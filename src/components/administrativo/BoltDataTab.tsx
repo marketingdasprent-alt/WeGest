@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+import { cn, matchesSearch } from '@/lib/utils';
 import { ImportRobotCsvDialog } from '@/components/admin/ImportRobotCsvDialog';
 import { DateRange } from 'react-day-picker';
 
@@ -182,12 +182,11 @@ export const BoltDataTab: React.FC = () => {
   // Apply local search filter
   const filteredResumos = useMemo(() => {
     if (!searchTerm) return resumos;
-    const term = searchTerm.toLowerCase();
     return resumos.filter(
       (r) =>
-        (r.motorista_nome || '').toLowerCase().includes(term) ||
-        (r.email || '').toLowerCase().includes(term) ||
-        (r.telefone || '').toLowerCase().includes(term)
+        matchesSearch(r.motorista_nome, searchTerm) ||
+        matchesSearch(r.email, searchTerm) ||
+        matchesSearch(r.telefone, searchTerm)
     );
   }, [resumos, searchTerm]);
 
@@ -367,16 +366,6 @@ export const BoltDataTab: React.FC = () => {
             />
           </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleFetchFromApify}
-            className="text-xs text-muted-foreground hidden md:flex items-center gap-1"
-          >
-            <Clock className="h-3 w-3" />
-            Resgatar do Apify
-          </Button>
-
           {hasActiveFilters && (
             <Button variant="ghost" size="icon" onClick={handleClearFilters}>
               <X className="h-4 w-4" />
@@ -404,16 +393,6 @@ export const BoltDataTab: React.FC = () => {
               </span>
             )}
           </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowImportDialog(true)}
-            disabled={!firstActiveIntegracao}
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Importar CSV
-          </Button>
         </div>
       </div>
 
@@ -578,16 +557,6 @@ export const BoltDataTab: React.FC = () => {
             </TableBody>
           </Table>
         </div>
-      )}
-
-      {/* Import CSV Dialog */}
-      {firstActiveIntegracao && (
-        <ImportRobotCsvDialog
-          open={showImportDialog}
-          onOpenChange={setShowImportDialog}
-          integracaoId={firstActiveIntegracao.id}
-          onImportComplete={handleImportComplete}
-        />
       )}
     </div>
   );

@@ -36,6 +36,7 @@ import {
   Printer,
   Plus,
   Upload,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -78,6 +79,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
   const [resumoDialogOpen, setResumoDialogOpen] = useState(false);
 
   const [recibos, setRecibos] = useState<Recibo[]>([]);
+  const [resumosGuardados, setResumosGuardados] = useState<Recibo[]>([]);
   const [filtroStatus, setFiltroStatus] = useState<string>('todos');
 
   const [dialogAberto, setDialogAberto] = useState(false);
@@ -142,7 +144,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
   }, [motoristaId, selectedWeek]);
 
   const loadData = async () => {
-    await Promise.all([loadRecibos(), loadResumoSemanal()]);
+    await Promise.all([loadRecibos(), loadResumosGuardados(), loadResumoSemanal()]);
   };
 
   const loadRecibos = async () => {
@@ -158,6 +160,22 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       setRecibos(data || []);
     } catch (error) {
       console.error('Erro ao carregar recibos:', error);
+    }
+  };
+
+  const loadResumosGuardados = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('motorista_recibos')
+        .select('*')
+        .eq('motorista_id', motoristaId)
+        .eq('tipo', 'relatorio')
+        .order('semana_referencia_inicio', { ascending: false });
+
+      if (error) throw error;
+      setResumosGuardados(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar resumos guardados:', error);
     }
   };
 
@@ -610,6 +628,83 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
             Ver Resumo
           </Button>
         </Card>
+      </div>
+
+      <Separator />
+
+      {/* Resumos Semanais Guardados */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <FileText className="h-5 w-5 text-blue-600" />
+          Histórico de Resumos
+        </h3>
+        {resumosGuardados.length === 0 ? (
+          <div className="text-center py-8 border rounded-lg bg-muted/20">
+            <FileText className="h-8 w-8 mx-auto mb-2 opacity-20" />
+            <p className="text-sm text-muted-foreground">
+              Nenhum resumo semanal guardado. Use "Enviar à Conta" no Administrativo → Contas.
+            </p>
+          </div>
+        ) : (
+          <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead>Período</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead className="text-right">Líquido</TableHead>
+                  <TableHead>Guardado em</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {resumosGuardados.map((resumo) => (
+                  <TableRow key={resumo.id}>
+                    <TableCell className="font-mono text-xs font-medium text-blue-700">
+                      {resumo.semana_referencia_inicio
+                        ? (() => {
+                            const d = new Date(resumo.semana_referencia_inicio);
+                            const fim = new Date(d);
+                            fim.setDate(fim.getDate() + 6);
+                            return `${format(d, 'dd/MM')} – ${format(fim, 'dd/MM/yyyy')}`;
+                          })()
+                        : resumo.periodo_referencia || '-'}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-medium">{resumo.descricao}</span>
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-blue-700">
+                      {resumo.valor_total != null ? formatCurrency(resumo.valor_total) : '-'}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {format(new Date(resumo.created_at), 'dd/MM/yyyy HH:mm')}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleVisualizar(resumo.ficheiro_url)}
+                        >
+                          <Eye className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleDownload(resumo.ficheiro_url, resumo.nome_ficheiro)}
+                        >
+                          <Download className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
 
       <Separator />

@@ -28,15 +28,13 @@ import {
   Fuel,
   Euro,
   X,
-  Upload,
   CheckCircle2,
   MapPin,
   Calendar as CalendarIcon,
 } from 'lucide-react';
+import { matchesSearch } from '@/lib/utils';
 import { format, subDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
-import { ImportRobotCsvDialog } from '@/components/admin/ImportRobotCsvDialog';
 import { DateRange } from 'react-day-picker';
 
 interface BpTransacao {
@@ -144,12 +142,11 @@ export const BPDataTab: React.FC = () => {
 
   const filteredTransacoes = useMemo(() => {
     if (!searchTerm) return transacoes;
-    const term = searchTerm.toLowerCase();
     return transacoes.filter(
       (t) =>
-        (t.motorista?.nome || '').toLowerCase().includes(term) ||
-        (t.fuel_type || '').toLowerCase().includes(term) ||
-        (t.station_name || '').toLowerCase().includes(term)
+        matchesSearch(t.motorista?.nome, searchTerm) ||
+        matchesSearch(t.fuel_type, searchTerm) ||
+        matchesSearch(t.station_name, searchTerm)
     );
   }, [transacoes, searchTerm]);
 
@@ -165,8 +162,6 @@ export const BPDataTab: React.FC = () => {
     setSelectedIntegracao('all');
     setDateRange({ from: subDays(new Date(), 30), to: new Date() });
   };
-
-  const firstActiveIntegracao = integracoes.find((i) => i.ativo);
 
   return (
     <div className="space-y-4">
@@ -241,15 +236,6 @@ export const BPDataTab: React.FC = () => {
               Dados de combustível importados da BP
             </span>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowImportDialog(true)}
-            disabled={!firstActiveIntegracao}
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Importar CSV BP
-          </Button>
         </div>
       </div>
 
@@ -376,15 +362,6 @@ export const BPDataTab: React.FC = () => {
             </TableBody>
           </Table>
         </div>
-      )}
-
-      {firstActiveIntegracao && (
-        <ImportRobotCsvDialog
-          open={showImportDialog}
-          onOpenChange={setShowImportDialog}
-          integracaoId={firstActiveIntegracao.id}
-          onImportComplete={fetchTransacoes}
-        />
       )}
     </div>
   );

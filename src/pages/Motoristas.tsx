@@ -1,10 +1,26 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, ChevronUp, ChevronDown, Plus, Check, RefreshCw } from 'lucide-react';
+import {
+  Search,
+  ChevronUp,
+  ChevronDown,
+  Plus,
+  Check,
+  RefreshCw,
+  Link2,
+  CreditCard,
+  Car,
+  Fuel,
+} from 'lucide-react';
+import { startOfWeek, format as formatDate } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
+import { MotoristasPlataformaNaoAssociados } from '@/components/motoristas/MotoristasPlataformaNaoAssociados';
+import { CartoesNaoReconhecidos } from '@/components/motoristas/CartoesNaoReconhecidos';
+import { PortagensNaoAssociadas } from '@/components/motoristas/PortagensNaoAssociadas';
+import { BpNaoAssociadas } from '@/components/motoristas/BpNaoAssociadas';
 import { GenerateDocumentsDialog } from '@/components/motoristas/GenerateDocumentsDialog';
 import { MotoristaCard } from '@/components/motoristas/MotoristaCard';
 import {
@@ -87,10 +103,135 @@ export default function Motoristas() {
     []
   );
   const [isMappingLoading, setIsMappingLoading] = useState(false);
+  const [naoAssociadosOpen, setNaoAssociadosOpen] = useState(false);
+  const [naoAssociadosCount, setNaoAssociadosCount] = useState<number>(0);
+  const [cartoesOpen, setCartoesOpen] = useState(false);
+  const [cartoesCount, setCartoesCount] = useState<number>(0);
+  const [portagensOpen, setPortagensOpen] = useState(false);
+  const [portagensCount, setPortagensCount] = useState<number>(0);
+  const [bpNaoAssociadasOpen, setBpNaoAssociadasOpen] = useState(false);
+  const [bpNaoAssociadasCount, setBpNaoAssociadasCount] = useState<number>(0);
+  const [novaFichaPrefill, setNovaFichaPrefill] = useState<{
+    nome?: string;
+    bolt_id?: string;
+    uber_uuid?: string;
+  } | null>(null);
 
   useEffect(() => {
     loadMotoristas();
+    loadNaoAssociadosCount();
+    loadCartoesCount();
+    loadPortagensCount();
+    loadBpNaoAssociadasCount();
   }, []);
+
+  const loadCartoesCount = async () => {
+    try {
+      const desde = formatDate(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const { data } = await (supabase as any).rpc('get_cartoes_combustivel_nao_associados', {
+        p_desde: desde,
+      });
+      setCartoesCount((data as any[] | null)?.length ?? 0);
+    } catch {
+      /* silencioso */
+    }
+  };
+
+  const loadBpNaoAssociadasCount = async () => {
+    try {
+      const { count } = await supabase
+        .from('bp_transacoes')
+        .select('card_number', { count: 'exact', head: false })
+        .is('motorista_id', null);
+      const { data } = await supabase
+        .from('bp_transacoes')
+        .select('card_number')
+        .is('motorista_id', null);
+      const unique = new Set<string>(
+        (data || []).map((r: any) => r.card_number || '__sem_cartao__')
+      );
+      setBpNaoAssociadasCount(unique.size);
+    } catch {
+      /* silencioso */
+    }
+  };
+
+  const loadPortagensCount = async () => {
+    try {
+      const { data } = await (supabase as any)
+        .from('via_verde_transacoes')
+        .select('matricula', { count: 'exact', head: false })
+        .is('motorista_id', null)
+        .not('matricula', 'is', null);
+      const unique = new Set<string>(((data as any[]) || []).map((r: any) => r.matricula));
+      setPortagensCount(unique.size);
+    } catch {
+      /* silencioso */
+    }
+  };
+
+  const loadNaoAssociadosCount = async () => {
+    try {
+      const desde = new Date();
+      desde.setDate(desde.getDate() - 56);
+      const desdeDate = desde.toISOString().slice(0, 10);
+
+      // IDs de plataforma já "ligados" — via ficha OU via motorista_id em qualquer registo.
+      const { data: crm } = await supabase.from('motoristas_ativos').select('uber_uuid, bolt_id');
+      const uberLigados = new Set<string>(
+        (crm || []).map((m: any) => m.uber_uuid).filter((x: any) => !!x)
+      );
+      const boltLigados = new Set<string>(
+        (crm || []).map((m: any) => m.bolt_id).filter((x: any) => !!x)
+      );
+
+      const [uberDrv, boltRows, uberLigDb, boltLigDb] = await Promise.all([
+        supabase.from('uber_drivers').select('uber_driver_id, full_name').is('motorista_id', null),
+        supabase
+          .from('bolt_resumos_semanais')
+          .select('identificador_motorista, motorista_nome')
+          .is('motorista_id', null)
+          .gte('periodo_inicio', desdeDate)
+          .not('identificador_motorista', 'is', null),
+        supabase
+          .from('uber_transactions')
+          .select('uber_driver_id')
+          .not('motorista_id', 'is', null)
+          .not('uber_driver_id', 'is', null),
+        supabase
+          .from('bolt_resumos_semanais')
+          .select('identificador_motorista')
+          .not('motorista_id', 'is', null)
+          .not('identificador_motorista', 'is', null),
+      ]);
+      (uberLigDb.data || []).forEach((r: any) => uberLigados.add(r.uber_driver_id));
+      (boltLigDb.data || []).forEach((r: any) => boltLigados.add(r.identificador_motorista));
+
+      // Contar PESSOAS (nome normalizado distinto), não registos — alinha com a lista unificada.
+      const norm = (s: string) =>
+        (s || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z0-9 ]/g, ' ')
+          .trim()
+          .replace(/\s+/g, ' ');
+      const nomes = new Set<string>();
+      (uberDrv.data || []).forEach((d: any) => {
+        if (d.uber_driver_id && !uberLigados.has(d.uber_driver_id)) {
+          nomes.add(norm(d.full_name) || d.uber_driver_id);
+        }
+      });
+      (boltRows.data || []).forEach((r: any) => {
+        if (r.identificador_motorista && !boltLigados.has(r.identificador_motorista)) {
+          nomes.add(norm(r.motorista_nome) || r.identificador_motorista);
+        }
+      });
+      setNaoAssociadosCount(nomes.size);
+    } catch {
+      /* silencioso */
+    }
+  };
 
   const loadMotoristas = async () => {
     try {
@@ -161,13 +302,16 @@ export default function Motoristas() {
   // Combined filtering and sorting logic
   const filteredMotoristas = useMemo(() => {
     const searchNormalized = normalizeString(searchTerm);
+    // Pesquisa por palavras: cada palavra do termo tem de aparecer no nome
+    const searchWords = searchNormalized.split(' ').filter(Boolean);
 
-    let result = motoristas.filter((m) => {
+    const result = motoristas.filter((m) => {
       // Text search (code, name, NIF, phone)
+      const nomeNorm = normalizeString(m.nome);
       const matchesSearch =
         searchTerm.trim() === '' ||
         m.codigo.toString().includes(searchTerm) ||
-        normalizeString(m.nome).includes(searchNormalized) ||
+        searchWords.every((w) => nomeNorm.includes(w)) ||
         (m.nif && m.nif.includes(searchTerm)) ||
         (m.bolt_id && m.bolt_id.includes(searchTerm)) ||
         (m.uber_uuid && m.uber_uuid.includes(searchTerm)) ||
@@ -233,6 +377,7 @@ export default function Motoristas() {
 
   const handleAddMotorista = () => {
     setMotoristaToEdit(null);
+    setNovaFichaPrefill(null);
     setIsDialogOpen(true);
   };
 
@@ -240,7 +385,9 @@ export default function Motoristas() {
     if (!open) {
       setIsDialogOpen(false);
       setMotoristaToEdit(null);
+      setNovaFichaPrefill(null);
       loadMotoristas();
+      loadNaoAssociadosCount();
     }
   };
 
@@ -356,7 +503,7 @@ export default function Motoristas() {
         const mPhone = m.telefone ? m.telefone.replace(/\D/g, '').slice(-9) : null;
         const mEmail = m.email?.toLowerCase().trim();
 
-        let updatedData: any = {};
+        const updatedData: any = {};
         let needsUpdate = false;
 
         // Tentar encontrar na Bolt
@@ -474,6 +621,70 @@ export default function Motoristas() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+          {naoAssociadosCount > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setNaoAssociadosOpen(true)}
+              className="w-full sm:w-auto gap-2 border-amber-500/50 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+            >
+              <Link2 className="h-4 w-4" />
+              {naoAssociadosCount} sem ficha
+              <Badge
+                variant="secondary"
+                className="ml-1 bg-amber-500/20 text-amber-700 dark:text-amber-300"
+              >
+                associar
+              </Badge>
+            </Button>
+          )}
+          {cartoesCount > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setCartoesOpen(true)}
+              className="w-full sm:w-auto gap-2 border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
+            >
+              <CreditCard className="h-4 w-4" />
+              {cartoesCount} cartões
+              <Badge
+                variant="secondary"
+                className="ml-1 bg-orange-500/20 text-orange-700 dark:text-orange-300"
+              >
+                associar
+              </Badge>
+            </Button>
+          )}
+          {portagensCount > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setPortagensOpen(true)}
+              className="w-full sm:w-auto gap-2 border-blue-500/50 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
+            >
+              <Car className="h-4 w-4" />
+              {portagensCount} sem portagens
+              <Badge
+                variant="secondary"
+                className="ml-1 bg-blue-500/20 text-blue-700 dark:text-blue-300"
+              >
+                associar
+              </Badge>
+            </Button>
+          )}
+          {bpNaoAssociadasCount > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setBpNaoAssociadasOpen(true)}
+              className="w-full sm:w-auto gap-2 border-green-500/50 text-green-700 hover:bg-green-500/10 dark:text-green-400"
+            >
+              <Fuel className="h-4 w-4" />
+              {bpNaoAssociadasCount} BP sem motorista
+              <Badge
+                variant="secondary"
+                className="ml-1 bg-green-500/20 text-green-700 dark:text-green-300"
+              >
+                associar
+              </Badge>
+            </Button>
+          )}
           <Button onClick={handleAddMotorista} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Adicionar Motorista
@@ -661,7 +872,51 @@ export default function Motoristas() {
         open={isDialogOpen}
         onOpenChange={handleDialogClose}
         motorista={motoristaToEdit}
+        prefill={novaFichaPrefill || undefined}
         onMotoristaCreated={handleMotoristaCreated}
+      />
+
+      {/* Dialog: motoristas de plataforma sem ficha */}
+      <MotoristasPlataformaNaoAssociados
+        open={naoAssociadosOpen}
+        onOpenChange={setNaoAssociadosOpen}
+        onChanged={() => {
+          loadMotoristas();
+          loadNaoAssociadosCount();
+        }}
+        onCriarFicha={({ nome, uberId, boltId }) => {
+          setNaoAssociadosOpen(false);
+          setMotoristaToEdit(null);
+          setNovaFichaPrefill({ nome, bolt_id: boltId, uber_uuid: uberId });
+          setIsDialogOpen(true);
+        }}
+      />
+
+      {/* Dialog: cartões de combustível não reconhecidos */}
+      <CartoesNaoReconhecidos
+        open={cartoesOpen}
+        onOpenChange={setCartoesOpen}
+        onChanged={() => {
+          loadCartoesCount();
+        }}
+      />
+
+      {/* Dialog: portagens Via Verde sem motorista associado */}
+      <PortagensNaoAssociadas
+        open={portagensOpen}
+        onOpenChange={setPortagensOpen}
+        onChanged={() => {
+          loadPortagensCount();
+        }}
+      />
+
+      {/* Dialog: transações BP sem motorista associado */}
+      <BpNaoAssociadas
+        open={bpNaoAssociadasOpen}
+        onOpenChange={setBpNaoAssociadasOpen}
+        onChanged={() => {
+          loadBpNaoAssociadasCount();
+        }}
       />
 
       {/* Dialog para Gerar Documentos após criar motorista */}

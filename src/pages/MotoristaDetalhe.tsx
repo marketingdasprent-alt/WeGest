@@ -20,6 +20,7 @@ import {
   XCircle,
   Loader2,
   Wallet,
+  CalendarPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -85,7 +86,7 @@ export default function MotoristaDetalhe() {
     { id: 'dados', label: 'Dados', icon: User },
     { id: 'documentos', label: 'Documentos', icon: FileText },
     { id: 'financeiro', label: 'Financeiro', icon: Wallet },
-    { id: 'recibos', label: 'Recibos', icon: Receipt },
+    { id: 'recibos', label: 'Resumos', icon: Receipt },
     { id: 'viaturas', label: 'Viaturas', icon: Car },
     { id: 'contratos', label: 'Contratos', icon: FileSignature },
     { id: 'danos', label: 'Danos', icon: AlertTriangle },
@@ -310,6 +311,14 @@ export default function MotoristaDetalhe() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => navigate('/renting/reservas/nova')}
+            className="flex-1 md:flex-none"
+          >
+            <CalendarPlus className="h-4 w-4 mr-2" />
+            Nova reserva
+          </Button>
           {hasPermission('contratos_criar') && (
             <Button onClick={() => setGenerateDialogOpen(true)} className="flex-1 md:flex-none">
               <FileSignature className="h-4 w-4 mr-2" />

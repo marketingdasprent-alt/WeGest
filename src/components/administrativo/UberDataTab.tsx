@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -27,28 +26,19 @@ import {
   Loader2,
   Search,
   Car,
-  TrendingUp,
-  Users,
   Euro,
   X,
   CalendarIcon,
   StopCircle,
   AlertCircle,
   CheckCircle2,
-  Upload,
-  Route,
-  Clock,
-  RefreshCcw,
-  ShieldAlert,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { format, subDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+import { cn, matchesSearch } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { ImportUberCsvDialog } from './ImportUberCsvDialog';
-import { UberViagensTab } from './UberViagensTab';
 
 interface Integracao {
   id: string;
@@ -121,17 +111,14 @@ export const UberDataTab: React.FC = () => {
   const [transactions, setTransactions] = useState<UberTransaction[]>([]);
   const [integracoes, setIntegracoes] = useState<Integracao[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
-  const [showImportDialog, setShowImportDialog] = useState(false);
   const [lastImport, setLastImport] = useState<{ date: string; count: number } | null>(null);
   const [uberDriversMap, setUberDriversMap] = useState<Map<string, string>>(new Map());
 
   const loadRequestIdRef = useRef<number>(0);
 
-  // Date range
   const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 30));
   const [endDate, setEndDate] = useState<Date>(new Date());
 
-  // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIntegracao, setSelectedIntegracao] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
@@ -143,7 +130,6 @@ export const UberDataTab: React.FC = () => {
     { value: 'completed', label: 'Concluídas' },
   ];
 
-  // Load integracoes on mount
   useEffect(() => {
     fetchIntegracoes();
     fetchLastImport();
@@ -311,185 +297,6 @@ export const UberDataTab: React.FC = () => {
     }
   }, [startDate, endDate, selectedIntegracao, toast]);
 
-  const handleFetchFromApify = async () => {
-    setLoading(true);
-    try {
-      // 1. Find all active Uber integrations with Apify tokens
-      const { data: configs, error: configError } = await supabase
-        .from('plataformas_configuracao')
-        .select('id, nome, apify_api_token, apify_actor_id, plataforma, robot_target_platform')
-        .eq('ativo', true)
-        .not('apify_api_token', 'is', null);
-
-      if (configError) throw configError;
-
-      const uberConfigs = configs?.filter(
-        (c) =>
-          c.plataforma === 'uber' ||
-          c.robot_target_platform === 'uber' ||
-          c.nome.toLowerCase().includes('uber')
-      );
-
-      if (!uberConfigs || uberConfigs.length === 0) {
-        toast({
-          title: 'Configurações não encontradas',
-          description:
-            'Certifique-se de que as suas integrações Uber-Robot estão ativas no painel de configurações.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      toast({
-        title: 'Resgatando da Uber',
-        description: `Iniciando resgate para ${uberConfigs.length} conta(s) Uber no Apify...`,
-      });
-
-      let successCount = 0;
-      for (const config of uberConfigs) {
-        const { data, error } = await supabase.functions.invoke('uber-rescue-apify', {
-          body: { integracao_id: config.id },
-        });
-
-        if (!error && data?.success) successCount++;
-      }
-
-      toast({
-        title: 'Resgate concluído!',
-        description: `Processadas ${successCount} de ${uberConfigs.length} integrações Uber com sucesso.`,
-      });
-
-      fetchAllTransactions();
-      fetchLastImport();
-      fetchUberDrivers();
-    } catch (error: any) {
-      console.error('Erro no resgate Uber:', error);
-      toast({
-        title: 'Erro no Resgate',
-        description: error.message || 'Falha técnica ao falar com o servidor de resgate.',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEmergencyFix = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || integracoes.length === 0) return;
-
-    setLoading(true);
-    try {
-      const integracaoId = selectedIntegracao === 'all' ? integracoes[0].id : selectedIntegracao;
-      const text = await file.text();
-      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-
-      if (lines.length < 2) throw new Error('Ficheiro CSV vazio ou inválido.');
-
-      const separator = lines[0].includes(';') ? ';' : ',';
-      const headers = lines[0]
-        .split(separator)
-        .map((h) => h.trim().toLowerCase().replace(/['"]/g, ''));
-
-      const idxUuid = headers.findIndex(
-        (h) => h.includes('uuid do motorista') || h.includes('uber_driver_id')
-      );
-      const idxFirst = headers.findIndex(
-        (h) => h.includes('nome próprio') || h.includes('nome proprio') || h.includes('first_name')
-      );
-      const idxLast = headers.findIndex((h) => h.includes('apelido') || h.includes('last_name'));
-
-      if (idxUuid === -1 || idxFirst === -1) {
-        throw new Error(
-          'Não foi possível encontrar as colunas de UUID ou Nome no CSV. Verifique o formato.'
-        );
-      }
-
-      toast({ title: 'Processando', description: `Lendo ${lines.length - 1} linhas do CSV...` });
-
-      // 1. Carregar motoristas ativos para matching
-      const { data: motoristas, error: mError } = await supabase
-        .from('motoristas_ativos')
-        .select('id, nome');
-
-      if (mError) throw mError;
-
-      const normalize = (s: string) =>
-        s
-          ?.toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .trim()
-          .replace(/\s+/g, ' ') || '';
-
-      let fixedCount = 0;
-      let driverUpserted = 0;
-
-      for (let i = 1; i < lines.length; i++) {
-        const cells = lines[i].split(separator).map((c) => c.trim().replace(/['"]/g, ''));
-        const uuid = cells[idxUuid];
-        const firstName = cells[idxFirst] || '';
-        const lastName = idxLast !== -1 ? cells[idxLast] : '';
-        const fullName = `${firstName} ${lastName}`.trim();
-
-        if (!uuid || uuid.length < 10) continue;
-
-        // A. Garantir que o motorista Uber existe na tabela uber_drivers
-        const { error: udError } = await supabase.from('uber_drivers').upsert(
-          {
-            uber_driver_id: uuid,
-            first_name: firstName,
-            last_name: lastName,
-            full_name: fullName,
-            integracao_id: integracaoId,
-            flow_type: 'emergency_fix',
-          },
-          { onConflict: 'uber_driver_id,integracao_id' }
-        );
-
-        if (!udError) driverUpserted++;
-
-        // B. Tentar encontrar matching agressivo (ignora nomes do meio e acentos)
-        const normFullName = normalize(fullName);
-        const match = motoristas.find((m) => {
-          const normM = normalize(m.nome);
-          // Match se o nome administrativo estiver contido no nome do Uber ou vice-versa
-          return normM.length > 3 && (normFullName.includes(normM) || normM.includes(normFullName));
-        });
-
-        if (match) {
-          // C. Ligar os dois
-          await supabase
-            .from('uber_drivers')
-            .update({ motorista_id: match.id })
-            .eq('uber_driver_id', uuid);
-          await supabase.from('motoristas').update({ uber_uuid: uuid }).eq('id', match.id);
-          fixedCount++;
-        }
-      }
-
-      toast({
-        title: 'Reparação Concluída',
-        description: `Processados ${driverUpserted} motoristas Uber. ${fixedCount} associações feitas com sucesso!`,
-      });
-
-      fetchUberDrivers();
-      fetchAllTransactions();
-    } catch (error: any) {
-      console.error('Erro na reparação Uber:', error);
-      toast({
-        title: 'Erro',
-        description: error.message || 'Falha na reparação.',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-      // Reset input
-      const input = document.getElementById('emergency-fix-input') as HTMLInputElement;
-      if (input) input.value = '';
-    }
-  };
-
   const handleStopLoading = () => {
     loadRequestIdRef.current++;
     setLoadingAll(false);
@@ -497,14 +304,6 @@ export const UberDataTab: React.FC = () => {
     toast({
       title: 'Carregamento interrompido',
       description: `${transactions.length} transacções carregadas.`,
-    });
-  };
-
-  // TODO: auto-mapeamento de motoristas Uber ainda por implementar.
-  const handleAutoMap = () => {
-    toast({
-      title: 'Funcionalidade em desenvolvimento',
-      description: 'O auto-mapeamento de motoristas Uber ainda não está disponível.',
     });
   };
 
@@ -527,14 +326,13 @@ export const UberDataTab: React.FC = () => {
         if (selectedStatus === 'completed' && t.status !== 'completed') return false;
       }
       if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        const driverName = getDriverName(t, driverNameMap, uberDriversMap).name.toLowerCase();
+        const driverName = getDriverName(t, driverNameMap, uberDriversMap).name;
         const matches =
-          driverName.includes(term) ||
-          (t.trip_reference || '').toLowerCase().includes(term) ||
-          (t.uber_driver_id || '').toLowerCase().includes(term) ||
-          (t.uber_vehicle_id || '').toLowerCase().includes(term) ||
-          (t.transaction_type || '').toLowerCase().includes(term);
+          matchesSearch(driverName, searchTerm) ||
+          matchesSearch(t.trip_reference, searchTerm) ||
+          matchesSearch(t.uber_driver_id, searchTerm) ||
+          matchesSearch(t.uber_vehicle_id, searchTerm) ||
+          matchesSearch(t.transaction_type, searchTerm);
         if (!matches) return false;
       }
       return true;
@@ -584,7 +382,6 @@ export const UberDataTab: React.FC = () => {
     }
 
     const formatted = status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-
     return <Badge variant="secondary">{formatted}</Badge>;
   };
 
@@ -598,396 +395,293 @@ export const UberDataTab: React.FC = () => {
   const hasLocalFilters = searchTerm || selectedStatus !== 'all';
 
   return (
-    <Tabs defaultValue="pagamentos" className="space-y-4">
-      <TabsList>
-        <TabsTrigger value="pagamentos" className="gap-2">
-          <Euro className="h-4 w-4" />
-          Pagamentos
-        </TabsTrigger>
-        <TabsTrigger value="viagens" className="gap-2">
-          <Route className="h-4 w-4" />
-          Atividade
-        </TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="pagamentos" className="space-y-4">
-        {/* Date Range + Filters */}
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Date Range */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    'w-[260px] justify-start text-left font-normal',
-                    !startDate && 'text-muted-foreground'
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {startDate && endDate ? (
-                    <>
-                      {format(startDate, 'dd/MM/yyyy')} → {format(endDate, 'dd/MM/yyyy')}
-                    </>
-                  ) : (
-                    <span>Selecionar período</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="range"
-                  selected={{ from: startDate, to: endDate }}
-                  onSelect={(range: DateRange | undefined) => {
-                    if (range?.from) setStartDate(range.from);
-                    if (range?.to) setEndDate(range.to);
-                    else if (range?.from) setEndDate(range.from);
-                  }}
-                  numberOfMonths={isMobile ? 1 : 2}
-                  initialFocus
-                  locale={pt}
-                  className="pointer-events-auto"
-                />
-              </PopoverContent>
-            </Popover>
-
-            {/* Integration Filter */}
-            <Select value={selectedIntegracao} onValueChange={setSelectedIntegracao}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Integração" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as integrações</SelectItem>
-                {integracoes.map((int) => (
-                  <SelectItem key={int.id} value={int.id}>
-                    {int.nome}
-                    {!int.ativo && ' (inativa)'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Status Filter */}
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                {statusOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Search */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Pesquisar referência, motorista, veículo..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-
-            {hasActiveFilters && (
-              <Button variant="ghost" size="icon" onClick={handleClearFilters}>
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-
-          {/* Status Bar + Import */}
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span className="text-muted-foreground">
-                Dados recebidos via webhook
-                {lastImport && lastImport.date && (
+    <div className="space-y-4">
+      {/* Date Range + Filters */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  'w-[260px] justify-start text-left font-normal',
+                  !startDate && 'text-muted-foreground'
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {startDate && endDate ? (
                   <>
-                    {' '}
-                    · Última importação CSV:{' '}
-                    {format(new Date(lastImport.date), 'dd/MM/yy HH:mm', { locale: pt })} (
-                    {lastImport.count} transacções)
+                    {format(startDate, 'dd/MM/yyyy')} → {format(endDate, 'dd/MM/yyyy')}
                   </>
-                )}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleFetchFromApify}
-                disabled={loading}
-                className="text-xs text-muted-foreground hidden md:flex items-center gap-1"
-              >
-                {loading ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
-                  <Clock className="h-3 w-3" />
+                  <span>Selecionar período</span>
                 )}
-                Resgatar do Apify
               </Button>
-              <input
-                type="file"
-                id="emergency-fix-input"
-                className="hidden"
-                accept=".csv"
-                onChange={handleEmergencyFix}
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="range"
+                selected={{ from: startDate, to: endDate }}
+                onSelect={(range: DateRange | undefined) => {
+                  if (range?.from) setStartDate(range.from);
+                  if (range?.to) setEndDate(range.to);
+                  else if (range?.from) setEndDate(range.from);
+                }}
+                numberOfMonths={isMobile ? 1 : 2}
+                initialFocus
+                locale={pt}
+                className="pointer-events-auto"
               />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => document.getElementById('emergency-fix-input')?.click()}
-                disabled={loading}
-                className="text-xs text-orange-500 hover:text-orange-600 hidden md:flex items-center gap-1"
-                title="Use isto se houver motoristas sem UUID após a importação regular"
-              >
-                {loading ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <ShieldAlert className="h-3 w-3" />
-                )}
-                Reparar Associação
-              </Button>
+            </PopoverContent>
+          </Popover>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleAutoMap}
-                disabled={loading}
-                className="text-xs text-muted-foreground hidden md:flex items-center gap-1"
-              >
-                {loading ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <RefreshCcw className="h-3 w-3" />
-                )}
-                Auto-Mapear
-              </Button>
+          <Select value={selectedIntegracao} onValueChange={setSelectedIntegracao}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Integração" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as integrações</SelectItem>
+              {integracoes.map((int) => (
+                <SelectItem key={int.id} value={int.id}>
+                  {int.nome}
+                  {!int.ativo && ' (inativa)'}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-              <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
-                <Upload className="h-4 w-4 mr-2" />
-                Importar CSV
-              </Button>
-            </div>
+          <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Estado" />
+            </SelectTrigger>
+            <SelectContent>
+              {statusOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Pesquisar referência, motorista, veículo..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
           </div>
-        </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="border-border/50 bg-card/50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Car className="h-4 w-4" />
-                Viagens
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{stats.total}</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/50 bg-card/50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Euro className="h-4 w-4" />
-                Valor Total
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">
-                <p className="text-2xl font-bold">
-                  €
-                  {stats.totalValor.toLocaleString('pt-PT', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </p>
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/50 bg-card/50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Euro className="h-4 w-4" />
-                Ganho Motorista (Líquido)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-green-400">
-                <p className="text-2xl font-bold text-green-400">
-                  €
-                  {stats.totalEarnings.toLocaleString('pt-PT', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </p>
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Loading/Count status */}
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            {loadingAll ? (
-              <>
-                <Loader2 className="h-4 w-4 inline-block mr-2 animate-spin" />A carregar{' '}
-                {transactions.length} de {totalCount} transacções...
-              </>
-            ) : (
-              <>
-                A mostrar {transactions.length} transacções
-                {hasLocalFilters && ` (${filteredTransactions.length} após filtros)`}
-              </>
-            )}
-          </span>
-          {loadingAll && (
-            <Button variant="outline" size="sm" onClick={handleStopLoading}>
-              <StopCircle className="h-4 w-4 mr-2" />
-              Interromper
+          {hasActiveFilters && (
+            <Button variant="ghost" size="icon" onClick={handleClearFilters}>
+              <X className="h-4 w-4" />
             </Button>
           )}
         </div>
 
-        {/* Warning for large datasets */}
-        {totalCount > 10000 && !loading && (
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-600 dark:text-yellow-400">
-            <AlertCircle className="h-4 w-4 inline-block mr-2" />
-            Este período contém {totalCount.toLocaleString()} transacções. O carregamento pode ser
-            lento em dispositivos móveis.
-          </div>
-        )}
+        <div className="flex items-center text-sm">
+          <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+          <span className="text-muted-foreground">
+            Dados recebidos via webhook
+            {lastImport && lastImport.date && (
+              <>
+                {' '}
+                · Última importação CSV:{' '}
+                {format(new Date(lastImport.date), 'dd/MM/yy HH:mm', { locale: pt })} (
+                {lastImport.count} transacções)
+              </>
+            )}
+          </span>
+        </div>
+      </div>
 
-        {/* Table */}
-        {loading && transactions.length === 0 ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : filteredTransactions.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <Car className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>Nenhuma transacção Uber encontrada.</p>
-            <p className="text-sm">
-              {integracoes.length === 0
-                ? 'Configure uma integração Uber para começar.'
-                : 'Os dados chegam automaticamente via webhook da Uber.'}
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="border-border/50 bg-card/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Car className="h-4 w-4" />
+              Viagens
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{stats.total}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 bg-card/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Euro className="h-4 w-4" />
+              Valor Total
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">
+              €
+              {stats.totalValor.toLocaleString('pt-PT', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </p>
-          </div>
-        ) : (
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Integração</TableHead>
-                  <TableHead>Referência</TableHead>
-                  <TableHead>Motorista</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-center">Estado</TableHead>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 bg-card/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Euro className="h-4 w-4" />
+              Ganho Motorista (Líquido)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-green-400">
+              €
+              {stats.totalEarnings.toLocaleString('pt-PT', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Loading/Count status */}
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <span>
+          {loadingAll ? (
+            <>
+              <Loader2 className="h-4 w-4 inline-block mr-2 animate-spin" />A carregar{' '}
+              {transactions.length} de {totalCount} transacções...
+            </>
+          ) : (
+            <>
+              A mostrar {transactions.length} transacções
+              {hasLocalFilters && ` (${filteredTransactions.length} após filtros)`}
+            </>
+          )}
+        </span>
+        {loadingAll && (
+          <Button variant="outline" size="sm" onClick={handleStopLoading}>
+            <StopCircle className="h-4 w-4 mr-2" />
+            Interromper
+          </Button>
+        )}
+      </div>
+
+      {totalCount > 10000 && !loading && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-600 dark:text-yellow-400">
+          <AlertCircle className="h-4 w-4 inline-block mr-2" />
+          Este período contém {totalCount.toLocaleString()} transacções. O carregamento pode ser
+          lento em dispositivos móveis.
+        </div>
+      )}
+
+      {/* Table */}
+      {loading && transactions.length === 0 ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : filteredTransactions.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <Car className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>Nenhuma transacção Uber encontrada.</p>
+          <p className="text-sm">
+            {integracoes.length === 0
+              ? 'Configure uma integração Uber para começar.'
+              : 'Os dados chegam automaticamente via webhook da Uber.'}
+          </p>
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Integração</TableHead>
+                <TableHead>Referência</TableHead>
+                <TableHead>Motorista</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead className="text-right">Valor</TableHead>
+                <TableHead className="text-center">Estado</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredTransactions.map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell>
+                    <Badge variant="outline" className="gap-1">
+                      <Car className="h-3 w-3 text-blue-400" />
+                      {t.integracao?.nome || '-'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {(() => {
+                      const periodo = (t.raw_transaction as Record<string, unknown>)?.periodo as
+                        | string
+                        | undefined;
+                      if (periodo) {
+                        const match = periodo.match(/(\d{4})(\d{2})(\d{2})-(\d{4})(\d{2})(\d{2})/);
+                        if (match) {
+                          return `${match[3]}/${match[2]} → ${match[6]}/${match[5]}`;
+                        }
+                      }
+                      if (t.trip_reference && !/^[0-9a-f]{8}-/.test(t.trip_reference)) {
+                        return t.trip_reference.length > 16
+                          ? `${t.trip_reference.slice(0, 16)}...`
+                          : t.trip_reference;
+                      }
+                      return '—';
+                    })()}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {(() => {
+                      const driver = getDriverName(t, driverNameMap, uberDriversMap);
+                      if (driver.resolved) return driver.name;
+                      return (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-muted-foreground italic cursor-help">
+                                Sem nome (webhook)
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="font-mono text-xs">{driver.name}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      );
+                    })()}
+                  </TableCell>
+                  <TableCell>
+                    {t.occurred_at
+                      ? format(new Date(t.occurred_at), 'dd/MM/yy HH:mm', { locale: pt })
+                      : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{t.transaction_type || '-'}</Badge>
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      'text-right font-medium',
+                      t.status === 'settled' && t.gross_amount && 'text-green-400'
+                    )}
+                  >
+                    {t.gross_amount != null ? (
+                      `€${t.gross_amount.toFixed(2)}`
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">{getStatusBadge(t.status)}</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTransactions.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell>
-                      <Badge variant="outline" className="gap-1">
-                        <Car className="h-3 w-3 text-blue-400" />
-                        {t.integracao?.nome || '-'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {(() => {
-                        const periodo = (t.raw_transaction as Record<string, unknown>)?.periodo as
-                          | string
-                          | undefined;
-                        if (periodo) {
-                          const match = periodo.match(
-                            /(\d{4})(\d{2})(\d{2})-(\d{4})(\d{2})(\d{2})/
-                          );
-                          if (match) {
-                            return `${match[3]}/${match[2]} → ${match[6]}/${match[5]}`;
-                          }
-                        }
-                        if (t.trip_reference && !/^[0-9a-f]{8}-/.test(t.trip_reference)) {
-                          return t.trip_reference.length > 16
-                            ? `${t.trip_reference.slice(0, 16)}...`
-                            : t.trip_reference;
-                        }
-                        return '—';
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {(() => {
-                        const driver = getDriverName(t, driverNameMap, uberDriversMap);
-                        if (driver.resolved) return driver.name;
-                        return (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="text-muted-foreground italic cursor-help">
-                                  Sem nome (webhook)
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p className="font-mono text-xs">{driver.name}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      {t.occurred_at
-                        ? format(new Date(t.occurred_at), 'dd/MM/yy HH:mm', { locale: pt })
-                        : '-'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{t.transaction_type || '-'}</Badge>
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        'text-right font-medium',
-                        t.status === 'settled' && t.gross_amount && 'text-green-400'
-                      )}
-                    >
-                      {t.gross_amount != null ? (
-                        `€${t.gross_amount.toFixed(2)}`
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">{getStatusBadge(t.status)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-
-        {/* Import CSV Dialog */}
-        {integracoes.length > 0 && (
-          <ImportUberCsvDialog
-            open={showImportDialog}
-            onOpenChange={setShowImportDialog}
-            integracaoId={integracoes[0].id}
-            onImportComplete={() => {
-              fetchAllTransactions();
-              fetchLastImport();
-              fetchUberDrivers();
-            }}
-          />
-        )}
-      </TabsContent>
-
-      <TabsContent value="viagens">
-        <UberViagensTab uberDriversMap={uberDriversMap} />
-      </TabsContent>
-    </Tabs>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
   );
 };
