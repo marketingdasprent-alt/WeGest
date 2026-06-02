@@ -271,23 +271,21 @@ export const GenerateDocumentsDialog = ({
 
       let successCount = 0;
       // Vários documentos juntam-se num único PDF (e num único trabalho de impressão):
-      // evita o bloqueio de pop-ups de abrir vários separadores e garante que cada
-      // documento começa numa folha nova mesmo em impressão frente-e-verso.
+      // evita o bloqueio de pop-ups de abrir vários separadores e separa cada documento
+      // com uma página em branco para nunca saírem colados.
       const isMultiple = templatesToGenerate.length > 1;
 
       const combinedPdf = isMultiple
         ? new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
         : null;
 
-      // Empurra o próximo documento para uma folha nova: se o anterior terminou em
-      // página ímpar, insere uma página em branco. Em frente-e-verso essa página fica
-      // no verso do documento anterior, evitando que a declaração saia atrás do contrato.
-      const ensureNewSheet = () => {
+      // Insere uma página em branco a separar os documentos dentro do PDF combinado.
+      // Só corre depois de já existir um documento gerado (successCount > 0), por isso
+      // nunca há folha em branco à cabeça nem depois do último — exatamente uma entre cada par.
+      const addSeparatorPage = () => {
         if (!combinedPdf) return;
-        // Exclui a página inicial em branco (removida no fim).
-        const printedSoFar = combinedPdf.getNumberOfPages() - 1;
-        if (printedSoFar > 0 && printedSoFar % 2 === 1) {
-          combinedPdf.addPage();
+        if (successCount > 0) {
+          combinedPdf.addPage(); // página em branco a separar os documentos
         }
       };
 
@@ -373,7 +371,7 @@ export const GenerateDocumentsDialog = ({
       for (const template of contratoTemplates) {
         setCurrentGenerating(template.id);
         try {
-          ensureNewSheet();
+          addSeparatorPage();
           await generateDocumentFromTemplate({
             templateId: template.id,
             motoristaData,
@@ -395,7 +393,7 @@ export const GenerateDocumentsDialog = ({
       for (const template of otherTemplates) {
         setCurrentGenerating(template.id);
         try {
-          ensureNewSheet();
+          addSeparatorPage();
           await generateDocumentFromTemplate({
             templateId: template.id,
             motoristaData,
