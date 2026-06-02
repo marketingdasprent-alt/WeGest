@@ -44,7 +44,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Motorista } from '@/pages/Motoristas';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { DocumentUploader } from '@/components/motorista-portal/DocumentUploader';
-import { Loader2, X, Check, ChevronsUpDown } from 'lucide-react';
+import { Loader2, X, Check, ChevronsUpDown, CreditCard } from 'lucide-react';
 import { validateDateYear } from '@/utils/dateValidators';
 
 const formSchema = z.object({
@@ -100,6 +100,8 @@ interface MotoristaDialogProps {
   onOpenChange: (open: boolean) => void;
   motorista: Motorista | null;
   onMotoristaCreated?: (motorista: Motorista) => void;
+  /** Pré-preenche campos quando se cria uma ficha nova (modo criação). */
+  prefill?: { nome?: string; bolt_id?: string; uber_uuid?: string };
 }
 
 export function MotoristaDialog({
@@ -107,12 +109,55 @@ export function MotoristaDialog({
   onOpenChange,
   motorista,
   onMotoristaCreated,
+  prefill,
 }: MotoristaDialogProps) {
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [gestores, setGestores] = useState<{ nome: string }[]>([]);
   const [gestorPopoverOpen, setGestorPopoverOpen] = useState(false);
   const { toast } = useToast();
+
+  type CartaoItem = { id: string; numero: string; motorista_id: string | null };
+  const [cartoesFrota, setCartoesFrota] = useState<{
+    bp: CartaoItem[];
+    repsol: CartaoItem[];
+    edp: CartaoItem[];
+  }>({ bp: [], repsol: [], edp: [] });
+  const [selectedCartao, setSelectedCartao] = useState<{ bp: string; repsol: string; edp: string }>(
+    { bp: '', repsol: '', edp: '' }
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const loadCartoes = async () => {
+      try {
+        const { data } = await (supabase as any)
+          .from('cartoes_frota')
+          .select('id, numero, tipo, motorista_id')
+          .eq('ativo', true)
+          .order('numero');
+        const all = (data || []) as (CartaoItem & { tipo: string })[];
+        const filterTipo = (t: string) =>
+          all.filter((c) => c.tipo === t && (!c.motorista_id || c.motorista_id === motorista?.id));
+        setCartoesFrota({
+          bp: filterTipo('bp'),
+          repsol: filterTipo('repsol'),
+          edp: filterTipo('edp'),
+        });
+        // Pre-select cartão actualmente atribuído ao motorista
+        const atribuido = (t: string) =>
+          all.find((c) => c.tipo === t && c.motorista_id === motorista?.id)?.id || '';
+        setSelectedCartao({
+          bp: atribuido('bp'),
+          repsol: atribuido('repsol'),
+          edp: atribuido('edp'),
+        });
+      } catch {
+        /* silencioso */
+      }
+    };
+    loadCartoes();
+  }, [open, motorista?.id]);
 
   useEffect(() => {
     const fetchGestores = async () => {
@@ -214,7 +259,7 @@ export function MotoristaDialog({
       });
     } else {
       form.reset({
-        nome: '',
+        nome: prefill?.nome || '',
         nif: '',
         telefone: '',
         email: '',
@@ -234,8 +279,8 @@ export function MotoristaDialog({
         observacoes: '',
         iban: '',
         gestor_responsavel: '',
-        bolt_id: '',
-        uber_uuid: '',
+        bolt_id: prefill?.bolt_id || '',
+        uber_uuid: prefill?.uber_uuid || '',
         documento_ficheiro_url: '',
         documento_identificacao_verso_url: '',
         carta_ficheiro_url: '',
@@ -246,7 +291,31 @@ export function MotoristaDialog({
         comprovativo_iban_url: '',
       });
     }
-  }, [motorista, form]);
+  }, [motorista, prefill, form]);
+
+  const syncCartoes = async (motoristaId: string) => {
+    try {
+      for (const tipo of ['bp', 'repsol', 'edp'] as const) {
+        const cartaoId = selectedCartao[tipo];
+        // Remover associação anterior para este tipo+motorista
+        await (supabase as any)
+          .from('cartoes_frota')
+          .update({ motorista_id: null })
+          .eq('tipo', tipo)
+          .eq('motorista_id', motoristaId)
+          .neq('id', cartaoId || '00000000-0000-0000-0000-000000000000');
+        // Atribuir novo cartão
+        if (cartaoId) {
+          await (supabase as any)
+            .from('cartoes_frota')
+            .update({ motorista_id: motoristaId })
+            .eq('id', cartaoId);
+        }
+      }
+    } catch {
+      /* silencioso — não bloqueia o save do motorista */
+    }
+  };
 
   const onSubmit = async (values: FormValues) => {
     // Prevenir duplo clique
@@ -317,6 +386,9 @@ export function MotoristaDialog({
 
         if (error) throw error;
 
+        // Sync cartões frota
+        await syncCartoes(motorista.id);
+
         toast({
           title: 'Motorista atualizado',
           description: 'Os dados do motorista foram atualizados com sucesso.',
@@ -332,6 +404,9 @@ export function MotoristaDialog({
           .single();
 
         if (error) throw error;
+
+        // Sync cartões frota
+        if (newMotorista) await syncCartoes(newMotorista.id);
 
         toast({
           title: 'Motorista criado',
@@ -629,6 +704,43 @@ export function MotoristaDialog({
                     </FormItem>
                   )}
                 />
+
+                {/* Cartões Frota */}
+                <div className="bg-orange-50/40 dark:bg-orange-950/10 p-4 rounded-xl border border-orange-100 dark:border-orange-900/30 space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-orange-700 dark:text-orange-400">
+                    <CreditCard className="h-4 w-4" />
+                    Cartões Frota
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {(['bp', 'repsol', 'edp'] as const).map((tipo) => (
+                      <div key={tipo} className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground uppercase">
+                          {tipo === 'edp' ? 'EDP' : tipo === 'bp' ? 'BP' : 'Repsol'}
+                        </label>
+                        <Select
+                          value={selectedCartao[tipo]}
+                          onValueChange={(v) =>
+                            setSelectedCartao((s) => ({ ...s, [tipo]: v === '__none__' ? '' : v }))
+                          }
+                        >
+                          <SelectTrigger className="h-9 bg-background text-sm">
+                            <SelectValue placeholder="Sem cartão" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">
+                              <span className="text-muted-foreground italic">Sem cartão</span>
+                            </SelectItem>
+                            {cartoesFrota[tipo].map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.numero}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-purple-50/30 dark:bg-purple-950/10 p-4 rounded-xl border border-purple-100 dark:border-purple-900/30">
                   <FormField

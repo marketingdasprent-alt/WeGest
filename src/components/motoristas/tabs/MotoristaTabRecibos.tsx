@@ -26,10 +26,10 @@ export function MotoristaTabRecibos({ motorista }: MotoristaTabRecibosProps) {
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
             <CalendarIcon className="h-5 w-5 text-primary" />
-            Recibos & Resumo Semanal
+            Resumos Semanais
           </h2>
           <p className="text-sm text-muted-foreground">
-            Análise financeira e gestão de recibos para o período selecionado.
+            Resumos financeiros e recibos verdes do motorista.
           </p>
         </div>
 

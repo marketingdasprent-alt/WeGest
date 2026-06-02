@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+import { cn, matchesSearch } from '@/lib/utils';
 import { ImportRobotCsvDialog } from '@/components/admin/ImportRobotCsvDialog';
 import { DateRange } from 'react-day-picker';
 
@@ -125,16 +125,9 @@ export const RepsolDataTab: React.FC = () => {
   const filtered = transacoes.filter(
     (t) =>
       !searchTerm ||
-      normalize(t.motorista?.nome || '').includes(normalize(searchTerm)) ||
-      normalize(t.station_name || '').includes(normalize(searchTerm))
+      matchesSearch(t.motorista?.nome, searchTerm) ||
+      matchesSearch(t.station_name, searchTerm)
   );
-
-  function normalize(s: string) {
-    return s
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-  }
 
   const stats = {
     total: filtered.length,
@@ -188,10 +181,6 @@ export const RepsolDataTab: React.FC = () => {
             className="pl-10"
           />
         </div>
-        <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
-          <Upload className="h-4 w-4 mr-2" />
-          Importar Repsol
-        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -249,12 +238,6 @@ export const RepsolDataTab: React.FC = () => {
           </Table>
         )}
       </div>
-      <ImportRobotCsvDialog
-        open={showImportDialog}
-        onOpenChange={setShowImportDialog}
-        integracaoId={selectedIntegracao}
-        onImportComplete={fetchTransacoes}
-      />
     </div>
   );
 };

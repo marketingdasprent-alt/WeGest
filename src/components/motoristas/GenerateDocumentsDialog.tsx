@@ -29,7 +29,7 @@ import {
   uploadDocumentToStorage,
 } from '@/utils/generateDocumentFromTemplate';
 import { useEmpresas } from '@/hooks/useEmpresas';
-import { printPdf } from '@/lib/printPdf';
+import { matchesSearch } from '@/lib/utils';
 
 interface Motorista {
   id: string;
@@ -132,8 +132,8 @@ export const GenerateDocumentsDialog = ({
     } else {
       const filtered = motoristas.filter(
         (m) =>
-          m.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (m.email && m.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          matchesSearch(m.nome, searchTerm) ||
+          matchesSearch(m.email, searchTerm) ||
           (m.nif && m.nif.includes(searchTerm))
       );
       setFilteredMotoristas(filtered);
@@ -276,6 +276,7 @@ export const GenerateDocumentsDialog = ({
       // com uma página em branco para nunca saírem colados.
       const isMultiple = templatesToGenerate.length > 1;
 
+      // Quando múltiplos downloads, criar um PDF combinado onde todos os documentos são adicionados
       const combinedPdf = isMultiple
         ? new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
         : null;
@@ -412,17 +413,12 @@ export const GenerateDocumentsDialog = ({
         }
       }
 
-      // Múltiplos documentos: apagar a página 1 em branco e imprimir/descarregar o PDF combinado
+      // Quando múltiplos downloads: apagar página 1 em branco e guardar PDF combinado
       if (isMultiple && combinedPdf && successCount > 0) {
         combinedPdf.deletePage(1);
         const today_str = new Date().toISOString().split('T')[0].replace(/-/g, '');
         const fileName = `Documentos_${activeMotorista.nome}_${today_str}.pdf`;
-
-        if (action === 'print') {
-          printPdf(combinedPdf, fileName);
-        } else {
-          combinedPdf.save(fileName);
-        }
+        combinedPdf.save(fileName);
       }
 
       setCurrentGenerating(null);

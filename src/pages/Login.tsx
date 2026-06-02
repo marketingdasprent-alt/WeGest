@@ -12,8 +12,12 @@ import { getEmailRedirectUrl, getResetPasswordRedirectUrl } from '@/lib/native';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 import { subdomainCodigo } from '@/lib/subdomain';
 
+const ORG_KEY = 'wegest_last_org';
+
 const Login = () => {
-  const [codigoOrg, setCodigoOrg] = useState(subdomainCodigo || '');
+  const [codigoOrg, setCodigoOrg] = useState(
+    subdomainCodigo || localStorage.getItem(ORG_KEY) || ''
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -108,6 +112,9 @@ const Login = () => {
       await supabase
         .from('user_org_ativa')
         .upsert({ user_id: authData.user.id, org_id: org.id }, { onConflict: 'user_id' });
+
+      // Guardar código da org para pré-preencher no próximo login
+      localStorage.setItem(ORG_KEY, orgCode);
 
       toast({
         title: 'Sucesso',
