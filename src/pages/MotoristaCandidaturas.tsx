@@ -889,11 +889,7 @@ const MotoristaCandidaturas: React.FC = () => {
                 Ver motorista
               </Button>
             )}
-            <Button
-              variant="ghost"
-              className="w-full"
-              onClick={() => setSuccessDialogOpen(false)}
-            >
+            <Button variant="ghost" className="w-full" onClick={() => setSuccessDialogOpen(false)}>
               Fechar
             </Button>
           </DialogFooter>

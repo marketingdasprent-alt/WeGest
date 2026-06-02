@@ -49,8 +49,7 @@ const RegistoMotorista: React.FC = () => {
       return 'A palavra-passe deve ter pelo menos 6 caracteres.';
     if (m.includes('weak') || m.includes('pwned') || m.includes('compromised'))
       return 'A palavra-passe é demasiado fraca. Escolha uma mais segura.';
-    if (m.includes('invalid') && m.includes('email'))
-      return 'O email introduzido não é válido.';
+    if (m.includes('invalid') && m.includes('email')) return 'O email introduzido não é válido.';
     if (m.includes('rate limit') || m.includes('too many') || m.includes('exceeded'))
       return 'Demasiadas tentativas. Aguarde uns minutos e tente novamente.';
     if (m.includes('network') || m.includes('failed to fetch') || m.includes('fetch'))

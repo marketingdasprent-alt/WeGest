@@ -243,7 +243,8 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
       if (typeof draft.carta_conducao === 'string') setCartaConducao(draft.carta_conducao);
       if (Array.isArray(draft.carta_categorias)) setCartaCategorias(draft.carta_categorias);
       if (typeof draft.carta_validade === 'string') setCartaValidade(draft.carta_validade);
-      if (typeof draft.carta_ficheiro_url === 'string') setCartaFicheiroUrl(draft.carta_ficheiro_url);
+      if (typeof draft.carta_ficheiro_url === 'string')
+        setCartaFicheiroUrl(draft.carta_ficheiro_url);
       if (typeof draft.carta_conducao_verso_url === 'string')
         setCartaConducaoVersoUrl(draft.carta_conducao_verso_url);
       if (typeof draft.licenca_tvde_numero === 'string')
@@ -512,10 +513,8 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
       errors.licencaTvdeFicheiroUrl = `Licença TVDE — Ficheiro: ${UPLOAD_HINT}`;
 
     // Documentos Adicionais
-    if (!registoCriminalUrl)
-      errors.registoCriminalUrl = `Registo Criminal: ${UPLOAD_HINT}`;
-    if (!comprovativoIbanUrl)
-      errors.comprovativoIbanUrl = `Comprovativo de IBAN: ${UPLOAD_HINT}`;
+    if (!registoCriminalUrl) errors.registoCriminalUrl = `Registo Criminal: ${UPLOAD_HINT}`;
+    if (!comprovativoIbanUrl) errors.comprovativoIbanUrl = `Comprovativo de IBAN: ${UPLOAD_HINT}`;
 
     setFieldErrors(errors);
     return Object.values(errors);

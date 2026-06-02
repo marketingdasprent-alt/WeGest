@@ -93,16 +93,19 @@ export const useNotificacoes = (enabled: boolean) => {
     };
   }, [enabled, fetchAtivas]);
 
-  const resolver = useCallback(async (id: string) => {
-    // Otimista: remove já do ecrã; o real-time confirma para os restantes.
-    setNotificacoes((cur) => cur.filter((n) => n.id !== id));
-    const { error } = await db.rpc('resolver_notificacao', { p_id: id });
-    if (error) {
-      console.error('Erro ao resolver notificação:', error);
-      // Em caso de erro recarrega o estado real.
-      fetchAtivas();
-    }
-  }, [fetchAtivas]);
+  const resolver = useCallback(
+    async (id: string) => {
+      // Otimista: remove já do ecrã; o real-time confirma para os restantes.
+      setNotificacoes((cur) => cur.filter((n) => n.id !== id));
+      const { error } = await db.rpc('resolver_notificacao', { p_id: id });
+      if (error) {
+        console.error('Erro ao resolver notificação:', error);
+        // Em caso de erro recarrega o estado real.
+        fetchAtivas();
+      }
+    },
+    [fetchAtivas]
+  );
 
   return { notificacoes, resolver };
 };
