@@ -3750,9 +3750,11 @@ export type Database = {
         Row: {
           carta_categorias: string[] | null
           carta_conducao: string | null
+          carta_conducao_verso_url: string | null
           carta_ficheiro_url: string | null
           carta_validade: string | null
           cidade: string | null
+          codigo_postal: string | null
           comprovativo_iban_url: string | null
           comprovativo_morada_url: string | null
           created_at: string | null
@@ -3760,6 +3762,7 @@ export type Database = {
           data_submissao: string | null
           decidido_por: string | null
           documento_ficheiro_url: string | null
+          documento_identificacao_verso_url: string | null
           documento_numero: string | null
           documento_tipo: string | null
           documento_validade: string | null
@@ -3783,9 +3786,11 @@ export type Database = {
         Insert: {
           carta_categorias?: string[] | null
           carta_conducao?: string | null
+          carta_conducao_verso_url?: string | null
           carta_ficheiro_url?: string | null
           carta_validade?: string | null
           cidade?: string | null
+          codigo_postal?: string | null
           comprovativo_iban_url?: string | null
           comprovativo_morada_url?: string | null
           created_at?: string | null
@@ -3793,6 +3798,7 @@ export type Database = {
           data_submissao?: string | null
           decidido_por?: string | null
           documento_ficheiro_url?: string | null
+          documento_identificacao_verso_url?: string | null
           documento_numero?: string | null
           documento_tipo?: string | null
           documento_validade?: string | null
@@ -3816,9 +3822,11 @@ export type Database = {
         Update: {
           carta_categorias?: string[] | null
           carta_conducao?: string | null
+          carta_conducao_verso_url?: string | null
           carta_ficheiro_url?: string | null
           carta_validade?: string | null
           cidade?: string | null
+          codigo_postal?: string | null
           comprovativo_iban_url?: string | null
           comprovativo_morada_url?: string | null
           created_at?: string | null
@@ -3826,6 +3834,7 @@ export type Database = {
           data_submissao?: string | null
           decidido_por?: string | null
           documento_ficheiro_url?: string | null
+          documento_identificacao_verso_url?: string | null
           documento_numero?: string | null
           documento_tipo?: string | null
           documento_validade?: string | null

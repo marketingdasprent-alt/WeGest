@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Eye, EyeOff, Car } from 'lucide-react';
+import { Loader2, Eye, EyeOff, Car, CheckCircle2, Circle } from 'lucide-react';
 import { PhoneInput, validatePhoneNumber } from '@/components/ui/phone-input';
 import { getEmailRedirectUrl } from '@/lib/native';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
@@ -34,6 +34,28 @@ const RegistoMotorista: React.FC = () => {
 
   const handleTelefoneChange = (value: string) => {
     setTelefone(value);
+  };
+
+  // Traduz/clarifica os erros do Supabase para o motorista perceber o que correu mal.
+  const traduzirErroRegisto = (msg?: string) => {
+    const m = (msg || '').toLowerCase();
+    if (
+      m.includes('already registered') ||
+      m.includes('already been registered') ||
+      m.includes('user already exists')
+    )
+      return 'Já existe uma conta com este email. Tente iniciar sessão ou recuperar a palavra-passe.';
+    if (m.includes('password should be at least') || m.includes('at least 6'))
+      return 'A palavra-passe deve ter pelo menos 6 caracteres.';
+    if (m.includes('weak') || m.includes('pwned') || m.includes('compromised'))
+      return 'A palavra-passe é demasiado fraca. Escolha uma mais segura.';
+    if (m.includes('invalid') && m.includes('email'))
+      return 'O email introduzido não é válido.';
+    if (m.includes('rate limit') || m.includes('too many') || m.includes('exceeded'))
+      return 'Demasiadas tentativas. Aguarde uns minutos e tente novamente.';
+    if (m.includes('network') || m.includes('failed to fetch') || m.includes('fetch'))
+      return 'Falha de ligação. Verifique a sua internet e tente novamente.';
+    return msg || 'Ocorreu um erro ao criar a conta.';
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -97,7 +119,7 @@ const RegistoMotorista: React.FC = () => {
       console.error('Erro no registo:', error);
       toast({
         title: 'Erro no registo',
-        description: error.message || 'Ocorreu um erro ao criar a conta.',
+        description: traduzirErroRegisto(error.message),
         variant: 'destructive',
       });
     } finally {
@@ -189,6 +211,18 @@ const RegistoMotorista: React.FC = () => {
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
+          <p
+            className={`flex items-center gap-1.5 text-xs ${
+              password.length >= 6 ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
+            }`}
+          >
+            {password.length >= 6 ? (
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            ) : (
+              <Circle className="h-3.5 w-3.5" />
+            )}
+            A palavra-passe deve ter pelo menos 6 caracteres.
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -204,6 +238,9 @@ const RegistoMotorista: React.FC = () => {
             className="auth-input"
             autoComplete="new-password"
           />
+          {confirmPassword.length > 0 && password !== confirmPassword && (
+            <p className="text-xs text-destructive">As palavras-passe não coincidem.</p>
+          )}
         </div>
 
         <Button type="submit" className="auth-primary-button w-full" disabled={loading}>
