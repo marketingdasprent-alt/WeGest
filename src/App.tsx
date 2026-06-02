@@ -11,6 +11,7 @@ import { isNativeDriverOnlyMode } from '@/lib/native';
 import NativeAppRoutes from '@/routes/NativeAppRoutes';
 import WebAppRoutes from '@/routes/WebAppRoutes';
 import { UpdateNotification } from '@/components/UpdateNotification';
+import { NotificacoesPopup } from '@/components/notificacoes/NotificacoesPopup';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,7 +33,14 @@ const App = () => {
                 <Sonner />
                 <UpdateNotification />
                 <BrowserRouter>
-                  {isNativeDriverOnlyMode() ? <NativeAppRoutes /> : <WebAppRoutes />}
+                  {isNativeDriverOnlyMode() ? (
+                    <NativeAppRoutes />
+                  ) : (
+                    <>
+                      <WebAppRoutes />
+                      <NotificacoesPopup />
+                    </>
+                  )}
                 </BrowserRouter>
               </TooltipProvider>
             </ThemeProvider>
