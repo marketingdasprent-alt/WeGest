@@ -30,6 +30,7 @@ import {
 } from '@/utils/generateDocumentFromTemplate';
 import { useEmpresas } from '@/hooks/useEmpresas';
 import { matchesSearch } from '@/lib/utils';
+import { printPdf } from '@/lib/printPdf';
 
 interface Motorista {
   id: string;
@@ -413,12 +414,17 @@ export const GenerateDocumentsDialog = ({
         }
       }
 
-      // Quando múltiplos downloads: apagar página 1 em branco e guardar PDF combinado
+      // Quando múltiplos documentos: apagar página 1 em branco e dar saída ao PDF combinado.
+      // Tem de respeitar a ação escolhida — imprimir abre a caixa de impressão, download grava.
       if (isMultiple && combinedPdf && successCount > 0) {
         combinedPdf.deletePage(1);
         const today_str = new Date().toISOString().split('T')[0].replace(/-/g, '');
         const fileName = `Documentos_${activeMotorista.nome}_${today_str}.pdf`;
-        combinedPdf.save(fileName);
+        if (action === 'print') {
+          printPdf(combinedPdf, fileName);
+        } else {
+          combinedPdf.save(fileName);
+        }
       }
 
       setCurrentGenerating(null);

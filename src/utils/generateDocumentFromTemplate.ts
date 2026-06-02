@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
+import { printPdf } from '@/lib/printPdf';
 
 interface DocumentTemplate {
   id: string;
@@ -698,16 +699,10 @@ export const generateDocumentFromTemplate = async (
 
     // Executar ação (imprimir ou download)
     if (!params.skipOutput) {
+      const fileName = `${templateData.nome}_${motoristaData.nome}_${format(new Date(), 'yyyyMMdd')}.pdf`;
       if (action === 'print') {
-        pdf.autoPrint();
-        const win = window.open(pdf.output('bloburl'), '_blank');
-        if (!win) {
-          // Pop-up bloqueado: descarregar como alternativa para não perder o documento
-          const fileName = `${templateData.nome}_${motoristaData.nome}_${format(new Date(), 'yyyyMMdd')}.pdf`;
-          pdf.save(fileName);
-        }
+        printPdf(pdf, fileName);
       } else {
-        const fileName = `${templateData.nome}_${motoristaData.nome}_${format(new Date(), 'yyyyMMdd')}.pdf`;
         pdf.save(fileName);
       }
     }
