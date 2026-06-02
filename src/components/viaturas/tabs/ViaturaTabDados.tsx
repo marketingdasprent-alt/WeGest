@@ -305,36 +305,50 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
     },
   });
 
+  // Subscrição ao estado dirty (lida em render) para o guard do reset abaixo.
+  const isFormDirty = form.formState.isDirty;
+
+  // Sincroniza o formulário com a viatura. É reaplicado à medida que as listas de
+  // opções (marcas, modelos, combustíveis, tipos, grupos, estações) carregam,
+  // porque os <Select> ligados aos IDs (marca_id, modelo_id, …) só mostram o valor
+  // guardado se a respetiva <SelectItem> já estiver montada quando o valor é
+  // definido. Sem isto, ao reentrar numa viatura os dropdowns apareciam vazios
+  // (as opções chegavam depois do reset). O guard isFormDirty evita sobrepor
+  // edições do utilizador ainda por guardar.
   useEffect(() => {
-    if (viatura) {
-      form.reset({
-        matricula: viatura.matricula || '',
-        marca: viatura.marca || '',
-        modelo: viatura.modelo || '',
-        marca_id: viatura.marca_id || '',
-        modelo_id: viatura.modelo_id || '',
-        combustivel_id: viatura.combustivel_id || '',
-        ano: viatura.ano?.toString() || '',
-        cor: viatura.cor || '',
-        categoria: viatura.categoria || '',
-        combustivel: viatura.combustivel || '',
-        status: viatura.status === 'em_uso' ? 'disponivel' : viatura.status || 'disponivel',
-        km_atual: viatura.km_atual?.toString() || '',
-        numero_motor: viatura.numero_motor || '',
-        numero_chassis: viatura.numero_chassis || '',
-        data_matricula: viatura.data_matricula || '',
-        observacoes: viatura.observacoes || '',
-        grupo_id: viatura.grupo_id || '',
-        is_slot: viatura.is_slot || false,
-        habilitada_tvde: viatura.habilitada_tvde || false,
-        estacao_id: viatura.estacao_id || '',
-        extintor_numero: viatura.extintor_numero || '',
-        extintor_validade: viatura.extintor_validade || '',
-        tipo_id: viatura.tipo_id || '',
-      });
-      loadDocuments();
-    }
-  }, [viatura, form, viaturasTipos]);
+    if (!viatura || isFormDirty) return;
+    form.reset({
+      matricula: viatura.matricula || '',
+      marca: viatura.marca || '',
+      modelo: viatura.modelo || '',
+      marca_id: viatura.marca_id || '',
+      modelo_id: viatura.modelo_id || '',
+      combustivel_id: viatura.combustivel_id || '',
+      ano: viatura.ano?.toString() || '',
+      cor: viatura.cor || '',
+      categoria: viatura.categoria || '',
+      combustivel: viatura.combustivel || '',
+      status: viatura.status === 'em_uso' ? 'disponivel' : viatura.status || 'disponivel',
+      km_atual: viatura.km_atual?.toString() || '',
+      numero_motor: viatura.numero_motor || '',
+      numero_chassis: viatura.numero_chassis || '',
+      data_matricula: viatura.data_matricula || '',
+      observacoes: viatura.observacoes || '',
+      grupo_id: viatura.grupo_id || '',
+      is_slot: viatura.is_slot || false,
+      habilitada_tvde: viatura.habilitada_tvde || false,
+      estacao_id: viatura.estacao_id || '',
+      extintor_numero: viatura.extintor_numero || '',
+      extintor_validade: viatura.extintor_validade || '',
+      tipo_id: viatura.tipo_id || '',
+    });
+  }, [viatura, form, isFormDirty, viaturasTipos, marcas, modelos, combustiveis, grupos, estacoes]);
+
+  // Documentos: carregar uma vez por viatura.
+  useEffect(() => {
+    if (viatura?.id) loadDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viatura?.id]);
 
   // Fetch modelos when marca_id changes
   const watchedMarcaId = form.watch('marca_id');

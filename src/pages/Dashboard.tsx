@@ -63,6 +63,8 @@ import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CheckinCheckoutHistoricoCard } from '@/components/dashboard/CheckinCheckoutHistoricoCard';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { fetchViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
+import { deriveViaturaEstado, ESTADOS_EM_USO } from '@/lib/viaturas';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -201,16 +203,27 @@ const Dashboard = () => {
       const filtrarGestor = gestorFiltro !== 'todos';
 
       // ── 1. Fleet counts ────────────────────────────────────────────────
-      const { data: viaturas } = await supabase
-        .from('viaturas')
-        .select('id, status, matricula, valor_aluguer')
-        .neq('status', 'vendida');
+      // O estado é derivado das ocupações ativas (contrato / reserva /
+      // movimentação / reparação), igual à listagem da Frota — não do campo
+      // `status` (em_uso manual foi descontinuado).
+      const [{ data: viaturas }, ocupacao] = await Promise.all([
+        supabase
+          .from('viaturas')
+          .select('id, status, matricula, valor_aluguer')
+          .neq('status', 'vendida'),
+        fetchViaturasOcupacao(),
+      ]);
+
+      const estadosFrota = (viaturas ?? []).map((v) =>
+        deriveViaturaEstado({ status: v.status }, ocupacao.get(v.id))
+      );
 
       const fleetCounts: FleetCounts = {
         total: viaturas?.length || 0,
-        disponiveis: viaturas?.filter((v) => v.status === 'disponivel').length || 0,
-        ocupadas: viaturas?.filter((v) => v.status === 'em_uso').length || 0,
-        manutencao: viaturas?.filter((v) => v.status === 'manutencao').length || 0,
+        disponiveis: estadosFrota.filter((e) => e === 'disponivel').length,
+        ocupadas: estadosFrota.filter((e) => (ESTADOS_EM_USO as readonly string[]).includes(e))
+          .length,
+        manutencao: estadosFrota.filter((e) => e === 'manutencao').length,
       };
       setFleet(fleetCounts);
 

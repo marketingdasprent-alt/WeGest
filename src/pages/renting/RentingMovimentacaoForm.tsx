@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, ArrowRightLeft, Loader2, Trash2 } from 'lucide-react';
@@ -74,7 +74,9 @@ const DEFAULT_VALUES: MovimentoFormValues = {
 const RentingMovimentacaoForm = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const isEdit = !!id && id !== 'novo';
+  const viaturaIdFromUrl = !isEdit ? searchParams.get('viatura_id') : null;
 
   const { data: movimento, isLoading: loadingMovimento } = useMovimento(isEdit ? id : null);
   // Carregamos TODAS as viaturas (não vendidas). O ViaturaDisponibilidadeSelect
@@ -125,6 +127,17 @@ const RentingMovimentacaoForm = () => {
       observacoes_internas: movimento.observacoes_internas ?? '',
     });
   }, [isEdit, movimento, form]);
+
+  // Pré-preenche a viatura quando vem por query param (?viatura_id=...),
+  // ex.: botão "Nova movimentação" no perfil da viatura.
+  useEffect(() => {
+    if (isEdit || !viaturaIdFromUrl || viaturas.length === 0) return;
+    if (form.getValues('viatura_id')) return;
+    const v = viaturas.find((x) => x.id === viaturaIdFromUrl);
+    if (!v) return;
+    form.setValue('viatura_id', v.id, { shouldDirty: false });
+    form.setValue('matricula', v.matricula ?? '', { shouldDirty: false });
+  }, [isEdit, viaturaIdFromUrl, viaturas, form]);
 
   const adicionarAnexosPendentes = (files: File[]) => {
     setAnexosPendentes((prev) => [
