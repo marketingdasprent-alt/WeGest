@@ -29,6 +29,7 @@ import {
   uploadDocumentToStorage,
 } from '@/utils/generateDocumentFromTemplate';
 import { useEmpresas } from '@/hooks/useEmpresas';
+import { printPdf } from '@/lib/printPdf';
 
 interface Motorista {
   id: string;
@@ -418,13 +419,7 @@ export const GenerateDocumentsDialog = ({
         const fileName = `Documentos_${activeMotorista.nome}_${today_str}.pdf`;
 
         if (action === 'print') {
-          combinedPdf.autoPrint();
-          const win = window.open(combinedPdf.output('bloburl'), '_blank');
-          if (!win) {
-            // Pop-up bloqueado: descarregar como alternativa para não perder o documento
-            combinedPdf.save(fileName);
-            toast.info('Pop-up bloqueado — documentos descarregados em vez de impressos.');
-          }
+          printPdf(combinedPdf, fileName);
         } else {
           combinedPdf.save(fileName);
         }
