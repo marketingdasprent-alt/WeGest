@@ -271,17 +271,23 @@ const RentingReservaForm = () => {
   // "Criar Contrato" está sempre presente em edição, mas só fica activo quando a
   // reserva GUARDADA tem os campos obrigatórios e não há alterações por gravar —
   // o contrato é gerado a partir da reserva persistida (reserva_id), não do form.
+  // Completude por regime. O condutor pode ser cliente (rent-a-car) ou
+  // motorista (TVDE), por isso aceitamos qualquer condutor guardado — exigir
+  // `cliente_id` bloqueava o TVDE. As estações só são obrigatórias no aluguer
+  // (rent-a-car); o TVDE não as usa. (Slot não chega aqui — gera prestação.)
+  const temCondutor = !!reserva?.cliente_id || condutoresAtuais.length > 0;
+  const temEstacoes = !!(reserva?.estacao_entrega_id && reserva?.estacao_recolha_id);
   const reservaCompleta = !!(
     reserva &&
-    reserva.cliente_id &&
     reserva.viatura_id &&
-    reserva.estacao_entrega_id &&
-    // Recolha só é exigida em rent-a-car (TVDE não devolve a viatura).
-    (reserva.regime !== 'rent_a_car' || reserva.estacao_recolha_id)
+    temCondutor &&
+    (reserva.regime === 'rent_a_car' ? temEstacoes : true)
   );
   const podeCriarContrato = reservaCompleta && !form.formState.isDirty;
   const motivoContratoBloqueado = !reservaCompleta
-    ? 'Preenche cliente, viatura e estação de entrega (e recolha, em rent-a-car) e guarda a reserva.'
+    ? reserva?.regime === 'rent_a_car'
+      ? 'Preenche condutor, viatura e estações (entrega e recolha) e guarda a reserva.'
+      : 'Preenche condutor e viatura e guarda a reserva.'
     : form.formState.isDirty
       ? 'Guarda as alterações antes de criar o contrato.'
       : undefined;

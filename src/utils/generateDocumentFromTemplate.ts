@@ -254,6 +254,7 @@ const replaceDynamicFields = (
     'local_entrega',
     'local_recolha',
     'tarifa_diaria',
+    'valor_semanal',
     'franquia',
     'caucao',
     'kms_incluidos',
@@ -730,8 +731,10 @@ export const generateDocumentFromTemplate = async (
     }
 
     // Logo de cabeçalho (canto superior esquerdo da 1ª página), tamanho fixo.
-    // 'PNG' preserva transparência (sem caixa preta de fundo).
-    if (headerLogoUrl) {
+    // 'PNG' preserva transparência (sem caixa preta de fundo). Só se desenha
+    // quando NÃO há papel timbrado — o timbrado já traz a sua própria logo,
+    // senão sobrepunha-se (ex.: logo WeGest por cima do timbrado da empresa).
+    if (headerLogoUrl && !templateData.papel_timbrado_url) {
       try {
         const logo = await loadImage(headerLogoUrl);
         const logoWidth = 45; // mm
@@ -1069,13 +1072,16 @@ export const generateDocumentFromTemplate = async (
     // skipFooter: quem orquestra (ex: contrato de aluguer) faz um rodapé unificado.
     const endPage = pdf.getNumberOfPages();
     const docTotalPages = endPage - startPage + 1;
+    // Com papel timbrado, o rodapé da empresa já vem na imagem — não desenhar
+    // o footerText por cima; usa-se só a numeração discreta.
+    const usarFooterEmpresa = !!params.footerText && !templateData.papel_timbrado_url;
     for (let i = startPage; i <= endPage && !params.skipFooter; i++) {
       pdf.setPage(i);
-      pdf.setFontSize(params.footerText ? 7.5 : 9);
+      pdf.setFontSize(usarFooterEmpresa ? 7.5 : 9);
       pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(138, 141, 153);
       const pageText = `Página ${i - startPage + 1} de ${docTotalPages}`;
-      if (params.footerText) {
+      if (usarFooterEmpresa) {
         // Rodapé da empresa (esquerda) + numeração (direita), sobre uma linha
         // fina — só quando há footerText e não há papel timbrado.
         const footerY = pageHeight - 14;
@@ -1108,6 +1114,47 @@ export const generateDocumentFromTemplate = async (
     console.error('Erro ao gerar documento:', error);
     throw error;
   }
+};
+
+/** Um documento a incluir no PDF combinado (mesmos campos do gerador). */
+export type DocumentoCombinado = Pick<
+  GenerateDocumentParams,
+  'templateId' | 'motoristaData' | 'documentData' | 'headerLogoUrl' | 'footerText' | 'anexoFotos'
+>;
+
+/**
+ * Gera vários documentos (templates) num ÚNICO PDF, com uma folha branca a
+ * separar cada documento. Cada documento mantém a sua própria numeração e
+ * rodapé. Usado, p.ex., no regime TVDE/slot (Contrato de Prestação + Contrato
+ * de Aluguer). Ordem do array = ordem no PDF.
+ */
+export const generateDocumentosCombinados = async (
+  docs: DocumentoCombinado[],
+  opts: { action?: 'print' | 'download'; fileName?: string } = {}
+): Promise<jsPDF | null> => {
+  const { action = 'print', fileName } = opts;
+  if (docs.length === 0) return null;
+
+  let pdf: jsPDF | undefined;
+  for (let i = 0; i < docs.length; i++) {
+    pdf = await generateDocumentFromTemplate({
+      ...docs[i],
+      existingPdf: pdf,
+      skipOutput: true,
+    });
+    // Folha branca a separar do próximo documento (o motor adiciona depois a
+    // página de conteúdo do documento seguinte por cima desta separação).
+    if (i < docs.length - 1) pdf.addPage();
+  }
+  if (!pdf) return null;
+
+  if (action === 'print') {
+    pdf.autoPrint();
+    window.open(pdf.output('bloburl'), '_blank');
+  } else {
+    pdf.save(`${fileName || `documento_${format(new Date(), 'yyyyMMdd')}`}.pdf`);
+  }
+  return pdf;
 };
 
 // Upload document to Supabase Storage and return the URL

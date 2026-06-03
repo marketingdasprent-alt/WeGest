@@ -587,7 +587,7 @@ export function ContasResumoTab() {
       });
 
       // 3. Buscar viagens Bolt
-      let boltQuery = supabase
+      const boltQuery = supabase
         .from('bolt_viagens')
         .select('driver_name, driver_uuid, driver_earnings, order_status, integracao_id')
         .gt('driver_earnings', 0)
@@ -595,7 +595,7 @@ export function ContasResumoTab() {
         .lte('payment_confirmed_timestamp', weekEnd.toISOString());
 
       // 4. Buscar transações Uber no mesmo período
-      let uberQuery = supabase
+      const uberQuery = supabase
         .from('uber_transactions')
         .select('uber_driver_id, gross_amount, raw_transaction')
         .gte('occurred_at', weekStart.toISOString())
@@ -606,7 +606,7 @@ export function ContasResumoTab() {
       const fmtD = (d: Date) =>
         `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
       const periodoStr = `${fmtD(weekStart)}-${fmtD(weekEnd)}`;
-      let atividadeQuery = supabase
+      const atividadeQuery = supabase
         .from('uber_atividade_motoristas')
         .select('uber_driver_id, viagens_concluidas')
         .eq('periodo', periodoStr);
@@ -617,21 +617,21 @@ export function ContasResumoTab() {
         .select('uber_driver_id, motorista_id, full_name');
 
       // 4d. Buscar transações de combustível no período
-      let combustivelQuery = (supabase as any)
+      const combustivelQuery = (supabase as any)
         .from('bp_transacoes')
         .select('motorista_id, amount')
         .gte('transaction_date', weekStart.toISOString())
         .lte('transaction_date', weekEnd.toISOString())
         .not('motorista_id', 'is', null);
 
-      let repsolQuery = supabase
+      const repsolQuery = supabase
         .from('repsol_transacoes')
         .select('motorista_id, amount')
         .gte('transaction_date', weekStart.toISOString())
         .lte('transaction_date', weekEnd.toISOString())
         .not('motorista_id', 'is', null);
 
-      let edpQuery = supabase
+      const edpQuery = supabase
         .from('edp_transacoes')
         .select('motorista_id, amount')
         .gte('transaction_date', weekStart.toISOString())
@@ -664,7 +664,7 @@ export function ContasResumoTab() {
         .lte('data_movimento', weekEndStr)
         .eq('status', 'pendente');
 
-      let boltResumosQuery = supabase
+      const boltResumosQuery = supabase
         .from('bolt_resumos_semanais')
         .select(
           'motorista_id, motorista_nome, ganhos_liquidos, viagens_terminadas, integracao_id, identificador_motorista'
