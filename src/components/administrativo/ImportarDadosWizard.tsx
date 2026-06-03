@@ -311,7 +311,7 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
         const wStartIso = `${wStart}T00:00:00`;
         const wEndIso = `${wEnd}T23:59:59`;
 
-        let result: { count: number | null; latest: string | null } = {
+        const result: { count: number | null; latest: string | null } = {
           count: null,
           latest: null,
         };
