@@ -36,3 +36,6 @@ supabase/.temp/
 # Documentação interna (markdown) — fica local, não vai para o repo.
 # AGENTS.md e README.md (root) ficam tracked.
 docs/**/*.md
+
+# Skills locais do Claude Code — ferramentas de apoio, não fazem parte do produto.
+.claude/skills/

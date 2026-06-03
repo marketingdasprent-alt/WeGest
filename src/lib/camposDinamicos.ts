@@ -98,6 +98,7 @@ export const CAMPOS_CATALOGO: CampoDinamico[] = [
   { chave: 'empresa_licenca_validade', label: 'Validade licença TVDE', categoria: 'empresa' },
   { chave: 'empresa_representante', label: 'Representante', categoria: 'empresa' },
   { chave: 'empresa_cargo_representante', label: 'Cargo do representante', categoria: 'empresa' },
+  { chave: 'colaborador_nome', label: 'Colaborador (quem gera)', categoria: 'empresa' },
 
   // ── Viatura ────────────────────────────────────────────────
   { chave: 'viatura_matricula', label: 'Matrícula', categoria: 'viatura' },
@@ -112,11 +113,14 @@ export const CAMPOS_CATALOGO: CampoDinamico[] = [
   { chave: 'data_assinatura', label: 'Data de assinatura', categoria: 'contrato' },
   { chave: 'cidade_assinatura', label: 'Cidade de assinatura', categoria: 'contrato' },
   { chave: 'duracao_meses', label: 'Duração (meses)', categoria: 'contrato' },
+  { chave: 'dias', label: 'Nº de dias', categoria: 'contrato' },
   { chave: 'tarifa_diaria', label: 'Tarifa diária', categoria: 'contrato' },
   { chave: 'franquia', label: 'Franquia', categoria: 'contrato' },
   { chave: 'caucao', label: 'Caução', categoria: 'contrato' },
   { chave: 'kms_incluidos', label: 'Kms incluídos', categoria: 'contrato' },
   { chave: 'km_adicional', label: 'Km adicional', categoria: 'contrato' },
+  { chave: 'subtotal', label: 'Subtotal', categoria: 'contrato' },
+  { chave: 'iva', label: 'IVA', categoria: 'contrato' },
   { chave: 'total', label: 'Total', categoria: 'contrato' },
   { chave: 'observacoes', label: 'Observações', categoria: 'contrato' },
   { chave: 'data_atual', label: 'Data actual', categoria: 'contrato' },

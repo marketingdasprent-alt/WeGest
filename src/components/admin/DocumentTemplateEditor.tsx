@@ -252,6 +252,11 @@ export const DocumentTemplateEditor = ({
 
     setSaving(true);
     try {
+      // Preservar o tipo do template em edição (ex.: 'contrato_aluguer').
+      // Forçar 'contrato_tvde' aqui mudava o tipo ao guardar e colidia com a
+      // constraint única (empresa_id, tipo, versao) → erro 23505.
+      const tipo = template?.tipo || 'contrato_tvde';
+
       // Determinar a versão correta
       let versao = template?.versao || 1;
 
@@ -261,7 +266,7 @@ export const DocumentTemplateEditor = ({
           .from('document_templates')
           .select('versao')
           .eq('empresa_id', empresaId)
-          .eq('tipo', 'contrato_tvde')
+          .eq('tipo', tipo)
           .order('versao', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -271,7 +276,7 @@ export const DocumentTemplateEditor = ({
 
       const templateData = {
         nome,
-        tipo: 'contrato_tvde',
+        tipo,
         empresa_id: empresaId,
         template_data: {
           conteudo: conteudoCompleto,

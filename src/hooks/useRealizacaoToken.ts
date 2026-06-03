@@ -75,7 +75,14 @@ export function usePollEventoRealizado(eventoId: string | null, enabled = true) 
         .select('realizado_em, realizado_por_id')
         .eq('id', eventoId)
         .maybeSingle();
-      if (error || !data || cancelled) return;
+      if (error || cancelled) return;
+      // Na RECOLHA, a cascata de estado APAGA o evento ao mudar para
+      // 'devolvido'. Sem evento, data === null — tratamos como realizado
+      // (senão o laptop ficava preso no "pendente" para sempre).
+      if (!data) {
+        setRealizado({ em: new Date().toISOString(), por_id: null });
+        return;
+      }
       if (data.realizado_em) {
         setRealizado({
           em: data.realizado_em as string,
@@ -125,6 +132,9 @@ export function useRealizarFromToken() {
       qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
       qc.invalidateQueries({ queryKey: ['renting', 'contratos'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+      // A box "pendente" do contrato lê desta query — sem isto, ao voltar ao
+      // contrato a box continuava a aparecer apesar de já estar realizado.
+      qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
       toast({
         title: vars.tipo === 'entrega' ? 'Entrega confirmada' : 'Recolha confirmada',
         description: 'O evento ficou marcado como realizado.',

@@ -481,7 +481,7 @@ const ContratoForm = () => {
         ? 'recolha'
         : null;
 
-  const { data: eventoPendente } = useQuery({
+  const { data: eventoPendente, isFetching: fetchingEventoPendente } = useQuery({
     queryKey: ['calendario-evento-pendente', contrato?.id ?? null, tipoEventoEsperado],
     queryFn: async () => {
       if (!contrato || !tipoEventoEsperado) return null;
@@ -497,17 +497,24 @@ const ContratoForm = () => {
       return { id: data.id as string, tipo: data.tipo as 'entrega' | 'recolha' };
     },
     enabled: isEdit && !!contrato && !!tipoEventoEsperado && !isFacturado,
+    // Sempre fresco ao montar: depois de realizar a entrega/recolha, ao voltar
+    // ao contrato não queremos reabrir a modal com base no evento em cache.
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 
   // Auto-open do dialog assim que entramos na página com evento pendente.
   // Só dispara uma vez por mount — se o user fechar, não reabre.
   useEffect(() => {
     if (autoOpenedRealizar) return;
+    // Espera o resultado FRESCO — durante o refetch o React Query serve o
+    // evento em cache (estado antigo) e abríamos a modal indevidamente.
+    if (fetchingEventoPendente) return;
     if (!eventoPendente) return;
     if (contrato?.substituido_em) return; // versão antiga não realiza
     setRealizarDialog({ eventoId: eventoPendente.id, tipo: eventoPendente.tipo });
     setAutoOpenedRealizar(true);
-  }, [eventoPendente, autoOpenedRealizar, contrato?.substituido_em]);
+  }, [eventoPendente, fetchingEventoPendente, autoOpenedRealizar, contrato?.substituido_em]);
 
   const conflitoArgs = useMemo(() => {
     const di = dataInicio ? new Date(dataInicio) : null;

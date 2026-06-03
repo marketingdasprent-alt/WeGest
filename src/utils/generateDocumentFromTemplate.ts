@@ -24,9 +24,16 @@ interface GenerateDocumentParams {
   documentData?: Record<string, any>;
   action?: 'print' | 'download';
   skipOutput?: boolean; // Se true, retorna o PDF sem abrir/gravar
+  skipFooter?: boolean; // Se true, não desenha o rodapé/numeração (rodapé unificado externo)
   existingPdf?: jsPDF; // Se fornecido, adiciona páginas a este PDF em vez de criar novo
   /** URL de um logo a desenhar no canto superior esquerdo da 1ª página (tamanho fixo). */
   headerLogoUrl?: string;
+  /** Texto do rodapé (ex.: "Empresa · NIF · Sede"). Quando dado e sem papel
+   *  timbrado, desenha-se em baixo à esquerda e a numeração à direita. */
+  footerText?: string;
+  /** Fotos a anexar em folhas próprias após o conteúdo (grelha 2×3). Cada
+   *  grupo gera um título de secção; os `urls` são imagens carregáveis. */
+  anexoFotos?: Array<{ titulo: string; urls: string[] }>;
 }
 
 interface UploadDocumentParams extends GenerateDocumentParams {
@@ -244,13 +251,19 @@ const replaceDynamicFields = (
     'viatura_marca_modelo',
     'viatura_grupo',
     'viatura_kms',
+    'local_entrega',
+    'local_recolha',
     'tarifa_diaria',
     'franquia',
     'caucao',
     'kms_incluidos',
     'km_adicional',
+    'subtotal',
+    'iva',
+    'dias',
     'total',
     'observacoes',
+    'colaborador_nome',
   ];
   contratoFields.forEach((field) => {
     const regex = new RegExp(`\\{\\{${field}\\}\\}`, 'g');
@@ -321,24 +334,223 @@ export const checkUnresolvedPlaceholders = (content: string): string[] => {
   return [...new Set(matches)];
 };
 
-// Converter HTML para texto simples, preservando formatação para o PDF
-const htmlToText = (
-  html: string
-): Array<{
-  type: 'text' | 'image';
+type RGB = [number, number, number];
+
+interface CellLine {
+  text: string;
+  bold: boolean;
+  color?: RGB;
+  fontSize?: number;
+}
+interface TableCellData {
+  lines: CellLine[];
+  align?: string;
+  bg?: RGB;
+  color?: RGB;
+  fontSize?: number;
+  colspan: number;
+}
+
+interface DocEl {
+  type: 'text' | 'image' | 'table' | 'hr';
   text?: string;
   src?: string;
-  style: { bold?: boolean; italic?: boolean; fontSize?: number; align?: string };
-}> => {
+  rows?: TableCellData[][];
+  bordered?: boolean;
+  style: { bold?: boolean; italic?: boolean; fontSize?: number; align?: string; color?: RGB };
+}
+
+/** Converte cor CSS (#rgb, #rrggbb, rgb(...)) para [r,g,b]; undefined se vazia. */
+const parseColor = (css: string | null | undefined): RGB | undefined => {
+  if (!css) return undefined;
+  const s = css.trim().toLowerCase();
+  if (s === 'transparent' || s === 'inherit' || s === 'initial') return undefined;
+  const hex = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3)
+      h = h
+        .split('')
+        .map((c) => c + c)
+        .join('');
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+  const rgb = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  return undefined;
+};
+
+/** Divide o conteúdo de uma célula em linhas, respeitando <br> e blocos, e
+ *  detetando por linha: negrito (<strong>/<b>), cor e tamanho (span style). */
+const cellToLines = (el: HTMLElement, headerBold: boolean): CellLine[] => {
+  const html = (el.innerHTML || '')
+    .replace(/<\/(p|div|h[1-6])>/gi, '<br>')
+    .replace(/<(p|div|h[1-6])[^>]*>/gi, '');
+  const lines = html.split(/<br\s*\/?>/i).map((part) => {
+    const colorMatch = part.match(/color\s*:\s*([^;"']+)/i);
+    const sizeMatch = part.match(/font-size\s*:\s*(\d+)/i);
+    return {
+      text: part
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/\s+/g, ' ')
+        .trim(),
+      bold: headerBold || /<(strong|b)[\s>]/i.test(part),
+      color: colorMatch ? parseColor(colorMatch[1]) : undefined,
+      fontSize: sizeMatch ? parseInt(sizeMatch[1]) : undefined,
+    };
+  });
+  // NÃO filtrar linhas vazias: uma linha sem texto (valor em falta ou <br>
+  // extra) vira um espaçador compacto em renderTable — preserva o ritmo e
+  // permite separar grupos de campos. Removem-se só vazias no início/fim.
+  while (lines.length && !lines[0].text) lines.shift();
+  while (lines.length && !lines[lines.length - 1].text) lines.pop();
+  return lines;
+};
+
+/** Lê um <table> HTML para uma matriz de células com estilo. */
+const parseTable = (tableEl: HTMLElement): { rows: TableCellData[][]; bordered: boolean } => {
+  const rows: TableCellData[][] = [];
+  const trs = Array.from(tableEl.querySelectorAll('tr'));
+  trs.forEach((tr) => {
+    const cells: TableCellData[] = [];
+    Array.from(tr.children).forEach((c) => {
+      const tag = c.tagName.toLowerCase();
+      if (tag !== 'td' && tag !== 'th') return;
+      const el = c as HTMLElement;
+      const fw = el.style.fontWeight;
+      const headerBold = tag === 'th' || fw === 'bold' || Number(fw) >= 600;
+      cells.push({
+        lines: cellToLines(el, headerBold),
+        align: el.style.textAlign || 'left',
+        bg: parseColor(el.style.backgroundColor),
+        color: parseColor(el.style.color),
+        fontSize: el.style.fontSize ? parseInt(el.style.fontSize) : undefined,
+        colspan: Number(el.getAttribute('colspan') || '1') || 1,
+      });
+    });
+    if (cells.length) rows.push(cells);
+  });
+  const bordered =
+    tableEl.getAttribute('border') === '1' ||
+    !!tableEl.style.border ||
+    tableEl.classList.contains('bordered');
+  return { rows, bordered };
+};
+
+interface TableCtx {
+  pageHeight: number;
+  bottomMargin: number;
+  topMargin: number;
+  bg: HTMLImageElement | null;
+}
+
+/**
+ * Desenha uma tabela (vetorial) a partir de TableCellData[][]. Suporta:
+ * larguras de coluna iguais (+ colspan), wrap de texto, alinhamento,
+ * cor de fundo/texto, bordas (opcional) e quebra de página por linha.
+ * Devolve o novo yPos.
+ */
+function renderTable(
+  pdf: jsPDF,
+  rows: TableCellData[][],
+  x: number,
+  yStart: number,
+  totalW: number,
+  bordered: boolean,
+  ctx: TableCtx
+): number {
+  const pad = 2;
+  const colCount = Math.max(1, ...rows.map((r) => r.reduce((s, c) => s + (c.colspan || 1), 0)));
+  const colW = totalW / colCount;
+  let y = yStart;
+
+  for (const row of rows) {
+    // 1) medir altura da linha — cada célula tem várias linhas (cada uma com
+    //    o seu tamanho/negrito/cor); a altura soma as linhas (com wrap).
+    type WLine = { text: string; bold: boolean; color?: RGB; fs: number; h: number };
+    const layout: Array<{ cell: TableCellData; cx: number; cw: number; wrapped: WLine[] }> = [];
+    let cx = x;
+    let rowH = 0;
+    for (const cell of row) {
+      const span = cell.colspan || 1;
+      const cw = colW * span;
+      const baseFs = cell.fontSize || 9;
+      const wrapped: WLine[] = [];
+      let cellH = pad * 2;
+      for (const ln of cell.lines.length ? cell.lines : [{ text: '', bold: false }]) {
+        const fs = ln.fontSize || baseFs;
+        // Linha vazia (valor em falta ou <br> separador) → espaçador compacto.
+        if (!ln.text || !ln.text.trim()) {
+          const gap = fs * 0.352777778 * 0.6;
+          wrapped.push({ text: '', bold: false, color: ln.color, fs, h: gap });
+          cellH += gap;
+          continue;
+        }
+        const lineH = fs * 0.352777778 * 1.4;
+        pdf.setFontSize(fs);
+        pdf.setFont('helvetica', ln.bold ? 'bold' : 'normal');
+        const parts = pdf.splitTextToSize(ln.text, cw - pad * 2);
+        parts.forEach((p: string) => {
+          wrapped.push({ text: p, bold: ln.bold, color: ln.color, fs, h: lineH });
+          cellH += lineH;
+        });
+      }
+      if (cellH > rowH) rowH = cellH;
+      layout.push({ cell, cx, cw, wrapped });
+      cx += cw;
+    }
+
+    // 2) quebra de página se a linha não couber
+    if (y + rowH > ctx.pageHeight - ctx.bottomMargin) {
+      pdf.addPage();
+      if (ctx.bg) pdf.addImage(ctx.bg, 'PNG', 0, 0, 210, 297);
+      y = ctx.topMargin;
+    }
+
+    // 3) desenhar células
+    for (const cl of layout) {
+      if (cl.cell.bg) {
+        pdf.setFillColor(cl.cell.bg[0], cl.cell.bg[1], cl.cell.bg[2]);
+        pdf.rect(cl.cx, y, cl.cw, rowH, 'F');
+      }
+      if (bordered || cl.cell.bg) {
+        pdf.setDrawColor(220, 222, 228);
+        pdf.setLineWidth(0.2);
+        pdf.rect(cl.cx, y, cl.cw, rowH, 'S');
+      }
+      let lineY = y + pad;
+      cl.wrapped.forEach((ln) => {
+        const col = ln.color ?? cl.cell.color ?? [30, 30, 35];
+        pdf.setTextColor(col[0], col[1], col[2]);
+        pdf.setFontSize(ln.fs);
+        pdf.setFont('helvetica', ln.bold ? 'bold' : 'normal');
+        let tx = cl.cx + pad;
+        const opts: any = {};
+        if (cl.cell.align === 'center') {
+          tx = cl.cx + cl.cw / 2;
+          opts.align = 'center';
+        } else if (cl.cell.align === 'right') {
+          tx = cl.cx + cl.cw - pad;
+          opts.align = 'right';
+        }
+        pdf.text(ln.text, tx, lineY + ln.h * 0.82, opts);
+        lineY += ln.h;
+      });
+    }
+    y += rowH;
+  }
+  pdf.setTextColor(0, 0, 0);
+  return y + 2;
+}
+
+// Converter HTML para texto simples, preservando formatação para o PDF
+const htmlToText = (html: string): DocEl[] => {
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = html;
 
-  const elements: Array<{
-    type: 'text' | 'image';
-    text?: string;
-    src?: string;
-    style: { bold?: boolean; italic?: boolean; fontSize?: number; align?: string };
-  }> = [];
+  const elements: DocEl[] = [];
 
   const processNode = (node: Node, inheritedStyle: any = {}, parentIsBlock: boolean = false) => {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -386,6 +598,26 @@ const htmlToText = (
       const fontSize = element.style.fontSize;
       if (fontSize) {
         style.fontSize = parseInt(fontSize);
+      }
+
+      // Detectar cor de texto inline
+      const elColor = parseColor(element.style.color);
+      if (elColor) style.color = elColor;
+
+      // Divisória horizontal
+      if (tagName === 'hr') {
+        elements.push({ type: 'hr', style: {} });
+        return;
+      }
+
+      // Tabelas: layout 2D próprio (caixas / 2 colunas).
+      if (tagName === 'table') {
+        const { rows, bordered } = parseTable(element);
+        if (rows.length > 0) {
+          elements.push({ type: 'table', rows, bordered, style: {} });
+          elements.push({ type: 'text', text: '\n', style: {} });
+        }
+        return;
       }
 
       // Tags que são blocos e devem criar nova linha APENAS se estiverem em blocos separados
@@ -512,10 +744,17 @@ export const generateDocumentFromTemplate = async (
 
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const leftMargin = 30;
-    const rightMargin = 20;
-    const topMargin = 50; // Margem superior igual à inferior
-    const bottomMargin = 50; // Margem aumentada: protege faixa amarela inferior do papel timbrado
+    // Sem papel timbrado (ex.: contrato de aluguer com logo simples) usamos
+    // margens compactas — o documento de 1 página aproveita a folha toda e cabe
+    // numa página. Com timbrado mantemos as margens largas que protegem a
+    // moldura/faixa amarela da imagem de fundo.
+    const hasLetterhead = !!templateData.papel_timbrado_url;
+    const leftMargin = hasLetterhead ? 30 : 18;
+    const rightMargin = hasLetterhead ? 20 : 18;
+    // Sem timbrado mas com logo: o conteúdo começa no topo (~16mm) e a 1ª linha
+    // (cabeçalho com Nº à direita) alinha ao lado do logo desenhado em (15,12).
+    const topMargin = hasLetterhead ? 50 : headerLogoUrl ? 16 : 22;
+    const bottomMargin = hasLetterhead ? 50 : 22; // Timbrado: protege faixa amarela inferior.
     const maxWidth = pageWidth - leftMargin - rightMargin;
     let yPos = topMargin;
 
@@ -525,24 +764,44 @@ export const generateDocumentFromTemplate = async (
     // Agrupar elementos consecutivos com mesmo alinhamento em "linhas lógicas"
     const groupedElements: Array<{
       align: string;
-      segments: Array<{ text: string; style: any; isImage?: boolean }>;
+      segments: Array<{
+        text: string;
+        style: any;
+        isImage?: boolean;
+        isTable?: boolean;
+        isHr?: boolean;
+      }>;
     }> = [];
 
     let currentGroup: {
       align: string;
-      segments: Array<{ text: string; style: any; isImage?: boolean }>;
+      segments: Array<{
+        text: string;
+        style: any;
+        isImage?: boolean;
+        isTable?: boolean;
+        isHr?: boolean;
+      }>;
     } | null = null;
 
     for (const element of contentElements) {
-      if (element.type === 'image') {
-        // Imagens sempre criam novo grupo
+      if (element.type === 'image' || element.type === 'table' || element.type === 'hr') {
+        // Imagens, tabelas e divisórias criam sempre o seu próprio grupo.
         if (currentGroup && currentGroup.segments.length > 0) {
           groupedElements.push(currentGroup);
           currentGroup = null;
         }
         groupedElements.push({
           align: element.style?.align || 'left',
-          segments: [{ text: '', style: element, isImage: true }],
+          segments: [
+            {
+              text: '',
+              style: element,
+              isImage: element.type === 'image',
+              isTable: element.type === 'table',
+              isHr: element.type === 'hr',
+            },
+          ],
         });
         continue;
       }
@@ -628,6 +887,30 @@ export const generateDocumentFromTemplate = async (
         continue;
       }
 
+      // Se for tabela (layout 2D próprio)
+      if (group.segments[0].isTable) {
+        const tableEl = group.segments[0].style as DocEl;
+        if (tableEl.rows && tableEl.rows.length > 0) {
+          yPos = renderTable(pdf, tableEl.rows, leftMargin, yPos, maxWidth, !!tableEl.bordered, {
+            pageHeight,
+            bottomMargin,
+            topMargin,
+            bg,
+          });
+        }
+        continue;
+      }
+
+      // Se for divisória (<hr>)
+      if (group.segments[0].isHr) {
+        yPos += 1;
+        pdf.setDrawColor(224, 226, 232);
+        pdf.setLineWidth(0.3);
+        pdf.line(leftMargin, yPos, pageWidth - rightMargin, yPos);
+        yPos += 3;
+        continue;
+      }
+
       // Renderizar grupo de texto com quebra automática
       const align = group.align;
       const maxFontSize = Math.max(...group.segments.map((seg) => seg.style.fontSize || 10));
@@ -653,10 +936,13 @@ export const generateDocumentFromTemplate = async (
 
           pdf.setFontSize(fontSize);
           pdf.setFont('helvetica', fontStyle);
+          const c = seg.style.color as RGB | undefined;
+          pdf.setTextColor(c ? c[0] : 0, c ? c[1] : 0, c ? c[2] : 0);
           pdf.text(seg.text, xPos, y);
 
           xPos += seg.width;
         }
+        pdf.setTextColor(0, 0, 0);
       };
 
       // Combinar todos os segmentos do grupo em linhas com quebra automática
@@ -729,18 +1015,81 @@ export const generateDocumentFromTemplate = async (
       }
     }
 
+    // Anexar fotos (check-in/check-out) em folhas próprias, grelha 2×3.
+    if (params.anexoFotos?.length) {
+      const cols = 2;
+      const rows = 3;
+      const gap = 6;
+      const cellW = (maxWidth - gap * (cols - 1)) / cols;
+      const gridTop = topMargin + 10; // abaixo do título da secção
+      const cellH = (pageHeight - bottomMargin - gridTop - gap * (rows - 1)) / rows;
+
+      const novaFolha = (titulo: string) => {
+        pdf.addPage();
+        if (bg) pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(43, 58, 107);
+        pdf.text(titulo, leftMargin, topMargin + 4);
+        pdf.setTextColor(0, 0, 0);
+      };
+
+      for (const grupo of params.anexoFotos) {
+        if (!grupo.urls.length) continue;
+        let idx = 0;
+        for (const url of grupo.urls) {
+          const posInPage = idx % (cols * rows);
+          if (posInPage === 0) novaFolha(idx === 0 ? grupo.titulo : `${grupo.titulo} (cont.)`);
+          const r = Math.floor(posInPage / cols);
+          const c = posInPage % cols;
+          const cx = leftMargin + c * (cellW + gap);
+          const cy = gridTop + r * (cellH + gap);
+          pdf.setDrawColor(220, 222, 228);
+          pdf.setLineWidth(0.2);
+          pdf.rect(cx, cy, cellW, cellH, 'S');
+          try {
+            const img = await loadImage(url);
+            const ratio = img.width && img.height ? img.width / img.height : 1.5;
+            let w = cellW - 2;
+            let h = w / ratio;
+            if (h > cellH - 2) {
+              h = cellH - 2;
+              w = h * ratio;
+            }
+            pdf.addImage(img, 'JPEG', cx + (cellW - w) / 2, cy + (cellH - h) / 2, w, h);
+          } catch (error) {
+            console.warn('Erro ao carregar foto do anexo:', url, error);
+          }
+          idx++;
+        }
+      }
+    }
+
     // Adicionar numeração de páginas (apenas deste documento, não de PDFs anteriores)
+    // skipFooter: quem orquestra (ex: contrato de aluguer) faz um rodapé unificado.
     const endPage = pdf.getNumberOfPages();
     const docTotalPages = endPage - startPage + 1;
-    for (let i = startPage; i <= endPage; i++) {
+    for (let i = startPage; i <= endPage && !params.skipFooter; i++) {
       pdf.setPage(i);
-      pdf.setFontSize(9);
+      pdf.setFontSize(params.footerText ? 7.5 : 9);
       pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(128, 128, 128);
+      pdf.setTextColor(138, 141, 153);
       const pageText = `Página ${i - startPage + 1} de ${docTotalPages}`;
-      const textWidth = pdf.getTextWidth(pageText);
-      // Posicionar a 35mm da borda inferior da página (margem aumentada em 20 pontos)
-      pdf.text(pageText, (pageWidth - textWidth) / 2, pageHeight - 35);
+      if (params.footerText) {
+        // Rodapé da empresa (esquerda) + numeração (direita), sobre uma linha
+        // fina — só quando há footerText e não há papel timbrado.
+        const footerY = pageHeight - 14;
+        pdf.setDrawColor(220, 222, 228);
+        pdf.setLineWidth(0.2);
+        pdf.line(leftMargin, footerY - 4, pageWidth - rightMargin, footerY - 4);
+        pdf.text(params.footerText, leftMargin, footerY);
+        const pw = pdf.getTextWidth(pageText);
+        pdf.text(pageText, pageWidth - rightMargin - pw, footerY);
+      } else {
+        // Posicionar a 35mm da borda inferior (margem do papel timbrado).
+        const textWidth = pdf.getTextWidth(pageText);
+        pdf.text(pageText, (pageWidth - textWidth) / 2, pageHeight - 35);
+      }
     }
 
     // Executar ação (imprimir ou download)
