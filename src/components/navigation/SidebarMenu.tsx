@@ -28,6 +28,7 @@ import {
   Calculator,
   CreditCard,
   Wifi,
+  Banknote,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
@@ -154,6 +155,7 @@ const MENU_ITEMS: MenuItem[] = [
     recurso: 'financeiro_recibos',
     subItems: [
       { label: 'Resumos', url: '/administrativo', icon: Calculator },
+      { label: 'Faturação', url: '/administrativo/faturacao', icon: Banknote },
       { label: 'Cartões Frota', url: '/administrativo/cartoes', icon: CreditCard },
       { label: 'Dispositivos OBE', url: '/administrativo/obe', icon: Wifi },
     ],

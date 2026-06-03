@@ -12,6 +12,8 @@ interface ContratoTabsPlaceholderProps {
   extrasContent: React.ReactNode;
   /** Conteúdo da tab "Taxas" — passado pela página pai. */
   taxasContent: React.ReactNode;
+  /** Conteúdo da tab "Faturar" — só renderizado em modo edit. */
+  faturarContent?: React.ReactNode;
   /** Conteúdo da tab "Histórico" — só renderizado em modo edit. */
   historicoContent?: React.ReactNode;
   /** Conteúdo da tab "Anexos" — passado pela página pai. */
@@ -26,6 +28,7 @@ export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = (
   coberturasContent,
   extrasContent,
   taxasContent,
+  faturarContent,
   historicoContent,
   anexosContent,
 }) => {
@@ -39,6 +42,7 @@ export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = (
         <TabsTrigger value="coberturas">Coberturas</TabsTrigger>
         <TabsTrigger value="extras">Extras</TabsTrigger>
         <TabsTrigger value="taxas">Taxas</TabsTrigger>
+        {faturarContent && <TabsTrigger value="faturar">Faturar</TabsTrigger>}
         {PLACEHOLDER_TABS.map((t) => (
           <TabsTrigger key={t.value} value={t.value}>
             {t.label}
@@ -80,6 +84,12 @@ export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = (
           </div>
         </TabsContent>
       ))}
+
+      {faturarContent && (
+        <TabsContent value="faturar" className="mt-4">
+          {faturarContent}
+        </TabsContent>
+      )}
 
       {historicoContent && (
         <TabsContent value="historico" className="mt-4">
