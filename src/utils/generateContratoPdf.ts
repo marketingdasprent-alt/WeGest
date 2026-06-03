@@ -268,13 +268,14 @@ export const generateContratoPdf = async ({
           .map((m) => urlByPath.get(m.url))
           .filter((u): u is string => !!u);
 
-      const checkin = urlsDe('checkin');
-      const checkout = urlsDe('checkout');
+      // checkout = entrega ao cliente; checkin = recolha da viatura (ver
+      // RealizarEntregaPage). Ordem lógica: entrega primeiro, recolha depois.
+      const entrega = urlsDe('checkout');
+      const recolha = urlsDe('checkin');
       anexoFotos = [];
-      if (checkin.length)
-        anexoFotos.push({ titulo: 'ANEXO — FOTOS DE CHECK-IN (ENTREGA)', urls: checkin });
-      if (checkout.length)
-        anexoFotos.push({ titulo: 'ANEXO — FOTOS DE CHECK-OUT (DEVOLUÇÃO)', urls: checkout });
+      if (entrega.length) anexoFotos.push({ titulo: 'ANEXO — FOTOS DA ENTREGA', urls: entrega });
+      if (recolha.length)
+        anexoFotos.push({ titulo: 'ANEXO — FOTOS DA RECOLHA (DEVOLUÇÃO)', urls: recolha });
       if (!anexoFotos.length) anexoFotos = undefined;
     }
   } catch (error) {
