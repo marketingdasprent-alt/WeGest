@@ -236,10 +236,30 @@ function parseSheet(wb: XLSX.WorkBook): ImportRow[] {
 
 function downloadTemplate() {
   const ws = XLSX.utils.aoa_to_sheet([
-    ['Tipo', 'Numero', 'Ambito', 'Limite', 'PIN', 'Validade', 'Detentor do Cartão', 'Notas', 'Devolução'],
+    [
+      'Tipo',
+      'Numero',
+      'Ambito',
+      'Limite',
+      'PIN',
+      'Validade',
+      'Detentor do Cartão',
+      'Notas',
+      'Devolução',
+    ],
     ['bp', '1234567890', 'Nacional', '200', '1234', '31/12/2026', 'DISTÂNCIA 01', '', ''],
     ['repsol', '9876543210', 'Nacional', '', '', '', 'DISTÂNCIA 02', '', ''],
-    ['edp', '5551234567', 'Nacional', '150', '', '30/06/2027', 'DISTÂNCIA 03', 'Carreg. rápido', ''],
+    [
+      'edp',
+      '5551234567',
+      'Nacional',
+      '150',
+      '',
+      '30/06/2027',
+      'DISTÂNCIA 03',
+      'Carreg. rápido',
+      '',
+    ],
   ]);
   ws['!cols'] = [8, 14, 12, 8, 6, 12, 20, 20, 20].map((w) => ({ wch: w }));
   const wb = XLSX.utils.book_new();

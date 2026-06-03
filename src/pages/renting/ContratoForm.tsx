@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -66,6 +66,7 @@ import { ContratoTabCobertura } from '@/components/renting/contratos/ContratoTab
 import { ContratoTabExtras } from '@/components/renting/contratos/ContratoTabExtras';
 import { ContratoTabTaxas } from '@/components/renting/contratos/ContratoTabTaxas';
 import { ContratoTabsPlaceholder } from '@/components/renting/contratos/ContratoTabsPlaceholder';
+import { ContratoTabFaturar } from '@/components/renting/contratos/ContratoTabFaturar';
 import { ResumoContrato } from '@/components/renting/contratos/ResumoContrato';
 import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import {
@@ -102,6 +103,10 @@ const ContratoForm = () => {
   const { data: taxasCatalogo = [] } = useRentingTaxas({ apenasAtivas: true });
   const { data: orgDefinicoes } = useOrgDefinicoes();
   const { data: contrato, isLoading: loadingContrato } = useContratoRenting(id ?? null);
+
+  // Garante que a hidratação reserva→contrato (form.reset) só corre UMA vez —
+  // senão um refetch da reserva volta a fazer reset e apaga edições/condutores.
+  const hidratadoDaReserva = useRef(false);
 
   // Carrega reserva — em criação vem do query string, em edição vem do contrato.
   // Em ambos os casos é a fonte do `viatura_id` (campo bloqueado no formulário).
@@ -296,6 +301,12 @@ const ContratoForm = () => {
         navigate(`/renting/reservas/${reservaFromQuery.id}`);
         return;
       }
+      // Espera pelos condutores da reserva (request separado) para os incluir no
+      // mesmo reset — senão o reset apagava-os. `undefined` = ainda a carregar.
+      if (condutoresDaReserva === undefined) return;
+      // Só hidrata uma vez (um refetch da reserva não deve apagar edições).
+      if (hidratadoDaReserva.current) return;
+      hidratadoDaReserva.current = true;
       // Conversão reserva → contrato: copia TUDO o que faz sentido.
       // O orçamento da reserva (valor_total) torna-se valor_total_manual no contrato.
       form.reset({
@@ -324,11 +335,19 @@ const ContratoForm = () => {
         km_adicional_valor: reservaFromQuery.km_adicional_valor,
         observacoes: reservaFromQuery.observacoes ?? '',
         observacoes_internas: reservaFromQuery.observacoes_internas ?? '',
+        // Condutores da reserva → passam para o contrato (persistidos no submit).
+        condutores: condutoresDaReserva
+          .filter((c) => c.cliente_id || c.motorista_id)
+          .map((c) => ({
+            cliente_id: c.cliente_id,
+            motorista_id: c.motorista_id,
+            is_principal: c.is_principal,
+          })),
       });
     }
-  }, [isEdit, contrato, reservaFromQuery, form]);
+  }, [isEdit, contrato, reservaFromQuery, condutoresDaReserva, navigate, toast, form]);
 
-  // Hidratação dos condutores (vem em request separado — só em modo edit)
+  // Hidratação dos condutores em modo EDIT (vêm em request separado).
   useEffect(() => {
     if (!isEdit || !contrato || !condutoresDb) return;
     form.setValue(
@@ -342,24 +361,8 @@ const ContratoForm = () => {
     );
   }, [isEdit, contrato, condutoresDb, form]);
 
-  // Hidratação dos condutores quando se cria contrato a partir de reserva.
-  // Os condutores vivem em `reserva_condutores` (m:n) — precisam de ser
-  // copiados para o form para serem persistidos depois em `contrato_condutores`.
-  useEffect(() => {
-    if (isEdit || !reservaFromQuery || !condutoresDaReserva) return;
-    if (condutoresDaReserva.length === 0) return;
-    form.setValue(
-      'condutores',
-      condutoresDaReserva
-        .filter((c) => c.cliente_id || c.motorista_id)
-        .map((c) => ({
-          cliente_id: c.cliente_id,
-          motorista_id: c.motorista_id,
-          is_principal: c.is_principal,
-        })),
-      { shouldDirty: false }
-    );
-  }, [isEdit, reservaFromQuery, condutoresDaReserva, form]);
+  // (Os condutores da reserva são hidratados no reset acima, em conjunto com os
+  //  restantes campos — evita corridas entre dois resets/setValue.)
 
   // Hidratação das coberturas (request separado — só em modo edit)
   useEffect(() => {
@@ -431,27 +434,9 @@ const ContratoForm = () => {
     });
   }, [regime, orgDefinicoes, form]);
 
-  // Quando o user troca de regime, os condutores existentes (motoristas ou
-  // clientes) deixam de fazer sentido — limpamos a lista com aviso.
-  useEffect(() => {
-    const condutores = (form.getValues('condutores') ?? []) as Array<{
-      cliente_id: string | null;
-      motorista_id: string | null;
-    }>;
-    if (condutores.length === 0) return;
-    const expectedKey: 'cliente_id' | 'motorista_id' =
-      regime === 'tvde' ? 'motorista_id' : 'cliente_id';
-    const tipoErrado = condutores.some((c) => !c[expectedKey]);
-    if (!tipoErrado) return;
-    form.setValue('condutores', [], { shouldDirty: true, shouldValidate: true });
-    toast({
-      title: 'Condutores limpos',
-      description:
-        regime === 'tvde'
-          ? 'Mudaste para TVDE — os condutores são agora motoristas. Volta a adicionar.'
-          : 'Mudaste para Rent-a-car — os condutores são agora clientes. Volta a adicionar.',
-    });
-  }, [regime, form, toast]);
+  // Os condutores PERSISTEM ao trocar de regime — não se apaga a lista (senão
+  // "desapareciam" condutores já adicionados ou hidratados da reserva). A tabela
+  // mostra clientes (rent-a-car) ou motoristas (TVDE) conforme o tipo de cada linha.
 
   // Regra de elegibilidade: qualquer viatura pode ser alugada em rent-a-car.
   // No regime tvde só aparecem viaturas com "Elegível para TVDE? = Sim"
@@ -916,6 +901,9 @@ const ContratoForm = () => {
                   coberturasContent={<ContratoTabCobertura form={form} coberturas={coberturas} />}
                   extrasContent={<ContratoTabExtras form={form} extras={extrasCatalogo} />}
                   taxasContent={<ContratoTabTaxas form={form} taxas={taxasCatalogo} />}
+                  faturarContent={
+                    isEdit && contrato ? <ContratoTabFaturar contrato={contrato} /> : undefined
+                  }
                   historicoContent={
                     isEdit && contrato ? (
                       <ContratoTabHistorico
