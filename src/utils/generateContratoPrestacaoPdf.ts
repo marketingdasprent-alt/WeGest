@@ -1,7 +1,10 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { EmpresaConfig } from '@/config/empresas';
 
-import { generateDocumentFromTemplate } from './generateDocumentFromTemplate';
+import {
+  generateDocumentosCombinados,
+  type DocumentoCombinado,
+} from './generateDocumentFromTemplate';
 
 import type { Motorista } from '@/types/motorista';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
@@ -39,19 +42,21 @@ export const generateContratoPrestacaoPdf = async ({
     throw new Error('Empresa não definida — impossível gerar o contrato de prestação.');
   }
 
-  // 1) Template de prestação para esta empresa.
+  // 1) Templates desta empresa: prestação (sempre) + aluguer (anexado a seguir,
+  //    com folha branca a separar — mesmo padrão do TVDE).
   const { data: templates, error: templatesErr } = await supabase
     .from('document_templates')
-    .select('id, nome, tipo, empresa_id')
+    .select('id, nome, tipo, empresa_id, versao')
     .eq('ativo', true)
     .eq('empresa_id', empresa.id)
-    .eq('tipo', 'contrato_prestacao')
+    .in('tipo', ['contrato_prestacao', 'contrato_aluguer'])
     .order('versao', { ascending: false });
 
   if (templatesErr) throw templatesErr;
 
-  const template = (templates ?? [])[0];
-  if (!template) {
+  const prestacaoTemplate = (templates ?? []).find((t) => t.tipo === 'contrato_prestacao');
+  const aluguerTemplate = (templates ?? []).find((t) => t.tipo === 'contrato_aluguer');
+  if (!prestacaoTemplate) {
     throw new Error(
       `Sem template de prestação activo para a empresa "${empresa.nome}". ` +
         `Cria um "Contrato Prestação - ${empresa.nome}" em Configurações do Sistema → Documentos.`
@@ -98,11 +103,32 @@ export const generateContratoPrestacaoPdf = async ({
     },
   };
 
-  await generateDocumentFromTemplate({
-    templateId: template.id,
-    motoristaData,
-    documentData,
-    action,
-    headerLogoUrl: '/Logo.png',
-  });
+  const footerText = [empresa.nomeCompleto, empresa.nif ? `NIF ${empresa.nif}` : null, empresa.sede]
+    .filter(Boolean)
+    .join('   ·   ');
+
+  // Slot: Prestação + Aluguer (o carro é do motorista, por isso o Aluguer sai
+  // com os campos financeiros/estações em branco). Um PDF, folha branca a
+  // separar.
+  const docs: DocumentoCombinado[] = [
+    {
+      templateId: prestacaoTemplate.id,
+      motoristaData,
+      documentData,
+      headerLogoUrl: '/Logo.png',
+      footerText,
+    },
+  ];
+  if (aluguerTemplate) {
+    docs.push({
+      templateId: aluguerTemplate.id,
+      motoristaData,
+      documentData,
+      headerLogoUrl: '/Logo.png',
+      footerText,
+    });
+  }
+
+  const fileName = `Prestacao_${numeroContrato ?? ''}_${motorista.nome ?? ''}`.trim();
+  await generateDocumentosCombinados(docs, { action, fileName });
 };

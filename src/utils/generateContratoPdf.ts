@@ -1,7 +1,10 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { EmpresaConfig } from '@/config/empresas';
 
-import { generateDocumentFromTemplate } from './generateDocumentFromTemplate';
+import {
+  generateDocumentosCombinados,
+  type DocumentoCombinado,
+} from './generateDocumentFromTemplate';
 
 import type { ContratoRenting } from '@/types/contratoRenting';
 import type { ClienteComDocumentos } from '@/types/cliente';
@@ -24,6 +27,10 @@ export interface GenerateContratoPdfParams {
   /** Empresa actual — fornece dados para os placeholders {{empresa_*}}. */
   empresa: EmpresaConfig | null;
   action?: 'print' | 'download';
+  /** IDs de templates a gerar (ordenados), escolhidos no dialog "Gerar
+   *  Documentos". Quando dado, gera exactamente estes; senão, decide pelo
+   *  regime (rent_a_car → aluguer; tvde → prestação + aluguer). */
+  templateIds?: string[];
 }
 
 /**
@@ -40,41 +47,51 @@ export const generateContratoPdf = async ({
   viatura,
   empresa,
   action = 'print',
+  templateIds,
 }: GenerateContratoPdfParams): Promise<void> => {
   if (!empresa) {
     throw new Error('Empresa não definida — impossível gerar contrato.');
   }
 
-  // 1) Escolher o template de contrato para esta empresa, conforme o `regime`.
-  //    Convenção de nomes (até existir taxonomia própria de `tipo`):
-  //      - rent-a-car → "Contrato Aluguer - <Empresa>"
-  //      - tvde       → "Contrato TVDE - <Empresa>"
-  //    Se ainda não existir o de aluguer, cai no de TVDE — não parte nada
-  //    enquanto o template de aluguer não for criado no admin.
+  // 1) Escolher os templates para esta empresa, conforme o `regime`:
+  //      - rent_a_car → só o Contrato de Aluguer
+  //      - tvde       → Contrato de Prestação + Contrato de Aluguer (1 PDF,
+  //        folha branca a separar). O motorista presta serviço sob a licença
+  //        da empresa (prestação) E aluga a viatura (aluguer).
   const { data: templates, error: templatesErr } = await supabase
     .from('document_templates')
     .select('id, nome, tipo, empresa_id')
     .eq('ativo', true)
     .eq('empresa_id', empresa.id)
-    .in('tipo', ['contrato_tvde', 'contrato', 'contrato_aluguer'])
     .order('nome', { ascending: true });
 
   if (templatesErr) throw templatesErr;
 
   const porPrefixo = (prefixo: string) =>
     (templates ?? []).find((t) => t.nome.toLowerCase().startsWith(prefixo.toLowerCase()));
+  const porTipo = (tipo: string) => (templates ?? []).find((t) => t.tipo === tipo);
 
   const regimeAluguer = contrato.regime === 'rent_a_car';
-  const template = regimeAluguer
-    ? (porPrefixo('Contrato Aluguer') ?? porPrefixo('Contrato Rent') ?? porPrefixo('Contrato TVDE'))
-    : (porPrefixo('Contrato TVDE') ?? (templates ?? [])[0]);
+  const aluguerTemplate =
+    porTipo('contrato_aluguer') ?? porPrefixo('Contrato Aluguer') ?? porPrefixo('Contrato Rent');
+  const prestacaoTemplate =
+    porTipo('contrato_prestacao') ??
+    porPrefixo('Contrato Prestação') ??
+    porPrefixo('Contrato Prestacao');
 
-  if (!template) {
-    const nomeSugerido = regimeAluguer ? 'Contrato Aluguer' : 'Contrato TVDE';
-    throw new Error(
-      `Sem template de contrato activo para a empresa "${empresa.nome}". ` +
-        `Cria um chamado "${nomeSugerido} - ${empresa.nome}" em Configurações do Sistema → Documentos.`
-    );
+  // No modo automático (sem escolha manual) o Aluguer é obrigatório.
+  if (!templateIds?.length) {
+    if (!aluguerTemplate) {
+      throw new Error(
+        `Sem template de "Contrato Aluguer" activo para a empresa "${empresa.nome}". ` +
+          `Cria um chamado "Contrato Aluguer - ${empresa.nome}" em Configurações do Sistema → Documentos.`
+      );
+    }
+    if (!regimeAluguer && !prestacaoTemplate) {
+      console.warn(
+        'Regime TVDE sem template de "Contrato Prestação" — imprime só o Contrato de Aluguer.'
+      );
+    }
   }
 
   // 2) Resolver o condutor principal para preencher o "motorista" no template.
@@ -264,21 +281,48 @@ export const generateContratoPdf = async ({
     console.warn('Não foi possível anexar fotos de check-in/out:', error);
   }
 
-  // Rodapé da empresa (só no aluguer; o TVDE usa papel timbrado próprio).
-  const footerText = regimeAluguer
-    ? [empresa.nomeCompleto, empresa.nif ? `NIF ${empresa.nif}` : null, empresa.sede]
-        .filter(Boolean)
-        .join('   ·   ')
-    : undefined;
+  // Rodapé da empresa (nome · NIF · sede) em todos os documentos gerados.
+  const footerText = [empresa.nomeCompleto, empresa.nif ? `NIF ${empresa.nif}` : null, empresa.sede]
+    .filter(Boolean)
+    .join('   ·   ');
 
-  // Gera a partir do template editável (BD), tanto para rent-a-car como TVDE.
-  await generateDocumentFromTemplate({
-    templateId: template.id,
+  // As fotos de check-in/out anexam-se ao template de ALUGUER (ou, na falta
+  // dele entre os escolhidos, ao último documento).
+  const anexarFotosA = (lista: { tipo: string }[]) => {
+    const idxAluguer = lista.findIndex((t) => t.tipo === 'contrato_aluguer');
+    return idxAluguer >= 0 ? idxAluguer : lista.length - 1;
+  };
+
+  // Lista ordenada de templates a gerar:
+  //  - templateIds dados (dialog "Gerar Documentos") → exactamente esses, na ordem;
+  //  - senão, por regime: rent_a_car → [aluguer]; tvde → [prestação, aluguer].
+  let templatesEscolhidos: { id: string; nome: string; tipo: string }[];
+  if (templateIds?.length) {
+    templatesEscolhidos = templateIds
+      .map((tid) => (templates ?? []).find((t) => t.id === tid))
+      .filter((t): t is NonNullable<typeof t> => !!t);
+  } else {
+    templatesEscolhidos = [
+      ...(!regimeAluguer && prestacaoTemplate ? [prestacaoTemplate] : []),
+      ...(aluguerTemplate ? [aluguerTemplate] : []),
+    ];
+  }
+
+  if (templatesEscolhidos.length === 0) {
+    throw new Error('Nenhum documento seleccionado para gerar.');
+  }
+
+  const idxFotos = anexoFotos ? anexarFotosA(templatesEscolhidos) : -1;
+  const docs: DocumentoCombinado[] = templatesEscolhidos.map((t, i) => ({
+    templateId: t.id,
     motoristaData,
     documentData,
-    headerLogoUrl: regimeAluguer ? '/Logo.png' : undefined,
+    headerLogoUrl: '/Logo.png',
     footerText,
-    anexoFotos,
-    action,
-  });
+    anexoFotos: i === idxFotos ? anexoFotos : undefined,
+  }));
+
+  const fileName =
+    `Contrato_${contrato.codigo ?? ''}_${(motoristaData.nome as string) ?? ''}`.trim();
+  await generateDocumentosCombinados(docs, { action, fileName });
 };
