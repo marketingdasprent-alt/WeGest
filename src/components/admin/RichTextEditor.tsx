@@ -8,6 +8,7 @@ import { Highlight } from '@tiptap/extension-highlight';
 import Underline from '@tiptap/extension-underline';
 import { FontFamily } from '@tiptap/extension-font-family';
 import ImageResize from 'tiptap-extension-resize-image';
+import { TableKit } from '@tiptap/extension-table';
 import { Extension } from '@tiptap/core';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,6 +28,10 @@ import {
   Heading2,
   Quote,
   Image as ImageIcon,
+  Table as TableIcon,
+  Columns3,
+  Rows3,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -154,6 +159,9 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         }),
         Underline,
         ImageResize,
+        TableKit.configure({
+          table: { resizable: true, HTMLAttributes: { class: 'pdf-table' } },
+        }),
         TextAlign.configure({
           types: ['heading', 'paragraph'],
         }),
@@ -454,6 +462,36 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
             />
             <ToolbarButton onClick={() => imageInputRef.current?.click()} title="Inserir imagem">
               <ImageIcon className="h-4 w-4" />
+            </ToolbarButton>
+          </div>
+
+          {/* Tabelas (caixas / colunas) */}
+          <div className="flex gap-1 border-r pr-2">
+            <ToolbarButton
+              onClick={() =>
+                editor.chain().focus().insertTable({ rows: 2, cols: 2, withHeaderRow: false }).run()
+              }
+              title="Inserir tabela"
+            >
+              <TableIcon className="h-4 w-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().addColumnAfter().run()}
+              title="Adicionar coluna"
+            >
+              <Columns3 className="h-4 w-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().addRowAfter().run()}
+              title="Adicionar linha"
+            >
+              <Rows3 className="h-4 w-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().deleteTable().run()}
+              title="Eliminar tabela"
+            >
+              <Trash2 className="h-4 w-4" />
             </ToolbarButton>
           </div>
 
