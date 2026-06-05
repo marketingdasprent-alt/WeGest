@@ -1037,6 +1037,23 @@ export const generateDocumentFromTemplate = async (
         pdf.setTextColor(0, 0, 0);
       };
 
+      // Pré-carregar TODAS as imagens em paralelo — uma a uma (await em loop)
+      // era N× a latência de rede. Falhas individuais ficam fora do mapa
+      // (a célula fica só com a moldura).
+      const urlsUnicas = [...new Set(params.anexoFotos.flatMap((g) => g.urls))];
+      const imagens = new Map<string, HTMLImageElement>();
+      await Promise.all(
+        urlsUnicas.map(async (url) => {
+          try {
+            imagens.set(url, await loadImage(url));
+          } catch (error) {
+            console.warn('Erro ao carregar foto do anexo:', url, error);
+          }
+        })
+      );
+
+      pdf.setDrawColor(220, 222, 228);
+      pdf.setLineWidth(0.2);
       for (const grupo of params.anexoFotos) {
         if (!grupo.urls.length) continue;
         let idx = 0;
@@ -1047,11 +1064,9 @@ export const generateDocumentFromTemplate = async (
           const c = posInPage % cols;
           const cx = leftMargin + c * (cellW + gap);
           const cy = gridTop + r * (cellH + gap);
-          pdf.setDrawColor(220, 222, 228);
-          pdf.setLineWidth(0.2);
           pdf.rect(cx, cy, cellW, cellH, 'S');
-          try {
-            const img = await loadImage(url);
+          const img = imagens.get(url);
+          if (img) {
             const ratio = img.width && img.height ? img.width / img.height : 1.5;
             let w = cellW - 2;
             let h = w / ratio;
@@ -1060,8 +1075,6 @@ export const generateDocumentFromTemplate = async (
               w = h * ratio;
             }
             pdf.addImage(img, 'JPEG', cx + (cellW - w) / 2, cy + (cellH - h) / 2, w, h);
-          } catch (error) {
-            console.warn('Erro ao carregar foto do anexo:', url, error);
           }
           idx++;
         }

@@ -47,3 +47,19 @@ export const getEmpresaById = (id: string): EmpresaConfig | undefined => {
 export const getEmpresasList = (): EmpresaConfig[] => {
   return Object.values(EMPRESAS);
 };
+
+/** Rodapé "Nome · NIF · Sede" usado nos PDFs gerados (sem papel timbrado). */
+export const empresaFooterText = (e: EmpresaConfig): string =>
+  [e.nomeCompleto, e.nif ? `NIF ${e.nif}` : null, e.sede].filter(Boolean).join('   ·   ');
+
+/** Dados da empresa no formato esperado por `documentData.empresaData`
+ *  (placeholders {{empresa_*}}). */
+export const empresaDocData = (e: EmpresaConfig) => ({
+  nomeCompleto: e.nomeCompleto,
+  nif: e.nif,
+  sede: e.sede,
+  licencaTVDE: e.licencaTVDE,
+  licencaValidade: e.licencaValidade,
+  representante: e.representante,
+  cargoRepresentante: e.cargoRepresentante,
+});

@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import type { EmpresaConfig } from '@/config/empresas';
+import { empresaDocData, empresaFooterText, type EmpresaConfig } from '@/config/empresas';
 
 import {
   generateDocumentosCombinados,
@@ -92,20 +92,10 @@ export const generateContratoPrestacaoPdf = async ({
     viatura_matricula: viatura?.matricula ?? '—',
     viatura_marca_modelo: viatura ? `${viatura.marca} ${viatura.modelo}`.trim() : '—',
     valor_semanal: eur(valorSemanal),
-    empresaData: {
-      nomeCompleto: empresa.nomeCompleto,
-      nif: empresa.nif,
-      sede: empresa.sede,
-      licencaTVDE: empresa.licencaTVDE,
-      licencaValidade: empresa.licencaValidade,
-      representante: empresa.representante,
-      cargoRepresentante: empresa.cargoRepresentante,
-    },
+    empresaData: empresaDocData(empresa),
   };
 
-  const footerText = [empresa.nomeCompleto, empresa.nif ? `NIF ${empresa.nif}` : null, empresa.sede]
-    .filter(Boolean)
-    .join('   ·   ');
+  const footerText = empresaFooterText(empresa);
 
   // Slot: Prestação + Aluguer (o carro é do motorista, por isso o Aluguer sai
   // com os campos financeiros/estações em branco). Um PDF, folha branca a
