@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import type { TablesInsert } from '@/integrations/supabase/types';
+import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -326,6 +326,22 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
     comprovativoIbanUrl,
   ]);
 
+  // Persiste imediatamente o URL de um ficheiro na BD após upload bem-sucedido.
+  // Só faz UPDATE se já existir candidatura — candidaturas novas ficam protegidas
+  // pelo rascunho local até ao primeiro "Guardar".
+  const saveUploadUrlToDb = async (column: string, url: string) => {
+    if (!user || !candidatura) return;
+    try {
+      await supabase
+        .from('motorista_candidaturas')
+        .update({ [column]: url || null } as TablesUpdate<'motorista_candidaturas'>)
+        .eq('id', candidatura.id);
+      onUpdate();
+    } catch (err) {
+      console.error('Erro ao persistir URL do ficheiro na BD:', err);
+    }
+  };
+
   const clearLocalDraft = () => {
     if (draftKey) {
       try {
@@ -373,6 +389,8 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
   // Traduz qualquer erro do sistema para uma mensagem clara para o motorista.
   const traduzirErro = (msg?: string, fallback = 'Ocorreu um erro. Tente novamente.') => {
     const m = (msg || '').toLowerCase();
+    if (m === 'sem_permissao_guardar')
+      return 'Não foi possível guardar — a sua sessão não tem permissões adequadas. Feche a sessão, entre novamente e tente outra vez.';
     if (
       m.includes('row-level security') ||
       m.includes('permission') ||
@@ -381,7 +399,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
     )
       return 'Não tem permissão para esta ação. Inicie sessão novamente e tente outra vez.';
     if (m.includes('could not find') && m.includes('column'))
-      return 'Erro de configuração do sistema. Por favor contacte o suporte.';
+      return 'Erro de base de dados: uma coluna está em falta. O administrador precisa de aplicar a migration mais recente no Supabase.';
     if (m.includes('duplicate') || m.includes('already exists') || m.includes('unique'))
       return 'Já existe um registo com estes dados.';
     if (m.includes('network') || m.includes('failed to fetch') || m.includes('fetch'))
@@ -401,12 +419,14 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
       const data = buildCandidaturaData() as TablesInsert<'motorista_candidaturas'>;
 
       if (candidatura) {
-        const { error } = await supabase
+        const { data: rows, error } = await supabase
           .from('motorista_candidaturas')
           .update(data)
-          .eq('id', candidatura.id);
+          .eq('id', candidatura.id)
+          .select('id');
 
         if (error) throw error;
+        if (!rows || rows.length === 0) throw new Error('sem_permissao_guardar');
       } else {
         const { error } = await supabase
           .from('motorista_candidaturas')
@@ -564,12 +584,14 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
       } as TablesInsert<'motorista_candidaturas'>;
 
       if (candidatura) {
-        const { error } = await supabase
+        const { data: rows, error } = await supabase
           .from('motorista_candidaturas')
           .update(data)
-          .eq('id', candidatura.id);
+          .eq('id', candidatura.id)
+          .select('id');
 
         if (error) throw error;
+        if (!rows || rows.length === 0) throw new Error('sem_permissao_guardar');
       } else {
         const { error } = await supabase.from('motorista_candidaturas').insert(data);
 
@@ -825,6 +847,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
                 onUpload={(url) => {
                   setComprovativoMoradaUrl(url);
                   clearFieldError('comprovativoMoradaUrl');
+                  void saveUploadUrlToDb('comprovativo_morada_url', url);
                 }}
                 accept="application/pdf,image/jpeg,image/png"
               />
@@ -925,6 +948,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
                     onUpload={(url) => {
                       setDocumentoFicheiroUrl(url);
                       clearFieldError('documentoFicheiroUrl');
+                      void saveUploadUrlToDb('documento_ficheiro_url', url);
                     }}
                     accept="application/pdf,image/jpeg,image/png"
                   />
@@ -938,6 +962,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
                     onUpload={(url) => {
                       setDocumentoIdentificacaoVersoUrl(url);
                       clearFieldError('documentoIdentificacaoVersoUrl');
+                      void saveUploadUrlToDb('documento_identificacao_verso_url', url);
                     }}
                     accept="application/pdf,image/jpeg,image/png"
                   />
@@ -1033,6 +1058,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
                     onUpload={(url) => {
                       setCartaFicheiroUrl(url);
                       clearFieldError('cartaFicheiroUrl');
+                      void saveUploadUrlToDb('carta_ficheiro_url', url);
                     }}
                     accept="application/pdf,image/jpeg,image/png"
                   />
@@ -1046,6 +1072,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
                     onUpload={(url) => {
                       setCartaConducaoVersoUrl(url);
                       clearFieldError('cartaConducaoVersoUrl');
+                      void saveUploadUrlToDb('carta_conducao_verso_url', url);
                     }}
                     accept="application/pdf,image/jpeg,image/png"
                   />
@@ -1110,6 +1137,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
                 onUpload={(url) => {
                   setLicencaTvdeFicheiroUrl(url);
                   clearFieldError('licencaTvdeFicheiroUrl');
+                  void saveUploadUrlToDb('licenca_tvde_ficheiro_url', url);
                 }}
                 accept="application/pdf,image/jpeg,image/png"
               />
@@ -1139,6 +1167,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
                 onUpload={(url) => {
                   setRegistoCriminalUrl(url);
                   clearFieldError('registoCriminalUrl');
+                  void saveUploadUrlToDb('registo_criminal_url', url);
                 }}
                 accept="application/pdf,image/jpeg,image/png"
               />
@@ -1159,6 +1188,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
                 onUpload={(url) => {
                   setComprovativoIbanUrl(url);
                   clearFieldError('comprovativoIbanUrl');
+                  void saveUploadUrlToDb('comprovativo_iban_url', url);
                 }}
                 accept="application/pdf,image/jpeg,image/png"
               />
