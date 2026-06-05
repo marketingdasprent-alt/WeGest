@@ -20,8 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useDocumentTemplates } from '@/hooks/useDocumentTemplates';
 
 import { generateContratoPdf, type CondutorPrincipal } from '@/utils/generateContratoPdf';
 import type { EmpresaConfig } from '@/config/empresas';
@@ -29,13 +29,6 @@ import type { ContratoRenting } from '@/types/contratoRenting';
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Motorista } from '@/types/motorista';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
-
-interface DocumentTemplateRow {
-  id: string;
-  nome: string;
-  tipo: string;
-  empresa_id: string;
-}
 
 interface Props {
   open: boolean;
@@ -73,10 +66,12 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
     empresas.find((e) => e.orgId === contrato.org_id)?.id ?? empresas[0]?.id ?? '';
 
   const [empresaId, setEmpresaId] = useState(empresaPorDefeito);
-  const [templates, setTemplates] = useState<DocumentTemplateRow[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
   const [gerando, setGerando] = useState(false);
+
+  const { data: templates = [], isLoading: loading } = useDocumentTemplates(
+    open ? empresaId : null
+  );
 
   // Ao abrir, repõe a empresa por defeito. Ao fechar, limpa a selecção.
   useEffect(() => {
@@ -84,39 +79,16 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
     else setSelected(new Set());
   }, [open, empresaPorDefeito]);
 
-  // Carrega templates activos da empresa e pré-selecciona por regime.
+  // Pré-selecciona por regime quando os templates (da empresa actual) chegam.
   useEffect(() => {
-    if (!open || !empresaId) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('document_templates')
-        .select('id, nome, tipo, empresa_id')
-        .eq('ativo', true)
-        .eq('empresa_id', empresaId)
-        .order('nome', { ascending: true });
-      if (cancelled) return;
-      if (error) {
-        toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-        setTemplates([]);
-        setSelected(new Set());
-      } else {
-        const rows = (data ?? []) as DocumentTemplateRow[];
-        setTemplates(rows);
-        const pre = new Set<string>();
-        rows.forEach((t) => {
-          if (t.tipo === 'contrato_aluguer') pre.add(t.id);
-          if (t.tipo === 'contrato_prestacao' && contrato.regime !== 'rent_a_car') pre.add(t.id);
-        });
-        setSelected(pre);
-      }
-      setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, empresaId, contrato.regime, toast]);
+    if (!open) return;
+    const pre = new Set<string>();
+    templates.forEach((t) => {
+      if (t.tipo === 'contrato_aluguer') pre.add(t.id);
+      if (t.tipo === 'contrato_prestacao' && contrato.regime !== 'rent_a_car') pre.add(t.id);
+    });
+    setSelected(pre);
+  }, [open, templates, contrato.regime]);
 
   const toggle = (id: string) =>
     setSelected((prev) => {

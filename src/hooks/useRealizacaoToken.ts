@@ -75,14 +75,12 @@ export function usePollEventoRealizado(eventoId: string | null, enabled = true) 
         .select('realizado_em, realizado_por_id')
         .eq('id', eventoId)
         .maybeSingle();
-      if (error || cancelled) return;
-      // Na RECOLHA, a cascata de estado APAGA o evento ao mudar para
-      // 'devolvido'. Sem evento, data === null — tratamos como realizado
-      // (senão o laptop ficava preso no "pendente" para sempre).
-      if (!data) {
-        setRealizado({ em: new Date().toISOString(), por_id: null });
-        return;
-      }
+      if (error || !data || cancelled) return;
+      // Realizado = o evento existe e tem realizado_em. Desde a migração
+      // 20260601000018 a realização (entrega/recolha) MARCA o evento como
+      // realizado e mantém-no (já não é apagado). Evento inexistente significa
+      // outra coisa (ex.: contrato cancelado) — NÃO é realização, por isso não
+      // confirmamos com base na ausência (evitava falsos "confirmado").
       if (data.realizado_em) {
         setRealizado({
           em: data.realizado_em as string,

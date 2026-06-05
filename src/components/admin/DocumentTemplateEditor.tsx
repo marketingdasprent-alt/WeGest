@@ -27,6 +27,19 @@ const CATEGORIA_EMOJI: Record<BaseCategoria, string> = {
   contrato: '📄',
 };
 
+// Tipos de template (coluna `tipo`, TEXT livre). Os de contrato têm semântica
+// no gerador (escolha por regime); os restantes são documentos genéricos que
+// aparecem no checklist "Gerar Documentos".
+const TIPO_TEMPLATE_OPTIONS = [
+  { value: 'contrato_aluguer', label: 'Contrato de Aluguer' },
+  { value: 'contrato_prestacao', label: 'Contrato de Prestação' },
+  { value: 'contrato_tvde', label: 'Contrato TVDE' },
+  { value: 'declaracao', label: 'Declaração' },
+  { value: 'procedimentos', label: 'Procedimentos' },
+  { value: 'recibo', label: 'Recibo' },
+  { value: 'outro', label: 'Outro documento' },
+] as const;
+
 interface DocumentTemplate {
   id?: string;
   nome: string;
@@ -52,6 +65,7 @@ export const DocumentTemplateEditor = ({
 }: DocumentTemplateEditorProps) => {
   const [nome, setNome] = useState(template?.nome || '');
   const [empresaId, setEmpresaId] = useState(template?.empresa_id || 'decada_ousada');
+  const [tipo, setTipo] = useState(template?.tipo || 'contrato_tvde');
   const [ativo, setAtivo] = useState(template?.ativo ?? true);
   const [conteudoCompleto, setConteudoCompleto] = useState('');
   const [papelTimbradoUrl, setPapelTimbradoUrl] = useState(template?.papel_timbrado_url || '');
@@ -61,6 +75,7 @@ export const DocumentTemplateEditor = ({
 
   useEffect(() => {
     if (template) {
+      setTipo(template.tipo || 'contrato_tvde');
       let content = '';
 
       if (template?.template_data?.conteudo) {
@@ -252,11 +267,6 @@ export const DocumentTemplateEditor = ({
 
     setSaving(true);
     try {
-      // Preservar o tipo do template em edição (ex.: 'contrato_aluguer').
-      // Forçar 'contrato_tvde' aqui mudava o tipo ao guardar e colidia com a
-      // constraint única (empresa_id, tipo, versao) → erro 23505.
-      const tipo = template?.tipo || 'contrato_tvde';
-
       // Determinar a versão correta
       let versao = template?.versao || 1;
 
@@ -350,15 +360,30 @@ export const DocumentTemplateEditor = ({
           <Card className="bg-card/50 border-border">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <div className="flex-1 grid grid-cols-2 gap-4">
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label className="text-foreground">Nome do Template</Label>
                     <Input
                       value={nome}
                       onChange={(e) => setNome(e.target.value)}
-                      placeholder="Ex: Contrato TVDE Padrão"
+                      placeholder="Ex: Contrato Aluguer - WeGest"
                       className="bg-card border-border text-foreground"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-foreground">Tipo de Documento</Label>
+                    <Select value={tipo} onValueChange={setTipo}>
+                      <SelectTrigger className="bg-card border-border text-foreground">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIPO_TEMPLATE_OPTIONS.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-foreground">Empresa</Label>

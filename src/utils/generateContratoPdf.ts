@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import type { EmpresaConfig } from '@/config/empresas';
+import { empresaDocData, empresaFooterText, type EmpresaConfig } from '@/config/empresas';
 
 import {
   generateDocumentosCombinados,
@@ -219,15 +219,7 @@ export const generateContratoPdf = async ({
     iva: eur(contrato.total_iva),
     total: contrato.total_final != null ? eur(contrato.total_final) : 'A facturar',
     observacoes: contrato.observacoes ?? '',
-    empresaData: {
-      nomeCompleto: empresa.nomeCompleto,
-      nif: empresa.nif,
-      sede: empresa.sede,
-      licencaTVDE: empresa.licencaTVDE,
-      licencaValidade: empresa.licencaValidade,
-      representante: empresa.representante,
-      cargoRepresentante: empresa.cargoRepresentante,
-    },
+    empresaData: empresaDocData(empresa),
   };
 
   // 5) Anexar fotos de check-in/check-out em folhas extra (grelha 2×3).
@@ -283,9 +275,7 @@ export const generateContratoPdf = async ({
   }
 
   // Rodapé da empresa (nome · NIF · sede) em todos os documentos gerados.
-  const footerText = [empresa.nomeCompleto, empresa.nif ? `NIF ${empresa.nif}` : null, empresa.sede]
-    .filter(Boolean)
-    .join('   ·   ');
+  const footerText = empresaFooterText(empresa);
 
   // As fotos de check-in/out anexam-se ao template de ALUGUER (ou, na falta
   // dele entre os escolhidos, ao último documento).
