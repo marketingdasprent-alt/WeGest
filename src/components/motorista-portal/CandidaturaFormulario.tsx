@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import type { TablesInsert } from '@/integrations/supabase/types';
+import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -334,7 +334,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
     try {
       await supabase
         .from('motorista_candidaturas')
-        .update({ [column]: url || null })
+        .update({ [column]: url || null } as TablesUpdate<'motorista_candidaturas'>)
         .eq('id', candidatura.id);
       onUpdate();
     } catch (err) {
