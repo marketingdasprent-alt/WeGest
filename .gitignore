@@ -32,3 +32,8 @@ dist-ssr
 
 # Supabase CLI — ficheiros temporários/estado local
 supabase/.temp/
+
+
+#claude
+
+.claude/skills

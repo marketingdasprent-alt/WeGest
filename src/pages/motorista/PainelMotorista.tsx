@@ -67,11 +67,16 @@ const PainelMotorista: React.FC = () => {
   const [motoristaAtivo, setMotoristaAtivo] = useState<MotoristaAtivo | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const userId = user?.id;
   useEffect(() => {
-    if (user) {
+    if (userId) {
       loadUserData();
     }
-  }, [user]);
+    // Só recarregar quando o ID do user muda (login/logout).
+    // Evitar remount do formulário no native-app-resume ou token refresh,
+    // que causaria perda do estado (incluindo URLs de uploads recentes).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   const loadUserData = async () => {
     if (!user) return;
