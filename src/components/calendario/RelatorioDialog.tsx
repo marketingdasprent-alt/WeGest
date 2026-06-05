@@ -11,8 +11,6 @@ import { formatMatricula } from './EventoCard';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { CalendarioEvento } from '@/pages/Calendario';
-import jsPDF from 'jspdf';
-import * as XLSX from 'xlsx';
 
 const TIPOS_CONFIG = [
   {
@@ -162,6 +160,7 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
   const exportarPDF = async () => {
     setExportLoading(true);
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
       const pageW = 210;
       const pageH = 297;
@@ -544,9 +543,10 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
   };
 
   // ── EXCEL (.xlsx) EXPORT ────────────────────────────────────────
-  const exportarExcel = () => {
+  const exportarExcel = async () => {
     setExportExcelLoading(true);
     try {
+      const XLSX = await import('xlsx');
       const headers = [
         'Data',
         'Hora',
@@ -608,6 +608,7 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
   const exportarPDFPorGestor = async () => {
     setExportGestorLoading(true);
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
       const pageW = 210;
       const pageH = 297;
