@@ -2,7 +2,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Copy, Power } from 'lucide-react';
-import { getEmpresaById } from '@/config/empresas';
 
 interface DocumentTemplate {
   id: string;
@@ -19,6 +18,7 @@ interface DocumentTemplate {
 
 interface DocumentTemplateListProps {
   templates: DocumentTemplate[];
+  nomePorEmpresa?: Record<string, string>;
   onEdit: (template: DocumentTemplate) => void;
   onDuplicate: (template: DocumentTemplate) => void;
   onToggleStatus: (template: DocumentTemplate) => void;
@@ -26,6 +26,7 @@ interface DocumentTemplateListProps {
 
 export const DocumentTemplateList = ({
   templates,
+  nomePorEmpresa = {},
   onEdit,
   onDuplicate,
   onToggleStatus,
@@ -40,10 +41,7 @@ export const DocumentTemplateList = ({
     });
   };
 
-  const getEmpresaNome = (empresaId: string) => {
-    const empresa = getEmpresaById(empresaId);
-    return empresa?.nome || empresaId;
-  };
+  const getEmpresaNome = (empresaId: string) => nomePorEmpresa[empresaId] || empresaId;
 
   if (templates.length === 0) {
     return (
