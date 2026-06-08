@@ -58,11 +58,7 @@ export const NotificacoesPopup = () => {
                     : 'bg-primary/10 text-primary'
                 )}
               >
-                {urgente ? (
-                  <AlertTriangle className="h-5 w-5" />
-                ) : (
-                  <Bell className="h-5 w-5" />
-                )}
+                {urgente ? <AlertTriangle className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
               </div>
 
               <div className="min-w-0 flex-1">
@@ -75,9 +71,7 @@ export const NotificacoesPopup = () => {
                   {urgente ? '🔴 ' : ''}
                   {n.titulo}
                 </p>
-                {n.mensagem && (
-                  <p className="mt-0.5 text-sm text-muted-foreground">{n.mensagem}</p>
-                )}
+                {n.mensagem && <p className="mt-0.5 text-sm text-muted-foreground">{n.mensagem}</p>}
 
                 <div className="mt-3 flex gap-2">
                   <Button
@@ -89,12 +83,7 @@ export const NotificacoesPopup = () => {
                     <Eye className="mr-1.5 h-3.5 w-3.5" />
                     Ver candidatura
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8"
-                    onClick={() => resolver(n.id)}
-                  >
+                  <Button size="sm" variant="ghost" className="h-8" onClick={() => resolver(n.id)}>
                     Fechar
                   </Button>
                 </div>
