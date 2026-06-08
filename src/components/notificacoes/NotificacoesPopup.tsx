@@ -1,11 +1,19 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useNotificacoes } from '@/hooks/useNotificacoes';
+import { armNotificationSound } from '@/lib/notificationSound';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, Bell, Eye, X } from 'lucide-react';
 
 const CARGOS_NOTIFICAVEIS = ['Gestor TVDE', 'Administrador', 'Supervisor Gestor TVDE'];
+
+// Abre a lista de candidaturas; com candidatura_id, abre logo o detalhe.
+const candidaturaLink = (candidaturaId: string | null) =>
+  candidaturaId
+    ? `/motoristas/candidaturas?candidatura=${candidaturaId}`
+    : '/motoristas/candidaturas';
 
 export const NotificacoesPopup = () => {
   const { cargo, isAdmin, tipoUtilizador, loading } = usePermissions();
@@ -17,6 +25,12 @@ export const NotificacoesPopup = () => {
     (isAdmin || (cargo != null && CARGOS_NOTIFICAVEIS.includes(cargo)));
 
   const { notificacoes, resolver } = useNotificacoes(enabled);
+
+  // Desbloqueia o áudio no primeiro gesto do utilizador (autoplay policy),
+  // para que o aviso urgente ao supervisor toque mesmo sem clique imediato.
+  useEffect(() => {
+    if (enabled) armNotificationSound();
+  }, [enabled]);
 
   if (!enabled || notificacoes.length === 0) return null;
 
@@ -64,7 +78,7 @@ export const NotificacoesPopup = () => {
                     size="sm"
                     variant={urgente ? 'destructive' : 'default'}
                     className="h-8"
-                    onClick={() => navigate('/motoristas/candidaturas')}
+                    onClick={() => navigate(candidaturaLink(n.candidatura_id))}
                   >
                     <Eye className="mr-1.5 h-3.5 w-3.5" />
                     Ver candidatura
