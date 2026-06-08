@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { Save, X, Upload, Trash2, Image as ImageIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCamposDinamicos } from '@/hooks/useCamposDinamicos';
+import { useEmpresas } from '@/hooks/useEmpresas';
 import { categoriasOrdenadas, labelCategoria, type BaseCategoria } from '@/lib/camposDinamicos';
 
 const CATEGORIA_EMOJI: Record<BaseCategoria, string> = {
@@ -64,6 +65,7 @@ export const DocumentTemplateEditor = ({
   onCancel,
 }: DocumentTemplateEditorProps) => {
   const [nome, setNome] = useState(template?.nome || '');
+  const { empresas } = useEmpresas();
   const [empresaId, setEmpresaId] = useState(template?.empresa_id || 'decada_ousada');
   const [tipo, setTipo] = useState(template?.tipo || 'contrato_tvde');
   const [ativo, setAtivo] = useState(template?.ativo ?? true);
@@ -392,8 +394,11 @@ export const DocumentTemplateEditor = ({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="decada_ousada">WeGest</SelectItem>
-                        <SelectItem value="distancia_arrojada">Distância Arrojada</SelectItem>
+                        {empresas.map((e) => (
+                          <SelectItem key={e.id} value={e.id}>
+                            {e.nome}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
