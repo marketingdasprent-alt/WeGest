@@ -887,32 +887,39 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
 
       gy += 10;
 
-      // Tabela resumo
+      // Tabela matriz: Gestor × Tipo (entregas, devoluções, etc. por gestor)
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
       doc.setTextColor(20, 20, 25);
-      doc.text('Resumo', marginL, gy);
+      doc.text('Resumo por Gestor e Tipo', marginL, gy);
       gy += 6;
 
+      const tiposPdf = TIPOS_CONFIG.filter((t) =>
+        eventosFiltrados.some((ev) => ev.tipo === t.value)
+      );
       const cGestor = marginL;
-      const cTotal = marginL + 90;
-      const cPct = marginL + 115;
+      const cTotal = pageW - marginR; // alinhado à direita
+      const gestorW = 56;
+      const totalW = 16;
+      const tiposX0 = marginL + gestorW;
+      const tiposW = cTotal - totalW - tiposX0;
+      const colW = tiposPdf.length > 0 ? tiposW / tiposPdf.length : 0;
+      const tipoX = (idx: number) => tiposX0 + idx * colW + colW / 2;
 
       doc.setFillColor(39, 39, 42);
       doc.rect(marginL - 2, gy - 4, pageW - marginL - marginR + 4, 8, 'F');
       doc.setTextColor(200, 200, 210);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
+      doc.setFontSize(7);
       doc.text('GESTOR', cGestor, gy);
-      doc.text('TOTAL', cTotal, gy);
-      doc.text('% DO PERÍODO', cPct, gy);
+      tiposPdf.forEach((t, idx) => {
+        doc.text((t.label || t.value).toUpperCase(), tipoX(idx), gy, { align: 'center' });
+      });
+      doc.text('TOTAL', cTotal, gy, { align: 'right' });
       gy += 6;
 
       gestores.forEach((g, i) => {
-        const pct =
-          eventosFiltrados.length > 0
-            ? ((g.eventos.length / eventosFiltrados.length) * 100).toFixed(1)
-            : '0.0';
+        if (gy > pageH - 18) return; // segurança de página
         const [r, gc2, b] = gestorColors[i % gestorColors.length];
 
         doc.setFillColor(i % 2 === 0 ? 248 : 255, i % 2 === 0 ? 248 : 255, i % 2 === 0 ? 252 : 255);
@@ -922,23 +929,39 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
         doc.circle(cGestor + 1.5, gy - 0.5, 1.5, 'F');
 
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8.5);
+        doc.setFontSize(8);
         doc.setTextColor(40, 40, 50);
-        doc.text(g.nome, cGestor + 5, gy);
-        doc.text(String(g.eventos.length), cTotal, gy);
-        doc.setTextColor(100, 100, 110);
-        doc.text(`${pct}%`, cPct, gy);
+        const nomeLines = doc.splitTextToSize(g.nome, gestorW - 6);
+        doc.text(nomeLines[0], cGestor + 5, gy);
+
+        tiposPdf.forEach((t, idx) => {
+          const c = g.eventos.filter((ev) => ev.tipo === t.value).length;
+          if (c > 0) {
+            doc.setTextColor(40, 40, 50);
+            doc.text(String(c), tipoX(idx), gy, { align: 'center' });
+          } else {
+            doc.setTextColor(190, 190, 195);
+            doc.text('·', tipoX(idx), gy, { align: 'center' });
+          }
+        });
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(20, 20, 25);
+        doc.text(String(g.eventos.length), cTotal, gy, { align: 'right' });
         gy += 7;
       });
 
       doc.setFillColor(230, 230, 240);
       doc.rect(marginL - 2, gy - 3.5, pageW - marginL - marginR + 4, 7, 'F');
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       doc.setTextColor(20, 20, 25);
       doc.text('TOTAL', cGestor, gy);
-      doc.text(String(eventosFiltrados.length), cTotal, gy);
-      doc.text('100%', cPct, gy);
+      tiposPdf.forEach((t, idx) => {
+        const c = eventosFiltrados.filter((ev) => ev.tipo === t.value).length;
+        doc.text(String(c), tipoX(idx), gy, { align: 'center' });
+      });
+      doc.text(String(eventosFiltrados.length), cTotal, gy, { align: 'right' });
 
       drawFooter(pageNum);
 
@@ -963,6 +986,23 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
       count: eventosFiltrados.filter((ev) => ev.criado_por === id).length,
     }))
     .sort((a, b) => b.count - a.count);
+
+  // Tipos que existem no período (colunas dinâmicas da matriz gestor × tipo).
+  const tiposPresentes = TIPOS_CONFIG.filter((t) =>
+    eventosFiltrados.some((ev) => ev.tipo === t.value)
+  );
+
+  // Matriz gestor × tipo: quantas entregas / devoluções / etc. cada gestor tem.
+  const matrizGestorTipo = Array.from(
+    new Map(eventosFiltrados.map((ev) => [ev.criado_por, ev.profiles?.nome || 'Desconhecido']))
+  )
+    .map(([id, nome]) => {
+      const evs = eventosFiltrados.filter((ev) => ev.criado_por === id);
+      const porTipo: Record<string, number> = {};
+      for (const t of TIPOS_CONFIG) porTipo[t.value] = evs.filter((e) => e.tipo === t.value).length;
+      return { id, nome, total: evs.length, porTipo };
+    })
+    .sort((a, b) => b.total - a.total);
 
   const GESTOR_PALETTE = [
     'bg-indigo-500',
@@ -1190,6 +1230,70 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
           {/* ── Painel direito: lista de eventos ── */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {/* Matriz Gestor × Tipo (quantas entregas/devoluções/... por gestor) */}
+              {podeVerGestores && !isLoading && eventosFiltrados.length > 0 && (
+                <div className="rounded-lg border bg-card overflow-hidden">
+                  <div className="px-3 py-2 border-b bg-muted/40">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Por Gestor &times; Tipo
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="px-3 py-1.5 text-left font-medium">Gestor</th>
+                          {tiposPresentes.map((t) => (
+                            <th
+                              key={t.value}
+                              className="px-2 py-1.5 text-center font-medium whitespace-nowrap"
+                            >
+                              {t.label}
+                            </th>
+                          ))}
+                          <th className="px-3 py-1.5 text-center font-semibold">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {matrizGestorTipo.map((g, i) => (
+                          <tr
+                            key={g.id}
+                            className={cn('border-b last:border-0', i % 2 === 1 && 'bg-muted/20')}
+                          >
+                            <td className="px-3 py-1.5 font-medium truncate max-w-[180px]">
+                              {g.nome}
+                            </td>
+                            {tiposPresentes.map((t) => (
+                              <td key={t.value} className="px-2 py-1.5 text-center tabular-nums">
+                                {g.porTipo[t.value] > 0 ? (
+                                  g.porTipo[t.value]
+                                ) : (
+                                  <span className="text-muted-foreground/30">·</span>
+                                )}
+                              </td>
+                            ))}
+                            <td className="px-3 py-1.5 text-center font-bold tabular-nums">
+                              {g.total}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="border-t-2 bg-muted/40 font-semibold">
+                          <td className="px-3 py-1.5">Total</td>
+                          {tiposPresentes.map((t) => (
+                            <td key={t.value} className="px-2 py-1.5 text-center tabular-nums">
+                              {eventosFiltrados.filter((e) => e.tipo === t.value).length}
+                            </td>
+                          ))}
+                          <td className="px-3 py-1.5 text-center tabular-nums">
+                            {eventosFiltrados.length}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               {isLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
