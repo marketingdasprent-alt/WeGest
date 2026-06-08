@@ -449,3 +449,40 @@ html[data-native-app="true"] [role="dialog"].inset-y-0 {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--primary) / 0.5);
 }
+
+/* Tabelas no editor de templates (Tiptap) — apenas visual no editor.
+   No PDF, o motor (generateDocumentFromTemplate) desenha a tabela. */
+.ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0;
+  table-layout: fixed;
+}
+.ProseMirror td,
+.ProseMirror th {
+  border: 1px solid #dcdee4;
+  padding: 6px 8px;
+  vertical-align: top;
+  position: relative;
+}
+.ProseMirror th {
+  background: #f3f4f6;
+  font-weight: 600;
+  text-align: left;
+}
+.ProseMirror .selectedCell:after {
+  background: hsl(var(--primary) / 0.12);
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ProseMirror .column-resize-handle {
+  background-color: hsl(var(--primary) / 0.5);
+  width: 3px;
+  position: absolute;
+  right: -1.5px;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+}

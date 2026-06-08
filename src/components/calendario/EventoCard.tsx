@@ -21,6 +21,7 @@ const TIPO_LABELS: Record<string, string> = {
   upgrade: 'Upgrade',
   lista_espera: 'Lista de Espera',
   transferencia: 'Transferência',
+  slot: 'Slot',
 };
 
 const TIPO_COLORS: Record<string, string> = {
@@ -31,6 +32,7 @@ const TIPO_COLORS: Record<string, string> = {
   upgrade: 'border-l-yellow-500',
   lista_espera: 'border-l-pink-500',
   transferencia: 'border-l-cyan-500',
+  slot: 'border-l-amber-500',
 };
 
 export function formatMatricula(val: string): string {
@@ -51,7 +53,7 @@ export const EventoCard: React.FC<Props> = ({ evento, onEdit, onDelete, onDetail
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-sm truncate">
-              {evento.tipo === 'lista_espera' ? (
+              {evento.tipo === 'lista_espera' || evento.tipo === 'slot' ? (
                 evento.titulo
               ) : evento.tipo === 'troca' ? (
                 <>

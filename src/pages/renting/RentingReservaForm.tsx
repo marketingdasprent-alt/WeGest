@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -100,6 +100,7 @@ const RentingReservaForm = () => {
   const deleteMutation = useDeleteReserva();
   const syncCondutoresMutation = useSyncReservaCondutores();
 
+  const [activeTab, setActiveTab] = useState('geral');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [anexosPendentes, setAnexosPendentes] = useState<AnexoPendente[]>([]);
   const [clienteDialogOpen, setClienteDialogOpen] = useState(false);
@@ -270,43 +271,32 @@ const RentingReservaForm = () => {
   // "Criar Contrato" está sempre presente em edição, mas só fica activo quando a
   // reserva GUARDADA tem os campos obrigatórios e não há alterações por gravar —
   // o contrato é gerado a partir da reserva persistida (reserva_id), não do form.
+  // Completude por regime. O condutor pode ser cliente (rent-a-car) ou
+  // motorista (TVDE), por isso aceitamos qualquer condutor guardado — exigir
+  // `cliente_id` bloqueava o TVDE. As estações só são obrigatórias no aluguer
+  // (rent-a-car); o TVDE não as usa. (Slot não chega aqui — gera prestação.)
+  const temCondutor = !!reserva?.cliente_id || condutoresAtuais.length > 0;
+  const temEstacoes = !!(reserva?.estacao_entrega_id && reserva?.estacao_recolha_id);
   const reservaCompleta = !!(
     reserva &&
-    reserva.cliente_id &&
     reserva.viatura_id &&
-    reserva.estacao_entrega_id &&
-    reserva.estacao_recolha_id
+    temCondutor &&
+    (reserva.regime === 'rent_a_car' ? temEstacoes : true)
   );
   const podeCriarContrato = reservaCompleta && !form.formState.isDirty;
   const motivoContratoBloqueado = !reservaCompleta
-    ? 'Preenche cliente, viatura e estações (entrega e recolha) e guarda a reserva.'
+    ? reserva?.regime === 'rent_a_car'
+      ? 'Preenche condutor, viatura e estações (entrega e recolha) e guarda a reserva.'
+      : 'Preenche condutor e viatura e guarda a reserva.'
     : form.formState.isDirty
       ? 'Guarda as alterações antes de criar o contrato.'
       : undefined;
 
-  // Quando o user troca de regime, os condutores existentes deixam de fazer
-  // sentido (clientes vs motoristas) — limpamos a lista com aviso.
+  // Os condutores PERSISTEM ao trocar de regime — não se apaga a lista (senão o
+  // condutor "desaparece"). A tabela de condutores mostra clientes (rent-a-car) ou
+  // motoristas (TVDE/slot) conforme o tipo gravado em cada linha; o utilizador
+  // remove manualmente os que não interessam ao novo regime.
   const regimeWatched = form.watch('regime');
-  useEffect(() => {
-    const condutores = (form.getValues('condutores') ?? []) as Array<{
-      cliente_id: string | null;
-      motorista_id: string | null;
-    }>;
-    if (condutores.length === 0) return;
-    // rent_a_car usa clientes; tvde e slot usam motoristas.
-    const expectedKey: 'cliente_id' | 'motorista_id' =
-      regimeWatched === 'rent_a_car' ? 'cliente_id' : 'motorista_id';
-    const tipoErrado = condutores.some((c) => !c[expectedKey]);
-    if (!tipoErrado) return;
-    form.setValue('condutores', [], { shouldDirty: true, shouldValidate: true });
-    toast({
-      title: 'Condutores limpos',
-      description:
-        regimeWatched === 'rent_a_car'
-          ? 'Mudaste para Rent-a-car — os condutores são agora clientes. Volta a adicionar.'
-          : 'Mudaste de regime — os condutores são agora motoristas. Volta a adicionar.',
-    });
-  }, [regimeWatched, form, toast]);
 
   // Qualquer viatura pode ser alugada em rent-a-car ou TVDE.
   // O campo habilitada_tvde é apenas informativo/administrativo, não restringe.
@@ -407,6 +397,36 @@ const RentingReservaForm = () => {
     } catch {
       // Erros são reportados via toast pelas mutations
     }
+  };
+
+  // Validação falhou — mostrar o motivo (senão "Guardar" parece não fazer nada)
+  // e saltar para a tab onde está o campo com erro.
+  const onInvalid = (errors: FieldErrors<ReservaFormValues>) => {
+    const messages: string[] = [];
+    const collect = (node: unknown) => {
+      if (!node) return;
+      if (Array.isArray(node)) {
+        node.forEach(collect);
+      } else if (typeof node === 'object') {
+        const maybe = node as { message?: unknown };
+        if (typeof maybe.message === 'string') messages.push(maybe.message);
+        else Object.values(node).forEach(collect);
+      }
+    };
+    collect(errors);
+
+    // Campo de condutores vive na tab "Condutores" (exceto em slot, que é no Geral).
+    if (errors.condutores && regimeWatched !== 'slot') setActiveTab('condutores');
+    else setActiveTab('geral');
+
+    const unicas = Array.from(new Set(messages)).slice(0, 4);
+    toast({
+      title: 'Não foi possível guardar',
+      description: unicas.length
+        ? unicas.join(' • ')
+        : 'Verifica os campos obrigatórios assinalados.',
+      variant: 'destructive',
+    });
   };
 
   const handleDelete = () => {
@@ -524,7 +544,7 @@ const RentingReservaForm = () => {
             ))}
           <Button
             type="button"
-            onClick={form.handleSubmit(onSubmit)}
+            onClick={form.handleSubmit(onSubmit, onInvalid)}
             disabled={isPending}
             className="gap-2"
           >
@@ -534,7 +554,7 @@ const RentingReservaForm = () => {
         </StickyPageHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
             {temConflito && (
               <div className="flex items-start gap-2 p-3 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -548,7 +568,7 @@ const RentingReservaForm = () => {
             <div className="grid grid-cols-1 xl:grid-cols-[1fr_240px] gap-4 items-start">
               <Card className="bg-card border-border">
                 <CardContent className="p-4 sm:p-6">
-                  <Tabs defaultValue="geral" className="w-full">
+                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                     {/* Em slot o motorista escolhe-se no Geral — sem tab Condutores. */}
                     <TabsList
                       className={cn(

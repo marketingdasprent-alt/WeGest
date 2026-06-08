@@ -43,6 +43,7 @@ const MeusTickets = lazy(() => import('@/pages/MeusTickets'));
 const Administrativo = lazy(() => import('@/pages/Administrativo'));
 const CartoesFlotaPage = lazy(() => import('@/pages/administrativo/CartoesFlotaPage'));
 const DispositivosObePage = lazy(() => import('@/pages/administrativo/DispositivosObePage'));
+const FaturacaoPage = lazy(() => import('@/pages/administrativo/FaturacaoPage'));
 const Instalar = lazy(() => import('@/pages/Instalar'));
 const Calendario = lazy(() => import('@/pages/Calendario'));
 const Marketing = lazy(() => import('@/pages/Marketing'));
@@ -357,6 +358,16 @@ const WebAppRoutes = () => {
               <ProtectedRoute requiredResource={RECURSOS.FINANCEIRO_RECIBOS}>
                 <DashboardLayout>
                   <DispositivosObePage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/administrativo/faturacao"
+            element={
+              <ProtectedRoute requiredResource={RECURSOS.FINANCEIRO_RECIBOS}>
+                <DashboardLayout>
+                  <FaturacaoPage />
                 </DashboardLayout>
               </ProtectedRoute>
             }

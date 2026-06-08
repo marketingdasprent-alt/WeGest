@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   AlertTriangle,
   ArrowLeft,
-  Download,
+  CalendarClock,
   FileText,
   Loader2,
   Printer,
@@ -51,7 +51,7 @@ import { useViaturas } from '@/hooks/useViaturas';
 import { ClienteDialog } from '@/components/renting/ClienteDialog';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
 
-import { generateContratoPdf } from '@/utils/generateContratoPdf';
+import { ContratoDocumentosDialog } from '@/components/renting/contratos/ContratoDocumentosDialog';
 import { ContratoDeleteConfirm } from '@/components/renting/contratos/ContratoDeleteConfirm';
 import { ContratoEstadoActions } from '@/components/renting/contratos/ContratoEstadoActions';
 import { ContratoFormSecoes } from '@/components/renting/contratos/ContratoFormSecoes';
@@ -66,6 +66,7 @@ import { ContratoTabCobertura } from '@/components/renting/contratos/ContratoTab
 import { ContratoTabExtras } from '@/components/renting/contratos/ContratoTabExtras';
 import { ContratoTabTaxas } from '@/components/renting/contratos/ContratoTabTaxas';
 import { ContratoTabsPlaceholder } from '@/components/renting/contratos/ContratoTabsPlaceholder';
+import { ContratoTabFaturar } from '@/components/renting/contratos/ContratoTabFaturar';
 import { ResumoContrato } from '@/components/renting/contratos/ResumoContrato';
 import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import {
@@ -102,6 +103,10 @@ const ContratoForm = () => {
   const { data: taxasCatalogo = [] } = useRentingTaxas({ apenasAtivas: true });
   const { data: orgDefinicoes } = useOrgDefinicoes();
   const { data: contrato, isLoading: loadingContrato } = useContratoRenting(id ?? null);
+
+  // Garante que a hidratação reserva→contrato (form.reset) só corre UMA vez —
+  // senão um refetch da reserva volta a fazer reset e apaga edições/condutores.
+  const hidratadoDaReserva = useRef(false);
 
   // Carrega reserva — em criação vem do query string, em edição vem do contrato.
   // Em ambos os casos é a fonte do `viatura_id` (campo bloqueado no formulário).
@@ -146,14 +151,14 @@ const ContratoForm = () => {
     alteracoes: AlteracaoMaterial[];
     valores: ContratoFormValues;
   } | null>(null);
-  /** Dialog de realização (entrega/recolha) via QR. Aberto automaticamente
-   *  quando há evento pendente correspondente ao estado actual. */
+  /** Dialog de realização (entrega/recolha). Aberto pelo botão do banner de
+   *  "realização pendente" — nunca automaticamente (não bloquear a página). */
   const [realizarDialog, setRealizarDialog] = useState<{
     eventoId: string;
     tipo: 'entrega' | 'recolha';
   } | null>(null);
-  /** Marca para o auto-open só correr uma vez por carregamento da página. */
-  const [autoOpenedRealizar, setAutoOpenedRealizar] = useState(false);
+  /** Dialog "Gerar Documentos" (checklist de templates → 1 PDF combinado). */
+  const [docsDialogOpen, setDocsDialogOpen] = useState(false);
 
   /** Adiciona um cliente recém-criado à lista de condutores (rent-a-car). */
   const handleClienteCriado = (clienteId: string) => {
@@ -194,33 +199,6 @@ const ContratoForm = () => {
   const handleDelete = () => {
     if (!contrato) return;
     setConfirmDeleteOpen(true);
-  };
-
-  const handleImprimir = async (action: 'print' | 'download') => {
-    if (!contrato) return;
-    // Empresa do contrato: associada por org_id. Fallback à primeira disponível
-    // caso a tabela `empresas` ainda não tenha org_id preenchido (legacy).
-    const empresaContrato =
-      empresas.find((e) => e.orgId === contrato.org_id) ?? empresas[0] ?? null;
-    try {
-      const principal = (condutoresDb ?? []).find((c) => c.is_principal) ?? null;
-      const viaturaContrato = viaturas.find((v) => v.id === contrato.viatura_id) ?? null;
-      await generateContratoPdf({
-        contrato,
-        condutorPrincipal: principal,
-        clientes,
-        motoristas,
-        viatura: viaturaContrato,
-        empresa: empresaContrato,
-        action,
-      });
-    } catch (err) {
-      toast({
-        title: 'Erro ao gerar contrato',
-        description: err instanceof Error ? err.message : 'Erro inesperado',
-        variant: 'destructive',
-      });
-    }
   };
 
   const confirmDelete = () => {
@@ -296,6 +274,12 @@ const ContratoForm = () => {
         navigate(`/renting/reservas/${reservaFromQuery.id}`);
         return;
       }
+      // Espera pelos condutores da reserva (request separado) para os incluir no
+      // mesmo reset — senão o reset apagava-os. `undefined` = ainda a carregar.
+      if (condutoresDaReserva === undefined) return;
+      // Só hidrata uma vez (um refetch da reserva não deve apagar edições).
+      if (hidratadoDaReserva.current) return;
+      hidratadoDaReserva.current = true;
       // Conversão reserva → contrato: copia TUDO o que faz sentido.
       // O orçamento da reserva (valor_total) torna-se valor_total_manual no contrato.
       form.reset({
@@ -324,11 +308,19 @@ const ContratoForm = () => {
         km_adicional_valor: reservaFromQuery.km_adicional_valor,
         observacoes: reservaFromQuery.observacoes ?? '',
         observacoes_internas: reservaFromQuery.observacoes_internas ?? '',
+        // Condutores da reserva → passam para o contrato (persistidos no submit).
+        condutores: condutoresDaReserva
+          .filter((c) => c.cliente_id || c.motorista_id)
+          .map((c) => ({
+            cliente_id: c.cliente_id,
+            motorista_id: c.motorista_id,
+            is_principal: c.is_principal,
+          })),
       });
     }
-  }, [isEdit, contrato, reservaFromQuery, form]);
+  }, [isEdit, contrato, reservaFromQuery, condutoresDaReserva, navigate, toast, form]);
 
-  // Hidratação dos condutores (vem em request separado — só em modo edit)
+  // Hidratação dos condutores em modo EDIT (vêm em request separado).
   useEffect(() => {
     if (!isEdit || !contrato || !condutoresDb) return;
     form.setValue(
@@ -342,24 +334,8 @@ const ContratoForm = () => {
     );
   }, [isEdit, contrato, condutoresDb, form]);
 
-  // Hidratação dos condutores quando se cria contrato a partir de reserva.
-  // Os condutores vivem em `reserva_condutores` (m:n) — precisam de ser
-  // copiados para o form para serem persistidos depois em `contrato_condutores`.
-  useEffect(() => {
-    if (isEdit || !reservaFromQuery || !condutoresDaReserva) return;
-    if (condutoresDaReserva.length === 0) return;
-    form.setValue(
-      'condutores',
-      condutoresDaReserva
-        .filter((c) => c.cliente_id || c.motorista_id)
-        .map((c) => ({
-          cliente_id: c.cliente_id,
-          motorista_id: c.motorista_id,
-          is_principal: c.is_principal,
-        })),
-      { shouldDirty: false }
-    );
-  }, [isEdit, reservaFromQuery, condutoresDaReserva, form]);
+  // (Os condutores da reserva são hidratados no reset acima, em conjunto com os
+  //  restantes campos — evita corridas entre dois resets/setValue.)
 
   // Hidratação das coberturas (request separado — só em modo edit)
   useEffect(() => {
@@ -431,27 +407,9 @@ const ContratoForm = () => {
     });
   }, [regime, orgDefinicoes, form]);
 
-  // Quando o user troca de regime, os condutores existentes (motoristas ou
-  // clientes) deixam de fazer sentido — limpamos a lista com aviso.
-  useEffect(() => {
-    const condutores = (form.getValues('condutores') ?? []) as Array<{
-      cliente_id: string | null;
-      motorista_id: string | null;
-    }>;
-    if (condutores.length === 0) return;
-    const expectedKey: 'cliente_id' | 'motorista_id' =
-      regime === 'tvde' ? 'motorista_id' : 'cliente_id';
-    const tipoErrado = condutores.some((c) => !c[expectedKey]);
-    if (!tipoErrado) return;
-    form.setValue('condutores', [], { shouldDirty: true, shouldValidate: true });
-    toast({
-      title: 'Condutores limpos',
-      description:
-        regime === 'tvde'
-          ? 'Mudaste para TVDE — os condutores são agora motoristas. Volta a adicionar.'
-          : 'Mudaste para Rent-a-car — os condutores são agora clientes. Volta a adicionar.',
-    });
-  }, [regime, form, toast]);
+  // Os condutores PERSISTEM ao trocar de regime — não se apaga a lista (senão
+  // "desapareciam" condutores já adicionados ou hidratados da reserva). A tabela
+  // mostra clientes (rent-a-car) ou motoristas (TVDE) conforme o tipo de cada linha.
 
   // Regra de elegibilidade: qualquer viatura pode ser alugada em rent-a-car.
   // No regime tvde só aparecem viaturas com "Elegível para TVDE? = Sim"
@@ -481,7 +439,7 @@ const ContratoForm = () => {
         ? 'recolha'
         : null;
 
-  const { data: eventoPendente } = useQuery({
+  const { data: eventoPendente, isFetching: fetchingEventoPendente } = useQuery({
     queryKey: ['calendario-evento-pendente', contrato?.id ?? null, tipoEventoEsperado],
     queryFn: async () => {
       if (!contrato || !tipoEventoEsperado) return null;
@@ -497,17 +455,20 @@ const ContratoForm = () => {
       return { id: data.id as string, tipo: data.tipo as 'entrega' | 'recolha' };
     },
     enabled: isEdit && !!contrato && !!tipoEventoEsperado && !isFacturado,
+    // Sempre fresco ao montar: depois de realizar a entrega/recolha, ao voltar
+    // ao contrato não queremos reabrir a modal com base no evento em cache.
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 
-  // Auto-open do dialog assim que entramos na página com evento pendente.
-  // Só dispara uma vez por mount — se o user fechar, não reabre.
-  useEffect(() => {
-    if (autoOpenedRealizar) return;
-    if (!eventoPendente) return;
-    if (contrato?.substituido_em) return; // versão antiga não realiza
-    setRealizarDialog({ eventoId: eventoPendente.id, tipo: eventoPendente.tipo });
-    setAutoOpenedRealizar(true);
-  }, [eventoPendente, autoOpenedRealizar, contrato?.substituido_em]);
+  // A realização (entrega/recolha) NÃO abre modal automaticamente — seria uma
+  // modal bloqueante a cada abertura do contrato (um contrato fica em_curso
+  // dias/semanas à espera da devolução). Mostramos um banner não-bloqueante
+  // (ver abaixo) com um botão que abre o dialog só quando o user quer.
+  const realizacaoPendente =
+    !fetchingEventoPendente && !!eventoPendente && !contrato?.substituido_em
+      ? eventoPendente
+      : null;
 
   const conflitoArgs = useMemo(() => {
     const di = dataInicio ? new Date(dataInicio) : null;
@@ -820,28 +781,16 @@ const ContratoForm = () => {
         </Button>
         {isEdit && contrato && <ContratoEstadoActions contrato={contrato} />}
         {isEdit && contrato && (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleImprimir('print')}
-              className="gap-2"
-              title="Imprimir contrato"
-            >
-              <Printer className="h-4 w-4" />
-              Imprimir
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleImprimir('download')}
-              className="gap-2"
-              title="Descarregar contrato como PDF"
-            >
-              <Download className="h-4 w-4" />
-              PDF
-            </Button>
-          </>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setDocsDialogOpen(true)}
+            className="gap-2"
+            title="Gerar documentos (contrato, prestação, declarações...)"
+          >
+            <Printer className="h-4 w-4" />
+            Documentos
+          </Button>
         )}
         {isEdit && contrato && (
           <Button
@@ -880,6 +829,35 @@ const ContratoForm = () => {
         </div>
       )}
 
+      {realizacaoPendente && (
+        <div className="mb-3 flex flex-col gap-2 rounded-md border border-primary/40 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-2 text-sm">
+            <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <p>
+              <strong>
+                {realizacaoPendente.tipo === 'entrega' ? 'Entrega' : 'Recolha'} pendente
+              </strong>{' '}
+              — regista a {realizacaoPendente.tipo === 'entrega' ? 'entrega' : 'recolha'} da viatura
+              (fotos, km e confirmação) quando estiver pronta.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() =>
+              setRealizarDialog({
+                eventoId: realizacaoPendente.id,
+                tipo: realizacaoPendente.tipo,
+              })
+            }
+            className="shrink-0 gap-2"
+          >
+            <FileText className="h-4 w-4" />
+            Realizar {realizacaoPendente.tipo === 'entrega' ? 'entrega' : 'recolha'}
+          </Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
         <Card className="bg-card border-border">
           <CardContent className="p-4 sm:p-6">
@@ -909,6 +887,9 @@ const ContratoForm = () => {
                   coberturasContent={<ContratoTabCobertura form={form} coberturas={coberturas} />}
                   extrasContent={<ContratoTabExtras form={form} extras={extrasCatalogo} />}
                   taxasContent={<ContratoTabTaxas form={form} taxas={taxasCatalogo} />}
+                  faturarContent={
+                    isEdit && contrato ? <ContratoTabFaturar contrato={contrato} /> : undefined
+                  }
                   historicoContent={
                     isEdit && contrato ? (
                       <ContratoTabHistorico
@@ -995,6 +976,19 @@ const ContratoForm = () => {
         tipo={realizarDialog?.tipo ?? 'entrega'}
         resumo={contrato ? `Contrato #${contrato.codigo} · ${contrato.matricula ?? ''}` : undefined}
       />
+
+      {isEdit && contrato && (
+        <ContratoDocumentosDialog
+          open={docsDialogOpen}
+          onOpenChange={setDocsDialogOpen}
+          contrato={contrato}
+          condutorPrincipal={(condutoresDb ?? []).find((c) => c.is_principal) ?? null}
+          clientes={clientes}
+          motoristas={motoristas}
+          viatura={viaturas.find((v) => v.id === contrato.viatura_id) ?? null}
+          empresas={empresas}
+        />
+      )}
     </div>
   );
 };

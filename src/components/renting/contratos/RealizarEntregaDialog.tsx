@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { ArrowLeft, CheckCircle2, Clock, Loader2, Smartphone } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, Loader2, Monitor, Smartphone } from 'lucide-react';
 
 import {
   Dialog,
@@ -41,8 +42,18 @@ export const RealizarEntregaDialog: React.FC<Props> = ({
   onDone,
 }) => {
   const [tokenId, setTokenId] = useState<string | null>(null);
+  const navigate = useNavigate();
   const gerarToken = useGerarTokenRealizacao();
   const realizado = usePollEventoRealizado(eventoId, !!tokenId);
+
+  // Fazer o check no próprio computador: gera o token e abre a página de
+  // realização neste browser (não precisa de telemóvel).
+  const handleRealizarAqui = () => {
+    if (!eventoId) return;
+    gerarToken.mutate(eventoId, {
+      onSuccess: (id) => navigate(`/realizar/${id}`),
+    });
+  };
 
   useEffect(() => {
     if (!open) setTokenId(null);
@@ -79,22 +90,17 @@ export const RealizarEntregaDialog: React.FC<Props> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-md"
+        className="sm:max-w-md max-h-[88vh] overflow-y-auto"
         // Bloqueia dismiss casual — utilizador tem que escolher um dos caminhos.
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Smartphone className="h-5 w-5" />
+            <Smartphone className="h-5 w-5 text-primary" />
             {tipo === 'entrega' ? 'Entrega' : 'Recolha'} pendente
           </DialogTitle>
-          <DialogDescription>
-            {resumo ?? ''}
-            {resumo ? ' · ' : ''}
-            Como queres realizar esta {tipo}? Escolhe se vais fazer agora (com fotos via telemóvel)
-            ou se deixas pendente para outro colaborador fazer.
-          </DialogDescription>
+          {resumo && <DialogDescription>{resumo}</DialogDescription>}
         </DialogHeader>
 
         {showRealizado && (
@@ -108,74 +114,94 @@ export const RealizarEntregaDialog: React.FC<Props> = ({
         {showQR && url && (
           <div className="flex flex-col items-center gap-3 py-2">
             <div className="bg-white p-4 rounded-lg border">
-              <QRCodeSVG value={url} size={220} level="M" />
+              <QRCodeSVG value={url} size={200} level="M" />
             </div>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <Clock className="h-3 w-3" /> Expira em 30 minutos
             </p>
-            <p className="text-xs text-center text-muted-foreground break-all px-4">
-              Ou abre directamente:{' '}
-              <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{url}</code>
-            </p>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-              <Loader2 className="h-4 w-4 animate-spin" />À espera da confirmação no telemóvel...
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> À espera da confirmação...
             </div>
           </div>
         )}
 
         {showInitial && (
-          <div className="py-2 space-y-2 text-sm text-muted-foreground">
-            <p>
-              <strong className="text-foreground">Realizar agora:</strong> abre um QR code que,
-              escaneado pelo telemóvel, leva-te à página de check-out — tiras fotos da viatura,
-              preenches km/combustível e confirmas.
-            </p>
-            <p>
-              <strong className="text-foreground">Deixar pendente:</strong> o evento fica na lista
-              de pendentes (Check Out / Check In no calendário) para qualquer colaborador da org
-              realizar mais tarde.
-            </p>
+          <div className="space-y-2 py-1">
+            <button
+              type="button"
+              onClick={handleRealizarAqui}
+              disabled={gerarToken.isPending || !eventoId}
+              className="w-full flex items-start gap-3 rounded-lg border-2 border-primary/40 bg-primary/5 p-3 text-left transition-colors hover:border-primary hover:bg-primary/10 disabled:opacity-50"
+            >
+              <Monitor className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-foreground">Fazer neste computador</div>
+                <div className="text-xs text-muted-foreground">
+                  Abre a página de check aqui — fotos, km e confirmação.
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRealizarAgora}
+              disabled={gerarToken.isPending || !eventoId}
+              className="w-full flex items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:border-primary/60 hover:bg-muted disabled:opacity-50"
+            >
+              <Smartphone className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-foreground">Telemóvel (QR)</div>
+                <div className="text-xs text-muted-foreground">
+                  Gera um QR code para fazer o check no telemóvel.
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="w-full flex items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:border-primary/60 hover:bg-muted"
+            >
+              <Clock className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-foreground">Deixar pendente</div>
+                <div className="text-xs text-muted-foreground">
+                  Outro colaborador realiza mais tarde (Check In/Out no calendário).
+                </div>
+              </div>
+            </button>
+
+            {gerarToken.isPending && (
+              <div className="flex items-center justify-center gap-2 pt-1 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> A preparar...
+              </div>
+            )}
           </div>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
-          {showRealizado ? (
-            <Button type="button" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
-              Fechar
-            </Button>
-          ) : showQR ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setTokenId(null)}
-              className="gap-2 w-full sm:w-auto"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Voltar
-            </Button>
-          ) : (
-            <>
+        {(showRealizado || showQR) && (
+          <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
+            {showRealizado ? (
               <Button
                 type="button"
-                variant="outline"
                 onClick={() => onOpenChange(false)}
                 className="w-full sm:w-auto"
               >
-                Deixar pendente
+                Fechar
               </Button>
+            ) : (
               <Button
                 type="button"
-                onClick={handleRealizarAgora}
-                disabled={gerarToken.isPending || !eventoId}
+                variant="outline"
+                onClick={() => setTokenId(null)}
                 className="gap-2 w-full sm:w-auto"
               >
-                {gerarToken.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                <Smartphone className="h-4 w-4" />
-                Realizar agora (telemóvel)
+                <ArrowLeft className="h-4 w-4" />
+                Voltar
               </Button>
-            </>
-          )}
-        </DialogFooter>
+            )}
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

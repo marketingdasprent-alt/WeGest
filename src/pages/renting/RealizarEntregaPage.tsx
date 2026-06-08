@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useState, useRef } from 'react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -24,6 +24,7 @@ interface FilePreview {
 
 const RealizarEntregaPage = () => {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { data: info, isLoading, error } = useConsumirTokenRealizacao(token ?? null);
   const realizar = useRealizarFromToken();
@@ -164,8 +165,12 @@ const RealizarEntregaPage = () => {
               {info?.tipo === 'entrega' ? 'Entrega' : 'Recolha'} confirmada
             </h2>
             <p className="text-sm text-muted-foreground">
-              O evento ficou marcado como realizado. Já podes fechar o telemóvel.
+              O evento ficou marcado como realizado. Já podes fechar esta janela.
             </p>
+            <Button type="button" onClick={() => navigate('/')} className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Voltar ao início
+            </Button>
           </CardContent>
         </Card>
       </div>

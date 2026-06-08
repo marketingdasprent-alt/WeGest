@@ -76,6 +76,11 @@ export function usePollEventoRealizado(eventoId: string | null, enabled = true) 
         .eq('id', eventoId)
         .maybeSingle();
       if (error || !data || cancelled) return;
+      // Realizado = o evento existe e tem realizado_em. Desde a migração
+      // 20260601000018 a realização (entrega/recolha) MARCA o evento como
+      // realizado e mantém-no (já não é apagado). Evento inexistente significa
+      // outra coisa (ex.: contrato cancelado) — NÃO é realização, por isso não
+      // confirmamos com base na ausência (evitava falsos "confirmado").
       if (data.realizado_em) {
         setRealizado({
           em: data.realizado_em as string,
@@ -125,6 +130,9 @@ export function useRealizarFromToken() {
       qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
       qc.invalidateQueries({ queryKey: ['renting', 'contratos'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+      // A box "pendente" do contrato lê desta query — sem isto, ao voltar ao
+      // contrato a box continuava a aparecer apesar de já estar realizado.
+      qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
       toast({
         title: vars.tipo === 'entrega' ? 'Entrega confirmada' : 'Recolha confirmada',
         description: 'O evento ficou marcado como realizado.',
