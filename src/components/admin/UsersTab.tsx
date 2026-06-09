@@ -305,6 +305,9 @@ export const UsersTab = () => {
     setIsSaving(true);
     try {
       const cargoNome = grupos.find((g) => g.id === editingProfile.cargo_id)?.nome || null;
+      // O nome do grupo define se é administrador (alinhado com a edge function create-user).
+      // Assim, escolher o grupo "Administrador" liga a flag is_admin que as rotas /admin e o RLS exigem.
+      const isAdminCargo = (cargoNome || '').toLowerCase().includes('admin');
 
       const { error } = await supabase
         .from('profiles')
@@ -312,6 +315,7 @@ export const UsersTab = () => {
           nome: editingProfile.nome,
           cargo_id: editingProfile.cargo_id,
           cargo: cargoNome,
+          is_admin: isAdminCargo,
         })
         .eq('id', editingProfile.id);
 

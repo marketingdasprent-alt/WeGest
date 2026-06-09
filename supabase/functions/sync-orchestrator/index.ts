@@ -8,9 +8,22 @@ const corsHeaders = {
 
 const STALE_TIMEOUT_MINUTES = 10;
 
+// Interruptor global: a sincronização automática está DESATIVADA.
+// Só o import manual por CSV (edge functions *-import-csv e o ramo CSV do
+// uber-webhook) deve funcionar. Para reativar, mudar para false e re-agendar
+// os cron jobs (ver migração 20260603130000_desativar_sync_automatico.sql).
+const SYNC_AUTOMATICO_DESATIVADO = true;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (SYNC_AUTOMATICO_DESATIVADO) {
+    return new Response(
+      JSON.stringify({ disabled: true, message: "Sincronização automática desativada (apenas import manual)." }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 
   try {

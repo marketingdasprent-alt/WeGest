@@ -49,9 +49,13 @@ export const RECURSOS = {
   ADMIN_INTEGRACOES: 'admin_integracoes',
   ADMIN_CONFIGURACOES: 'admin_configuracoes',
 
-  // Financeiro
+  // Administrativo (antigo "Financeiro")
   FINANCEIRO_RECIBOS: 'financeiro_recibos',
   RECIBOS_VERDES_ADICIONAR: 'recibos_verdes_adicionar',
+  ADMINISTRATIVO_RESUMOS: 'administrativo_resumos',
+  ADMINISTRATIVO_IMPORTAR: 'administrativo_importar',
+  ADMINISTRATIVO_PLATAFORMAS: 'administrativo_plataformas',
+  ADMINISTRATIVO_CARTOES: 'administrativo_cartoes',
 
   // Marketing
   MARKETING_VER: 'marketing_ver',

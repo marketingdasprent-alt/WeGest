@@ -14,6 +14,8 @@ import { RepsolDataTab } from '@/components/administrativo/RepsolDataTab';
 import { EdpDataTab } from '@/components/administrativo/EdpDataTab';
 import { ContasResumoTab } from '@/components/administrativo/ContasResumoTab';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
 interface Recibo {
   id: string;
@@ -47,6 +49,13 @@ export default function Administrativo() {
   // Filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('all');
+
+  // Permissões granulares do módulo Administrativo (admins têm acesso a tudo).
+  const { hasAccessToResource } = usePermissions();
+  const canResumos = hasAccessToResource(RECURSOS.ADMINISTRATIVO_RESUMOS);
+  const canRecibos = hasAccessToResource(RECURSOS.FINANCEIRO_RECIBOS);
+  const canPlataformas = hasAccessToResource(RECURSOS.ADMINISTRATIVO_PLATAFORMAS);
+  const defaultTab = canResumos ? 'resumos' : canRecibos ? 'recibos' : 'bolt';
 
   useEffect(() => {
     loadData();
@@ -123,8 +132,11 @@ export default function Administrativo() {
     );
   }
 
+  const triggerClass =
+    'data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto gap-2 text-xs';
+
   return (
-    <Tabs defaultValue="resumos" className="w-full">
+    <Tabs defaultValue={defaultTab} className="w-full">
       <StickyPageHeader
         title="Administrativo"
         description="Gestão financeira e dados de plataformas"
@@ -132,97 +144,92 @@ export default function Administrativo() {
       />
 
       <TabsList className="flex w-full overflow-x-auto justify-start no-scrollbar border-b rounded-none bg-transparent h-auto p-0 gap-6 mb-2">
-        <TabsTrigger
-          value="resumos"
-          className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto gap-2 text-xs"
-        >
-          <Calculator className="h-4 w-4" />
-          Resumos
-        </TabsTrigger>
-        <TabsTrigger
-          value="recibos"
-          className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto gap-2 text-xs"
-        >
-          <Receipt className="h-4 w-4" />
-          Recibos Verdes
-        </TabsTrigger>
-        <TabsTrigger
-          value="bolt"
-          className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto gap-2 text-xs"
-        >
-          <Zap className="h-4 w-4" />
-          Bolt
-        </TabsTrigger>
-        <TabsTrigger
-          value="uber"
-          className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto gap-2 text-xs"
-        >
-          <Car className="h-4 w-4" />
-          Uber
-        </TabsTrigger>
-        <TabsTrigger
-          value="bp"
-          className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto gap-2 text-xs"
-        >
-          <Fuel className="h-4 w-4 text-orange-400" />
-          BP
-        </TabsTrigger>
-        <TabsTrigger
-          value="repsol"
-          className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto gap-2 text-xs"
-        >
-          <Fuel className="h-4 w-4 text-orange-500" />
-          Repsol
-        </TabsTrigger>
-        <TabsTrigger
-          value="edp"
-          className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto gap-2 text-xs"
-        >
-          <Zap className="h-4 w-4 text-green-500" />
-          EDP
-        </TabsTrigger>
+        {canResumos && (
+          <TabsTrigger value="resumos" className={triggerClass}>
+            <Calculator className="h-4 w-4" />
+            Resumos
+          </TabsTrigger>
+        )}
+        {canRecibos && (
+          <TabsTrigger value="recibos" className={triggerClass}>
+            <Receipt className="h-4 w-4" />
+            Recibos Verdes
+          </TabsTrigger>
+        )}
+        {canPlataformas && (
+          <>
+            <TabsTrigger value="bolt" className={triggerClass}>
+              <Zap className="h-4 w-4" />
+              Bolt
+            </TabsTrigger>
+            <TabsTrigger value="uber" className={triggerClass}>
+              <Car className="h-4 w-4" />
+              Uber
+            </TabsTrigger>
+            <TabsTrigger value="bp" className={triggerClass}>
+              <Fuel className="h-4 w-4 text-orange-400" />
+              BP
+            </TabsTrigger>
+            <TabsTrigger value="repsol" className={triggerClass}>
+              <Fuel className="h-4 w-4 text-orange-500" />
+              Repsol
+            </TabsTrigger>
+            <TabsTrigger value="edp" className={triggerClass}>
+              <Zap className="h-4 w-4 text-green-500" />
+              EDP
+            </TabsTrigger>
+          </>
+        )}
       </TabsList>
 
       <div className="space-y-6">
-        <TabsContent value="recibos" className="space-y-4 mt-4">
-          <FinanceiroStats recibos={recibos} />
-          <FinanceiroFilters
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            selectedStatus={selectedStatus}
-            setSelectedStatus={setSelectedStatus}
-            onClearFilters={handleClearFilters}
-          />
-          <div className="text-sm text-muted-foreground">
-            {filteredRecibos.length} {filteredRecibos.length === 1 ? 'recibo' : 'recibos'}{' '}
-            encontrado{filteredRecibos.length !== 1 && 's'}
-          </div>
-          <RecibosTable recibos={filteredRecibos} onReciboUpdated={loadData} />
-        </TabsContent>
+        {canRecibos && (
+          <TabsContent value="recibos" className="space-y-4 mt-4">
+            <FinanceiroStats recibos={recibos} />
+            <FinanceiroFilters
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              selectedStatus={selectedStatus}
+              setSelectedStatus={setSelectedStatus}
+              onClearFilters={handleClearFilters}
+            />
+            <div className="text-sm text-muted-foreground">
+              {filteredRecibos.length} {filteredRecibos.length === 1 ? 'recibo' : 'recibos'}{' '}
+              encontrado{filteredRecibos.length !== 1 && 's'}
+            </div>
+            <RecibosTable recibos={filteredRecibos} onReciboUpdated={loadData} />
+          </TabsContent>
+        )}
 
-        <TabsContent value="bolt" className="mt-4">
-          <BoltDataTab />
-        </TabsContent>
+        {canPlataformas && (
+          <>
+            <TabsContent value="bolt" className="mt-4">
+              <BoltDataTab />
+            </TabsContent>
 
-        <TabsContent value="uber" className="mt-4">
-          <UberDataTab />
-        </TabsContent>
+            <TabsContent value="uber" className="mt-4">
+              <UberDataTab />
+            </TabsContent>
 
-        <TabsContent value="bp" className="mt-0">
-          <BPDataTab />
-        </TabsContent>
+            <TabsContent value="bp" className="mt-0">
+              <BPDataTab />
+            </TabsContent>
 
-        <TabsContent value="repsol" className="mt-0">
-          <RepsolDataTab />
-        </TabsContent>
+            <TabsContent value="repsol" className="mt-0">
+              <RepsolDataTab />
+            </TabsContent>
 
-        <TabsContent value="edp" className="mt-0">
-          <EdpDataTab />
-        </TabsContent>
+            <TabsContent value="edp" className="mt-0">
+              <EdpDataTab />
+            </TabsContent>
+          </>
+        )}
 
-        <TabsContent value="resumos" className="mt-4">
-          <ContasResumoTab />
-        </TabsContent>
+        {canResumos && (
+          <TabsContent value="resumos" className="mt-4">
+            <ContasResumoTab />
+          </TabsContent>
+        )}
       </div>
     </Tabs>
   );

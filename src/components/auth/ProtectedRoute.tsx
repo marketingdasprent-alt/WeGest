@@ -14,7 +14,8 @@ import { MODULO_LABELS } from '@/types/modulo';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
-  requiredResource?: string;
+  /** Um recurso, ou uma lista — o acesso é concedido se o utilizador tiver QUALQUER um. */
+  requiredResource?: string | string[];
   requiredModule?: Modulo;
 }
 
@@ -65,7 +66,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   useEffect(() => {
     if (loading || !user || !requiredResource) return;
 
-    const hasAccess = isAdmin || hasAccessToResource(requiredResource);
+    const resources = Array.isArray(requiredResource) ? requiredResource : [requiredResource];
+    const hasAccess = isAdmin || resources.some((r) => hasAccessToResource(r));
 
     if (!hasAccess && defaultRoute && defaultRoute !== location.pathname) {
       navigate(defaultRoute, { replace: true });

@@ -13,6 +13,19 @@ import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 
 const CARGO_MOTORISTA_ID = 'a0000000-0000-0000-0000-000000000001';
 
+// Requisitos da palavra-passe (alinhados com a política do Supabase).
+const PASSWORD_RULES = [
+  { id: 'len', label: 'Pelo menos 6 caracteres', test: (p: string) => p.length >= 6 },
+  { id: 'lower', label: 'Uma letra minúscula (a-z)', test: (p: string) => /[a-z]/.test(p) },
+  { id: 'upper', label: 'Uma letra maiúscula (A-Z)', test: (p: string) => /[A-Z]/.test(p) },
+  { id: 'digit', label: 'Um número (0-9)', test: (p: string) => /[0-9]/.test(p) },
+  {
+    id: 'special',
+    label: 'Um caractere especial (! @ # $ % …)',
+    test: (p: string) => /[^a-zA-Z0-9]/.test(p),
+  },
+];
+
 const RegistoMotorista: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -45,6 +58,8 @@ const RegistoMotorista: React.FC = () => {
       m.includes('user already exists')
     )
       return 'Já existe uma conta com este email. Tente iniciar sessão ou recuperar a palavra-passe.';
+    if (m.includes('character of each') || m.includes('should contain at least one'))
+      return 'A palavra-passe precisa de pelo menos: uma minúscula, uma maiúscula, um número e um caractere especial (ex.: ! @ # $ %).';
     if (m.includes('password should be at least') || m.includes('at least 6'))
       return 'A palavra-passe deve ter pelo menos 6 caracteres.';
     if (m.includes('weak') || m.includes('pwned') || m.includes('compromised'))
@@ -70,10 +85,11 @@ const RegistoMotorista: React.FC = () => {
       return;
     }
 
-    if (password.length < 6) {
+    const faltam = PASSWORD_RULES.filter((r) => !r.test(password));
+    if (faltam.length > 0) {
       toast({
-        title: 'Erro',
-        description: 'A palavra-passe deve ter pelo menos 6 caracteres.',
+        title: 'Palavra-passe inválida',
+        description: 'Falta: ' + faltam.map((r) => r.label.toLowerCase()).join('; ') + '.',
         variant: 'destructive',
       });
       return;
@@ -194,7 +210,7 @@ const RegistoMotorista: React.FC = () => {
             <Input
               id="password"
               type={showPassword ? 'text' : 'password'}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Min. 6 caracteres, com número e símbolo"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -211,18 +227,26 @@ const RegistoMotorista: React.FC = () => {
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          <p
-            className={`flex items-center gap-1.5 text-xs ${
-              password.length >= 6 ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
-            }`}
-          >
-            {password.length >= 6 ? (
-              <CheckCircle2 className="h-3.5 w-3.5" />
-            ) : (
-              <Circle className="h-3.5 w-3.5" />
-            )}
-            A palavra-passe deve ter pelo menos 6 caracteres.
-          </p>
+          <ul className="space-y-1">
+            {PASSWORD_RULES.map((regra) => {
+              const ok = regra.test(password);
+              return (
+                <li
+                  key={regra.id}
+                  className={`flex items-center gap-1.5 text-xs ${
+                    ok ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
+                  }`}
+                >
+                  {ok ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5 shrink-0" />
+                  )}
+                  {regra.label}
+                </li>
+              );
+            })}
+          </ul>
         </div>
 
         <div className="space-y-2">

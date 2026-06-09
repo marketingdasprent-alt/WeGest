@@ -38,6 +38,8 @@ import {
 import { MotoristaResumoDialog } from './MotoristaResumoDialog';
 import { ImportarDadosWizard } from './ImportarDadosWizard';
 import { Checkbox } from '@/components/ui/checkbox';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 import {
   Printer,
   Mail,
@@ -102,6 +104,8 @@ const getWeekShortcuts = () => [
 
 export function ContasResumoTab() {
   const isMobile = useIsMobile();
+  const { hasAccessToResource } = usePermissions();
+  const canImportar = hasAccessToResource(RECURSOS.ADMINISTRATIVO_IMPORTAR);
   const [loading, setLoading] = useState(true);
   const [resumos, setResumos] = useState<MotoristaResumo[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -616,34 +620,40 @@ export function ContasResumoTab() {
         .from('uber_drivers')
         .select('uber_driver_id, motorista_id, full_name');
 
+      // Fronteira de semana por DATA UTC. Antes usava-se weekStart.toISOString()
+      // (meia-noite local → 23:00 UTC do dia anterior), o que puxava transações
+      // da véspera para a semana seguinte. Por data UTC o bucket fica correto.
+      const weekStartUtc = `${format(weekStart, 'yyyy-MM-dd')}T00:00:00Z`;
+      const weekEndUtc = `${format(weekEnd, 'yyyy-MM-dd')}T23:59:59Z`;
+
       // 4d. Buscar transações de combustível no período
       const combustivelQuery = (supabase as any)
         .from('bp_transacoes')
         .select('motorista_id, amount')
-        .gte('transaction_date', weekStart.toISOString())
-        .lte('transaction_date', weekEnd.toISOString())
+        .gte('transaction_date', weekStartUtc)
+        .lte('transaction_date', weekEndUtc)
         .not('motorista_id', 'is', null);
 
       const repsolQuery = supabase
         .from('repsol_transacoes')
         .select('motorista_id, amount')
-        .gte('transaction_date', weekStart.toISOString())
-        .lte('transaction_date', weekEnd.toISOString())
+        .gte('transaction_date', weekStartUtc)
+        .lte('transaction_date', weekEndUtc)
         .not('motorista_id', 'is', null);
 
       const edpQuery = supabase
         .from('edp_transacoes')
         .select('motorista_id, amount')
-        .gte('transaction_date', weekStart.toISOString())
-        .lte('transaction_date', weekEnd.toISOString())
+        .gte('transaction_date', weekStartUtc)
+        .lte('transaction_date', weekEndUtc)
         .not('motorista_id', 'is', null);
 
       // 4d-ter. Buscar portagens Via Verde no período
       const viaVerdeQuery = (supabase as any)
         .from('via_verde_transacoes')
         .select('motorista_id, amount')
-        .gte('transaction_date', weekStart.toISOString())
-        .lte('transaction_date', weekEnd.toISOString())
+        .gte('transaction_date', weekStartUtc)
+        .lte('transaction_date', weekEndUtc)
         .not('motorista_id', 'is', null);
 
       // 4d-bis. Buscar valor de aluguer de viatura (bulk) para todos os motoristas activos
@@ -1544,13 +1554,15 @@ export function ContasResumoTab() {
               <FileDown className="h-4 w-4 mr-2" />
               Exportar Excel
             </Button>
-            <Button
-              className="gap-2 bg-gradient-to-r from-primary to-primary/80 text-white hover:opacity-90"
-              onClick={() => setImportarWizardOpen(true)}
-            >
-              <Upload className="h-4 w-4" />
-              Importar Dados
-            </Button>
+            {canImportar && (
+              <Button
+                className="gap-2 bg-gradient-to-r from-primary to-primary/80 text-white hover:opacity-90"
+                onClick={() => setImportarWizardOpen(true)}
+              >
+                <Upload className="h-4 w-4" />
+                Importar Dados
+              </Button>
+            )}
           </div>
         </div>
 

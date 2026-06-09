@@ -39,8 +39,13 @@ export const getRecursoLabel = (nome: string): string => {
     motoristas_contratos: 'Gestão completa de contratos',
     motoristas_editar_data_contrato: 'Editar data do 1.º contrato',
 
-    // Financeiro
+    // Administrativo
     financeiro_recibos: 'Gestão de recibos verdes',
+    recibos_verdes_adicionar: 'Adicionar recibos verdes manualmente',
+    administrativo_resumos: 'Ver resumos e contas dos motoristas',
+    administrativo_importar: 'Importar dados das plataformas',
+    administrativo_plataformas: 'Ver dados das plataformas',
+    administrativo_cartoes: 'Gerir cartões de frota e OBE',
 
     // Assistência
     assistencia_ver: 'Ver tickets de assistência',
