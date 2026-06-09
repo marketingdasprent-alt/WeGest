@@ -39,6 +39,7 @@ import { SectionCard } from '@/components/ui/section-card';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useEmpresas } from '@/hooks/useEmpresas';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { usePermissions } from '@/hooks/usePermissions';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
 import { GenerateDocumentsDialog } from '../GenerateDocumentsDialog';
@@ -76,6 +77,7 @@ export function MotoristaTabContratos({
 }: MotoristaTabContratosProps) {
   const { hasPermission } = usePermissions();
   const { getById: getEmpresaById } = useEmpresas();
+  const { getById: getClienteEmpresaById } = useClientesEmpresas();
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState<string | null>(null);
@@ -141,7 +143,7 @@ export function MotoristaTabContratos({
   };
 
   const getEmpresaNome = (empresaId: string) => {
-    return getEmpresaById(empresaId)?.nome || empresaId;
+    return getClienteEmpresaById(empresaId)?.nome || getEmpresaById(empresaId)?.nome || empresaId;
   };
 
   const handleDownload = async (contrato: Contrato) => {

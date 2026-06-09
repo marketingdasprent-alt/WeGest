@@ -60,9 +60,9 @@ export const generateContratoPdf = async ({
   //        da empresa (prestação) E aluga a viatura (aluguer).
   const { data: templates, error: templatesErr } = await supabase
     .from('document_templates')
-    .select('id, nome, tipo, empresa_id')
+    .select('id, nome, tipo, cliente_empresa_id')
     .eq('ativo', true)
-    .eq('empresa_id', empresa.id)
+    .eq('cliente_empresa_id', empresa.id)
     .order('nome', { ascending: true });
 
   if (templatesErr) throw templatesErr;

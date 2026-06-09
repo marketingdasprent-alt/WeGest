@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
+import { printPdf } from '@/lib/printPdf';
 
 interface DocumentTemplate {
   id: string;
@@ -1113,11 +1114,10 @@ export const generateDocumentFromTemplate = async (
 
     // Executar ação (imprimir ou download)
     if (!params.skipOutput) {
+      const fileName = `${templateData.nome}_${motoristaData.nome}_${format(new Date(), 'yyyyMMdd')}.pdf`;
       if (action === 'print') {
-        pdf.autoPrint();
-        window.open(pdf.output('bloburl'), '_blank');
+        printPdf(pdf, fileName);
       } else {
-        const fileName = `${templateData.nome}_${motoristaData.nome}_${format(new Date(), 'yyyyMMdd')}.pdf`;
         pdf.save(fileName);
       }
     }
@@ -1161,11 +1161,11 @@ export const generateDocumentosCombinados = async (
   }
   if (!pdf) return null;
 
+  const resolvedFileName = fileName || `documento_${format(new Date(), 'yyyyMMdd')}.pdf`;
   if (action === 'print') {
-    pdf.autoPrint();
-    window.open(pdf.output('bloburl'), '_blank');
+    printPdf(pdf, resolvedFileName);
   } else {
-    pdf.save(`${fileName || `documento_${format(new Date(), 'yyyyMMdd')}`}.pdf`);
+    pdf.save(resolvedFileName);
   }
   return pdf;
 };

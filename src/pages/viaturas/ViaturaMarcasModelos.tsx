@@ -29,6 +29,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { matchesSearch } from '@/lib/utils';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
 interface Marca {
   id: string;
@@ -52,6 +54,10 @@ const ViaturaMarcasModelos = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { orgId } = useTenant();
+  const { hasPermission } = usePermissions();
+  // Gere criação/edição/eliminação de marcas, modelos e versões.
+  // Quem só tem viaturas_ver consulta o catálogo mas não o altera.
+  const podeGerir = hasPermission(RECURSOS.VIATURAS_MARCAS_MODELOS);
 
   const [search, setSearch] = useState('');
   const [selectedMarca, setSelectedMarca] = useState<Marca | null>(null);
@@ -370,10 +376,12 @@ const ViaturaMarcasModelos = () => {
         }
         icon={CarFront}
       >
-        <Button onClick={openNewMarca} size="sm">
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Marca
-        </Button>
+        {podeGerir && (
+          <Button onClick={openNewMarca} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Marca
+          </Button>
+        )}
       </StickyPageHeader>
 
       <div className="relative mb-4">
@@ -394,7 +402,7 @@ const ViaturaMarcasModelos = () => {
           loading={loadingMarcas}
           emptyIcon={<CarFront className="h-10 w-10 text-muted-foreground" />}
           emptyText={search ? 'Nenhuma marca encontrada' : 'Ainda não há marcas'}
-          onNew={openNewMarca}
+          onNew={podeGerir ? openNewMarca : undefined}
           onSelect={(m) => {
             setSelectedMarca(m);
             setSelectedModelo(null);
@@ -411,28 +419,32 @@ const ViaturaMarcasModelos = () => {
                 )}
               </div>
               <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openEditMarca(m);
-                  }}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-destructive hover:text-destructive"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteMarcaTarget(m);
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                {podeGerir && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditMarca(m);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteMarcaTarget(m);
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
+                )}
                 <ChevronRight
                   className={`h-4 w-4 ${selectedMarca?.id === m.id ? 'text-primary' : 'text-muted-foreground'}`}
                 />
@@ -453,7 +465,7 @@ const ViaturaMarcasModelos = () => {
             loading={loadingModelos}
             emptyIcon={<CarFront className="h-10 w-10 text-muted-foreground" />}
             emptyText="Nenhum modelo para esta marca"
-            onNew={openNewModelo}
+            onNew={podeGerir ? openNewModelo : undefined}
             onSelect={(m) => setSelectedModelo(m)}
             selectedId={selectedModelo?.id}
             renderItem={(m: Modelo) => (
@@ -467,28 +479,32 @@ const ViaturaMarcasModelos = () => {
                   )}
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEditModelo(m);
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-destructive hover:text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteModeloTarget(m);
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {podeGerir && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditModelo(m);
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteModeloTarget(m);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
                   <ChevronRight
                     className={`h-4 w-4 ${selectedModelo?.id === m.id ? 'text-primary' : 'text-muted-foreground'}`}
                   />
@@ -518,7 +534,7 @@ const ViaturaMarcasModelos = () => {
             loading={loadingVersoes}
             emptyIcon={<CarFront className="h-10 w-10 text-muted-foreground" />}
             emptyText="Nenhuma versão para este modelo"
-            onNew={openNewVersao}
+            onNew={podeGerir ? openNewVersao : undefined}
             renderItem={(v: Versao) => (
               <>
                 <div className="flex items-center gap-2">
@@ -530,28 +546,32 @@ const ViaturaMarcasModelos = () => {
                   )}
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEditVersao(v);
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-destructive hover:text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteVersaoTarget(v);
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {podeGerir && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditVersao(v);
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteVersaoTarget(v);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </>
             )}

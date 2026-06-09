@@ -7,7 +7,8 @@ interface DocumentTemplate {
   id: string;
   nome: string;
   tipo: string;
-  empresa_id: string;
+  empresa_id: string | null;
+  cliente_empresa_id?: string | null;
   template_data: any;
   campos_dinamicos: any;
   ativo: boolean;
@@ -41,7 +42,10 @@ export const DocumentTemplateList = ({
     });
   };
 
-  const getEmpresaNome = (empresaId: string) => nomePorEmpresa[empresaId] || empresaId;
+  const getEmpresaNome = (template: DocumentTemplate) => {
+    const key = template.cliente_empresa_id ?? template.empresa_id ?? '';
+    return nomePorEmpresa[key] || key || '—';
+  };
 
   if (templates.length === 0) {
     return (
@@ -63,7 +67,7 @@ export const DocumentTemplateList = ({
                 <CardTitle className="text-xl">{template.nome}</CardTitle>
                 <CardDescription className="mt-2">
                   <div className="flex flex-col gap-1">
-                    <span>Empresa: {getEmpresaNome(template.empresa_id)}</span>
+                    <span>Empresa: {getEmpresaNome(template)}</span>
                     <span>Versão: {template.versao}</span>
                   </div>
                 </CardDescription>

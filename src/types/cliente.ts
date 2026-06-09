@@ -74,6 +74,13 @@ export type Cliente = {
   localidade: string | null;
   cidade: string | null;
   pais: string | null;
+  // campos usados quando tipo_cliente='empresa'
+  sede: string | null;
+  representante: string | null;
+  cargo_representante: string | null;
+  licenca_tvde: string | null;
+  licenca_validade: string | null;
+  papel_timbrado: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;

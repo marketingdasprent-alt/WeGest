@@ -19,7 +19,7 @@ import {
   saveCheckinDados,
 } from './CheckinDadosSection';
 import type { CheckinDadosState } from './CheckinDadosSection';
-import { useEmpresas } from '@/hooks/useEmpresas';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 
 interface SelectedFile {
   id: string;
@@ -49,7 +49,7 @@ export const TrocaCheckinStep: React.FC<{
   } = trocaData;
 
   const queryClient = useQueryClient();
-  const { empresas } = useEmpresas();
+  const { empresas } = useClientesEmpresas();
 
   const [filesCheckin, setFilesCheckin] = useState<SelectedFile[]>([]);
   const [filesCheckout, setFilesCheckout] = useState<SelectedFile[]>([]);

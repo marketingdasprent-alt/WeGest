@@ -20,11 +20,12 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { printPdf } from '@/lib/printPdf';
 import { format } from 'date-fns';
 import { formatMatricula } from './calendarioUtils';
 import type { PendingEventoData } from './NovoEventoPage';
 import jsPDF from 'jspdf';
-import { useEmpresas } from '@/hooks/useEmpresas';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import {
   uploadDocumentToStorage,
   generateDocumentFromTemplate,
@@ -71,7 +72,7 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
   const fazerDepois = eventoData.fazerDepois ?? false;
 
   const queryClient = useQueryClient();
-  const { empresas } = useEmpresas();
+  const { empresas } = useClientesEmpresas();
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
   const [dataInicio, setDataInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [cidadeAssinatura, setCidadeAssinatura] = useState('Leiria');
@@ -88,11 +89,17 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('document_templates')
-        .select('id, nome, tipo, empresa_id')
+        .select('id, nome, tipo, cliente_empresa_id, empresa_id')
         .eq('ativo', true)
         .order('nome');
       if (error) throw error;
-      return data as { id: string; nome: string; tipo: string; empresa_id: string }[];
+      return data as {
+        id: string;
+        nome: string;
+        tipo: string;
+        cliente_empresa_id: string | null;
+        empresa_id: string | null;
+      }[];
     },
   });
 
@@ -386,11 +393,11 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
           if (targetPdf) successCount++;
         }
 
-        // Abrir PDF combinado quando múltiplos documentos
+        // Imprimir PDF combinado quando múltiplos documentos
         if (isMultiple && combinedPdf && successCount > 0) {
           combinedPdf.deletePage(1);
-          combinedPdf.autoPrint();
-          window.open(combinedPdf.output('bloburl'), '_blank');
+          const fileName = `Documentos_CT-${String(ct.numero_contrato ?? 0).padStart(4, '0')}.pdf`;
+          printPdf(combinedPdf, fileName);
         }
       }
 
