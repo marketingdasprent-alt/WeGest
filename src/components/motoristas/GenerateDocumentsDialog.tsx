@@ -28,7 +28,7 @@ import {
   generateDocumentFromTemplate,
   uploadDocumentToStorage,
 } from '@/utils/generateDocumentFromTemplate';
-import { useEmpresas } from '@/hooks/useEmpresas';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { matchesSearch } from '@/lib/utils';
 
 interface Motorista {
@@ -55,7 +55,8 @@ interface DocumentTemplate {
   id: string;
   nome: string;
   tipo: string;
-  empresa_id: string;
+  cliente_empresa_id: string | null;
+  empresa_id: string | null;
 }
 
 interface GenerateDocumentsDialogProps {
@@ -82,7 +83,7 @@ export const GenerateDocumentsDialog = ({
   forceNewVersion = false,
   uploadFirstToStorage = false,
 }: GenerateDocumentsDialogProps) => {
-  const { empresas, getById } = useEmpresas();
+  const { empresas, getById } = useClientesEmpresas();
   const defaultEmpresaId = empresas[0]?.id || '';
 
   // Estado para seleção de motorista (quando não passado nas props)
@@ -145,7 +146,7 @@ export const GenerateDocumentsDialog = ({
     if (templates.length > 0 && selectedEmpresa) {
       setSelectedTemplates((prev) => {
         const filteredIds = templates
-          .filter((t) => t.empresa_id === selectedEmpresa)
+          .filter((t) => t.cliente_empresa_id === selectedEmpresa)
           .map((t) => t.id);
 
         const newSet = new Set<string>();
@@ -186,7 +187,7 @@ export const GenerateDocumentsDialog = ({
 
       const { data, error } = await supabase
         .from('document_templates')
-        .select('id, nome, tipo, empresa_id')
+        .select('id, nome, tipo, cliente_empresa_id, empresa_id')
         .eq('ativo', true)
         .order('nome', { ascending: true });
 
@@ -195,7 +196,7 @@ export const GenerateDocumentsDialog = ({
 
       // Pré-selecionar templates do tipo contrato_tvde APENAS da empresa padrão
       const contratoIds = (data || [])
-        .filter((t) => t.tipo === 'contrato_tvde' && t.empresa_id === defaultEmpresaId)
+        .filter((t) => t.tipo === 'contrato_tvde' && t.cliente_empresa_id === defaultEmpresaId)
         .map((t) => t.id);
       setSelectedTemplates(new Set(contratoIds));
     } catch (error: any) {
@@ -219,7 +220,7 @@ export const GenerateDocumentsDialog = ({
   };
 
   const filteredTemplates = templates.filter(
-    (t) => !selectedEmpresa || t.empresa_id === selectedEmpresa
+    (t) => !selectedEmpresa || t.cliente_empresa_id === selectedEmpresa
   );
 
   // Contador de templates visíveis e selecionados
@@ -563,7 +564,7 @@ export const GenerateDocumentsDialog = ({
                     ) : (
                       <div className="space-y-2">
                         {templates
-                          .filter((t) => t.empresa_id === selectedEmpresa)
+                          .filter((t) => t.cliente_empresa_id === selectedEmpresa)
                           .map((template) => (
                             <div
                               key={template.id}

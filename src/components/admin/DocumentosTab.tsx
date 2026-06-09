@@ -12,13 +12,14 @@ import {
 import { Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { useEmpresas } from '@/hooks/useEmpresas';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 
 interface DocumentTemplate {
   id: string;
   nome: string;
   tipo: string;
-  empresa_id: string;
+  empresa_id: string | null;
+  cliente_empresa_id: string | null;
   template_data: any;
   campos_dinamicos: any;
   ativo: boolean;
@@ -33,7 +34,7 @@ export const DocumentosTab = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [filtroEmpresa, setFiltroEmpresa] = useState<string>('todas');
-  const { empresas } = useEmpresas();
+  const { empresas } = useClientesEmpresas();
 
   useEffect(() => {
     fetchTemplates();
@@ -44,7 +45,7 @@ export const DocumentosTab = () => {
       const { data, error } = await supabase
         .from('document_templates')
         .select('*')
-        .order('empresa_id', { ascending: true })
+        .order('cliente_empresa_id', { ascending: true })
         .order('versao', { ascending: false });
 
       if (error) throw error;
@@ -78,7 +79,7 @@ export const DocumentosTab = () => {
       const { error } = await supabase.from('document_templates').insert({
         nome: `${template.nome} (Cópia)`,
         tipo: template.tipo,
-        empresa_id: template.empresa_id,
+        cliente_empresa_id: template.cliente_empresa_id,
         template_data: template.template_data,
         campos_dinamicos: template.campos_dinamicos,
         ativo: false,
@@ -122,7 +123,9 @@ export const DocumentosTab = () => {
     empresas.map((e) => [e.id, e.nome])
   );
   const templatesFiltrados =
-    filtroEmpresa === 'todas' ? templates : templates.filter((t) => t.empresa_id === filtroEmpresa);
+    filtroEmpresa === 'todas'
+      ? templates
+      : templates.filter((t) => t.cliente_empresa_id === filtroEmpresa);
 
   return (
     <div className="space-y-6">

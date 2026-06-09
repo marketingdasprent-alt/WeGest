@@ -42,7 +42,7 @@ import { useOrgDefinicoes, ivaParaModalidade } from '@/hooks/useOrgDefinicoes';
 import { useRentingCoberturas } from '@/hooks/useRentingCoberturas';
 import { useRentingExtras } from '@/hooks/useRentingExtras';
 import { useRentingTaxas } from '@/hooks/useRentingTaxas';
-import { useEmpresas } from '@/hooks/useEmpresas';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useMotoristas } from '@/hooks/useMotoristas';
 import { useReserva } from '@/hooks/useReservas';
 import { useReservaCondutores } from '@/hooks/useReservaCondutores';
@@ -95,7 +95,7 @@ const ContratoForm = () => {
   // Server state
   const { data: clientes = [] } = useClientes();
   const { data: motoristas = [] } = useMotoristas({ apenasAtivos: true });
-  const { empresas } = useEmpresas();
+  const { empresas } = useClientesEmpresas();
   const { data: viaturas = [] } = useViaturas();
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
   const { data: coberturas = [] } = useRentingCoberturas({ apenasAtivas: true });

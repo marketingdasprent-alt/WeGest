@@ -80,6 +80,8 @@ interface ViaturaDialogProps {
   slotMotoristaId?: string | null;
   /** Devolve a viatura recém-criada (id + dados básicos) ao criador. */
   onCreated?: (viatura: { id: string; matricula: string; marca: string; modelo: string }) => void;
+  /** Matrícula a pré-preencher quando o dialog abre para criar (vem do campo de pesquisa). */
+  initialMatricula?: string;
 }
 
 const CATEGORIAS = [
@@ -114,6 +116,7 @@ export function ViaturaDialog({
   onSuccess,
   slotMotoristaId = null,
   onCreated,
+  initialMatricula,
 }: ViaturaDialogProps) {
   const [loading, setLoading] = useState(false);
   const isEditing = !!viatura;
@@ -160,7 +163,7 @@ export function ViaturaDialog({
       });
     } else {
       form.reset({
-        matricula: '',
+        matricula: initialMatricula ?? '',
         marca: '',
         modelo: '',
         ano: '',
@@ -177,7 +180,7 @@ export function ViaturaDialog({
         extintor_validade: '',
       });
     }
-  }, [viatura, form]);
+  }, [viatura, initialMatricula, form]);
 
   const onSubmit = async (data: ViaturaFormData) => {
     setLoading(true);
