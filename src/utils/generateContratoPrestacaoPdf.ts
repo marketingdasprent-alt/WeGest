@@ -46,9 +46,9 @@ export const generateContratoPrestacaoPdf = async ({
   //    com folha branca a separar — mesmo padrão do TVDE).
   const { data: templates, error: templatesErr } = await supabase
     .from('document_templates')
-    .select('id, nome, tipo, empresa_id, versao')
+    .select('id, nome, tipo, cliente_empresa_id, versao')
     .eq('ativo', true)
-    .eq('empresa_id', empresa.id)
+    .eq('cliente_empresa_id', empresa.id)
     .in('tipo', ['contrato_prestacao', 'contrato_aluguer'])
     .order('versao', { ascending: false });
 

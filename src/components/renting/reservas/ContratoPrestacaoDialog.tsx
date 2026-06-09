@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useEmpresas } from '@/hooks/useEmpresas';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { generateContratoPrestacaoPdf } from '@/utils/generateContratoPrestacaoPdf';
 
 import type { Reserva } from '@/types/reserva';
@@ -38,7 +38,7 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
   viaturas,
 }) => {
   const { toast } = useToast();
-  const { empresas } = useEmpresas();
+  const { empresas } = useClientesEmpresas();
   const [loading, setLoading] = useState(false);
 
   const motorista = reserva.condutor_id
