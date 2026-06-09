@@ -57,6 +57,13 @@ const Index = () => {
           </div>
         </Link>
 
+        <p className="-mt-3 text-center text-sm text-muted-foreground">
+          É a sua primeira vez?{' '}
+          <Link to="/motorista/registo" className="font-medium text-primary hover:underline">
+            Criar conta de motorista
+          </Link>
+        </p>
+
         <Link
           to="/equipa"
           className="flex w-full items-center gap-4 rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary hover:bg-card/80"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -70,10 +70,12 @@ interface Candidatura {
   documento_numero: string | null;
   documento_validade: string | null;
   documento_ficheiro_url: string | null;
+  documento_identificacao_verso_url: string | null;
   carta_conducao: string | null;
   carta_categorias: string[] | null;
   carta_validade: string | null;
   carta_ficheiro_url: string | null;
+  carta_conducao_verso_url: string | null;
   licenca_tvde_numero: string | null;
   licenca_tvde_validade: string | null;
   licenca_tvde_ficheiro_url: string | null;
@@ -135,7 +137,6 @@ const MotoristaCandidaturas: React.FC = () => {
   const [approvedMotorista, setApprovedMotorista] = useState<any>(null);
 
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     loadCandidaturas();
@@ -299,7 +300,7 @@ const MotoristaCandidaturas: React.FC = () => {
   const getDocumentsForCandidatura = (candidatura: Candidatura): DocumentInfo[] => {
     return [
       {
-        label: 'Documento de Identificação',
+        label: 'Documento de Identificação (Frente)',
         url: candidatura.documento_ficheiro_url,
         type:
           TIPO_DOCUMENTO_LABELS[candidatura.documento_tipo || ''] ||
@@ -309,8 +310,25 @@ const MotoristaCandidaturas: React.FC = () => {
         validity: candidatura.documento_validade,
       },
       {
-        label: 'Carta de Condução',
+        label: 'Documento de Identificação (Verso)',
+        url: candidatura.documento_identificacao_verso_url,
+        type:
+          TIPO_DOCUMENTO_LABELS[candidatura.documento_tipo || ''] ||
+          candidatura.documento_tipo ||
+          'ID',
+        icon: <IdCard className="h-4 w-4" />,
+        validity: candidatura.documento_validade,
+      },
+      {
+        label: 'Carta de Condução (Frente)',
         url: candidatura.carta_ficheiro_url,
+        type: 'Carta',
+        icon: <Car className="h-4 w-4" />,
+        validity: candidatura.carta_validade,
+      },
+      {
+        label: 'Carta de Condução (Verso)',
+        url: candidatura.carta_conducao_verso_url,
         type: 'Carta',
         icon: <Car className="h-4 w-4" />,
         validity: candidatura.carta_validade,

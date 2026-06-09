@@ -11,8 +11,6 @@ import { formatMatricula } from './EventoCard';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { CalendarioEvento } from '@/pages/Calendario';
-import jsPDF from 'jspdf';
-import * as XLSX from 'xlsx';
 
 const TIPOS_CONFIG = [
   {
@@ -110,30 +108,37 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
   const [dataInicio, setDataInicio] = useState(format(startOfMonth(currentMonth), 'yyyy-MM-dd'));
   const [dataFim, setDataFim] = useState(format(endOfMonth(currentMonth), 'yyyy-MM-dd'));
   const [tipoFiltro, setTipoFiltro] = useState<string | null>(null); // null = Todos
+  const [gestorFiltro, setGestorFiltro] = useState<string | null>(null); // null = Todos
+  const [modoData, setModoData] = useState<'evento' | 'criacao'>('evento');
   const [exportLoading, setExportLoading] = useState(false);
   const [exportGestorLoading, setExportGestorLoading] = useState(false);
   const [exportExcelLoading, setExportExcelLoading] = useState(false);
+  const [selectGestorDialogOpen, setSelectGestorDialogOpen] = useState(false);
+  const [selectedGestorForExport, setSelectedGestorForExport] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (open) {
       setDataInicio(format(startOfMonth(currentMonth), 'yyyy-MM-dd'));
       setDataFim(format(endOfMonth(currentMonth), 'yyyy-MM-dd'));
       setTipoFiltro(null);
+      setGestorFiltro(null);
+      setModoData('evento');
     }
   }, [open, currentMonth]);
 
   const { data: eventos = [], isLoading } = useQuery({
-    queryKey: ['relatorio-eventos', dataInicio, dataFim, podeVerGestores],
+    queryKey: ['relatorio-eventos', dataInicio, dataFim, podeVerGestores, modoData],
     enabled: open && !!dataInicio && !!dataFim,
     queryFn: async () => {
       const start = new Date(dataInicio + 'T00:00:00');
       const end = new Date(dataFim + 'T23:59:59');
+      const campoData = modoData === 'criacao' ? 'created_at' : 'data_inicio';
 
       const { data, error } = await supabase
         .from('calendario_eventos')
         .select('*')
-        .gte('data_inicio', start.toISOString())
-        .lte('data_inicio', end.toISOString())
+        .gte(campoData, start.toISOString())
+        .lte(campoData, end.toISOString())
         .order('data_inicio', { ascending: true });
 
       if (error) throw error;
@@ -157,11 +162,16 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
     },
   });
 
-  const eventosFiltrados = tipoFiltro ? eventos.filter((ev) => ev.tipo === tipoFiltro) : eventos;
+  const eventosFiltrados = eventos.filter((ev) => {
+    if (tipoFiltro && ev.tipo !== tipoFiltro) return false;
+    if (gestorFiltro && ev.criado_por !== gestorFiltro) return false;
+    return true;
+  });
 
   const exportarPDF = async () => {
     setExportLoading(true);
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
       const pageW = 210;
       const pageH = 297;
@@ -544,9 +554,10 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
   };
 
   // ── EXCEL (.xlsx) EXPORT ────────────────────────────────────────
-  const exportarExcel = () => {
+  const exportarExcel = async () => {
     setExportExcelLoading(true);
     try {
+      const XLSX = await import('xlsx');
       const headers = [
         'Data',
         'Hora',
@@ -604,10 +615,11 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
     }
   };
 
-  // ── PDF POR GESTOR ──────────────────────────────────────────────
+  // ── PDF POR GESTOR (todos agrupados) ────────────────────────────────────────────
   const exportarPDFPorGestor = async () => {
     setExportGestorLoading(true);
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
       const pageW = 210;
       const pageH = 297;
@@ -971,6 +983,393 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
     }
   };
 
+  // ── PDF DE UM GESTOR ESPECÍFICO ─────────────────────────────────────────────
+  const exportarPDFGestorUnico = async (gestorId: string) => {
+    setExportGestorLoading(true);
+    try {
+      const gestor = totalPorGestor.find((g) => g.id === gestorId);
+      if (!gestor) return;
+
+      const eventosDoGestor = eventosFiltrados.filter((ev) => ev.criado_por === gestorId);
+
+      const { default: jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const pageW = 210;
+      const pageH = 297;
+      const marginL = 14;
+      const marginR = 14;
+
+      const logoInfo = await loadImageWithDimensions('/Logo.png');
+
+      // ── HEADER ──────────────────────────────────────────────
+      const headerH = 44;
+      doc.setFillColor(255, 255, 255);
+      doc.rect(0, 0, pageW, headerH, 'F');
+
+      doc.setFillColor(99, 102, 241);
+      doc.rect(0, headerH - 2, pageW, 2, 'F');
+
+      if (logoInfo) {
+        try {
+          const maxW = 55;
+          const maxH = 26;
+          const aspect = logoInfo.width / logoInfo.height;
+          let logoW = maxW;
+          let logoH = logoW / aspect;
+          if (logoH > maxH) {
+            logoH = maxH;
+            logoW = logoH * aspect;
+          }
+          const logoX = marginL;
+          const logoY = (headerH - logoH) / 2;
+          doc.addImage(logoInfo.dataUrl, 'PNG', logoX, logoY, logoW, logoH);
+        } catch {
+          /* skip logo if error */
+        }
+      }
+
+      doc.setTextColor(20, 20, 25);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.text(`Relatório - ${gestor.nome}`, pageW - marginR, 18, { align: 'right' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 100, 110);
+      doc.text('Calendário  ·  WeGest', pageW - marginR, 25, { align: 'right' });
+
+      // ── STATS BAR ───────────────────────────────────────────
+      const statsY = headerH;
+      const statsH = 13;
+      doc.setFillColor(244, 244, 245);
+      doc.rect(0, statsY, pageW, statsH, 'F');
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(60, 60, 70);
+      const d1 = format(new Date(dataInicio + 'T00:00:00'), 'dd/MM/yyyy');
+      const d2 = format(new Date(dataFim + 'T00:00:00'), 'dd/MM/yyyy');
+      doc.text(`Período: ${d1}  —  ${d2}`, marginL, statsY + 8.5);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(99, 102, 241);
+      doc.text(`${eventosDoGestor.length} evento(s)`, pageW - marginR, statsY + 8.5, {
+        align: 'right',
+      });
+
+      // ── COLUMN HEADERS ──────────────────────────────────────
+      let y = statsY + statsH;
+      const colHeaderH = 9;
+      doc.setFillColor(39, 39, 42);
+      doc.rect(0, y, pageW, colHeaderH, 'F');
+
+      doc.setTextColor(160, 160, 170);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      const COL = { mat: marginL + 4, tipo: 112, data: 143, resp: pageW - marginR };
+      doc.text('MATRÍCULA / CIDADE', COL.mat, y + 6);
+      doc.text('TIPO', COL.tipo, y + 6);
+      doc.text('DATA / HORA', COL.data, y + 6);
+      doc.text('RESPONSÁVEL', COL.resp, y + 6, { align: 'right' });
+      y += colHeaderH;
+
+      // ── HELPERS ─────────────────────────────────────────────
+      const rowPad = 3.5;
+      const lineH = 5;
+      const lineH2 = 4.2;
+      const obsMaxW = COL.tipo - COL.mat - 2;
+      const bodyMaxY = pageH - 12;
+
+      const drawColHeaders = (atY: number) => {
+        doc.setFillColor(39, 39, 42);
+        doc.rect(0, atY, pageW, colHeaderH, 'F');
+        doc.setTextColor(160, 160, 170);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.text('MATRÍCULA / CIDADE', COL.mat, atY + 6);
+        doc.text('TIPO', COL.tipo, atY + 6);
+        doc.text('DATA / HORA', COL.data, atY + 6);
+        doc.text('RESPONSÁVEL', COL.resp, atY + 6, { align: 'right' });
+        return atY + colHeaderH;
+      };
+
+      const drawFooter = (pageNum: number) => {
+        doc.setFillColor(244, 244, 245);
+        doc.rect(0, pageH - 10, pageW, 10, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(130, 130, 140);
+        doc.text(`Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, marginL, pageH - 3.5);
+        doc.text(`Página ${pageNum}`, pageW / 2, pageH - 3.5, { align: 'center' });
+        doc.text('WeGest', pageW - marginR, pageH - 3.5, { align: 'right' });
+      };
+
+      // Pre-calculate row heights
+      const rowHeights = eventosDoGestor.map((ev) => {
+        let h = rowPad + lineH + lineH2;
+        if (ev.descricao) {
+          const lines = doc.splitTextToSize(`Obs: ${ev.descricao}`, obsMaxW);
+          h += lines.length * 4;
+        }
+        return h + rowPad;
+      });
+
+      // ── DRAW ROWS ───────────────────────────────────────────
+      let pageNum = 1;
+
+      eventosDoGestor.forEach((ev, i) => {
+        const rh = rowHeights[i];
+
+        if (y + rh > bodyMaxY) {
+          drawFooter(pageNum);
+          doc.addPage();
+          pageNum++;
+          y = drawColHeaders(8);
+        }
+
+        // Row background
+        if (i % 2 === 0) {
+          doc.setFillColor(255, 255, 255);
+        } else {
+          doc.setFillColor(250, 250, 252);
+        }
+        doc.rect(0, y, pageW, rh, 'F');
+
+        // Left color bar (tipo)
+        const tc = TIPO_COLORS_PDF[ev.tipo] || [120, 120, 120];
+        doc.setFillColor(tc[0], tc[1], tc[2]);
+        doc.rect(0, y, 3, rh, 'F');
+
+        const ty = y + rowPad + lineH;
+
+        // Matrícula (bold, dark)
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(20, 20, 25);
+        const matricula =
+          ev.tipo === 'lista_espera'
+            ? ev.titulo
+            : ev.tipo === 'troca'
+              ? `${formatMatricula(ev.titulo)}${ev.matricula_devolver ? `  <>  ${formatMatricula(ev.matricula_devolver)}` : ''}`
+              : formatMatricula(ev.titulo);
+        const cidadeStr = ev.cidade ? `  ${ev.cidade.toUpperCase()}` : '';
+
+        // Ensure matrícula doesn't overflow into tipo column
+        const maxMatW = COL.tipo - COL.mat - 4;
+        const matLines = doc.splitTextToSize(matricula + cidadeStr, maxMatW);
+        doc.text(matLines[0], COL.mat, ty);
+        if (matLines.length > 1) {
+          doc.setFontSize(8);
+          doc.text(matLines.slice(1).join(' '), COL.mat, ty + 3.5);
+        }
+
+        // Tipo (colored)
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(tc[0], tc[1], tc[2]);
+        doc.text(TIPO_LABELS[ev.tipo] || ev.tipo, COL.tipo, ty);
+
+        // Data
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(50, 50, 60);
+        const dataStr = format(
+          new Date(ev.data_inicio),
+          ev.dia_todo ? 'dd/MM/yyyy' : 'dd/MM/yy  HH:mm',
+          { locale: pt }
+        );
+        doc.text(dataStr, COL.data, ty);
+
+        // Responsável (right-aligned, truncated)
+        if (ev.profiles?.nome) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.setTextColor(80, 80, 90);
+          const respMaxW = pageW - marginR - COL.data - 30;
+          const respLines = doc.splitTextToSize(ev.profiles.nome, respMaxW);
+          doc.text(respLines[0], COL.resp, ty, { align: 'right' });
+        }
+
+        // Observações (wrapped, italic, muted)
+        if (ev.descricao) {
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(8);
+          doc.setTextColor(110, 110, 120);
+          const obsLines = doc.splitTextToSize(`Obs: ${ev.descricao}`, obsMaxW);
+          obsLines.forEach((line: string, li: number) => {
+            doc.text(line, COL.mat, ty + lineH2 + li * 4);
+          });
+        }
+
+        // Bottom separator
+        doc.setDrawColor(228, 228, 235);
+        doc.setLineWidth(0.2);
+        doc.line(0, y + rh, pageW, y + rh);
+
+        y += rh;
+      });
+
+      drawFooter(pageNum);
+
+      // ── RESUMO POR TIPO ───────────────────────────────────────
+      const totaisTipo = TIPOS_CONFIG.map((t) => ({
+        label: t.label,
+        value: t.value,
+        count: eventosDoGestor.filter((ev) => ev.tipo === t.value).length,
+        color: TIPO_COLORS_PDF[t.value] || [120, 120, 120],
+      })).filter((t) => t.count > 0);
+
+      if (totaisTipo.length > 0) {
+        doc.addPage();
+        pageNum++;
+
+        // Header faixa
+        doc.setFillColor(255, 255, 255);
+        doc.rect(0, 0, pageW, pageH, 'F');
+        doc.setFillColor(99, 102, 241);
+        doc.rect(0, 0, pageW, 10, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.text('RESUMO  ·  TOTAL POR TIPO DE EVENTO', marginL, 6.5);
+
+        // Título
+        let gy = 22;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(20, 20, 25);
+        doc.text('Total por Tipo de Evento', marginL, gy);
+        gy += 3;
+        doc.setDrawColor(99, 102, 241);
+        doc.setLineWidth(0.6);
+        doc.line(marginL, gy, marginL + 60, gy);
+        gy += 8;
+
+        // Período
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 110);
+        const d1 = format(new Date(dataInicio + 'T00:00:00'), 'dd/MM/yyyy');
+        const d2 = format(new Date(dataFim + 'T00:00:00'), 'dd/MM/yyyy');
+        doc.text(
+          `Período: ${d1} — ${d2}   ·   ${eventosDoGestor.length} evento(s) no total`,
+          marginL,
+          gy
+        );
+        gy += 12;
+
+        // ── Barras horizontais ──────────────────────────────────
+        const maxCount = Math.max(...totaisTipo.map((t) => t.count));
+        const barMaxW = pageW - marginL - marginR - 40;
+        const barH = 10;
+        const barGap = 7;
+        const labelW = 38;
+        const numW = 12;
+        const barStartX = marginL + labelW + 2;
+
+        totaisTipo.forEach((t) => {
+          const barW = maxCount > 0 ? (t.count / maxCount) * barMaxW : 0;
+          const [r, g, b] = t.color;
+
+          // Label
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8.5);
+          doc.setTextColor(40, 40, 50);
+          doc.text(t.label, marginL + labelW, gy + barH / 2 + 2.5, { align: 'right' });
+
+          // Background track
+          doc.setFillColor(240, 240, 245);
+          doc.roundedRect(barStartX, gy, barMaxW, barH, 2, 2, 'F');
+
+          // Colored bar
+          if (barW > 0) {
+            doc.setFillColor(r, g, b);
+            doc.roundedRect(barStartX, gy, barW, barH, 2, 2, 'F');
+          }
+
+          // Count inside / beside bar
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8.5);
+          const countX = barStartX + barW + 3;
+          doc.setTextColor(r, g, b);
+          doc.text(String(t.count), countX, gy + barH / 2 + 2.5);
+
+          gy += barH + barGap;
+        });
+
+        gy += 10;
+
+        // ── Tabela resumo ───────────────────────────────────────
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(20, 20, 25);
+        doc.text('Resumo', marginL, gy);
+        gy += 6;
+
+        const colTipo = marginL;
+        const colQtd = marginL + 70;
+        const colPct = marginL + 100;
+
+        // Cabeçalho tabela
+        doc.setFillColor(39, 39, 42);
+        doc.rect(marginL - 2, gy - 4, pageW - marginL - marginR + 4, 8, 'F');
+        doc.setTextColor(200, 200, 210);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.text('TIPO', colTipo, gy);
+        doc.text('TOTAL', colQtd, gy);
+        doc.text('% DO PERÍODO', colPct, gy);
+        gy += 6;
+
+        totaisTipo.forEach((t, i) => {
+          const pct =
+            eventosDoGestor.length > 0
+              ? ((t.count / eventosDoGestor.length) * 100).toFixed(1)
+              : '0.0';
+
+          if (i % 2 === 0) {
+            doc.setFillColor(248, 248, 252);
+          } else {
+            doc.setFillColor(255, 255, 255);
+          }
+          doc.rect(marginL - 2, gy - 3.5, pageW - marginL - marginR + 4, 7, 'F');
+
+          // Dot color
+          const [r, g, b] = t.color;
+          doc.setFillColor(r, g, b);
+          doc.circle(colTipo + 1.5, gy - 0.5, 1.5, 'F');
+
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8.5);
+          doc.setTextColor(40, 40, 50);
+          doc.text(t.label, colTipo + 5, gy);
+          doc.text(String(t.count), colQtd, gy);
+
+          doc.setTextColor(100, 100, 110);
+          doc.text(`${pct}%`, colPct, gy);
+
+          gy += 7;
+        });
+
+        // Total row
+        doc.setFillColor(230, 230, 240);
+        doc.rect(marginL - 2, gy - 3.5, pageW - marginL - marginR + 4, 7, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(20, 20, 25);
+        doc.text('TOTAL', colTipo, gy);
+        doc.text(String(eventosDoGestor.length), colQtd, gy);
+        doc.text('100%', colPct, gy);
+
+        drawFooter(pageNum);
+      }
+
+      const pdfUrl = doc.output('bloburl');
+      window.open(pdfUrl, '_blank');
+    } finally {
+      setExportGestorLoading(false);
+    }
+  };
+
   // Derived data for charts
   const totalPorTipo = TIPOS_CONFIG.map((t) => ({
     ...t,
@@ -978,12 +1377,12 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
   })).filter((t) => t.count > 0);
 
   const totalPorGestor = Array.from(
-    new Map(eventosFiltrados.map((ev) => [ev.criado_por, ev.profiles?.nome || 'Desconhecido']))
+    new Map(eventos.map((ev) => [ev.criado_por, ev.profiles?.nome || 'Desconhecido']))
   )
     .map(([id, nome]) => ({
       id,
       nome,
-      count: eventosFiltrados.filter((ev) => ev.criado_por === id).length,
+      count: eventos.filter((ev) => ev.criado_por === id).length,
     }))
     .sort((a, b) => b.count - a.count);
 
@@ -1045,7 +1444,7 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
             {podeVerGestores && (
               <Button
                 variant="outline"
-                onClick={exportarPDFPorGestor}
+                onClick={() => setSelectGestorDialogOpen(true)}
                 disabled={isLoading || exportGestorLoading || eventosFiltrados.length === 0}
                 className="gap-2 h-8 text-xs"
                 size="sm"
@@ -1088,6 +1487,44 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
           {/* ── Painel esquerdo: filtros + gráficos ── */}
           <div className="w-72 shrink-0 border-r bg-muted/20 flex flex-col overflow-y-auto">
             <div className="p-4 space-y-5">
+              {/* Modo de data */}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Filtrar por
+                </Label>
+                <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+                  <button
+                    type="button"
+                    onClick={() => setModoData('evento')}
+                    className={cn(
+                      'flex-1 px-2 py-1.5 transition-colors',
+                      modoData === 'evento'
+                        ? 'bg-foreground text-background'
+                        : 'bg-muted/40 text-muted-foreground hover:bg-muted'
+                    )}
+                  >
+                    Data do Evento
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModoData('criacao')}
+                    className={cn(
+                      'flex-1 px-2 py-1.5 transition-colors border-l border-border',
+                      modoData === 'criacao'
+                        ? 'bg-foreground text-background'
+                        : 'bg-muted/40 text-muted-foreground hover:bg-muted'
+                    )}
+                  >
+                    Data de Registo
+                  </button>
+                </div>
+                {modoData === 'criacao' && (
+                  <p className="text-[10px] text-muted-foreground leading-tight">
+                    Mostra eventos registados neste período, independentemente da data de entrega.
+                  </p>
+                )}
+              </div>
+
               {/* Datas */}
               <div className="space-y-3">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -1160,6 +1597,45 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
                   })}
                 </div>
               </div>
+
+              {/* Filtros gestor */}
+              {podeVerGestores && totalPorGestor.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Gestor
+                  </Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setGestorFiltro(null)}
+                      className={cn(
+                        'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-all',
+                        gestorFiltro === null
+                          ? 'border-foreground bg-foreground text-background'
+                          : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
+                      )}
+                    >
+                      Todos ({eventos.length})
+                    </button>
+                    {totalPorGestor.map((g) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => setGestorFiltro(g.id)}
+                        className={cn(
+                          'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-all truncate max-w-[150px]',
+                          gestorFiltro === g.id
+                            ? 'border-indigo-600 bg-indigo-600 text-white'
+                            : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
+                        )}
+                        title={g.nome}
+                      >
+                        {g.nome} ({g.count})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Gráfico por tipo */}
               {totalPorTipo.length > 0 && (
@@ -1359,6 +1835,38 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
           </div>
         </div>
       </DialogContent>
+
+      {/* Dialog para selecionar gestor para PDF */}
+      <Dialog open={selectGestorDialogOpen} onOpenChange={setSelectGestorDialogOpen}>
+        <DialogContent className="max-w-md">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <h3 className="font-semibold text-base">Selecione o Gestor</h3>
+              <p className="text-sm text-muted-foreground">
+                Escolha qual gestor deseja incluir no PDF
+              </p>
+            </div>
+            <div className="max-h-96 overflow-y-auto space-y-2">
+              {totalPorGestor.map((g) => (
+                <button
+                  key={g.id}
+                  onClick={async () => {
+                    setSelectGestorDialogOpen(false);
+                    await exportarPDFGestorUnico(g.id);
+                  }}
+                  disabled={exportGestorLoading}
+                  className="w-full text-left p-3 rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{g.nome}</span>
+                    <span className="text-sm text-muted-foreground">{g.count} evento(s)</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };

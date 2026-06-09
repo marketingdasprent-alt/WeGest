@@ -674,7 +674,7 @@ export function ContasResumoTab() {
         .lte('data_movimento', weekEndStr)
         .eq('status', 'pendente');
 
-      const boltResumosQuery = supabase
+      let boltResumosQuery = supabase
         .from('bolt_resumos_semanais')
         .select(
           'motorista_id, motorista_nome, ganhos_liquidos, viagens_terminadas, integracao_id, identificador_motorista'

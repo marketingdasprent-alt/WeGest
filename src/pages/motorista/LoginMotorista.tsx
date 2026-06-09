@@ -230,6 +230,13 @@ const LoginMotorista: React.FC = () => {
           >
             Esqueceu-se da palavra-passe?
           </button>
+
+          <p className="text-center text-sm text-muted-foreground">
+            Ainda não tem conta?{' '}
+            <Link to="/motorista/registo" className="auth-link">
+              Criar conta
+            </Link>
+          </p>
         </form>
       )}
     </AuthMobileShell>
