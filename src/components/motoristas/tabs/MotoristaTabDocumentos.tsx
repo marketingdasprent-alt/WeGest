@@ -102,8 +102,6 @@ const TIPOS_DOCUMENTO = [
     validityField: 'licenca_tvde_validade',
     storageFolder: 'tvde',
   },
-  { value: 'dua_frente', label: 'DUA (Frente)', storageFolder: 'documentos' },
-  { value: 'dua_verso', label: 'DUA (Verso)', storageFolder: 'documentos' },
   {
     value: 'registo_criminal',
     label: 'Registo Criminal',
