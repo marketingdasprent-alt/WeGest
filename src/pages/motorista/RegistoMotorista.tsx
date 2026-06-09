@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Eye, EyeOff, Car } from 'lucide-react';
+import { Loader2, Eye, EyeOff, Car, CheckCircle2, Circle } from 'lucide-react';
 import { PhoneInput, validatePhoneNumber } from '@/components/ui/phone-input';
 import { getEmailRedirectUrl } from '@/lib/native';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
@@ -36,6 +36,42 @@ const RegistoMotorista: React.FC = () => {
     setTelefone(value);
   };
 
+  const pwdReqs = (pwd: string) => ({
+    minLength: pwd.length >= 8,
+    hasUpper: /[A-Z]/.test(pwd),
+    hasLower: /[a-z]/.test(pwd),
+    hasNumber: /[0-9]/.test(pwd),
+    hasSpecial: /[!@#$%^&*()_+\-=[\]{};':"\\|<>?,./`~]/.test(pwd),
+  });
+
+  const isPasswordValid = (pwd: string) => Object.values(pwdReqs(pwd)).every(Boolean);
+
+  // Traduz/clarifica os erros do Supabase para o motorista perceber o que correu mal.
+  const traduzirErroRegisto = (msg?: string) => {
+    const m = (msg || '').toLowerCase();
+    if (
+      m.includes('already registered') ||
+      m.includes('already been registered') ||
+      m.includes('user already exists')
+    )
+      return 'Já existe uma conta com este email — pode ter sido criada anteriormente mas ainda não confirmada. Verifique a caixa de entrada (incluindo spam) para o email de confirmação, ou tente iniciar sessão.';
+    if (
+      m.includes('weak_password') ||
+      m.includes('weak password') ||
+      m.includes('password should') ||
+      m.includes('at least 8')
+    )
+      return 'A palavra-passe não cumpre os requisitos: mínimo 8 caracteres, com letra maiúscula, minúscula, número e carácter especial.';
+    if (m.includes('pwned') || m.includes('compromised'))
+      return 'Esta palavra-passe foi comprometida em fugas de dados. Escolha uma diferente.';
+    if (m.includes('invalid') && m.includes('email')) return 'O email introduzido não é válido.';
+    if (m.includes('rate limit') || m.includes('too many') || m.includes('exceeded'))
+      return 'Demasiadas tentativas. Aguarde uns minutos e tente novamente.';
+    if (m.includes('network') || m.includes('failed to fetch') || m.includes('fetch'))
+      return 'Falha de ligação. Verifique a sua internet e tente novamente.';
+    return msg || 'Ocorreu um erro ao criar a conta.';
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -48,10 +84,11 @@ const RegistoMotorista: React.FC = () => {
       return;
     }
 
-    if (password.length < 6) {
+    if (!isPasswordValid(password)) {
       toast({
         title: 'Erro',
-        description: 'A palavra-passe deve ter pelo menos 6 caracteres.',
+        description:
+          'A palavra-passe não cumpre os requisitos: mínimo 8 caracteres, com letra maiúscula, minúscula, número e carácter especial.',
         variant: 'destructive',
       });
       return;
@@ -97,7 +134,7 @@ const RegistoMotorista: React.FC = () => {
       console.error('Erro no registo:', error);
       toast({
         title: 'Erro no registo',
-        description: error.message || 'Ocorreu um erro ao criar a conta.',
+        description: traduzirErroRegisto(error.message),
         variant: 'destructive',
       });
     } finally {
@@ -172,7 +209,7 @@ const RegistoMotorista: React.FC = () => {
             <Input
               id="password"
               type={showPassword ? 'text' : 'password'}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -189,6 +226,34 @@ const RegistoMotorista: React.FC = () => {
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
+          {password.length > 0 && (
+            <div className="space-y-1 pt-0.5">
+              {(
+                [
+                  { key: 'minLength', label: 'Mínimo 8 caracteres' },
+                  { key: 'hasUpper', label: 'Letra maiúscula (A-Z)' },
+                  { key: 'hasLower', label: 'Letra minúscula (a-z)' },
+                  { key: 'hasNumber', label: 'Número (0-9)' },
+                  { key: 'hasSpecial', label: 'Carácter especial (!@#$…)' },
+                ] as const
+              ).map(({ key, label }) => {
+                const ok = pwdReqs(password)[key];
+                return (
+                  <p
+                    key={key}
+                    className={`flex items-center gap-1.5 text-xs ${ok ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
+                  >
+                    {ok ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+                    ) : (
+                      <Circle className="h-3.5 w-3.5 flex-shrink-0" />
+                    )}
+                    {label}
+                  </p>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -204,6 +269,9 @@ const RegistoMotorista: React.FC = () => {
             className="auth-input"
             autoComplete="new-password"
           />
+          {confirmPassword.length > 0 && password !== confirmPassword && (
+            <p className="text-xs text-destructive">As palavras-passe não coincidem.</p>
+          )}
         </div>
 
         <Button type="submit" className="auth-primary-button w-full" disabled={loading}>

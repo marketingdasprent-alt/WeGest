@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -54,7 +55,6 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { DocumentPreviewPanel } from '@/components/motoristas/DocumentPreviewPanel';
-import { GenerateDocumentsDialog } from '@/components/motoristas/GenerateDocumentsDialog';
 import { cn, matchesSearch } from '@/lib/utils';
 
 interface Candidatura {
@@ -70,10 +70,12 @@ interface Candidatura {
   documento_numero: string | null;
   documento_validade: string | null;
   documento_ficheiro_url: string | null;
+  documento_identificacao_verso_url: string | null;
   carta_conducao: string | null;
   carta_categorias: string[] | null;
   carta_validade: string | null;
   carta_ficheiro_url: string | null;
+  carta_conducao_verso_url: string | null;
   licenca_tvde_numero: string | null;
   licenca_tvde_validade: string | null;
   licenca_tvde_ficheiro_url: string | null;
@@ -130,9 +132,11 @@ const MotoristaCandidaturas: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [selectedDocIndex, setSelectedDocIndex] = useState(0);
 
-  // Contract dialog states
-  const [contractDialogOpen, setContractDialogOpen] = useState(false);
+  // Modal de sucesso pós-aprovação
+  const [successDialogOpen, setSuccessDialogOpen] = useState(false);
   const [approvedMotorista, setApprovedMotorista] = useState<any>(null);
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadCandidaturas();
@@ -188,7 +192,7 @@ const MotoristaCandidaturas: React.FC = () => {
 
       if (error) throw error;
 
-      // Buscar o motorista recém-criado para abrir o diálogo de contrato
+      // Buscar o motorista recém-criado para mostrar no modal de sucesso
       const { data: motoristaData } = await supabase
         .from('motoristas_ativos')
         .select('*')
@@ -203,11 +207,9 @@ const MotoristaCandidaturas: React.FC = () => {
       loadCandidaturas();
       setDetailsOpen(false);
 
-      // Abrir diálogo de contrato automaticamente após aprovação
-      if (motoristaData) {
-        setApprovedMotorista(motoristaData);
-        setContractDialogOpen(true);
-      }
+      // Informar que o motorista foi criado e já pode ser usado
+      setApprovedMotorista(motoristaData ?? { nome: candidatura.nome });
+      setSuccessDialogOpen(true);
     } catch (error: any) {
       console.error('Erro ao aprovar:', error);
       toast({
@@ -281,7 +283,7 @@ const MotoristaCandidaturas: React.FC = () => {
   const getDocumentsForCandidatura = (candidatura: Candidatura): DocumentInfo[] => {
     return [
       {
-        label: 'Documento de Identificação',
+        label: 'Documento de Identificação (Frente)',
         url: candidatura.documento_ficheiro_url,
         type:
           TIPO_DOCUMENTO_LABELS[candidatura.documento_tipo || ''] ||
@@ -291,8 +293,25 @@ const MotoristaCandidaturas: React.FC = () => {
         validity: candidatura.documento_validade,
       },
       {
-        label: 'Carta de Condução',
+        label: 'Documento de Identificação (Verso)',
+        url: candidatura.documento_identificacao_verso_url,
+        type:
+          TIPO_DOCUMENTO_LABELS[candidatura.documento_tipo || ''] ||
+          candidatura.documento_tipo ||
+          'ID',
+        icon: <IdCard className="h-4 w-4" />,
+        validity: candidatura.documento_validade,
+      },
+      {
+        label: 'Carta de Condução (Frente)',
         url: candidatura.carta_ficheiro_url,
+        type: 'Carta',
+        icon: <Car className="h-4 w-4" />,
+        validity: candidatura.carta_validade,
+      },
+      {
+        label: 'Carta de Condução (Verso)',
+        url: candidatura.carta_conducao_verso_url,
         type: 'Carta',
         icon: <Car className="h-4 w-4" />,
         validity: candidatura.carta_validade,
@@ -852,12 +871,48 @@ const MotoristaCandidaturas: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Documents Dialog - Opens after approval */}
-      <GenerateDocumentsDialog
-        open={contractDialogOpen}
-        onOpenChange={setContractDialogOpen}
-        motorista={approvedMotorista}
-      />
+      {/* Modal de sucesso — aberto após aprovar a candidatura */}
+      <Dialog open={successDialogOpen} onOpenChange={setSuccessDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+              <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+            </div>
+            <DialogTitle className="text-center">Motorista criado no sistema</DialogTitle>
+            <DialogDescription className="text-center">
+              {approvedMotorista?.nome ? `${approvedMotorista.nome} foi` : 'O motorista foi'}{' '}
+              adicionado à frota com sucesso. Já o pode atribuir a uma viatura e criar uma reserva.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+            <Button
+              className="w-full"
+              onClick={() => {
+                setSuccessDialogOpen(false);
+                navigate('/renting/reservas/nova');
+              }}
+            >
+              <Car className="mr-2 h-4 w-4" />
+              Criar reserva
+            </Button>
+            {approvedMotorista?.id && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setSuccessDialogOpen(false);
+                  navigate(`/motoristas/${approvedMotorista.id}`);
+                }}
+              >
+                Ver motorista
+              </Button>
+            )}
+            <Button variant="ghost" className="w-full" onClick={() => setSuccessDialogOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

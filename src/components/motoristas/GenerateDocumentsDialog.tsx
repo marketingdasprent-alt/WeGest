@@ -30,6 +30,7 @@ import {
 } from '@/utils/generateDocumentFromTemplate';
 import { useEmpresas } from '@/hooks/useEmpresas';
 import { matchesSearch } from '@/lib/utils';
+import { printPdf } from '@/lib/printPdf';
 
 interface Motorista {
   id: string;
@@ -271,13 +272,25 @@ export const GenerateDocumentsDialog = ({
       );
 
       let successCount = 0;
-      // Para impressão cada documento abre o seu próprio diálogo; combinação só para download
-      const isMultiple = templatesToGenerate.length > 1 && action === 'download';
+      // Vários documentos juntam-se num único PDF (e num único trabalho de impressão):
+      // evita o bloqueio de pop-ups de abrir vários separadores e separa cada documento
+      // com uma página em branco para nunca saírem colados.
+      const isMultiple = templatesToGenerate.length > 1;
 
       // Quando múltiplos downloads, criar um PDF combinado onde todos os documentos são adicionados
       const combinedPdf = isMultiple
         ? new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
         : null;
+
+      // Insere uma página em branco a separar os documentos dentro do PDF combinado.
+      // Só corre depois de já existir um documento gerado (successCount > 0), por isso
+      // nunca há folha em branco à cabeça nem depois do último — exatamente uma entre cada par.
+      const addSeparatorPage = () => {
+        if (!combinedPdf) return;
+        if (successCount > 0) {
+          combinedPdf.addPage(); // página em branco a separar os documentos
+        }
+      };
 
       const docParams = {
         data_inicio: activeMotorista.data_contratacao || today,
@@ -361,6 +374,7 @@ export const GenerateDocumentsDialog = ({
       for (const template of contratoTemplates) {
         setCurrentGenerating(template.id);
         try {
+          addSeparatorPage();
           await generateDocumentFromTemplate({
             templateId: template.id,
             motoristaData,
@@ -382,6 +396,7 @@ export const GenerateDocumentsDialog = ({
       for (const template of otherTemplates) {
         setCurrentGenerating(template.id);
         try {
+          addSeparatorPage();
           await generateDocumentFromTemplate({
             templateId: template.id,
             motoristaData,
@@ -399,12 +414,17 @@ export const GenerateDocumentsDialog = ({
         }
       }
 
-      // Quando múltiplos downloads: apagar página 1 em branco e guardar PDF combinado
+      // Quando múltiplos documentos: apagar página 1 em branco e dar saída ao PDF combinado.
+      // Tem de respeitar a ação escolhida — imprimir abre a caixa de impressão, download grava.
       if (isMultiple && combinedPdf && successCount > 0) {
         combinedPdf.deletePage(1);
         const today_str = new Date().toISOString().split('T')[0].replace(/-/g, '');
         const fileName = `Documentos_${activeMotorista.nome}_${today_str}.pdf`;
-        combinedPdf.save(fileName);
+        if (action === 'print') {
+          printPdf(combinedPdf, fileName);
+        } else {
+          combinedPdf.save(fileName);
+        }
       }
 
       setCurrentGenerating(null);

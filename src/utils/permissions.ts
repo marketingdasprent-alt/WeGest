@@ -28,7 +28,7 @@ export const RECURSOS = {
   VIATURAS_EDITAR: 'viaturas_editar',
   VIATURAS_ELIMINAR: 'viaturas_eliminar',
   VIATURAS_FINANCEIRO: 'viaturas_financeiro',
-
+  VIATURAS_MARCAS_MODELOS: 'viaturas_marcas_modelos',
   // Contratos
   CONTRATOS_VER: 'contratos_ver',
   CONTRATOS_CRIAR: 'contratos_criar',

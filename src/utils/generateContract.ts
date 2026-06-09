@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import { EmpresaConfig } from '@/config/empresas';
+import { printPdf } from '@/lib/printPdf';
 
 interface DriverData {
   nome: string;
@@ -587,19 +588,11 @@ export const generateContract = async (
   // Add page numbers to all pages
   addPageNumbers(pdf);
 
+  const fileName = `Contrato_${data.driver.nome.replace(/\s+/g, '_')}_${format(data.signingDate, 'dd-MM-yyyy')}.pdf`;
   if (action === 'print') {
-    // Abrir para impressão
-    pdf.autoPrint();
-    const blobUrl = pdf.output('bloburl');
-    const win = window.open(blobUrl, '_blank');
-    if (!win) {
-      // Fallback: salvar com nome do motorista
-      const fileName = `Contrato_${data.driver.nome.replace(/\s+/g, '_')}_${format(data.signingDate, 'dd-MM-yyyy')}.pdf`;
-      pdf.save(fileName);
-    }
+    printPdf(pdf, fileName);
   } else {
     // Exportar PDF com nome personalizado
-    const fileName = `Contrato_${data.driver.nome.replace(/\s+/g, '_')}_${format(data.signingDate, 'dd-MM-yyyy')}.pdf`;
     pdf.save(fileName);
   }
 };
