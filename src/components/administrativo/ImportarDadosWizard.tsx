@@ -454,7 +454,6 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
         body: JSON.stringify(body),
       });
       const data = await response.json();
-      console.log(`[ImportarDadosWizard] resposta ${plataforma}:`, data);
       if (!response.ok || data.success === false) {
         throw new Error(data.error || `Erro ${response.status}`);
       }

@@ -123,8 +123,6 @@ const Formularios = () => {
         formulario_id: formulario.id,
         campanha_tag: 'Geral',
       });
-
-      console.log('Formulário Geral criado com sucesso:', formulario.id);
     } catch (error) {
       console.error('Erro ao criar formulário padrão:', error);
     }

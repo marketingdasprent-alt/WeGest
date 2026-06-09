@@ -80,7 +80,7 @@ export const DocumentTemplateEditor = ({
 
   // Se for novo template e ainda não tiver empresa seleccionada, usar a primeira disponível.
   // Depende intencionalmente só de `empresas` — não queremos re-executar quando empresaId muda.
-   
+
   useEffect(() => {
     if (!template && !empresaId && empresas.length > 0) {
       setEmpresaId(empresas[0].id);
