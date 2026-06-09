@@ -44,15 +44,9 @@ const normalizeForSearch = (s: string) =>
 
 export const SectionGeral: React.FC<SectionGeralProps> = ({ form, clientes }) => {
   const [clientePopoverOpen, setClientePopoverOpen] = useState(false);
-  const regime = form.watch('regime');
-  const isTvde = regime === 'tvde';
-  const clienteLabel = isTvde ? 'Motorista parceiro' : 'Cliente';
-  const clientePlaceholder = isTvde
-    ? 'Clique ou escreva para procurar motorista parceiro...'
-    : 'Clique ou escreva para procurar cliente...';
-  const clienteEmpty = isTvde
-    ? 'Nenhum motorista parceiro encontrado.'
-    : 'Nenhum cliente encontrado.';
+  const clienteLabel = 'Cliente';
+  const clientePlaceholder = 'Clique ou escreva para procurar cliente...';
+  const clienteEmpty = 'Nenhum cliente encontrado.';
   return (
     <div>
       <SectionTitle>Geral</SectionTitle>

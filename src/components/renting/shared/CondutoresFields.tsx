@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useFieldArray, useFormContext, type FieldValues } from 'react-hook-form';
-import { Info, Plus, Star, Trash2, UserCheck, UserPlus, Users } from 'lucide-react';
+import { Eye, Info, Plus, Star, Trash2, UserCheck, UserPlus, Users } from 'lucide-react';
 
 import { FormField, FormMessage } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Command,
@@ -23,11 +24,25 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 
-import type { ClienteComDocumentos } from '@/types/cliente';
+import { type ClienteComDocumentos, TIPO_CLIENTE_LABELS } from '@/types/cliente';
 import type { Motorista } from '@/types/motorista';
 import type { ReservaRegime } from '@/types/reserva';
 
 const normalizeForSearch = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+function isMotorista(e: ClienteComDocumentos | Motorista): e is Motorista {
+  return 'licenca_tvde_numero' in e;
+}
+
+const fmtDate = (d: string | null | undefined): string =>
+  d ? d.slice(0, 10).split('-').reverse().join('/') : '—';
+
+const InfoRow = ({ label, value }: { label: string; value: string | null | undefined }) => (
+  <div className="flex justify-between gap-4 py-2 border-b last:border-0">
+    <span className="text-muted-foreground text-xs shrink-0">{label}</span>
+    <span className="text-xs font-medium text-right">{value ?? '—'}</span>
+  </div>
+);
 
 /**
  * Forma genérica do form pai. Em rent-a-car cada condutor tem
@@ -66,6 +81,7 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
 }) => {
   const form = useFormContext<CondutoresFieldsShape>();
   const [adicionarOpen, setAdicionarOpen] = useState(false);
+  const [infoCondutor, setInfoCondutor] = useState<ClienteComDocumentos | Motorista | null>(null);
   // tvde e slot usam motoristas; rent_a_car usa clientes.
   const isTvde = regime !== 'rent_a_car';
 
@@ -376,16 +392,29 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleRemover(idx)}
-                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          title="Remover condutor"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => entidade && setInfoCondutor(entidade)}
+                            className="h-8 w-8"
+                            title="Ver informação"
+                            disabled={!entidade}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleRemover(idx)}
+                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            title="Remover condutor"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -404,6 +433,64 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
 
         <FormField control={form.control} name="condutores" render={() => <FormMessage />} />
       </div>
+
+      <Dialog open={!!infoCondutor} onOpenChange={(open) => !open && setInfoCondutor(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              {infoCondutor?.nome}
+              {infoCondutor != null && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  #{infoCondutor.codigo}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {infoCondutor && (
+            <div className="mt-1">
+              {isMotorista(infoCondutor) ? (
+                <>
+                  <InfoRow label="NIF" value={infoCondutor.nif} />
+                  <InfoRow label="Telefone" value={infoCondutor.telefone} />
+                  <InfoRow label="Email" value={infoCondutor.email} />
+                  <InfoRow label="Carta de condução" value={infoCondutor.carta_conducao} />
+                  <InfoRow label="Validade carta" value={fmtDate(infoCondutor.carta_validade)} />
+                  <InfoRow label="Licença TVDE" value={infoCondutor.licenca_tvde_numero} />
+                  <InfoRow
+                    label="Validade TVDE"
+                    value={fmtDate(infoCondutor.licenca_tvde_validade)}
+                  />
+                  <InfoRow label="Estado" value={infoCondutor.status_ativo ? 'Ativo' : 'Inativo'} />
+                </>
+              ) : (
+                <>
+                  <InfoRow label="NIF" value={infoCondutor.nif} />
+                  <InfoRow label="Telefone" value={infoCondutor.telefone} />
+                  <InfoRow label="Email" value={infoCondutor.email} />
+                  <InfoRow label="Tipo" value={TIPO_CLIENTE_LABELS[infoCondutor.tipo_cliente]} />
+                  <InfoRow
+                    label="Doc. identificação"
+                    value={
+                      infoCondutor.documentoIdentificacao
+                        ? `${infoCondutor.documentoIdentificacao.tipo}${infoCondutor.documentoIdentificacao.numero ? ` · ${infoCondutor.documentoIdentificacao.numero}` : ''}`
+                        : null
+                    }
+                  />
+                  <InfoRow
+                    label="Validade doc."
+                    value={fmtDate(infoCondutor.documentoIdentificacao?.validade)}
+                  />
+                  <InfoRow label="Carta de condução" value={infoCondutor.cartaConducao?.numero} />
+                  <InfoRow
+                    label="Validade carta"
+                    value={fmtDate(infoCondutor.cartaConducao?.validade)}
+                  />
+                </>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
