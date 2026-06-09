@@ -142,6 +142,23 @@ const MotoristaCandidaturas: React.FC = () => {
     loadCandidaturas();
   }, []);
 
+  // Deep-link a partir do popup de notificações (?candidatura=<id>):
+  // abre logo o detalhe assim que as candidaturas carregam, e limpa o param.
+  useEffect(() => {
+    const id = searchParams.get('candidatura');
+    if (!id || candidaturas.length === 0) return;
+
+    const found = candidaturas.find((c) => c.id === id);
+    if (found) {
+      setSelectedCandidatura(found);
+      setSelectedDocIndex(0);
+      setDetailsOpen(true);
+    }
+
+    searchParams.delete('candidatura');
+    setSearchParams(searchParams, { replace: true });
+  }, [candidaturas, searchParams, setSearchParams]);
+
   const loadCandidaturas = async () => {
     setLoading(true);
     try {

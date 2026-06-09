@@ -150,9 +150,19 @@ async function fetchBoltOrdersWithRetry(
 // Helper to delay between batches
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Sincronização automática Bolt DESATIVADA — só import manual por CSV.
+const SYNC_AUTOMATICO_DESATIVADO = true;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (SYNC_AUTOMATICO_DESATIVADO) {
+    return new Response(
+      JSON.stringify({ success: false, disabled: true, message: 'Sincronização Bolt desativada. Use o import manual por CSV.' }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

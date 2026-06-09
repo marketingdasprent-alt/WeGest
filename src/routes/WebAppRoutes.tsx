@@ -7,6 +7,16 @@ import { usePageTracking } from '@/hooks/usePageTracking';
 import { RECURSOS } from '@/utils/permissions';
 import { Loader2 } from 'lucide-react';
 
+// Recursos do módulo Administrativo — acesso à página com QUALQUER um deles.
+const ADMINISTRATIVO_RESOURCES = [
+  RECURSOS.FINANCEIRO_RECIBOS,
+  RECURSOS.RECIBOS_VERDES_ADICIONAR,
+  RECURSOS.ADMINISTRATIVO_RESUMOS,
+  RECURSOS.ADMINISTRATIVO_IMPORTAR,
+  RECURSOS.ADMINISTRATIVO_PLATAFORMAS,
+  RECURSOS.ADMINISTRATIVO_CARTOES,
+];
+
 const CRMContatos = lazy(() => import('@/pages/CRMContatos'));
 const Motoristas = lazy(() => import('@/pages/Motoristas'));
 const Viaturas = lazy(() => import('@/pages/Viaturas'));
@@ -43,6 +53,7 @@ const MeusTickets = lazy(() => import('@/pages/MeusTickets'));
 const Administrativo = lazy(() => import('@/pages/Administrativo'));
 const CartoesFlotaPage = lazy(() => import('@/pages/administrativo/CartoesFlotaPage'));
 const DispositivosObePage = lazy(() => import('@/pages/administrativo/DispositivosObePage'));
+const FaturacaoPage = lazy(() => import('@/pages/administrativo/FaturacaoPage'));
 const Instalar = lazy(() => import('@/pages/Instalar'));
 const Calendario = lazy(() => import('@/pages/Calendario'));
 const Marketing = lazy(() => import('@/pages/Marketing'));
@@ -324,7 +335,7 @@ const WebAppRoutes = () => {
           <Route
             path="/administrativo"
             element={
-              <ProtectedRoute requiredResource={RECURSOS.FINANCEIRO_RECIBOS}>
+              <ProtectedRoute requiredResource={ADMINISTRATIVO_RESOURCES}>
                 <DashboardLayout>
                   <Administrativo />
                 </DashboardLayout>
@@ -334,7 +345,7 @@ const WebAppRoutes = () => {
           <Route
             path="/financeiro"
             element={
-              <ProtectedRoute requiredResource={RECURSOS.FINANCEIRO_RECIBOS}>
+              <ProtectedRoute requiredResource={ADMINISTRATIVO_RESOURCES}>
                 <DashboardLayout>
                   <Administrativo />
                 </DashboardLayout>
@@ -344,7 +355,7 @@ const WebAppRoutes = () => {
           <Route
             path="/administrativo/cartoes"
             element={
-              <ProtectedRoute requiredResource={RECURSOS.FINANCEIRO_RECIBOS}>
+              <ProtectedRoute requiredResource={RECURSOS.ADMINISTRATIVO_CARTOES}>
                 <DashboardLayout>
                   <CartoesFlotaPage />
                 </DashboardLayout>
@@ -354,9 +365,19 @@ const WebAppRoutes = () => {
           <Route
             path="/administrativo/obe"
             element={
-              <ProtectedRoute requiredResource={RECURSOS.FINANCEIRO_RECIBOS}>
+              <ProtectedRoute requiredResource={RECURSOS.ADMINISTRATIVO_CARTOES}>
                 <DashboardLayout>
                   <DispositivosObePage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/administrativo/faturacao"
+            element={
+              <ProtectedRoute requiredResource={RECURSOS.FINANCEIRO_RECIBOS}>
+                <DashboardLayout>
+                  <FaturacaoPage />
                 </DashboardLayout>
               </ProtectedRoute>
             }

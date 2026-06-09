@@ -1,4 +1,5 @@
 import React from 'react';
+import { SINCRONIZACAO_ATIVA } from '@/config/sync';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -144,7 +145,7 @@ export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
                 <Pencil className="mr-2 h-4 w-4" />
                 Editar
               </DropdownMenuItem>
-              {onSync && (
+              {SINCRONIZACAO_ATIVA && onSync && (
                 <DropdownMenuItem onClick={() => onSync(data)}>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Sincronizar
@@ -179,7 +180,7 @@ export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${connectionDotColor}`} />
           <span className="text-xs text-muted-foreground">{connectionLabel}</span>
-          {data.ativo && onExecute && (
+          {SINCRONIZACAO_ATIVA && data.ativo && onExecute && (
             <Button
               variant="ghost"
               size="icon"

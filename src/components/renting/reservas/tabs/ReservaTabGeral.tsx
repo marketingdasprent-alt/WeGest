@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { UseFormReturn } from 'react-hook-form';
 import {
   Car,
@@ -12,6 +13,7 @@ import {
   FileText,
   Layers,
   MapPin,
+  Plus,
   User,
 } from 'lucide-react';
 
@@ -51,6 +53,7 @@ import type { Motorista } from '@/types/motorista';
 import { SectionHeader } from '../SectionHeader';
 import { RegimeCards } from '../RegimeCards';
 import { SlotMotoristaViatura } from '../SlotMotoristaViatura';
+import { ViaturaDialog } from '@/components/viaturas/ViaturaDialog';
 
 const SENTINEL_NONE = '__none__';
 
@@ -138,6 +141,9 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
 }) => {
   const [viaturaPopoverOpen, setViaturaPopoverOpen] = useState(false);
   const [clientePopoverOpen, setClientePopoverOpen] = useState(false);
+  const [novaViaturaOpen, setNovaViaturaOpen] = useState(false);
+  const [viaturaSearchTerm, setViaturaSearchTerm] = useState('');
+  const queryClient = useQueryClient();
   const { has } = useModules();
 
   const clienteId = form.watch('cliente_id');
@@ -651,7 +657,11 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                             return s === '' || v.includes(s) ? 1 : 0;
                           }}
                         >
-                          <CommandInput placeholder="Pesquisar por matrícula..." className="h-9" />
+                          <CommandInput
+                            placeholder="Pesquisar por matrícula..."
+                            className="h-9"
+                            onValueChange={setViaturaSearchTerm}
+                          />
                           <CommandList>
                             <CommandEmpty>Nenhuma viatura encontrada.</CommandEmpty>
                             <CommandGroup>
@@ -700,6 +710,22 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                               ))}
                             </CommandGroup>
                           </CommandList>
+                          <div className="border-t p-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start gap-2 text-primary"
+                              onClick={() => {
+                                setViaturaPopoverOpen(false);
+                                setNovaViaturaOpen(true);
+                              }}
+                            >
+                              <Plus className="h-4 w-4" />
+                              Nova viatura
+                              {viaturaSearchTerm ? ` "${viaturaSearchTerm.toUpperCase()}"` : ''}
+                            </Button>
+                          </div>
                         </Command>
                       </PopoverContent>
                     </Popover>
@@ -708,6 +734,20 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                 );
               }}
             />
+
+            <ViaturaDialog
+              open={novaViaturaOpen}
+              onOpenChange={setNovaViaturaOpen}
+              onSuccess={() => {}}
+              initialMatricula={viaturaSearchTerm.toUpperCase()}
+              onCreated={(v) => {
+                queryClient.invalidateQueries({ queryKey: ['viaturas'] });
+                form.setValue('viatura_id', v.id);
+                form.setValue('matricula', v.matricula);
+                setNovaViaturaOpen(false);
+              }}
+            />
+
             <FormField
               control={form.control}
               name="grupo"

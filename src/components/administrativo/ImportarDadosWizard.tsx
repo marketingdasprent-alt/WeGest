@@ -191,6 +191,9 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
     ultimaData: string | null;
   } | null>(null);
   const [verificandoExistencia, setVerificandoExistencia] = useState(false);
+  // Confirmação explícita exigida quando já existe importação nesta conta+semana
+  // (evita reimportar/importar na conta errada sem querer).
+  const [confirmarReimport, setConfirmarReimport] = useState(false);
 
   // Última importação por conta (carregado quando entra no passo 2)
   // Map: integracao_id → { ultimaData, ultimaSemana? }
@@ -212,6 +215,7 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
       setImportando(false);
       setExisteImportacao(null);
       setUltimaImportPorConta({});
+      setConfirmarReimport(false);
     }
   }, [open]);
 
@@ -298,6 +302,8 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
 
   // Verificar se já existe importação para (plataforma + conta + semana)
   useEffect(() => {
+    // Mudou a conta/semana → exigir nova confirmação.
+    setConfirmarReimport(false);
     if (!plataforma || !integracaoId) {
       setExisteImportacao(null);
       return;
@@ -433,6 +439,8 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
           origem: 'Upload Manual (Contas)',
           nome_original: nomeComPeriodo,
           data_extracao: new Date().toISOString(),
+          periodo_inicio: fmtDate(weekStart),
+          periodo_fim: fmtDate(weekEnd),
         };
       } else {
         // bp / repsol / edp / viaverde
@@ -491,7 +499,7 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
     (passo === 1 && !!plataforma) ||
     (passo === 2 && !!integracaoId) ||
     (passo === 3 && !!selectedWeek) ||
-    (passo === 4 && !!file && !importando);
+    (passo === 4 && !!file && !importando && (!existeImportacao || confirmarReimport));
 
   const avancar = () => {
     if (!podeAvancar) return;
@@ -553,6 +561,8 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
               weekLabel={weekLabel}
               integracao={integracoes.find((i) => i.id === integracaoId)}
               existeImportacao={existeImportacao}
+              confirmarReimport={confirmarReimport}
+              setConfirmarReimport={setConfirmarReimport}
             />
           )}
         </div>
@@ -959,7 +969,18 @@ const PassoFicheiro: React.FC<{
   weekLabel: string;
   integracao?: Integracao;
   existeImportacao: { quantidade: number; ultimaData: string | null } | null;
-}> = ({ cfg, file, setFile, weekLabel, integracao, existeImportacao }) => {
+  confirmarReimport: boolean;
+  setConfirmarReimport: (v: boolean) => void;
+}> = ({
+  cfg,
+  file,
+  setFile,
+  weekLabel,
+  integracao,
+  existeImportacao,
+  confirmarReimport,
+  setConfirmarReimport,
+}) => {
   const Icon = cfg.icon;
   return (
     <div>
@@ -977,9 +998,9 @@ const PassoFicheiro: React.FC<{
           <p className="font-semibold text-foreground">Plataforma</p>
           <p className="text-muted-foreground">{cfg.label}</p>
         </div>
-        <div>
-          <p className="font-semibold text-foreground">Conta</p>
-          <p className="truncate text-muted-foreground">
+        <div className={cn('rounded-md border-2 px-2 py-1', cfg.border, cfg.bg)}>
+          <p className="font-semibold text-foreground">Conta (confirma!)</p>
+          <p className={cn('truncate font-bold', cfg.text)}>
             {integracao?.company_name || integracao?.nome || '—'}
           </p>
         </div>
@@ -990,14 +1011,25 @@ const PassoFicheiro: React.FC<{
       </div>
 
       {existeImportacao && (
-        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-2.5 text-xs">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <span className="text-amber-700 dark:text-amber-300">
-            <strong>Já existe importação</strong> para esta semana ({existeImportacao.quantidade}{' '}
-            registo
-            {existeImportacao.quantidade !== 1 ? 's' : ''}). Importar de novo substitui pelos novos
-            valores.
-          </span>
+        <div className="mb-3 rounded-lg border border-amber-500/50 bg-amber-500/10 p-2.5 text-xs">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span className="text-amber-700 dark:text-amber-300">
+              <strong>Já existe importação</strong> para esta conta nesta semana (
+              {existeImportacao.quantidade} registo
+              {existeImportacao.quantidade !== 1 ? 's' : ''}). Confirma que é a conta certa antes de
+              continuar.
+            </span>
+          </div>
+          <label className="mt-2 flex cursor-pointer items-center gap-2 font-medium text-amber-800 dark:text-amber-200">
+            <input
+              type="checkbox"
+              checked={confirmarReimport}
+              onChange={(e) => setConfirmarReimport(e.target.checked)}
+              className="h-4 w-4 accent-amber-600"
+            />
+            Confirmo que quero importar nesta conta (substitui os valores existentes).
+          </label>
         </div>
       )}
 

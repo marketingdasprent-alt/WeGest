@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { Save, X, Upload, Trash2, Image as ImageIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCamposDinamicos } from '@/hooks/useCamposDinamicos';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { categoriasOrdenadas, labelCategoria, type BaseCategoria } from '@/lib/camposDinamicos';
 
 const CATEGORIA_EMOJI: Record<BaseCategoria, string> = {
@@ -44,7 +45,8 @@ interface DocumentTemplate {
   id?: string;
   nome: string;
   tipo: string;
-  empresa_id: string;
+  empresa_id: string | null;
+  cliente_empresa_id?: string | null;
   template_data: any;
   campos_dinamicos: any;
   ativo: boolean;
@@ -64,7 +66,10 @@ export const DocumentTemplateEditor = ({
   onCancel,
 }: DocumentTemplateEditorProps) => {
   const [nome, setNome] = useState(template?.nome || '');
-  const [empresaId, setEmpresaId] = useState(template?.empresa_id || 'decada_ousada');
+  const { empresas } = useClientesEmpresas();
+  const [empresaId, setEmpresaId] = useState(
+    template?.cliente_empresa_id || template?.empresa_id || ''
+  );
   const [tipo, setTipo] = useState(template?.tipo || 'contrato_tvde');
   const [ativo, setAtivo] = useState(template?.ativo ?? true);
   const [conteudoCompleto, setConteudoCompleto] = useState('');
@@ -72,6 +77,15 @@ export const DocumentTemplateEditor = ({
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const editorRef = useRef<RichTextEditorRef>(null);
+
+  // Se for novo template e ainda não tiver empresa seleccionada, usar a primeira disponível.
+  // Depende intencionalmente só de `empresas` — não queremos re-executar quando empresaId muda.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!template && !empresaId && empresas.length > 0) {
+      setEmpresaId(empresas[0].id);
+    }
+  }, [empresas]);
 
   useEffect(() => {
     if (template) {
@@ -275,7 +289,7 @@ export const DocumentTemplateEditor = ({
         const { data: maxVersionTemplate } = await supabase
           .from('document_templates')
           .select('versao')
-          .eq('empresa_id', empresaId)
+          .eq('cliente_empresa_id', empresaId)
           .eq('tipo', tipo)
           .order('versao', { ascending: false })
           .limit(1)
@@ -287,7 +301,7 @@ export const DocumentTemplateEditor = ({
       const templateData = {
         nome,
         tipo,
-        empresa_id: empresaId,
+        cliente_empresa_id: empresaId || null,
         template_data: {
           conteudo: conteudoCompleto,
         } as any,
@@ -392,8 +406,11 @@ export const DocumentTemplateEditor = ({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="decada_ousada">WeGest</SelectItem>
-                        <SelectItem value="distancia_arrojada">Distância Arrojada</SelectItem>
+                        {empresas.map((e) => (
+                          <SelectItem key={e.id} value={e.id}>
+                            {e.nome}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

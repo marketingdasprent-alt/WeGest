@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SINCRONIZACAO_ATIVA } from '@/config/sync';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -702,14 +703,21 @@ export const BoltIntegrationPanel: React.FC = () => {
                     />
                   </div>
                   <div className="flex items-end">
-                    <Button onClick={handleSync} disabled={syncing} className="w-full">
-                      {syncing ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                      )}
-                      Sincronizar Agora
-                    </Button>
+                    {SINCRONIZACAO_ATIVA ? (
+                      <Button onClick={handleSync} disabled={syncing} className="w-full">
+                        {syncing ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                        )}
+                        Sincronizar Agora
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Sincronização automática desativada. Usa o import manual por CSV em
+                        Administrativo › Importar Dados.
+                      </p>
+                    )}
                   </div>
                 </div>
 

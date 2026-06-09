@@ -85,7 +85,9 @@ interface CartaoFrota {
   limite: number | null;
   pin: string | null;
   ambito: string | null;
+  detentor: string | null;
   notas: string | null;
+  devolucao: string | null;
   motorista: { nome: string } | null;
   cliente: { nome: string } | null;
 }
@@ -109,7 +111,9 @@ interface ImportRow {
   limite: string;
   pin: string;
   data_validade: string;
+  detentor: string;
   notas: string;
+  devolucao: string;
   erros: string[];
 }
 
@@ -172,6 +176,15 @@ const COL_MAP: Record<string, keyof Omit<ImportRow, '_row' | 'erros'>> = {
   notes: 'notas',
   observacoes: 'notas',
   observações: 'notas',
+  detentor: 'detentor',
+  'detentor do cartao': 'detentor',
+  'detentor do cartão': 'detentor',
+  titular: 'detentor',
+  holder: 'detentor',
+  devolucao: 'devolucao',
+  devolução: 'devolucao',
+  return: 'devolucao',
+  devolvido: 'devolucao',
 };
 
 function parseSheet(wb: XLSX.WorkBook): ImportRow[] {
@@ -196,7 +209,9 @@ function parseSheet(wb: XLSX.WorkBook): ImportRow[] {
         limite: '',
         pin: '',
         data_validade: '',
+        detentor: '',
         notas: '',
+        devolucao: '',
         erros: [],
       };
       (row as unknown[]).forEach((cell, i) => {
@@ -221,12 +236,32 @@ function parseSheet(wb: XLSX.WorkBook): ImportRow[] {
 
 function downloadTemplate() {
   const ws = XLSX.utils.aoa_to_sheet([
-    ['Tipo', 'Numero', 'Ambito', 'Limite', 'PIN', 'Validade', 'Notas'],
-    ['bp', '1234567890', 'Combustível', '200', '1234', '31/12/2026', ''],
-    ['repsol', '9876543210', 'Geral', '', '', '', ''],
-    ['edp', '5551234567', 'Elétrico', '150', '', '30/06/2027', 'Carreg. rápido'],
+    [
+      'Tipo',
+      'Numero',
+      'Ambito',
+      'Limite',
+      'PIN',
+      'Validade',
+      'Detentor do Cartão',
+      'Notas',
+      'Devolução',
+    ],
+    ['bp', '1234567890', 'Nacional', '200', '1234', '31/12/2026', 'DISTÂNCIA 01', '', ''],
+    ['repsol', '9876543210', 'Nacional', '', '', '', 'DISTÂNCIA 02', '', ''],
+    [
+      'edp',
+      '5551234567',
+      'Nacional',
+      '150',
+      '',
+      '30/06/2027',
+      'DISTÂNCIA 03',
+      'Carreg. rápido',
+      '',
+    ],
   ]);
-  ws['!cols'] = [8, 14, 14, 8, 6, 12, 20].map((w) => ({ wch: w }));
+  ws['!cols'] = [8, 14, 12, 8, 6, 12, 20, 20, 20].map((w) => ({ wch: w }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Cartões');
   XLSX.writeFile(wb, 'template_cartoes_frota.xlsx');
@@ -279,7 +314,9 @@ type FormState = {
   limite: string;
   pin: string;
   ambito: string;
+  detentor: string;
   notas: string;
+  devolucao: string;
 };
 
 const emptyForm = (): FormState => ({
@@ -289,7 +326,9 @@ const emptyForm = (): FormState => ({
   limite: '',
   pin: '',
   ambito: '',
+  detentor: '',
   notas: '',
+  devolucao: '',
 });
 
 export function CartoesFlotaTab() {
@@ -401,7 +440,9 @@ export function CartoesFlotaTab() {
       limite: c.limite != null ? String(c.limite) : '',
       pin: c.pin || '',
       ambito: c.ambito || '',
+      detentor: c.detentor || '',
       notas: c.notas || '',
+      devolucao: c.devolucao || '',
     });
     setShowPin(false);
     setDialogOpen(true);
@@ -421,7 +462,9 @@ export function CartoesFlotaTab() {
         limite: form.limite ? Number(form.limite) : null,
         pin: form.pin || null,
         ambito: form.ambito || null,
+        detentor: form.detentor || null,
         notas: form.notas || null,
+        devolucao: form.devolucao || null,
       };
       const { error } = editing
         ? await (supabase as any).from('cartoes_frota').update(payload).eq('id', editing.id)
@@ -520,7 +563,9 @@ export function CartoesFlotaTab() {
         limite: r.limite ? Number(r.limite) : null,
         pin: r.pin || null,
         data_validade: r.data_validade || null,
+        detentor: r.detentor || null,
         notas: r.notas || null,
+        devolucao: r.devolucao || null,
       }));
       const { error } = await (supabase as any)
         .from('cartoes_frota')
@@ -540,13 +585,15 @@ export function CartoesFlotaTab() {
     const rows = filtered.map((c) => ({
       Tipo: TIPO_INFO[c.tipo].label,
       Número: c.numero,
+      'Detentor do Cartão': c.detentor || '',
       Âmbito: c.ambito || '',
       Titular: c.motorista?.nome || c.cliente?.nome || '',
       'Tipo Titular': c.motorista ? 'Motorista' : c.cliente ? 'Cliente' : '',
       'Limite (€)': c.limite ?? '',
       Validade: c.data_validade ? fmtDate(c.data_validade) : '',
       Estado: c.ativo ? 'Ativo' : 'Inativo',
-      Notas: c.notas || '',
+      Observações: c.notas || '',
+      Devolução: c.devolucao || '',
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -959,13 +1006,34 @@ export function CartoesFlotaTab() {
               </div>
             </div>
 
-            {/* Notas */}
+            {/* Detentor */}
             <div className="space-y-1.5">
-              <Label>Notas</Label>
+              <Label>Detentor do Cartão</Label>
+              <Input
+                placeholder="Ex: DISTÂNCIA 01, João Silva…"
+                value={form.detentor}
+                onChange={(e) => setForm((f) => ({ ...f, detentor: e.target.value }))}
+              />
+            </div>
+
+            {/* Observações */}
+            <div className="space-y-1.5">
+              <Label>Observações</Label>
               <Textarea
-                placeholder="Observações…"
+                placeholder="Notas gerais sobre o cartão…"
                 value={form.notas}
                 onChange={(e) => setForm((f) => ({ ...f, notas: e.target.value }))}
+                rows={2}
+              />
+            </div>
+
+            {/* Devolução */}
+            <div className="space-y-1.5">
+              <Label>Devolução</Label>
+              <Textarea
+                placeholder="Observações sobre a devolução do cartão…"
+                value={form.devolucao}
+                onChange={(e) => setForm((f) => ({ ...f, devolucao: e.target.value }))}
                 rows={2}
               />
             </div>

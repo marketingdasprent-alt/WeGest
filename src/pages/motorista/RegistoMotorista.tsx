@@ -13,6 +13,19 @@ import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 
 const CARGO_MOTORISTA_ID = 'a0000000-0000-0000-0000-000000000001';
 
+// Requisitos da palavra-passe (alinhados com a política do Supabase).
+const PASSWORD_RULES = [
+  { id: 'len', label: 'Pelo menos 6 caracteres', test: (p: string) => p.length >= 6 },
+  { id: 'lower', label: 'Uma letra minúscula (a-z)', test: (p: string) => /[a-z]/.test(p) },
+  { id: 'upper', label: 'Uma letra maiúscula (A-Z)', test: (p: string) => /[A-Z]/.test(p) },
+  { id: 'digit', label: 'Um número (0-9)', test: (p: string) => /[0-9]/.test(p) },
+  {
+    id: 'special',
+    label: 'Um caractere especial (! @ # $ % …)',
+    test: (p: string) => /[^a-zA-Z0-9]/.test(p),
+  },
+];
+
 const RegistoMotorista: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();

@@ -146,7 +146,9 @@ export const reservaDialogSchema = z
         message: 'Estação de entrega obrigatória',
       });
     }
-    if (!d.estacao_recolha_id) {
+    // Estação de recolha só é obrigatória em rent-a-car. Em TVDE o condutor fica
+    // com a viatura (sem devolução), por isso não se exige recolha.
+    if (d.regime === 'rent_a_car' && !d.estacao_recolha_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['estacao_recolha_id'],

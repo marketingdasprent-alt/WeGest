@@ -1552,6 +1552,8 @@ const processCsvImport = async ({
   origem,
   nomeOriginal,
   dataExtracao,
+  periodoInicio,
+  periodoFim,
 }: {
   supabase: ReturnType<typeof createClient>;
   integracaoId: string;
@@ -1559,6 +1561,8 @@ const processCsvImport = async ({
   origem: string;
   nomeOriginal: string;
   dataExtracao: string;
+  periodoInicio?: string | null;
+  periodoFim?: string | null;
 }) => {
   const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) {
@@ -1636,21 +1640,33 @@ const processCsvImport = async ({
       }
     }
 
-    // Generate transaction ID: prefer CSV column, then driver_uuid+period, then fallback
+    // Período da importação: o enviado pelo wizard (manual) tem prioridade
+    // sobre o extraído do nome do ficheiro. Garante ID estável e data correta.
+    const bodyPeriod = (periodoInicio && periodoFim)
+      ? `${periodoInicio.replace(/-/g, "")}-${periodoFim.replace(/-/g, "")}`
+      : "";
+    const periodo = bodyPeriod || filenamePeriod;
+    let periodStartIso = filenameDate;
+    if (periodoInicio) {
+      const d = new Date(`${periodoInicio}T12:00:00Z`);
+      if (!Number.isNaN(d.getTime())) periodStartIso = d.toISOString();
+    }
+
+    // ID de transação DETERMINÍSTICO (sem Date.now): reimportar a mesma
+    // semana substitui em vez de duplicar.
     const driverUuid = mapped.uber_driver_id || "";
     const transactionId = mapped.uber_transaction_id
-      || (driverUuid && filenamePeriod ? `${driverUuid}-${filenamePeriod}` : "")
-      || `csv-${integracaoId}-${i}-${Date.now()}`;
+      || (periodo ? `${driverUuid || `row${i}`}-${periodo}` : `${integracaoId}-row${i}`);
 
-    // Parse date
+    // Data: coluna do CSV se existir, senão o INÍCIO do período (meio-dia UTC).
+    // Nunca a hora do upload — isso carimbava a semana errada.
     let occurredAt: string | null = null;
     if (mapped.occurred_at) {
       const parsed = new Date(mapped.occurred_at);
       occurredAt = Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
     }
-    // Fallback to filename date
-    if (!occurredAt && filenameDate) {
-      occurredAt = filenameDate;
+    if (!occurredAt && periodStartIso) {
+      occurredAt = periodStartIso;
     }
 
     // Resolve motorista/viatura
@@ -1816,6 +1832,11 @@ const processCsvImport = async ({
     columns_mapped: Array.from(columnMap.values()),
   };
 };
+
+// Eventos push do Uber (sincronização automática) DESATIVADOS.
+// O import manual por CSV (ramo `dados_csv_brutos`) continua funcional.
+// Reativar: pôr a false e re-registar o webhook na consola do Uber.
+const UBER_PUSH_DESATIVADO = true;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -2050,6 +2071,8 @@ Deno.serve(async (req) => {
         origem: asTrimmedString(parsedBody.origem) ?? "apify",
         nomeOriginal: asTrimmedString(parsedBody.nome_original) ?? "unknown.csv",
         dataExtracao: asTrimmedString(parsedBody.data_extracao) ?? new Date().toISOString(),
+        periodoInicio: asTrimmedString(parsedBody.periodo_inicio),
+        periodoFim: asTrimmedString(parsedBody.periodo_fim),
       });
 
       return jsonResponse(csvResult, csvResult.success ? 200 : 500);
@@ -2058,6 +2081,16 @@ Deno.serve(async (req) => {
       console.error("[uber-webhook] CSV import error:", msg);
       return jsonResponse({ success: false, error: msg }, 500);
     }
+  }
+
+  // Daqui para baixo é o processamento de eventos push do Uber (automático).
+  // Está desativado — só o import manual por CSV (acima) funciona.
+  if (UBER_PUSH_DESATIVADO) {
+    return jsonResponse({
+      success: true,
+      ignored: true,
+      message: "Webhook de eventos Uber desativado (apenas import manual por CSV).",
+    }, 200);
   }
 
   const integracaoId = requestUrl.searchParams.get("integracao_id") ?? asTrimmedString(parsedBody.integracao_id);
