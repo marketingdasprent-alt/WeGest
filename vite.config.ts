@@ -15,6 +15,9 @@ export default defineConfig(({ mode }) => ({
     
     VitePWA({
       registerType: 'prompt',
+      devOptions: {
+        enabled: false,
+      },
       includeAssets: ['favicon.ico', 'Icon_Favicon.png', 'Logo.png'],
       manifest: {
         name: 'WeGest',

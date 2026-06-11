@@ -4,6 +4,7 @@ import { AdminLoadingState } from '@/components/admin/AdminLoadingState';
 import { AdminAccessDenied } from '@/components/admin/AdminAccessDenied';
 import { DocumentTemplateList } from '@/components/admin/DocumentTemplateList';
 import { DocumentTemplateEditor } from '@/components/admin/DocumentTemplateEditor';
+import { DocumentTemplatePreviewDialog } from '@/components/admin/DocumentTemplatePreviewDialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,6 +17,7 @@ interface DocumentTemplate {
   empresa_id: string;
   template_data: any;
   campos_dinamicos: any;
+  papel_timbrado_url?: string | null;
   ativo: boolean;
   versao: number;
   created_at: string;
@@ -28,9 +30,14 @@ const AdminDocumentos = () => {
   const [loading, setLoading] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState<DocumentTemplate | null>(null);
 
   useEffect(() => {
-    if (isAdmin || hasAccessToResource('admin_documentos')) {
+    if (
+      isAdmin ||
+      hasAccessToResource('admin_documentos') ||
+      hasAccessToResource('admin_documentos_preview')
+    ) {
       fetchTemplates();
     }
   }, [isAdmin, hasAccessToResource]);
@@ -110,8 +117,10 @@ const AdminDocumentos = () => {
     return <AdminLoadingState message="A carregar documentos..." />;
   }
 
-  const hasAccess = isAdmin || hasAccessToResource('admin_documentos');
-  if (!hasAccess) {
+  const hasFullAccess = isAdmin || hasAccessToResource('admin_documentos');
+  const hasPreviewAccess = hasFullAccess || hasAccessToResource('admin_documentos_preview');
+
+  if (!hasPreviewAccess) {
     return <AdminAccessDenied />;
   }
 
@@ -122,13 +131,15 @@ const AdminDocumentos = () => {
           <h1 className="text-3xl font-bold text-foreground">Gestão de Documentos</h1>
           <p className="text-muted-foreground mt-1">Gerir templates de contratos e documentos</p>
         </div>
-        <Button onClick={handleNew}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Template
-        </Button>
+        {hasFullAccess && (
+          <Button onClick={handleNew}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Template
+          </Button>
+        )}
       </div>
 
-      {isEditorOpen ? (
+      {isEditorOpen && hasFullAccess ? (
         <DocumentTemplateEditor
           template={selectedTemplate}
           onSave={handleSave}
@@ -140,11 +151,21 @@ const AdminDocumentos = () => {
       ) : (
         <DocumentTemplateList
           templates={templates}
+          canEdit={hasFullAccess}
           onEdit={handleEdit}
           onDuplicate={handleDuplicate}
           onToggleStatus={handleToggleStatus}
+          onPreview={(t) => setPreviewTemplate(t)}
         />
       )}
+
+      <DocumentTemplatePreviewDialog
+        template={previewTemplate}
+        open={!!previewTemplate}
+        onOpenChange={(open) => {
+          if (!open) setPreviewTemplate(null);
+        }}
+      />
     </div>
   );
 };

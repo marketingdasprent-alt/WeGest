@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { DocumentTemplateList } from '@/components/admin/DocumentTemplateList';
 import { DocumentTemplateEditor } from '@/components/admin/DocumentTemplateEditor';
+import { DocumentTemplatePreviewDialog } from '@/components/admin/DocumentTemplatePreviewDialog';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -34,6 +35,7 @@ export const DocumentosTab = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [filtroEmpresa, setFiltroEmpresa] = useState<string>('todas');
+  const [previewTemplate, setPreviewTemplate] = useState<DocumentTemplate | null>(null);
   const { empresas } = useClientesEmpresas();
 
   useEffect(() => {
@@ -174,9 +176,17 @@ export const DocumentosTab = () => {
             onEdit={handleEdit}
             onDuplicate={handleDuplicate}
             onToggleStatus={handleToggleStatus}
+            onPreview={(t) => setPreviewTemplate(t)}
           />
         </>
       )}
+      <DocumentTemplatePreviewDialog
+        template={previewTemplate}
+        open={!!previewTemplate}
+        onOpenChange={(open) => {
+          if (!open) setPreviewTemplate(null);
+        }}
+      />
     </div>
   );
 };

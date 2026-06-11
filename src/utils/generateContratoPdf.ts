@@ -308,7 +308,7 @@ export const generateContratoPdf = async ({
     templateId: t.id,
     motoristaData,
     documentData,
-    headerLogoUrl: '/Logo.png',
+    headerLogoUrl: empresa.logoUrl || '/Logo.png',
     footerText,
     anexoFotos: i === idxFotos ? anexoFotos : undefined,
   }));
