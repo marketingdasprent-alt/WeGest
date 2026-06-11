@@ -14,6 +14,8 @@ interface ContratoTabsPlaceholderProps {
   taxasContent: React.ReactNode;
   /** Conteúdo da tab "Faturar" — só renderizado em modo edit. */
   faturarContent?: React.ReactNode;
+  /** Conteúdo da tab "Faturação KeyInvoice" — só renderizado em modo edit. */
+  faturacaoKeyinvoiceContent?: React.ReactNode;
   /** Conteúdo da tab "Histórico" — só renderizado em modo edit. */
   historicoContent?: React.ReactNode;
   /** Conteúdo da tab "Anexos" — passado pela página pai. */
@@ -29,6 +31,7 @@ export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = (
   extrasContent,
   taxasContent,
   faturarContent,
+  faturacaoKeyinvoiceContent,
   historicoContent,
   anexosContent,
 }) => {
@@ -43,6 +46,9 @@ export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = (
         <TabsTrigger value="extras">Extras</TabsTrigger>
         <TabsTrigger value="taxas">Taxas</TabsTrigger>
         {faturarContent && <TabsTrigger value="faturar">Faturar</TabsTrigger>}
+        {faturacaoKeyinvoiceContent && (
+          <TabsTrigger value="faturacao-keyinvoice">📋 KeyInvoice</TabsTrigger>
+        )}
         {PLACEHOLDER_TABS.map((t) => (
           <TabsTrigger key={t.value} value={t.value}>
             {t.label}
@@ -88,6 +94,12 @@ export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = (
       {faturarContent && (
         <TabsContent value="faturar" className="mt-4">
           {faturarContent}
+        </TabsContent>
+      )}
+
+      {faturacaoKeyinvoiceContent && (
+        <TabsContent value="faturacao-keyinvoice" className="mt-4">
+          {faturacaoKeyinvoiceContent}
         </TabsContent>
       )}
 

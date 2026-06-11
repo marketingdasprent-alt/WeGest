@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Receipt, Lock, FileText } from 'lucide-react';
+import { Receipt, Lock, FileText, FileMinus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,12 +19,15 @@ import { useContratoCoberturas } from '@/hooks/useContratoCoberturas';
 import { useContratoExtras, calcExtraTotal } from '@/hooks/useContratoExtras';
 import { useContratoTaxas, calcTaxaValor } from '@/hooks/useContratoTaxas';
 import { useContratoCondutores } from '@/hooks/useContratoCondutores';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import type { ContratoRenting } from '@/types/contratoRenting';
+import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
 import {
   ContratoFaturarDialog,
   type FaturaCalculo,
   type EntidadeOption,
 } from './ContratoFaturarDialog';
+import { NotaCreditoDialog, type NotaCreditoCobranca } from './NotaCreditoDialog';
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -48,8 +51,12 @@ interface CobrancaRow {
   documento_externo_ref: string | null;
   estado: string;
   valor_total: number | null;
+  taxa_iva: number | null;
+  emite_fatura_fiscal: boolean;
   emitida_em: string | null;
   created_at: string;
+  descricao: string | null;
+  destinatario_id: string;
   destinatario_nome: string;
 }
 
@@ -59,11 +66,23 @@ interface Props {
 
 export function ContratoTabFaturar({ contrato }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [ncCobranca, setNcCobranca] = useState<NotaCreditoCobranca | null>(null);
 
   const { data: coberturas } = useContratoCoberturas(contrato.id);
   const { data: extras } = useContratoExtras(contrato.id);
   const { data: taxas } = useContratoTaxas(contrato.id);
   const { data: condutores } = useContratoCondutores(contrato.id);
+  const { empresas } = useClientesEmpresas();
+
+  // Emitente do cabeçalho do documento: só é inequívoco quando a org tem
+  // exatamente uma empresa. Com várias (ou nenhuma) fica sem cabeçalho de emitente.
+  const emitente: FaturacaoDocEmitente | null = useMemo(() => {
+    if (empresas.length === 1) {
+      const e = empresas[0];
+      return { nomeCompleto: e.nomeCompleto, nif: e.nif, sede: e.sede };
+    }
+    return null;
+  }, [empresas]);
 
   const principal = useMemo(
     () => (condutores ?? []).find((c) => c.is_principal && c.cliente_id) ?? null,
@@ -93,12 +112,34 @@ export function ContratoTabFaturar({ contrato }: Props) {
       const { data, error } = await supabase
         .from('contrato_cobrancas')
         .select(
-          'id, documento_externo_ref, estado, valor_total, emitida_em, created_at, destinatario_nome'
+          'id, documento_externo_ref, estado, valor_total, taxa_iva, emite_fatura_fiscal, emitida_em, created_at, descricao, destinatario_id, destinatario_nome'
         )
         .eq('contrato_id', contrato.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as CobrancaRow[];
+    },
+  });
+
+  // Total já creditado (NC ativas) por cobrança — para o saldo e o botão de NC.
+  const { data: ncPorCobranca, refetch: refetchNC } = useQuery({
+    queryKey: ['contrato-notas-credito', contrato.id],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data, error } = await (supabase as any)
+        .from('notas_credito')
+        .select('cobranca_id, valor')
+        .eq('contrato_id', contrato.id)
+        .eq('estado', 'ativo');
+      if (error) {
+        // a tabela pode ainda não estar na BD — não partir a aba
+        console.warn('notas_credito indisponível:', error.message);
+        return {};
+      }
+      const m: Record<string, number> = {};
+      (data ?? []).forEach((n: any) => {
+        m[n.cobranca_id] = (m[n.cobranca_id] ?? 0) + Number(n.valor || 0);
+      });
+      return m;
     },
   });
 
@@ -236,40 +277,83 @@ export function ContratoTabFaturar({ contrato }: Props) {
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Data</TableHead>
+                <TableHead className="text-right">Nota de Crédito</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {!cobrancas || cobrancas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-20 text-center text-muted-foreground text-sm">
+                  <TableCell colSpan={6} className="h-20 text-center text-muted-foreground text-sm">
                     Ainda sem faturas para este contrato.
                   </TableCell>
                 </TableRow>
               ) : (
-                cobrancas.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-mono text-xs">
-                      {c.documento_externo_ref || c.id.slice(0, 8).toUpperCase()}
-                    </TableCell>
-                    <TableCell className="max-w-[200px] truncate" title={c.destinatario_nome}>
-                      {c.destinatario_nome}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(c.valor_total)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={cn('capitalize border', ESTADO_COBRANCA_CLASS[c.estado] ?? '')}
-                      >
-                        {c.estado}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm whitespace-nowrap">
-                      {formatDate(c.emitida_em || c.created_at)}
-                    </TableCell>
-                  </TableRow>
-                ))
+                cobrancas.map((c) => {
+                  const creditado = round2(ncPorCobranca?.[c.id] ?? 0);
+                  const saldo = round2((c.valor_total ?? 0) - creditado);
+                  const podeCreditar =
+                    (c.estado === 'emitida' || c.estado === 'paga') &&
+                    c.emite_fatura_fiscal &&
+                    (c.valor_total ?? 0) > 0 &&
+                    saldo > 0.005;
+                  return (
+                    <TableRow key={c.id}>
+                      <TableCell className="font-mono text-xs">
+                        {c.documento_externo_ref || c.id.slice(0, 8).toUpperCase()}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate" title={c.destinatario_nome}>
+                        {c.destinatario_nome}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(c.valor_total)}
+                        {creditado > 0 && (
+                          <span className="block text-[11px] font-normal text-fuchsia-600 dark:text-fuchsia-400">
+                            − {formatCurrency(creditado)} creditado
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={cn('capitalize border', ESTADO_COBRANCA_CLASS[c.estado] ?? '')}
+                        >
+                          {c.estado}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {formatDate(c.emitida_em || c.created_at)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {podeCreditar ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1.5 text-fuchsia-700 dark:text-fuchsia-300"
+                            onClick={() =>
+                              setNcCobranca({
+                                id: c.id,
+                                descricao: c.descricao,
+                                valor_total: c.valor_total,
+                                taxa_iva: c.taxa_iva,
+                                destinatario_id: c.destinatario_id,
+                                destinatario_nome: c.destinatario_nome,
+                                contrato_id: contrato.id,
+                                documento_externo_ref: c.documento_externo_ref,
+                              })
+                            }
+                          >
+                            <FileMinus className="h-3.5 w-3.5" />
+                            Emitir
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            {saldo <= 0.005 && (c.valor_total ?? 0) > 0 ? 'Creditada' : '—'}
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -283,7 +367,26 @@ export function ContratoTabFaturar({ contrato }: Props) {
         fatura={fatura}
         clienteEntidade={clienteEntidade}
         condutorEntidade={condutorEntidade}
-        onFaturado={() => refetchCobrancas()}
+        emitente={emitente}
+        onFaturado={() => {
+          refetchCobrancas();
+          refetchNC();
+        }}
+      />
+
+      <NotaCreditoDialog
+        open={!!ncCobranca}
+        onOpenChange={(o) => {
+          if (!o) setNcCobranca(null);
+        }}
+        cobranca={ncCobranca}
+        orgId={contrato.org_id}
+        emitente={emitente}
+        jaCreditado={ncCobranca ? round2(ncPorCobranca?.[ncCobranca.id] ?? 0) : 0}
+        onEmitida={() => {
+          refetchCobrancas();
+          refetchNC();
+        }}
       />
     </div>
   );

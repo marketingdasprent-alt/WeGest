@@ -67,6 +67,7 @@ import { ContratoTabExtras } from '@/components/renting/contratos/ContratoTabExt
 import { ContratoTabTaxas } from '@/components/renting/contratos/ContratoTabTaxas';
 import { ContratoTabsPlaceholder } from '@/components/renting/contratos/ContratoTabsPlaceholder';
 import { ContratoTabFaturar } from '@/components/renting/contratos/ContratoTabFaturar';
+import { FaturacaoTab } from '@/components/renting/contratos/FaturacaoTab';
 import { ResumoContrato } from '@/components/renting/contratos/ResumoContrato';
 import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import {
@@ -889,6 +890,9 @@ const ContratoForm = () => {
                   taxasContent={<ContratoTabTaxas form={form} taxas={taxasCatalogo} />}
                   faturarContent={
                     isEdit && contrato ? <ContratoTabFaturar contrato={contrato} /> : undefined
+                  }
+                  faturacaoKeyinvoiceContent={
+                    isEdit && contrato ? <FaturacaoTab contrato={contrato} /> : undefined
                   }
                   historicoContent={
                     isEdit && contrato ? (

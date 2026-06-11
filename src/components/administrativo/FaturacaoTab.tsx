@@ -14,7 +14,9 @@ import {
   Printer,
   X,
   Info,
+  Banknote,
 } from 'lucide-react';
+import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import {
   Select,
   SelectContent,
@@ -143,12 +145,13 @@ export function FaturacaoTab() {
         const mEndStr = fmtDay(mEnd);
         const windowStartStr = [mStartStr, wStartStr, yStr].sort()[0];
 
+        // Faturado líquido: débitos de cobrança − estornos − notas de crédito.
         const { data, error } = await supabase
           .from('conta_movimentos')
           .select(
-            'valor, tipo, data_movimento, contrato:contratos_renting!conta_movimentos_contrato_id_fkey(estacao_entrega_id)'
+            'valor, tipo, origem, data_movimento, contrato:contratos_renting!conta_movimentos_contrato_id_fkey(estacao_entrega_id)'
           )
-          .eq('origem', 'cobranca')
+          .in('origem', ['cobranca', 'nota_credito'])
           .gte('data_movimento', windowStartStr);
         if (error) throw error;
         if (cancelled) return;
@@ -166,25 +169,27 @@ export function FaturacaoTab() {
           const v = Number(m.valor) || 0;
           const isDebito = m.tipo === 'debito';
           const signed = isDebito ? v : -v;
+          // Só um débito de cobrança conta como "fatura emitida" (exclui estornos de NC anulada).
+          const isFatura = isDebito && m.origem === 'cobranca';
           const est: string | null = m.contrato?.estacao_entrega_id ?? null;
 
           // KPIs respeitam o filtro de estação selecionado
           if (stationSel && est !== estacaoId) return;
           if (d === todayStr) {
             k.hoje.valor += signed;
-            if (isDebito) k.hoje.count += 1;
+            if (isFatura) k.hoje.count += 1;
           }
           if (d === yStr) {
             k.ontem.valor += signed;
-            if (isDebito) k.ontem.count += 1;
+            if (isFatura) k.ontem.count += 1;
           }
           if (d >= wStartStr && d <= wEndStr) {
             k.semana.valor += signed;
-            if (isDebito) k.semana.count += 1;
+            if (isFatura) k.semana.count += 1;
           }
           if (d >= mStartStr && d <= mEndStr) {
             k.mes.valor += signed;
-            if (isDebito) k.mes.count += 1;
+            if (isFatura) k.mes.count += 1;
           }
         });
 
@@ -469,6 +474,32 @@ export function FaturacaoTab() {
 
   return (
     <div className="space-y-4">
+      <StickyPageHeader
+        title="Faturação"
+        description="Movimentos de conta-corrente e faturação dos contratos"
+        icon={Banknote}
+      >
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          <Button variant="outline" onClick={handleExportExcel} className="w-full sm:w-auto">
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Exportar Excel
+          </Button>
+          <Button variant="outline" onClick={handlePrint} className="w-full sm:w-auto">
+            <Printer className="mr-2 h-4 w-4" />
+            Imprimir
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setReloadToken((t) => t + 1)}
+            disabled={loading}
+            className="w-full sm:w-auto"
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
+        </div>
+      </StickyPageHeader>
+
       <FaturacaoStats
         hoje={kpis.hoje}
         ontem={kpis.ontem}
@@ -555,27 +586,10 @@ export function FaturacaoTab() {
           </Button>
         )}
 
-        <div className="flex items-center gap-2 ml-auto">
-          <span className="text-sm text-muted-foreground hidden sm:inline">
+        <div className="ml-auto">
+          <span className="text-sm text-muted-foreground">
             {totalCount} {totalCount === 1 ? 'registo' : 'registos'}
           </span>
-          <Button variant="outline" size="sm" className="h-9 gap-2" onClick={handleExportExcel}>
-            <FileSpreadsheet className="h-4 w-4" />
-            <span className="hidden sm:inline">Exportar Excel</span>
-          </Button>
-          <Button variant="outline" size="sm" className="h-9 gap-2" onClick={handlePrint}>
-            <Printer className="h-4 w-4" />
-            <span className="hidden sm:inline">Imprimir</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9"
-            onClick={() => setReloadToken((t) => t + 1)}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
         </div>
       </div>
 

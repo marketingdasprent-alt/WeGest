@@ -24,6 +24,7 @@ import {
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
+import { escreverFaturacaoDocumento, type FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 export interface FaturaItem {
@@ -58,6 +59,7 @@ interface Props {
   fatura: FaturaCalculo;
   clienteEntidade: EntidadeOption;
   condutorEntidade: EntidadeOption | null;
+  emitente?: FaturacaoDocEmitente | null;
   onFaturado: () => void;
 }
 
@@ -75,6 +77,7 @@ export function ContratoFaturarDialog({
   fatura,
   clienteEntidade,
   condutorEntidade,
+  emitente,
   onFaturado,
 }: Props) {
   const qc = useQueryClient();
@@ -90,6 +93,47 @@ export function ContratoFaturarDialog({
   const faturaZero = fatura.valorRegistado === 0;
   const podeFaturar = fatura.valorRegistado >= 0; // 0€ é permitido (cortesia / 100% desconto)
 
+  /** Escreve a fatura/fatura-recibo na janela pré-aberta no gesto do clique. */
+  async function abrirDocumento(docWin: Window | null, numeroDoc: string) {
+    if (!docWin) {
+      toast.warning('Pop-up bloqueado — não foi possível abrir o documento.');
+      return;
+    }
+    // NIF/morada do cliente para o cabeçalho — best-effort, não bloqueia
+    let clienteNif: string | null = null;
+    let clienteMorada: string | null = null;
+    try {
+      const { data: cli } = await supabase
+        .from('clientes')
+        .select('nif, morada, codigo_postal, cidade')
+        .eq('id', destinatario.id)
+        .single();
+      if (cli) {
+        clienteNif = (cli as any).nif ?? null;
+        clienteMorada =
+          [(cli as any).morada, (cli as any).codigo_postal, (cli as any).cidade]
+            .filter(Boolean)
+            .join(', ') || null;
+      }
+    } catch {
+      /* cabeçalho do cliente é opcional */
+    }
+
+    escreverFaturacaoDocumento(docWin, {
+      tipo: tipo === 'fatura_recibo' ? 'fatura_recibo' : 'fatura',
+      numero: numeroDoc,
+      data: dataDoc,
+      emitente: emitente ?? null,
+      cliente: { nome: destinatario.nome, nif: clienteNif, morada: clienteMorada },
+      linhas: fatura.itens.map((it) => ({ descricao: it.descricao, valor: it.valor })),
+      subtotal: fatura.subtotal,
+      taxaIva: fatura.taxaIva,
+      iva: fatura.iva,
+      total: fatura.valorRegistado,
+      metodoLabel: tipo === 'fatura_recibo' ? metodoLabel(metodo) : null,
+    });
+  }
+
   async function handleCriar() {
     if (!podeFaturar) {
       toast.error('O total a faturar é negativo — verifique o desconto do contrato.');
@@ -99,6 +143,9 @@ export function ContratoFaturarDialog({
       toast.error('Selecione o método de pagamento.');
       return;
     }
+    // Abre a janela do documento JÁ, dentro do gesto do clique (síncrono),
+    // para não ser bloqueada pelo browser depois dos awaits. Escreve-se nela no fim.
+    const docWin = window.open('', '_blank');
     setSubmitting(true);
     try {
       // Reconfirmar o estado na BD (evita faturar o mesmo contrato duas vezes em simultâneo)
@@ -109,6 +156,7 @@ export function ContratoFaturarDialog({
         .single();
       if (chkErr) throw chkErr;
       if (fresh?.estado_financeiro !== 'pendente') {
+        docWin?.close();
         toast.error('Este contrato já foi faturado.');
         onFaturado();
         onOpenChange(false);
@@ -181,6 +229,15 @@ export function ContratoFaturarDialog({
         .eq('estado_financeiro', 'pendente');
       if (updErr) throw updErr;
 
+      // Documento intermediário: escreve a fatura/fatura-recibo na janela já aberta.
+      // Nunca deixa um erro de impressão reverter uma faturação já concluída.
+      try {
+        await abrirDocumento(docWin, descricao);
+      } catch (docErr) {
+        console.error('Erro ao abrir o documento de faturação:', docErr);
+        docWin?.close();
+      }
+
       toast.success(
         faturaZero
           ? 'Fatura a 0€ registada (sem movimento de conta-corrente).'
@@ -193,6 +250,7 @@ export function ContratoFaturarDialog({
       onFaturado();
       onOpenChange(false);
     } catch (e: any) {
+      docWin?.close();
       console.error('Erro ao faturar contrato:', e);
       if (e?.code === '23505') {
         toast.error('Já existe uma fatura para este destinatário e período.');
