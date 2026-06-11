@@ -11,7 +11,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Form } from '@/components/ui/form';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
 
 import { useClientes } from '@/hooks/useClientes';
 import { useMotoristas } from '@/hooks/useMotoristas';
@@ -61,6 +60,7 @@ const DEFAULT_VALUES: ReservaFormValues = {
   cliente_nome: '',
   condutor_id: null,
   condutor_nome: '',
+  emissor_id: null,
   estado: 'pendente',
   regime: 'rent_a_car',
   valor_total: null,
@@ -229,6 +229,7 @@ const RentingReservaForm = () => {
       cliente_nome: reserva.cliente_nome ?? '',
       condutor_id: reserva.condutor_id,
       condutor_nome: reserva.condutor_nome ?? '',
+      emissor_id: reserva.emissor_id,
       estado: reserva.estado,
       regime: reserva.regime,
       slot_valor_semanal: reserva.slot_valor_semanal,
@@ -298,6 +299,25 @@ const RentingReservaForm = () => {
   // remove manualmente os que não interessam ao novo regime.
   const regimeWatched = form.watch('regime');
 
+  // Auto‑activa longa duração + intervalo 30d para TVDE/slot;
+  // desmarca ao voltar a rent-a-car.
+  useEffect(() => {
+    if (regimeWatched === 'tvde' || regimeWatched === 'slot') {
+      const jaEstaActivo = form.getValues('is_longa_duracao');
+      if (!jaEstaActivo) {
+        form.setValue('is_longa_duracao', true);
+        form.setValue('renovacao_opcao', 'intervalo_dias');
+        form.setValue('renovacao_intervalo_dias', 30);
+      }
+    } else if (regimeWatched === 'rent_a_car') {
+      form.setValue('is_longa_duracao', false);
+      form.setValue('renovacao_opcao', null);
+      form.setValue('renovacao_intervalo_dias', null);
+    }
+    // Só dispara quando o regime muda, não quando o user mexe manualmente no checkbox
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regimeWatched]);
+
   // Qualquer viatura pode ser alugada em rent-a-car ou TVDE.
   // O campo habilitada_tvde é apenas informativo/administrativo, não restringe.
   const viaturasParaSelecao = viaturas;
@@ -334,6 +354,7 @@ const RentingReservaForm = () => {
         // bifurcada. Em TVDE/slot usa o motorista, em rent-a-car fica null.
         condutor_id: condutorPrincipalMotorista?.id ?? null,
         condutor_nome: condutorPrincipalNome,
+        emissor_id: values.emissor_id ?? null,
         estado: values.estado,
         regime: values.regime,
         // Valor semanal só no regime slot (cobrado por carro).
@@ -415,8 +436,8 @@ const RentingReservaForm = () => {
     };
     collect(errors);
 
-    // Campo de condutores vive na tab "Condutores" (exceto em slot, que é no Geral).
-    if (errors.condutores && regimeWatched !== 'slot') setActiveTab('condutores');
+    // Campo de condutores vive na tab "Condutores"/"Motoristas".
+    if (errors.condutores) setActiveTab('condutores');
     else setActiveTab('geral');
 
     const unicas = Array.from(new Set(messages)).slice(0, 4);
@@ -569,17 +590,11 @@ const RentingReservaForm = () => {
               <Card className="bg-card border-border">
                 <CardContent className="p-4 sm:p-6">
                   <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    {/* Em slot o motorista escolhe-se no Geral — sem tab Condutores. */}
-                    <TabsList
-                      className={cn(
-                        'grid w-full sm:w-auto sm:inline-flex',
-                        regimeWatched === 'slot' ? 'grid-cols-2' : 'grid-cols-3'
-                      )}
-                    >
+                    <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-flex">
                       <TabsTrigger value="geral">Geral</TabsTrigger>
-                      {regimeWatched !== 'slot' && (
-                        <TabsTrigger value="condutores">Condutores</TabsTrigger>
-                      )}
+                      <TabsTrigger value="condutores">
+                        {regimeWatched === 'rent_a_car' ? 'Condutores' : 'Motoristas'}
+                      </TabsTrigger>
                       <TabsTrigger value="anexos">Anexos</TabsTrigger>
                     </TabsList>
 
@@ -594,18 +609,16 @@ const RentingReservaForm = () => {
                       />
                     </TabsContent>
 
-                    {regimeWatched !== 'slot' && (
-                      <TabsContent value="condutores" className="pt-4">
-                        <ReservaTabCondutores
-                          form={form}
-                          regime={regimeWatched}
-                          clientes={clientes}
-                          motoristas={motoristas}
-                          onCriarNovoCliente={() => setClienteDialogOpen(true)}
-                          onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
-                        />
-                      </TabsContent>
-                    )}
+                    <TabsContent value="condutores" className="pt-4">
+                      <ReservaTabCondutores
+                        form={form}
+                        regime={regimeWatched}
+                        clientes={clientes}
+                        motoristas={motoristas}
+                        onCriarNovoCliente={() => setClienteDialogOpen(true)}
+                        onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
+                      />
+                    </TabsContent>
 
                     <TabsContent value="anexos" className="pt-4">
                       <ReservaTabAnexos

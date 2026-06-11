@@ -267,7 +267,6 @@ const CRM = () => {
 
             if (!profileError && profile?.nome) {
               updateData.gestor_responsavel = profile.nome;
-              console.log(`Gestor ${profile.nome} atribuído automaticamente ao lead`);
             }
           }
         } catch (error) {
@@ -295,8 +294,6 @@ const CRM = () => {
   };
 
   const updateLead = async (updatedLead: Partial<Lead> & { id: string }) => {
-    console.log('CRM updateLead - updatedLead received:', updatedLead);
-
     try {
       const { error } = await supabase
         .from('leads_dasprent')
@@ -305,8 +302,6 @@ const CRM = () => {
           updated_at: new Date().toISOString(),
         })
         .eq('id', updatedLead.id);
-
-      console.log('CRM updateLead - Supabase update result:', { error });
 
       updateLeadHook(updatedLead);
 
@@ -326,8 +321,6 @@ const CRM = () => {
 
   const assignGestorsFromHistory = async () => {
     try {
-      console.log('🔄 Executando atribuição automática de gestores...');
-
       const { data, error } = await supabase.rpc('execute_gestor_assignment');
 
       if (error) throw error;
@@ -342,8 +335,6 @@ const CRM = () => {
           title: '✅ Atribuição Concluída',
           description: `${updatedCount} leads foram atualizados com gestores baseado no histórico`,
         });
-
-        console.log(`🎉 ${updatedCount} leads atualizados com gestores!`);
       } else {
         toast({
           title: 'ℹ️ Nenhuma alteração',
@@ -381,20 +372,13 @@ const CRM = () => {
   };
 
   const handleDragStart = (event: DragStartEvent) => {
-    console.log('Drag started:', event.active.id);
     setActiveId(event.active.id as string);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    console.log('Drag ended:', {
-      active: event.active.id,
-      over: event.over?.id,
-      overData: event.over?.data?.current,
-    });
     const { active, over } = event;
 
     if (!over) {
-      console.log('No drop target found');
       setActiveId(null);
       return;
     }
@@ -403,28 +387,22 @@ const CRM = () => {
     const overElement = over.id as string;
     const overData = over.data?.current;
 
-    console.log('Processing drop:', { leadId, overElement, overType: overData?.type });
-
     let newStatus: string;
     const validStatuses = statusColumns.map((col) => col.id);
 
     // Prioritize column drops over lead drops
     if (overData?.type === 'column' && validStatuses.includes(overElement)) {
       // Dropped directly on a column
-      console.log('Dropped on column:', overElement);
       newStatus = overElement;
     } else if (validStatuses.includes(overElement)) {
       // Dropped directly on a column (fallback)
-      console.log('Dropped on column (fallback):', overElement);
       newStatus = overElement;
     } else {
       // Dropped on another lead, find which column it belongs to
       const targetLead = filteredLeads.find((lead) => lead.id === overElement);
       if (targetLead) {
-        console.log('Dropped on lead:', targetLead.nome, 'with status:', targetLead.status);
         newStatus = targetLead.status;
       } else {
-        console.log('Invalid drop target:', overElement);
         setActiveId(null);
         return;
       }
@@ -433,12 +411,7 @@ const CRM = () => {
     // Only update if status actually changed
     const currentLead = leads.find((lead) => lead.id === leadId);
     if (currentLead && currentLead.status !== newStatus) {
-      console.log(
-        `Updating lead ${leadId} (${currentLead.nome}) from ${currentLead.status} to ${newStatus}`
-      );
       updateLeadStatus(leadId, newStatus);
-    } else {
-      console.log('No status change needed or lead not found');
     }
 
     setActiveId(null);
@@ -446,8 +419,6 @@ const CRM = () => {
 
   const generateReport = async (userId: string, userLeads: any[]) => {
     try {
-      console.log('Generating report for:', userId, 'with leads:', userLeads.length);
-
       // Calculate local statistics
       const totalLeads = userLeads.length;
       const statusCounts = {
@@ -998,8 +969,6 @@ const CRM = () => {
           </html>
         `);
         reportWindow.document.close();
-
-        console.log('Report window opened successfully');
       } else {
         console.error('Failed to open report window');
         throw new Error('Não foi possível abrir a janela do relatório');

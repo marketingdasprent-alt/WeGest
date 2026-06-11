@@ -267,7 +267,6 @@ export const BoltDataTab: React.FC = () => {
       }
 
       // Removed cleanup: orphan records must be preserved for manual association
-      console.log('Fetching Bolt records from Apify...');
 
       toast({
         title: 'Resgatando do Apify',
@@ -276,8 +275,6 @@ export const BoltDataTab: React.FC = () => {
 
       let totalImported = 0;
       for (const config of boltConfigs) {
-        console.log(`Rescuing Bolt integration: ${config.nome}`);
-
         const { data, error } = await supabase.functions.invoke('bolt-rescue-apify', {
           body: { integracao_id: config.id },
         });

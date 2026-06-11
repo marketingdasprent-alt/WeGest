@@ -49,7 +49,6 @@ export const LeadStatusHistory: React.FC<LeadStatusHistoryProps> = ({ leadId }) 
     try {
       setLoading(true);
       setError(null);
-      console.log('Buscando histórico para lead:', leadId);
 
       const { data: historyData, error: historyError } = await supabase
         .from('lead_status_history')
@@ -64,10 +63,7 @@ export const LeadStatusHistory: React.FC<LeadStatusHistoryProps> = ({ leadId }) 
         return;
       }
 
-      console.log('Histórico carregado:', historyData);
-
       if (!historyData || historyData.length === 0) {
-        console.log('Nenhum histórico encontrado');
         setHistory([]);
         return;
       }

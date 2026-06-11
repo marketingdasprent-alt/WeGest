@@ -62,6 +62,9 @@ export type Reserva = {
   cliente_nome: string | null;
   condutor_id: string | null;
   condutor_nome: string | null;
+  /** Empresa emissora (clientes.id com tipo_cliente='empresa') — determina
+   *  os templates dos documentos gerados. Obrigatória a partir de confirmada. */
+  emissor_id: string | null;
   estado: ReservaEstado;
   /** rent_a_car, tvde ou slot — determina o regime de aluguer e a taxa de IVA. */
   regime: ReservaRegime;

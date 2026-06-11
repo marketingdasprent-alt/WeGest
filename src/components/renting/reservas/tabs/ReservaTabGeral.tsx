@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UseFormReturn } from 'react-hook-form';
 import {
+  Building2,
   Car,
   CarTaxiFront,
   Check,
@@ -21,6 +22,7 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/comp
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Command,
@@ -43,7 +45,9 @@ import { supabase } from '@/integrations/supabase/client';
 
 import { ALDFields } from '@/components/renting/shared/ALDFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
+import { EmissorSelect } from '@/components/renting/EmissorSelect';
 import { useModules } from '@/hooks/useModules';
+import { AlertTriangle } from 'lucide-react';
 
 import type { ReservaFormValues } from '../reservaDialog.schema';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
@@ -191,6 +195,10 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
 
   // Tarifa aplicável = a do grupo da viatura escolhida.
   const viaturaIdSel = form.watch('viatura_id');
+  const viaturaSelected = useMemo(
+    () => viaturas.find((x) => x.id === viaturaIdSel) ?? null,
+    [viaturaIdSel, viaturas]
+  );
   const tarifaAtual = useMemo(() => {
     if (!viaturaIdSel) return null;
     const v = viaturas.find((x) => x.id === viaturaIdSel);
@@ -245,7 +253,10 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
 
   // Ao escolher a viatura: puxa o grupo e os valores da tarifa desse grupo.
   const aplicarDadosViatura = (v: ViaturaBasic) => {
-    if (!v.grupo_id) return;
+    if (!v.grupo_id) {
+      // Sem grupo: o Alert amarelo mostra a mensagem; sem toast.
+      return;
+    }
     const grupo = grupos.find((g) => g.id === v.grupo_id);
     if (grupo) form.setValue('grupo', grupo.nome, { shouldDirty: true });
 
@@ -282,6 +293,28 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                   allowSlot={has('slot')}
                 />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      {/* === Empresa Emissora (todos os regimes — slot incluído) === */}
+      <div>
+        <SectionHeader
+          icon={Building2}
+          title="Empresa Emissora"
+          accent="sky"
+          required
+          hint="Os documentos da reserva usam os templates desta empresa"
+        />
+        <FormField
+          control={form.control}
+          name="emissor_id"
+          render={({ field }) => (
+            <FormItem className="max-w-md">
+              <FormLabel className="sr-only">Empresa emissora</FormLabel>
+              <EmissorSelect value={field.value} onChange={field.onChange} />
               <FormMessage />
             </FormItem>
           )}
@@ -598,8 +631,8 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
         </div>
       )}
 
-      {/* === Aluguer Longa Duração + Renovação (shared) — não aplicável a slot === */}
-      {!isSlot && <ALDFields idPrefix="reserva" />}
+      {/* === Aluguer Longa Duração + Renovação (shared) === */}
+      <ALDFields idPrefix="reserva" />
 
       {/* === Slot: motorista → viatura (carro próprio do motorista) === */}
       {isSlot && (
@@ -768,6 +801,32 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
               )}
             />
           </div>
+
+          {/* Aviso: viatura sem grupo bloqueia cálculo de preços */}
+          {viaturaSelected && !viaturaSelected.grupo_id && (
+            <Alert variant="destructive" className="border-amber-200 bg-amber-50 dark:bg-amber-950">
+              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <AlertTitle className="text-amber-900 dark:text-amber-100">
+                Viatura {viaturaSelected.matricula}: sem grupo atribuído
+              </AlertTitle>
+              <AlertDescription className="text-amber-800 dark:text-amber-200 mt-1">
+                <p className="text-sm mb-2">
+                  Sem grupo, não há tarifa automática — os preços não podem ser calculados.
+                </p>
+                <Button
+                  variant="link"
+                  className="h-auto p-0 text-amber-700 dark:text-amber-300 underline"
+                  onClick={() => {
+                    if (viaturaSelected) {
+                      window.open(`/viaturas/${viaturaSelected.id}`, '_blank');
+                    }
+                  }}
+                >
+                  Definir grupo na ficha da viatura →
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
       )}
 

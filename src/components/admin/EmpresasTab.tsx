@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Building2, Plus, Pencil, Trash2, Loader2, RefreshCw } from 'lucide-react';
+import { validarNIF } from '@/lib/pt-validators';
 
 interface Empresa {
   id: string;
@@ -113,13 +114,22 @@ export const EmpresasTab: React.FC = () => {
       toast.error('Nome e ID são obrigatórios');
       return;
     }
+    // NIF da empresa sai impresso nos contratos — valida checksum antes de gravar.
+    const nifNormalizado = form.nif ? form.nif.replace(/\s/g, '') : '';
+    if (nifNormalizado) {
+      const res = validarNIF(nifNormalizado);
+      if (!res.valid) {
+        toast.error(res.message || 'NIF inválido');
+        return;
+      }
+    }
     setSaving(true);
     try {
       const payload = {
         id: form.id,
         nome: form.nome,
         nome_completo: form.nome_completo || form.nome,
-        nif: form.nif || null,
+        nif: nifNormalizado || null,
         sede: form.sede || null,
         licenca_tvde: form.licenca_tvde || null,
         licenca_validade: form.licenca_validade || null,

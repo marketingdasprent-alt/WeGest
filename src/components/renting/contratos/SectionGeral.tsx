@@ -23,12 +23,12 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
+import { EmissorSelect } from '@/components/renting/EmissorSelect';
 
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { ContratoFormValues } from './contratoForm.schema';
 import { SectionTitle } from './SectionTitle';
 import {
-  ORIGEM_OPTIONS,
   ESTADO_OP_OPTIONS,
   ESTADO_FIN_OPTIONS,
   DEFAULT_IVA_PERCENTAGE,
@@ -44,15 +44,9 @@ const normalizeForSearch = (s: string) =>
 
 export const SectionGeral: React.FC<SectionGeralProps> = ({ form, clientes }) => {
   const [clientePopoverOpen, setClientePopoverOpen] = useState(false);
-  const regime = form.watch('regime');
-  const isTvde = regime === 'tvde';
-  const clienteLabel = isTvde ? 'Motorista parceiro' : 'Cliente';
-  const clientePlaceholder = isTvde
-    ? 'Clique ou escreva para procurar motorista parceiro...'
-    : 'Clique ou escreva para procurar cliente...';
-  const clienteEmpty = isTvde
-    ? 'Nenhum motorista parceiro encontrado.'
-    : 'Nenhum cliente encontrado.';
+  const clienteLabel = 'Cliente';
+  const clientePlaceholder = 'Clique ou escreva para procurar cliente...';
+  const clienteEmpty = 'Nenhum cliente encontrado.';
   return (
     <div>
       <SectionTitle>Geral</SectionTitle>
@@ -140,24 +134,13 @@ export const SectionGeral: React.FC<SectionGeralProps> = ({ form, clientes }) =>
 
         <FormField
           control={form.control}
-          name="origem"
+          name="emissor_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Origem</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
-                <FormControl>
-                  <SelectTrigger className="bg-background">
-                    <SelectValue />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {ORIGEM_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FormLabel>
+                Empresa emissora <span className="text-red-500">*</span>
+              </FormLabel>
+              <EmissorSelect value={field.value} onChange={field.onChange} />
               <FormMessage />
             </FormItem>
           )}

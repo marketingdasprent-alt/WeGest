@@ -17,7 +17,10 @@ interface ReservaResumoSidebarProps {
   isEdit: boolean;
 }
 
-const IVA_RATE = 0.23;
+function ivaRate(regime: string): number {
+  // TVDE e Slot já têm IVA incluído no preço — não aplica IVA adicional
+  return regime === 'tvde' || regime === 'slot' ? 0 : 0.23;
+}
 
 function diferencaDias(inicio: string, fim: string): number | null {
   if (!inicio || !fim) return null;
@@ -62,6 +65,7 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
   const franquiaValor = form.watch('franquia_valor');
   const caucaoValor = form.watch('caucao_valor');
   const longaDuracao = form.watch('is_longa_duracao');
+  const regime = form.watch('regime');
 
   const estacaoEntrega = useMemo(
     () => estacoes.find((e) => e.id === estacaoEntregaId),
@@ -75,7 +79,8 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
 
   const dias = diferencaDias(dataInicio, dataFim);
   const total = valorTotal ?? 0;
-  const subtotal = total > 0 ? total / (1 + IVA_RATE) : 0;
+  const taxaIVA = ivaRate(regime);
+  const subtotal = taxaIVA > 0 && total > 0 ? total / (1 + taxaIVA) : total;
   const iva = total - subtotal;
 
   const horaEntrega = formatHora(dataInicio);
@@ -256,7 +261,7 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
             <span className="text-right tabular-nums">{formatEur(subtotal)}</span>
           </div>
           <div className="px-4 py-1.5 grid grid-cols-2 text-sm border-t bg-muted/20">
-            <span className="text-muted-foreground">IVA ({(IVA_RATE * 100).toFixed(0)}%)</span>
+            <span className="text-muted-foreground">IVA ({(taxaIVA * 100).toFixed(0)}%)</span>
             <span className="text-right tabular-nums">{formatEur(iva)}</span>
           </div>
           <div className="px-4 py-2 grid grid-cols-2 text-sm border-t font-semibold">

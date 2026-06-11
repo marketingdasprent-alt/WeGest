@@ -42,7 +42,6 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
     const channel = supabase
       .channel('profiles-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-        console.log('🔄 Mudança detectada nos perfis, recarregando usuários...');
         fetchUsuarios();
       })
       .subscribe();
@@ -54,8 +53,6 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 
   const fetchUsuarios = async () => {
     try {
-      console.log('🔄 Atualizando lista de usuários para filtros...');
-
       // Buscar o ID do cargo "Gestor TVDE"
       const { data: cargoData } = await supabase
         .from('cargos')
@@ -77,10 +74,6 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
         .order('nome');
 
       if (error) throw error;
-      console.log(
-        '📋 Usuários carregados:',
-        data?.map((u) => u.nome)
-      );
       const uniqueNomes = Array.from(new Set((data || []).map((u) => u.nome))).map((nome) => ({
         nome,
       }));
@@ -88,13 +81,6 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 
       // Também buscar gestores ativos (que têm leads atribuídos)
       const { data: gestores, error: gestoresError } = await supabase.rpc('get_gestores');
-
-      if (!gestoresError && gestores) {
-        console.log(
-          '👨‍💼 Gestores ativos:',
-          gestores.map((g) => g.nome)
-        );
-      }
     } catch (error) {
       console.error('Erro ao buscar usuários:', error);
     }
@@ -205,7 +191,6 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
                 mode="single"
                 selected={filters.customStartDate}
                 onSelect={(date) => {
-                  console.log('📅 Data início selecionada:', date);
                   updateFilters({
                     customStartDate: date,
                     dateRange: 'customizado',
@@ -242,7 +227,6 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
                 mode="single"
                 selected={filters.customEndDate}
                 onSelect={(date) => {
-                  console.log('📅 Data fim selecionada:', date);
                   updateFilters({
                     customEndDate: date,
                     dateRange: 'customizado',

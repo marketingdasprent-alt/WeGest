@@ -137,7 +137,6 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, customTags = [] }) => 
   const handleViewClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    console.log('Navegando para página de detalhes do lead:', lead.id);
     navigate(`/crm/lead/${lead.id}`);
   };
 

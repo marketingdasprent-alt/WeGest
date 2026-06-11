@@ -1476,6 +1476,7 @@ export type Database = {
       }
       clientes: {
         Row: {
+          cargo_representante: string | null
           cidade: string | null
           codigo: number
           codigo_postal: string | null
@@ -1488,6 +1489,8 @@ export type Database = {
           iban: string | null
           id: string
           is_empresa: boolean
+          licenca_tvde: string | null
+          licenca_validade: string | null
           localidade: string | null
           morada: string | null
           naturalidade: string | null
@@ -1497,12 +1500,16 @@ export type Database = {
           observacoes: string | null
           org_id: string
           pais: string | null
+          papel_timbrado: string | null
+          representante: string | null
+          sede: string | null
           telefone: string | null
           tipo_cliente: string
           updated_at: string
           updated_by: string | null
         }
         Insert: {
+          cargo_representante?: string | null
           cidade?: string | null
           codigo?: number
           codigo_postal?: string | null
@@ -1515,6 +1522,8 @@ export type Database = {
           iban?: string | null
           id?: string
           is_empresa?: boolean
+          licenca_tvde?: string | null
+          licenca_validade?: string | null
           localidade?: string | null
           morada?: string | null
           naturalidade?: string | null
@@ -1524,12 +1533,16 @@ export type Database = {
           observacoes?: string | null
           org_id?: string
           pais?: string | null
+          papel_timbrado?: string | null
+          representante?: string | null
+          sede?: string | null
           telefone?: string | null
           tipo_cliente?: string
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
+          cargo_representante?: string | null
           cidade?: string | null
           codigo?: number
           codigo_postal?: string | null
@@ -1542,6 +1555,8 @@ export type Database = {
           iban?: string | null
           id?: string
           is_empresa?: boolean
+          licenca_tvde?: string | null
+          licenca_validade?: string | null
           localidade?: string | null
           morada?: string | null
           naturalidade?: string | null
@@ -1551,6 +1566,9 @@ export type Database = {
           observacoes?: string | null
           org_id?: string
           pais?: string | null
+          papel_timbrado?: string | null
+          representante?: string | null
+          sede?: string | null
           telefone?: string | null
           tipo_cliente?: string
           updated_at?: string
@@ -2447,6 +2465,7 @@ export type Database = {
           data_inicio: string
           deleted_at: string | null
           desconto_percentagem: number | null
+          emissor_id: string | null
           estacao_entrega_id: string | null
           estacao_origem_viatura_id: string | null
           estacao_recolha_id: string | null
@@ -2512,6 +2531,7 @@ export type Database = {
           data_inicio: string
           deleted_at?: string | null
           desconto_percentagem?: number | null
+          emissor_id?: string | null
           estacao_entrega_id?: string | null
           estacao_origem_viatura_id?: string | null
           estacao_recolha_id?: string | null
@@ -2577,6 +2597,7 @@ export type Database = {
           data_inicio?: string
           deleted_at?: string | null
           desconto_percentagem?: number | null
+          emissor_id?: string | null
           estacao_entrega_id?: string | null
           estacao_origem_viatura_id?: string | null
           estacao_recolha_id?: string | null
@@ -2757,9 +2778,10 @@ export type Database = {
         Row: {
           ativo: boolean | null
           campos_dinamicos: Json
+          cliente_empresa_id: string | null
           created_at: string | null
           criado_por: string | null
-          empresa_id: string
+          empresa_id: string | null
           id: string
           nome: string
           org_id: string | null
@@ -2772,9 +2794,10 @@ export type Database = {
         Insert: {
           ativo?: boolean | null
           campos_dinamicos?: Json
+          cliente_empresa_id?: string | null
           created_at?: string | null
           criado_por?: string | null
-          empresa_id: string
+          empresa_id?: string | null
           id?: string
           nome: string
           org_id?: string | null
@@ -2787,9 +2810,10 @@ export type Database = {
         Update: {
           ativo?: boolean | null
           campos_dinamicos?: Json
+          cliente_empresa_id?: string | null
           created_at?: string | null
           criado_por?: string | null
-          empresa_id?: string
+          empresa_id?: string | null
           id?: string
           nome?: string
           org_id?: string | null
@@ -2800,6 +2824,13 @@ export type Database = {
           versao?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "document_templates_cliente_empresa_id_fkey"
+            columns: ["cliente_empresa_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "document_templates_org_id_fkey"
             columns: ["org_id"]
@@ -6081,6 +6112,7 @@ export type Database = {
           data_inicio: string
           deleted_at: string | null
           desconto: number
+          emissor_id: string | null
           estacao_entrega_id: string | null
           estacao_recolha_id: string | null
           estado: Database["public"]["Enums"]["reserva_estado_enum"]
@@ -6127,6 +6159,7 @@ export type Database = {
           data_inicio: string
           deleted_at?: string | null
           desconto?: number
+          emissor_id?: string | null
           estacao_entrega_id?: string | null
           estacao_recolha_id?: string | null
           estado?: Database["public"]["Enums"]["reserva_estado_enum"]
@@ -6173,6 +6206,7 @@ export type Database = {
           data_inicio?: string
           deleted_at?: string | null
           desconto?: number
+          emissor_id?: string | null
           estacao_entrega_id?: string | null
           estacao_recolha_id?: string | null
           estado?: Database["public"]["Enums"]["reserva_estado_enum"]
