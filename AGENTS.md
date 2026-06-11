@@ -403,6 +403,8 @@ pnpm dev               # Vite dev server
 pnpm build             # Build produção
 pnpm type-check        # tsc --noEmit
 pnpm lint              # ESLint
+pnpm test              # Vitest (run única)
+pnpm test:watch        # Vitest em watch mode
 pnpm format            # Prettier write
 pnpm format:check      # Prettier check (CI)
 ```
@@ -414,7 +416,7 @@ pnpm format:check      # Prettier check (CI)
 - **Prettier:** config em [.prettierrc](.prettierrc) — `printWidth: 100`, `singleQuote: true`, `semi: true`.
 - **ESLint:** algumas regras estão `off`/`warn` por motivos históricos ([eslint.config.js](eslint.config.js)). **Código novo deve passar como se fossem `error`** — laxismo é para legacy.
 - **Ignorados pelo lint:** `dist/`, `android/`, `ios/`, `supabase/` (Edge Functions Deno), `src/integrations/supabase/types.ts`.
-- **Sem Vitest/Playwright** — não há testes. Adicionar está em backlog.
+- **Vitest** (`pnpm test` / `pnpm test:watch`) — testes unitários em `src/**/*.test.ts`. Cobertura actual: `pt-validators` (NIF, IBAN, CP, telefone, documentos). Lógica pura nova deve trazer testes. Sem Playwright (E2E em backlog).
 
 ### Capacitor (mobile)
 
@@ -460,6 +462,7 @@ OBRIGATÓRIO
 [ ] pnpm type-check         → sem erros TS
 [ ] pnpm lint               → sem errors (warnings tolerados)
 [ ] pnpm format:check       → código formatado
+[ ] pnpm test               → testes verdes
 [ ] pnpm build              → build passa
 [ ] Sem console.log soltos
 [ ] Sem credenciais/secrets

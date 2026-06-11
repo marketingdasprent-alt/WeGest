@@ -35,6 +35,10 @@ export const reservaDialogSchema = z
     condutor_id: z.string().uuid().nullable().optional(),
     condutor_nome: z.string().max(255).optional().nullable(),
 
+    // Empresa emissora (cliente tipo='empresa') — determina os templates dos
+    // documentos. Obrigatória a partir de confirmada (superRefine).
+    emissor_id: z.string().uuid().nullable().optional(),
+
     estado: z.enum(RESERVA_ESTADOS),
     regime: z.enum(RESERVA_REGIMES).default('rent_a_car'),
 
@@ -80,6 +84,17 @@ export const reservaDialogSchema = z
   // Validações condicionais ao regime e estado.
   .superRefine((d, ctx) => {
     const isSlot = d.regime === 'slot';
+    const exigeCompleto = d.estado === 'confirmada' || d.estado === 'em_curso';
+
+    // Emissor: obrigatório a partir de confirmada, em qualquer regime —
+    // é a empresa cujos templates assinam os documentos da reserva.
+    if (exigeCompleto && !d.emissor_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['emissor_id'],
+        message: 'Empresa emissora obrigatória quando a reserva é confirmada ou está em curso',
+      });
+    }
 
     // data_fim: obrigatória e válida fora do regime slot (slot é aberto).
     if (!isSlot) {
@@ -122,7 +137,6 @@ export const reservaDialogSchema = z
 
     // Validação condicional: estado confirmada/em_curso exige dados completos.
     // Reserva pendente pode ser rascunho com cliente/viatura/estações por preencher.
-    const exigeCompleto = d.estado === 'confirmada' || d.estado === 'em_curso';
     if (!exigeCompleto) return;
 
     if (!d.cliente_id) {

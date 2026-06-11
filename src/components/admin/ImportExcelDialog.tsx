@@ -14,6 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Upload, FileSpreadsheet, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { validarNIF } from '@/lib/pt-validators';
 
 // ── Column name normalisation ────────────────────────────────────────────────
 // Maps Excel header variations → internal key
@@ -148,6 +149,29 @@ export const ImportExcelDialog: React.FC<Props> = ({ open, onOpenChange }) => {
 
   const handleImport = async () => {
     if (parsedRows.length === 0) return;
+
+    // Pré-validação de NIFs: bloqueia antes de enviar para o utilizador corrigir
+    // o Excel — senão as linhas inválidas morrem uma a uma na BD a meio do import.
+    const nifsInvalidos = parsedRows
+      .map((r, i) => ({ linha: i + 2, nif: (r.nif ?? '').replace(/\s/g, '') }))
+      .filter((r) => r.nif && !validarNIF(r.nif).valid);
+    if (nifsInvalidos.length > 0) {
+      const amostra = nifsInvalidos
+        .slice(0, 5)
+        .map((r) => `linha ${r.linha} (${r.nif})`)
+        .join(', ');
+      toast.error(
+        `${nifsInvalidos.length} NIF(s) inválido(s) no ficheiro: ${amostra}` +
+          `${nifsInvalidos.length > 5 ? ', …' : ''}. Corrige o Excel e volta a carregar.`
+      );
+      return;
+    }
+
+    // Normalização: NIFs sem espaços (consistente com os formulários).
+    const rowsNormalizadas = parsedRows.map((r) =>
+      r.nif ? { ...r, nif: r.nif.replace(/\s/g, '') } : r
+    );
+
     setStep('importing');
 
     try {
@@ -165,7 +189,7 @@ export const ImportExcelDialog: React.FC<Props> = ({ open, onOpenChange }) => {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ rows: parsedRows }),
+        body: JSON.stringify({ rows: rowsNormalizadas }),
       });
 
       const data = await response.json();

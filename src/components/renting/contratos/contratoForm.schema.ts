@@ -43,6 +43,10 @@ export const contratoFormSchema = z
     // Reserva associada (obrigatória — contrato sempre origina de reserva)
     reserva_id: z.string().uuid('Reserva inválida'),
 
+    // Empresa emissora (cliente tipo='empresa') — obrigatória; determina os
+    // templates dos documentos gerados a partir do contrato.
+    emissor_id: z.string().uuid('Empresa emissora obrigatória'),
+
     // Entrega
     estacao_entrega_id: z.string().uuid().nullable().optional(),
     data_inicio: datetimeLocal,
@@ -185,6 +189,7 @@ export const DEFAULT_CONTRATO_VALUES: ContratoFormValues = {
   grupo: '',
   matricula: '',
   reserva_id: '',
+  emissor_id: '',
   estacao_entrega_id: null,
   data_inicio: '',
   estacao_recolha_id: null,

@@ -164,10 +164,13 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
     cliente && !isTvde ? fields.some((f) => f.cliente_id === cliente.id) : false;
 
   const entidadeLabel = isTvde ? 'motorista' : 'cliente';
+  const condutorLabel = isTvde ? 'Motorista' : 'Condutor';
+  const condutorLabelPlural = isTvde ? 'Motoristas' : 'Condutores';
+  const condutorLabelLower = isTvde ? 'motorista' : 'condutor';
   const placeholderTexto = isTvde ? 'Pesquisar motorista...' : 'Pesquisar cliente...';
   const emptyTexto =
     disponiveis.length === 0
-      ? `Todos os ${entidadeLabel}s já foram adicionados como condutores.`
+      ? `Todos os ${entidadeLabel}s já foram adicionados.`
       : `Nenhum ${entidadeLabel} encontrado.`;
 
   return (
@@ -176,7 +179,7 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
         <div className="flex items-center justify-between gap-2 pb-2 border-b mb-4">
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
-            <h3 className="text-base font-semibold">Condutores Autorizados</h3>
+            <h3 className="text-base font-semibold">{condutorLabelPlural} Autorizados</h3>
             {fields.length > 0 && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/30 font-semibold">
                 {fields.length}
@@ -190,7 +193,7 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
             <PopoverTrigger asChild>
               <Button type="button" size="sm" className="gap-2">
                 <Plus className="h-4 w-4" />
-                Adicionar Condutor
+                Adicionar {condutorLabel}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[360px] p-0" align="start">

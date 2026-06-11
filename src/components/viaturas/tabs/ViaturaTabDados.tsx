@@ -50,7 +50,9 @@ import {
   getStatusBadgeClass,
   getStatusLabel,
   getStatusColorClass,
+  deriveViaturaEstado,
 } from '@/lib/viaturas';
+import { useViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 
 const viaturaSchema = z.object({
   matricula: z
@@ -221,6 +223,12 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   const [marcas, setMarcas] = useState<ViaturaMarca[]>([]);
   const [modelos, setModelos] = useState<ViaturaModelo[]>([]);
   const [combustiveis, setCombustiveis] = useState<ViaturaCombustivel[]>([]);
+
+  // Estado derivado da viatura (considera ocupações ativas: contrato, reserva, movimento)
+  const { data: fontesMap } = useViaturasOcupacao();
+  const estadoDerivedado = viatura
+    ? deriveViaturaEstado(viatura, fontesMap?.get(viatura.id))
+    : null;
 
   // Batch upload
   const batchInputRef = useRef<HTMLInputElement | null>(null);
@@ -658,30 +666,40 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                     name="status"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger
-                              className={`font-bold transition-all ${getStatusColorClass(field.value)}`}
-                            >
-                              <SelectValue placeholder="Selecionar Status" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="disponivel">🟢 Disponível</SelectItem>
-                            <SelectItem value="inativo">⚪ Inativo</SelectItem>
-                            <SelectItem value="manutencao" disabled={field.value !== 'manutencao'}>
-                              🟠 Manutenção {field.value !== 'manutencao' && '(Automático)'}
-                            </SelectItem>
-                            <SelectItem value="vendida" disabled={field.value !== 'vendida'}>
-                              🔴 Vendida {field.value !== 'vendida' && '(Apenas via Financeiro)'}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          Em reserva / contrato / movimentação são automáticos. Aqui só define
-                          Disponível ou Inativo.
-                        </p>
+                        <FormLabel>Estado</FormLabel>
+                        {estadoDerivedado && estadoDerivedado !== 'disponivel' ? (
+                          <div className="flex items-center gap-2 h-10 px-3 rounded-md border bg-muted/40 cursor-not-allowed">
+                            <Badge className={getStatusBadgeClass(estadoDerivedado)}>
+                              {getStatusLabel(estadoDerivedado)}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              gerido automaticamente
+                            </span>
+                          </div>
+                        ) : (
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger
+                                className={`font-medium transition-all ${getStatusColorClass(field.value)}`}
+                              >
+                                <SelectValue placeholder="Selecionar estado" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="disponivel">Disponível</SelectItem>
+                              <SelectItem value="inativo">Inativo</SelectItem>
+                              <SelectItem
+                                value="manutencao"
+                                disabled={field.value !== 'manutencao'}
+                              >
+                                Manutenção{field.value !== 'manutencao' && ' (Automático)'}
+                              </SelectItem>
+                              <SelectItem value="vendida" disabled={field.value !== 'vendida'}>
+                                Vendida{field.value !== 'vendida' && ' (Apenas via Financeiro)'}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -955,9 +973,9 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                       <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
                         <div>
                           <p className="font-medium">Elegível para TVDE?</p>
-                          <p className="text-sm text-muted-foreground">
-                            {form.watch('habilitada_tvde') ? '🟢 Sim' : '🔴 Não'}
-                          </p>
+                          <Badge variant={form.watch('habilitada_tvde') ? 'default' : 'secondary'}>
+                            {form.watch('habilitada_tvde') ? 'Sim' : 'Não'}
+                          </Badge>
                         </div>
                         <Switch
                           checked={form.watch('habilitada_tvde')}
@@ -967,9 +985,9 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                       <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
                         <div>
                           <p className="font-medium">Viatura SLOT</p>
-                          <p className="text-sm text-muted-foreground">
-                            {form.watch('is_slot') ? '🟢 Activo' : '🔴 Inactivo'}
-                          </p>
+                          <Badge variant={form.watch('is_slot') ? 'default' : 'secondary'}>
+                            {form.watch('is_slot') ? 'Ativo' : 'Inativo'}
+                          </Badge>
                         </div>
                         <Switch
                           checked={form.watch('is_slot')}

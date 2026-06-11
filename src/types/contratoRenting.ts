@@ -93,6 +93,10 @@ export type ContratoRenting = {
 
   cliente_id: string;
 
+  /** Empresa emissora (clientes.id com tipo_cliente='empresa') — determina
+   *  os templates dos documentos gerados. Herdada da reserva na conversão. */
+  emissor_id: string | null;
+
   viatura_id: string;
   matricula: string | null;
   grupo: string | null;

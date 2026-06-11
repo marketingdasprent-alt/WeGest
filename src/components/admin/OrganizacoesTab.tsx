@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Building2, Pencil, Users, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { validarNIF } from '@/lib/pt-validators';
 
 interface Organizacao {
   id: string;
@@ -114,6 +115,14 @@ export const OrganizacoesTab: React.FC = () => {
     if (!formData.nome.trim() || !formData.codigo.trim()) {
       toast.error('Nome e código são obrigatórios');
       return;
+    }
+    // NIF da org aparece em documentos/faturação — valida checksum antes de gravar.
+    if (formData.nif.trim()) {
+      const res = validarNIF(formData.nif.trim());
+      if (!res.valid) {
+        toast.error(res.message || 'NIF inválido');
+        return;
+      }
     }
 
     setSaving(true);

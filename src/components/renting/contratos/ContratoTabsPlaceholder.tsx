@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { ContratoRegime } from '@/types/contratoRenting';
 
 interface ContratoTabsPlaceholderProps {
+  /** Regime do contrato — define se a tab se chama "Condutores" ou "Motoristas". */
+  regime: ContratoRegime;
   /** Conteúdo da tab "Geral" — passado pela página pai. */
   geralContent: React.ReactNode;
-  /** Conteúdo da tab "Condutores" — passado pela página pai. */
+  /** Conteúdo da tab "Condutores" / "Motoristas" — passado pela página pai. */
   condutoresContent: React.ReactNode;
   /** Conteúdo da tab "Coberturas" — passado pela página pai. */
   coberturasContent: React.ReactNode;
@@ -23,6 +26,7 @@ interface ContratoTabsPlaceholderProps {
 const PLACEHOLDER_TABS = [{ value: 'outros', label: 'Outros' }] as const;
 
 export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = ({
+  regime,
   geralContent,
   condutoresContent,
   coberturasContent,
@@ -33,12 +37,13 @@ export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = (
   anexosContent,
 }) => {
   const [active, setActive] = useState<string>('geral');
+  const condutorLabel = regime === 'rent_a_car' ? 'Condutores' : 'Motoristas';
 
   return (
     <Tabs value={active} onValueChange={setActive} className="w-full">
       <TabsList className="w-full justify-start overflow-x-auto">
         <TabsTrigger value="geral">Geral</TabsTrigger>
-        <TabsTrigger value="condutores">Condutores</TabsTrigger>
+        <TabsTrigger value="condutores">{condutorLabel}</TabsTrigger>
         <TabsTrigger value="coberturas">Coberturas</TabsTrigger>
         <TabsTrigger value="extras">Extras</TabsTrigger>
         <TabsTrigger value="taxas">Taxas</TabsTrigger>
