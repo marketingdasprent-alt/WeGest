@@ -38,7 +38,9 @@
       "Bash(git push *)",
       "Bash(git pull *)",
       "Bash(git stash *)",
-      "PowerShell(*)"
+      "PowerShell(*)",
+      "Bash(supabase secrets *)",
+      "Bash(supabase functions *)"
     ]
   }
 }

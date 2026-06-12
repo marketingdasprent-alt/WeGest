@@ -1,4 +1,7 @@
-// KeyInvoice API tipos e schemas
+// KeyInvoice (API 5.0 REST) — tipos do cliente frontend.
+// A emissão é feita server-side pela edge function `keyinvoice-emitir`
+// (api key em secret). O frontend só envia o payload e lê `invoices`.
+
 export type TipoFatura = 'FT' | 'FR' | 'NC'; // Fatura, Fatura-Recibo, Nota de Crédito
 
 export interface ItemFatura {
@@ -6,69 +9,67 @@ export interface ItemFatura {
   quantidade: number;
   preco_unitario: number;
   taxa_iva: number; // 0, 6, 13, 23
+  ref?: string;
+  id_produto?: string; // IdProduct no KeyInvoice (artigo)
+  id_tax?: string; // IdTax no KeyInvoice (se já conhecido)
+  desconto?: number; // %
 }
 
+export interface ClienteFatura {
+  nome: string;
+  nif?: string;
+  email?: string;
+  morada?: string;
+  codigo_postal?: string;
+  localidade?: string;
+  country_code?: string; // ISO-3166 alpha-2 (default PT)
+}
+
+/** Body enviado à edge function `keyinvoice-emitir` (action 'emit'). */
 export interface CreateFaturaPayload {
   tipo: TipoFatura;
-  cliente_nome: string;
-  cliente_nif: string;
-  cliente_email?: string;
-  cliente_morada?: string;
-  cliente_codigo_postal?: string;
-  cliente_localidade?: string;
-  cliente_pais?: string;
-  data?: string; // YYYY-MM-DD, default hoje
+  cliente: ClienteFatura;
   itens: ItemFatura[];
+  contrato_id?: string;
+  cobranca_id?: string;
   observacoes?: string;
-  referencia_externa?: string; // ex: número do contrato
-  fatura_original_id?: string; // para NC (Nota de Crédito)
+  referencia_externa?: string; // ex.: número do contrato
+  documento_referencia?: string; // obrigatório p/ NC (documento original)
 }
 
-export interface FaturaResponse {
-  id: string;
-  numero: string;
-  serie: string;
-  data: string;
-  url_pdf: string;
-  status: string;
-  total: number;
-}
-
-export interface KeyInvoiceRequest {
-  m: string; // 'create_document', 'get_document', etc
-  tipo_documento?: string; // 'FT', 'FR', 'NC'
-  cliente?: {
-    nome: string;
-    nif: string;
-    email?: string;
-    morada?: string;
-    codigo_postal?: string;
-    localidade?: string;
-    pais?: string;
+/** Resposta da edge function (emissão). */
+export interface EmitResult {
+  success: boolean;
+  error?: string;
+  warning?: string;
+  invoice?: InvoiceMetadata;
+  keyinvoice?: {
+    DocType: string;
+    DocSeries: string;
+    DocNum: string;
+    FullDocNumber: string;
+    total: number;
   };
-  data_emissao?: string;
-  descricao?: string;
-  itens?: Array<{
-    descricao: string;
-    quantidade: number;
-    valor_unitario: number;
-    taxa_iva: number;
-  }>;
-  observacoes?: string;
-  referencia_externa?: string;
-  documento_referencia?: string; // para NC
 }
 
+/** Linha da tabela `invoices` (espelho local do documento KeyInvoice). */
 export interface InvoiceMetadata {
   id: string;
   org_id: string;
-  contrato_id: string;
+  contrato_id: string | null;
+  cobranca_id: string | null;
   tipo: TipoFatura;
-  keyinvoice_numero: string;
-  keyinvoice_serie: string;
-  keyinvoice_data: string;
-  url_pdf: string;
-  total: number;
+  ki_doctype: string | null; // DocType numérico (p/ getDocumentPDF)
+  ki_docnum: string | null; // DocNum (p/ getDocumentPDF)
+  serie: string | null; // DocSeries
+  numero: string | null; // FullDocNumber
+  data_emissao: string | null;
+  total: number | null;
+  cliente_nif: string | null;
+  referencia_externa: string | null;
+  observacoes: string | null;
+  status: 'emitida' | 'erro' | 'anulada';
+  erro_msg: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -1,64 +1,50 @@
 /**
- * Hook React Query para integração KeyInvoice
- * Gerencia criação de Faturas, Faturas-Recibo e Notas de Crédito
+ * Hooks React Query para a faturação KeyInvoice.
+ * Emissão (FT/FR/NC) corre na edge function `keyinvoice-emitir`, que também
+ * grava o espelho local em `invoices`. Aqui só invocamos e lemos.
  */
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createFatura, checkKeyInvoiceHealth, type FaturaResponse } from '@/lib/keyinvoice';
+import { emitirDocumento, checkKeyInvoiceHealth } from '@/lib/keyinvoice';
 import { supabase } from '@/integrations/supabase/client';
-import type { CreateFaturaPayload, InvoiceMetadata } from '@/types/keyinvoice';
+import type { CreateFaturaPayload, EmitResult, InvoiceMetadata } from '@/types/keyinvoice';
 import { useToast } from './use-toast';
 
 interface UseCreateFaturaOptions {
-  onSuccess?: (fatura: FaturaResponse & { metadata: InvoiceMetadata }) => void;
+  onSuccess?: (result: EmitResult) => void;
   onError?: (error: Error) => void;
 }
 
+const TIPO_LABEL: Record<string, string> = {
+  FT: 'Fatura',
+  FR: 'Fatura-Recibo',
+  NC: 'Nota de Crédito',
+};
+
 /**
- * Hook para criar fatura no KeyInvoice e guardar metadata no Supabase.
+ * Emite um documento no KeyInvoice (via edge function).
  */
 export function useCreateFatura(options?: UseCreateFaturaOptions) {
   const qc = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (payload: CreateFaturaPayload & { contrato_id: string }) => {
-      // 1. Criar fatura no KeyInvoice
-      const faturaKeyInvoice = await createFatura(payload);
-
-      // 2. Guardar metadata no Supabase
-      const { data: metadata, error: dbError } = await (supabase.from('invoices') as any)
-        .insert({
-          contrato_id: payload.contrato_id,
-          tipo: payload.tipo,
-          keyinvoice_numero: faturaKeyInvoice.numero,
-          keyinvoice_serie: faturaKeyInvoice.serie,
-          keyinvoice_data: faturaKeyInvoice.data,
-          url_pdf: faturaKeyInvoice.url_pdf,
-          total: faturaKeyInvoice.total,
-          referencia_externa: payload.referencia_externa,
-        })
-        .select()
-        .single();
-
-      if (dbError) throw dbError;
-
-      return { ...faturaKeyInvoice, metadata: metadata as InvoiceMetadata };
-    },
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['invoices'] });
+    mutationFn: (payload: CreateFaturaPayload) => emitirDocumento(payload),
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['invoices-by-contrato'] });
+      const ki = result.keyinvoice;
       toast({
-        title: 'Fatura criada',
-        description: `${data.metadata.tipo} #${data.numero}`,
+        title: result.warning ? 'Documento emitido (aviso)' : 'Documento emitido',
+        description:
+          result.warning ??
+          `${TIPO_LABEL[result.invoice?.tipo ?? ''] ?? 'Documento'} ${ki?.FullDocNumber ?? ''}`.trim(),
+        variant: result.warning ? 'default' : undefined,
       });
-      options?.onSuccess?.(data);
+      options?.onSuccess?.(result);
     },
     onError: (error) => {
-      const msg = error instanceof Error ? error.message : 'Erro ao criar fatura';
       toast({
-        title: 'Erro',
-        description: msg,
+        title: 'Erro ao emitir',
+        description: error instanceof Error ? error.message : 'Erro desconhecido',
         variant: 'destructive',
       });
       options?.onError?.(error as Error);
@@ -67,13 +53,16 @@ export function useCreateFatura(options?: UseCreateFaturaOptions) {
 }
 
 /**
- * Hook para listar faturas de um contrato.
+ * Lista os documentos emitidos para um contrato.
  */
 export function useInvoicesByContrato(contratoId: string) {
   return useQuery({
     queryKey: ['invoices-by-contrato', contratoId],
+    enabled: !!contratoId,
     queryFn: async () => {
-      const { data, error } = await (supabase.from('invoices') as any)
+      // `invoices` ainda não está nos tipos gerados — cast até regenerar.
+      const { data, error } = await (supabase as any)
+        .from('invoices')
         .select('*')
         .eq('contrato_id', contratoId)
         .order('created_at', { ascending: false });
@@ -85,13 +74,13 @@ export function useInvoicesByContrato(contratoId: string) {
 }
 
 /**
- * Hook para verificar se KeyInvoice está disponível.
+ * Health-check do serviço de faturação (a edge function autentica no KeyInvoice).
  */
 export function useKeyInvoiceHealth() {
   return useQuery({
     queryKey: ['keyinvoice-health'],
     queryFn: checkKeyInvoiceHealth,
-    staleTime: 5 * 60 * 1000, // 5 minutos
+    staleTime: 5 * 60 * 1000,
     retry: false,
   });
 }

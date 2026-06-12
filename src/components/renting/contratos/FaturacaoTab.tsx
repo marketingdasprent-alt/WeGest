@@ -26,6 +26,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { useInvoicesByContrato, useCreateFatura, useKeyInvoiceHealth } from '@/hooks/useKeyInvoice';
+import { baixarDocumentoPdf } from '@/lib/keyinvoice';
 import { useClientes } from '@/hooks/useClientes';
 import { useToast } from '@/hooks/use-toast';
 import type { InvoiceMetadata } from '@/types/keyinvoice';
@@ -75,14 +76,16 @@ export function FaturacaoTab({ contrato }: FaturacaoTabProps) {
       await createMutation.mutateAsync({
         contrato_id: contrato.id,
         tipo: selectedTipo,
-        cliente_nome: clienteInfo.nome || 'Cliente',
-        cliente_nif: clienteInfo.nif || '',
-        cliente_email: clienteInfo.email,
-        cliente_morada: clienteInfo.morada,
+        cliente: {
+          nome: clienteInfo.nome || 'Cliente',
+          nif: clienteInfo.nif || undefined,
+          email: clienteInfo.email || undefined,
+          morada: clienteInfo.morada || undefined,
+        },
         referencia_externa: `Contrato #${contrato.codigo}`,
         itens: [
           {
-            descricao: `Aluguel de viatura - Contrato ${contrato.codigo}`,
+            descricao: `Aluguer de viatura - Contrato ${contrato.codigo}`,
             quantidade: 1,
             preco_unitario: contrato.total_final || contrato.valor_total_manual || 0,
             taxa_iva: 23,
@@ -188,6 +191,24 @@ export function FaturacaoTab({ contrato }: FaturacaoTabProps) {
 }
 
 function InvoiceCard({ invoice }: { invoice: InvoiceMetadata }) {
+  const { toast } = useToast();
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    try {
+      setDownloading(true);
+      await baixarDocumentoPdf(invoice);
+    } catch (e) {
+      toast({
+        title: 'Erro ao obter PDF',
+        description: e instanceof Error ? e.message : 'Erro desconhecido',
+        variant: 'destructive',
+      });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -196,11 +217,12 @@ function InvoiceCard({ invoice }: { invoice: InvoiceMetadata }) {
             <FileText className="h-5 w-5 text-blue-600" />
             <div>
               <CardTitle className="text-sm">
-                {invoice.keyinvoice_numero} ({invoice.keyinvoice_serie})
+                {invoice.numero ?? '—'}
+                {invoice.serie ? ` (${invoice.serie})` : ''}
               </CardTitle>
               <p className="text-xs text-gray-500">
-                {invoice.keyinvoice_data
-                  ? format(new Date(invoice.keyinvoice_data), 'dd MMM yyyy', { locale: ptBR })
+                {invoice.data_emissao
+                  ? format(new Date(invoice.data_emissao), 'dd MMM yyyy', { locale: ptBR })
                   : '—'}
               </p>
             </div>
@@ -212,9 +234,13 @@ function InvoiceCard({ invoice }: { invoice: InvoiceMetadata }) {
         <div>
           <p className="text-sm font-medium">€ {invoice.total?.toFixed(2) || '0.00'}</p>
         </div>
-        {invoice.url_pdf && (
-          <Button variant="ghost" size="sm" onClick={() => window.open(invoice.url_pdf, '_blank')}>
-            <Download className="h-4 w-4" />
+        {invoice.ki_docnum && (
+          <Button variant="ghost" size="sm" onClick={handleDownload} disabled={downloading}>
+            {downloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
           </Button>
         )}
       </CardContent>
