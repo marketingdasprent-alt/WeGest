@@ -411,9 +411,6 @@ export const BoltIntegrationPanel: React.FC = () => {
                   description: `${autoMapData.created} motoristas criados automaticamente via email`,
                 });
               }
-              if (autoMapData?.mapped > 0) {
-                console.log(`Auto-mapeados: ${autoMapData.mapped} motoristas`);
-              }
             } catch (autoMapError) {
               console.error('Erro no auto-mapeamento:', autoMapError);
               // Não falhar por erro no auto-map

@@ -47,7 +47,13 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
   const viatura = reserva.viatura_id
     ? (viaturas.find((v) => v.id === reserva.viatura_id) ?? null)
     : null;
-  const empresa = empresas.find((e) => e.orgId === reserva.org_id) ?? empresas[0] ?? null;
+  // Emissor escolhido na reserva manda; fallback cobre reservas antigas
+  // criadas antes do campo existir.
+  const empresa =
+    empresas.find((e) => e.id === reserva.emissor_id) ??
+    empresas.find((e) => e.orgId === reserva.org_id) ??
+    empresas[0] ??
+    null;
 
   const podeGerar = !!motorista && !!empresa;
 

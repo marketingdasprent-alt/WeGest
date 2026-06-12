@@ -9,9 +9,7 @@ interface OptionsEditorProps {
 
 export const OptionsEditor: React.FC<OptionsEditorProps> = ({ options, onChange }) => {
   const handleOptionsChange = (value: string) => {
-    console.log('Valor do textarea:', value);
     const processedOptions = value.split('\n').filter((o) => o.trim() !== '');
-    console.log('Opções processadas:', processedOptions);
     onChange(processedOptions);
   };
 

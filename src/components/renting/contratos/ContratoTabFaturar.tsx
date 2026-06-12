@@ -179,7 +179,9 @@ export function ContratoTabFaturar({ contrato }: Props) {
     if (desconto > 0) itens.push({ descricao: `Desconto (${descPct}%)`, valor: -round2(desconto) });
 
     const subtotal = subtotalBruto - desconto;
-    const taxaIva = contrato.taxa_iva ?? 23;
+    // TVDE e Slot já têm IVA incluído no preço — fatura sem IVA adicional
+    const taxaIva =
+      contrato.regime === 'tvde' || contrato.regime === 'slot' ? 0 : (contrato.taxa_iva ?? 23);
     const iva = subtotal * (taxaIva / 100);
 
     const taxasItens: FaturaCalculo['taxasItens'] = [];

@@ -48,8 +48,8 @@ const ordemTipo = (tipo: string) => TIPO_ORDEM[tipo] ?? 2;
 /**
  * Dialog "Gerar Documentos" do contrato de renting (mesmo padrão do dos
  * motoristas): seletor de empresa (só com >1 empresa) + checklist de templates
- * activos, pré-seleccionados por regime. O nome do template traz a empresa, por
- * isso a escolha resolve a marca — sem `empresa_id` no schema.
+ * activos, pré-seleccionados por regime. A empresa por defeito é o emissor
+ * gravado no contrato (`emissor_id`); o seletor permite override pontual.
  */
 export const ContratoDocumentosDialog: React.FC<Props> = ({
   open,
@@ -62,8 +62,13 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
   empresas,
 }) => {
   const { toast } = useToast();
+  // Emissor do contrato manda; fallback para a 1.ª empresa da org cobre
+  // contratos antigos criados antes do campo existir.
   const empresaPorDefeito =
-    empresas.find((e) => e.orgId === contrato.org_id)?.id ?? empresas[0]?.id ?? '';
+    empresas.find((e) => e.id === contrato.emissor_id)?.id ??
+    empresas.find((e) => e.orgId === contrato.org_id)?.id ??
+    empresas[0]?.id ??
+    '';
 
   const [empresaId, setEmpresaId] = useState(empresaPorDefeito);
   const [selected, setSelected] = useState<Set<string>>(new Set());

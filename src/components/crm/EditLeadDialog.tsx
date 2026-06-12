@@ -95,10 +95,6 @@ export const EditLeadDialog: React.FC<EditLeadDialogProps> = ({
   };
 
   const handleSave = () => {
-    console.log('EditLeadDialog - handleSave called');
-    console.log('EditLeadDialog - lead:', lead);
-    console.log('EditLeadDialog - formData:', formData);
-
     if (lead) {
       // Convert 'none' back to null for database storage
       // Convert empty strings to null for date fields
@@ -108,8 +104,6 @@ export const EditLeadDialog: React.FC<EditLeadDialogProps> = ({
         data_aluguer: formData.data_aluguer === '' ? null : formData.data_aluguer,
         id: lead.id,
       };
-      console.log('EditLeadDialog - dataToSave:', dataToSave);
-
       try {
         onSave(dataToSave);
         onClose();

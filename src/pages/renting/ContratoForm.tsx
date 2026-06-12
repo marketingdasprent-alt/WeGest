@@ -234,6 +234,7 @@ const ContratoForm = () => {
         grupo: contrato.grupo ?? '',
         matricula: contrato.matricula ?? '',
         reserva_id: contrato.reserva_id,
+        emissor_id: contrato.emissor_id ?? '',
         estacao_entrega_id: contrato.estacao_entrega_id,
         data_inicio: isoToLocalInput(contrato.data_inicio),
         estacao_recolha_id: contrato.estacao_recolha_id,
@@ -287,6 +288,8 @@ const ContratoForm = () => {
         ...DEFAULT_CONTRATO_VALUES,
         reserva_id: reservaFromQuery.id,
         cliente_id: reservaFromQuery.cliente_id ?? '',
+        // Emissor escolhido na reserva flui para o contrato.
+        emissor_id: reservaFromQuery.emissor_id ?? '',
         viatura_id: reservaFromQuery.viatura_id ?? '',
         matricula: reservaFromQuery.matricula ?? '',
         grupo: reservaFromQuery.grupo ?? '',
@@ -391,8 +394,10 @@ const ContratoForm = () => {
   const tarifaDiaria = form.watch('tarifa_diaria');
   const valorTotalManual = form.watch('valor_total_manual');
   const descontoPercentagem = form.watch('desconto_percentagem');
-  const taxaIva = form.watch('taxa_iva');
   const regime = form.watch('regime');
+  // TVDE e Slot já têm IVA incluído no preço — o resumo não aplica IVA adicional
+  const rawTaxaIva = form.watch('taxa_iva');
+  const taxaIva = regime === 'tvde' || regime === 'slot' ? 0 : rawTaxaIva;
   const coberturasForm = form.watch('coberturas');
   const extrasForm = form.watch('extras') as ExtraFormItem[];
   const taxasForm = form.watch('taxas') as TaxaFormItem[];
@@ -544,6 +549,7 @@ const ContratoForm = () => {
     const payload: ContratoRentingInsert = {
       reserva_id: values.reserva_id,
       cliente_id: values.cliente_id,
+      emissor_id: values.emissor_id,
       viatura_id: values.viatura_id,
       matricula: matriculaFinal,
       grupo: values.grupo || null,
@@ -688,6 +694,7 @@ const ContratoForm = () => {
               id: novaId,
               reserva_id: values.reserva_id,
               cliente_id: values.cliente_id,
+              emissor_id: values.emissor_id,
               viatura_id: values.viatura_id,
               matricula: matriculaFinal,
               grupo: values.grupo || null,
@@ -865,6 +872,7 @@ const ContratoForm = () => {
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <ContratoTabsPlaceholder
+                  regime={regime}
                   geralContent={
                     <ContratoFormSecoes
                       form={form}

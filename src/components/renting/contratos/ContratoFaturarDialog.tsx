@@ -163,7 +163,9 @@ export function ContratoFaturarDialog({
         return;
       }
 
-      const taxaIva = contrato.taxa_iva ?? 23;
+      // TVDE e Slot já têm IVA incluído no preço — fatura sem IVA adicional
+      const taxaIva =
+        contrato.regime === 'tvde' || contrato.regime === 'slot' ? 0 : (contrato.taxa_iva ?? 23);
       // As taxas somam-se DEPOIS do IVA e a cobrança não as modela; o movimento WeGest
       // regista subtotal + IVA. A fatura fiscal (com taxas) é emitida pelo programa externo.
       const valorSemIva = fatura.subtotal;

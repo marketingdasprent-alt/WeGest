@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { validarNIF } from '@/lib/pt-validators';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -71,6 +72,21 @@ const RegistarOrg = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // NIF da org vai para documentos/faturação — valida checksum antes de registar.
+    const nifNormalizado = nif.replace(/\s/g, '');
+    if (nifNormalizado) {
+      const res = validarNIF(nifNormalizado);
+      if (!res.valid) {
+        toast({
+          title: 'NIF inválido',
+          description: res.message || 'Verifica o NIF da empresa.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -78,7 +94,7 @@ const RegistarOrg = () => {
         body: {
           nome_empresa: nomeEmpresa,
           codigo,
-          nif,
+          nif: nifNormalizado,
           morada,
           telefone,
           admin_nome: adminNome,
