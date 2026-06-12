@@ -2,21 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Copy, Power, Eye } from 'lucide-react';
-
-interface DocumentTemplate {
-  id: string;
-  nome: string;
-  tipo: string;
-  empresa_id: string | null;
-  cliente_empresa_id?: string | null;
-  template_data: any;
-  campos_dinamicos: any;
-  papel_timbrado_url?: string | null;
-  ativo: boolean;
-  versao: number;
-  created_at: string;
-  updated_at: string;
-}
+import type { DocumentTemplate } from '@/types/documentTemplate';
 
 interface DocumentTemplateListProps {
   templates: DocumentTemplate[];

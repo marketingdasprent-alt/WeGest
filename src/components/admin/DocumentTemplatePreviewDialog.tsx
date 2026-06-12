@@ -4,17 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { useClientesEmpresas, empresaFooterText } from '@/hooks/useClientesEmpresas';
 import { empresaDocData } from '@/config/empresas';
-
-interface DocumentTemplate {
-  id: string;
-  nome: string;
-  tipo: string;
-  empresa_id?: string | null;
-  cliente_empresa_id?: string | null;
-  template_data: { conteudo?: string } | null;
-  papel_timbrado_url?: string | null;
-  ativo: boolean;
-}
+import type { DocumentTemplate } from '@/types/documentTemplate';
 
 interface Props {
   template: DocumentTemplate | null;
@@ -106,6 +96,20 @@ export const DocumentTemplatePreviewDialog: React.FC<Props> = ({
       observacoes: '—',
       colaborador_nome: 'Gestor Demo',
       empresaData: empresa ? empresaDocData(empresa) : SAMPLE_EMPRESA_DATA,
+      clienteData: {
+        nome: SAMPLE_MOTORISTA.nome,
+        nif: SAMPLE_MOTORISTA.nif,
+        email: SAMPLE_MOTORISTA.email,
+        telefone: SAMPLE_MOTORISTA.telefone,
+        morada: SAMPLE_MOTORISTA.morada,
+        codigo_postal: '1250-096',
+        cidade: SAMPLE_MOTORISTA.cidade,
+        data_nascimento: '1990-01-15',
+        nome_comercial: '',
+        sede: '',
+        representante: '',
+        cargo_representante: '',
+      },
     };
 
     import('@/utils/generateDocumentFromTemplate')
@@ -126,7 +130,7 @@ export const DocumentTemplatePreviewDialog: React.FC<Props> = ({
         }
         // Revogar URL anterior se existir
         if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
-        const url = pdf.output('bloburl') as string;
+        const url = pdf.output('bloburl').toString();
         blobUrlRef.current = url;
         setPdfUrl(url);
       })

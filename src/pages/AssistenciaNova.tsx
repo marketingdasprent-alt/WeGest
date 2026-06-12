@@ -250,7 +250,16 @@ export default function AssistenciaNova() {
 
         const { error: anexosError } = await supabase.from('assistencia_anexos').insert(anexos);
 
-        if (anexosError) console.error('Erro ao salvar anexos:', anexosError);
+        if (anexosError) {
+          console.error('Erro ao salvar anexos:', anexosError);
+          toast({
+            title: 'Aviso: fotos não guardadas',
+            description:
+              'O ticket foi criado mas as fotografias não foram associadas. Abre o ticket e faz upload manualmente.',
+            variant: 'destructive',
+            duration: 10000,
+          });
+        }
 
         // 2.1 TAMBÉM salvar como "Dano" da viatura para histórico centralizado
         const { data: novoDano, error: danoError } = await supabase
@@ -550,7 +559,11 @@ export default function AssistenciaNova() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <AssistenciaMultimediaUpload onComplete={handleMultimediaComplete} />
+            <AssistenciaMultimediaUpload
+              onComplete={handleMultimediaComplete}
+              initialFiles={mediaFiles}
+              requiredPhotos={4}
+            />
           </CardContent>
         </Card>
       )}

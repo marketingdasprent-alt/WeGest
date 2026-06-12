@@ -20,9 +20,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCamposDinamicos } from '@/hooks/useCamposDinamicos';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { categoriasOrdenadas, labelCategoria, type BaseCategoria } from '@/lib/camposDinamicos';
+import type { DocumentTemplate } from '@/types/documentTemplate';
 
 const CATEGORIA_EMOJI: Record<BaseCategoria, string> = {
   motorista: '👤',
+  cliente: '👥',
   empresa: '🏢',
   viatura: '🚗',
   contrato: '📄',
@@ -40,19 +42,6 @@ const TIPO_TEMPLATE_OPTIONS = [
   { value: 'recibo', label: 'Recibo' },
   { value: 'outro', label: 'Outro documento' },
 ] as const;
-
-interface DocumentTemplate {
-  id?: string;
-  nome: string;
-  tipo: string;
-  empresa_id: string | null;
-  cliente_empresa_id?: string | null;
-  template_data: any;
-  campos_dinamicos: any;
-  ativo: boolean;
-  versao: number;
-  papel_timbrado_url?: string;
-}
 
 interface DocumentTemplateEditorProps {
   template: DocumentTemplate | null;
@@ -74,6 +63,18 @@ export const DocumentTemplateEditor = ({
   const [ativo, setAtivo] = useState(template?.ativo ?? true);
   const [conteudoCompleto, setConteudoCompleto] = useState('');
   const [papelTimbradoUrl, setPapelTimbradoUrl] = useState(template?.papel_timbrado_url || '');
+  // Margens superior/inferior (mm) só usadas quando há papel timbrado.
+  // Permitem ajustar o documento por template (cada timbrado tem logo/faixa
+  // de altura diferente). Defaults globais: 50/38 (seguros). Baixar num
+  // template específico quando o seu conteúdo precisa de caber numa só página.
+  const [topMargin, setTopMargin] = useState<number>(
+    typeof template?.template_data?.topMargin === 'number' ? template.template_data.topMargin : 50
+  );
+  const [bottomMargin, setBottomMargin] = useState<number>(
+    typeof template?.template_data?.bottomMargin === 'number'
+      ? template.template_data.bottomMargin
+      : 38
+  );
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const editorRef = useRef<RichTextEditorRef>(null);
@@ -134,6 +135,13 @@ export const DocumentTemplateEditor = ({
 
       if (template?.papel_timbrado_url) {
         setPapelTimbradoUrl(template.papel_timbrado_url);
+      }
+
+      if (typeof template?.template_data?.topMargin === 'number') {
+        setTopMargin(template.template_data.topMargin);
+      }
+      if (typeof template?.template_data?.bottomMargin === 'number') {
+        setBottomMargin(template.template_data.bottomMargin);
       }
     }
   }, [template]);
@@ -304,6 +312,8 @@ export const DocumentTemplateEditor = ({
         cliente_empresa_id: empresaId || null,
         template_data: {
           conteudo: conteudoCompleto,
+          topMargin,
+          bottomMargin,
         } as any,
         // Snapshot da paleta efectiva no momento (informativo). A config real
         // vive em org_campos_dinamicos; aqui guardamos só um registo.
@@ -543,6 +553,42 @@ export const DocumentTemplateEditor = ({
               <p className="text-xs text-gray-500">
                 A imagem será usada como fundo do documento ao gerar contratos
               </p>
+
+              {papelTimbradoUrl && (
+                <div className="space-y-3 border-t border-border pt-3">
+                  <div>
+                    <Label className="text-foreground text-sm">Margens (mm)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Ajusta a distância ao topo e ao fundo se o conteúdo bater na logo ou na faixa
+                      do timbrado.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Topo</Label>
+                      <Input
+                        type="number"
+                        min={10}
+                        max={120}
+                        value={topMargin}
+                        onChange={(e) => setTopMargin(Number(e.target.value) || 50)}
+                        className="bg-card border-border text-foreground"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Fundo</Label>
+                      <Input
+                        type="number"
+                        min={10}
+                        max={120}
+                        value={bottomMargin}
+                        onChange={(e) => setBottomMargin(Number(e.target.value) || 38)}
+                        className="bg-card border-border text-foreground"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

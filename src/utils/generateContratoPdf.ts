@@ -94,14 +94,102 @@ export const generateContratoPdf = async ({
     }
   }
 
-  // 2) Resolver o condutor principal para preencher o "motorista" no template.
-  //    TVDE: motorista directo. Rent-a-car: cliente mapeado para motorista_*.
+  // 2a) Cliente do contrato (locatário) — é SEMPRE o contrato.cliente_id,
+  //     independentemente de quem é o condutor principal. Alimenta os
+  //     placeholders {{cliente_*}}.
+  //     Se o cliente não vier na lista (race condition na UI), vai-se buscar
+  //     directamente à BD — para garantir que {{cliente_*}} resolve sempre.
+  let clienteContrato: ClienteComDocumentos | null = contrato.cliente_id
+    ? (clientes.find((c) => c.id === contrato.cliente_id) ?? null)
+    : null;
+
+  if (!clienteContrato && contrato.cliente_id) {
+    try {
+      const { data: clienteRow } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('id', contrato.cliente_id)
+        .maybeSingle();
+      if (clienteRow) {
+        clienteContrato = {
+          ...(clienteRow as unknown as ClienteComDocumentos),
+          documentoIdentificacao: null,
+          cartaConducao: null,
+          ligacaoDocumento: null,
+          ligacaoCarta: null,
+        };
+      }
+    } catch (err) {
+      console.warn('Falha a obter cliente do contrato directamente da BD:', err);
+    }
+  }
+
+  if (contrato.cliente_id && !clienteContrato) {
+    console.warn(
+      `[generateContratoPdf] contrato.cliente_id=${contrato.cliente_id} não foi encontrado — {{cliente_*}} ficarão vazios.`
+    );
+  } else if (!contrato.cliente_id) {
+    console.warn(
+      '[generateContratoPdf] Contrato sem cliente_id — {{cliente_*}} ficarão vazios. Define o cliente do contrato.'
+    );
+  } else if (clienteContrato) {
+    console.info(
+      `[generateContratoPdf] {{cliente_*}} usa "${clienteContrato.nome}" (id=${clienteContrato.id})`
+    );
+  }
+
+  // 2b) Resolver o condutor principal para preencher o "motorista" no template.
+  //     TVDE: motorista directo. Rent-a-car: cliente mapeado para motorista_*.
   const cli = condutorPrincipal?.cliente_id
     ? (clientes.find((c) => c.id === condutorPrincipal.cliente_id) ?? null)
     : null;
-  const mo = condutorPrincipal?.motorista_id
+  let mo = condutorPrincipal?.motorista_id
     ? (motoristas.find((m) => m.id === condutorPrincipal.motorista_id) ?? null)
     : null;
+
+  // 2c) Procurar QUALQUER motorista entre os condutores do contrato (não só o
+  //     principal). Se houver, prefere-se sempre esse para {{motorista_*}} —
+  //     evita que rent-a-car com cliente como condutor principal mas com um
+  //     motorista também registado nos condutores não pinte o motorista.
+  if (!mo) {
+    try {
+      const { data: condutoresAll } = await supabase
+        .from('contratos_condutores')
+        .select('motorista_id, is_principal')
+        .eq('contrato_id', contrato.id)
+        .not('motorista_id', 'is', null)
+        .order('is_principal', { ascending: false });
+
+      const motoristaId = (condutoresAll ?? [])[0]?.motorista_id ?? null;
+      if (motoristaId) {
+        const moInLista = motoristas.find((m) => m.id === motoristaId) ?? null;
+        if (moInLista) {
+          mo = moInLista;
+        } else {
+          const { data: moRow } = await supabase
+            .from('motoristas')
+            .select('*')
+            .eq('id', motoristaId)
+            .maybeSingle();
+          if (moRow) mo = moRow as unknown as Motorista;
+        }
+      }
+    } catch (err) {
+      console.warn('Falha a obter motoristas do contrato:', err);
+    }
+  }
+
+  if (mo) {
+    console.info(`[generateContratoPdf] {{motorista_*}} usa "${mo.nome}" (id=${mo.id})`);
+  } else if (cli) {
+    console.info(
+      `[generateContratoPdf] {{motorista_*}} usa cliente "${cli.nome}" (sem motorista nos condutores — rent-a-car).`
+    );
+  } else {
+    console.warn(
+      '[generateContratoPdf] {{motorista_*}} sem fonte — nem motorista nem cliente nos condutores.'
+    );
+  }
 
   const motoristaData: Record<string, unknown> = mo
     ? {
@@ -220,6 +308,26 @@ export const generateContratoPdf = async ({
     total: contrato.total_final != null ? eur(contrato.total_final) : 'A facturar',
     observacoes: contrato.observacoes ?? '',
     empresaData: empresaDocData(empresa),
+    // Cliente do contrato (locatário) — alimenta os placeholders {{cliente_*}}.
+    // É sempre o contrato.cliente_id, NÃO o condutor principal. Em TVDE, o
+    // locatário pode ser uma empresa cliente; o motorista (condutor) é outra
+    // pessoa e resolve em {{motorista_*}}.
+    clienteData: clienteContrato
+      ? {
+          nome: clienteContrato.nome ?? '',
+          nif: clienteContrato.nif ?? '',
+          email: clienteContrato.email ?? '',
+          telefone: clienteContrato.telefone ?? '',
+          morada: clienteContrato.morada ?? '',
+          codigo_postal: clienteContrato.codigo_postal ?? '',
+          cidade: clienteContrato.cidade ?? '',
+          data_nascimento: clienteContrato.data_nascimento ?? '',
+          nome_comercial: clienteContrato.nome_comercial ?? '',
+          sede: clienteContrato.sede ?? '',
+          representante: clienteContrato.representante ?? '',
+          cargo_representante: clienteContrato.cargo_representante ?? '',
+        }
+      : undefined,
   };
 
   // 5) Anexar fotos de check-in/check-out em folhas extra (grelha 2×3).

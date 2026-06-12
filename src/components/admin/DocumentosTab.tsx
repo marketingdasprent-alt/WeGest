@@ -14,20 +14,7 @@ import { Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
-
-interface DocumentTemplate {
-  id: string;
-  nome: string;
-  tipo: string;
-  empresa_id: string | null;
-  cliente_empresa_id: string | null;
-  template_data: any;
-  campos_dinamicos: any;
-  ativo: boolean;
-  versao: number;
-  created_at: string;
-  updated_at: string;
-}
+import type { DocumentTemplate } from '@/types/documentTemplate';
 
 export const DocumentosTab = () => {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);

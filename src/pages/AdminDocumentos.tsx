@@ -9,20 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-
-interface DocumentTemplate {
-  id: string;
-  nome: string;
-  tipo: string;
-  empresa_id: string;
-  template_data: any;
-  campos_dinamicos: any;
-  papel_timbrado_url?: string | null;
-  ativo: boolean;
-  versao: number;
-  created_at: string;
-  updated_at: string;
-}
+import type { DocumentTemplate } from '@/types/documentTemplate';
 
 const AdminDocumentos = () => {
   const { isAdmin, hasAccessToResource, loading: adminLoading } = usePermissions();
