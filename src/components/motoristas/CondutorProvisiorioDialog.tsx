@@ -108,12 +108,7 @@ export function CondutorProvisiorioDialog({ open, onOpenChange, onCreated }: Pro
                     Nome Completo <span className="text-red-500">*</span>
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="Ex: João Silva"
-                      autoFocus
-                      {...field}
-                      className="h-11"
-                    />
+                    <Input placeholder="Ex: João Silva" autoFocus {...field} className="h-11" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

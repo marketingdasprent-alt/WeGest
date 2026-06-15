@@ -140,7 +140,10 @@ async function upsertDocumento(
 ): Promise<void> {
   if (documentoId) {
     // Documento já existe — actualizar (mesmo que fique "vazio", mantém histórico)
-    const { error } = await supabase.from('documentos').update(dados as any).eq('id', documentoId);
+    const { error } = await supabase
+      .from('documentos')
+      .update(dados as any)
+      .eq('id', documentoId);
     if (error) throw error;
     return;
   }

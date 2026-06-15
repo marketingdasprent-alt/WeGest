@@ -22,15 +22,11 @@ const PRINT_IFRAME_ID = 'wegest-print-iframe';
  *                       de impressão, caso contrário o browser adiciona bordas
  *                       brancas à volta da imagem de fundo.
  */
-export const printPdf = (
-  pdf: jsPDF,
-  fallbackFileName: string,
-  hasLetterhead = false,
-): void => {
+export const printPdf = (pdf: jsPDF, fallbackFileName: string, hasLetterhead = false): void => {
   if (hasLetterhead) {
     toast.info(
       'No diálogo de impressão selecione Margens → Nenhuma (ou Mínimas) para o papel timbrado ficar sem bordas brancas.',
-      { duration: 8000 },
+      { duration: 8000 }
     );
   }
 

@@ -4,9 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useMotoristas } from './useMotoristas';
 import { supabase } from '@/integrations/supabase/client';
 
-// Mock Supabase
-vi.mock('@/integrations/supabase/client');
-
 // Wrapper para React Query
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -78,7 +75,6 @@ describe('useMotoristas', () => {
     expect(result.current.data).toBeDefined();
     expect(Array.isArray(result.current.data)).toBe(true);
   });
-
 
   it('não deve executar query quando disabled', () => {
     const { result } = renderHook(() => useMotoristas({ enabled: false }), {

@@ -839,8 +839,8 @@ const ContratoForm = () => {
         <Alert className="mb-3 border-amber-300 bg-amber-50 dark:bg-amber-950/20">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
           <AlertDescription className="text-amber-700 dark:text-amber-400">
-            <strong>Contrato bloqueado.</strong> O seguinte condutor tem perfil incompleto (sem NIF /
-            carta de condução):{' '}
+            <strong>Contrato bloqueado.</strong> O seguinte condutor tem perfil incompleto (sem NIF
+            / carta de condução):{' '}
             {condutoresRascunho
               .map((c) => motoristas.find((m) => m.id === c.motorista_id)?.nome ?? c.motorista_id)
               .join(', ')}
