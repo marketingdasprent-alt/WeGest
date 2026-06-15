@@ -1,4 +1,5 @@
 import type jsPDF from 'jspdf';
+import { toast } from 'sonner';
 
 const PRINT_IFRAME_ID = 'wegest-print-iframe';
 
@@ -15,8 +16,20 @@ const PRINT_IFRAME_ID = 'wegest-print-iframe';
  *
  * Se a impressão falhar por algum motivo, faz fallback para download para não
  * perder o documento.
+ *
+ * @param hasLetterhead  true quando o PDF usa papel timbrado — mostra aviso
+ *                       para o utilizador definir "Margens: Nenhuma" no diálogo
+ *                       de impressão, caso contrário o browser adiciona bordas
+ *                       brancas à volta da imagem de fundo.
  */
-export const printPdf = (pdf: jsPDF, fallbackFileName: string): void => {
+export const printPdf = (pdf: jsPDF, fallbackFileName: string, hasLetterhead = false): void => {
+  if (hasLetterhead) {
+    toast.info(
+      'No diálogo de impressão selecione Margens → Nenhuma (ou Mínimas) para o papel timbrado ficar sem bordas brancas.',
+      { duration: 8000 }
+    );
+  }
+
   try {
     // autoPrint embebe a acção de impressão no próprio PDF (fallback do iframe).
     pdf.autoPrint();

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { DocumentTemplateList } from '@/components/admin/DocumentTemplateList';
 import { DocumentTemplateEditor } from '@/components/admin/DocumentTemplateEditor';
+import { DocumentTemplatePreviewDialog } from '@/components/admin/DocumentTemplatePreviewDialog';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -13,20 +14,7 @@ import { Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
-
-interface DocumentTemplate {
-  id: string;
-  nome: string;
-  tipo: string;
-  empresa_id: string | null;
-  cliente_empresa_id: string | null;
-  template_data: any;
-  campos_dinamicos: any;
-  ativo: boolean;
-  versao: number;
-  created_at: string;
-  updated_at: string;
-}
+import type { DocumentTemplate } from '@/types/documentTemplate';
 
 export const DocumentosTab = () => {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -34,6 +22,7 @@ export const DocumentosTab = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [filtroEmpresa, setFiltroEmpresa] = useState<string>('todas');
+  const [previewTemplate, setPreviewTemplate] = useState<DocumentTemplate | null>(null);
   const { empresas } = useClientesEmpresas();
 
   useEffect(() => {
@@ -174,9 +163,17 @@ export const DocumentosTab = () => {
             onEdit={handleEdit}
             onDuplicate={handleDuplicate}
             onToggleStatus={handleToggleStatus}
+            onPreview={(t) => setPreviewTemplate(t)}
           />
         </>
       )}
+      <DocumentTemplatePreviewDialog
+        template={previewTemplate}
+        open={!!previewTemplate}
+        onOpenChange={(open) => {
+          if (!open) setPreviewTemplate(null);
+        }}
+      />
     </div>
   );
 };

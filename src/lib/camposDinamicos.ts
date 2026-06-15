@@ -19,7 +19,7 @@
  */
 
 /** Categorias base (código). O provider pode criar outras (string livre). */
-export type BaseCategoria = 'motorista' | 'empresa' | 'viatura' | 'contrato';
+export type BaseCategoria = 'motorista' | 'cliente' | 'empresa' | 'viatura' | 'contrato';
 /** Uma categoria pode ser uma das base OU uma criada pelo provider. */
 export type CampoCategoria = string;
 
@@ -46,12 +46,19 @@ export interface CampoCatalogoCustom {
 
 export const CATEGORIA_LABELS: Record<BaseCategoria, string> = {
   motorista: 'Motorista',
+  cliente: 'Cliente',
   empresa: 'Empresa',
   viatura: 'Viatura',
   contrato: 'Contrato',
 };
 
-export const CATEGORIA_ORDEM: BaseCategoria[] = ['motorista', 'empresa', 'viatura', 'contrato'];
+export const CATEGORIA_ORDEM: BaseCategoria[] = [
+  'motorista',
+  'cliente',
+  'empresa',
+  'viatura',
+  'contrato',
+];
 
 /** Rótulo de uma categoria: base → traduzido; custom → o próprio nome. */
 export function labelCategoria(cat: string): string {
@@ -89,6 +96,24 @@ export const CAMPOS_CATALOGO: CampoDinamico[] = [
   { chave: 'carta_validade', label: 'Validade da carta', categoria: 'motorista' },
   { chave: 'cmtvde_numero', label: 'Nº licença TVDE', categoria: 'motorista' },
   { chave: 'cmtvde_validade', label: 'Validade licença TVDE', categoria: 'motorista' },
+
+  // ── Cliente (renting) ──────────────────────────────────────
+  { chave: 'cliente_nome', label: 'Nome', categoria: 'cliente' },
+  { chave: 'cliente_nif', label: 'NIF', categoria: 'cliente' },
+  { chave: 'cliente_email', label: 'Email', categoria: 'cliente' },
+  { chave: 'cliente_telefone', label: 'Telefone', categoria: 'cliente' },
+  { chave: 'cliente_morada', label: 'Morada', categoria: 'cliente' },
+  { chave: 'cliente_codigo_postal', label: 'Código postal', categoria: 'cliente' },
+  { chave: 'cliente_cidade', label: 'Cidade', categoria: 'cliente' },
+  { chave: 'cliente_data_nascimento', label: 'Data de nascimento', categoria: 'cliente' },
+  { chave: 'cliente_nome_comercial', label: 'Nome comercial (empresa)', categoria: 'cliente' },
+  { chave: 'cliente_sede', label: 'Sede (empresa)', categoria: 'cliente' },
+  { chave: 'cliente_representante', label: 'Representante (empresa)', categoria: 'cliente' },
+  {
+    chave: 'cliente_cargo_representante',
+    label: 'Cargo do representante (empresa)',
+    categoria: 'cliente',
+  },
 
   // ── Empresa ────────────────────────────────────────────────
   { chave: 'empresa_nome_completo', label: 'Nome completo', categoria: 'empresa' },

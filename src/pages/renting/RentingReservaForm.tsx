@@ -30,6 +30,7 @@ import { useViaturas } from '@/hooks/useViaturas';
 
 import { ClienteDialog } from '@/components/renting/ClienteDialog';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
+import { CondutorProvisiorioDialog } from '@/components/motoristas/CondutorProvisiorioDialog';
 import { ReservaDeleteConfirm } from '@/components/renting/reservas/ReservaDeleteConfirm';
 import { ContratoPrestacaoDialog } from '@/components/renting/reservas/ContratoPrestacaoDialog';
 import { ReservaResumoSidebar } from '@/components/renting/reservas/ReservaResumoSidebar';
@@ -105,6 +106,7 @@ const RentingReservaForm = () => {
   const [anexosPendentes, setAnexosPendentes] = useState<AnexoPendente[]>([]);
   const [clienteDialogOpen, setClienteDialogOpen] = useState(false);
   const [motoristaDialogOpen, setMotoristaDialogOpen] = useState(false);
+  const [condutorProvisorioOpen, setCondutorProvisorioOpen] = useState(false);
   const [prestacaoDialogOpen, setPrestacaoDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -617,6 +619,7 @@ const RentingReservaForm = () => {
                         motoristas={motoristas}
                         onCriarNovoCliente={() => setClienteDialogOpen(true)}
                         onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
+                        onCriarCondutorProvisorio={() => setCondutorProvisorioOpen(true)}
                       />
                     </TabsContent>
 
@@ -667,6 +670,15 @@ const RentingReservaForm = () => {
         onOpenChange={setMotoristaDialogOpen}
         motorista={null}
         onMotoristaCreated={(m) => handleMotoristaCriado(m.id)}
+      />
+
+      <CondutorProvisiorioDialog
+        open={condutorProvisorioOpen}
+        onOpenChange={setCondutorProvisorioOpen}
+        onCreated={(m) => {
+          handleMotoristaCriado(m.id);
+          queryClient.invalidateQueries({ queryKey: ['motoristas'] });
+        }}
       />
 
       {reserva && (

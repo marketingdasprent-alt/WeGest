@@ -39,6 +39,7 @@ import type { TablesInsert } from '@/integrations/supabase/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { getStatusLabel, getStatusBadgeClass } from '@/lib/viaturas';
 
 const IDADES = [
   { value: '', label: '— Sem Restrições —' },
@@ -122,23 +123,24 @@ const RentingGrupoForm = () => {
     enabled: !!id,
   });
 
-  const { data: viaturasAssociadas = [] } = useQuery({
+  const { data: viaturasAssociadas = [], error: viaturasError } = useQuery({
     queryKey: ['viaturas_grupo', id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('viaturas')
-        .select('id, matricula, marca, modelo, ano, estado')
+        .select('id, matricula, marca, modelo, ano, status, grupo_id, org_id')
         .eq('grupo_id', id!)
         .order('matricula');
       if (error) {
-        // grupo_id pode não estar no schema cache do PostgREST ainda
-        console.warn('[viaturas_grupo] Query falhou (schema cache?):', error.message);
-        return [];
+        console.error('[viaturas_grupo] Query falhou:', error);
+        throw error;
       }
-      return data;
+      console.info(`[viaturas_grupo] grupo_id=${id} → ${data?.length ?? 0} viaturas`);
+      return data ?? [];
     },
     enabled: !!id,
     retry: false,
+    refetchOnMount: 'always',
   });
 
   useEffect(() => {
@@ -510,14 +512,25 @@ const RentingGrupoForm = () => {
 
         {/* Tab: Viaturas Associadas */}
         <TabsContent value="viaturas">
-          {viaturasAssociadas.length === 0 ? (
+          {viaturasError ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 border rounded-lg border-dashed border-destructive/50">
+              <Car className="h-10 w-10 text-destructive" />
+              <p className="text-sm text-destructive font-medium">
+                Erro ao carregar viaturas deste grupo
+              </p>
+              <p className="text-xs text-muted-foreground max-w-md text-center">
+                {(viaturasError as Error).message}
+              </p>
+            </div>
+          ) : viaturasAssociadas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 border rounded-lg border-dashed">
               <Car className="h-10 w-10 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
                 Nenhuma viatura associada a este grupo
               </p>
               <p className="text-xs text-muted-foreground">
-                Associa viaturas na página de detalhe de cada viatura.
+                Associa viaturas na página de detalhe de cada viatura, no campo &quot;Grupo&quot;, e
+                clica em <strong>Guardar</strong>.
               </p>
             </div>
           ) : (
@@ -541,10 +554,10 @@ const RentingGrupoForm = () => {
                       <TableCell>{v.ano || '—'}</TableCell>
                       <TableCell>
                         <Badge
-                          variant={v.estado === 'ativo' ? 'default' : 'secondary'}
-                          className="text-xs capitalize"
+                          variant="outline"
+                          className={`text-xs ${getStatusBadgeClass(v.status)}`}
                         >
-                          {v.estado || '—'}
+                          {getStatusLabel(v.status)}
                         </Badge>
                       </TableCell>
                     </TableRow>

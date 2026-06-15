@@ -16,6 +16,7 @@ function clienteToEmpresaConfig(row: Record<string, any>): EmpresaConfig {
     representante: row.representante ?? '',
     cargoRepresentante: row.cargo_representante ?? '',
     papelTimbrado: row.papel_timbrado ?? '',
+    logoUrl: row.logo_url ?? null,
   };
 }
 
@@ -30,7 +31,7 @@ export function useClientesEmpresas() {
       const { data, error } = await supabase
         .from('clientes')
         .select(
-          'id, org_id, nome, nome_comercial, nif, sede, representante, cargo_representante, licenca_tvde, licenca_validade, papel_timbrado'
+          'id, org_id, nome, nome_comercial, nif, sede, representante, cargo_representante, licenca_tvde, licenca_validade, papel_timbrado, logo_url'
         )
         .eq('tipo_cliente', 'empresa')
         .is('deleted_at', null)
