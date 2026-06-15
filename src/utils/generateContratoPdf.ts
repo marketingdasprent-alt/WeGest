@@ -153,7 +153,7 @@ export const generateContratoPdf = async ({
   //     motorista também registado nos condutores não pinte o motorista.
   if (!mo) {
     try {
-      const { data: condutoresAll } = await supabase
+      const { data: condutoresAll } = await (supabase as any)
         .from('contratos_condutores')
         .select('motorista_id, is_principal')
         .eq('contrato_id', contrato.id)

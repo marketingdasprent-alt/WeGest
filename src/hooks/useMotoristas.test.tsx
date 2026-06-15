@@ -89,15 +89,14 @@ describe('useMotoristas', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
-  it('deve manter queryKey consistente', () => {
-    const { result: result1 } = renderHook(() => useMotoristas(), {
-      wrapper: createWrapper(),
-    });
-    const { result: result2 } = renderHook(() => useMotoristas(), {
-      wrapper: createWrapper(),
-    });
+  it('deve manter comportamento inicial consistente entre instâncias', () => {
+    const wrapper = createWrapper();
+    const { result: result1 } = renderHook(() => useMotoristas(), { wrapper });
+    const { result: result2 } = renderHook(() => useMotoristas(), { wrapper });
 
-    // Ambas devem ter mesma queryKey (para caching)
-    expect(result1.current.queryKey).toEqual(result2.current.queryKey);
+    // Com o mesmo QueryClient, ambas as instâncias partilham cache (mesma queryKey)
+    // e devem ter exactamente o mesmo status inicial.
+    expect(result1.current.status).toEqual(result2.current.status);
+    expect(result1.current.isLoading).toEqual(result2.current.isLoading);
   });
 });

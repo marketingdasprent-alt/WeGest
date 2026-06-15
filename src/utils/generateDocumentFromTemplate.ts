@@ -11,6 +11,8 @@ interface DocumentTemplate {
   papel_timbrado_url: string | null;
   template_data: {
     conteudo: string;
+    topMargin?: number;
+    bottomMargin?: number;
   };
   campos_dinamicos: {
     motorista: Array<{ id: string; label: string; tipo: string }>;
@@ -1162,11 +1164,13 @@ export const generateDocumentFromTemplate = async (
         const pw = pdf.getTextWidth(pageText);
         pdf.text(pageText, pageWidth - rightMargin - pw, footerY);
       } else {
-        // Canto inferior direito, acima da faixa decorativa do timbrado.
-        // Evita sobrepor um rodapé centrado já presente no template (ex.:
-        // "Este documento foi criado por WeGest...").
         const textWidth = pdf.getTextWidth(pageText);
-        pdf.text(pageText, pageWidth - rightMargin - textWidth, pageHeight - 18);
+        // Com timbrado: colocar a numeração logo abaixo do fim do conteúdo
+        // (bottomMargin - 6mm), nunca dentro da faixa decorativa inferior que
+        // começa tipicamente ~25mm da base — a fórmula anterior (pageHeight-18)
+        // ficava dentro da faixa. Sem timbrado: canto inferior como antes.
+        const numY = hasLetterhead ? pageHeight - bottomMargin + 6 : pageHeight - 18;
+        pdf.text(pageText, pageWidth - rightMargin - textWidth, numY);
       }
     }
 
@@ -1174,7 +1178,7 @@ export const generateDocumentFromTemplate = async (
     if (!params.skipOutput) {
       const fileName = `${templateData.nome}_${motoristaData.nome}_${format(new Date(), 'yyyyMMdd')}.pdf`;
       if (action === 'print') {
-        printPdf(pdf, fileName);
+        printPdf(pdf, fileName, hasLetterhead);
       } else {
         pdf.save(fileName);
       }
