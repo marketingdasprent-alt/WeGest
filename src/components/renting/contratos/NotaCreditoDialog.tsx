@@ -17,7 +17,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
-import { escreverFaturacaoDocumento, type FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
+import { openFaturacaoDocumento, type FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
+import { emitirDocumento, baixarDocumentoPdf, clienteRowToKI } from '@/lib/keyinvoice';
 
 /** Cobrança/fatura-alvo da nota de crédito. */
 export interface NotaCreditoCobranca {
@@ -27,7 +28,7 @@ export interface NotaCreditoCobranca {
   taxa_iva: number | null;
   destinatario_id: string;
   destinatario_nome: string;
-  contrato_id: string;
+  contrato_id: string | null;
   documento_externo_ref: string | null;
 }
 
@@ -94,19 +95,17 @@ export function NotaCreditoDialog({
       if (erro) toast.error(erro);
       return;
     }
-    // Abre a janela do documento JÁ, dentro do gesto do clique (síncrono),
-    // para não ser bloqueada pelo browser depois dos awaits.
-    const docWin = window.open('', '_blank');
     setSubmitting(true);
     try {
-      // 1) Inserir a nota de crédito → trigger posta o crédito na conta-corrente.
-      const { data: inserida, error } = await (supabase as any)
+      // ── Fase 1 — registar a nota de crédito (trigger posta o crédito) ────
+      // contrato_id é preenchido pelo trigger a partir da cobrança (pode ser uma
+      // cobrança de reserva, sem contrato) — por isso não o enviamos aqui.
+      const { data: inserida, error } = await supabase
         .from('notas_credito')
         .insert({
           org_id: orgId,
           cobranca_id: cobranca.id,
           entidade_id: cobranca.destinatario_id,
-          contrato_id: cobranca.contrato_id,
           valor: valorNum,
           motivo: motivo.trim(),
           data_nota: hojeISO(),
@@ -118,36 +117,72 @@ export function NotaCreditoDialog({
       const codigo = inserida?.codigo;
       const numero = codigo != null ? `NC-${codigo}` : 'Nota de Crédito';
 
-      // 2) Dados do cliente para o cabeçalho do documento (best-effort).
-      let clienteNif: string | null = null;
-      let clienteMorada: string | null = null;
-      try {
-        const { data: cli } = await supabase
-          .from('clientes')
-          .select('nif, morada, codigo_postal, cidade')
-          .eq('id', cobranca.destinatario_id)
-          .single();
-        if (cli) {
-          clienteNif = (cli as any).nif ?? null;
-          clienteMorada =
-            [(cli as any).morada, (cli as any).codigo_postal, (cli as any).cidade]
-              .filter(Boolean)
-              .join(', ') || null;
-        }
-      } catch {
-        /* cabeçalho do cliente é opcional */
-      }
+      qc.invalidateQueries({ queryKey: ['renting'] });
+      qc.invalidateQueries({ queryKey: ['contrato-cobrancas', cobranca.contrato_id] });
+      qc.invalidateQueries({ queryKey: ['contrato-notas-credito', cobranca.contrato_id] });
 
-      // 3) Escrever o documento imprimível (decompõe o valor bruto em base + IVA).
+      // Dados do cliente para o cabeçalho (best-effort).
+      const { data: cli } = await supabase
+        .from('clientes')
+        .select('nome, nif, email, morada, codigo_postal, localidade, cidade')
+        .eq('id', cobranca.destinatario_id)
+        .maybeSingle();
+
       const base = round2(valorNum / (1 + taxaIva / 100));
       const iva = round2(valorNum - base);
-      if (docWin) {
-        escreverFaturacaoDocumento(docWin, {
+
+      // ── Fase 2 — emitir a NC no KeyInvoice se a fatura original também o for ─
+      let emitiuKI = false;
+      if (cobranca.documento_externo_ref) {
+        try {
+          const res = await emitirDocumento({
+            tipo: 'NC',
+            cliente: clienteRowToKI(cli, cobranca.destinatario_nome),
+            itens: [
+              {
+                descricao: `Crédito sobre ${docOriginal} — ${motivo.trim()}`,
+                quantidade: 1,
+                preco_unitario: base,
+                taxa_iva: taxaIva,
+              },
+            ],
+            contrato_id: cobranca.contrato_id,
+            cobranca_id: cobranca.id,
+            documento_referencia: cobranca.documento_externo_ref,
+            referencia_externa: numero,
+            observacoes: motivo.trim(),
+          });
+          if (res.invoice) {
+            try {
+              await baixarDocumentoPdf(res.invoice);
+            } catch {
+              /* download é best-effort */
+            }
+          }
+          emitiuKI = true;
+          toast.success(
+            `Nota de crédito ${res.keyinvoice?.FullDocNumber ?? numero} emitida no KeyInvoice (${formatCurrency(valorNum)}).`
+          );
+          if (res.warning) toast.warning(res.warning);
+          qc.invalidateQueries({ queryKey: ['invoices-by-contrato', cobranca.contrato_id] });
+        } catch (kiErr: any) {
+          console.error('Falha a emitir NC no KeyInvoice:', kiErr);
+          toast.warning(
+            'Nota de crédito registada, mas não foi possível emitir no KeyInvoice — foi gerado o documento interno.'
+          );
+        }
+      }
+
+      // Documento HTML local (fallback) — original não-KeyInvoice ou emissão falhada.
+      if (!emitiuKI) {
+        const clienteMorada =
+          [cli?.morada, cli?.codigo_postal, cli?.cidade].filter(Boolean).join(', ') || null;
+        const aberto = openFaturacaoDocumento({
           tipo: 'nota_credito',
           numero,
           data: hojeISO(),
           emitente: emitente ?? null,
-          cliente: { nome: cobranca.destinatario_nome, nif: clienteNif, morada: clienteMorada },
+          cliente: { nome: cobranca.destinatario_nome, nif: cli?.nif ?? null, morada: clienteMorada },
           linhas: [{ descricao: `Crédito sobre ${docOriginal} — ${motivo.trim()}`, valor: base }],
           subtotal: base,
           taxaIva,
@@ -158,18 +193,13 @@ export function NotaCreditoDialog({
           valorOriginal: totalCobranca,
           saldoRestante,
         });
+        toast.success(`Nota de crédito ${numero} emitida (${formatCurrency(valorNum)}).`);
+        if (!aberto) toast.warning('Pop-up bloqueado — não foi possível abrir o documento.');
       }
 
-      toast.success(`Nota de crédito ${numero} emitida (${formatCurrency(valorNum)}).`);
-      if (!docWin) toast.warning('Pop-up bloqueado — não foi possível abrir o documento.');
-
-      qc.invalidateQueries({ queryKey: ['renting'] });
-      qc.invalidateQueries({ queryKey: ['contrato-cobrancas', cobranca.contrato_id] });
-      qc.invalidateQueries({ queryKey: ['contrato-notas-credito', cobranca.contrato_id] });
       onEmitida();
       onOpenChange(false);
     } catch (e: any) {
-      docWin?.close();
       console.error('Erro ao emitir nota de crédito:', e);
       toast.error(`Erro ao emitir nota de crédito: ${e?.message ?? 'tente novamente'}`);
     } finally {

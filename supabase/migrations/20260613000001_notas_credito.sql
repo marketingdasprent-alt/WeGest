@@ -189,7 +189,8 @@ CREATE POLICY "mt_notas_credito_insert" ON public.notas_credito
 
 CREATE POLICY "mt_notas_credito_update" ON public.notas_credito
   FOR UPDATE TO authenticated
-  USING (org_id = get_current_org_id() AND has_renting_faturacao_access());
+  USING (org_id = get_current_org_id() AND has_renting_faturacao_access())
+  WITH CHECK (org_id = get_current_org_id() AND has_renting_faturacao_access());
 -- sem DELETE: notas de crédito anulam-se (estado), não se apagam
 
 COMMENT ON TABLE public.notas_credito IS

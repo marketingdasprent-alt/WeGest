@@ -154,6 +154,8 @@ export interface MovimentoRaw {
 /** Linha pronta a apresentar. */
 export interface FaturacaoRow {
   id: string;
+  /** cobrança de origem — liga ao documento fiscal KeyInvoice em `invoices`. */
+  cobrancaId: string | null;
   /** data contabilística (ISO date) */
   dataMovimento: string | null;
   /** timestamp do registo (com hora) */
@@ -205,6 +207,7 @@ export function mapMovimentoToRow(
   const utilizador = m.created_by ? profilesMap[m.created_by] || '—' : '—';
   return {
     id: m.id,
+    cobrancaId: m.cobranca_id,
     dataMovimento: m.data_movimento,
     createdAt: m.created_at,
     numeroDoc,

@@ -6,9 +6,43 @@
  * com o KeyInvoice nem vê a chave — só invoca a edge function.
  */
 import { supabase } from '@/integrations/supabase/client';
-import type { CreateFaturaPayload, EmitResult, InvoiceMetadata } from '@/types/keyinvoice';
+import type {
+  ClienteFatura,
+  CreateFaturaPayload,
+  EmitResult,
+  InvoiceMetadata,
+} from '@/types/keyinvoice';
 
 export type { CreateFaturaPayload, EmitResult };
+
+/** Subconjunto de `clientes` necessário para o cabeçalho de um documento fiscal. */
+export interface ClienteRowParaKI {
+  nome?: string | null;
+  nif?: string | null;
+  email?: string | null;
+  morada?: string | null;
+  codigo_postal?: string | null;
+  localidade?: string | null;
+}
+
+/**
+ * Mapeia um registo de `clientes` para o cliente do documento KeyInvoice.
+ * NOTA: usa `localidade` (campo fiscal), não `cidade`.
+ */
+export function clienteRowToKI(
+  row: ClienteRowParaKI | null | undefined,
+  fallbackNome?: string
+): ClienteFatura {
+  return {
+    nome: row?.nome || fallbackNome || 'Cliente',
+    nif: row?.nif || undefined,
+    email: row?.email || undefined,
+    morada: row?.morada || undefined,
+    codigo_postal: row?.codigo_postal || undefined,
+    localidade: row?.localidade || undefined,
+    country_code: 'PT',
+  };
+}
 
 const FN = 'keyinvoice-emitir';
 

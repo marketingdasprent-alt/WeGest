@@ -1,0 +1,415 @@
+/**
+ * Aba "Faturação" da reserva — permite faturar a reserva antecipadamente
+ * (antes de abrir o contrato), fazer recibo e nota de crédito, e ver/descarregar
+ * os documentos fiscais emitidos. As cobranças ficam ligadas à reserva
+ * (reserva_id) e são herdadas pelo contrato na conversão.
+ */
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { Receipt, FileText, Download, Loader2, Send } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { formatCurrency, formatDate } from '@/utils/formatters';
+import { cn } from '@/lib/utils';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import { useEmitirEEscreverFatura } from '@/hooks/useKeyInvoice';
+import { baixarDocumentoPdf, clienteRowToKI } from '@/lib/keyinvoice';
+import type { InvoiceMetadata, ItemFatura } from '@/types/keyinvoice';
+import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
+import {
+  FaturacaoActionsToolbar,
+  type ToolbarCobranca,
+} from '@/components/faturacao/FaturacaoActionsToolbar';
+import { ReservaFaturarDialog } from '@/components/faturacao/ReservaFaturarDialog';
+import type { Reserva } from '@/types/reserva';
+
+const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
+
+const ESTADO_COBRANCA_CLASS: Record<string, string> = {
+  pendente: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  emitida: 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  paga: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  anulada: 'border-muted-foreground/30 bg-muted text-muted-foreground',
+};
+
+interface CobrancaRow {
+  id: string;
+  documento_externo_ref: string | null;
+  estado: string;
+  valor_total: number | null;
+  valor_sem_iva: number | null;
+  taxa_iva: number | null;
+  emite_fatura_fiscal: boolean;
+  emitida_em: string | null;
+  created_at: string;
+  descricao: string | null;
+  destinatario_id: string;
+  destinatario_nome: string;
+}
+
+interface Props {
+  reserva: Reserva;
+}
+
+export function ReservaTabFaturar({ reserva }: Props) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [reemitindoId, setReemitindoId] = useState<string | null>(null);
+  const [baixandoId, setBaixandoId] = useState<string | null>(null);
+
+  const { empresas } = useClientesEmpresas();
+  const emitente: FaturacaoDocEmitente | null = useMemo(() => {
+    const e = empresas.find((x) => x.id === reserva.emissor_id) ?? (empresas.length === 1 ? empresas[0] : null);
+    return e ? { nomeCompleto: e.nomeCompleto, nif: e.nif, sede: e.sede } : null;
+  }, [empresas, reserva.emissor_id]);
+
+  const emitirMut = useEmitirEEscreverFatura();
+
+  const { data: cobrancas = [], refetch: refetchCobrancas } = useQuery({
+    queryKey: ['reserva-cobrancas', reserva.id],
+    queryFn: async (): Promise<CobrancaRow[]> => {
+      const { data, error } = await supabase
+        .from('contrato_cobrancas')
+        .select(
+          'id, documento_externo_ref, estado, valor_total, valor_sem_iva, taxa_iva, emite_fatura_fiscal, emitida_em, created_at, descricao, destinatario_id, destinatario_nome'
+        )
+        .eq('reserva_id', reserva.id)
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.warn('cobranças da reserva indisponíveis:', error.message);
+        return [];
+      }
+      return (data ?? []) as CobrancaRow[];
+    },
+  });
+
+  const cobrancaIds = useMemo(() => cobrancas.map((c) => c.id), [cobrancas]);
+
+  const { data: ncPorCobranca = {}, refetch: refetchNC } = useQuery({
+    queryKey: ['reserva-notas-credito', reserva.id],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data, error } = await supabase
+        .from('notas_credito')
+        .select('cobranca_id, valor')
+        .eq('estado', 'ativo')
+        .in('cobranca_id', cobrancaIds.length ? cobrancaIds : ['00000000-0000-0000-0000-000000000000']);
+      if (error) return {};
+      const m: Record<string, number> = {};
+      (data ?? []).forEach((n: any) => {
+        m[n.cobranca_id] = (m[n.cobranca_id] ?? 0) + Number(n.valor || 0);
+      });
+      return m;
+    },
+    enabled: cobrancaIds.length > 0,
+  });
+
+  const { data: recibosPorCobranca = {}, refetch: refetchRecibos } = useQuery({
+    queryKey: ['reserva-recibos', reserva.id],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data, error } = await supabase
+        .from('recibos')
+        .select('referencia, valor')
+        .eq('estado', 'ativo')
+        .in('referencia', cobrancaIds.length ? cobrancaIds : ['00000000-0000-0000-0000-000000000000']);
+      if (error) return {};
+      const m: Record<string, number> = {};
+      (data ?? []).forEach((r: any) => {
+        if (r.referencia) m[r.referencia] = (m[r.referencia] ?? 0) + Number(r.valor || 0);
+      });
+      return m;
+    },
+    enabled: cobrancaIds.length > 0,
+  });
+
+  const { data: invoices = [], refetch: refetchInvoices } = useQuery({
+    queryKey: ['reserva-invoices', reserva.id],
+    queryFn: async (): Promise<InvoiceMetadata[]> => {
+      const { data, error } = await (supabase as any)
+        .from('invoices')
+        .select('*')
+        .in('cobranca_id', cobrancaIds.length ? cobrancaIds : ['00000000-0000-0000-0000-000000000000']);
+      if (error) return [];
+      return (data ?? []) as InvoiceMetadata[];
+    },
+    enabled: cobrancaIds.length > 0,
+  });
+
+  const invoiceByCobranca = useMemo(() => {
+    const m = new Map<string, InvoiceMetadata>();
+    for (const inv of invoices) {
+      if (!inv.cobranca_id || inv.status !== 'emitida') continue;
+      if (inv.tipo !== 'FT' && inv.tipo !== 'FR') continue;
+      const prev = m.get(inv.cobranca_id);
+      if (!prev || (inv.created_at ?? '') > (prev.created_at ?? '')) m.set(inv.cobranca_id, inv);
+    }
+    return m;
+  }, [invoices]);
+
+  const refetchAll = () => {
+    refetchCobrancas();
+    refetchNC();
+    refetchRecibos();
+    refetchInvoices();
+  };
+
+  const toolbarCobrancas: ToolbarCobranca[] = useMemo(
+    () =>
+      cobrancas.map((c) => {
+        const total = round2(c.valor_total ?? 0);
+        const creditado = round2(ncPorCobranca?.[c.id] ?? 0);
+        const pago = round2(recibosPorCobranca?.[c.id] ?? 0);
+        return {
+          id: c.id,
+          descricao: c.descricao,
+          valor_total: c.valor_total,
+          taxa_iva: c.taxa_iva,
+          destinatario_id: c.destinatario_id,
+          destinatario_nome: c.destinatario_nome,
+          contrato_id: null,
+          documento_externo_ref: c.documento_externo_ref,
+          emite_fatura_fiscal: c.emite_fatura_fiscal,
+          estado: c.estado,
+          saldoPagar: round2(total - pago - creditado),
+          saldoCreditar: round2(total - creditado),
+          jaCreditado: creditado,
+        };
+      }),
+    [cobrancas, ncPorCobranca, recibosPorCobranca]
+  );
+
+  const jaFaturada = cobrancas.some((c) => c.estado === 'emitida' || c.estado === 'paga');
+
+  async function baixarPdf(inv: InvoiceMetadata) {
+    setBaixandoId(inv.cobranca_id ?? inv.id);
+    try {
+      await baixarDocumentoPdf(inv);
+    } catch (e: any) {
+      toast.error(`Erro ao obter PDF: ${e?.message ?? 'indisponível'}`);
+    } finally {
+      setBaixandoId(null);
+    }
+  }
+
+  async function reemitirFatura(c: CobrancaRow) {
+    setReemitindoId(c.id);
+    try {
+      const { data: fresh } = await supabase
+        .from('contrato_cobrancas')
+        .select('documento_externo_ref')
+        .eq('id', c.id)
+        .single();
+      if (fresh?.documento_externo_ref) {
+        toast.info('Esta fatura já tem documento fiscal emitido.');
+        refetchCobrancas();
+        return;
+      }
+      const { data: cli } = await supabase
+        .from('clientes')
+        .select('nome, nif, email, morada, codigo_postal, localidade')
+        .eq('id', c.destinatario_id)
+        .single();
+      const isFR = /^fa[c]?tura-recibo/i.test((c.descricao ?? '').trim());
+      const itens: ItemFatura[] = [
+        {
+          descricao: `Aluguer — Reserva #${reserva.codigo}`,
+          quantidade: 1,
+          preco_unitario: c.valor_sem_iva ?? 0,
+          taxa_iva: c.taxa_iva ?? 0,
+        },
+      ];
+      const res = await emitirMut.mutateAsync({
+        payload: {
+          tipo: isFR ? 'FR' : 'FT',
+          cliente: clienteRowToKI(cli, c.destinatario_nome),
+          itens,
+          cobranca_id: c.id,
+          referencia_externa: `Reserva #${reserva.codigo}`,
+        },
+        cobrancaId: c.id,
+        contratoId: reserva.id,
+      });
+      if (res.invoice) {
+        try {
+          await baixarDocumentoPdf(res.invoice);
+        } catch {
+          /* best-effort */
+        }
+      }
+      toast.success(`Documento fiscal emitido${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`);
+      if (res.warning) toast.warning(res.warning);
+      refetchAll();
+    } catch (e: any) {
+      console.error('Erro a reemitir documento fiscal:', e);
+      toast.error(`Falha a emitir o documento fiscal: ${e?.message ?? 'tente novamente'}`);
+    } finally {
+      setReemitindoId(null);
+    }
+  }
+
+  if (reserva.regime === 'slot') {
+    return (
+      <div className="rounded-md border border-dashed border-border/60 bg-muted/30 p-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          As reservas em regime <strong>slot</strong> são faturadas via Contrato de Prestação.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Receipt className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">
+                {jaFaturada ? 'Reserva faturada' : 'Faturar reserva (pagamento antecipado)'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Total: <span className="font-semibold">{formatCurrency(reserva.valor_total)}</span>
+                {jaFaturada ? ' · já faturada' : ' · IVA incluído'}
+              </p>
+            </div>
+          </div>
+          <FaturacaoActionsToolbar
+            orgId={reserva.org_id}
+            emitente={emitente}
+            onFaturar={jaFaturada ? undefined : () => setDialogOpen(true)}
+            faturarLabel="Faturar reserva"
+            cobrancas={toolbarCobrancas}
+            onChanged={refetchAll}
+          />
+        </CardContent>
+      </Card>
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+          <FileText className="h-3.5 w-3.5" /> Faturas da reserva
+        </p>
+        <div className="rounded-md border overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nº / Ref.</TableHead>
+                <TableHead>Destinatário</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Data</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cobrancas.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-20 text-center text-muted-foreground text-sm">
+                    Ainda sem faturas para esta reserva.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                cobrancas.map((c) => {
+                  const inv = invoiceByCobranca.get(c.id);
+                  const porEmitir =
+                    !c.documento_externo_ref &&
+                    c.emite_fatura_fiscal &&
+                    (c.estado === 'emitida' || c.estado === 'paga') &&
+                    (c.valor_total ?? 0) > 0;
+                  return (
+                    <TableRow key={c.id}>
+                      <TableCell className="font-mono text-xs">
+                        {c.documento_externo_ref ? (
+                          <div className="flex items-center gap-1.5">
+                            <span>{c.documento_externo_ref}</span>
+                            {inv && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 shrink-0"
+                                title="Descarregar PDF"
+                                onClick={() => baixarPdf(inv)}
+                                disabled={baixandoId === c.id}
+                              >
+                                {baixandoId === c.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Download className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        ) : porEmitir ? (
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              variant="outline"
+                              className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                            >
+                              Por emitir
+                            </Badge>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1"
+                              onClick={() => reemitirFatura(c)}
+                              disabled={reemitindoId === c.id}
+                            >
+                              {reemitindoId === c.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Send className="h-3.5 w-3.5" />
+                              )}
+                              Reemitir
+                            </Button>
+                          </div>
+                        ) : (
+                          c.id.slice(0, 8).toUpperCase()
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate" title={c.destinatario_nome}>
+                        {c.destinatario_nome}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(c.valor_total)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={cn('capitalize border', ESTADO_COBRANCA_CLASS[c.estado] ?? '')}
+                        >
+                          {c.estado}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {formatDate(c.emitida_em || c.created_at)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      <ReservaFaturarDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        reserva={reserva}
+        emitente={emitente}
+        onFaturado={refetchAll}
+      />
+    </div>
+  );
+}

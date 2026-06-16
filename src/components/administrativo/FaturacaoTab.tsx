@@ -48,6 +48,14 @@ import {
   type FaturacaoRow,
 } from './faturacao';
 import { formatCurrency, formatDateTime } from '@/utils/formatters';
+import type { InvoiceMetadata } from '@/types/keyinvoice';
+import { RecibosDialog, type ReciboCobrancaAlvo } from '@/components/faturacao/RecibosDialog';
+import {
+  NotaCreditoDialog,
+  type NotaCreditoCobranca,
+} from '@/components/renting/contratos/NotaCreditoDialog';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
 
 const PAGE_SIZE = 50;
 const WEEK_STARTS_ON = 1; // Segunda-feira
@@ -83,6 +91,10 @@ export function FaturacaoTab() {
   // ── dados ──
   const [rawMovimentos, setRawMovimentos] = useState<MovimentoRaw[]>([]);
   const [capped, setCapped] = useState(false);
+  // Documentos fiscais KeyInvoice (FT/FR emitidas) por cobrança — p/ download do PDF.
+  const [invoiceByCobranca, setInvoiceByCobranca] = useState<Map<string, InvoiceMetadata>>(
+    new Map()
+  );
   const [loading, setLoading] = useState(true);
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
   // espelho síncrono do mapa de perfis — evita closures obsoletas / refetch duplicado
@@ -99,6 +111,103 @@ export function FaturacaoTab() {
   // ── dialog de detalhe ──
   const [selectedRow, setSelectedRow] = useState<FaturacaoRow | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // ── ações de faturação (recibo / nota de crédito) sobre uma fatura ──
+  const { empresas } = useClientesEmpresas();
+  const emitente: FaturacaoDocEmitente | null = useMemo(
+    () => (empresas.length === 1 ? { nomeCompleto: empresas[0].nomeCompleto, nif: empresas[0].nif, sede: empresas[0].sede } : null),
+    [empresas]
+  );
+  const [actionOrgId, setActionOrgId] = useState<string>('');
+  const [reciboOpen, setReciboOpen] = useState(false);
+  const [reciboAlvo, setReciboAlvo] = useState<ReciboCobrancaAlvo | null>(null);
+  const [ncAlvo, setNcAlvo] = useState<NotaCreditoCobranca | null>(null);
+  const [ncJaCreditado, setNcJaCreditado] = useState(0);
+
+  /** Carrega a cobrança + saldos (recibos/NC ativos) para uma ação. */
+  async function resolverCobranca(cobrancaId: string) {
+    const { data: cob } = await supabase
+      .from('contrato_cobrancas')
+      .select(
+        'id, org_id, descricao, valor_total, taxa_iva, emite_fatura_fiscal, estado, destinatario_id, destinatario_nome, contrato_id, documento_externo_ref'
+      )
+      .eq('id', cobrancaId)
+      .single();
+    if (!cob) return null;
+    const { data: recs } = await supabase
+      .from('recibos')
+      .select('valor')
+      .eq('referencia', cobrancaId)
+      .eq('estado', 'ativo');
+    const pago = (recs ?? []).reduce((s: number, r: any) => s + Number(r.valor || 0), 0);
+    const { data: ncs } = await supabase
+      .from('notas_credito')
+      .select('valor')
+      .eq('cobranca_id', cobrancaId)
+      .eq('estado', 'ativo');
+    const creditado = (ncs ?? []).reduce((s: number, n: any) => s + Number(n.valor || 0), 0);
+    return { cob: cob as any, pago, creditado };
+  }
+
+  async function abrirReciboParaRow(row: FaturacaoRow) {
+    if (!row.cobrancaId) return;
+    setDialogOpen(false);
+    const r = await resolverCobranca(row.cobrancaId);
+    if (!r) {
+      toast.error('Cobrança não encontrada.');
+      return;
+    }
+    const total = Math.round((Number(r.cob.valor_total) || 0) * 100) / 100;
+    const saldoPagar = Math.round((total - r.pago - r.creditado) * 100) / 100;
+    if (saldoPagar <= 0.005) {
+      toast.info('Esta fatura já está liquidada.');
+      return;
+    }
+    setActionOrgId(r.cob.org_id);
+    setReciboAlvo({
+      id: r.cob.id,
+      descricao: r.cob.descricao,
+      valor_total: r.cob.valor_total,
+      saldoPagar,
+      destinatario_id: r.cob.destinatario_id,
+      destinatario_nome: r.cob.destinatario_nome,
+      contrato_id: r.cob.contrato_id,
+      documento_externo_ref: r.cob.documento_externo_ref,
+    });
+    setReciboOpen(true);
+  }
+
+  async function abrirNcParaRow(row: FaturacaoRow) {
+    if (!row.cobrancaId) return;
+    setDialogOpen(false);
+    const r = await resolverCobranca(row.cobrancaId);
+    if (!r) {
+      toast.error('Cobrança não encontrada.');
+      return;
+    }
+    if (!r.cob.emite_fatura_fiscal) {
+      toast.error('Cobrança interna não tem fatura a creditar.');
+      return;
+    }
+    const total = Math.round((Number(r.cob.valor_total) || 0) * 100) / 100;
+    const saldoCreditar = Math.round((total - r.creditado) * 100) / 100;
+    if (saldoCreditar <= 0.005) {
+      toast.info('Esta fatura já está totalmente creditada.');
+      return;
+    }
+    setActionOrgId(r.cob.org_id);
+    setNcJaCreditado(r.creditado);
+    setNcAlvo({
+      id: r.cob.id,
+      descricao: r.cob.descricao,
+      valor_total: r.cob.valor_total,
+      taxa_iva: r.cob.taxa_iva,
+      destinatario_id: r.cob.destinatario_id,
+      destinatario_nome: r.cob.destinatario_nome,
+      contrato_id: r.cob.contrato_id ?? null,
+      documento_externo_ref: r.cob.documento_externo_ref,
+    });
+  }
 
   const stationSel = estacaoId !== TODAS;
   const metodoSel = metodo !== TODOS;
@@ -247,6 +356,38 @@ export function FaturacaoTab() {
     // resolveProfiles intentionally omitted (cache-stable enough; avoids refetch loop)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estacaoId, stationSel, dateFrom, dateTo, reloadToken]);
+
+  // ── Documentos fiscais KeyInvoice das cobranças visíveis (p/ download PDF) ──
+  useEffect(() => {
+    let cancelled = false;
+    async function loadInvoices() {
+      const ids = Array.from(
+        new Set(rawMovimentos.map((m) => m.cobranca_id).filter((x): x is string => !!x))
+      );
+      if (ids.length === 0) {
+        setInvoiceByCobranca(new Map());
+        return;
+      }
+      const { data, error } = await (supabase as any)
+        .from('invoices')
+        .select('*')
+        .in('cobranca_id', ids)
+        .eq('status', 'emitida')
+        .in('tipo', ['FT', 'FR']);
+      if (error || cancelled) return;
+      const m = new Map<string, InvoiceMetadata>();
+      for (const inv of (data ?? []) as InvoiceMetadata[]) {
+        if (!inv.cobranca_id) continue;
+        const prev = m.get(inv.cobranca_id);
+        if (!prev || (inv.created_at ?? '') > (prev.created_at ?? '')) m.set(inv.cobranca_id, inv);
+      }
+      if (!cancelled) setInvoiceByCobranca(m);
+    }
+    loadInvoices();
+    return () => {
+      cancelled = true;
+    };
+  }, [rawMovimentos]);
 
   // Documentos consolidados (Fatura-Recibo = 1 linha) — antes de paginar.
   const allDocs: FaturacaoRow[] = useMemo(
@@ -639,7 +780,41 @@ export function FaturacaoTab() {
         </div>
       )}
 
-      <FaturacaoMovimentoDialog row={selectedRow} open={dialogOpen} onOpenChange={setDialogOpen} />
+      <FaturacaoMovimentoDialog
+        row={selectedRow}
+        invoice={
+          selectedRow &&
+          (selectedRow.docTipo === 'fatura' || selectedRow.docTipo === 'fatura_recibo') &&
+          selectedRow.cobrancaId
+            ? (invoiceByCobranca.get(selectedRow.cobrancaId) ?? null)
+            : null
+        }
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onFazerRecibo={selectedRow ? () => abrirReciboParaRow(selectedRow) : undefined}
+        onNotaCredito={selectedRow ? () => abrirNcParaRow(selectedRow) : undefined}
+      />
+
+      <RecibosDialog
+        open={reciboOpen}
+        onOpenChange={setReciboOpen}
+        orgId={actionOrgId}
+        cobrancas={reciboAlvo ? [reciboAlvo] : []}
+        preselectId={reciboAlvo?.id}
+        onEmitido={() => setReloadToken((t) => t + 1)}
+      />
+
+      <NotaCreditoDialog
+        open={!!ncAlvo}
+        onOpenChange={(o) => {
+          if (!o) setNcAlvo(null);
+        }}
+        cobranca={ncAlvo}
+        orgId={actionOrgId}
+        emitente={emitente}
+        jaCreditado={ncJaCreditado}
+        onEmitida={() => setReloadToken((t) => t + 1)}
+      />
     </div>
   );
 }

@@ -221,7 +221,7 @@ export function buildFaturacaoDocHtml(doc: FaturacaoDocPayload): string {
 
     <div class="footer">
       Documento interno emitido pelo WeGest${
-        isNC ? '' : ' — a fatura fiscal é emitida pelo programa de faturação externo'
+        isNC ? '' : ' — a fatura fiscal é emitida no KeyInvoice'
       }.
     </div>
   </body></html>`;

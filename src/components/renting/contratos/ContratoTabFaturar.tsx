@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Receipt, Lock, FileText, FileMinus } from 'lucide-react';
+import { Receipt, Lock, FileText, Download, Loader2, Send } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +21,9 @@ import { useContratoExtras, calcExtraTotal } from '@/hooks/useContratoExtras';
 import { useContratoTaxas, calcTaxaValor } from '@/hooks/useContratoTaxas';
 import { useContratoCondutores } from '@/hooks/useContratoCondutores';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import { useInvoicesByContrato, useEmitirEEscreverFatura } from '@/hooks/useKeyInvoice';
+import { baixarDocumentoPdf, clienteRowToKI } from '@/lib/keyinvoice';
+import type { InvoiceMetadata, ItemFatura } from '@/types/keyinvoice';
 import type { ContratoRenting } from '@/types/contratoRenting';
 import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
 import {
@@ -27,7 +31,10 @@ import {
   type FaturaCalculo,
   type EntidadeOption,
 } from './ContratoFaturarDialog';
-import { NotaCreditoDialog, type NotaCreditoCobranca } from './NotaCreditoDialog';
+import {
+  FaturacaoActionsToolbar,
+  type ToolbarCobranca,
+} from '@/components/faturacao/FaturacaoActionsToolbar';
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -51,6 +58,7 @@ interface CobrancaRow {
   documento_externo_ref: string | null;
   estado: string;
   valor_total: number | null;
+  valor_sem_iva: number | null;
   taxa_iva: number | null;
   emite_fatura_fiscal: boolean;
   emitida_em: string | null;
@@ -66,7 +74,8 @@ interface Props {
 
 export function ContratoTabFaturar({ contrato }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [ncCobranca, setNcCobranca] = useState<NotaCreditoCobranca | null>(null);
+  const [reemitindoId, setReemitindoId] = useState<string | null>(null);
+  const [baixandoId, setBaixandoId] = useState<string | null>(null);
 
   const { data: coberturas } = useContratoCoberturas(contrato.id);
   const { data: extras } = useContratoExtras(contrato.id);
@@ -112,7 +121,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
       const { data, error } = await supabase
         .from('contrato_cobrancas')
         .select(
-          'id, documento_externo_ref, estado, valor_total, taxa_iva, emite_fatura_fiscal, emitida_em, created_at, descricao, destinatario_id, destinatario_nome'
+          'id, documento_externo_ref, estado, valor_total, valor_sem_iva, taxa_iva, emite_fatura_fiscal, emitida_em, created_at, descricao, destinatario_id, destinatario_nome'
         )
         .eq('contrato_id', contrato.id)
         .order('created_at', { ascending: false });
@@ -125,7 +134,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
   const { data: ncPorCobranca, refetch: refetchNC } = useQuery({
     queryKey: ['contrato-notas-credito', contrato.id],
     queryFn: async (): Promise<Record<string, number>> => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('notas_credito')
         .select('cobranca_id, valor')
         .eq('contrato_id', contrato.id)
@@ -142,6 +151,123 @@ export function ContratoTabFaturar({ contrato }: Props) {
       return m;
     },
   });
+
+  // Total já liquidado (recibos ativos) por cobrança — para o saldo a pagar.
+  const { data: recibosPorCobranca, refetch: refetchRecibos } = useQuery({
+    queryKey: ['contrato-recibos', contrato.id],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data, error } = await supabase
+        .from('recibos')
+        .select('referencia, valor')
+        .eq('contrato_id', contrato.id)
+        .eq('estado', 'ativo');
+      if (error) {
+        console.warn('recibos indisponível:', error.message);
+        return {};
+      }
+      const m: Record<string, number> = {};
+      (data ?? []).forEach((r: any) => {
+        if (r.referencia) m[r.referencia] = (m[r.referencia] ?? 0) + Number(r.valor || 0);
+      });
+      return m;
+    },
+  });
+
+  const { data: invoices = [], refetch: refetchInvoices } = useInvoicesByContrato(contrato.id);
+  const emitirMut = useEmitirEEscreverFatura();
+
+  const refetchAll = () => {
+    refetchCobrancas();
+    refetchNC();
+    refetchRecibos();
+    refetchInvoices();
+  };
+
+  // Última fatura fiscal (FT/FR emitida) por cobrança — p/ download do PDF.
+  // A `invoices` é 1-para-N por cobrança (uma FT + eventuais NC partilham cobranca_id).
+  const invoiceByCobranca = useMemo(() => {
+    const m = new Map<string, InvoiceMetadata>();
+    for (const inv of invoices) {
+      if (!inv.cobranca_id || inv.status !== 'emitida') continue;
+      if (inv.tipo !== 'FT' && inv.tipo !== 'FR') continue;
+      const prev = m.get(inv.cobranca_id);
+      if (!prev || (inv.created_at ?? '') > (prev.created_at ?? '')) m.set(inv.cobranca_id, inv);
+    }
+    return m;
+  }, [invoices]);
+
+  async function baixarPdf(inv: InvoiceMetadata) {
+    setBaixandoId(inv.cobranca_id ?? inv.id);
+    try {
+      await baixarDocumentoPdf(inv);
+    } catch (e: any) {
+      toast.error(`Erro ao obter PDF: ${e?.message ?? 'indisponível'}`);
+    } finally {
+      setBaixandoId(null);
+    }
+  }
+
+  /** Emite (ou reemite) o documento fiscal de uma cobrança que ficou "por emitir". */
+  async function reemitirFatura(c: CobrancaRow) {
+    setReemitindoId(c.id);
+    try {
+      // Reconfirmar p/ não duplicar o documento fiscal (idempotência).
+      const { data: fresh, error: fErr } = await supabase
+        .from('contrato_cobrancas')
+        .select('documento_externo_ref')
+        .eq('id', c.id)
+        .single();
+      if (fErr) throw fErr;
+      if (fresh?.documento_externo_ref) {
+        toast.info('Esta fatura já tem documento fiscal emitido.');
+        refetchCobrancas();
+        return;
+      }
+      const { data: cli } = await supabase
+        .from('clientes')
+        .select('nome, nif, email, morada, codigo_postal, localidade')
+        .eq('id', c.destinatario_id)
+        .single();
+      const isFR = /^fa[c]?tura-recibo/i.test((c.descricao ?? '').trim());
+      const codigoLabel = `Contrato #${String(contrato.codigo).padStart(4, '0')}`;
+      const itens: ItemFatura[] = [
+        {
+          descricao: `Aluguer — ${codigoLabel}`,
+          quantidade: 1,
+          preco_unitario: c.valor_sem_iva ?? 0,
+          taxa_iva: c.taxa_iva ?? 0,
+        },
+      ];
+      const res = await emitirMut.mutateAsync({
+        payload: {
+          tipo: isFR ? 'FR' : 'FT',
+          cliente: clienteRowToKI(cli, c.destinatario_nome),
+          itens,
+          contrato_id: contrato.id,
+          cobranca_id: c.id,
+          referencia_externa: codigoLabel,
+        },
+        cobrancaId: c.id,
+        contratoId: contrato.id,
+      });
+      if (res.invoice) {
+        try {
+          await baixarDocumentoPdf(res.invoice);
+        } catch {
+          /* download é best-effort */
+        }
+      }
+      toast.success(`Documento fiscal emitido${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`);
+      if (res.warning) toast.warning(res.warning);
+      refetchCobrancas();
+      refetchInvoices();
+    } catch (e: any) {
+      console.error('Erro a reemitir documento fiscal:', e);
+      toast.error(`Falha a emitir o documento fiscal: ${e?.message ?? 'tente novamente'}`);
+    } finally {
+      setReemitindoId(null);
+    }
+  }
 
   const fatura: FaturaCalculo = useMemo(() => {
     const dias = calcDias(contrato.data_inicio, contrato.data_fim);
@@ -223,47 +349,78 @@ export function ContratoTabFaturar({ contrato }: Props) {
 
   const jaFacturado = contrato.estado_financeiro !== 'pendente';
 
+  // Cobranças com saldos pré-computados — alvo de recibo / nota de crédito na toolbar.
+  const toolbarCobrancas: ToolbarCobranca[] = useMemo(
+    () =>
+      (cobrancas ?? []).map((c) => {
+        const total = round2(c.valor_total ?? 0);
+        const creditado = round2(ncPorCobranca?.[c.id] ?? 0);
+        const pago = round2(recibosPorCobranca?.[c.id] ?? 0);
+        return {
+          id: c.id,
+          descricao: c.descricao,
+          valor_total: c.valor_total,
+          taxa_iva: c.taxa_iva,
+          destinatario_id: c.destinatario_id,
+          destinatario_nome: c.destinatario_nome,
+          contrato_id: contrato.id,
+          documento_externo_ref: c.documento_externo_ref,
+          emite_fatura_fiscal: c.emite_fatura_fiscal,
+          estado: c.estado,
+          saldoPagar: round2(total - pago - creditado),
+          saldoCreditar: round2(total - creditado),
+          jaCreditado: creditado,
+        };
+      }),
+    [cobrancas, ncPorCobranca, recibosPorCobranca, contrato.id]
+  );
+
   return (
     <div className="space-y-4">
-      {jaFacturado ? (
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <Lock className="h-5 w-5 text-indigo-500 shrink-0" />
-            <div>
-              <p className="text-sm font-medium">
-                Contrato {contrato.estado_financeiro === 'pago' ? 'pago' : 'facturado'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {contrato.facturado_em
-                  ? `Facturado em ${formatDate(contrato.facturado_em)}`
-                  : 'Os totais estão congelados.'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
+      <Card>
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className={cn('p-2 rounded-lg', jaFacturado ? 'bg-indigo-500/10' : 'bg-primary/10')}>
+              {jaFacturado ? (
+                <Lock className="h-5 w-5 text-indigo-500" />
+              ) : (
                 <Receipt className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Faturar este contrato</p>
-                <p className="text-xs text-muted-foreground">
-                  Total a faturar:{' '}
-                  <span className="font-semibold">{formatCurrency(fatura.valorRegistado)}</span>
-                  {fatura.dias > 0 ? ` · ${fatura.dias} dia${fatura.dias !== 1 ? 's' : ''}` : ''}
-                </p>
-              </div>
+              )}
             </div>
-            <Button onClick={() => setDialogOpen(true)} className="gap-2">
-              <Receipt className="h-4 w-4" />
-              Faturar contrato
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+            <div>
+              {jaFacturado ? (
+                <>
+                  <p className="text-sm font-medium">
+                    Contrato {contrato.estado_financeiro === 'pago' ? 'pago' : 'facturado'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {contrato.facturado_em
+                      ? `Facturado em ${formatDate(contrato.facturado_em)}`
+                      : 'Os totais estão congelados.'}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium">Faturar este contrato</p>
+                  <p className="text-xs text-muted-foreground">
+                    Total a faturar:{' '}
+                    <span className="font-semibold">{formatCurrency(fatura.valorRegistado)}</span>
+                    {fatura.dias > 0 ? ` · ${fatura.dias} dia${fatura.dias !== 1 ? 's' : ''}` : ''}
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+          <FaturacaoActionsToolbar
+            orgId={contrato.org_id}
+            emitente={emitente}
+            onFaturar={jaFacturado ? undefined : () => setDialogOpen(true)}
+            faturarLabel="Faturar contrato"
+            cobrancas={toolbarCobrancas}
+            onChanged={refetchAll}
+          />
+        </CardContent>
+      </Card>
 
       {/* Faturas/cobranças deste contrato */}
       <div>
@@ -293,15 +450,63 @@ export function ContratoTabFaturar({ contrato }: Props) {
                 cobrancas.map((c) => {
                   const creditado = round2(ncPorCobranca?.[c.id] ?? 0);
                   const saldo = round2((c.valor_total ?? 0) - creditado);
-                  const podeCreditar =
-                    (c.estado === 'emitida' || c.estado === 'paga') &&
+                  const inv = invoiceByCobranca.get(c.id);
+                  const porEmitir =
+                    !c.documento_externo_ref &&
                     c.emite_fatura_fiscal &&
-                    (c.valor_total ?? 0) > 0 &&
-                    saldo > 0.005;
+                    (c.estado === 'emitida' || c.estado === 'paga') &&
+                    (c.valor_total ?? 0) > 0;
                   return (
                     <TableRow key={c.id}>
                       <TableCell className="font-mono text-xs">
-                        {c.documento_externo_ref || c.id.slice(0, 8).toUpperCase()}
+                        {c.documento_externo_ref ? (
+                          <div className="flex items-center gap-1.5">
+                            <span>{c.documento_externo_ref}</span>
+                            {inv && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 shrink-0"
+                                title="Descarregar PDF"
+                                onClick={() => baixarPdf(inv)}
+                                disabled={baixandoId === c.id}
+                              >
+                                {baixandoId === c.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Download className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        ) : porEmitir ? (
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              variant="outline"
+                              className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                            >
+                              Por emitir
+                            </Badge>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1"
+                              onClick={() => reemitirFatura(c)}
+                              disabled={reemitindoId === c.id}
+                            >
+                              {reemitindoId === c.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Send className="h-3.5 w-3.5" />
+                              )}
+                              Reemitir
+                            </Button>
+                          </div>
+                        ) : (
+                          c.id.slice(0, 8).toUpperCase()
+                        )}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate" title={c.destinatario_nome}>
                         {c.destinatario_nome}
@@ -326,31 +531,12 @@ export function ContratoTabFaturar({ contrato }: Props) {
                         {formatDate(c.emitida_em || c.created_at)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {podeCreditar ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 gap-1.5 text-fuchsia-700 dark:text-fuchsia-300"
-                            onClick={() =>
-                              setNcCobranca({
-                                id: c.id,
-                                descricao: c.descricao,
-                                valor_total: c.valor_total,
-                                taxa_iva: c.taxa_iva,
-                                destinatario_id: c.destinatario_id,
-                                destinatario_nome: c.destinatario_nome,
-                                contrato_id: contrato.id,
-                                documento_externo_ref: c.documento_externo_ref,
-                              })
-                            }
-                          >
-                            <FileMinus className="h-3.5 w-3.5" />
-                            Emitir
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {saldo <= 0.005 && (c.valor_total ?? 0) > 0 ? 'Creditada' : '—'}
+                        {creditado > 0 ? (
+                          <span className="text-xs text-fuchsia-600 dark:text-fuchsia-400">
+                            {saldo <= 0.005 ? 'Creditada' : 'Parcial'}
                           </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -370,25 +556,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
         clienteEntidade={clienteEntidade}
         condutorEntidade={condutorEntidade}
         emitente={emitente}
-        onFaturado={() => {
-          refetchCobrancas();
-          refetchNC();
-        }}
-      />
-
-      <NotaCreditoDialog
-        open={!!ncCobranca}
-        onOpenChange={(o) => {
-          if (!o) setNcCobranca(null);
-        }}
-        cobranca={ncCobranca}
-        orgId={contrato.org_id}
-        emitente={emitente}
-        jaCreditado={ncCobranca ? round2(ncPorCobranca?.[ncCobranca.id] ?? 0) : 0}
-        onEmitida={() => {
-          refetchCobrancas();
-          refetchNC();
-        }}
+        onFaturado={refetchAll}
       />
     </div>
   );

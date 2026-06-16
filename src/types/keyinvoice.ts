@@ -2,7 +2,7 @@
 // A emissão é feita server-side pela edge function `keyinvoice-emitir`
 // (api key em secret). O frontend só envia o payload e lê `invoices`.
 
-export type TipoFatura = 'FT' | 'FR' | 'NC'; // Fatura, Fatura-Recibo, Nota de Crédito
+export type TipoFatura = 'FT' | 'FR' | 'NC' | 'RC'; // Fatura, Fatura-Recibo, Nota de Crédito, Recibo
 
 export interface ItemFatura {
   descricao: string;

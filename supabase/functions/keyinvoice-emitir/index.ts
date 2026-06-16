@@ -42,6 +42,7 @@ const DOCTYPE: Record<string, string> = {
   FT: env('KI_DOCTYPE_FT') || '4', // Fatura
   FR: env('KI_DOCTYPE_FR') || '34', // Fatura-Recibo
   NC: env('KI_DOCTYPE_NC') || '7', // Nota de Crédito
+  RC: env('KI_DOCTYPE_RC') || '', // Recibo (confirmar nº na conta; sem default)
 };
 
 // ── REST helper ──────────────────────────────────────────────────────────────
@@ -108,7 +109,7 @@ interface Cliente {
 }
 interface EmitBody {
   action?: 'emit' | 'health' | 'pdf';
-  tipo: 'FT' | 'FR' | 'NC';
+  tipo: 'FT' | 'FR' | 'NC' | 'RC';
   cliente: Cliente;
   itens: Item[];
   contrato_id?: string;
@@ -215,12 +216,21 @@ serve(async (req) => {
   }
 
   // ── emit ──
-  if (!payload?.tipo || !['FT', 'FR', 'NC'].includes(payload.tipo)) {
-    return json({ success: false, error: 'tipo inválido (FT|FR|NC)' });
+  if (!payload?.tipo || !['FT', 'FR', 'NC', 'RC'].includes(payload.tipo)) {
+    return json({ success: false, error: 'tipo inválido (FT|FR|NC|RC)' });
   }
   if (!payload.itens?.length) return json({ success: false, error: 'Sem itens para faturar' });
-  if (payload.tipo === 'NC' && !payload.documento_referencia) {
-    return json({ success: false, error: 'Nota de Crédito exige documento_referencia' });
+  if ((payload.tipo === 'NC' || payload.tipo === 'RC') && !payload.documento_referencia) {
+    return json({
+      success: false,
+      error: `${payload.tipo === 'RC' ? 'Recibo' : 'Nota de Crédito'} exige documento_referencia`,
+    });
+  }
+  if (payload.tipo === 'RC' && !DOCTYPE.RC) {
+    return json({
+      success: false,
+      error: 'Recibo (RC) não configurado: defina o secret KI_DOCTYPE_RC.',
+    });
   }
 
   const cliente = payload.cliente ?? ({} as Cliente);
