@@ -1,36 +1,27 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Copy, Power } from 'lucide-react';
-
-interface DocumentTemplate {
-  id: string;
-  nome: string;
-  tipo: string;
-  empresa_id: string | null;
-  cliente_empresa_id?: string | null;
-  template_data: any;
-  campos_dinamicos: any;
-  ativo: boolean;
-  versao: number;
-  created_at: string;
-  updated_at: string;
-}
+import { Edit, Copy, Power, Eye } from 'lucide-react';
+import type { DocumentTemplate } from '@/types/documentTemplate';
 
 interface DocumentTemplateListProps {
   templates: DocumentTemplate[];
   nomePorEmpresa?: Record<string, string>;
+  canEdit?: boolean;
   onEdit: (template: DocumentTemplate) => void;
   onDuplicate: (template: DocumentTemplate) => void;
   onToggleStatus: (template: DocumentTemplate) => void;
+  onPreview?: (template: DocumentTemplate) => void;
 }
 
 export const DocumentTemplateList = ({
   templates,
   nomePorEmpresa = {},
+  canEdit = true,
   onEdit,
   onDuplicate,
   onToggleStatus,
+  onPreview,
 }: DocumentTemplateListProps) => {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-PT', {
@@ -84,21 +75,37 @@ export const DocumentTemplateList = ({
                 <p>Atualizado: {formatDate(template.updated_at)}</p>
               </div>
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onEdit(template)}
-                  className="flex-1"
-                >
-                  <Edit className="mr-2 h-4 w-4" />
-                  Editar
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => onDuplicate(template)}>
-                  <Copy className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => onToggleStatus(template)}>
-                  <Power className="h-4 w-4" />
-                </Button>
+                {canEdit && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEdit(template)}
+                    className="flex-1"
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Editar
+                  </Button>
+                )}
+                {onPreview && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPreview(template)}
+                    title="Pré-visualizar"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                )}
+                {canEdit && (
+                  <Button variant="outline" size="sm" onClick={() => onDuplicate(template)}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                )}
+                {canEdit && (
+                  <Button variant="outline" size="sm" onClick={() => onToggleStatus(template)}>
+                    <Power className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>

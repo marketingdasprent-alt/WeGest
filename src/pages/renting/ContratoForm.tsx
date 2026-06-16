@@ -14,6 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Form } from '@/components/ui/form';
@@ -401,6 +402,14 @@ const ContratoForm = () => {
   const coberturasForm = form.watch('coberturas');
   const extrasForm = form.watch('extras') as ExtraFormItem[];
   const taxasForm = form.watch('taxas') as TaxaFormItem[];
+  const condutoresWatch = form.watch('condutores');
+  const condutoresRascunho = useMemo(() => {
+    if (!condutoresWatch?.length) return [];
+    return condutoresWatch.filter((c) => {
+      if (!c.motorista_id) return false;
+      return motoristas.find((m) => m.id === c.motorista_id)?.perfil_rascunho === true;
+    });
+  }, [condutoresWatch, motoristas]);
 
   // O IVA não é editável no contrato — é derivado do regime
   // (rent-a-car / TVDE) e das taxas configuradas na organização.
@@ -819,13 +828,28 @@ const ContratoForm = () => {
         <Button
           type="button"
           onClick={form.handleSubmit(onSubmit)}
-          disabled={isPending || contrato?.substituido_em != null}
+          disabled={isPending || contrato?.substituido_em != null || condutoresRascunho.length > 0}
           className="gap-2"
         >
           {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
           {isEdit ? 'Guardar' : 'Abrir Contrato'}
         </Button>
       </StickyPageHeader>
+
+      {condutoresRascunho.length > 0 && (
+        <Alert className="mb-3 border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-700 dark:text-amber-400">
+            <strong>Contrato bloqueado.</strong> O seguinte condutor tem perfil incompleto (sem NIF
+            / carta de condução):{' '}
+            {condutoresRascunho
+              .map((c) => motoristas.find((m) => m.id === c.motorista_id)?.nome ?? c.motorista_id)
+              .join(', ')}
+            . Abre a ficha do motorista, preenche todos os dados obrigatórios e guarda — o contrato
+            ficará disponível de seguida.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {isEdit && contrato?.substituido_em && (
         <div className="mb-3 flex items-start gap-2 p-3 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">

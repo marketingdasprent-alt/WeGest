@@ -11,6 +11,8 @@ interface DocumentTemplate {
   papel_timbrado_url: string | null;
   template_data: {
     conteudo: string;
+    topMargin?: number;
+    bottomMargin?: number;
   };
   campos_dinamicos: {
     motorista: Array<{ id: string; label: string; tipo: string }>;
@@ -238,6 +240,41 @@ const replaceDynamicFields = (
     result = result.replace(regex, value?.toString() || '');
   });
 
+  // Substituir campos do cliente (renting) no formato {{cliente_CAMPO}}.
+  // Vêm de documentData.clienteData (mesmo padrão de empresaData). No regime
+  // rent-a-car o locatário é um cliente; os {{motorista_*}} continuam a funcionar
+  // (o gerador mapeia o cliente também para motoristaData, por compatibilidade).
+  const clienteFieldMap: Record<string, string> = {
+    cliente_nome: 'nome',
+    cliente_nif: 'nif',
+    cliente_email: 'email',
+    cliente_telefone: 'telefone',
+    cliente_morada: 'morada',
+    cliente_codigo_postal: 'codigo_postal',
+    cliente_cidade: 'cidade',
+    cliente_data_nascimento: 'data_nascimento',
+    cliente_nome_comercial: 'nome_comercial',
+    cliente_sede: 'sede',
+    cliente_representante: 'representante',
+    cliente_cargo_representante: 'cargo_representante',
+  };
+
+  Object.entries(clienteFieldMap).forEach(([placeholder, dbField]) => {
+    const regex = new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g');
+    const value = documentData.clienteData?.[dbField];
+
+    if (placeholder.includes('data_') && value) {
+      if (
+        value instanceof Date ||
+        (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}/))
+      ) {
+        result = result.replace(regex, formatDate(value));
+        return;
+      }
+    }
+    result = result.replace(regex, value?.toString() || '');
+  });
+
   // Substituir campos do contrato no formato {{data_inicio}}
   // Os campos numéricos/monetários (tarifa, franquia, total, etc.) são passados
   // já formatados como string por generateContratoPdf — aqui só se substituem.
@@ -446,6 +483,9 @@ interface TableCtx {
   bottomMargin: number;
   topMargin: number;
   bg: HTMLImageElement | null;
+  /** Modo compacto (papel timbrado): padding e entrelinha menores para
+   *  recuperar altura útil e caber numa página. */
+  compact: boolean;
 }
 
 /**
@@ -463,7 +503,7 @@ function renderTable(
   bordered: boolean,
   ctx: TableCtx
 ): number {
-  const pad = 2;
+  const pad = ctx.compact ? 1.4 : 2;
   const colCount = Math.max(1, ...rows.map((r) => r.reduce((s, c) => s + (c.colspan || 1), 0)));
   const colW = totalW / colCount;
   let y = yStart;
@@ -485,12 +525,12 @@ function renderTable(
         const fs = ln.fontSize || baseFs;
         // Linha vazia (valor em falta ou <br> separador) → espaçador compacto.
         if (!ln.text || !ln.text.trim()) {
-          const gap = fs * 0.352777778 * 0.6;
+          const gap = fs * 0.352777778 * (ctx.compact ? 0.5 : 0.6);
           wrapped.push({ text: '', bold: false, color: ln.color, fs, h: gap });
           cellH += gap;
           continue;
         }
-        const lineH = fs * 0.352777778 * 1.4;
+        const lineH = fs * 0.352777778 * (ctx.compact ? 1.22 : 1.4);
         pdf.setFontSize(fs);
         pdf.setFont('helvetica', ln.bold ? 'bold' : 'normal');
         const parts = pdf.splitTextToSize(ln.text, cw - pad * 2);
@@ -757,10 +797,27 @@ export const generateDocumentFromTemplate = async (
     const rightMargin = hasLetterhead ? 20 : 18;
     // Sem timbrado mas com logo: o conteúdo começa no topo (~16mm) e a 1ª linha
     // (cabeçalho com Nº à direita) alinha ao lado do logo desenhado em (15,12).
-    const topMargin = hasLetterhead ? 50 : headerLogoUrl ? 16 : 22;
-    const bottomMargin = hasLetterhead ? 50 : 22; // Timbrado: protege faixa amarela inferior.
+    // Com timbrado: margens "seguras" que evitam sobrepor a logo (topo) e a
+    // faixa decorativa (fundo). Defaults 50/38 cobrem timbrados típicos.
+    // Cada template pode reduzir-as via template_data.topMargin /
+    // template_data.bottomMargin (UI no editor) quando o seu conteúdo precisa
+    // de caber numa página única — sem afectar os outros templates.
+    const topMarginLetterhead: number =
+      typeof templateData.template_data?.topMargin === 'number'
+        ? templateData.template_data.topMargin
+        : 50;
+    const topMargin = hasLetterhead ? topMarginLetterhead : headerLogoUrl ? 16 : 22;
+    const bottomMarginLetterhead: number =
+      typeof templateData.template_data?.bottomMargin === 'number'
+        ? templateData.template_data.bottomMargin
+        : 38;
+    const bottomMargin = hasLetterhead ? bottomMarginLetterhead : 22;
     const maxWidth = pageWidth - leftMargin - rightMargin;
     let yPos = topMargin;
+    // Com papel timbrado a área útil é menor (logo no topo + faixa decorativa no
+    // fundo). Comprimir a entrelinha do texto recupera espaço suficiente para
+    // contratos caberem numa página sem cortar conteúdo nem tocar no timbrado.
+    const lineFactor = hasLetterhead ? 1.24 : 1.5;
 
     // Processar HTML e renderizar no PDF diretamente
     const contentElements = htmlToText(processedContent);
@@ -846,7 +903,7 @@ export const generateDocumentFromTemplate = async (
       // Se for quebra de linha
       if (group.segments.length === 1 && group.segments[0].text === '\n') {
         // Adicionar espaçamento equivalente a uma linha (usa fontSize padrão 10)
-        yPos += 10 * 0.352777778 * 1.5; // ~5.29mm = mesma altura de uma linha de texto
+        yPos += 10 * 0.352777778 * lineFactor; // espaçador de parágrafo (entrelinha)
         continue;
       }
 
@@ -899,6 +956,7 @@ export const generateDocumentFromTemplate = async (
             pageHeight,
             bottomMargin,
             topMargin,
+            compact: hasLetterhead,
             bg,
           });
         }
@@ -994,7 +1052,7 @@ export const generateDocumentFromTemplate = async (
           } else {
             // Renderizar linha atual
             if (currentLineSegments.length > 0) {
-              const lineHeight = maxFontSize * 0.352777778 * 1.5;
+              const lineHeight = maxFontSize * 0.352777778 * lineFactor;
               if (yPos + lineHeight > pageHeight - bottomMargin) {
                 pdf.addPage();
                 if (bg) pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
@@ -1106,9 +1164,13 @@ export const generateDocumentFromTemplate = async (
         const pw = pdf.getTextWidth(pageText);
         pdf.text(pageText, pageWidth - rightMargin - pw, footerY);
       } else {
-        // Posicionar a 35mm da borda inferior (margem do papel timbrado).
         const textWidth = pdf.getTextWidth(pageText);
-        pdf.text(pageText, (pageWidth - textWidth) / 2, pageHeight - 35);
+        // Com timbrado: colocar a numeração logo abaixo do fim do conteúdo
+        // (bottomMargin - 6mm), nunca dentro da faixa decorativa inferior que
+        // começa tipicamente ~25mm da base — a fórmula anterior (pageHeight-18)
+        // ficava dentro da faixa. Sem timbrado: canto inferior como antes.
+        const numY = hasLetterhead ? pageHeight - bottomMargin + 6 : pageHeight - 18;
+        pdf.text(pageText, pageWidth - rightMargin - textWidth, numY);
       }
     }
 
@@ -1116,7 +1178,7 @@ export const generateDocumentFromTemplate = async (
     if (!params.skipOutput) {
       const fileName = `${templateData.nome}_${motoristaData.nome}_${format(new Date(), 'yyyyMMdd')}.pdf`;
       if (action === 'print') {
-        printPdf(pdf, fileName);
+        printPdf(pdf, fileName, hasLetterhead);
       } else {
         pdf.save(fileName);
       }

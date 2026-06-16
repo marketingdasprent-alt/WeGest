@@ -69,6 +69,8 @@ interface CondutoresFieldsProps {
   onCriarNovoCliente?: () => void;
   /** Callback para abrir o dialog de criar novo motorista (só TVDE). */
   onCriarNovoMotorista?: () => void;
+  /** Callback para abrir o dialog de condutor provisório por nome (só TVDE). */
+  onCriarCondutorProvisorio?: () => void;
 }
 
 export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
@@ -78,6 +80,7 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
   clientePrincipalLabel = 'Cliente do contrato também conduz',
   onCriarNovoCliente,
   onCriarNovoMotorista,
+  onCriarCondutorProvisorio,
 }) => {
   const form = useFormContext<CondutoresFieldsShape>();
   const [adicionarOpen, setAdicionarOpen] = useState(false);
@@ -261,21 +264,38 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
                           ))}
                   </CommandGroup>
                 </CommandList>
-                {isTvde && onCriarNovoMotorista && (
-                  <div className="border-t p-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start gap-2 text-primary"
-                      onClick={() => {
-                        setAdicionarOpen(false);
-                        onCriarNovoMotorista();
-                      }}
-                    >
-                      <UserPlus className="h-4 w-4" />
-                      Novo motorista
-                    </Button>
+                {isTvde && (onCriarNovoMotorista || onCriarCondutorProvisorio) && (
+                  <div className="border-t p-2 space-y-1">
+                    {onCriarNovoMotorista && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start gap-2 text-primary"
+                        onClick={() => {
+                          setAdicionarOpen(false);
+                          onCriarNovoMotorista();
+                        }}
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Novo motorista
+                      </Button>
+                    )}
+                    {onCriarCondutorProvisorio && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start gap-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/20"
+                        onClick={() => {
+                          setAdicionarOpen(false);
+                          onCriarCondutorProvisorio();
+                        }}
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Condutor por nome (provisório)
+                      </Button>
+                    )}
                   </div>
                 )}
                 {!isTvde && onCriarNovoCliente && (
@@ -363,6 +383,11 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
                             {'codigo' in entidade && entidade.codigo != null && (
                               <span className="ml-1 text-xs text-muted-foreground">
                                 #{entidade.codigo}
+                              </span>
+                            )}
+                            {'perfil_rascunho' in entidade && (entidade as any).perfil_rascunho && (
+                              <span className="ml-2 text-[10px] font-bold uppercase bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 rounded">
+                                Perfil incompleto
                               </span>
                             )}
                           </>

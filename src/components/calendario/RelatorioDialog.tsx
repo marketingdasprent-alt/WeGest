@@ -168,6 +168,9 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
     return true;
   });
 
+  const eventosNormais = eventosFiltrados.filter((ev) => ev.tipo !== 'slot');
+  const eventosSlot = eventosFiltrados.filter((ev) => ev.tipo === 'slot');
+
   const exportarPDF = async () => {
     setExportLoading(true);
     try {
@@ -1418,6 +1421,56 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
   const maxTipoCount = Math.max(...totalPorTipo.map((t) => t.count), 1);
   const maxGestorCount = Math.max(...totalPorGestor.map((g) => g.count), 1);
 
+  const EventoCard = ({ ev }: { ev: CalendarioEvento }) => {
+    const tipoConfig = TIPOS_CONFIG.find((t) => t.value === ev.tipo);
+    const titulo =
+      ev.tipo === 'lista_espera' || ev.tipo === 'slot'
+        ? ev.titulo
+        : ev.tipo === 'troca'
+          ? `${formatMatricula(ev.titulo)}${ev.matricula_devolver ? ` ↔ ${formatMatricula(ev.matricula_devolver)}` : ''}`
+          : formatMatricula(ev.titulo);
+    return (
+      <div
+        className={cn(
+          'border border-l-4 rounded-lg p-3 text-sm space-y-1 bg-card',
+          ev.tipo === 'entrega' && 'border-l-green-500',
+          ev.tipo === 'recolha' && 'border-l-blue-500',
+          ev.tipo === 'devolucao' && 'border-l-orange-500',
+          ev.tipo === 'troca' && 'border-l-purple-500',
+          ev.tipo === 'upgrade' && 'border-l-yellow-500',
+          ev.tipo === 'lista_espera' && 'border-l-pink-500',
+          ev.tipo === 'slot' && 'border-l-amber-500'
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-semibold truncate">
+            {titulo}
+            {ev.cidade && ` — ${ev.cidade.toUpperCase()}`}
+          </span>
+          {tipoConfig && (
+            <span
+              className={cn(
+                'text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0',
+                tipoConfig.color
+              )}
+            >
+              {tipoConfig.label}
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5">
+          <span>
+            {format(new Date(ev.data_inicio), ev.dia_todo ? 'dd/MM/yyyy' : 'dd/MM/yyyy HH:mm', {
+              locale: pt,
+            })}
+          </span>
+          {ev.profiles?.nome && <span>Por: {ev.profiles.nome}</span>}
+          {ev.descricao && <span className="w-full italic">Obs: {ev.descricao}</span>}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none p-0 flex flex-col gap-0 [&>button]:hidden">
@@ -1779,57 +1832,45 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
                   Nenhum evento no período selecionado.
                 </p>
               ) : (
-                eventosFiltrados.map((ev) => {
-                  const tipoConfig = TIPOS_CONFIG.find((t) => t.value === ev.tipo);
-                  const titulo =
-                    ev.tipo === 'lista_espera' || ev.tipo === 'slot'
-                      ? ev.titulo
-                      : ev.tipo === 'troca'
-                        ? `${formatMatricula(ev.titulo)}${ev.matricula_devolver ? ` ↔ ${formatMatricula(ev.matricula_devolver)}` : ''}`
-                        : formatMatricula(ev.titulo);
-                  return (
-                    <div
-                      key={ev.id}
-                      className={cn(
-                        'border border-l-4 rounded-lg p-3 text-sm space-y-1 bg-card',
-                        ev.tipo === 'entrega' && 'border-l-green-500',
-                        ev.tipo === 'recolha' && 'border-l-blue-500',
-                        ev.tipo === 'devolucao' && 'border-l-orange-500',
-                        ev.tipo === 'troca' && 'border-l-purple-500',
-                        ev.tipo === 'upgrade' && 'border-l-yellow-500',
-                        ev.tipo === 'lista_espera' && 'border-l-pink-500'
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold truncate">
-                          {titulo}
-                          {ev.cidade && ` — ${ev.cidade.toUpperCase()}`}
-                        </span>
-                        {tipoConfig && (
-                          <span
-                            className={cn(
-                              'text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0',
-                              tipoConfig.color
-                            )}
-                          >
-                            {tipoConfig.label}
+                <>
+                  {/* ── Eventos normais ── */}
+                  {eventosNormais.length > 0 && (
+                    <>
+                      {eventosSlot.length > 0 && (
+                        <div className="flex items-center gap-2 pt-1 pb-0.5">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Eventos
                           </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5">
-                        <span>
-                          {format(
-                            new Date(ev.data_inicio),
-                            ev.dia_todo ? 'dd/MM/yyyy' : 'dd/MM/yyyy HH:mm',
-                            { locale: pt }
-                          )}
+                          <span className="text-xs text-muted-foreground">
+                            ({eventosNormais.length})
+                          </span>
+                          <div className="flex-1 h-px bg-border" />
+                        </div>
+                      )}
+                      {eventosNormais.map((ev) => (
+                        <EventoCard key={ev.id} ev={ev} />
+                      ))}
+                    </>
+                  )}
+
+                  {/* ── Slots (secção separada) ── */}
+                  {eventosSlot.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2 pt-2 pb-0.5">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                          Slots
                         </span>
-                        {ev.profiles?.nome && <span>Por: {ev.profiles.nome}</span>}
-                        {ev.descricao && <span className="w-full italic">Obs: {ev.descricao}</span>}
+                        <span className="text-xs text-muted-foreground">
+                          ({eventosSlot.length})
+                        </span>
+                        <div className="flex-1 h-px bg-amber-500/30" />
                       </div>
-                    </div>
-                  );
-                })
+                      {eventosSlot.map((ev) => (
+                        <EventoCard key={ev.id} ev={ev} />
+                      ))}
+                    </>
+                  )}
+                </>
               )}
             </div>
           </div>

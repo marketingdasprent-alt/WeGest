@@ -11,6 +11,7 @@ export interface EmpresaConfig {
   representante: string;
   cargoRepresentante: string;
   papelTimbrado: string;
+  logoUrl?: string | null;
 }
 
 export const EMPRESAS: Record<string, EmpresaConfig> = {

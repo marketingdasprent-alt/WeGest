@@ -18,6 +18,7 @@ interface AssistenciaMultimediaUploadProps {
   onFilesChange?: (files: MediaFile[]) => void;
   requiredPhotos?: number;
   requiredVideos?: number;
+  initialFiles?: MediaFile[];
 }
 
 export function AssistenciaMultimediaUpload({
@@ -25,11 +26,12 @@ export function AssistenciaMultimediaUpload({
   onFilesChange,
   requiredPhotos = 1,
   requiredVideos = 0,
+  initialFiles,
 }: AssistenciaMultimediaUploadProps) {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [files, setFiles] = useState<MediaFile[]>([]);
+  const [files, setFiles] = useState<MediaFile[]>(initialFiles ?? []);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
 
@@ -393,7 +395,7 @@ export function AssistenciaMultimediaUpload({
 
       <div className="pt-2">
         <Button
-          onClick={() => onComplete(files)}
+          onClick={() => onComplete?.(files)}
           disabled={!canComplete || uploading}
           size="lg"
           className={`w-full h-14 text-base font-black uppercase tracking-wider transition-all shadow-lg ${canComplete ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-200 text-slate-400'}`}

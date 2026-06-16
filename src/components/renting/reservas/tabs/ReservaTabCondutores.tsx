@@ -15,6 +15,7 @@ interface ReservaTabCondutoresProps {
   motoristas?: Motorista[];
   onCriarNovoCliente?: () => void;
   onCriarNovoMotorista?: () => void;
+  onCriarCondutorProvisorio?: () => void;
 }
 
 export const ReservaTabCondutores: React.FC<ReservaTabCondutoresProps> = ({
@@ -23,6 +24,7 @@ export const ReservaTabCondutores: React.FC<ReservaTabCondutoresProps> = ({
   motoristas,
   onCriarNovoCliente,
   onCriarNovoMotorista,
+  onCriarCondutorProvisorio,
 }) => (
   <CondutoresFields
     regime={regime}
@@ -31,5 +33,6 @@ export const ReservaTabCondutores: React.FC<ReservaTabCondutoresProps> = ({
     clientePrincipalLabel="Cliente da Reserva também conduz"
     onCriarNovoCliente={onCriarNovoCliente}
     onCriarNovoMotorista={onCriarNovoMotorista}
+    onCriarCondutorProvisorio={onCriarCondutorProvisorio}
   />
 );
