@@ -398,7 +398,7 @@ const Calendario: React.FC = () => {
             currentMonth={currentMonth}
             onMonthChange={setCurrentMonth}
             onEventClick={
-              hasPermission('calendario_editar') || hasPermission('calendario_gerir_todos')
+              isAdmin
                 ? (ev) => {
                     if (ev.tipo === 'lista_espera' && !canManageListaEspera) return;
                     handleEdit(ev);
@@ -406,7 +406,7 @@ const Calendario: React.FC = () => {
                 : undefined
             }
             onDeleteEvent={
-              hasPermission('calendario_eliminar') || hasPermission('calendario_gerir_todos')
+              isAdmin
                 ? (id) => deleteMutation.mutate(id)
                 : undefined
             }

@@ -68,6 +68,11 @@ export const EventoCard: React.FC<Props> = ({ evento, onEdit, onDelete, onDetail
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
               {TIPO_LABELS[evento.tipo] || evento.tipo}
             </span>
+            {evento.profiles?.nome && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                {evento.profiles.nome}
+              </span>
+            )}
             {evento.realizado_em && (
               <span
                 className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"

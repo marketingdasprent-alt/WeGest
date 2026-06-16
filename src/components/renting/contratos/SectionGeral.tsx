@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { EmissorSelect } from '@/components/renting/EmissorSelect';
+import { GestorSelect } from '@/components/renting/GestorSelect';
+import { usePermissions } from '@/hooks/usePermissions';
 
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { ContratoFormValues } from './contratoForm.schema';
@@ -44,6 +46,7 @@ const normalizeForSearch = (s: string) =>
 
 export const SectionGeral: React.FC<SectionGeralProps> = ({ form, clientes }) => {
   const [clientePopoverOpen, setClientePopoverOpen] = useState(false);
+  const { podeVerTodosRenting } = usePermissions();
   const clienteLabel = 'Cliente';
   const clientePlaceholder = 'Clique ou escreva para procurar cliente...';
   const clienteEmpty = 'Nenhum cliente encontrado.';
@@ -145,6 +148,20 @@ export const SectionGeral: React.FC<SectionGeralProps> = ({ form, clientes }) =>
             </FormItem>
           )}
         />
+
+        {podeVerTodosRenting && (
+          <FormField
+            control={form.control}
+            name="gestor_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Gestor responsável</FormLabel>
+                <GestorSelect value={field.value} onChange={field.onChange} />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <FormField
           control={form.control}

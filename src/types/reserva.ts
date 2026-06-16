@@ -65,6 +65,9 @@ export type Reserva = {
   /** Empresa emissora (clientes.id com tipo_cliente='empresa') — determina
    *  os templates dos documentos gerados. Obrigatória a partir de confirmada. */
   emissor_id: string | null;
+  /** Gestor responsável (profiles.id). Default = quem cria. Base da privacidade
+   *  por gestor (só visível ao dono + superiores quando a org a tem ligada). */
+  gestor_id: string | null;
   estado: ReservaEstado;
   /** rent_a_car, tvde ou slot — determina o regime de aluguer e a taxa de IVA. */
   regime: ReservaRegime;
@@ -100,9 +103,14 @@ export type ReservaInsert = Omit<
   | 'updated_by'
   | 'created_at'
   | 'updated_at'
+  // gestor_id é preenchido por DEFAULT na BD (= quem cria); reatribuível via Update.
+  | 'gestor_id'
 >;
 
-export type ReservaUpdate = Partial<ReservaInsert> & { deleted_at?: string | null };
+export type ReservaUpdate = Partial<ReservaInsert> & {
+  deleted_at?: string | null;
+  gestor_id?: string | null;
+};
 
 // ============================================================
 // Condutores (m:n entre reservas e clientes)

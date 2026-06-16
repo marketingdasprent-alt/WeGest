@@ -62,6 +62,7 @@ const DEFAULT_VALUES: ReservaFormValues = {
   condutor_id: null,
   condutor_nome: '',
   emissor_id: null,
+  gestor_id: null,
   estado: 'pendente',
   regime: 'rent_a_car',
   valor_total: null,
@@ -232,6 +233,7 @@ const RentingReservaForm = () => {
       condutor_id: reserva.condutor_id,
       condutor_nome: reserva.condutor_nome ?? '',
       emissor_id: reserva.emissor_id,
+      gestor_id: reserva.gestor_id ?? null,
       estado: reserva.estado,
       regime: reserva.regime,
       slot_valor_semanal: reserva.slot_valor_semanal,
@@ -287,6 +289,11 @@ const RentingReservaForm = () => {
     (reserva.regime === 'rent_a_car' ? temEstacoes : true)
   );
   const podeCriarContrato = reservaCompleta && !form.formState.isDirty;
+  // A reserva é só a porta de entrada: depois de gerar contrato, a fonte de
+  // verdade passa a ser o contrato. A reserva fica read-only — para mudar
+  // viatura/dados, edita-se o contrato (que versiona). Slot não gera
+  // contrato_renting, por isso nunca é bloqueada por aqui.
+  const bloqueadaPorContrato = isEdit && !!contratoExistente;
   const motivoContratoBloqueado = !reservaCompleta
     ? reserva?.regime === 'rent_a_car'
       ? 'Preenche condutor, viatura e estações (entrega e recolha) e guarda a reserva.'
@@ -390,8 +397,11 @@ const RentingReservaForm = () => {
 
       if (isEdit && reserva) {
         // Editar: ficar na própria página (utilizador vê toast e continua a trabalhar).
+        // gestor_id (reatribuição por superior) vai só no update — na criação o
+        // dono é definido pela BD (= quem cria). Para não-superiores é o valor
+        // hidratado (sem efeito).
         updateMutation.mutate(
-          { id: reserva.id, ...payload },
+          { id: reserva.id, ...payload, gestor_id: values.gestor_id ?? null },
           { onSuccess: () => syncCondutores(reserva.id) }
         );
       } else {
@@ -500,7 +510,11 @@ const RentingReservaForm = () => {
         <StickyPageHeader
           title={isEdit ? `Reserva #${reserva?.codigo}` : 'Nova Reserva'}
           description={
-            isEdit ? 'Editar dados da reserva existente' : 'Cria uma nova reserva de renting'
+            bloqueadaPorContrato
+              ? 'Reserva já convertida em contrato — só leitura'
+              : isEdit
+                ? 'Editar dados da reserva existente'
+                : 'Cria uma nova reserva de renting'
           }
           icon={CalendarCheck}
         >
@@ -513,7 +527,7 @@ const RentingReservaForm = () => {
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>
-          {isEdit && (
+          {isEdit && !bloqueadaPorContrato && (
             <Button
               type="button"
               variant="destructive"
@@ -565,20 +579,34 @@ const RentingReservaForm = () => {
                 Criar Contrato
               </Button>
             ))}
-          <Button
-            type="button"
-            onClick={form.handleSubmit(onSubmit, onInvalid)}
-            disabled={isPending}
-            className="gap-2"
-          >
-            {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isEdit ? 'Guardar' : 'Criar'}
-          </Button>
+          {!bloqueadaPorContrato && (
+            <Button
+              type="button"
+              onClick={form.handleSubmit(onSubmit, onInvalid)}
+              disabled={isPending}
+              className="gap-2"
+            >
+              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isEdit ? 'Guardar' : 'Criar'}
+            </Button>
+          )}
         </StickyPageHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
-            {temConflito && (
+            {bloqueadaPorContrato && (
+              <div className="flex items-start gap-2 p-3 rounded-md border border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300">
+                <FileText className="h-4 w-4 mt-0.5 shrink-0" />
+                <p className="text-sm">
+                  Esta reserva já gerou o contrato
+                  {contratoExistente?.codigo ? ` #${contratoExistente.codigo}` : ''}. É só leitura —
+                  para alterar a viatura, datas ou outros dados, edita o contrato (que cria uma nova
+                  versão).
+                </p>
+              </div>
+            )}
+
+            {!bloqueadaPorContrato && temConflito && (
               <div className="flex items-start gap-2 p-3 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <p className="text-sm">
@@ -588,63 +616,68 @@ const RentingReservaForm = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-1 xl:grid-cols-[1fr_240px] gap-4 items-start">
-              <Card className="bg-card border-border">
-                <CardContent className="p-4 sm:p-6">
-                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-flex">
-                      <TabsTrigger value="geral">Geral</TabsTrigger>
-                      <TabsTrigger value="condutores">
-                        {regimeWatched === 'rent_a_car' ? 'Condutores' : 'Motoristas'}
-                      </TabsTrigger>
-                      <TabsTrigger value="anexos">Anexos</TabsTrigger>
-                    </TabsList>
+            <fieldset
+              disabled={bloqueadaPorContrato}
+              className="m-0 min-w-0 border-0 p-0 disabled:opacity-95"
+            >
+              <div className="grid grid-cols-1 xl:grid-cols-[1fr_240px] gap-4 items-start">
+                <Card className="bg-card border-border">
+                  <CardContent className="p-4 sm:p-6">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                      <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-flex">
+                        <TabsTrigger value="geral">Geral</TabsTrigger>
+                        <TabsTrigger value="condutores">
+                          {regimeWatched === 'rent_a_car' ? 'Condutores' : 'Motoristas'}
+                        </TabsTrigger>
+                        <TabsTrigger value="anexos">Anexos</TabsTrigger>
+                      </TabsList>
 
-                    <TabsContent value="geral" className="pt-4">
-                      <ReservaTabGeral
-                        form={form}
-                        viaturas={viaturasParaSelecao}
-                        estacoes={estacoes}
-                        clientes={clientes}
-                        motoristas={motoristas}
-                        onCriarMotorista={() => setMotoristaDialogOpen(true)}
-                      />
-                    </TabsContent>
+                      <TabsContent value="geral" className="pt-4">
+                        <ReservaTabGeral
+                          form={form}
+                          viaturas={viaturasParaSelecao}
+                          estacoes={estacoes}
+                          clientes={clientes}
+                          motoristas={motoristas}
+                          onCriarMotorista={() => setMotoristaDialogOpen(true)}
+                        />
+                      </TabsContent>
 
-                    <TabsContent value="condutores" className="pt-4">
-                      <ReservaTabCondutores
-                        form={form}
-                        regime={regimeWatched}
-                        clientes={clientes}
-                        motoristas={motoristas}
-                        onCriarNovoCliente={() => setClienteDialogOpen(true)}
-                        onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
-                        onCriarCondutorProvisorio={() => setCondutorProvisorioOpen(true)}
-                      />
-                    </TabsContent>
+                      <TabsContent value="condutores" className="pt-4">
+                        <ReservaTabCondutores
+                          form={form}
+                          regime={regimeWatched}
+                          clientes={clientes}
+                          motoristas={motoristas}
+                          onCriarNovoCliente={() => setClienteDialogOpen(true)}
+                          onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
+                          onCriarCondutorProvisorio={() => setCondutorProvisorioOpen(true)}
+                        />
+                      </TabsContent>
 
-                    <TabsContent value="anexos" className="pt-4">
-                      <ReservaTabAnexos
-                        reservaId={isEdit ? (id ?? null) : null}
-                        pendentes={anexosPendentes}
-                        onAdicionarPendentes={adicionarAnexosPendentes}
-                        onRenomearPendente={renomearAnexoPendente}
-                        onRemoverPendente={removerAnexoPendente}
-                      />
-                    </TabsContent>
-                  </Tabs>
-                </CardContent>
-              </Card>
+                      <TabsContent value="anexos" className="pt-4">
+                        <ReservaTabAnexos
+                          reservaId={isEdit ? (id ?? null) : null}
+                          pendentes={anexosPendentes}
+                          onAdicionarPendentes={adicionarAnexosPendentes}
+                          onRenomearPendente={renomearAnexoPendente}
+                          onRemoverPendente={removerAnexoPendente}
+                        />
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                </Card>
 
-              <div className="xl:sticky xl:top-24">
-                <ReservaResumoSidebar
-                  form={form}
-                  estacoes={estacoes}
-                  viaturas={viaturas}
-                  isEdit={isEdit}
-                />
+                <div className="xl:sticky xl:top-24">
+                  <ReservaResumoSidebar
+                    form={form}
+                    estacoes={estacoes}
+                    viaturas={viaturas}
+                    isEdit={isEdit}
+                  />
+                </div>
               </div>
-            </div>
+            </fieldset>
           </form>
         </Form>
       </div>

@@ -40,13 +40,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 
 import { ALDFields } from '@/components/renting/shared/ALDFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
 import { EmissorSelect } from '@/components/renting/EmissorSelect';
+import { GestorSelect } from '@/components/renting/GestorSelect';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useModules } from '@/hooks/useModules';
+import {
+  useRentingGruposMin,
+  useRentingTarifasMin,
+  calcularFaturacaoRenting,
+} from '@/hooks/useRentingGruposTarifas';
 import { AlertTriangle } from 'lucide-react';
 
 import type { ReservaFormValues } from '../reservaDialog.schema';
@@ -91,50 +96,6 @@ function addDaysToLocalInput(localInput: string, days: number): string | null {
   return `${novo.getFullYear()}-${pad(novo.getMonth() + 1)}-${pad(novo.getDate())}T${pad(novo.getHours())}:${pad(novo.getMinutes())}`;
 }
 
-type TarifaPrecos = {
-  preco_dia: number | null;
-  preco_semana: number | null;
-  preco_mes: number | null;
-};
-
-type Faturacao = {
-  valor: number; // valor faturado ao cliente
-  modo: 'Diário' | 'Mensal';
-  descricao: string;
-  semanalCondutor: number | null; // preço/semana atribuído ao condutor (só TVDE)
-};
-
-// Faturação ao cliente:
-//   TVDE ou ALD       → mensal (preço/mês, período travado em 30 dias)
-//   Rent-a-Car normal → diário (nº dias × preço/dia)
-// No TVDE, o preço/semana vai para a conta-corrente do condutor.
-function calcularFaturacao(
-  regime: string,
-  isLongaDuracao: boolean,
-  dias: number | null,
-  tarifa: TarifaPrecos | null
-): Faturacao | null {
-  if (!tarifa) return null;
-
-  if (regime === 'tvde' || isLongaDuracao) {
-    if (tarifa.preco_mes == null) return null;
-    return {
-      valor: Number(tarifa.preco_mes.toFixed(2)),
-      modo: 'Mensal',
-      descricao: '30 dias · renova a cada mês',
-      semanalCondutor: regime === 'tvde' ? tarifa.preco_semana : null,
-    };
-  }
-
-  if (dias == null || dias <= 0 || tarifa.preco_dia == null) return null;
-  return {
-    valor: Number((dias * tarifa.preco_dia).toFixed(2)),
-    modo: 'Diário',
-    descricao: `${dias} dia(s) × ${tarifa.preco_dia} €`,
-    semanalCondutor: null,
-  };
-}
-
 export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   form,
   viaturas,
@@ -155,6 +116,7 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   const dataFim = form.watch('data_fim');
 
   const cliente = clienteId ? (clientes.find((c) => c.id === clienteId) ?? null) : null;
+  const { podeVerTodosRenting } = usePermissions();
 
   const dias = useMemo(() => diferencaDias(dataInicio, dataFim), [dataInicio, dataFim]);
 
@@ -167,31 +129,8 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   }, [dias]);
 
   // Grupos e tarifas — para preencher automaticamente ao escolher a viatura.
-  const { data: grupos = [] } = useQuery({
-    queryKey: ['renting_grupos_min'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('renting_grupos')
-        .select('id, nome')
-        .eq('ativo', true);
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: tarifas = [] } = useQuery({
-    queryKey: ['renting_tarifas_min'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('renting_tarifas')
-        .select(
-          'grupo_id, nome, kms_incluidos, km_adicional_valor, preco_dia, preco_semana, preco_mes'
-        )
-        .eq('ativa', true);
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: grupos = [] } = useRentingGruposMin();
+  const { data: tarifas = [] } = useRentingTarifasMin();
 
   // Tarifa aplicável = a do grupo da viatura escolhida.
   const viaturaIdSel = form.watch('viatura_id');
@@ -212,7 +151,7 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   const isLongaDuracao = form.watch('is_longa_duracao');
   const modoMensal = !isSlot && (regime === 'tvde' || isLongaDuracao);
   const faturacao = useMemo(
-    () => calcularFaturacao(regime, isLongaDuracao, dias, tarifaAtual),
+    () => calcularFaturacaoRenting(regime, isLongaDuracao, dias, tarifaAtual),
     [regime, isLongaDuracao, dias, tarifaAtual]
   );
 
@@ -224,7 +163,8 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   }, [faturacao, isSlot, form]);
 
   // Lista de viaturas filtrada por regime: slot mostra só carros slot
-  // (do motorista); restantes regimes escondem carros slot.
+  // (do motorista); restantes regimes escondem carros slot. habilitada_tvde é
+  // apenas informativo/administrativo — não restringe o seletor.
   const viaturasFiltradas = useMemo(
     () => viaturas.filter((v) => (isSlot ? v.is_slot === true : v.is_slot !== true)),
     [viaturas, isSlot]
@@ -319,6 +259,19 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
             </FormItem>
           )}
         />
+        {podeVerTodosRenting && (
+          <FormField
+            control={form.control}
+            name="gestor_id"
+            render={({ field }) => (
+              <FormItem className="max-w-md">
+                <FormLabel>Gestor responsável</FormLabel>
+                <GestorSelect value={field.value} onChange={field.onChange} />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
       </div>
 
       {/* === Cliente da Reserva (não aplicável a slot) === */}

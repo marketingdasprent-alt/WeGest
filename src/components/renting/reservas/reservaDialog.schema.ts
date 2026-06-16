@@ -39,6 +39,10 @@ export const reservaDialogSchema = z
     // documentos. Obrigatória a partir de confirmada (superRefine).
     emissor_id: z.string().uuid().nullable().optional(),
 
+    // Gestor responsável (profiles.id). Reatribuível por superiores; default
+    // (criador) tratado pela BD. Privacidade por gestor.
+    gestor_id: z.string().uuid().nullable().optional(),
+
     estado: z.enum(RESERVA_ESTADOS),
     regime: z.enum(RESERVA_REGIMES).default('rent_a_car'),
 

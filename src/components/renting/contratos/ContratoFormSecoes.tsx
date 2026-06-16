@@ -21,6 +21,8 @@ interface ContratoFormSecoesProps {
   /** Trava o campo viatura — usado quando o contrato vem de reserva. */
   viaturaLocked?: boolean;
   reservaCodigo?: number | null;
+  /** Recalcula grupo/tarifa/preço ao trocar de viatura (edição do contrato). */
+  onViaturaChange?: (viaturaId: string) => void;
 }
 
 /**
@@ -34,6 +36,7 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   estacoes,
   viaturaLocked,
   reservaCodigo,
+  onViaturaChange,
 }) => (
   <div className="space-y-6">
     <SectionRegime form={form} />
@@ -44,6 +47,7 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
       viaturas={viaturas}
       viaturaLocked={viaturaLocked}
       reservaCodigo={reservaCodigo}
+      onViaturaChange={onViaturaChange}
     />
     <SectionGeral form={form} clientes={clientes} />
     <FranquiaKmsFields />

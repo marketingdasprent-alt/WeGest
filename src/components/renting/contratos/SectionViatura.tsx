@@ -26,6 +26,11 @@ interface SectionViaturaProps {
    */
   viaturaLocked?: boolean;
   reservaCodigo?: number | null;
+  /**
+   * Chamado depois de mudar a viatura. O contrato usa-o para recalcular o
+   * snapshot `grupo` e o preço a partir do grupo da viatura nova.
+   */
+  onViaturaChange?: (viaturaId: string) => void;
 }
 
 export const SectionViatura: React.FC<SectionViaturaProps> = ({
@@ -33,6 +38,7 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
   viaturas,
   viaturaLocked = false,
   reservaCodigo,
+  onViaturaChange,
 }) => (
   <div>
     <SectionTitle>Viatura</SectionTitle>
@@ -54,6 +60,7 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
                 field.onChange(newId);
                 const via = viaturas.find((x) => x.id === newId);
                 if (via) form.setValue('matricula', via.matricula);
+                if (newId) onViaturaChange?.(newId);
               }}
             >
               <FormControl>

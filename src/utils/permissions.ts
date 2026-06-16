@@ -74,6 +74,8 @@ export const RECURSOS = {
   RENTING_CONTRATOS: 'renting_contratos',
   RENTING_MOVIMENTACOES: 'renting_movimentacoes',
   RENTING_CLIENTES: 'renting_clientes',
+  // Ver todos os contratos/reservas (ignora a privacidade por gestor)
+  RENTING_VER_TODOS: 'renting_ver_todos',
 
   // Dashboard / Contabilidade
   DASHBOARD_CHECKIN_HISTORICO: 'dashboard_checkin_historico',

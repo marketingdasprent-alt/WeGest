@@ -25,6 +25,7 @@ const SELECT_COLUMNS = `
   reserva_id,
   cliente_id,
   emissor_id,
+  gestor_id,
   viatura_id, matricula, grupo,
   estacao_entrega_id, data_inicio,
   estacao_recolha_id, data_fim,
