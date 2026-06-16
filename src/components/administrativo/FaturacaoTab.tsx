@@ -126,7 +126,10 @@ export function FaturacaoTab() {
   // ── ações de faturação (recibo / nota de crédito) sobre uma fatura ──
   const { empresas } = useClientesEmpresas();
   const emitente: FaturacaoDocEmitente | null = useMemo(
-    () => (empresas.length === 1 ? { nomeCompleto: empresas[0].nomeCompleto, nif: empresas[0].nif, sede: empresas[0].sede } : null),
+    () =>
+      empresas.length === 1
+        ? { nomeCompleto: empresas[0].nomeCompleto, nif: empresas[0].nif, sede: empresas[0].sede }
+        : null,
     [empresas]
   );
   const [actionOrgId, setActionOrgId] = useState<string>('');

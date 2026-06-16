@@ -9,7 +9,18 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus, Minus, Lock, Info, Download, Loader2, Receipt, FileMinus, Eye, Ban } from 'lucide-react';
+import {
+  Plus,
+  Minus,
+  Lock,
+  Info,
+  Download,
+  Loader2,
+  Receipt,
+  FileMinus,
+  Eye,
+  Ban,
+} from 'lucide-react';
 import { formatCurrency, formatDateTime, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { baixarDocumentoPdf, abrirDocumentoPdf } from '@/lib/keyinvoice';
@@ -52,7 +63,8 @@ export function FaturacaoMovimentoDialog({
   const isCredito = row?.tipo === 'credito';
   const isFaturaRecibo = row?.docTipo === 'fatura_recibo';
   // Ações disponíveis quando a linha é uma fatura ligada a uma cobrança.
-  const podeAgir = !!row?.cobrancaId && (row?.docTipo === 'fatura' || row?.docTipo === 'fatura_recibo');
+  const podeAgir =
+    !!row?.cobrancaId && (row?.docTipo === 'fatura' || row?.docTipo === 'fatura_recibo');
   // Anulação: só faz sentido para um recibo ativo ou uma NC ativa (movimentos a crédito).
   const anularLabel =
     row?.docTipo === 'recibo'

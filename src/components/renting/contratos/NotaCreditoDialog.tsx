@@ -185,7 +185,11 @@ export function NotaCreditoDialog({
           numero,
           data: hojeISO(),
           emitente: emitente ?? null,
-          cliente: { nome: cobranca.destinatario_nome, nif: cli?.nif ?? null, morada: clienteMorada },
+          cliente: {
+            nome: cobranca.destinatario_nome,
+            nif: cli?.nif ?? null,
+            morada: clienteMorada,
+          },
           linhas: [{ descricao: `Crédito sobre ${docOriginal} — ${motivo.trim()}`, valor: base }],
           subtotal: base,
           taxaIva,

@@ -358,10 +358,18 @@ function Row({
 }) {
   return (
     <div className="flex items-center justify-between px-3 py-2">
-      <span className={cn('text-xs', muted ? 'text-muted-foreground' : '', total && 'font-semibold')}>
+      <span
+        className={cn('text-xs', muted ? 'text-muted-foreground' : '', total && 'font-semibold')}
+      >
         {label}
       </span>
-      <span className={cn('tabular-nums', total ? 'text-base font-bold' : '', muted && 'text-muted-foreground text-xs')}>
+      <span
+        className={cn(
+          'tabular-nums',
+          total ? 'text-base font-bold' : '',
+          muted && 'text-muted-foreground text-xs'
+        )}
+      >
         {value}
       </span>
     </div>

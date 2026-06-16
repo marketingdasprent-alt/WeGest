@@ -110,7 +110,8 @@ export function RecibosDialog({
   const erro = useMemo(() => {
     if (!cobranca) return 'Selecione a fatura a liquidar.';
     if (valorNum <= 0) return 'Indique um valor.';
-    if (excede) return `O valor excede o saldo por liquidar (${formatCurrency(cobranca.saldoPagar)}).`;
+    if (excede)
+      return `O valor excede o saldo por liquidar (${formatCurrency(cobranca.saldoPagar)}).`;
     if (!metodo) return 'Selecione o método de pagamento.';
     return null;
   }, [cobranca, valorNum, excede, metodo]);
@@ -305,7 +306,12 @@ export function RecibosDialog({
               </p>
             )}
             {!excede && cobranca && (
-              <p className={cn('text-[11px] text-muted-foreground', liquidaTotal && 'text-emerald-600 dark:text-emerald-400')}>
+              <p
+                className={cn(
+                  'text-[11px] text-muted-foreground',
+                  liquidaTotal && 'text-emerald-600 dark:text-emerald-400'
+                )}
+              >
                 {liquidaTotal
                   ? 'Liquida a fatura na totalidade — passa a paga.'
                   : 'Liquidação parcial — a fatura mantém saldo em aberto.'}

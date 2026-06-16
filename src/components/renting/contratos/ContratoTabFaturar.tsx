@@ -257,7 +257,9 @@ export function ContratoTabFaturar({ contrato }: Props) {
           /* download é best-effort */
         }
       }
-      toast.success(`Documento fiscal emitido${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`);
+      toast.success(
+        `Documento fiscal emitido${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
+      );
       if (res.warning) toast.warning(res.warning);
       refetchCobrancas();
       refetchInvoices();
@@ -380,7 +382,9 @@ export function ContratoTabFaturar({ contrato }: Props) {
       <Card>
         <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className={cn('p-2 rounded-lg', jaFacturado ? 'bg-indigo-500/10' : 'bg-primary/10')}>
+            <div
+              className={cn('p-2 rounded-lg', jaFacturado ? 'bg-indigo-500/10' : 'bg-primary/10')}
+            >
               {jaFacturado ? (
                 <Lock className="h-5 w-5 text-indigo-500" />
               ) : (

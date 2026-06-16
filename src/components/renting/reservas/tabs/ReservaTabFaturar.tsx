@@ -69,7 +69,9 @@ export function ReservaTabFaturar({ reserva }: Props) {
 
   const { empresas } = useClientesEmpresas();
   const emitente: FaturacaoDocEmitente | null = useMemo(() => {
-    const e = empresas.find((x) => x.id === reserva.emissor_id) ?? (empresas.length === 1 ? empresas[0] : null);
+    const e =
+      empresas.find((x) => x.id === reserva.emissor_id) ??
+      (empresas.length === 1 ? empresas[0] : null);
     return e ? { nomeCompleto: e.nomeCompleto, nif: e.nif, sede: e.sede } : null;
   }, [empresas, reserva.emissor_id]);
 
@@ -102,7 +104,10 @@ export function ReservaTabFaturar({ reserva }: Props) {
         .from('notas_credito')
         .select('cobranca_id, valor')
         .eq('estado', 'ativo')
-        .in('cobranca_id', cobrancaIds.length ? cobrancaIds : ['00000000-0000-0000-0000-000000000000']);
+        .in(
+          'cobranca_id',
+          cobrancaIds.length ? cobrancaIds : ['00000000-0000-0000-0000-000000000000']
+        );
       if (error) return {};
       const m: Record<string, number> = {};
       (data ?? []).forEach((n: any) => {
@@ -120,7 +125,10 @@ export function ReservaTabFaturar({ reserva }: Props) {
         .from('recibos')
         .select('referencia, valor')
         .eq('estado', 'ativo')
-        .in('referencia', cobrancaIds.length ? cobrancaIds : ['00000000-0000-0000-0000-000000000000']);
+        .in(
+          'referencia',
+          cobrancaIds.length ? cobrancaIds : ['00000000-0000-0000-0000-000000000000']
+        );
       if (error) return {};
       const m: Record<string, number> = {};
       (data ?? []).forEach((r: any) => {
@@ -137,7 +145,10 @@ export function ReservaTabFaturar({ reserva }: Props) {
       const { data, error } = await (supabase as any)
         .from('invoices')
         .select('*')
-        .in('cobranca_id', cobrancaIds.length ? cobrancaIds : ['00000000-0000-0000-0000-000000000000']);
+        .in(
+          'cobranca_id',
+          cobrancaIds.length ? cobrancaIds : ['00000000-0000-0000-0000-000000000000']
+        );
       if (error) return [];
       return (data ?? []) as InvoiceMetadata[];
     },
@@ -245,7 +256,9 @@ export function ReservaTabFaturar({ reserva }: Props) {
           /* best-effort */
         }
       }
-      toast.success(`Documento fiscal emitido${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`);
+      toast.success(
+        `Documento fiscal emitido${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
+      );
       if (res.warning) toast.warning(res.warning);
       refetchAll();
     } catch (e: any) {
