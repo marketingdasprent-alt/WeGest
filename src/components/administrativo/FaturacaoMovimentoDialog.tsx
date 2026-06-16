@@ -9,10 +9,10 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus, Minus, Lock, Info, Download, Loader2, Receipt, FileMinus } from 'lucide-react';
+import { Plus, Minus, Lock, Info, Download, Loader2, Receipt, FileMinus, Eye, Ban } from 'lucide-react';
 import { formatCurrency, formatDateTime, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
-import { baixarDocumentoPdf } from '@/lib/keyinvoice';
+import { baixarDocumentoPdf, abrirDocumentoPdf } from '@/lib/keyinvoice';
 import type { InvoiceMetadata } from '@/types/keyinvoice';
 import { DOC_TIPO_LABEL, DOC_TIPO_CLASS, type FaturacaoRow } from './faturacao';
 
@@ -25,6 +25,8 @@ interface Props {
   /** Ações sobre a fatura desta linha (quando é uma cobrança/fatura). */
   onFazerRecibo?: () => void;
   onNotaCredito?: () => void;
+  /** Anular o recibo / nota de crédito desta linha (estorno na conta-corrente). */
+  onAnular?: () => void;
 }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -43,12 +45,28 @@ export function FaturacaoMovimentoDialog({
   onOpenChange,
   onFazerRecibo,
   onNotaCredito,
+  onAnular,
 }: Props) {
   const [downloading, setDownloading] = useState(false);
+  const [viewing, setViewing] = useState(false);
   const isCredito = row?.tipo === 'credito';
   const isFaturaRecibo = row?.docTipo === 'fatura_recibo';
   // Ações disponíveis quando a linha é uma fatura ligada a uma cobrança.
   const podeAgir = !!row?.cobrancaId && (row?.docTipo === 'fatura' || row?.docTipo === 'fatura_recibo');
+  // Anulação: só faz sentido para um recibo ativo ou uma NC ativa (movimentos a crédito).
+  const anularLabel =
+    row?.docTipo === 'recibo'
+      ? 'Anular recibo'
+      : row?.docTipo === 'nota_credito'
+        ? 'Anular nota de crédito'
+        : row?.docTipo === 'fatura'
+          ? 'Anular fatura'
+          : null;
+  const podeAnular =
+    !!onAnular &&
+    ((row?.docTipo === 'recibo' && !!row?.reciboId) ||
+      (row?.docTipo === 'nota_credito' && !!row?.notaCreditoId) ||
+      (row?.docTipo === 'fatura' && !!row?.cobrancaId));
 
   async function handleDownload() {
     if (!invoice) return;
@@ -61,13 +79,27 @@ export function FaturacaoMovimentoDialog({
       setDownloading(false);
     }
   }
+
+  async function handleView() {
+    if (!invoice) return;
+    // Abrir a janela JÁ, no gesto do clique (window.open após await é bloqueado).
+    const w = window.open('', '_blank');
+    setViewing(true);
+    try {
+      await abrirDocumentoPdf(invoice, w);
+    } catch (e: any) {
+      toast.error(`Erro ao obter PDF: ${e?.message ?? 'indisponível'}`);
+    } finally {
+      setViewing(false);
+    }
+  }
   // Montante "principal": numa Fatura-Recibo é o valor recebido (crédito); nos restantes,
   // o débito ou o crédito conforme o tipo.
   const montante = row ? (row.credito ?? row.debito ?? row.valor) : 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Movimento de Conta-Corrente
@@ -138,20 +170,40 @@ export function FaturacaoMovimentoDialog({
                   <Info className="h-3.5 w-3.5 shrink-0" />
                   Documento fiscal KeyInvoice{invoice.numero ? `: ${invoice.numero}` : ''}
                 </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1.5 shrink-0"
-                  onClick={handleDownload}
-                  disabled={downloading}
-                >
-                  {downloading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Download className="h-3.5 w-3.5" />
-                  )}
-                  PDF
-                </Button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={handleView}
+                    disabled={viewing || downloading}
+                    title="Ver o documento numa nova aba"
+                  >
+                    {viewing ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5" />
+                    )}
+                    Ver
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={handleDownload}
+                    disabled={downloading || viewing}
+                    title="Descarregar o PDF"
+                  >
+                    {downloading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    PDF
+                  </Button>
+                </div>
               </div>
             ) : row.numeroDoc !== '—' ? (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -189,6 +241,20 @@ export function FaturacaoMovimentoDialog({
                     <FileMinus className="h-4 w-4" /> Nota de crédito
                   </Button>
                 )}
+              </div>
+            )}
+
+            {podeAnular && (
+              <div className="flex flex-wrap gap-2 border-t pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-rose-700 dark:text-rose-300"
+                  onClick={onAnular}
+                >
+                  <Ban className="h-4 w-4" /> {anularLabel}
+                </Button>
               </div>
             )}
           </div>

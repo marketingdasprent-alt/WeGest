@@ -40,6 +40,8 @@ interface Props {
   emitente?: FaturacaoDocEmitente | null;
   /** Total já creditado por NC ativas desta cobrança (para o saldo disponível). */
   jaCreditado?: number;
+  /** Motivo pré-preenchido (ex.: ao "anular fatura" via NC total). */
+  defaultMotivo?: string;
   onEmitida: () => void;
 }
 
@@ -53,6 +55,7 @@ export function NotaCreditoDialog({
   orgId,
   emitente,
   jaCreditado = 0,
+  defaultMotivo,
   onEmitida,
 }: Props) {
   const qc = useQueryClient();
@@ -70,7 +73,7 @@ export function NotaCreditoDialog({
   useEffect(() => {
     if (open) {
       setValor(saldoDisponivel > 0 ? String(saldoDisponivel) : '');
-      setMotivo('');
+      setMotivo(defaultMotivo ?? '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cobranca?.id]);
@@ -209,7 +212,7 @@ export function NotaCreditoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileMinus className="h-5 w-5 text-fuchsia-600 dark:text-fuchsia-400" />

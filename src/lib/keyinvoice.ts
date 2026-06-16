@@ -101,3 +101,37 @@ export async function baixarDocumentoPdf(invoice: InvoiceMetadata): Promise<void
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/**
+ * Abre o PDF de um documento numa nova aba (pré-visualização).
+ *
+ * `win` deve ser uma janela aberta de forma SÍNCRONA no gesto do clique
+ * (window.open após `await` é bloqueado pelos browsers). Se `win` for null
+ * (pop-up bloqueado), faz fallback para download.
+ */
+export async function abrirDocumentoPdf(
+  invoice: InvoiceMetadata,
+  win: Window | null
+): Promise<void> {
+  let base64: string;
+  try {
+    base64 = await fetchDocumentoPdf(invoice);
+  } catch (e) {
+    win?.close();
+    throw e;
+  }
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  if (win) {
+    win.location.href = url;
+  } else {
+    // pop-up bloqueado → fallback para download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${invoice.tipo}_${invoice.numero ?? invoice.ki_docnum ?? 'documento'}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}

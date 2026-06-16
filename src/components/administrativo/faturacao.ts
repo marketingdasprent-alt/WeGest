@@ -143,6 +143,7 @@ export interface MovimentoRaw {
   contrato_id: string | null;
   cobranca_id: string | null;
   recibo_id: string | null;
+  nota_credito_id: string | null;
   entidade_id: string;
   created_by: string | null;
   entidade: EmbedEntidade | null;
@@ -156,6 +157,10 @@ export interface FaturacaoRow {
   id: string;
   /** cobrança de origem — liga ao documento fiscal KeyInvoice em `invoices`. */
   cobrancaId: string | null;
+  /** recibo de origem (quando o movimento é um recibo) — p/ anular. */
+  reciboId: string | null;
+  /** nota de crédito de origem (quando o movimento é uma NC) — p/ anular. */
+  notaCreditoId: string | null;
   /** data contabilística (ISO date) */
   dataMovimento: string | null;
   /** timestamp do registo (com hora) */
@@ -208,6 +213,8 @@ export function mapMovimentoToRow(
   return {
     id: m.id,
     cobrancaId: m.cobranca_id,
+    reciboId: m.recibo_id,
+    notaCreditoId: m.nota_credito_id,
     dataMovimento: m.data_movimento,
     createdAt: m.created_at,
     numeroDoc,
@@ -328,7 +335,7 @@ export function movimentoSelect(
   opts: { contratoInner?: boolean; reciboInner?: boolean } = {}
 ): string {
   const { contratoInner = false, reciboInner = false } = opts;
-  return `id, data_movimento, created_at, tipo, valor, origem, descricao, primavera_ref, sincronizado_primavera, contrato_id, cobranca_id, recibo_id, entidade_id, created_by,
+  return `id, data_movimento, created_at, tipo, valor, origem, descricao, primavera_ref, sincronizado_primavera, contrato_id, cobranca_id, recibo_id, nota_credito_id, entidade_id, created_by,
     entidade:clientes!conta_movimentos_entidade_id_fkey(id, nome, codigo),
     cobranca:contrato_cobrancas!conta_movimentos_cobranca_id_fkey(id, documento_externo_ref, estado, valor_total),
     recibo:recibos!conta_movimentos_recibo_id_fkey${reciboInner ? '!inner' : ''}(id, codigo, metodo, documento_externo_ref, referencia, data_recibo),
