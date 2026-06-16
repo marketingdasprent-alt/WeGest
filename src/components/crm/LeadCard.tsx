@@ -141,21 +141,7 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, customTags = [] }) => 
   };
 
   const getTagColor = (tag: string) => {
-    const colors = [
-      'bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30',
-      'bg-green-500/20 text-green-600 dark:text-green-300 border-green-500/30',
-      'bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/30',
-      'bg-orange-500/20 text-orange-600 dark:text-orange-300 border-orange-500/30',
-      'bg-pink-500/20 text-pink-600 dark:text-pink-300 border-pink-500/30',
-      'bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 border-cyan-500/30',
-    ];
-
-    const hash = tag.split('').reduce((a, b) => {
-      a = (a << 5) - a + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-
-    return colors[Math.abs(hash) % colors.length];
+    return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
   };
 
   return (
@@ -168,8 +154,8 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, customTags = [] }) => 
       className={`transition-all duration-200 ${isDragging ? 'opacity-50 z-50' : ''}`}
     >
       <Card
-        className={`bg-gradient-to-br from-card/90 to-card backdrop-blur-sm border-border/50 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 transition-all duration-300 ${
-          isDragging ? 'shadow-2xl shadow-primary/30 border-primary' : ''
+        className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-cyan-400 dark:hover:border-cyan-500 hover:shadow-md transition-all duration-200 ${
+          isDragging ? 'shadow-lg shadow-cyan-500/30 border-cyan-400' : ''
         }`}
         {...attributes}
         {...listeners}
@@ -187,10 +173,10 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, customTags = [] }) => 
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={handleViewClick}
-                className="p-1.5 rounded-full bg-yellow-500/20 hover:bg-yellow-500/30 transition-colors border border-yellow-500/30 hover:border-yellow-500/50 z-10"
+                className="p-1.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 z-10"
                 title="Ver detalhes"
               >
-                <Eye className="h-3 w-3 text-yellow-500" />
+                <Eye className="h-3 w-3 text-slate-600 dark:text-slate-400" />
               </button>
             </div>
           </div>
@@ -199,7 +185,7 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, customTags = [] }) => 
           {lead.observacoes && lead.observacoes.trim() && !isFormDataJSON(lead.observacoes) && (
             <div className="mb-3">
               <div className="text-xs text-muted-foreground mb-1">Observações</div>
-              <div className="text-xs text-foreground bg-muted/50 rounded p-2 max-h-20 overflow-y-auto">
+              <div className="text-xs text-foreground bg-slate-50 dark:bg-slate-800/50 rounded p-2 max-h-20 overflow-y-auto">
                 {lead.observacoes}
               </div>
             </div>

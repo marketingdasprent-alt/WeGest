@@ -105,6 +105,22 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
         });
         return false;
       }
+      if (!closureData.numero_fatura || !closureData.numero_fatura.trim()) {
+        toast({
+          title: 'Erro',
+          description: 'Informe o número de fatura.',
+          variant: 'destructive',
+        });
+        return false;
+      }
+      if (!faturaFile) {
+        toast({
+          title: 'Erro',
+          description: 'Anexe o ficheiro da fatura (PDF ou imagem).',
+          variant: 'destructive',
+        });
+        return false;
+      }
 
       try {
         setIsClosing(true);
@@ -159,13 +175,13 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
           const fileExt = faturaFile.name.split('.').pop();
           const fileName = `faturas/${ticketId}/${Date.now()}.${fileExt}`;
           const { error: uploadErr } = await supabase.storage
-            .from('assistencia-anexos')
+            .from('viatura-documentos')
             .upload(fileName, faturaFile);
           if (uploadErr) throw uploadErr;
 
           const {
             data: { publicUrl },
-          } = supabase.storage.from('assistencia-anexos').getPublicUrl(fileName);
+          } = supabase.storage.from('viatura-documentos').getPublicUrl(fileName);
           faturaUrl = publicUrl;
         }
 
@@ -206,6 +222,17 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
                 nome_ficheiro: file.path.split('/').pop() || 'foto_checkout',
                 uploaded_by: user?.id,
               }));
+
+            // Adicionar fatura também aos danos
+            if (faturaUrl) {
+              fotosDano.push({
+                dano_id: novoDano.id,
+                ficheiro_url: faturaUrl,
+                nome_ficheiro: `Fatura_${closureData.numero_fatura}.pdf`,
+                uploaded_by: user?.id,
+              });
+            }
+
             if (fotosDano.length > 0) {
               await supabase.from('viatura_dano_fotos').insert(fotosDano);
             }

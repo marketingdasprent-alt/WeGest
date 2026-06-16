@@ -405,11 +405,7 @@ const Calendario: React.FC = () => {
                   }
                 : undefined
             }
-            onDeleteEvent={
-              isAdmin
-                ? (id) => deleteMutation.mutate(id)
-                : undefined
-            }
+            onDeleteEvent={isAdmin ? (id) => deleteMutation.mutate(id) : undefined}
             onEventDetails={handleDetails}
             isLoading={isLoading}
             currentUserId={user?.id}
