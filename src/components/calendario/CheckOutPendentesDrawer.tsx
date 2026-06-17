@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, Camera, Car, CheckCircle, Film, Loader2, Upload, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMatricula } from './calendarioUtils';
+import { EVENTO_COLS } from './eventoColumns';
 import {
   CheckinDadosSection,
   emptyCheckinDados,
@@ -33,6 +34,19 @@ interface PendenteCheckout {
     combustivel: string | null;
   } | null;
   motoristaNome: string;
+}
+
+/** Shape do evento de entrega com contrato+viatura embebidos (Fase 3). */
+interface CheckoutEventoRow {
+  data_inicio: string | null;
+  contratos: {
+    id: string;
+    numero_contrato: number | null;
+    viatura_id: string;
+    motorista_id: string | null;
+    status: string;
+    viaturas: PendenteCheckout['viaturas'];
+  };
 }
 
 interface SelectedFile {
@@ -71,10 +85,12 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
   const { data: pendentes = [], isLoading } = useQuery({
     queryKey: ['contratos-checkout-pendentes'],
     queryFn: async () => {
-      // Fase 3: ler de calendario_eventos em vez de contratos flags
-      const query = supabase
-        .from('calendario_eventos' as any)
-        .select(
+      // Fase 3: ler de calendario_eventos em vez de contratos flags.
+      // O nome da coluna é validado em compile-time via EVENTO_COLS (ver topo
+      // do ficheiro); o cast do builder existe apenas por limitação de
+      // inferência do supabase-js em embeds aninhados (TS2589).
+      const { data, error } = await (
+        supabase.from('calendario_eventos').select(
           `
           data_inicio,
           contratos!inner(
@@ -82,21 +98,20 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
             viaturas(id, matricula, marca, modelo, km_atual, combustivel)
           )
         `
-        ) as any;
-
-      const { data, error } = await query
+        ) as any
+      )
         .eq('tipo', 'entrega')
-        .eq('origen_tipo', 'contrato')
-        .is('realizado_em', null)
+        .eq(EVENTO_COLS.origemTipo, 'contrato')
+        .is(EVENTO_COLS.realizadoEm, null)
         .eq('contratos.status', 'ativo')
         .order('data_inicio', { ascending: false });
       if (error) throw error;
 
-      const items = (data || []) as any[];
+      const items = (data || []) as CheckoutEventoRow[];
       if (items.length === 0) return [];
 
       // Re-map para estrutura esperada (remapear do evento para contrato)
-      const contractItems = items.map((ev: any) => ({
+      const contractItems = items.map((ev) => ({
         id: ev.contratos.id,
         numero_contrato: ev.contratos.numero_contrato,
         viatura_id: ev.contratos.viatura_id,
@@ -251,16 +266,15 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
       // Fase 4: Marca o evento 'entrega' como realizado (em calendario_eventos)
       if (selected.id) {
         const now = new Date().toISOString();
-        const query = supabase
-          .from('calendario_eventos' as any)
-          .select('id') as any;
-        const { data: evMatch } = (await query
+        const { data: evMatch } = await supabase
+          .from('calendario_eventos')
+          .select('id')
           .eq('tipo', 'entrega')
-          .eq('origen_tipo', 'contrato')
-          .eq('origen_id', selected.id)
-          .is('realizado_em', null)
+          .eq(EVENTO_COLS.origemTipo, 'contrato')
+          .eq(EVENTO_COLS.origemId, selected.id)
+          .is(EVENTO_COLS.realizadoEm, null)
           .limit(1)
-          .maybeSingle()) as any;
+          .maybeSingle();
 
         if (evMatch?.id) {
           await supabase

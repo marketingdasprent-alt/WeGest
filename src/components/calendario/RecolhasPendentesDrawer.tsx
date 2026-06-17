@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMatricula, SearchableDropdown } from './calendarioUtils';
+import { EVENTO_COLS } from './eventoColumns';
 import { RentingPendentesSection } from './RentingPendentesSection';
 import { useEventosPendentesRenting } from '@/hooks/useEventosPendentesRenting';
 import {
@@ -37,6 +38,17 @@ interface ViaturaEmRecolha {
   categoria: string | null;
   km_atual: number | null;
   combustivel: string | null;
+}
+
+/** Shape do evento de recolha/devolução com contrato+viatura embebidos (Fase 3). */
+interface RecolhaEventoRow {
+  data_inicio: string | null;
+  contratos: {
+    id: string;
+    viatura_id: string;
+    status: string;
+    viaturas: ViaturaEmRecolha | null;
+  };
 }
 
 interface SelectedFile {
@@ -86,13 +98,13 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
   const { data: viaturas = [], isLoading } = useQuery({
     queryKey: ['viaturas-pendentes-recolha'],
     queryFn: async () => {
-      // Fase 3: ler de calendario_eventos em vez de viaturas.status='em_recolha'
+      // Fase 3: ler de calendario_eventos em vez de viaturas.status='em_recolha'.
+      // Nome de coluna validado via EVENTO_COLS; cast do builder apenas por
+      // limitação de inferência do supabase-js em embeds aninhados (TS2589).
       const now = new Date().toISOString();
 
-      // Query com type casting para evitar type inference complexity
-      const query = supabase
-        .from('calendario_eventos' as any)
-        .select(
+      const { data, error } = await (
+        supabase.from('calendario_eventos').select(
           `
           data_inicio,
           contratos!inner(
@@ -100,31 +112,31 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
             viaturas(id, matricula, marca, modelo, categoria, km_atual, combustivel)
           )
         `
-        ) as any;
-
-      const { data, error } = await query
+        ) as any
+      )
         .in('tipo', ['recolha', 'devolucao'])
-        .eq('origen_tipo', 'contrato')
-        .is('realizado_em', null)
+        .eq(EVENTO_COLS.origemTipo, 'contrato')
+        .is(EVENTO_COLS.realizadoEm, null)
         .lte('data_inicio', now)
         .eq('contratos.status', 'ativo')
         .order('data_inicio', { ascending: false });
 
       if (error) throw error;
 
-      const items = (data || []) as any[];
+      const items = (data || []) as RecolhaEventoRow[];
       if (items.length === 0) return [];
 
       // Deduplicate by viatura_id (only one event per viatura)
       const seen = new Set<string>();
       return items
-        .filter((ev: any) => {
-          const vId = ev.contratos.viaturas.id;
-          if (seen.has(vId)) return false;
+        .filter((ev) => {
+          const vId = ev.contratos.viaturas?.id;
+          if (!vId || seen.has(vId)) return false;
           seen.add(vId);
           return true;
         })
-        .map((ev: any) => ev.contratos.viaturas) as ViaturaEmRecolha[];
+        .map((ev) => ev.contratos.viaturas)
+        .filter((v): v is ViaturaEmRecolha => v !== null);
     },
     enabled: open,
   });
@@ -320,16 +332,15 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
       // Fase 4: Marca o evento 'recolha'/'devolucao' como realizado (em calendario_eventos)
       if (contrato?.id) {
         const now = new Date().toISOString();
-        const query = supabase
-          .from('calendario_eventos' as any)
-          .select('id') as any;
-        const { data: evMatch } = (await query
+        const { data: evMatch } = await supabase
+          .from('calendario_eventos')
+          .select('id')
           .in('tipo', ['recolha', 'devolucao'])
-          .eq('origen_tipo', 'contrato')
-          .eq('origen_id', contrato.id)
-          .is('realizado_em', null)
+          .eq(EVENTO_COLS.origemTipo, 'contrato')
+          .eq(EVENTO_COLS.origemId, contrato.id)
+          .is(EVENTO_COLS.realizadoEm, null)
           .limit(1)
-          .maybeSingle()) as any;
+          .maybeSingle();
 
         if (evMatch?.id) {
           await supabase
