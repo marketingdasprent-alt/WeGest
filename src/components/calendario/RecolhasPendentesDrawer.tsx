@@ -318,7 +318,6 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
       }
 
       // Fase 4: Marca o evento 'recolha'/'devolucao' como realizado (em calendario_eventos)
-      // Prioriza eventos contract-driven (origen_tipo='contrato'), depois legacy
       if (contrato?.id) {
         const now = new Date().toISOString();
         const query = supabase
@@ -340,27 +339,6 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
               realizado_por_id: userId,
             })
             .eq('id', evMatch.id);
-        } else if (selected.matricula) {
-          // Fallback: evento legacy sem origem_tipo
-          const { data: evLegacy } = await supabase
-            .from('calendario_eventos')
-            .select('id')
-            .eq('tipo', 'recolha')
-            .eq('matricula_devolver', selected.matricula)
-            .is('realizado_em', null)
-            .is('origem_tipo', null)
-            .order('data_inicio', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-          if (evLegacy?.id) {
-            await supabase
-              .from('calendario_eventos')
-              .update({
-                realizado_em: now,
-                realizado_por_id: userId,
-              })
-              .eq('id', evLegacy.id);
-          }
         }
       }
 

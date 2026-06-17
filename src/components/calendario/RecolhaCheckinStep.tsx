@@ -165,44 +165,13 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
     }
     setSaving(true);
     try {
-      // 1. Create the recolha calendar event
       const dataISO = diaTodo
         ? new Date(`${data}T00:00:00`).toISOString()
         : new Date(`${data}T${hora}:00`).toISOString();
 
-      const eventoPayload: Record<string, any> = {
-        titulo: viatura.matricula.replace(/[-\s]/g, '').toUpperCase(),
-        tipo: eventoData.tipo,
-        data_inicio: dataISO,
-        data_fim: null,
-        dia_todo: diaTodo,
-        cidade: estacaoNome || null,
-        descricao: observacoes.trim() || null,
-        criado_por: userId,
-      };
-      if (motoristaId) eventoPayload.motorista_id = motoristaId;
-      // Fase 1b: carimba o evento de recolha com a origem do contrato, para a
-      // leitura das listas poder ser unificada (legacy + renting) tal como a
-      // entrega. Sem matricula_devolver ⇒ não colide com os matchers dos
-      // drawers de conclusão (que filtram origem_tipo IS NULL + matricula).
-      if (contrato) {
-        eventoPayload.origem_tipo = 'contrato';
-        eventoPayload.origem_id = contrato.id;
-      }
+      const matriculaFormatted = viatura.matricula.replace(/[-\s]/g, '').toUpperCase();
 
-      let evResult = await supabase
-        .from('calendario_eventos')
-        .insert(eventoPayload)
-        .select('id')
-        .single();
-      if (evResult.error) {
-        const { motorista_id: _, ...fallback } = eventoPayload;
-        evResult = await supabase.from('calendario_eventos').insert(fallback).select('id').single();
-        if (evResult.error) throw evResult.error;
-      }
-      const eventoId = evResult.data.id;
-
-      // 2. Close motorista_viaturas association
+      // 1. Close motorista_viaturas association
       if (motoristaId) {
         await supabase
           .from('motorista_viaturas')
@@ -229,11 +198,49 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
         )
         .eq('id', viaturaId);
 
-      // 4. Notification (fire & forget)
+      // 2. Update evento recolha (trigger criou com data_inicio=NULL on-demand)
+      // Se não for "fazer depois", preencher data_inicio e adicionar dados
+      if (!fazerDepois && contrato) {
+        const query = supabase.from('calendario_eventos' as any).select('id') as any;
+        const { data: recolhaEvento } = (await query
+          .eq('origen_tipo', 'contrato')
+          .eq('origen_id', contrato.id)
+          .eq('tipo', 'recolha')
+          .is('data_inicio', null)
+          .maybeSingle()) as any;
+
+        if (recolhaEvento?.id) {
+          await supabase
+            .from('calendario_eventos')
+            .update({
+              data_inicio: dataISO,
+              cidade: estacaoNome || null,
+              descricao: observacoes.trim() || null,
+            })
+            .eq('id', recolhaEvento.id);
+        } else if (!recolhaEvento?.id) {
+          // Safety net: evento não criado pelo trigger (nunca deveria acontecer)
+          console.error('⚠️ Trigger não criou evento recolha, criando manualmente');
+          await supabase.from('calendario_eventos').insert({
+            tipo: 'recolha',
+            titulo: matriculaFormatted,
+            data_inicio: dataISO,
+            dia_todo: diaTodo,
+            cidade: estacaoNome || null,
+            descricao: observacoes.trim() || null,
+            criado_por: userId,
+            motorista_id: motoristaId || null,
+            origen_tipo: 'contrato' as any,
+            origen_id: contrato.id,
+          } as any);
+        }
+      }
+
+      // 3. Notification (fire & forget)
       try {
         await supabase.functions.invoke('send-calendar-notification', {
           body: {
-            matricula: eventoPayload.titulo,
+            matricula: matriculaFormatted,
             cidade: estacaoNome,
             tipo: 'recolha',
             data_inicio: dataISO,
@@ -244,17 +251,17 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
         /* non-critical */
       }
 
-      // 5. Contrato
+      // 4. Contrato (trigger já criou eventos, so atualizar estado)
       if (contrato) {
         if (fazerDepois) {
           await supabase
             .from('contratos')
-            .update({ checkin_pendente: true, calendario_evento_id: eventoId })
+            .update({ checkin_pendente: true })
             .eq('id', contrato.id);
         } else {
           await supabase
             .from('contratos')
-            .update({ status: 'encerrado', calendario_evento_id: eventoId })
+            .update({ status: 'encerrado' })
             .eq('id', contrato.id);
         }
       }

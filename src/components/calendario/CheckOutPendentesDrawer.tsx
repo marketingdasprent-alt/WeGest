@@ -249,7 +249,6 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
       await supabase.from('contratos').update({ checkout_pendente: false }).eq('id', selected.id);
 
       // Fase 4: Marca o evento 'entrega' como realizado (em calendario_eventos)
-      // Prioriza eventos contract-driven (origem_tipo='contrato'), depois legacy
       if (selected.id) {
         const now = new Date().toISOString();
         const query = supabase
@@ -271,27 +270,6 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
               realizado_por_id: userId,
             })
             .eq('id', evMatch.id);
-        } else if (selected.viaturas?.matricula) {
-          // Fallback: evento legacy sem origem_tipo
-          const { data: evLegacy } = await supabase
-            .from('calendario_eventos')
-            .select('id')
-            .eq('tipo', 'entrega')
-            .eq('matricula_devolver', selected.viaturas.matricula)
-            .is('realizado_em', null)
-            .is('origem_tipo', null)
-            .order('data_inicio', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-          if (evLegacy?.id) {
-            await supabase
-              .from('calendario_eventos')
-              .update({
-                realizado_em: now,
-                realizado_por_id: userId,
-              })
-              .eq('id', evLegacy.id);
-          }
         }
       }
 

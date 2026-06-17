@@ -228,36 +228,13 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
 
     setSaving(true);
     try {
-      // 1. Create the calendar event
       const dataISO = diaTodo
         ? new Date(`${data}T00:00:00`).toISOString()
         : new Date(`${data}T${hora}:00`).toISOString();
 
-      const eventoPayload: Record<string, any> = {
-        titulo: viatura.matricula.replace(/[-\s]/g, '').toUpperCase(),
-        tipo: 'entrega',
-        data_inicio: dataISO,
-        data_fim: null,
-        dia_todo: diaTodo,
-        cidade: estacaoNome || null,
-        descricao: observacoes.trim() || null,
-        criado_por: userId,
-      };
-      if (motoristaId) eventoPayload.motorista_id = motoristaId;
+      const matriculaFormatted = viatura.matricula.replace(/[-\s]/g, '').toUpperCase();
 
-      let evResult = await supabase
-        .from('calendario_eventos')
-        .insert(eventoPayload)
-        .select('id')
-        .single();
-      if (evResult.error) {
-        const { motorista_id: _, ...fallback } = eventoPayload;
-        evResult = await supabase.from('calendario_eventos').insert(fallback).select('id').single();
-        if (evResult.error) throw evResult.error;
-      }
-      const eventoId = evResult.data.id;
-
-      // 2. Associar viatura ao motorista
+      // 1. Associar viatura ao motorista (antes do contrato)
       const { error: mvErr } = await supabase.from('motorista_viaturas').insert({
         motorista_id: motoristaId,
         viatura_id: viaturaId,
@@ -267,18 +244,18 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
       });
       if (mvErr) throw mvErr;
 
-      // 3. Viatura → em_uso + estação
+      // 2. Viatura → em_uso + estação
       const { error: vErr } = await supabase
         .from('viaturas')
         .update({ status: 'em_uso', estacao_id: estacaoId || null })
         .eq('id', viaturaId);
       if (vErr) throw vErr;
 
-      // 4. Notificação (fire & forget)
+      // 3. Notificação (fire & forget)
       try {
         await supabase.functions.invoke('send-calendar-notification', {
           body: {
-            matricula: eventoPayload.titulo,
+            matricula: matriculaFormatted,
             cidade: estacaoNome,
             tipo: 'entrega',
             data_inicio: dataISO,
@@ -289,7 +266,7 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
         /* non-critical */
       }
 
-      // 5. Insert contrato (via RPC atómica — previne duplicados)
+      // 4. Insert contrato (trigger cria eventos automaticamente)
       const ct = await gerarContratoAtomico({
         motoristaId,
         empresaId,
@@ -307,12 +284,37 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
         criadoPor: userId,
         forceNewVersion: true,
         viaturaId,
-        calendarioEventoId: eventoId,
         checkoutPendente: fazerDepois,
       });
 
       const contratoId = ct.id;
       setContratoNumero(ct.numero_contrato);
+
+      // 5. Safety net: verificar se eventos foram criados (trigger deveria ter feito)
+      // Se falhar, cria manualmente (nunca deveria acontecer em produção)
+      const query = supabase.from('calendario_eventos' as any).select('id') as any;
+      const { data: entregaEvento } = (await query
+        .eq('origen_tipo', 'contrato')
+        .eq('origen_id', contratoId)
+        .eq('tipo', 'entrega')
+        .maybeSingle()) as any;
+
+      if (!entregaEvento?.id) {
+        console.error('⚠️ Trigger não criou evento entrega, criando manualmente');
+        const { error: manualErr } = await supabase.from('calendario_eventos').insert({
+          tipo: 'entrega',
+          titulo: matriculaFormatted,
+          data_inicio: dataISO,
+          dia_todo: diaTodo,
+          cidade: estacaoNome || null,
+          descricao: observacoes.trim() || null,
+          criado_por: userId,
+          motorista_id: motoristaId || null,
+          origen_tipo: 'contrato' as any,
+          origen_id: contratoId,
+        } as any);
+        if (manualErr) throw manualErr;
+      }
 
       if (!fazerDepois) {
         // 6. KM, combustivel, danos
