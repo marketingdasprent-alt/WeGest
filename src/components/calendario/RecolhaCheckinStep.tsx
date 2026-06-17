@@ -63,8 +63,10 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
   const [checkinDados, setCheckinDados] = useState<CheckinDadosState>(emptyCheckinDados);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const dragOverRef = useRef<HTMLDivElement>(null);
 
   const isDevolucao = eventoData.tipo === 'devolucao';
 
@@ -107,6 +109,44 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
     });
   };
 
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget === dragOverRef.current) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDropFiles = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const droppedFiles = e.dataTransfer.files;
+    if (droppedFiles.length > 0) {
+      const validFiles = Array.from(droppedFiles).filter(
+        (f) => f.type.startsWith('image/') || f.type.startsWith('video/')
+      );
+      if (validFiles.length === 0) {
+        toast.error('Por favor, arraste apenas imagens ou vídeos');
+        return;
+      }
+      setFiles((prev) => [
+        ...prev,
+        ...validFiles.map((f) => ({
+          id: Math.random().toString(36).slice(2),
+          file: f,
+          preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null,
+        })),
+      ]);
+    }
+  };
+
   const handleConfirm = async () => {
     if (!fazerDepois) {
       if (files.length === 0 && checkinDados.novosDanos.length === 0) {
@@ -141,6 +181,14 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
         criado_por: userId,
       };
       if (motoristaId) eventoPayload.motorista_id = motoristaId;
+      // Fase 1b: carimba o evento de recolha com a origem do contrato, para a
+      // leitura das listas poder ser unificada (legacy + renting) tal como a
+      // entrega. Sem matricula_devolver ⇒ não colide com os matchers dos
+      // drawers de conclusão (que filtram origem_tipo IS NULL + matricula).
+      if (contrato) {
+        eventoPayload.origem_tipo = 'contrato';
+        eventoPayload.origem_id = contrato.id;
+      }
 
       let evResult = await supabase
         .from('calendario_eventos')
@@ -407,11 +455,23 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
                   onChange={handleFileChange}
                 />
 
-                <div className="grid grid-cols-2 gap-2">
+                <div
+                  ref={dragOverRef}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDropFiles}
+                  className={cn(
+                    'grid grid-cols-2 gap-2 p-2 rounded-lg transition-colors',
+                    isDragging && 'bg-primary/10 border-2 border-primary border-dashed'
+                  )}
+                >
                   <button
                     type="button"
                     onClick={() => cameraInputRef.current?.click()}
-                    className="rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors py-6 flex flex-col items-center gap-2 text-sm text-muted-foreground"
+                    className={cn(
+                      'rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors py-6 flex flex-col items-center gap-2 text-sm text-muted-foreground',
+                      isDragging && 'border-primary/50 bg-primary/5'
+                    )}
                   >
                     <Camera className="h-6 w-6 opacity-40" />
                     <span>Câmara</span>
@@ -419,7 +479,10 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors py-6 flex flex-col items-center gap-2 text-sm text-muted-foreground"
+                    className={cn(
+                      'rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors py-6 flex flex-col items-center gap-2 text-sm text-muted-foreground',
+                      isDragging && 'border-primary/50 bg-primary/5'
+                    )}
                   >
                     <Upload className="h-6 w-6 opacity-40" />
                     <span>Galeria / Ficheiros</span>

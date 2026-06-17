@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { ArrowLeft, Camera, Car, CheckCircle, Film, Loader2, Upload, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { formatMatricula } from './calendarioUtils';
 import {
   CheckinDadosSection,
@@ -57,8 +58,10 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
   const [checkinDados, setCheckinDados] = useState<CheckinDadosState>(emptyCheckinDados);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const dragOverRef = useRef<HTMLDivElement>(null);
 
   // Pendentes de renting — usado para o empty state e para o badge.
   const { data: rentingEntregasPendentes = [] } = useEventosPendentesRenting({
@@ -68,23 +71,46 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
   const { data: pendentes = [], isLoading } = useQuery({
     queryKey: ['contratos-checkout-pendentes'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('contratos')
+      // Fase 3: ler de calendario_eventos em vez de contratos flags
+      const query = supabase
+        .from('calendario_eventos' as any)
         .select(
           `
-          id, numero_contrato, viatura_id, motorista_id, data_inicio,
-          viaturas (id, matricula, marca, modelo, km_atual, combustivel)
+          data_inicio,
+          contratos!inner(
+            id, numero_contrato, viatura_id, motorista_id, status,
+            viaturas(id, matricula, marca, modelo, km_atual, combustivel)
+          )
         `
-        )
-        .eq('checkout_pendente', true)
-        .eq('status', 'ativo')
+        ) as any;
+
+      const { data, error } = await query
+        .eq('tipo', 'entrega')
+        .eq('origen_tipo', 'contrato')
+        .is('realizado_em', null)
+        .eq('contratos.status', 'ativo')
         .order('data_inicio', { ascending: false });
       if (error) throw error;
+
       const items = (data || []) as any[];
       if (items.length === 0) return [];
 
+      // Re-map para estrutura esperada (remapear do evento para contrato)
+      const contractItems = items.map((ev: any) => ({
+        id: ev.contratos.id,
+        numero_contrato: ev.contratos.numero_contrato,
+        viatura_id: ev.contratos.viatura_id,
+        motorista_id: ev.contratos.motorista_id,
+        data_inicio: ev.data_inicio,
+        viaturas: ev.contratos.viaturas,
+      }));
+
       const motIds = [
-        ...new Set(items.filter((i) => i.motorista_id).map((i: any) => i.motorista_id as string)),
+        ...new Set(
+          contractItems
+            .filter((i) => i.motorista_id)
+            .map((i: any) => i.motorista_id as string)
+        ),
       ];
       let nomeMap: Record<string, string> = {};
       if (motIds.length > 0) {
@@ -96,7 +122,7 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
           nomeMap = Object.fromEntries(profiles.map((p: any) => [p.id, p.nome || '']));
         }
       }
-      return items.map((i: any) => ({
+      return contractItems.map((i: any) => ({
         ...i,
         motoristaNome: nomeMap[i.motorista_id] || '',
       })) as PendenteCheckout[];
@@ -123,6 +149,44 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
       if (f?.preview) URL.revokeObjectURL(f.preview);
       return prev.filter((x) => x.id !== id);
     });
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget === dragOverRef.current) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDropFiles = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const droppedFiles = e.dataTransfer.files;
+    if (droppedFiles.length > 0) {
+      const validFiles = Array.from(droppedFiles).filter(
+        (f) => f.type.startsWith('image/') || f.type.startsWith('video/')
+      );
+      if (validFiles.length === 0) {
+        toast.error('Por favor, arraste apenas imagens ou vídeos');
+        return;
+      }
+      setFiles((prev) => [
+        ...prev,
+        ...validFiles.map((f) => ({
+          id: Math.random().toString(36).slice(2),
+          file: f,
+          preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null,
+        })),
+      ]);
+    }
   };
 
   const resetCheckout = () => {
@@ -314,11 +378,23 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
                 className="hidden"
                 onChange={handleFileChange}
               />
-              <div className="grid grid-cols-2 gap-2">
+              <div
+                ref={dragOverRef}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDropFiles}
+                className={cn(
+                  'grid grid-cols-2 gap-2 p-2 rounded-lg transition-colors',
+                  isDragging && 'bg-primary/10 border-2 border-primary border-dashed'
+                )}
+              >
                 <button
                   type="button"
                   onClick={() => cameraInputRef.current?.click()}
-                  className="rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors py-6 flex flex-col items-center gap-2 text-sm text-muted-foreground"
+                  className={cn(
+                    'rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors py-6 flex flex-col items-center gap-2 text-sm text-muted-foreground',
+                    isDragging && 'border-primary/50 bg-primary/5'
+                  )}
                 >
                   <Camera className="h-6 w-6 opacity-40" />
                   <span>Câmara</span>
@@ -326,7 +402,10 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors py-6 flex flex-col items-center gap-2 text-sm text-muted-foreground"
+                  className={cn(
+                    'rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors py-6 flex flex-col items-center gap-2 text-sm text-muted-foreground',
+                    isDragging && 'border-primary/50 bg-primary/5'
+                  )}
                 >
                   <Upload className="h-6 w-6 opacity-40" />
                   <span>Galeria / Ficheiros</span>
