@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Smoke-test da API KeyInvoice **API 5.0 (REST)** contra a conta DEMO.
+ * Smoke-test do adapter de faturação KeyInvoice **API 5.0 (REST)** — ferramenta
+ * de dev para validar o protocolo contra a conta. NÃO faz parte da app.
  *
- *   node scripts/keyinvoice-smoke.mjs           # authenticate + métodos read-only
- *   node scripts/keyinvoice-smoke.mjs --raw     # imprime o JSON cru de cada resposta
+ *   node scripts/faturacao-smoke.mjs           # authenticate + métodos read-only
+ *   node scripts/faturacao-smoke.mjs --raw     # imprime o JSON cru de cada resposta
  *
- * Lê a chave de VITE_KEYINVOICE_API_KEY (.env) ou de KEYINVOICE_API_KEY (env).
+ * Lê a chave de KEYINVOICE_API_KEY (env ou .env local, NÃO commitado).
  *
  * Protocolo (doc API5):
  *   POST https://login.keyinvoice.com/API5.php  Content-Type: application/json
@@ -21,8 +22,8 @@ const RAW = process.argv.includes('--raw');
 function readApiKey() {
   if (process.env.KEYINVOICE_API_KEY) return process.env.KEYINVOICE_API_KEY;
   const env = readFileSync(new URL('../.env', import.meta.url), 'utf8');
-  const m = env.match(/^VITE_KEYINVOICE_API_KEY=(.+)$/m);
-  if (!m) throw new Error('Sem KEYINVOICE_API_KEY / VITE_KEYINVOICE_API_KEY');
+  const m = env.match(/^KEYINVOICE_API_KEY=(.+)$/m);
+  if (!m) throw new Error('Sem KEYINVOICE_API_KEY (env ou .env)');
   return m[1].trim();
 }
 const API_KEY = readApiKey();
@@ -49,7 +50,7 @@ async function call(method, params = {}, sid = null) {
 }
 
 async function main() {
-  console.log(`KeyInvoice API5 smoke-test — key …${API_KEY.slice(-6)}\n`);
+  console.log(`Faturação (KeyInvoice API5) smoke-test — key …${API_KEY.slice(-6)}\n`);
 
   const auth = await call('authenticate');
   console.log('authenticate →', JSON.stringify(auth));
@@ -68,7 +69,7 @@ async function main() {
   }
   console.log('\n✅ Protocolo API5 confirmado.');
 
-  // Criar artigo genérico via API: node scripts/keyinvoice-smoke.mjs --mkproduct
+  // Criar artigo genérico via API: node scripts/faturacao-smoke.mjs --mkproduct
   if (process.argv.includes('--mkproduct')) {
     const ref = process.env.KI_TEST_PRODUCT || 'WEGEST';
     console.log(`\n── insertProduct (IdProduct "${ref}") ──`);
@@ -86,7 +87,7 @@ async function main() {
     return;
   }
 
-  // Emissão de teste real: node scripts/keyinvoice-smoke.mjs --emit  (KI_TEST_PRODUCT=<ref>)
+  // Emissão de teste real: node scripts/faturacao-smoke.mjs --emit  (KI_TEST_PRODUCT=<ref>)
   if (process.argv.includes('--emit')) {
     const product = process.env.KI_TEST_PRODUCT;
     if (!product) {

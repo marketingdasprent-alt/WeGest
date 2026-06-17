@@ -85,7 +85,13 @@ export function FaturacaoActionsToolbar({
   const [ncPick, setNcPick] = useState<string>('');
   const [ncCobranca, setNcCobranca] = useState<ToolbarCobranca | null>(null);
 
-  const liquidaveis = useMemo(() => cobrancas.filter((c) => c.saldoPagar > 0.005), [cobrancas]);
+  const liquidaveis = useMemo(
+    () =>
+      cobrancas.filter(
+        (c) => (c.estado === 'emitida' || c.estado === 'paga') && c.saldoPagar > 0.005
+      ),
+    [cobrancas]
+  );
   const creditaveis = useMemo(
     () =>
       cobrancas.filter(

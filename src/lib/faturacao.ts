@@ -1,9 +1,9 @@
 /**
- * Cliente KeyInvoice (frontend) — API 5.0 REST.
+ * Cliente de faturação fiscal (frontend) — provider-agnostic.
  *
- * A emissão fiscal é feita SERVER-SIDE pela edge function `keyinvoice-emitir`
- * (com a api key como secret do Supabase). O browser NUNCA fala diretamente
- * com o KeyInvoice nem vê a chave — só invoca a edge function.
+ * A emissão fiscal é feita SERVER-SIDE pela edge function `faturacao-emitir`,
+ * que despacha para o software de faturação configurado por organização (a
+ * chave vive na config da org, nunca no browser). O browser só invoca a função.
  */
 import { supabase } from '@/integrations/supabase/client';
 import type {
@@ -11,12 +11,12 @@ import type {
   CreateFaturaPayload,
   EmitResult,
   InvoiceMetadata,
-} from '@/types/keyinvoice';
+} from '@/types/faturacao';
 
 export type { CreateFaturaPayload, EmitResult };
 
 /** Subconjunto de `clientes` necessário para o cabeçalho de um documento fiscal. */
-export interface ClienteRowParaKI {
+export interface ClienteRowParaFatura {
   nome?: string | null;
   nif?: string | null;
   email?: string | null;
@@ -26,11 +26,11 @@ export interface ClienteRowParaKI {
 }
 
 /**
- * Mapeia um registo de `clientes` para o cliente do documento KeyInvoice.
+ * Mapeia um registo de `clientes` para o cliente do documento fiscal.
  * NOTA: usa `localidade` (campo fiscal), não `cidade`.
  */
-export function clienteRowToKI(
-  row: ClienteRowParaKI | null | undefined,
+export function clienteRowToFatura(
+  row: ClienteRowParaFatura | null | undefined,
   fallbackNome?: string
 ): ClienteFatura {
   return {
@@ -44,20 +44,20 @@ export function clienteRowToKI(
   };
 }
 
-const FN = 'keyinvoice-emitir';
+const FN = 'faturacao-emitir';
 
-/** Emite um documento (FT / FR / NC) no KeyInvoice. A função grava em `invoices`. */
+/** Emite um documento (FT / FR / NC / RC) no provider configurado. A função grava em `invoices`. */
 export async function emitirDocumento(payload: CreateFaturaPayload): Promise<EmitResult> {
   const { data, error } = await supabase.functions.invoke<EmitResult>(FN, {
     body: { action: 'emit', ...payload },
   });
   if (error) throw new Error(error.message || 'Falha a contactar o serviço de faturação');
-  if (!data?.success) throw new Error(data?.error || 'Falha ao emitir documento no KeyInvoice');
+  if (!data?.success) throw new Error(data?.error || 'Falha ao emitir documento fiscal');
   return data;
 }
 
-/** Health-check: confirma que a edge function autentica no KeyInvoice. */
-export async function checkKeyInvoiceHealth(): Promise<boolean> {
+/** Health-check: confirma que a edge function autentica no provider configurado. */
+export async function checkFaturacaoHealth(): Promise<boolean> {
   try {
     const { data, error } = await supabase.functions.invoke<{ ok?: boolean }>(FN, {
       body: { action: 'health' },
@@ -66,6 +66,46 @@ export async function checkKeyInvoiceHealth(): Promise<boolean> {
     return !!data?.ok;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Anula a faturação de um conjunto de cobranças (estorna tudo → saldo a zero):
+ * anula os recibos e notas de crédito ativos ligados e as próprias cobranças.
+ * Os triggers de conta-corrente lançam os estornos (recibo/NC → débito; cobrança
+ * → crédito), que se cancelam entre si. NÃO emite Nota de Crédito nem cancela o
+ * documento fiscal no provider — isso, se necessário, é uma ação separada/manual.
+ * Lança em erro.
+ */
+export async function anularCobrancasFaturacao(cobrancaIds: string[]): Promise<void> {
+  for (const id of cobrancaIds) {
+    // Recibos ativos da cobrança → anulados (estorno a débito).
+    const { error: recErr } = await supabase
+      .from('recibos')
+      .update({ estado: 'anulado' })
+      .eq('referencia', id)
+      .eq('estado', 'ativo');
+    if (recErr) throw recErr;
+
+    // Notas de crédito ativas da cobrança → anuladas (estorno a débito).
+    // A tabela pode não existir em BDs antigas — não partir por isso.
+    try {
+      await supabase
+        .from('notas_credito')
+        .update({ estado: 'anulado' })
+        .eq('cobranca_id', id)
+        .eq('estado', 'ativo');
+    } catch (e) {
+      console.warn('notas_credito indisponível ao anular:', e);
+    }
+
+    // Cobrança → anulada (trigger lança o estorno a crédito).
+    const { error: cobErr } = await supabase
+      .from('contrato_cobrancas')
+      .update({ estado: 'anulada' })
+      .eq('id', id)
+      .in('estado', ['emitida', 'paga']);
+    if (cobErr) throw cobErr;
   }
 }
 
@@ -78,8 +118,8 @@ export async function fetchDocumentoPdf(invoice: InvoiceMetadata): Promise<strin
   }>(FN, {
     body: {
       action: 'pdf',
-      ki_doctype: invoice.ki_doctype,
-      ki_docnum: invoice.ki_docnum,
+      provider_doctype: invoice.provider_doctype,
+      provider_docnum: invoice.provider_docnum,
       serie: invoice.serie ?? undefined,
     },
   });
@@ -95,7 +135,7 @@ export async function baixarDocumentoPdf(invoice: InvoiceMetadata): Promise<void
   const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${invoice.tipo}_${invoice.numero ?? invoice.ki_docnum ?? 'documento'}.pdf`;
+  a.download = `${invoice.tipo}_${invoice.numero ?? invoice.provider_docnum ?? 'documento'}.pdf`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -128,7 +168,7 @@ export async function abrirDocumentoPdf(
     // pop-up bloqueado → fallback para download
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${invoice.tipo}_${invoice.numero ?? invoice.ki_docnum ?? 'documento'}.pdf`;
+    a.download = `${invoice.tipo}_${invoice.numero ?? invoice.provider_docnum ?? 'documento'}.pdf`;
     document.body.appendChild(a);
     a.click();
     a.remove();

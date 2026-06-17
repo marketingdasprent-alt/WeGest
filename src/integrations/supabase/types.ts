@@ -3658,11 +3658,12 @@ export type Database = {
           data_emissao: string | null
           erro_msg: string | null
           id: string
-          ki_docnum: string | null
-          ki_doctype: string | null
           numero: string | null
           observacoes: string | null
           org_id: string
+          provider: string | null
+          provider_docnum: string | null
+          provider_doctype: string | null
           raw_response: Json | null
           referencia_externa: string | null
           serie: string | null
@@ -3680,11 +3681,12 @@ export type Database = {
           data_emissao?: string | null
           erro_msg?: string | null
           id?: string
-          ki_docnum?: string | null
-          ki_doctype?: string | null
           numero?: string | null
           observacoes?: string | null
           org_id: string
+          provider?: string | null
+          provider_docnum?: string | null
+          provider_doctype?: string | null
           raw_response?: Json | null
           referencia_externa?: string | null
           serie?: string | null
@@ -3702,11 +3704,12 @@ export type Database = {
           data_emissao?: string | null
           erro_msg?: string | null
           id?: string
-          ki_docnum?: string | null
-          ki_doctype?: string | null
           numero?: string | null
           observacoes?: string | null
           org_id?: string
+          provider?: string | null
+          provider_docnum?: string | null
+          provider_doctype?: string | null
           raw_response?: Json | null
           referencia_externa?: string | null
           serie?: string | null
@@ -5343,6 +5346,7 @@ export type Database = {
       org_definicoes: {
         Row: {
           created_at: string
+          faturacao_provider: string | null
           iva_rent_a_car: number
           iva_tvde: number
           org_id: string
@@ -5351,6 +5355,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          faturacao_provider?: string | null
           iva_rent_a_car?: number
           iva_tvde?: number
           org_id: string
@@ -5359,6 +5364,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          faturacao_provider?: string | null
           iva_rent_a_car?: number
           iva_tvde?: number
           org_id?: string
@@ -5431,6 +5437,7 @@ export type Database = {
           client_secret: string | null
           company_id: number | null
           company_name: string | null
+          config: Json | null
           cookies_json: string | null
           created_at: string | null
           criado_por: string | null
@@ -5470,6 +5477,7 @@ export type Database = {
           client_secret?: string | null
           company_id?: number | null
           company_name?: string | null
+          config?: Json | null
           cookies_json?: string | null
           created_at?: string | null
           criado_por?: string | null
@@ -5509,6 +5517,7 @@ export type Database = {
           client_secret?: string | null
           company_id?: number | null
           company_name?: string | null
+          config?: Json | null
           cookies_json?: string | null
           created_at?: string | null
           criado_por?: string | null

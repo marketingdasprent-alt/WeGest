@@ -25,9 +25,11 @@ import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
 import { openFaturacaoDocumento, type FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
-import { baixarDocumentoPdf, clienteRowToKI } from '@/lib/keyinvoice';
-import { useEmitirEEscreverFatura } from '@/hooks/useKeyInvoice';
-import type { ItemFatura } from '@/types/keyinvoice';
+import { baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
+import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
+import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
+import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
+import type { ItemFatura } from '@/types/faturacao';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 export interface FaturaItem {
@@ -85,6 +87,8 @@ export function ContratoFaturarDialog({
 }: Props) {
   const qc = useQueryClient();
   const emitirMut = useEmitirEEscreverFatura();
+  const { data: orgDef } = useOrgDefinicoes();
+  const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
   const [entidade, setEntidade] = useState<'cliente' | 'condutor'>('cliente');
   const [tipo, setTipo] = useState<'fatura' | 'fatura_recibo'>('fatura');
   const [metodo, setMetodo] = useState<string>('transferencia');
@@ -97,7 +101,7 @@ export function ContratoFaturarDialog({
   const faturaZero = fatura.valorRegistado === 0;
   const podeFaturar = fatura.valorRegistado >= 0; // 0€ é permitido (cortesia / 100% desconto)
 
-  /** Documento HTML local — fallback quando o KeyInvoice falha ou em faturas a 0€. */
+  /** Documento HTML local — fallback quando a emissão fiscal falha ou em faturas a 0€. */
   async function abrirDocumentoLocal(numeroDoc: string) {
     // NIF/morada do cliente para o cabeçalho — best-effort, não bloqueia
     let clienteNif: string | null = null;
@@ -135,17 +139,17 @@ export function ContratoFaturarDialog({
     if (!aberto) toast.warning('Pop-up bloqueado — não foi possível abrir o documento local.');
   }
 
-  /** Dados do cliente (cabeçalho fiscal) para o KeyInvoice. */
-  async function fetchClienteKI() {
+  /** Dados do cliente (cabeçalho fiscal) para o documento. */
+  async function fetchClienteFatura() {
     try {
       const { data } = await supabase
         .from('clientes')
         .select('nome, nif, email, morada, codigo_postal, localidade')
         .eq('id', destinatario.id)
         .single();
-      return clienteRowToKI(data, destinatario.nome);
+      return clienteRowToFatura(data, destinatario.nome);
     } catch {
-      return clienteRowToKI(null, destinatario.nome);
+      return clienteRowToFatura(null, destinatario.nome);
     }
   }
 
@@ -249,7 +253,7 @@ export function ContratoFaturarDialog({
 
       const cobrancaId = cobInserida?.id ?? null;
 
-      // ── Fase 2 — emissão fiscal no KeyInvoice (NUNCA reverte a Fase 1) ────
+      // ── Fase 2 — emissão fiscal no provider configurado (NUNCA reverte a Fase 1) ────
       if (faturaZero || !cobrancaId) {
         // Fatura a 0€ não gera documento fiscal — só o documento interno.
         await abrirDocumentoLocal(descricao);
@@ -258,7 +262,7 @@ export function ContratoFaturarDialog({
         try {
           // Itens fiscais = linhas brutas (sem a linha sintética de desconto);
           // o desconto vai como % por linha, p/ o total bater certo sem linhas negativas.
-          const itensKI: ItemFatura[] = fatura.itens
+          const itensFatura: ItemFatura[] = fatura.itens
             .filter((it) => !it.descricao.startsWith('Desconto'))
             .map((it) => ({
               descricao: it.descricao,
@@ -267,12 +271,12 @@ export function ContratoFaturarDialog({
               taxa_iva: fatura.taxaIva,
               desconto: contrato.desconto_percentagem ?? 0,
             }));
-          const cliente = await fetchClienteKI();
+          const cliente = await fetchClienteFatura();
           const res = await emitirMut.mutateAsync({
             payload: {
               tipo: tipo === 'fatura_recibo' ? 'FR' : 'FT',
               cliente,
-              itens: itensKI,
+              itens: itensFatura,
               contrato_id: contrato.id,
               cobranca_id: cobrancaId,
               referencia_externa: `Contrato #${String(contrato.codigo).padStart(4, '0')}`,
@@ -288,11 +292,11 @@ export function ContratoFaturarDialog({
             }
           }
           toast.success(
-            `Documento fiscal emitido no KeyInvoice${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
+            `Documento fiscal emitido no ${providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
           );
           if (res.warning) toast.warning(res.warning);
         } catch (kiErr: any) {
-          console.error('Falha a emitir no KeyInvoice:', kiErr);
+          console.error('Falha a emitir o documento fiscal:', kiErr);
           toast.warning(
             'Fatura registada, mas o documento fiscal ficou por emitir. Pode reemiti-lo na lista de faturas.'
           );
@@ -323,7 +327,7 @@ export function ContratoFaturarDialog({
             Faturar contrato #{String(contrato.codigo).padStart(4, '0')}
           </DialogTitle>
           <DialogDescription>
-            Regista a fatura no WeGest e emite o documento fiscal no KeyInvoice.
+            Regista a fatura no WeGest e emite o documento fiscal no {providerLabel}.
           </DialogDescription>
         </DialogHeader>
 

@@ -1,11 +1,21 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Receipt, Lock, FileText, Download, Loader2, Send } from 'lucide-react';
+import { Receipt, Lock, FileText, Download, Loader2, Send, RotateCcw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Table,
   TableBody,
@@ -21,9 +31,9 @@ import { useContratoExtras, calcExtraTotal } from '@/hooks/useContratoExtras';
 import { useContratoTaxas, calcTaxaValor } from '@/hooks/useContratoTaxas';
 import { useContratoCondutores } from '@/hooks/useContratoCondutores';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
-import { useInvoicesByContrato, useEmitirEEscreverFatura } from '@/hooks/useKeyInvoice';
-import { baixarDocumentoPdf, clienteRowToKI } from '@/lib/keyinvoice';
-import type { InvoiceMetadata, ItemFatura } from '@/types/keyinvoice';
+import { useInvoicesByContrato, useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
+import { baixarDocumentoPdf, clienteRowToFatura, anularCobrancasFaturacao } from '@/lib/faturacao';
+import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
 import type { ContratoRenting } from '@/types/contratoRenting';
 import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
 import {
@@ -73,9 +83,12 @@ interface Props {
 }
 
 export function ContratoTabFaturar({ contrato }: Props) {
+  const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reemitindoId, setReemitindoId] = useState<string | null>(null);
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
+  const [anularOpen, setAnularOpen] = useState(false);
+  const [anularBusy, setAnularBusy] = useState(false);
 
   const { data: coberturas } = useContratoCoberturas(contrato.id);
   const { data: extras } = useContratoExtras(contrato.id);
@@ -183,6 +196,57 @@ export function ContratoTabFaturar({ contrato }: Props) {
     refetchInvoices();
   };
 
+  // Pode anular se o contrato está facturado/pago, OU se há cobranças activas
+  // (cobre o edge-case de um FR em que o recibo falhou a meio: contrato fica
+  // pendente mas a cobrança ficou emitida — o botão precisa de aparecer na mesma).
+  const temCobrancasAtivas = (cobrancas ?? []).some(
+    (c) => c.estado === 'emitida' || c.estado === 'paga'
+  );
+  const podeAnularFaturacao =
+    contrato.estado_financeiro === 'facturado' ||
+    contrato.estado_financeiro === 'pago' ||
+    temCobrancasAtivas;
+
+  /**
+   * Anula a faturação do contrato → volta a "não faturado" (Pendente), re-faturável.
+   * Desfaz tudo o que a faturação criou na conta-corrente: anula recibos e notas de
+   * crédito ativos (estornos a débito) e a(s) cobrança(s) (estorno a crédito) — os
+   * estornos cancelam-se entre si, deixando o saldo a zero. NÃO emite Nota de Crédito
+   * nem cancela o documento fiscal no provider (isso, se necessário, é manual).
+   */
+  async function anularFaturacao() {
+    setAnularBusy(true);
+    try {
+      const ativasIds = (cobrancas ?? [])
+        .filter((c) => c.estado === 'emitida' || c.estado === 'paga')
+        .map((c) => c.id);
+      await anularCobrancasFaturacao(ativasIds);
+
+      // Contrato volta a "não faturado" (limpa o snapshot de totais congelado).
+      const { error: upErr } = await supabase
+        .from('contratos_renting')
+        .update({
+          estado_financeiro: 'pendente',
+          facturado_em: null,
+          total_subtotal: null,
+          total_iva: null,
+          total_final: null,
+        })
+        .eq('id', contrato.id);
+      if (upErr) throw upErr;
+
+      toast.success('Faturação anulada — o contrato voltou a "não faturado".');
+      setAnularOpen(false);
+      qc.invalidateQueries({ queryKey: ['renting'] });
+      refetchAll();
+    } catch (e: any) {
+      console.error('Erro ao anular faturação:', e);
+      toast.error(`Erro ao anular faturação: ${e?.message ?? 'tente novamente'}`);
+    } finally {
+      setAnularBusy(false);
+    }
+  }
+
   // Última fatura fiscal (FT/FR emitida) por cobrança — p/ download do PDF.
   // A `invoices` é 1-para-N por cobrança (uma FT + eventuais NC partilham cobranca_id).
   const invoiceByCobranca = useMemo(() => {
@@ -241,7 +305,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
       const res = await emitirMut.mutateAsync({
         payload: {
           tipo: isFR ? 'FR' : 'FT',
-          cliente: clienteRowToKI(cli, c.destinatario_nome),
+          cliente: clienteRowToFatura(cli, c.destinatario_nome),
           itens,
           contrato_id: contrato.id,
           cobranca_id: c.id,
@@ -413,6 +477,23 @@ export function ContratoTabFaturar({ contrato }: Props) {
                   </p>
                 </>
               )}
+              {podeAnularFaturacao && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 h-7 gap-1.5 text-rose-600 hover:text-rose-700 dark:text-rose-400"
+                  onClick={() => setAnularOpen(true)}
+                  disabled={anularBusy}
+                >
+                  {anularBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  )}
+                  Anular faturação
+                </Button>
+              )}
             </div>
           </div>
           <FaturacaoActionsToolbar
@@ -444,14 +525,20 @@ export function ContratoTabFaturar({ contrato }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {!cobrancas || cobrancas.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-20 text-center text-muted-foreground text-sm">
-                    Ainda sem faturas para este contrato.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                cobrancas.map((c) => {
+              {(() => {
+                const visiveis = (cobrancas ?? []).filter((c) => c.estado !== 'anulada');
+                if (visiveis.length === 0)
+                  return (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className="h-20 text-center text-muted-foreground text-sm"
+                      >
+                        Ainda sem faturas para este contrato.
+                      </TableCell>
+                    </TableRow>
+                  );
+                return visiveis.map((c) => {
                   const creditado = round2(ncPorCobranca?.[c.id] ?? 0);
                   const saldo = round2((c.valor_total ?? 0) - creditado);
                   const inv = invoiceByCobranca.get(c.id);
@@ -545,8 +632,8 @@ export function ContratoTabFaturar({ contrato }: Props) {
                       </TableCell>
                     </TableRow>
                   );
-                })
-              )}
+                });
+              })()}
             </TableBody>
           </Table>
         </div>
@@ -562,6 +649,39 @@ export function ContratoTabFaturar({ contrato }: Props) {
         emitente={emitente}
         onFaturado={refetchAll}
       />
+
+      <AlertDialog
+        open={anularOpen}
+        onOpenChange={(o) => {
+          if (!o && !anularBusy) setAnularOpen(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Anular a faturação deste contrato?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O contrato volta a <b>"não faturado"</b> e fica re-faturável. Os lançamentos na
+              conta-corrente (cobrança, recibos e notas de crédito) são estornados — o saldo fica a
+              zero. Esta ação <b>não</b> emite Nota de Crédito nem cancela o documento fiscal no
+              software de faturação; se já tiver sido emitido um documento certificado, faça a
+              reversão fiscal (NC) separadamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={anularBusy}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                anularFaturacao();
+              }}
+              disabled={anularBusy}
+              className="bg-rose-600 hover:bg-rose-700"
+            >
+              {anularBusy ? 'A anular…' : 'Anular faturação'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

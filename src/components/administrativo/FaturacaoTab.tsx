@@ -48,7 +48,7 @@ import {
   type FaturacaoRow,
 } from './faturacao';
 import { formatCurrency, formatDateTime } from '@/utils/formatters';
-import type { InvoiceMetadata } from '@/types/keyinvoice';
+import type { InvoiceMetadata } from '@/types/faturacao';
 import { RecibosDialog, type ReciboCobrancaAlvo } from '@/components/faturacao/RecibosDialog';
 import {
   NotaCreditoDialog,
@@ -83,7 +83,7 @@ const capitalize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : 
 
 const emptyKpi = (dateLabel = ''): FaturacaoKpi => ({ valor: 0, count: 0, dateLabel });
 
-/** Documentos fiscais KeyInvoice de uma cobrança, por grupo de tipo. */
+/** Documentos fiscais de uma cobrança, por grupo de tipo. */
 type InvoiceDocs = { ft?: InvoiceMetadata; nc?: InvoiceMetadata; rc?: InvoiceMetadata };
 
 export function FaturacaoTab() {
@@ -104,7 +104,7 @@ export function FaturacaoTab() {
   // ── dados ──
   const [rawMovimentos, setRawMovimentos] = useState<MovimentoRaw[]>([]);
   const [capped, setCapped] = useState(false);
-  // Documentos fiscais KeyInvoice (FT/FR/NC/RC emitidos) por cobrança — p/ ver/descarregar.
+  // Documentos fiscais (FT/FR/NC/RC emitidos) por cobrança — p/ ver/descarregar.
   const [invoiceByCobranca, setInvoiceByCobranca] = useState<Map<string, InvoiceDocs>>(new Map());
   const [loading, setLoading] = useState(true);
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
@@ -283,7 +283,7 @@ export function FaturacaoTab() {
     }
   }
 
-  /** Documento fiscal KeyInvoice associado à linha (fatura→FT/FR, NC→NC, recibo→RC). */
+  /** Documento fiscal associado à linha (fatura→FT/FR, NC→NC, recibo→RC). */
   function docFiscalDaLinha(row: FaturacaoRow | null): InvoiceMetadata | null {
     if (!row) return null;
     if (row.docTipo === 'fatura' || row.docTipo === 'fatura_recibo')
@@ -443,7 +443,7 @@ export function FaturacaoTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estacaoId, stationSel, dateFrom, dateTo, reloadToken]);
 
-  // ── Documentos fiscais KeyInvoice das cobranças visíveis (p/ download PDF) ──
+  // ── Documentos fiscais das cobranças visíveis (p/ download PDF) ──
   useEffect(() => {
     let cancelled = false;
     async function loadInvoices() {

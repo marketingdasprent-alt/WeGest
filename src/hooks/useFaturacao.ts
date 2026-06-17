@@ -1,12 +1,13 @@
 /**
- * Hooks React Query para a faturação KeyInvoice.
- * Emissão (FT/FR/NC) corre na edge function `keyinvoice-emitir`, que também
- * grava o espelho local em `invoices`. Aqui só invocamos e lemos.
+ * Hooks React Query para a faturação fiscal (provider-agnostic).
+ * A emissão (FT/FR/NC) corre na edge function `faturacao-emitir`, que despacha
+ * para o software configurado por organização e grava o espelho local em
+ * `invoices`. Aqui só invocamos e lemos.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { emitirDocumento, checkKeyInvoiceHealth } from '@/lib/keyinvoice';
+import { emitirDocumento, checkFaturacaoHealth } from '@/lib/faturacao';
 import { supabase } from '@/integrations/supabase/client';
-import type { CreateFaturaPayload, EmitResult, InvoiceMetadata } from '@/types/keyinvoice';
+import type { CreateFaturaPayload, EmitResult, InvoiceMetadata } from '@/types/faturacao';
 
 export interface EmitirEEscreverInput {
   payload: CreateFaturaPayload;
@@ -23,10 +24,10 @@ export interface EmitirEEscreverResult extends EmitResult {
 }
 
 /**
- * Emite um documento no KeyInvoice E grava o nº na cobrança (idempotente).
+ * Emite um documento fiscal E grava o nº na cobrança (idempotente).
  *
  * O write-back só ocorre quando `documento_externo_ref IS NULL` — protege contra
- * emissão dupla. Cobre também o caminho `warning` da edge function (KeyInvoice
+ * emissão dupla. Cobre também o caminho `warning` da edge function (provider
  * emitiu mas falhou gravar o espelho local): o nº fiscal é gravado na mesma.
  * Usado tanto pela faturação inicial como pelo botão "Reemitir".
  */
@@ -35,7 +36,7 @@ export function useEmitirEEscreverFatura() {
   return useMutation<EmitirEEscreverResult, Error, EmitirEEscreverInput>({
     mutationFn: async ({ payload, cobrancaId }) => {
       const res = await emitirDocumento(payload);
-      const fullDocNumber = res.keyinvoice?.FullDocNumber ?? res.invoice?.numero ?? null;
+      const fullDocNumber = res.provider?.FullDocNumber ?? res.invoice?.numero ?? null;
       let wroteBackRef = false;
       if (fullDocNumber) {
         const { data, error } = await supabase
@@ -64,26 +65,25 @@ export function useInvoicesByContrato(contratoId: string) {
     queryKey: ['invoices-by-contrato', contratoId],
     enabled: !!contratoId,
     queryFn: async () => {
-      // `invoices` ainda não está nos tipos gerados — cast até regenerar.
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('invoices')
         .select('*')
         .eq('contrato_id', contratoId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []) as InvoiceMetadata[];
+      return (data || []) as unknown as InvoiceMetadata[];
     },
   });
 }
 
 /**
- * Health-check do serviço de faturação (a edge function autentica no KeyInvoice).
+ * Health-check do serviço de faturação (a edge function autentica no provider).
  */
-export function useKeyInvoiceHealth() {
+export function useFaturacaoHealth() {
   return useQuery({
-    queryKey: ['keyinvoice-health'],
-    queryFn: checkKeyInvoiceHealth,
+    queryKey: ['faturacao-health'],
+    queryFn: checkFaturacaoHealth,
     staleTime: 5 * 60 * 1000,
     retry: false,
   });

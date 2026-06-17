@@ -5,13 +5,23 @@
  * (reserva_id) e são herdadas pelo contrato na conversão.
  */
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Receipt, FileText, Download, Loader2, Send } from 'lucide-react';
+import { Receipt, FileText, Download, Loader2, Send, RotateCcw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Table,
   TableBody,
@@ -23,9 +33,9 @@ import {
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
-import { useEmitirEEscreverFatura } from '@/hooks/useKeyInvoice';
-import { baixarDocumentoPdf, clienteRowToKI } from '@/lib/keyinvoice';
-import type { InvoiceMetadata, ItemFatura } from '@/types/keyinvoice';
+import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
+import { baixarDocumentoPdf, clienteRowToFatura, anularCobrancasFaturacao } from '@/lib/faturacao';
+import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
 import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
 import {
   FaturacaoActionsToolbar,
@@ -63,9 +73,12 @@ interface Props {
 }
 
 export function ReservaTabFaturar({ reserva }: Props) {
+  const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reemitindoId, setReemitindoId] = useState<string | null>(null);
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
+  const [anularOpen, setAnularOpen] = useState(false);
+  const [anularBusy, setAnularBusy] = useState(false);
 
   const { empresas } = useClientesEmpresas();
   const emitente: FaturacaoDocEmitente | null = useMemo(() => {
@@ -173,6 +186,31 @@ export function ReservaTabFaturar({ reserva }: Props) {
     refetchInvoices();
   };
 
+  /**
+   * Anula a faturação da reserva → volta a "não faturada" (re-faturável). Estorna
+   * as cobranças/recibos/notas de crédito (saldo a zero). NÃO emite Nota de Crédito
+   * nem cancela o documento fiscal no provider. O estado "faturada" da reserva é
+   * derivado das cobranças ativas, por isso basta anulá-las.
+   */
+  async function anularFaturacao() {
+    setAnularBusy(true);
+    try {
+      const ativasIds = cobrancas
+        .filter((c) => c.estado === 'emitida' || c.estado === 'paga')
+        .map((c) => c.id);
+      await anularCobrancasFaturacao(ativasIds);
+      toast.success('Faturação anulada — a reserva voltou a "não faturada".');
+      setAnularOpen(false);
+      qc.invalidateQueries({ queryKey: ['renting', 'reservas'] });
+      refetchAll();
+    } catch (e: any) {
+      console.error('Erro ao anular faturação da reserva:', e);
+      toast.error(`Erro ao anular faturação: ${e?.message ?? 'tente novamente'}`);
+    } finally {
+      setAnularBusy(false);
+    }
+  }
+
   const toolbarCobrancas: ToolbarCobranca[] = useMemo(
     () =>
       cobrancas.map((c) => {
@@ -241,7 +279,7 @@ export function ReservaTabFaturar({ reserva }: Props) {
       const res = await emitirMut.mutateAsync({
         payload: {
           tipo: isFR ? 'FR' : 'FT',
-          cliente: clienteRowToKI(cli, c.destinatario_nome),
+          cliente: clienteRowToFatura(cli, c.destinatario_nome),
           itens,
           cobranca_id: c.id,
           referencia_externa: `Reserva #${reserva.codigo}`,
@@ -295,6 +333,23 @@ export function ReservaTabFaturar({ reserva }: Props) {
                 Total: <span className="font-semibold">{formatCurrency(reserva.valor_total)}</span>
                 {jaFaturada ? ' · já faturada' : ' · IVA incluído'}
               </p>
+              {jaFaturada && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 h-7 gap-1.5 text-rose-600 hover:text-rose-700 dark:text-rose-400"
+                  onClick={() => setAnularOpen(true)}
+                  disabled={anularBusy}
+                >
+                  {anularBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  )}
+                  Anular faturação
+                </Button>
+              )}
             </div>
           </div>
           <FaturacaoActionsToolbar
@@ -324,14 +379,20 @@ export function ReservaTabFaturar({ reserva }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {cobrancas.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-20 text-center text-muted-foreground text-sm">
-                    Ainda sem faturas para esta reserva.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                cobrancas.map((c) => {
+              {(() => {
+                const visiveis = cobrancas.filter((c) => c.estado !== 'anulada');
+                if (visiveis.length === 0)
+                  return (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="h-20 text-center text-muted-foreground text-sm"
+                      >
+                        Ainda sem faturas para esta reserva.
+                      </TableCell>
+                    </TableRow>
+                  );
+                return visiveis.map((c) => {
                   const inv = invoiceByCobranca.get(c.id);
                   const porEmitir =
                     !c.documento_externo_ref &&
@@ -409,8 +470,8 @@ export function ReservaTabFaturar({ reserva }: Props) {
                       </TableCell>
                     </TableRow>
                   );
-                })
-              )}
+                });
+              })()}
             </TableBody>
           </Table>
         </div>
@@ -423,6 +484,39 @@ export function ReservaTabFaturar({ reserva }: Props) {
         emitente={emitente}
         onFaturado={refetchAll}
       />
+
+      <AlertDialog
+        open={anularOpen}
+        onOpenChange={(o) => {
+          if (!o && !anularBusy) setAnularOpen(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Anular a faturação desta reserva?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A reserva volta a <b>"não faturada"</b> e fica re-faturável. Os lançamentos na
+              conta-corrente (cobrança, recibos e notas de crédito) são estornados — o saldo fica a
+              zero. Esta ação <b>não</b> emite Nota de Crédito nem cancela o documento fiscal no
+              software de faturação; se já tiver sido emitido um documento certificado, faça a
+              reversão fiscal (NC) separadamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={anularBusy}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                anularFaturacao();
+              }}
+              disabled={anularBusy}
+              className="bg-rose-600 hover:bg-rose-700"
+            >
+              {anularBusy ? 'A anular…' : 'Anular faturação'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

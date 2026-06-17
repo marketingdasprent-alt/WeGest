@@ -18,7 +18,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import { openFaturacaoDocumento, type FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
-import { emitirDocumento, baixarDocumentoPdf, clienteRowToKI } from '@/lib/keyinvoice';
+import { emitirDocumento, baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
+import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
+import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 
 /** Cobrança/fatura-alvo da nota de crédito. */
 export interface NotaCreditoCobranca {
@@ -59,6 +61,8 @@ export function NotaCreditoDialog({
   onEmitida,
 }: Props) {
   const qc = useQueryClient();
+  const { data: orgDef } = useOrgDefinicoes();
+  const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
   const [valor, setValor] = useState('');
   const [motivo, setMotivo] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -134,13 +138,13 @@ export function NotaCreditoDialog({
       const base = round2(valorNum / (1 + taxaIva / 100));
       const iva = round2(valorNum - base);
 
-      // ── Fase 2 — emitir a NC no KeyInvoice se a fatura original também o for ─
-      let emitiuKI = false;
+      // ── Fase 2 — emitir a NC no provider se a fatura original também o for ─
+      let emitiuFiscal = false;
       if (cobranca.documento_externo_ref) {
         try {
           const res = await emitirDocumento({
             tipo: 'NC',
-            cliente: clienteRowToKI(cli, cobranca.destinatario_nome),
+            cliente: clienteRowToFatura(cli, cobranca.destinatario_nome),
             itens: [
               {
                 descricao: `Crédito sobre ${docOriginal} — ${motivo.trim()}`,
@@ -162,22 +166,22 @@ export function NotaCreditoDialog({
               /* download é best-effort */
             }
           }
-          emitiuKI = true;
+          emitiuFiscal = true;
           toast.success(
-            `Nota de crédito ${res.keyinvoice?.FullDocNumber ?? numero} emitida no KeyInvoice (${formatCurrency(valorNum)}).`
+            `Nota de crédito ${res.provider?.FullDocNumber ?? numero} emitida no ${providerLabel} (${formatCurrency(valorNum)}).`
           );
           if (res.warning) toast.warning(res.warning);
           qc.invalidateQueries({ queryKey: ['invoices-by-contrato', cobranca.contrato_id] });
         } catch (kiErr: any) {
-          console.error('Falha a emitir NC no KeyInvoice:', kiErr);
+          console.error('Falha a emitir a nota de crédito no provider:', kiErr);
           toast.warning(
-            'Nota de crédito registada, mas não foi possível emitir no KeyInvoice — foi gerado o documento interno.'
+            `Nota de crédito registada, mas não foi possível emitir no ${providerLabel} — foi gerado o documento interno.`
           );
         }
       }
 
-      // Documento HTML local (fallback) — original não-KeyInvoice ou emissão falhada.
-      if (!emitiuKI) {
+      // Documento HTML local (fallback) — original sem documento fiscal ou emissão falhada.
+      if (!emitiuFiscal) {
         const clienteMorada =
           [cli?.morada, cli?.codigo_postal, cli?.cidade].filter(Boolean).join(', ') || null;
         const aberto = openFaturacaoDocumento({

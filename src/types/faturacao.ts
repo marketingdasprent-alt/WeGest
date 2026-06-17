@@ -1,6 +1,7 @@
-// KeyInvoice (API 5.0 REST) — tipos do cliente frontend.
-// A emissão é feita server-side pela edge function `keyinvoice-emitir`
-// (api key em secret). O frontend só envia o payload e lê `invoices`.
+// Faturação fiscal — tipos do cliente frontend (provider-agnostic).
+// A emissão é feita server-side pela edge function `faturacao-emitir`, que
+// despacha para o provider configurado por organização. O frontend só envia o
+// payload e lê `invoices`.
 
 export type TipoFatura = 'FT' | 'FR' | 'NC' | 'RC'; // Fatura, Fatura-Recibo, Nota de Crédito, Recibo
 
@@ -10,8 +11,8 @@ export interface ItemFatura {
   preco_unitario: number;
   taxa_iva: number; // 0, 6, 13, 23
   ref?: string;
-  id_produto?: string; // IdProduct no KeyInvoice (artigo)
-  id_tax?: string; // IdTax no KeyInvoice (se já conhecido)
+  id_produto?: string; // id do artigo no provider (se conhecido)
+  id_tax?: string; // id de IVA no provider (se já conhecido)
   desconto?: number; // %
 }
 
@@ -25,7 +26,7 @@ export interface ClienteFatura {
   country_code?: string; // ISO-3166 alpha-2 (default PT)
 }
 
-/** Body enviado à edge function `keyinvoice-emitir` (action 'emit'). */
+/** Body enviado à edge function `faturacao-emitir` (action 'emit'). */
 export interface CreateFaturaPayload {
   tipo: TipoFatura;
   cliente: ClienteFatura;
@@ -43,7 +44,8 @@ export interface EmitResult {
   error?: string;
   warning?: string;
   invoice?: InvoiceMetadata;
-  keyinvoice?: {
+  /** Identificação devolvida pelo provider de faturação. */
+  provider?: {
     DocType: string;
     DocSeries: string;
     DocNum: string;
@@ -52,17 +54,18 @@ export interface EmitResult {
   };
 }
 
-/** Linha da tabela `invoices` (espelho local do documento KeyInvoice). */
+/** Linha da tabela `invoices` (espelho local do documento fiscal emitido). */
 export interface InvoiceMetadata {
   id: string;
   org_id: string;
   contrato_id: string | null;
   cobranca_id: string | null;
   tipo: TipoFatura;
-  ki_doctype: string | null; // DocType numérico (p/ getDocumentPDF)
-  ki_docnum: string | null; // DocNum (p/ getDocumentPDF)
+  provider: string | null; // slug do provider que emitiu (ex.: 'keyinvoice')
+  provider_doctype: string | null; // DocType do provider (p/ obter o PDF)
+  provider_docnum: string | null; // DocNum do provider (p/ obter o PDF)
   serie: string | null; // DocSeries
-  numero: string | null; // FullDocNumber
+  numero: string | null; // FullDocNumber (nº legal apresentável)
   data_emissao: string | null;
   total: number | null;
   cliente_nif: string | null;

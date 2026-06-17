@@ -23,13 +23,15 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDateTime, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
-import { baixarDocumentoPdf, abrirDocumentoPdf } from '@/lib/keyinvoice';
-import type { InvoiceMetadata } from '@/types/keyinvoice';
+import { baixarDocumentoPdf, abrirDocumentoPdf } from '@/lib/faturacao';
+import type { InvoiceMetadata } from '@/types/faturacao';
+import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
+import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import { DOC_TIPO_LABEL, DOC_TIPO_CLASS, type FaturacaoRow } from './faturacao';
 
 interface Props {
   row: FaturacaoRow | null;
-  /** Documento fiscal KeyInvoice ligado a esta linha (quando existe). */
+  /** Documento fiscal ligado a esta linha (quando existe). */
   invoice?: InvoiceMetadata | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,6 +60,8 @@ export function FaturacaoMovimentoDialog({
   onNotaCredito,
   onAnular,
 }: Props) {
+  const { data: orgDef } = useOrgDefinicoes();
+  const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
   const [downloading, setDownloading] = useState(false);
   const [viewing, setViewing] = useState(false);
   const isCredito = row?.tipo === 'credito';
@@ -180,7 +184,9 @@ export function FaturacaoMovimentoDialog({
               <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2">
                 <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Info className="h-3.5 w-3.5 shrink-0" />
-                  Documento fiscal KeyInvoice{invoice.numero ? `: ${invoice.numero}` : ''}
+                  Documento fiscal
+                  {invoice.provider ? ` ${faturacaoProviderLabel(invoice.provider)}` : ''}
+                  {invoice.numero ? `: ${invoice.numero}` : ''}
                 </span>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <Button
@@ -226,7 +232,7 @@ export function FaturacaoMovimentoDialog({
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground border-t pt-3">
               <Lock className="h-3.5 w-3.5 shrink-0" />
               Os movimentos de conta-corrente são um registo imutável (livro-razão). A faturação
-              fiscal é emitida no KeyInvoice.
+              fiscal é emitida no {providerLabel}.
             </p>
 
             {podeAgir && (onFazerRecibo || onNotaCredito) && (

@@ -1,8 +1,8 @@
 /**
  * Faturar uma RESERVA (pagamento antecipado, antes de abrir o contrato).
  * Cria uma cobrança ligada à reserva (reserva_id), emite o documento fiscal
- * no KeyInvoice e regista a conta-corrente. Ao converter a reserva em
- * contrato, este herda a cobrança (trigger) — não refatura.
+ * no software de faturação configurado e regista a conta-corrente. Ao converter
+ * a reserva em contrato, este herda a cobrança (trigger) — não refatura.
  *
  * Convenção: na reserva, `valor_total` é COM IVA incluído (ver ReservaTabCaixa).
  */
@@ -33,9 +33,11 @@ import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
 import { openFaturacaoDocumento, type FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
-import { baixarDocumentoPdf, clienteRowToKI } from '@/lib/keyinvoice';
-import { useEmitirEEscreverFatura } from '@/hooks/useKeyInvoice';
-import type { ItemFatura } from '@/types/keyinvoice';
+import { baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
+import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
+import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
+import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
+import type { ItemFatura } from '@/types/faturacao';
 import type { Reserva } from '@/types/reserva';
 
 interface Props {
@@ -57,6 +59,8 @@ const maisDias = (n: number) => {
 export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, onFaturado }: Props) {
   const qc = useQueryClient();
   const emitirMut = useEmitirEEscreverFatura();
+  const { data: orgDef } = useOrgDefinicoes();
+  const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
   const [tipo, setTipo] = useState<'fatura' | 'fatura_recibo'>('fatura');
   const [metodo, setMetodo] = useState<string>('transferencia');
   const [dataDoc, setDataDoc] = useState<string>(hoje());
@@ -110,16 +114,16 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
     if (!aberto) toast.warning('Pop-up bloqueado — não foi possível abrir o documento local.');
   }
 
-  async function fetchClienteKI() {
+  async function fetchClienteFatura() {
     try {
       const { data } = await supabase
         .from('clientes')
         .select('nome, nif, email, morada, codigo_postal, localidade')
         .eq('id', reserva.cliente_id!)
         .single();
-      return clienteRowToKI(data, reserva.cliente_nome ?? undefined);
+      return clienteRowToFatura(data, reserva.cliente_nome ?? undefined);
     } catch {
-      return clienteRowToKI(null, reserva.cliente_nome ?? undefined);
+      return clienteRowToFatura(null, reserva.cliente_nome ?? undefined);
     }
   }
 
@@ -191,10 +195,11 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
       }
 
       qc.invalidateQueries({ queryKey: ['reserva-cobrancas', reserva.id] });
+      qc.invalidateQueries({ queryKey: ['renting', 'reservas'] });
 
-      // Fase 2 — emissão fiscal no KeyInvoice (não reverte a Fase 1).
+      // Fase 2 — emissão fiscal no provider configurado (não reverte a Fase 1).
       try {
-        const cliente = await fetchClienteKI();
+        const cliente = await fetchClienteFatura();
         const itens: ItemFatura[] = [
           {
             descricao: `Aluguer — ${codigoLabel}`,
@@ -222,11 +227,11 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
           }
         }
         toast.success(
-          `Documento fiscal emitido no KeyInvoice${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
+          `Documento fiscal emitido no ${providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
         );
         if (res.warning) toast.warning(res.warning);
       } catch (kiErr: any) {
-        console.error('Falha a emitir reserva no KeyInvoice:', kiErr);
+        console.error('Falha a emitir o documento fiscal da reserva:', kiErr);
         toast.warning(
           'Reserva faturada, mas o documento fiscal ficou por emitir. Pode reemiti-lo na lista de faturas.'
         );

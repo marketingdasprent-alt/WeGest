@@ -155,7 +155,7 @@ export interface MovimentoRaw {
 /** Linha pronta a apresentar. */
 export interface FaturacaoRow {
   id: string;
-  /** cobrança de origem — liga ao documento fiscal KeyInvoice em `invoices`. */
+  /** cobrança de origem — liga ao documento fiscal em `invoices`. */
   cobrancaId: string | null;
   /** recibo de origem (quando o movimento é um recibo) — p/ anular. */
   reciboId: string | null;

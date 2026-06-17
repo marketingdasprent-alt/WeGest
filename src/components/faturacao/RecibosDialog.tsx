@@ -4,8 +4,8 @@
  * (trigger fn_recibo_posta_movimento); se liquidar o saldo todo, a cobrança
  * passa a 'paga'.
  *
- * NOTA: a emissão do documento fiscal Recibo (RC) no KeyInvoice é adicionada
- * na fase seguinte; por agora o recibo é registo interno de conta-corrente.
+ * NOTA: a emissão do documento fiscal Recibo (RC) no provider configurado é
+ * adicionada na fase seguinte; por agora o recibo é registo interno de conta-corrente.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -34,7 +34,7 @@ import {
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS } from '@/components/administrativo/faturacao';
-import { emitirDocumento, baixarDocumentoPdf, clienteRowToKI } from '@/lib/keyinvoice';
+import { emitirDocumento, baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
 
 /** Cobrança/fatura em aberto que um recibo pode liquidar. */
 export interface ReciboCobrancaAlvo {
@@ -149,8 +149,8 @@ export function RecibosDialog({
           .eq('estado', 'emitida');
       }
 
-      // Documento fiscal Recibo (RC) no KeyInvoice — só se a fatura é KeyInvoice
-      // e o RC estiver configurado (KI_DOCTYPE_RC). Caso contrário, fica só interno.
+      // Documento fiscal Recibo (RC) no provider — só se a fatura original também
+      // tem documento fiscal e o RC estiver configurado. Caso contrário, fica só interno.
       if (cobranca.documento_externo_ref) {
         try {
           const { data: cli } = await supabase
@@ -160,7 +160,7 @@ export function RecibosDialog({
             .maybeSingle();
           const res = await emitirDocumento({
             tipo: 'RC',
-            cliente: clienteRowToKI(cli, cobranca.destinatario_nome),
+            cliente: clienteRowToFatura(cli, cobranca.destinatario_nome),
             itens: [
               {
                 descricao: `Recibo de ${cobranca.documento_externo_ref}`,
