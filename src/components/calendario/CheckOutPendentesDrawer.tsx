@@ -248,29 +248,50 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
 
       await supabase.from('contratos').update({ checkout_pendente: false }).eq('id', selected.id);
 
-      // Espelha no calendário: encontra o evento 'entrega' legacy pendente
-      // para esta matrícula e marca como realizado por este utilizador.
-      // Limita-se a eventos sem origem_tipo (legacy) para não mexer nos
-      // eventos do novo sistema de renting, que são tratados por trigger.
-      if (selected.viaturas?.matricula) {
-        const { data: evMatch } = await supabase
-          .from('calendario_eventos')
-          .select('id')
+      // Fase 4: Marca o evento 'entrega' como realizado (em calendario_eventos)
+      // Prioriza eventos contract-driven (origem_tipo='contrato'), depois legacy
+      if (selected.id) {
+        const now = new Date().toISOString();
+        const query = supabase
+          .from('calendario_eventos' as any)
+          .select('id') as any;
+        const { data: evMatch } = (await query
           .eq('tipo', 'entrega')
-          .eq('matricula_devolver', selected.viaturas.matricula)
+          .eq('origen_tipo', 'contrato')
+          .eq('origen_id', selected.id)
           .is('realizado_em', null)
-          .is('origem_tipo', null)
-          .order('data_inicio', { ascending: true })
           .limit(1)
-          .maybeSingle();
+          .maybeSingle()) as any;
+
         if (evMatch?.id) {
           await supabase
             .from('calendario_eventos')
             .update({
-              realizado_em: new Date().toISOString(),
+              realizado_em: now,
               realizado_por_id: userId,
             })
             .eq('id', evMatch.id);
+        } else if (selected.viaturas?.matricula) {
+          // Fallback: evento legacy sem origem_tipo
+          const { data: evLegacy } = await supabase
+            .from('calendario_eventos')
+            .select('id')
+            .eq('tipo', 'entrega')
+            .eq('matricula_devolver', selected.viaturas.matricula)
+            .is('realizado_em', null)
+            .is('origem_tipo', null)
+            .order('data_inicio', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          if (evLegacy?.id) {
+            await supabase
+              .from('calendario_eventos')
+              .update({
+                realizado_em: now,
+                realizado_por_id: userId,
+              })
+              .eq('id', evLegacy.id);
+          }
         }
       }
 

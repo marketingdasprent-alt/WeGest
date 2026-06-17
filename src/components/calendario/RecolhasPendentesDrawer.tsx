@@ -317,29 +317,50 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
         }
       }
 
-      // Espelha no calendário: encontra o evento 'recolha' legacy pendente
-      // para esta matrícula e marca como realizado por este utilizador.
-      // Filtra origem_tipo IS NULL para não tocar nos eventos do novo
-      // sistema de renting (que são tratados pelo trigger cascata_realizacao).
-      if (selected.matricula) {
-        const { data: evMatch } = await supabase
-          .from('calendario_eventos')
-          .select('id')
-          .eq('tipo', 'recolha')
-          .eq('matricula_devolver', selected.matricula)
+      // Fase 4: Marca o evento 'recolha'/'devolucao' como realizado (em calendario_eventos)
+      // Prioriza eventos contract-driven (origen_tipo='contrato'), depois legacy
+      if (contrato?.id) {
+        const now = new Date().toISOString();
+        const query = supabase
+          .from('calendario_eventos' as any)
+          .select('id') as any;
+        const { data: evMatch } = (await query
+          .in('tipo', ['recolha', 'devolucao'])
+          .eq('origen_tipo', 'contrato')
+          .eq('origen_id', contrato.id)
           .is('realizado_em', null)
-          .is('origem_tipo', null)
-          .order('data_inicio', { ascending: true })
           .limit(1)
-          .maybeSingle();
+          .maybeSingle()) as any;
+
         if (evMatch?.id) {
           await supabase
             .from('calendario_eventos')
             .update({
-              realizado_em: new Date().toISOString(),
+              realizado_em: now,
               realizado_por_id: userId,
             })
             .eq('id', evMatch.id);
+        } else if (selected.matricula) {
+          // Fallback: evento legacy sem origem_tipo
+          const { data: evLegacy } = await supabase
+            .from('calendario_eventos')
+            .select('id')
+            .eq('tipo', 'recolha')
+            .eq('matricula_devolver', selected.matricula)
+            .is('realizado_em', null)
+            .is('origem_tipo', null)
+            .order('data_inicio', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          if (evLegacy?.id) {
+            await supabase
+              .from('calendario_eventos')
+              .update({
+                realizado_em: now,
+                realizado_por_id: userId,
+              })
+              .eq('id', evLegacy.id);
+          }
         }
       }
 
