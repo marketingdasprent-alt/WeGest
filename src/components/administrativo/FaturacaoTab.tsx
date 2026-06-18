@@ -263,7 +263,7 @@ export function FaturacaoTab() {
             .eq('id', row.referencia)
             .eq('estado', 'paga');
         }
-        toast.success('Recibo anulado (estorno lançado na conta-corrente).');
+        toast.success('Recibo anulado (anulamento lançado na conta-corrente).');
       } else if (row.docTipo === 'nota_credito' && row.notaCreditoId) {
         const { error } = await supabase
           .from('notas_credito')
@@ -271,7 +271,7 @@ export function FaturacaoTab() {
           .eq('id', row.notaCreditoId)
           .eq('estado', 'ativo');
         if (error) throw error;
-        toast.success('Nota de crédito anulada (estorno lançado na conta-corrente).');
+        toast.success('Nota de crédito anulada (anulamento lançado na conta-corrente).');
       }
       setAnularRow(null);
       setReloadToken((t) => t + 1);
@@ -918,8 +918,8 @@ export function FaturacaoTab() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {anularRow?.docTipo === 'recibo'
-                ? 'Anula o recibo e lança um estorno na conta-corrente. Um recibo anula-se internamente — não é emitido documento fiscal.'
-                : 'Anula a nota de crédito e lança um estorno na conta-corrente. A reversão fiscal de uma NC seria uma Nota de Débito, que não é emitida aqui.'}
+                ? 'Anula o recibo e lança um anulamento na conta-corrente. Um recibo anula-se internamente — não é emitido documento fiscal.'
+                : 'Anula a nota de crédito e lança um anulamento na conta-corrente. A reversão fiscal de uma NC seria uma Nota de Débito, que não é emitida aqui.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

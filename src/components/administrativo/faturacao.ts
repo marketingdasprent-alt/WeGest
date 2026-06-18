@@ -61,7 +61,7 @@ export const DOC_TIPO_LABEL: Record<DocTipo, string> = {
   nota_credito: 'Nota de Crédito',
   dano: 'Dano',
   ajuste: 'Ajuste',
-  estorno: 'Estorno',
+  estorno: 'Anulamento',
 };
 
 export const DOC_TIPO_CLASS: Record<DocTipo, string> = {

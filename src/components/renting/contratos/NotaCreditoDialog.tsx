@@ -116,6 +116,7 @@ export function NotaCreditoDialog({
           valor: valorNum,
           motivo: motivo.trim(),
           data_nota: hojeISO(),
+          estado: 'ativo',
         })
         .select('id, codigo')
         .single();
@@ -125,8 +126,13 @@ export function NotaCreditoDialog({
       const numero = codigo != null ? `NC-${codigo}` : 'Nota de Crédito';
 
       qc.invalidateQueries({ queryKey: ['renting'] });
-      qc.invalidateQueries({ queryKey: ['contrato-cobrancas', cobranca.contrato_id] });
-      qc.invalidateQueries({ queryKey: ['contrato-notas-credito', cobranca.contrato_id] });
+      if (cobranca.contrato_id) {
+        qc.invalidateQueries({ queryKey: ['contrato-cobrancas', cobranca.contrato_id] });
+        qc.invalidateQueries({ queryKey: ['contrato-notas-credito', cobranca.contrato_id] });
+      } else {
+        qc.invalidateQueries({ queryKey: ['reserva-cobrancas'] });
+        qc.invalidateQueries({ queryKey: ['reserva-notas-credito'] });
+      }
 
       // Dados do cliente para o cabeçalho (best-effort).
       const { data: cli } = await supabase

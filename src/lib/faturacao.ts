@@ -90,13 +90,16 @@ export async function anularCobrancasFaturacao(cobrancaIds: string[]): Promise<v
     // Notas de crédito ativas da cobrança → anuladas (estorno a débito).
     // A tabela pode não existir em BDs antigas — não partir por isso.
     try {
-      await supabase
+      const { error: ncErr } = await supabase
         .from('notas_credito')
         .update({ estado: 'anulado' })
         .eq('cobranca_id', id)
         .eq('estado', 'ativo');
-    } catch (e) {
-      console.warn('notas_credito indisponível ao anular:', e);
+      // 42P01 = "undefined_table" — BD antiga sem esta tabela, ignorar.
+      if (ncErr && (ncErr as any).code !== '42P01') throw ncErr;
+    } catch (e: any) {
+      if (e?.code !== '42P01') throw e;
+      console.warn('notas_credito indisponível ao anular (BD antiga)');
     }
 
     // Cobrança → anulada (trigger lança o estorno a crédito).

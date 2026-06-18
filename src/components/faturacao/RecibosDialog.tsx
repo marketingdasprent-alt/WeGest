@@ -190,8 +190,11 @@ export function RecibosDialog({
 
       toast.success(`Recibo de ${formatCurrency(valorNum)} registado.`);
       qc.invalidateQueries({ queryKey: ['renting'] });
-      if (cobranca.contrato_id)
+      if (cobranca.contrato_id) {
         qc.invalidateQueries({ queryKey: ['contrato-cobrancas', cobranca.contrato_id] });
+      } else {
+        qc.invalidateQueries({ queryKey: ['reserva-cobrancas'] });
+      }
       onEmitido();
       onOpenChange(false);
     } catch (e: any) {
