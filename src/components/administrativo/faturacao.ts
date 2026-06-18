@@ -27,6 +27,7 @@ export function metodoLabel(m: string | null | undefined): string {
 export const ORIGEM_LABEL: Record<string, string> = {
   cobranca: 'Cobrança',
   recibo: 'Recibo',
+  nota_credito: 'Nota de Crédito',
   dano: 'Dano',
   ajuste: 'Ajuste',
 };
@@ -34,6 +35,7 @@ export const ORIGEM_LABEL: Record<string, string> = {
 export const ORIGEM_CLASS: Record<string, string> = {
   cobranca: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   recibo: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  nota_credito: 'bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400',
   dano: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
   ajuste: 'bg-muted text-muted-foreground',
 };
@@ -43,21 +45,30 @@ export const ORIGEM_CLASS: Record<string, string> = {
  * Uma Fatura-Recibo é um único documento, mesmo gerando 2 movimentos
  * (débito da cobrança + crédito do recibo) — ver `mergeMovimentosToRows`.
  */
-export type DocTipo = 'fatura' | 'fatura_recibo' | 'recibo' | 'dano' | 'ajuste' | 'estorno';
+export type DocTipo =
+  | 'fatura'
+  | 'fatura_recibo'
+  | 'recibo'
+  | 'nota_credito'
+  | 'dano'
+  | 'ajuste'
+  | 'estorno';
 
 export const DOC_TIPO_LABEL: Record<DocTipo, string> = {
   fatura: 'Fatura',
   fatura_recibo: 'Fatura-Recibo',
   recibo: 'Recibo',
+  nota_credito: 'Nota de Crédito',
   dano: 'Dano',
   ajuste: 'Ajuste',
-  estorno: 'Estorno',
+  estorno: 'Anulamento',
 };
 
 export const DOC_TIPO_CLASS: Record<DocTipo, string> = {
   fatura: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   fatura_recibo: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
   recibo: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  nota_credito: 'bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400',
   dano: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
   ajuste: 'bg-muted text-muted-foreground',
   estorno: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
@@ -72,6 +83,7 @@ function isFaturaReciboDesc(desc: string | null | undefined): boolean {
 
 /** Tipo de documento de um único movimento (sem emparelhar). */
 function singleDocTipo(m: MovimentoRaw): DocTipo {
+  if (m.origem === 'nota_credito') return 'nota_credito'; // crédito = NC; débito = estorno da NC
   if (m.origem === 'cobranca') {
     if (m.tipo === 'credito') return 'estorno'; // estorno de cobrança anulada
     return isFaturaReciboDesc(m.descricao) ? 'fatura_recibo' : 'fatura';
@@ -81,6 +93,13 @@ function singleDocTipo(m: MovimentoRaw): DocTipo {
   }
   if (m.origem === 'dano') return 'dano';
   return 'ajuste';
+}
+
+/** Nº "NC-{codigo}" extraído do descritivo do movimento de nota de crédito. */
+function ncNumeroFromDesc(m: MovimentoRaw): string {
+  if (m.origem !== 'nota_credito') return '';
+  const match = (m.descricao ?? '').match(/Nº\s*(\d+)/);
+  return match ? `NC-${match[1]}` : '';
 }
 
 // ── Formas embebidas (Supabase) ──────────────────────────────
@@ -124,6 +143,7 @@ export interface MovimentoRaw {
   contrato_id: string | null;
   cobranca_id: string | null;
   recibo_id: string | null;
+  nota_credito_id: string | null;
   entidade_id: string;
   created_by: string | null;
   entidade: EmbedEntidade | null;
@@ -135,6 +155,12 @@ export interface MovimentoRaw {
 /** Linha pronta a apresentar. */
 export interface FaturacaoRow {
   id: string;
+  /** cobrança de origem — liga ao documento fiscal em `invoices`. */
+  cobrancaId: string | null;
+  /** recibo de origem (quando o movimento é um recibo) — p/ anular. */
+  reciboId: string | null;
+  /** nota de crédito de origem (quando o movimento é uma NC) — p/ anular. */
+  notaCreditoId: string | null;
   /** data contabilística (ISO date) */
   dataMovimento: string | null;
   /** timestamp do registo (com hora) */
@@ -172,10 +198,13 @@ export function mapMovimentoToRow(
   const isCredito = m.tipo === 'credito';
   const valor = Number(m.valor) || 0;
   const numeroDoc =
+    // a NC tem numeração própria — não pode herdar a ref. da fatura original (mesmo cobranca_id)
+    (m.origem === 'nota_credito' ? ncNumeroFromDesc(m) : '') ||
     m.cobranca?.documento_externo_ref ||
     m.recibo?.documento_externo_ref ||
     m.primavera_ref ||
-    (m.recibo?.codigo != null ? `R-${m.recibo.codigo}` : '—');
+    (m.recibo?.codigo != null ? `R-${m.recibo.codigo}` : '') ||
+    '—';
   const contratoLabel =
     m.contrato?.codigo != null ? `#${String(m.contrato.codigo).padStart(4, '0')}` : '—';
   const estacaoEntregaId = m.contrato?.estacao_entrega_id ?? null;
@@ -183,6 +212,9 @@ export function mapMovimentoToRow(
   const utilizador = m.created_by ? profilesMap[m.created_by] || '—' : '—';
   return {
     id: m.id,
+    cobrancaId: m.cobranca_id,
+    reciboId: m.recibo_id,
+    notaCreditoId: m.nota_credito_id,
     dataMovimento: m.data_movimento,
     createdAt: m.created_at,
     numeroDoc,
@@ -303,7 +335,7 @@ export function movimentoSelect(
   opts: { contratoInner?: boolean; reciboInner?: boolean } = {}
 ): string {
   const { contratoInner = false, reciboInner = false } = opts;
-  return `id, data_movimento, created_at, tipo, valor, origem, descricao, primavera_ref, sincronizado_primavera, contrato_id, cobranca_id, recibo_id, entidade_id, created_by,
+  return `id, data_movimento, created_at, tipo, valor, origem, descricao, primavera_ref, sincronizado_primavera, contrato_id, cobranca_id, recibo_id, nota_credito_id, entidade_id, created_by,
     entidade:clientes!conta_movimentos_entidade_id_fkey(id, nome, codigo),
     cobranca:contrato_cobrancas!conta_movimentos_cobranca_id_fkey(id, documento_externo_ref, estado, valor_total),
     recibo:recibos!conta_movimentos_recibo_id_fkey${reciboInner ? '!inner' : ''}(id, codigo, metodo, documento_externo_ref, referencia, data_recibo),

@@ -122,7 +122,6 @@ function validateComum(data: ClienteFormData, ctx: Ctx) {
     'data_nascimento',
     data.is_empresa ? 'Data de criação obrigatória' : 'Data de nascimento obrigatória'
   );
-  exigirCampo(data, ctx, 'iban');
   exigirCampo(data, ctx, 'morada');
   exigirCampo(data, ctx, 'codigo_postal');
   exigirCampo(data, ctx, 'localidade');
@@ -150,8 +149,6 @@ function exigirNomeApelido(data: ClienteFormData, ctx: Ctx) {
 /** Carta de condução completa — obrigatória para quem conduz. */
 function exigirCarta(data: ClienteFormData, ctx: Ctx) {
   exigirCampo(data, ctx, 'carta_numero');
-  exigirCampo(data, ctx, 'carta_pais');
-  exigirCampo(data, ctx, 'carta_data_emissao');
   exigirCampo(data, ctx, 'carta_validade');
 }
 
@@ -179,7 +176,6 @@ function validateEmpresa(data: ClienteFormData, ctx: Ctx) {
 function validateDocumentos(data: ClienteFormData, ctx: Ctx) {
   exigirCampo(data, ctx, 'doc_tipo', 'Selecione o tipo de documento');
   exigirCampo(data, ctx, 'doc_numero');
-  exigirCampo(data, ctx, 'doc_data_emissao');
   exigirCampo(data, ctx, 'doc_validade');
 
   // Número do documento: validar formato conforme o tipo seleccionado

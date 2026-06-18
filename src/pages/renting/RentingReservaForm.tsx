@@ -39,6 +39,7 @@ import {
   type AnexoPendente,
 } from '@/components/renting/reservas/tabs/ReservaTabAnexos';
 import { ReservaTabCondutores } from '@/components/renting/reservas/tabs/ReservaTabCondutores';
+import { ReservaTabFaturar } from '@/components/renting/reservas/tabs/ReservaTabFaturar';
 import { ReservaTabGeral } from '@/components/renting/reservas/tabs/ReservaTabGeral';
 import {
   isoToLocalInput,
@@ -324,6 +325,10 @@ const RentingReservaForm = () => {
   // O campo habilitada_tvde é apenas informativo/administrativo, não restringe.
   const viaturasParaSelecao = viaturas;
 
+  // Faturação da reserva: só em edição, com reserva guardada e fora do regime slot
+  // (slot fatura via Contrato de Prestação).
+  const mostrarFaturacao = isEdit && !!reserva && reserva.regime !== 'slot';
+
   const onSubmit = async (values: ReservaFormValues) => {
     try {
       const viaturaSelecionada = viaturas.find((v) => v.id === values.viatura_id);
@@ -592,12 +597,17 @@ const RentingReservaForm = () => {
               <Card className="bg-card border-border">
                 <CardContent className="p-4 sm:p-6">
                   <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-flex">
+                    <TabsList
+                      className={`grid w-full sm:w-auto sm:inline-flex ${
+                        mostrarFaturacao ? 'grid-cols-4' : 'grid-cols-3'
+                      }`}
+                    >
                       <TabsTrigger value="geral">Geral</TabsTrigger>
                       <TabsTrigger value="condutores">
                         {regimeWatched === 'rent_a_car' ? 'Condutores' : 'Motoristas'}
                       </TabsTrigger>
                       <TabsTrigger value="anexos">Anexos</TabsTrigger>
+                      {mostrarFaturacao && <TabsTrigger value="faturacao">Faturação</TabsTrigger>}
                     </TabsList>
 
                     <TabsContent value="geral" className="pt-4">
@@ -632,6 +642,12 @@ const RentingReservaForm = () => {
                         onRemoverPendente={removerAnexoPendente}
                       />
                     </TabsContent>
+
+                    {mostrarFaturacao && reserva && (
+                      <TabsContent value="faturacao" className="pt-4">
+                        <ReservaTabFaturar reserva={reserva} />
+                      </TabsContent>
+                    )}
                   </Tabs>
                 </CardContent>
               </Card>

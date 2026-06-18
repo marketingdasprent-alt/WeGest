@@ -126,6 +126,20 @@ const replaceDynamicFields = (
 ): string => {
   let result = content;
 
+  // Assinatura do colaborador — a sentinela {{assinatura_colaborador}} vive
+  // dentro de uma célula de tabela ("O Colaborador"). O parser de tabelas
+  // descarta HTML, por isso convertemo-la num <img> com classe marcadora que o
+  // parseTable reconhece e a transforma numa imagem desenhada na célula. Sem
+  // assinatura, resolve para vazio → a célula fica como hoje (traço + nome).
+  {
+    const assinatura = documentData['assinatura_colaborador'];
+    const replacement =
+      typeof assinatura === 'string' && assinatura.startsWith('data:image')
+        ? `<img class="sig-colaborador" src="${assinatura.replace(/"/g, '&quot;')}">`
+        : '';
+    result = result.replace(/\{\{assinatura_colaborador\}\}/g, replacement);
+  }
+
   // Mapear campos do motorista para o formato usado nos templates: {{motorista_CAMPO}}
   const motoristaFieldMap: Record<string, string> = {
     motorista_nome: 'nome',
@@ -388,6 +402,10 @@ interface TableCellData {
   color?: RGB;
   fontSize?: number;
   colspan: number;
+  /** Data URL da assinatura a desenhar no topo da célula (marcador
+   *  <img class="sig-colaborador">). Quando presente, renderTable desenha a
+   *  imagem acima das linhas de texto. */
+  signatureSrc?: string;
 }
 
 interface DocEl {
@@ -460,6 +478,8 @@ const parseTable = (tableEl: HTMLElement): { rows: TableCellData[][]; bordered: 
       const el = c as HTMLElement;
       const fw = el.style.fontWeight;
       const headerBold = tag === 'th' || fw === 'bold' || Number(fw) >= 600;
+      // Assinatura embebida na célula (marcador inserido por replaceDynamicFields).
+      const sigImg = el.querySelector('img.sig-colaborador') as HTMLImageElement | null;
       cells.push({
         lines: cellToLines(el, headerBold),
         align: el.style.textAlign || 'left',
@@ -467,6 +487,7 @@ const parseTable = (tableEl: HTMLElement): { rows: TableCellData[][]; bordered: 
         color: parseColor(el.style.color),
         fontSize: el.style.fontSize ? parseInt(el.style.fontSize) : undefined,
         colspan: Number(el.getAttribute('colspan') || '1') || 1,
+        signatureSrc: sigImg?.getAttribute('src') || undefined,
       });
     });
     if (cells.length) rows.push(cells);
@@ -486,6 +507,9 @@ interface TableCtx {
   /** Modo compacto (papel timbrado): padding e entrelinha menores para
    *  recuperar altura útil e caber numa página. */
   compact: boolean;
+  /** Imagens de assinatura pré-carregadas (data URL → elemento). renderTable é
+   *  síncrono, por isso as imagens têm de vir já resolvidas. */
+  signatures?: Map<string, HTMLImageElement>;
 }
 
 /**
@@ -562,6 +586,31 @@ function renderTable(
         pdf.setLineWidth(0.2);
         pdf.rect(cl.cx, y, cl.cw, rowH, 'S');
       }
+      // Assinatura: desenhada SOBRE a primeira linha (o traço ___), assente na
+      // linha como uma assinatura real. Não altera a altura da célula.
+      const sigImg = cl.cell.signatureSrc ? ctx.signatures?.get(cl.cell.signatureSrc) : undefined;
+      if (sigImg && sigImg.width > 0 && sigImg.height > 0) {
+        const maxSigW = Math.min(cl.cw - pad * 2, 38); // mm
+        const maxSigH = 14; // mm — fica sobre o traço sem invadir o nome
+        const aspect = sigImg.width / sigImg.height;
+        let sw = maxSigW;
+        let sh = sw / aspect;
+        if (sh > maxSigH) {
+          sh = maxSigH;
+          sw = sh * aspect;
+        }
+        // Assenta a base da imagem ligeiramente acima do traço (1ª linha de texto).
+        const firstLineH = cl.wrapped[0]?.h ?? 4;
+        const baseLineY = y + pad + firstLineH * 0.82;
+        const sx = cl.cx + pad;
+        const sy = Math.max(y + 0.5, baseLineY - sh);
+        try {
+          pdf.addImage(sigImg, 'PNG', sx, sy, sw, sh);
+        } catch (err) {
+          console.warn('Falha a desenhar a assinatura na célula:', err);
+        }
+      }
+
       let lineY = y + pad;
       cl.wrapped.forEach((ln) => {
         const col = ln.color ?? cl.cell.color ?? [30, 30, 35];
@@ -822,6 +871,28 @@ export const generateDocumentFromTemplate = async (
     // Processar HTML e renderizar no PDF diretamente
     const contentElements = htmlToText(processedContent);
 
+    // Pré-carregar imagens de assinatura embebidas em células de tabela.
+    // renderTable é síncrono, por isso resolvemos as imagens (data URLs) aqui
+    // e passamo-las já carregadas no contexto da tabela.
+    const signatures = new Map<string, HTMLImageElement>();
+    const sigSrcs = new Set<string>();
+    for (const el of contentElements) {
+      if (el.type === 'table' && el.rows) {
+        for (const row of el.rows) {
+          for (const cell of row) {
+            if (cell.signatureSrc) sigSrcs.add(cell.signatureSrc);
+          }
+        }
+      }
+    }
+    for (const src of sigSrcs) {
+      try {
+        signatures.set(src, await loadImage(src));
+      } catch (err) {
+        console.warn('Falha a carregar a imagem da assinatura:', err);
+      }
+    }
+
     // Agrupar elementos consecutivos com mesmo alinhamento em "linhas lógicas"
     const groupedElements: Array<{
       align: string;
@@ -958,6 +1029,7 @@ export const generateDocumentFromTemplate = async (
             topMargin,
             compact: hasLetterhead,
             bg,
+            signatures,
           });
         }
         continue;
