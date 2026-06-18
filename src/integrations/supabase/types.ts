@@ -5678,6 +5678,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          assinatura_url: string | null
           cargo: string | null
           cargo_id: string | null
           created_at: string | null
@@ -5690,6 +5691,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          assinatura_url?: string | null
           cargo?: string | null
           cargo_id?: string | null
           created_at?: string | null
@@ -5702,6 +5704,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          assinatura_url?: string | null
           cargo?: string | null
           cargo_id?: string | null
           created_at?: string | null
