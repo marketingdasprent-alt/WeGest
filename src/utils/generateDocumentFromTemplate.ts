@@ -21,6 +21,27 @@ interface DocumentTemplate {
   };
 }
 
+/** Dano de viatura para o anexo do contrato. */
+export interface AnexoDanoItem {
+  localizacao: string;
+  descricao: string;
+  estado: string;
+  data: string;
+  valor?: string;
+}
+
+/** Anexo de danos da viatura: lista + fotos (máx 6) + QR code. */
+export interface AnexoDanos {
+  titulo: string;
+  danos: AnexoDanoItem[];
+  /** URLs já assinadas (máx 6) para a grelha de fotos. */
+  fotos: string[];
+  /** URL da página de danos da viatura (texto + QR). */
+  linkUrl: string;
+  /** data:image/png;base64 do QR code. */
+  qrCodeDataUrl: string;
+}
+
 interface GenerateDocumentParams {
   templateId: string;
   motoristaData: Record<string, any>;
@@ -37,6 +58,8 @@ interface GenerateDocumentParams {
   /** Fotos a anexar em folhas próprias após o conteúdo (grelha 2×3). Cada
    *  grupo gera um título de secção; os `urls` são imagens carregáveis. */
   anexoFotos?: Array<{ titulo: string; urls: string[] }>;
+  /** Danos da viatura a anexar numa folha extra: lista + fotos (máx 6) + QR. */
+  anexoDanos?: AnexoDanos;
 }
 
 interface UploadDocumentParams extends GenerateDocumentParams {
@@ -1140,6 +1163,191 @@ export const generateDocumentFromTemplate = async (
       }
     }
 
+    // Anexar folha de danos da viatura (lista + fotos máx 6 + QR code).
+    if (params.anexoDanos) {
+      const ad = params.anexoDanos;
+      const blue: [number, number, number] = [43, 58, 107];
+      const gray: [number, number, number] = [90, 90, 100];
+      const borderColor: [number, number, number] = [200, 202, 210];
+
+      // Páginas do anexo de danos não usam o papel timbrado — são folhas
+      // funcionais; o fundo decorativo sobrepõe-se ao conteúdo e ao QR code.
+      const adPage = () => {
+        pdf.addPage();
+        // Linha fina azul no topo como separador visual de secção
+        pdf.setDrawColor(...blue);
+        pdf.setLineWidth(0.5);
+        pdf.line(leftMargin, 8, pageWidth - rightMargin, 8);
+        pdf.setLineWidth(0.2);
+      };
+
+      adPage();
+
+      const LOCALIZACAO_LABELS: Record<string, string> = {
+        frente: 'Frente',
+        traseira: 'Traseira',
+        lateral_esq: 'Lat. Esq.',
+        lateral_dir: 'Lat. Dir.',
+        teto: 'Teto',
+        interior: 'Interior',
+        motor: 'Motor',
+        outro: 'Outro',
+      };
+      const ESTADO_LABELS: Record<string, string> = {
+        existente: 'Existente',
+        em_reparacao: 'Em reparação',
+        reparado: 'Reparado',
+        irreparavel: 'Irreparável',
+        pendente: 'Pendente',
+      };
+
+      // — Título do anexo —
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(...blue);
+      pdf.text(ad.titulo, leftMargin, topMargin + 4);
+      pdf.setTextColor(0, 0, 0);
+
+      let ty = topMargin + 12;
+
+      // — Fotos (grelha 2×3, máx 6) — vêm ANTES da tabela —
+      if (ad.fotos.length > 0) {
+        const photoCols = 2;
+        const photoRows = Math.ceil(Math.min(ad.fotos.length, 6) / photoCols);
+        const photoGap = 4;
+        const photoW = (maxWidth - photoGap) / photoCols;
+        const photoH = 38;
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(...gray);
+        const totalFotos = ad.fotos.length;
+        const mostradas = Math.min(totalFotos, 6);
+        const labelFotos =
+          totalFotos > 6
+            ? `FOTOS DOS DANOS (${mostradas} de ${totalFotos} — ver restantes via QR)`
+            : `FOTOS DOS DANOS (${mostradas})`;
+        pdf.text(labelFotos, leftMargin, ty);
+        ty += 5;
+
+        // Pré-carregar fotos em paralelo
+        const fotoUrls = ad.fotos.slice(0, 6);
+        const fotoImagens = new Map<string, HTMLImageElement>();
+        await Promise.all(
+          fotoUrls.map(async (url) => {
+            try {
+              fotoImagens.set(url, await loadImage(url));
+            } catch {
+              // célula fica só com moldura
+            }
+          })
+        );
+
+        pdf.setDrawColor(...borderColor);
+        pdf.setLineWidth(0.2);
+        pdf.setTextColor(0, 0, 0);
+        for (let fi = 0; fi < fotoUrls.length; fi++) {
+          const fc = fi % photoCols;
+          const fr = Math.floor(fi / photoCols);
+          const fx = leftMargin + fc * (photoW + photoGap);
+          const fy = ty + fr * (photoH + photoGap);
+          pdf.rect(fx, fy, photoW, photoH, 'S');
+          const img = fotoImagens.get(fotoUrls[fi]);
+          if (img) {
+            const ratio = img.width && img.height ? img.width / img.height : 1.5;
+            let w = photoW - 2;
+            let h = w / ratio;
+            if (h > photoH - 2) {
+              h = photoH - 2;
+              w = h * ratio;
+            }
+            pdf.addImage(img, 'JPEG', fx + (photoW - w) / 2, fy + (photoH - h) / 2, w, h);
+          }
+        }
+        ty += photoRows * (photoH + photoGap) + 6;
+      }
+
+      // — Tabela de danos —
+      const colW = [32, 72, 28, 22, 22];
+      const headers = ['Localização', 'Descrição', 'Estado', 'Data', 'Valor'];
+      const rowH = 7;
+      const headerH = 8;
+
+      // Nova página se não couber tabela + QR (mínimo 3 linhas + QR = ~60mm)
+      if (ty + headerH + rowH + 44 > pageHeight - bottomMargin) {
+        adPage();
+        ty = topMargin + 8;
+      }
+
+      pdf.setDrawColor(...borderColor);
+      pdf.setLineWidth(0.2);
+      pdf.setFillColor(240, 242, 248);
+
+      // Header row
+      pdf.rect(
+        leftMargin,
+        ty,
+        colW.reduce((a, b) => a + b, 0),
+        headerH,
+        'FD'
+      );
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.setTextColor(...blue);
+      let cx = leftMargin;
+      for (let ci = 0; ci < headers.length; ci++) {
+        pdf.text(headers[ci], cx + 2, ty + headerH - 2.5);
+        cx += colW[ci];
+      }
+      ty += headerH;
+
+      // Data rows
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(30, 30, 40);
+      for (const dano of ad.danos) {
+        if (ty + rowH > pageHeight - bottomMargin - 44) {
+          adPage();
+          ty = topMargin + 8;
+        }
+        const rowData = [
+          LOCALIZACAO_LABELS[dano.localizacao] ?? dano.localizacao,
+          dano.descricao,
+          ESTADO_LABELS[dano.estado] ?? dano.estado,
+          dano.data,
+          dano.valor ?? '—',
+        ];
+        cx = leftMargin;
+        pdf.setDrawColor(...borderColor);
+        for (let ci = 0; ci < rowData.length; ci++) {
+          pdf.rect(cx, ty, colW[ci], rowH, 'S');
+          const cellText = pdf.splitTextToSize(rowData[ci], colW[ci] - 3);
+          pdf.text(cellText[0] ?? '', cx + 2, ty + rowH - 2);
+          cx += colW[ci];
+        }
+        ty += rowH;
+      }
+
+      ty += 6;
+
+      // — QR code + link —
+      if (ty + 44 > pageHeight - bottomMargin) {
+        adPage();
+        ty = topMargin + 8;
+      }
+      const qrSize = 36;
+      pdf.addImage(ad.qrCodeDataUrl, 'PNG', leftMargin, ty, qrSize, qrSize);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(...gray);
+      pdf.text('Ver todas as fotos e danos:', leftMargin + qrSize + 4, ty + 10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(...blue);
+      pdf.text(ad.linkUrl, leftMargin + qrSize + 4, ty + 17);
+      pdf.setTextColor(0, 0, 0);
+    }
+
     // Adicionar numeração de páginas (apenas deste documento, não de PDFs anteriores)
     // skipFooter: quem orquestra (ex: contrato de aluguer) faz um rodapé unificado.
     const endPage = pdf.getNumberOfPages();
@@ -1194,7 +1402,13 @@ export const generateDocumentFromTemplate = async (
 /** Um documento a incluir no PDF combinado (mesmos campos do gerador). */
 export type DocumentoCombinado = Pick<
   GenerateDocumentParams,
-  'templateId' | 'motoristaData' | 'documentData' | 'headerLogoUrl' | 'footerText' | 'anexoFotos'
+  | 'templateId'
+  | 'motoristaData'
+  | 'documentData'
+  | 'headerLogoUrl'
+  | 'footerText'
+  | 'anexoFotos'
+  | 'anexoDanos'
 >;
 
 /**

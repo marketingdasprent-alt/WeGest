@@ -9,7 +9,7 @@ export const ESTADO_OP_OPTIONS = [
   { value: 'agendado', label: 'Agendado' },
   { value: 'em_curso', label: 'Em Curso' },
   { value: 'devolvido', label: 'Devolvido' },
-  { value: 'cancelado', label: 'Cancelado' },
+  { value: 'cancelado', label: 'Fechado' },
 ] as const;
 
 export const ESTADO_FIN_OPTIONS = [

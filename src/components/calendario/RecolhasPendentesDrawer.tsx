@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMatricula, SearchableDropdown } from './calendarioUtils';
-import { EVENTO_COLS } from './eventoColumns';
 import { RentingPendentesSection } from './RentingPendentesSection';
 import { useEventosPendentesRenting } from '@/hooks/useEventosPendentesRenting';
 import {
@@ -40,15 +39,13 @@ interface ViaturaEmRecolha {
   combustivel: string | null;
 }
 
-/** Shape do evento de recolha/devolução com contrato+viatura embebidos (Fase 3). */
-interface RecolhaEventoRow {
-  data_inicio: string | null;
-  contratos: {
-    id: string;
-    viatura_id: string;
-    status: string;
-    viaturas: ViaturaEmRecolha | null;
-  };
+/** Item da lista de pendentes com todos os dados necessários para confirmar. */
+interface RecolhaPendente {
+  viatura: ViaturaEmRecolha;
+  contratoId: string;
+  contratoNumero: number | null;
+  motoristaId: string | null;
+  eventoId: string;
 }
 
 interface SelectedFile {
@@ -79,7 +76,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
   userId,
 }) => {
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<ViaturaEmRecolha | null>(null);
+  const [selected, setSelected] = useState<RecolhaPendente | null>(null);
   const [estacaoId, setEstacaoId] = useState('');
   const [files, setFiles] = useState<SelectedFile[]>([]);
   const [checkinDados, setCheckinDados] = useState<CheckinDadosState>(emptyCheckinDados);
@@ -95,48 +92,58 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
     tipo: 'recolha',
   });
 
-  const { data: viaturas = [], isLoading } = useQuery({
+  // Two-step: evita join embed (sem FK directa calendario_eventos→contratos via origem_id).
+  // Fase 3.5: inclui 'troca', sem filtro de contrato.status.
+  const { data: pendentes = [], isLoading } = useQuery({
     queryKey: ['viaturas-pendentes-recolha'],
     queryFn: async () => {
-      // Fase 3: ler de calendario_eventos em vez de viaturas.status='em_recolha'.
-      // Nome de coluna validado via EVENTO_COLS; cast do builder apenas por
-      // limitação de inferência do supabase-js em embeds aninhados (TS2589).
       const now = new Date().toISOString();
 
-      const { data, error } = await (
-        supabase.from('calendario_eventos').select(
-          `
-          data_inicio,
-          contratos!inner(
-            id, viatura_id, status,
-            viaturas(id, matricula, marca, modelo, categoria, km_atual, combustivel)
-          )
-        `
-        ) as any
-      )
-        .in('tipo', ['recolha', 'devolucao'])
-        .eq(EVENTO_COLS.origemTipo, 'contrato')
-        .is(EVENTO_COLS.realizadoEm, null)
+      // Step 1: eventos pendentes (recolha/devolucao/troca com origem contrato)
+      const { data: eventos, error: evErr } = await supabase
+        .from('calendario_eventos')
+        .select('id, data_inicio, origem_id')
+        .in('tipo', ['recolha', 'devolucao', 'troca'])
+        .eq('origem_tipo', 'contrato')
+        .is('realizado_em', null)
         .lte('data_inicio', now)
-        .eq('contratos.status', 'ativo')
         .order('data_inicio', { ascending: false });
+      if (evErr) throw evErr;
 
-      if (error) throw error;
+      const contratoIds = [
+        ...new Set((eventos ?? []).map((e) => e.origem_id).filter((x): x is string => !!x)),
+      ];
+      if (contratoIds.length === 0) return [];
 
-      const items = (data || []) as RecolhaEventoRow[];
-      if (items.length === 0) return [];
+      // Step 2: contratos + viaturas para esses IDs
+      const { data: contratos, error: ctErr } = await supabase
+        .from('contratos')
+        .select(
+          'id, viatura_id, numero_contrato, motorista_id, status, viaturas(id, matricula, marca, modelo, categoria, km_atual, combustivel)'
+        )
+        .in('id', contratoIds);
+      if (ctErr) throw ctErr;
 
-      // Deduplicate by viatura_id (only one event per viatura)
+      const contratoMap = new Map((contratos ?? []).map((ct) => [ct.id, ct]));
+
+      // Dedup por viatura — evento mais recente ganha (query já está DESC)
       const seen = new Set<string>();
-      return items
-        .filter((ev) => {
-          const vId = ev.contratos.viaturas?.id;
-          if (!vId || seen.has(vId)) return false;
-          seen.add(vId);
-          return true;
-        })
-        .map((ev) => ev.contratos.viaturas)
-        .filter((v): v is ViaturaEmRecolha => v !== null);
+      const result: RecolhaPendente[] = [];
+      for (const ev of eventos ?? []) {
+        if (!ev.origem_id) continue;
+        const ct = contratoMap.get(ev.origem_id);
+        const viatura = (ct as any)?.viaturas as ViaturaEmRecolha | null | undefined;
+        if (!viatura?.id || seen.has(viatura.id)) continue;
+        seen.add(viatura.id);
+        result.push({
+          viatura,
+          contratoId: ct!.id,
+          contratoNumero: (ct as any).numero_contrato,
+          motoristaId: (ct as any).motorista_id,
+          eventoId: ev.id,
+        });
+      }
+      return result;
     },
     enabled: open,
   });
@@ -155,37 +162,19 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
     enabled: open,
   });
 
-  // Fetch active contrato + motorista for the selected vehicle (for folha de danos)
+  // Busca apenas o nome do motorista — o resto vem do embed da query principal.
   const { data: contratoInfo } = useQuery({
-    queryKey: ['contrato-recolha-pendente', selected?.id],
+    queryKey: ['motorista-nome-recolha-pendente', selected?.motoristaId],
     queryFn: async () => {
-      const { data: ct } = await supabase
-        .from('contratos')
-        .select('id, numero_contrato, motorista_id')
-        .eq('viatura_id', selected!.id)
-        .eq('status', 'ativo')
-        .order('criado_em', { ascending: false })
-        .limit(1)
+      if (!selected?.motoristaId) return { motoristaNome: '' };
+      const { data: mot } = await supabase
+        .from('profiles')
+        .select('nome')
+        .eq('id', selected.motoristaId)
         .maybeSingle();
-      if (!ct) return null;
-
-      let motoristaNome = '';
-      if (ct.motorista_id) {
-        const { data: mot } = await supabase
-          .from('profiles')
-          .select('nome')
-          .eq('id', ct.motorista_id)
-          .maybeSingle();
-        motoristaNome = mot?.nome || '';
-      }
-      return {
-        contratoId: ct.id,
-        contratoNumero: ct.numero_contrato as number | null,
-        motoristaNome,
-        motoristaId: ct.motorista_id as string | null,
-      };
+      return { motoristaNome: mot?.nome || '' };
     },
-    enabled: !!selected?.id,
+    enabled: !!selected?.motoristaId,
   });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -257,6 +246,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
 
   const handleConfirm = async () => {
     if (!selected) return;
+    const { viatura, contratoId, eventoId } = selected;
     if (!estacaoId) {
       toast.error('Estação de chegada é obrigatória');
       return;
@@ -267,8 +257,8 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
     }
     const checkinErr = validateCheckinDados(
       checkinDados,
-      selected.km_atual ?? 0,
-      selected.combustivel ?? ''
+      viatura.km_atual ?? 0,
+      viatura.combustivel ?? ''
     );
     if (checkinErr) {
       toast.error(checkinErr);
@@ -276,90 +266,63 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
     }
     setSaving(true);
     try {
-      // 1. Encontrar contrato ativo para esta viatura
-      const { data: contrato } = await supabase
-        .from('contratos')
-        .select('id, numero_contrato')
-        .eq('viatura_id', selected.id)
-        .eq('status', 'ativo')
-        .order('criado_em', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      // 2. Viatura → disponivel + estação
+      // 1. Viatura → disponivel + estação
       await supabase
         .from('viaturas')
         .update({ status: 'disponivel', estacao_id: estacaoId })
-        .eq('id', selected.id);
+        .eq('id', viatura.id);
 
-      // 3. Encerrar contrato + km/fuel/danos
-      if (contrato) {
-        await supabase.from('contratos').update({ status: 'encerrado' }).eq('id', contrato.id);
-        await saveCheckinDados({
-          dados: checkinDados,
-          contratoId: contrato.id,
-          viaturaId: selected.id,
-          userId,
-          tipo: 'checkin',
-          motoristaId: (contrato as { motoristaId?: string }).motoristaId || undefined,
-        });
+      // 2. Encerrar contrato (idempotente — troca já o encerrou)
+      await supabase.from('contratos').update({ status: 'encerrado' }).eq('id', contratoId);
 
-        // 4. Upload fotos se existirem
-        if (files.length > 0) {
-          const records: any[] = [];
-          for (const { file } of files) {
-            const ext = file.name.split('.').pop() || 'bin';
-            const path = `${contrato.id}/checkin/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-            const { error } = await supabase.storage
-              .from('contrato-media')
-              .upload(path, file, { contentType: file.type });
-            if (error) throw error;
-            records.push({
-              contrato_id: contrato.id,
-              tipo: 'checkin',
-              url: path,
-              nome_ficheiro: file.name,
-              tipo_ficheiro: file.type,
-              tamanho_bytes: file.size,
-              criado_por: userId,
-            });
-          }
-          const { error } = await supabase.from('contrato_media').insert(records);
+      // 3. KM, combustivel, danos
+      await saveCheckinDados({
+        dados: checkinDados,
+        contratoId,
+        viaturaId: viatura.id,
+        userId,
+        tipo: 'checkin',
+        motoristaId: selected.motoristaId || undefined,
+      });
+
+      // 4. Upload fotos se existirem
+      if (files.length > 0) {
+        const records: any[] = [];
+        for (const { file } of files) {
+          const ext = file.name.split('.').pop() || 'bin';
+          const path = `${contratoId}/checkin/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+          const { error } = await supabase.storage
+            .from('contrato-media')
+            .upload(path, file, { contentType: file.type });
           if (error) throw error;
+          records.push({
+            contrato_id: contratoId,
+            tipo: 'checkin',
+            url: path,
+            nome_ficheiro: file.name,
+            tipo_ficheiro: file.type,
+            tamanho_bytes: file.size,
+            criado_por: userId,
+          });
         }
+        const { error } = await supabase.from('contrato_media').insert(records);
+        if (error) throw error;
       }
 
-      // Fase 4: Marca o evento 'recolha'/'devolucao' como realizado (em calendario_eventos)
-      if (contrato?.id) {
-        const now = new Date().toISOString();
-        const { data: evMatch } = await supabase
-          .from('calendario_eventos')
-          .select('id')
-          .in('tipo', ['recolha', 'devolucao'])
-          .eq(EVENTO_COLS.origemTipo, 'contrato')
-          .eq(EVENTO_COLS.origemId, contrato.id)
-          .is(EVENTO_COLS.realizadoEm, null)
-          .limit(1)
-          .maybeSingle();
+      // 5. Marca o evento como realizado (usa eventoId directamente — sem re-query)
+      await supabase
+        .from('calendario_eventos')
+        .update({ realizado_em: new Date().toISOString(), realizado_por_id: userId })
+        .eq('id', eventoId);
 
-        if (evMatch?.id) {
-          await supabase
-            .from('calendario_eventos')
-            .update({
-              realizado_em: now,
-              realizado_por_id: userId,
-            })
-            .eq('id', evMatch.id);
-        }
-      }
-
-      // 5. Invalidar caches
+      // 6. Invalidar caches
       queryClient.invalidateQueries({ queryKey: ['viaturas-pendentes-recolha'] });
+      queryClient.invalidateQueries({ queryKey: ['checkin-pendentes-count'] });
       queryClient.invalidateQueries({ queryKey: ['viaturas-calendario'] });
       queryClient.invalidateQueries({ queryKey: ['motorista-viaturas'] });
       queryClient.invalidateQueries({ queryKey: ['calendario-eventos'] });
 
-      toast.success(`Check-in de ${formatMatricula(selected.matricula)} confirmado`);
+      toast.success(`Check-in de ${formatMatricula(viatura.matricula)} confirmado`);
       setDone(true);
       setTimeout(() => resetCheckin(), 1200);
     } catch (err: any) {
@@ -376,6 +339,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
 
   // ── Full-page check-in step ───────────────────────────────────────────────
   if (selected && open) {
+    const { viatura } = selected;
     if (done) {
       return (
         <div className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center gap-4">
@@ -395,7 +359,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
           <div className="flex-1 min-w-0">
             <h1 className="text-base font-semibold leading-tight">Check-in na Estação</h1>
             <p className="text-xs text-muted-foreground truncate">
-              {formatMatricula(selected.matricula)} — {selected.marca} {selected.modelo}
+              {formatMatricula(viatura.matricula)} — {viatura.marca} {viatura.modelo}
             </p>
           </div>
           <Button onClick={handleConfirm} disabled={saving} className="shrink-0">
@@ -445,16 +409,16 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
 
             {/* KM, combustivel, danos */}
             <CheckinDadosSection
-              viaturaId={selected.id}
-              kmMinimo={selected.km_atual ?? 0}
+              viaturaId={viatura.id}
+              kmMinimo={viatura.km_atual ?? 0}
               dados={checkinDados}
               onChange={setCheckinDados}
               tipo="checkin"
-              tipoCombustivel={selected.combustivel ?? ''}
+              tipoCombustivel={viatura.combustivel ?? ''}
               motoristaNome={contratoInfo?.motoristaNome || ''}
-              matricula={formatMatricula(selected.matricula)}
+              matricula={formatMatricula(viatura.matricula)}
               dataEvento={new Date().toISOString().slice(0, 10)}
-              contratoNumero={contratoInfo?.contratoNumero}
+              contratoNumero={selected.contratoNumero}
               accentClass="border-orange-200 dark:border-orange-800"
             />
 
@@ -564,9 +528,9 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
         <SheetHeader className="px-4 py-3 border-b border-border shrink-0">
           <SheetTitle className="flex items-center gap-2 text-base">
             Recolhas Pendentes de Check-in
-            {viaturas.length + rentingRecolhasPendentes.length > 0 && (
+            {pendentes.length + rentingRecolhasPendentes.length > 0 && (
               <Badge className="bg-orange-500 text-white">
-                {viaturas.length + rentingRecolhasPendentes.length}
+                {pendentes.length + rentingRecolhasPendentes.length}
               </Badge>
             )}
           </SheetTitle>
@@ -577,7 +541,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : viaturas.length === 0 && rentingRecolhasPendentes.length === 0 ? (
+          ) : pendentes.length === 0 && rentingRecolhasPendentes.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
               <CheckCircle className="h-10 w-10 opacity-30" />
               <p className="text-sm">Nenhuma recolha pendente</p>
@@ -586,9 +550,9 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
             <div className="divide-y divide-border">
               {/* Pendentes de renting — mesma estética dos legacy. */}
               <RentingPendentesSection tipo="recolha" />
-              {viaturas.map((v) => (
+              {pendentes.map((p) => (
                 <div
-                  key={v.id}
+                  key={p.viatura.id}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors"
                 >
                   <div className={cn('rounded-lg p-2 bg-orange-500/10 shrink-0')}>
@@ -596,20 +560,20 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-mono font-semibold text-sm">
-                      {formatMatricula(v.matricula)}
+                      {formatMatricula(p.viatura.matricula)}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
-                      {v.marca} {v.modelo}
+                      {p.viatura.marca} {p.viatura.modelo}
                     </p>
-                    {v.categoria && (
-                      <p className="text-xs text-muted-foreground/70">{v.categoria}</p>
+                    {p.viatura.categoria && (
+                      <p className="text-xs text-muted-foreground/70">{p.viatura.categoria}</p>
                     )}
                   </div>
                   <Button
                     size="sm"
                     variant="outline"
                     className="shrink-0 text-xs border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400"
-                    onClick={() => setSelected(v)}
+                    onClick={() => setSelected(p)}
                   >
                     Check-in
                   </Button>

@@ -200,6 +200,10 @@ export const TrocaCheckinStep: React.FC<{
         matricula_devolver: viaturaAtual.matricula.replace(/[-\s]/g, '').toUpperCase(),
         criado_por: userId,
         motorista_id: motoristaId,
+        // Fase 3.5: troca diferida aparece na lista de pendentes via origem
+        ...(contratoAtual ? { origem_tipo: 'contrato', origem_id: contratoAtual.id } : {}),
+        // Fase 3.5: troca imediata fica realizada; diferida fica IS NULL
+        ...(!fazerDepois ? { realizado_em: dataISO, realizado_por_id: userId } : {}),
       };
       let evResult = await supabase
         .from('calendario_eventos')
@@ -243,11 +247,7 @@ export const TrocaCheckinStep: React.FC<{
       if (contratoAtual) {
         await supabase
           .from('contratos')
-          .update({
-            status: 'encerrado',
-            calendario_evento_id: eventoId,
-            ...(fazerDepois ? { checkin_pendente: true } : {}),
-          })
+          .update({ status: 'encerrado', calendario_evento_id: eventoId })
           .eq('id', contratoAtual.id);
         if (!fazerDepois) {
           await saveCheckinDados({
@@ -281,7 +281,6 @@ export const TrocaCheckinStep: React.FC<{
         forceNewVersion: true,
         viaturaId: novaViatura.id,
         calendarioEventoId: eventoId,
-        checkoutPendente: fazerDepois || false,
       });
       setContratoNumero(newCt.numero_contrato);
 

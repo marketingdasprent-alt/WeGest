@@ -128,9 +128,12 @@ describe('useEventosPendentesRenting', () => {
   });
 
   it('não corre quando enabled=false', () => {
-    const { result } = renderHook(() => useEventosPendentesRenting({ tipo: 'entrega', enabled: false }), {
-      wrapper: createWrapper(),
-    });
+    const { result } = renderHook(
+      () => useEventosPendentesRenting({ tipo: 'entrega', enabled: false }),
+      {
+        wrapper: createWrapper(),
+      }
+    );
     expect(result.current.isLoading).toBe(false);
     expect(result.current.fetchStatus).toBe('idle');
   });

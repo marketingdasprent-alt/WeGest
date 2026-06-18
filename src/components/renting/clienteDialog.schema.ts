@@ -151,8 +151,19 @@ function exigirNomeApelido(data: ClienteFormData, ctx: Ctx) {
 function exigirCarta(data: ClienteFormData, ctx: Ctx) {
   exigirCampo(data, ctx, 'carta_numero');
   exigirCampo(data, ctx, 'carta_pais');
-  exigirCampo(data, ctx, 'carta_data_emissao');
   exigirCampo(data, ctx, 'carta_validade');
+
+  if (
+    data.carta_data_emissao &&
+    data.carta_validade &&
+    data.carta_validade < data.carta_data_emissao
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['carta_validade'],
+      message: 'A validade não pode ser anterior à data de emissão',
+    });
+  }
 }
 
 function validatePessoa(data: ClienteFormData, ctx: Ctx) {
@@ -179,8 +190,16 @@ function validateEmpresa(data: ClienteFormData, ctx: Ctx) {
 function validateDocumentos(data: ClienteFormData, ctx: Ctx) {
   exigirCampo(data, ctx, 'doc_tipo', 'Selecione o tipo de documento');
   exigirCampo(data, ctx, 'doc_numero');
-  exigirCampo(data, ctx, 'doc_data_emissao');
   exigirCampo(data, ctx, 'doc_validade');
+
+  // Validade não pode ser anterior à data de emissão
+  if (data.doc_data_emissao && data.doc_validade && data.doc_validade < data.doc_data_emissao) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['doc_validade'],
+      message: 'A validade não pode ser anterior à data de emissão',
+    });
+  }
 
   // Número do documento: validar formato conforme o tipo seleccionado
   if (data.doc_numero && data.doc_tipo && isTipoDocumento(data.doc_tipo)) {

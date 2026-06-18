@@ -8,7 +8,6 @@ import { toast } from 'sonner';
 import { ArrowLeft, Camera, Car, CheckCircle, Film, Loader2, Upload, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMatricula } from './calendarioUtils';
-import { EVENTO_COLS } from './eventoColumns';
 import {
   CheckinDadosSection,
   emptyCheckinDados,
@@ -21,6 +20,7 @@ import { useEventosPendentesRenting } from '@/hooks/useEventosPendentesRenting';
 
 interface PendenteCheckout {
   id: string;
+  eventoId: string;
   numero_contrato: number | null;
   viatura_id: string;
   motorista_id: string | null;
@@ -34,19 +34,6 @@ interface PendenteCheckout {
     combustivel: string | null;
   } | null;
   motoristaNome: string;
-}
-
-/** Shape do evento de entrega com contrato+viatura embebidos (Fase 3). */
-interface CheckoutEventoRow {
-  data_inicio: string | null;
-  contratos: {
-    id: string;
-    numero_contrato: number | null;
-    viatura_id: string;
-    motorista_id: string | null;
-    status: string;
-    viaturas: PendenteCheckout['viaturas'];
-  };
 }
 
 interface SelectedFile {
@@ -82,49 +69,56 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
     tipo: 'entrega',
   });
 
+  // Two-step: evita join embed (sem FK directa calendario_eventos→contratos).
+  // Step 1: busca eventos pendentes; Step 2: busca contratos por origem_id.
   const { data: pendentes = [], isLoading } = useQuery({
     queryKey: ['contratos-checkout-pendentes'],
     queryFn: async () => {
-      // Fase 3: ler de calendario_eventos em vez de contratos flags.
-      // O nome da coluna é validado em compile-time via EVENTO_COLS (ver topo
-      // do ficheiro); o cast do builder existe apenas por limitação de
-      // inferência do supabase-js em embeds aninhados (TS2589).
-      const { data, error } = await (
-        supabase.from('calendario_eventos').select(
-          `
-          data_inicio,
-          contratos!inner(
-            id, numero_contrato, viatura_id, motorista_id, status,
-            viaturas(id, matricula, marca, modelo, km_atual, combustivel)
-          )
-        `
-        ) as any
-      )
+      // Step 1: eventos de entrega pendentes
+      const { data: eventos, error: evErr } = await supabase
+        .from('calendario_eventos')
+        .select('id, data_inicio, origem_id')
         .eq('tipo', 'entrega')
-        .eq(EVENTO_COLS.origemTipo, 'contrato')
-        .is(EVENTO_COLS.realizadoEm, null)
-        .eq('contratos.status', 'ativo')
+        .eq('origem_tipo', 'contrato')
+        .is('realizado_em', null)
         .order('data_inicio', { ascending: false });
-      if (error) throw error;
+      if (evErr) throw evErr;
 
-      const items = (data || []) as CheckoutEventoRow[];
-      if (items.length === 0) return [];
+      const contratoIds = [
+        ...new Set((eventos ?? []).map((e) => e.origem_id).filter((x): x is string => !!x)),
+      ];
+      if (contratoIds.length === 0) return [];
 
-      // Re-map para estrutura esperada (remapear do evento para contrato)
-      const contractItems = items.map((ev) => ({
-        id: ev.contratos.id,
-        numero_contrato: ev.contratos.numero_contrato,
-        viatura_id: ev.contratos.viatura_id,
-        motorista_id: ev.contratos.motorista_id,
-        data_inicio: ev.data_inicio,
-        viaturas: ev.contratos.viaturas,
-      }));
+      // Step 2: contratos activos com viaturas
+      const { data: contratos, error: ctErr } = await supabase
+        .from('contratos')
+        .select(
+          'id, numero_contrato, viatura_id, motorista_id, status, viaturas(id, matricula, marca, modelo, km_atual, combustivel)'
+        )
+        .in('id', contratoIds)
+        .eq('status', 'ativo');
+      if (ctErr) throw ctErr;
+
+      const eventoMap = new Map((eventos ?? []).map((ev) => [ev.origem_id, ev]));
+
+      const contractItems = (contratos ?? [])
+        .map((ct) => {
+          const ev = eventoMap.get(ct.id);
+          return {
+            id: ct.id,
+            eventoId: ev?.id ?? '',
+            numero_contrato: ct.numero_contrato,
+            viatura_id: ct.viatura_id,
+            motorista_id: ct.motorista_id,
+            data_inicio: ev?.data_inicio ?? null,
+            viaturas: (ct as any).viaturas ?? null,
+          };
+        })
+        .filter((i) => !!i.eventoId);
 
       const motIds = [
         ...new Set(
-          contractItems
-            .filter((i) => i.motorista_id)
-            .map((i: any) => i.motorista_id as string)
+          contractItems.filter((i) => i.motorista_id).map((i) => i.motorista_id as string)
         ),
       ];
       let nomeMap: Record<string, string> = {};
@@ -137,9 +131,9 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
           nomeMap = Object.fromEntries(profiles.map((p: any) => [p.id, p.nome || '']));
         }
       }
-      return contractItems.map((i: any) => ({
+      return contractItems.map((i) => ({
         ...i,
-        motoristaNome: nomeMap[i.motorista_id] || '',
+        motoristaNome: nomeMap[i.motorista_id ?? ''] || '',
       })) as PendenteCheckout[];
     },
     enabled: open,
@@ -261,33 +255,14 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
         if (error) throw error;
       }
 
-      await supabase.from('contratos').update({ checkout_pendente: false }).eq('id', selected.id);
-
-      // Fase 4: Marca o evento 'entrega' como realizado (em calendario_eventos)
-      if (selected.id) {
-        const now = new Date().toISOString();
-        const { data: evMatch } = await supabase
-          .from('calendario_eventos')
-          .select('id')
-          .eq('tipo', 'entrega')
-          .eq(EVENTO_COLS.origemTipo, 'contrato')
-          .eq(EVENTO_COLS.origemId, selected.id)
-          .is(EVENTO_COLS.realizadoEm, null)
-          .limit(1)
-          .maybeSingle();
-
-        if (evMatch?.id) {
-          await supabase
-            .from('calendario_eventos')
-            .update({
-              realizado_em: now,
-              realizado_por_id: userId,
-            })
-            .eq('id', evMatch.id);
-        }
-      }
+      // Marca o evento 'entrega' como realizado (usa eventoId directamente — sem re-query)
+      await supabase
+        .from('calendario_eventos')
+        .update({ realizado_em: new Date().toISOString(), realizado_por_id: userId })
+        .eq('id', selected.eventoId);
 
       queryClient.invalidateQueries({ queryKey: ['contratos-checkout-pendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['checkout-pendentes-count'] });
       queryClient.invalidateQueries({ queryKey: ['viaturas-calendario'] });
       queryClient.invalidateQueries({ queryKey: ['calendario-eventos'] });
 

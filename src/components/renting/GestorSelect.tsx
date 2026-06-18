@@ -36,7 +36,10 @@ export const GestorSelect: React.FC<GestorSelectProps> = ({ value, onChange, dis
   return (
     <Select
       value={value ?? SENTINEL_NONE}
-      onValueChange={(v) => onChange(v === SENTINEL_NONE ? null : v)}
+      onValueChange={(v) => {
+        if (!v) return;
+        onChange(v === SENTINEL_NONE ? null : v);
+      }}
       disabled={disabled}
     >
       <SelectTrigger className="bg-background">

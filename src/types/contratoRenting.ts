@@ -10,7 +10,7 @@ export const CONTRATO_ESTADO_OP_LABELS: Record<ContratoEstadoOperacional, string
   agendado: 'Agendado',
   em_curso: 'Em Curso',
   devolvido: 'Devolvido',
-  cancelado: 'Cancelado',
+  cancelado: 'Fechado',
 };
 
 // ============================================================

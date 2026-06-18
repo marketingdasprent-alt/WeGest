@@ -29,7 +29,9 @@ describe('validateCheckinDados', () => {
     });
 
     it('aceita KM igual ao mínimo', () => {
-      expect(validateCheckinDados(base({ km: '1000', combustivel: '50' }), 1000, 'diesel')).toBeNull();
+      expect(
+        validateCheckinDados(base({ km: '1000', combustivel: '50' }), 1000, 'diesel')
+      ).toBeNull();
     });
   });
 
@@ -49,22 +51,28 @@ describe('validateCheckinDados', () => {
 
     it('exige combustível E nível elétrico para híbrido', () => {
       // combustível em falta deteta primeiro
-      expect(validateCheckinDados(base({ combustivel: '', nivelEletrico: '80' }), 0, 'hibrido')).toMatch(
-        /combustível/
-      );
+      expect(
+        validateCheckinDados(base({ combustivel: '', nivelEletrico: '80' }), 0, 'hibrido')
+      ).toMatch(/combustível/);
       // com combustível, falta o elétrico
-      expect(validateCheckinDados(base({ combustivel: '50', nivelEletrico: '' }), 0, 'hibrido')).toMatch(
-        /bateria/
-      );
+      expect(
+        validateCheckinDados(base({ combustivel: '50', nivelEletrico: '' }), 0, 'hibrido')
+      ).toMatch(/bateria/);
     });
 
     it('exige GPL para tipos com GPL', () => {
-      const msg = validateCheckinDados(base({ combustivel: '50', nivelGpl: '' }), 0, 'gasolina_gpl');
+      const msg = validateCheckinDados(
+        base({ combustivel: '50', nivelGpl: '' }),
+        0,
+        'gasolina_gpl'
+      );
       expect(msg).toMatch(/GPL/);
     });
 
     it('não exige combustível para elétrico puro', () => {
-      expect(validateCheckinDados(base({ combustivel: '', nivelEletrico: '90' }), 0, 'eletrico')).toBeNull();
+      expect(
+        validateCheckinDados(base({ combustivel: '', nivelEletrico: '90' }), 0, 'eletrico')
+      ).toBeNull();
     });
   });
 
@@ -86,7 +94,9 @@ describe('validateCheckinDados', () => {
         validateCheckinDados(
           base({
             combustivel: '50',
-            novosDanos: [{ id: '1', descricao: 'Risco no para-choques', localizacao: 'frente', files: [] }],
+            novosDanos: [
+              { id: '1', descricao: 'Risco no para-choques', localizacao: 'frente', files: [] },
+            ],
           }),
           0,
           'diesel'

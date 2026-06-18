@@ -87,13 +87,35 @@ function diferencaDias(inicio: string, fim: string): number | null {
   return Math.max(1, Math.ceil((df - di) / (1000 * 60 * 60 * 24)));
 }
 
+const padDate = (n: number) => String(n).padStart(2, '0');
+
+function formatLocalInput(d: Date): string {
+  return `${d.getFullYear()}-${padDate(d.getMonth() + 1)}-${padDate(d.getDate())}T${padDate(d.getHours())}:${padDate(d.getMinutes())}`;
+}
+
 function addDaysToLocalInput(localInput: string, days: number): string | null {
   if (!localInput) return null;
   const d = new Date(localInput);
   if (Number.isNaN(d.getTime())) return null;
-  const novo = new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${novo.getFullYear()}-${pad(novo.getMonth() + 1)}-${pad(novo.getDate())}T${pad(novo.getHours())}:${pad(novo.getMinutes())}`;
+  return formatLocalInput(new Date(d.getTime() + days * 24 * 60 * 60 * 1000));
+}
+
+function addOneMonthSameDayToLocalInput(localInput: string): string | null {
+  if (!localInput) return null;
+  const d = new Date(localInput);
+  if (Number.isNaN(d.getTime())) return null;
+  return formatLocalInput(
+    new Date(d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes())
+  );
+}
+
+function firstDayNextMonthToLocalInput(localInput: string): string | null {
+  if (!localInput) return null;
+  const d = new Date(localInput);
+  if (Number.isNaN(d.getTime())) return null;
+  return formatLocalInput(
+    new Date(d.getFullYear(), d.getMonth() + 1, 1, d.getHours(), d.getMinutes())
+  );
 }
 
 export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
@@ -149,6 +171,8 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   const regime = form.watch('regime');
   const isSlot = regime === 'slot';
   const isLongaDuracao = form.watch('is_longa_duracao');
+  const renovacaoOpcao = form.watch('renovacao_opcao');
+  const renovacaoIntervalo = form.watch('renovacao_intervalo_dias');
   const modoMensal = !isSlot && (regime === 'tvde' || isLongaDuracao);
   const faturacao = useMemo(
     () => calcularFaturacaoRenting(regime, isLongaDuracao, dias, tarifaAtual),
@@ -170,15 +194,22 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
     [viaturas, isSlot]
   );
 
-  // Modo mensal (TVDE ou ALD): trava o período em 30 dias.
+  // Modo mensal (TVDE ou ALD): data_fim calculada conforme a opção de renovação.
   useEffect(() => {
-    if (modoMensal && dataInicio) {
-      const fim = addDaysToLocalInput(dataInicio, 30);
-      if (fim && fim !== dataFim) {
-        form.setValue('data_fim', fim, { shouldValidate: true });
-      }
+    if (!modoMensal || !dataInicio) return;
+    let fim: string | null = null;
+    if (renovacaoOpcao === 'mesmo_dia_cada_mes') {
+      fim = addOneMonthSameDayToLocalInput(dataInicio);
+    } else if (renovacaoOpcao === 'primeiro_dia_mes') {
+      fim = firstDayNextMonthToLocalInput(dataInicio);
+    } else {
+      // 'intervalo_dias' ou sem opção definida → usar intervalo (default 30)
+      fim = addDaysToLocalInput(dataInicio, renovacaoIntervalo ?? 30);
     }
-  }, [modoMensal, dataInicio, dataFim, form]);
+    if (fim && fim !== dataFim) {
+      form.setValue('data_fim', fim, { shouldValidate: true });
+    }
+  }, [modoMensal, dataInicio, dataFim, renovacaoOpcao, renovacaoIntervalo, form]);
 
   const handleDiasManualChange = (raw: string) => {
     const cleaned = raw.replace(/\D/g, '');
@@ -189,6 +220,14 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
     if (!dataInicio) return;
     const novoFim = addDaysToLocalInput(dataInicio, n);
     if (novoFim) form.setValue('data_fim', novoFim, { shouldValidate: true });
+  };
+
+  const handleIntervaloChange = (raw: string) => {
+    const cleaned = raw.replace(/\D/g, '');
+    if (cleaned === '') return;
+    const n = parseInt(cleaned, 10);
+    if (!Number.isFinite(n) || n <= 0) return;
+    form.setValue('renovacao_intervalo_dias', n, { shouldDirty: true });
   };
 
   // Ao escolher a viatura: puxa o grupo e os valores da tarifa desse grupo.
@@ -453,7 +492,10 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                   </FormLabel>
                   <Select
                     value={field.value ?? SENTINEL_NONE}
-                    onValueChange={(v) => field.onChange(v === SENTINEL_NONE ? null : v)}
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      field.onChange(v === SENTINEL_NONE ? null : v);
+                    }}
                   >
                     <FormControl>
                       <SelectTrigger className="bg-background">
@@ -502,21 +544,35 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
               accent="violet"
               right={
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-muted-foreground">Nº Dias</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {modoMensal && renovacaoOpcao === 'intervalo_dias'
+                      ? 'Intervalo (dias)'
+                      : 'Nº Dias'}
+                  </span>
                   <Input
                     type="text"
                     inputMode="numeric"
-                    value={diasInput}
-                    onChange={(e) => handleDiasManualChange(e.target.value)}
-                    disabled={!dataInicio || modoMensal}
+                    value={
+                      modoMensal && renovacaoOpcao === 'intervalo_dias'
+                        ? (renovacaoIntervalo ?? 30).toString()
+                        : diasInput
+                    }
+                    onChange={(e) =>
+                      modoMensal && renovacaoOpcao === 'intervalo_dias'
+                        ? handleIntervaloChange(e.target.value)
+                        : handleDiasManualChange(e.target.value)
+                    }
+                    disabled={!dataInicio || (modoMensal && renovacaoOpcao !== 'intervalo_dias')}
                     className="h-9 w-16 text-center bg-background text-base font-semibold disabled:bg-muted"
                     placeholder="—"
                     title={
-                      modoMensal
-                        ? 'Período fixo de 30 dias (mensal)'
-                        : dataInicio
-                          ? 'Editar ajusta a Data Fim automaticamente'
-                          : 'Define primeiro a Data Início'
+                      modoMensal && renovacaoOpcao !== 'intervalo_dias'
+                        ? 'Calculado automaticamente pela opção de renovação'
+                        : modoMensal
+                          ? 'Intervalo de renovação — altera a Data Fim automaticamente'
+                          : dataInicio
+                            ? 'Editar ajusta a Data Fim automaticamente'
+                            : 'Define primeiro a Data Início'
                     }
                   />
                 </div>
@@ -538,7 +594,10 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                     </FormLabel>
                     <Select
                       value={field.value ?? SENTINEL_NONE}
-                      onValueChange={(v) => field.onChange(v === SENTINEL_NONE ? null : v)}
+                      onValueChange={(v) => {
+                        if (!v) return;
+                        field.onChange(v === SENTINEL_NONE ? null : v);
+                      }}
                     >
                       <FormControl>
                         <SelectTrigger className="bg-background">

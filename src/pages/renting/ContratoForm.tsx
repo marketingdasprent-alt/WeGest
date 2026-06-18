@@ -285,6 +285,16 @@ const ContratoForm = () => {
         navigate(`/renting/reservas/${reservaFromQuery.id}`);
         return;
       }
+      // Reserva sem viatura — não pode gerar contrato. Redireciona com aviso.
+      if (!reservaFromQuery.viatura_id) {
+        toast({
+          title: 'Reserva sem viatura selecionada',
+          description: 'Seleciona uma viatura na reserva e guarda antes de criar o contrato.',
+          variant: 'destructive',
+        });
+        navigate(`/renting/reservas/${reservaFromQuery.id}`);
+        return;
+      }
       // Espera pelos condutores da reserva (request separado) para os incluir no
       // mesmo reset — senão o reset apagava-os. `undefined` = ainda a carregar.
       if (condutoresDaReserva === undefined) return;
@@ -299,8 +309,8 @@ const ContratoForm = () => {
         cliente_id: reservaFromQuery.cliente_id ?? '',
         // Emissor escolhido na reserva flui para o contrato.
         emissor_id: reservaFromQuery.emissor_id ?? '',
-        // Na criação o dono é definido pela BD (= quem cria). Campo fica vazio.
-        gestor_id: null,
+        // Herda o gestor da reserva; a BD usa auth.uid() como fallback se null.
+        gestor_id: reservaFromQuery.gestor_id ?? null,
         viatura_id: reservaFromQuery.viatura_id ?? '',
         matricula: reservaFromQuery.matricula ?? '',
         grupo: reservaFromQuery.grupo ?? '',
@@ -550,8 +560,17 @@ const ContratoForm = () => {
       const grupoAntes = contrato.grupo ?? '—';
       const grupoDepois = values.grupo ?? '—';
       if (grupoAntes !== grupoDepois) {
+        // Determinar direção via preco_dia da tarifa de cada grupo.
+        const gAntes = grupos.find((g) => g.nome === grupoAntes);
+        const gDepois = grupos.find((g) => g.nome === grupoDepois);
+        const tAntes = gAntes ? tarifas.find((t) => t.grupo_id === gAntes.id) : null;
+        const tDepois = gDepois ? tarifas.find((t) => t.grupo_id === gDepois.id) : null;
+        let direcao = 'upgrade/downgrade';
+        if (tAntes?.preco_dia != null && tDepois?.preco_dia != null) {
+          direcao = tDepois.preco_dia > tAntes.preco_dia ? 'upgrade' : 'downgrade';
+        }
         result.push({
-          label: 'Grupo (upgrade/downgrade)',
+          label: `Grupo (${direcao})`,
           valorAntes: grupoAntes,
           valorDepois: grupoDepois,
         });
@@ -845,7 +864,14 @@ const ContratoForm = () => {
           <ArrowLeft className="h-4 w-4" />
           Voltar
         </Button>
-        {isEdit && contrato && <ContratoEstadoActions contrato={contrato} />}
+        {isEdit && contrato && (
+          <ContratoEstadoActions
+            contrato={contrato}
+            motoristaId={
+              condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null
+            }
+          />
+        )}
         {isEdit && contrato && (
           <Button
             type="button"

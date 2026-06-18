@@ -28,6 +28,7 @@ import {
 import { toast } from 'sonner';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { format } from 'date-fns';
+import { EVENTO_COLS } from '@/components/calendario/eventoColumns';
 
 export interface CalendarioEvento {
   id: string;
@@ -71,6 +72,8 @@ const Calendario: React.FC = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'calendario_eventos' }, () => {
         queryClient.invalidateQueries({ queryKey: ['calendario-eventos'] });
         queryClient.invalidateQueries({ queryKey: ['lista-espera-count'] });
+        queryClient.invalidateQueries({ queryKey: ['checkout-pendentes-count'] });
+        queryClient.invalidateQueries({ queryKey: ['checkin-pendentes-count'] });
       })
       .subscribe();
 
@@ -79,17 +82,22 @@ const Calendario: React.FC = () => {
     };
   }, [queryClient]);
 
-  const { data: recolhasPendentes = [] } = useQuery({
-    queryKey: ['viaturas-pendentes-recolha'],
+  // Badge check-in: lê de eventos (realizado_em IS NULL) — unifica recolha/devolucao/troca.
+  const { data: recolhasPendentesCount = 0 } = useQuery({
+    queryKey: ['checkin-pendentes-count'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('viaturas')
-        .select('id, matricula, marca, modelo, categoria')
-        .eq('status', 'em_recolha')
-        .order('matricula');
+      const now = new Date().toISOString();
+      const { count, error } = await (
+        supabase.from('calendario_eventos').select('id', { count: 'exact', head: true }) as any
+      )
+        .in('tipo', ['recolha', 'devolucao', 'troca'])
+        .eq(EVENTO_COLS.origemTipo, 'contrato')
+        .is(EVENTO_COLS.realizadoEm, null)
+        .lte('data_inicio', now);
       if (error) throw error;
-      return data || [];
+      return count ?? 0;
     },
+    staleTime: 30_000,
   });
 
   // Contagem combinada (legacy + renting) para os badges nos botões.
@@ -137,17 +145,29 @@ const Calendario: React.FC = () => {
     },
   });
 
-  const { data: checkoutPendentes = [] } = useQuery({
-    queryKey: ['contratos-checkout-pendentes'],
+  // Badge check-out: two-step para evitar falsos positivos de eventos históricos
+  // (realizado_em IS NULL mas contrato já encerrado antes da Fase 4).
+  const { data: checkoutPendentesCount = 0 } = useQuery({
+    queryKey: ['checkout-pendentes-count'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: evs, error: evErr } = await supabase
+        .from('calendario_eventos')
+        .select('origem_id')
+        .eq('tipo', 'entrega')
+        .eq(EVENTO_COLS.origemTipo, 'contrato')
+        .is(EVENTO_COLS.realizadoEm, null);
+      if (evErr) throw evErr;
+      const ids = (evs ?? []).map((e) => e.origem_id).filter((x): x is string => !!x);
+      if (ids.length === 0) return 0;
+      const { count, error: ctErr } = await supabase
         .from('contratos')
-        .select('id')
-        .eq('checkout_pendente', true)
+        .select('id', { count: 'exact', head: true })
+        .in('id', ids)
         .eq('status', 'ativo');
-      if (error) throw error;
-      return data || [];
+      if (ctErr) throw ctErr;
+      return count ?? 0;
     },
+    staleTime: 30_000,
   });
 
   const { data: eventos = [], isLoading } = useQuery({
@@ -334,9 +354,9 @@ const Calendario: React.FC = () => {
                 >
                   <LogOut className="h-4 w-4" />
                   <span className="hidden sm:inline">Check Out</span>
-                  {checkoutPendentes.length + rentingEntregaPendentesCount > 0 && (
+                  {checkoutPendentesCount + rentingEntregaPendentesCount > 0 && (
                     <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1 flex items-center justify-center text-[10px] bg-green-600 text-white border-0">
-                      {checkoutPendentes.length + rentingEntregaPendentesCount}
+                      {checkoutPendentesCount + rentingEntregaPendentesCount}
                     </Badge>
                   )}
                 </Button>
@@ -347,9 +367,9 @@ const Calendario: React.FC = () => {
                 >
                   <PackageCheck className="h-4 w-4" />
                   <span className="hidden sm:inline">Check In</span>
-                  {recolhasPendentes.length + rentingRecolhaPendentesCount > 0 && (
+                  {recolhasPendentesCount + rentingRecolhaPendentesCount > 0 && (
                     <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1 flex items-center justify-center text-[10px] bg-orange-500 text-white border-0">
-                      {recolhasPendentes.length + rentingRecolhaPendentesCount}
+                      {recolhasPendentesCount + rentingRecolhaPendentesCount}
                     </Badge>
                   )}
                 </Button>

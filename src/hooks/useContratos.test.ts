@@ -54,13 +54,13 @@ describe('gerarContratoAtomico', () => {
       ...baseParams,
       viaturaId: 'v1',
       calendarioEventoId: 'ev1',
-      checkoutPendente: true,
     });
 
     const params = rpc.mock.calls[0][1] as Record<string, unknown>;
     expect(params.p_viatura_id).toBe('v1');
     expect(params.p_calendario_evento_id).toBe('ev1');
-    expect(params.p_checkout_pendente).toBe(true);
+    // Fase 5a: p_checkout_pendente removido — flags legacy descontinuadas
+    expect('p_checkout_pendente' in params).toBe(false);
   });
 
   it('omite opcionais quando não passados (não envia chaves undefined)', async () => {

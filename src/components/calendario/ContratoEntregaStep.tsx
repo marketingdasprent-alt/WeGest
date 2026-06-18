@@ -242,6 +242,12 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
         cidade: estacaoNome || null,
         descricao: observacoes.trim() || null,
         criado_por: userId,
+        // Entrega imediata = já realizada; "fazer depois" = fica pendente.
+        // As listas (Fase 3) leem realizado_em IS NULL, e o contrato fica
+        // sempre 'ativo' na entrega — sem isto, entregas imediatas apareceriam
+        // como pendentes.
+        realizado_em: fazerDepois ? null : dataISO,
+        realizado_por_id: fazerDepois ? null : userId,
       };
       if (motoristaId) eventoPayload.motorista_id = motoristaId;
 
@@ -308,7 +314,6 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
         forceNewVersion: true,
         viaturaId,
         calendarioEventoId: eventoId,
-        checkoutPendente: fazerDepois,
       });
 
       const contratoId = ct.id;

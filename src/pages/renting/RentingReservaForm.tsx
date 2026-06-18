@@ -282,9 +282,12 @@ const RentingReservaForm = () => {
   // (rent-a-car); o TVDE não as usa. (Slot não chega aqui — gera prestação.)
   const temCondutor = !!reserva?.cliente_id || condutoresAtuais.length > 0;
   const temEstacoes = !!(reserva?.estacao_entrega_id && reserva?.estacao_recolha_id);
+  // grupo é obrigatório: sem grupo não há tarifa e o contrato fica inválido.
+  const temGrupo = !!reserva?.grupo;
   const reservaCompleta = !!(
     reserva &&
     reserva.viatura_id &&
+    temGrupo &&
     temCondutor &&
     (reserva.regime === 'rent_a_car' ? temEstacoes : true)
   );
@@ -295,9 +298,11 @@ const RentingReservaForm = () => {
   // contrato_renting, por isso nunca é bloqueada por aqui.
   const bloqueadaPorContrato = isEdit && !!contratoExistente;
   const motivoContratoBloqueado = !reservaCompleta
-    ? reserva?.regime === 'rent_a_car'
-      ? 'Preenche condutor, viatura e estações (entrega e recolha) e guarda a reserva.'
-      : 'Preenche condutor e viatura e guarda a reserva.'
+    ? reserva?.viatura_id && !temGrupo
+      ? 'A viatura selecionada não tem grupo — atribui um grupo na ficha da viatura e volta a selecionar.'
+      : reserva?.regime === 'rent_a_car'
+        ? 'Preenche condutor, viatura e estações (entrega e recolha) e guarda a reserva.'
+        : 'Preenche condutor e viatura e guarda a reserva.'
     : form.formState.isDirty
       ? 'Guarda as alterações antes de criar o contrato.'
       : undefined;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Car,
@@ -113,6 +113,7 @@ const TABS = [
 export default function ViaturaDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const isNew = id === 'nova';
 
@@ -127,7 +128,7 @@ export default function ViaturaDetalhe() {
   const [viatura, setViatura] = useState<Viatura | null>(null);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('dados');
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') ?? 'dados');
   const [reparacoesAbertas, setReparacoesAbertas] = useState<any[]>([]);
 
   // Vínculos ativos (reserva / contrato / movimentação) para os botões do header.

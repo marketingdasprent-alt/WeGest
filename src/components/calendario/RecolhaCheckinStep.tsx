@@ -179,6 +179,9 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
         cidade: estacaoNome || null,
         descricao: observacoes.trim() || null,
         criado_por: userId,
+        // Fase 3.5: recolha imediata fica marcada; diferida fica IS NULL para aparecer na lista
+        realizado_em: fazerDepois ? null : dataISO,
+        realizado_por_id: fazerDepois ? null : userId,
       };
       if (motoristaId) eventoPayload.motorista_id = motoristaId;
       // Fase 1b: carimba o evento de recolha com a origem do contrato, para a
@@ -246,17 +249,13 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
 
       // 5. Contrato
       if (contrato) {
-        if (fazerDepois) {
-          await supabase
-            .from('contratos')
-            .update({ checkin_pendente: true, calendario_evento_id: eventoId })
-            .eq('id', contrato.id);
-        } else {
-          await supabase
-            .from('contratos')
-            .update({ status: 'encerrado', calendario_evento_id: eventoId })
-            .eq('id', contrato.id);
-        }
+        await supabase
+          .from('contratos')
+          .update({
+            ...(fazerDepois ? {} : { status: 'encerrado' }),
+            calendario_evento_id: eventoId,
+          })
+          .eq('id', contrato.id);
       }
 
       if (!fazerDepois) {
