@@ -253,6 +253,7 @@ export function useUpdateContratoRenting() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      qc.invalidateQueries({ queryKey: ['contrato-historico'] });
       toast({ title: 'Contrato actualizado', description: 'As alterações foram guardadas.' });
     },
     onError: (error: unknown) => {

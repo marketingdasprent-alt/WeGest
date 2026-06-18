@@ -238,6 +238,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
       toast.success('Faturação anulada — o contrato voltou a "não faturado".');
       setAnularOpen(false);
       qc.invalidateQueries({ queryKey: ['renting'] });
+      qc.invalidateQueries({ queryKey: ['contrato-historico', contrato.id] });
       refetchAll();
     } catch (e: any) {
       console.error('Erro ao anular faturação:', e);

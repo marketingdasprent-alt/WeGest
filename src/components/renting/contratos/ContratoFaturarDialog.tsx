@@ -250,6 +250,7 @@ export function ContratoFaturarDialog({
       // Fase 1 concluída — conta-corrente lançada e contrato congelado.
       qc.invalidateQueries({ queryKey: ['renting'] });
       qc.invalidateQueries({ queryKey: ['contrato-cobrancas', contrato.id] });
+      qc.invalidateQueries({ queryKey: ['contrato-historico', contrato.id] });
 
       const cobrancaId = cobInserida?.id ?? null;
 
