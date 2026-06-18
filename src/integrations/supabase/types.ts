@@ -9404,6 +9404,16 @@ export type Database = {
         }[]
       }
       conta_corrente_saldo: { Args: { p_entidade_id: string }; Returns: number }
+      contrato_historico_resumo: {
+        Args: { p_contrato_id: string }
+        Returns: {
+          ator_id: string | null
+          ator_nome: string | null
+          criado_em: string
+          detalhe: string | null
+          evento_tipo: string
+        }[]
+      }
       contrato_tem_conflito: {
         Args: {
           p_data_fim: string

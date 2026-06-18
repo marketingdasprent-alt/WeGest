@@ -69,6 +69,7 @@ import { ContratoTabTaxas } from '@/components/renting/contratos/ContratoTabTaxa
 import { ContratoTabsPlaceholder } from '@/components/renting/contratos/ContratoTabsPlaceholder';
 import { ContratoTabFaturar } from '@/components/renting/contratos/ContratoTabFaturar';
 import { ResumoContrato } from '@/components/renting/contratos/ResumoContrato';
+import { HistoricoEdicoesContrato } from '@/components/renting/contratos/HistoricoEdicoesContrato';
 import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import {
   DEFAULT_CONTRATO_VALUES,
@@ -963,6 +964,7 @@ const ContratoForm = () => {
             subtotalSnapshot={contrato?.total_subtotal}
             ivaSnapshot={contrato?.total_iva}
           />
+          {isEdit && contrato && <HistoricoEdicoesContrato contratoId={contrato.id} />}
         </aside>
       </div>
 
