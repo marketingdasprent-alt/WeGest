@@ -382,9 +382,9 @@ export default function Viaturas() {
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
-      exportViaturasExcel(viaturasParaExport());
+      await exportViaturasExcel(viaturasParaExport());
     } catch (error) {
       console.error('Erro ao exportar Excel:', error);
       toast.error('Erro ao exportar Excel');

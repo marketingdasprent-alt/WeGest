@@ -140,30 +140,31 @@ const Formularios = () => {
 
       if (error) throw error;
 
-      // Buscar campanhas associadas a cada formulário
-      const formulariosWithCampanhas = await Promise.all(
-        (formulariosData || []).map(async (formulario) => {
-          const { data: campanhas, error: campanhasError } = await supabase
-            .from('formulario_campanhas')
-            .select('campanha_tag')
-            .eq('formulario_id', formulario.id);
-
-          if (campanhasError) {
-            console.error('Erro ao buscar campanhas:', campanhasError);
-            return {
-              ...formulario,
-              campanhas: [],
-              configuracoes: {},
-            };
+      // Campanhas de TODOS os formulários numa única query (evita N+1: antes
+      // era uma query por formulário dentro de um Promise.all).
+      const ids = (formulariosData || []).map((f) => f.id);
+      const campanhasPorForm = new Map<string, string[]>();
+      if (ids.length > 0) {
+        const { data: campanhas, error: campanhasError } = await supabase
+          .from('formulario_campanhas')
+          .select('formulario_id, campanha_tag')
+          .in('formulario_id', ids);
+        if (campanhasError) {
+          console.error('Erro ao buscar campanhas:', campanhasError);
+        } else {
+          for (const c of campanhas ?? []) {
+            const arr = campanhasPorForm.get(c.formulario_id) ?? [];
+            arr.push(c.campanha_tag);
+            campanhasPorForm.set(c.formulario_id, arr);
           }
+        }
+      }
 
-          return {
-            ...formulario,
-            campanhas: campanhas?.map((c) => c.campanha_tag) || [],
-            configuracoes: {},
-          };
-        })
-      );
+      const formulariosWithCampanhas = (formulariosData || []).map((formulario) => ({
+        ...formulario,
+        campanhas: campanhasPorForm.get(formulario.id) ?? [],
+        configuracoes: {},
+      }));
 
       setFormularios(formulariosWithCampanhas);
     } catch (error) {
