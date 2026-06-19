@@ -3409,36 +3409,6 @@ export type Database = {
           },
         ]
       }
-      empresa_dasprent: {
-        Row: {
-          created_at: string | null
-          email: string | null
-          endereco: string | null
-          id: string
-          nome: string
-          telefone: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          email?: string | null
-          endereco?: string | null
-          id?: string
-          nome?: string
-          telefone?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          email?: string | null
-          endereco?: string | null
-          id?: string
-          nome?: string
-          telefone?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       empresas: {
         Row: {
           ativo: boolean
@@ -3545,18 +3515,21 @@ export type Database = {
           created_at: string | null
           formulario_id: string
           id: string
+          org_id: string
         }
         Insert: {
           campanha_tag: string
           created_at?: string | null
           formulario_id: string
           id?: string
+          org_id?: string
         }
         Update: {
           campanha_tag?: string
           created_at?: string | null
           formulario_id?: string
           id?: string
+          org_id?: string
         }
         Relationships: [
           {
@@ -3576,6 +3549,7 @@ export type Database = {
           descricao: string | null
           id: string
           nome: string
+          org_id: string
           updated_at: string | null
         }
         Insert: {
@@ -3585,6 +3559,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           nome: string
+          org_id?: string
           updated_at?: string | null
         }
         Update: {
@@ -3594,9 +3569,18 @@ export type Database = {
           descricao?: string | null
           id?: string
           nome?: string
+          org_id?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "formularios_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       integracoes_webhooks: {
         Row: {
@@ -3756,6 +3740,7 @@ export type Database = {
           id: string
           lead_id: string
           observacoes: string | null
+          org_id: string
           status_anterior: string | null
           status_novo: string
         }
@@ -3765,6 +3750,7 @@ export type Database = {
           id?: string
           lead_id: string
           observacoes?: string | null
+          org_id?: string
           status_anterior?: string | null
           status_novo: string
         }
@@ -3774,6 +3760,7 @@ export type Database = {
           id?: string
           lead_id?: string
           observacoes?: string | null
+          org_id?: string
           status_anterior?: string | null
           status_novo?: string
         }
@@ -3871,51 +3858,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      leads_encontro: {
-        Row: {
-          canal: string | null
-          created_at: string | null
-          data_inscricao: string | null
-          email: string
-          gestor: string | null
-          id: string
-          motorista: string | null
-          nome: string
-          status: string | null
-          telefone: string | null
-          updated_at: string | null
-          zona: string | null
-        }
-        Insert: {
-          canal?: string | null
-          created_at?: string | null
-          data_inscricao?: string | null
-          email: string
-          gestor?: string | null
-          id?: string
-          motorista?: string | null
-          nome: string
-          status?: string | null
-          telefone?: string | null
-          updated_at?: string | null
-          zona?: string | null
-        }
-        Update: {
-          canal?: string | null
-          created_at?: string | null
-          data_inscricao?: string | null
-          email?: string
-          gestor?: string | null
-          id?: string
-          motorista?: string | null
-          nome?: string
-          status?: string | null
-          telefone?: string | null
-          updated_at?: string | null
-          zona?: string | null
-        }
-        Relationships: []
       }
       marketing_assinaturas: {
         Row: {
@@ -4355,6 +4297,7 @@ export type Database = {
           descricao: string | null
           id: string
           motorista_id: string
+          org_id: string
           semana_referencia: string
           status: string
           tipo: string
@@ -4365,6 +4308,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           motorista_id: string
+          org_id?: string
           semana_referencia: string
           status?: string
           tipo: string
@@ -4375,6 +4319,7 @@ export type Database = {
           descricao?: string | null
           id?: string
           motorista_id?: string
+          org_id?: string
           semana_referencia?: string
           status?: string
           tipo?: string

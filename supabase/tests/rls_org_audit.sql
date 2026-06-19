@@ -46,3 +46,37 @@ where p.schemaname = 'public'
   and p.permissive <> 'RESTRICTIVE'
 
 order by 1;
+
+-- ============================================================
+-- PARTE 2 — tabelas SEM org_id nenhum (ponto cego da Parte 1)
+-- ============================================================
+-- A Parte 1 só vê tabelas que TÊM org_id. Tabelas de dados de tenant
+-- criadas SEM org_id (muitas vezes pela UI do Supabase) escapam: foi assim
+-- que formularios, lead_status_history e motorista_custos_adicionais
+-- vazaram entre orgs (2026-06-19). Esta query lista todas as tabelas base
+-- sem org_id que NÃO estão na allowlist de globais legítimas — cada linha é
+-- um candidato a rever (é tenant data? então precisa de org_id + isolamento).
+--
+-- Ao classificar uma tabela nova como global, acrescenta-a à allowlist.
+-- ============================================================
+select c.relname as tabela, 'SEM org_id — rever se é dado de tenant' as problema
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+where c.relkind = 'r'
+  and not exists (
+    select 1 from pg_attribute a
+    where a.attrelid = c.oid and a.attname = 'org_id'
+      and a.attnum > 0 and not a.attisdropped
+  )
+  and c.relname <> all (array[
+    -- Globais legítimas (partilhadas por todas as orgs por design):
+    'organizacoes',         -- a própria tabela de orgs
+    'recursos',             -- catálogo global de permissões
+    'campos_catalogo',      -- catálogo global de placeholders
+    'user_roles',           -- roles a nível de user
+    'user_org_ativa',       -- sessão (user → org ativa)
+    'user_organizacoes',    -- junção user ↔ org
+    'convites',             -- convites (pré-org)
+    'notificacao_dispensas' -- dispensas por user
+  ])
+order by 1;
