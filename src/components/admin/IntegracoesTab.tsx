@@ -46,6 +46,11 @@ import { Loader2, Plus, Pencil, Trash2, Webhook, Play, Settings } from 'lucide-r
 import { IntegracaoCard, type IntegracaoCardData } from './IntegracaoCard';
 import { IntegracaoDialog } from './IntegracaoDialog';
 import { IntegracaoDetailModal } from './IntegracaoDetailModal';
+import {
+  FaturacaoIntegracaoDialog,
+  type FaturacaoConfigRow,
+} from './faturacao/FaturacaoIntegracaoDialog';
+import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import { ImportRobotCsvDialog } from './ImportRobotCsvDialog';
 import { ViaVerdeContaDialog } from './via-verde/ViaVerdeContaDialog';
 import { ImportUberCsvDialog } from '../administrativo/ImportUberCsvDialog';
@@ -106,6 +111,10 @@ export const IntegracoesTab: React.FC = () => {
   const [importUberDialogOpen, setImportUberDialogOpen] = useState(false);
   const [selectedUberIntegracaoId, setSelectedUberIntegracaoId] = useState<string>('');
   const [executingRobots, setExecutingRobots] = useState<Set<string>>(new Set());
+
+  // Faturação fiscal (config por-org)
+  const [faturacaoDialogOpen, setFaturacaoDialogOpen] = useState(false);
+  const [faturacaoRow, setFaturacaoRow] = useState<FaturacaoConfigRow | null>(null);
 
   // Webhooks
   const [webhooks, setWebhooks] = useState<IntegracaoWebhook[]>([]);
@@ -292,12 +301,33 @@ export const IntegracoesTab: React.FC = () => {
       });
     });
 
+    // Faturação fiscal — cartão sempre presente (configurado ou não)
+    const fatRow = (integracoes as any[]).find((i) => i.plataforma === 'faturacao') || null;
+    result.push({
+      id: fatRow?.id ? `fat-${fatRow.id}` : 'fat-novo',
+      type: 'faturacao',
+      nome: 'Faturação',
+      ativo: !!fatRow?.ativo,
+      ultimoSync: null,
+      username: null,
+      password: null,
+      connectionMode: 'api',
+      subLabel: fatRow?.ativo
+        ? faturacaoProviderLabel(fatRow?.config?.provider)
+        : 'Não configurado',
+      rawData: fatRow,
+      logoUrl: null,
+    });
+
     setCards(result);
   };
 
   // Card handlers
   const handleCardEdit = (card: IntegracaoCardData) => {
-    if (card.type === 'via_verde') {
+    if (card.type === 'faturacao') {
+      setFaturacaoRow((card.rawData as FaturacaoConfigRow | null) ?? null);
+      setFaturacaoDialogOpen(true);
+    } else if (card.type === 'via_verde') {
       const conta = card.rawData as ViaVerdeConta;
       setSelectedViaVerdeConta(conta);
       setViaVerdeDialogOpen(true);
@@ -634,12 +664,16 @@ export const IntegracoesTab: React.FC = () => {
                 key={card.id}
                 data={card}
                 onEdit={handleCardEdit}
-                onSync={card.type !== 'via_verde' ? handleCardSync : undefined}
+                onSync={
+                  card.type !== 'via_verde' && card.type !== 'faturacao'
+                    ? handleCardSync
+                    : undefined
+                }
                 onImport={hasImport ? handleCardImport : undefined}
                 onExecute={
                   isRobotBacked ? handleExecuteRobot : isUberBacked ? handleExecuteUber : undefined
                 }
-                onDelete={handleDelete}
+                onDelete={card.type !== 'faturacao' ? handleDelete : undefined}
                 isExecuting={executingRobots.has(card.id)}
               />
             );
@@ -776,6 +810,13 @@ export const IntegracoesTab: React.FC = () => {
           onSuccess={fetchAll}
         />
       )}
+
+      <FaturacaoIntegracaoDialog
+        open={faturacaoDialogOpen}
+        onOpenChange={setFaturacaoDialogOpen}
+        row={faturacaoRow}
+        onSuccess={fetchAll}
+      />
 
       {/* Webhook Create/Edit Dialog */}
       <Dialog open={webhookDialogOpen} onOpenChange={setWebhookDialogOpen}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { User, Loader2, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { User, Loader2, Eye, EyeOff, Trash2, PenLine, Eraser } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { SignaturePad, type SignaturePadHandle } from '@/components/assinatura/SignaturePad';
 
 interface Profile {
   id: string;
@@ -17,6 +18,7 @@ interface Profile {
   cargo: string;
   is_admin: boolean;
   created_at: string;
+  assinatura_url: string | null;
 }
 
 export default function MyAccount() {
@@ -38,6 +40,9 @@ export default function MyAccount() {
     new: false,
     confirm: false,
   });
+  const signatureRef = useRef<SignaturePadHandle>(null);
+  const [savingSignature, setSavingSignature] = useState(false);
+  const [signatureDirty, setSignatureDirty] = useState(false);
   const { toast } = useToast();
 
   const fetchProfile = async () => {
@@ -154,6 +159,50 @@ export default function MyAccount() {
     } finally {
       setChangingPassword(false);
     }
+  };
+
+  const handleSaveSignature = async () => {
+    if (!user) return;
+    const dataUrl = signatureRef.current?.toDataURL();
+    if (!dataUrl) {
+      toast({
+        variant: 'destructive',
+        title: 'Assinatura vazia',
+        description: 'Desenhe a sua assinatura antes de guardar.',
+      });
+      return;
+    }
+
+    setSavingSignature(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ assinatura_url: dataUrl })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setProfile((prev) => (prev ? { ...prev, assinatura_url: dataUrl } : prev));
+      setSignatureDirty(false);
+      toast({
+        title: 'Sucesso',
+        description: 'Assinatura guardada com sucesso',
+      });
+    } catch (error: any) {
+      console.error('Erro ao guardar assinatura:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Erro ao guardar a assinatura',
+      });
+    } finally {
+      setSavingSignature(false);
+    }
+  };
+
+  const handleClearSignature = () => {
+    signatureRef.current?.clear();
+    setSignatureDirty(true);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, action: () => void) => {
@@ -355,6 +404,48 @@ export default function MyAccount() {
                 {changingPassword ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Alterar Senha
               </Button>
+            </div>
+
+            {/* Assinatura Digital */}
+            <div className="border-t pt-6 space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <PenLine className="h-5 w-5 text-primary" />
+                  Assinatura Digital
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Desenhe a sua assinatura com o rato ou o dedo. Será inserida automaticamente nos
+                  contratos de aluguer que gerar, na área do colaborador.
+                </p>
+              </div>
+
+              <SignaturePad
+                ref={signatureRef}
+                value={profile.assinatura_url}
+                onChange={() => setSignatureDirty(true)}
+                className="max-w-md"
+              />
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleClearSignature}
+                  disabled={savingSignature}
+                >
+                  <Eraser className="h-4 w-4 mr-2" />
+                  Limpar Assinatura
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSaveSignature}
+                  disabled={savingSignature || !signatureDirty}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                >
+                  {savingSignature ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Guardar Assinatura
+                </Button>
+              </div>
             </div>
 
             {/* Eliminar Conta */}

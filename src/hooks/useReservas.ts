@@ -18,7 +18,7 @@ export interface UseReservasOptions {
 }
 
 const SELECT_COLUMNS = `
-  id, codigo, viatura_id, matricula, grupo,
+  id, org_id, codigo, viatura_id, matricula, grupo,
   estacao_entrega_id, estacao_recolha_id,
   data_inicio, data_fim,
   cliente_id, cliente_nome,

@@ -39,6 +39,7 @@ import {
   type AnexoPendente,
 } from '@/components/renting/reservas/tabs/ReservaTabAnexos';
 import { ReservaTabCondutores } from '@/components/renting/reservas/tabs/ReservaTabCondutores';
+import { ReservaTabFaturar } from '@/components/renting/reservas/tabs/ReservaTabFaturar';
 import { ReservaTabGeral } from '@/components/renting/reservas/tabs/ReservaTabGeral';
 import {
   isoToLocalInput,
@@ -335,6 +336,10 @@ const RentingReservaForm = () => {
   // Qualquer viatura pode ser alugada em rent-a-car ou TVDE.
   // O campo habilitada_tvde é apenas informativo/administrativo, não restringe.
   const viaturasParaSelecao = viaturas;
+
+  // Faturação da reserva: só em edição, com reserva guardada e fora do regime slot
+  // (slot fatura via Contrato de Prestação).
+  const mostrarFaturacao = isEdit && !!reserva && reserva.regime !== 'slot';
 
   const onSubmit = async (values: ReservaFormValues) => {
     try {

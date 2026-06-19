@@ -122,7 +122,6 @@ function validateComum(data: ClienteFormData, ctx: Ctx) {
     'data_nascimento',
     data.is_empresa ? 'Data de criação obrigatória' : 'Data de nascimento obrigatória'
   );
-  exigirCampo(data, ctx, 'iban');
   exigirCampo(data, ctx, 'morada');
   exigirCampo(data, ctx, 'codigo_postal');
   exigirCampo(data, ctx, 'localidade');

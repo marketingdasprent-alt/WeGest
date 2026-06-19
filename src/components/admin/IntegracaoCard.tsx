@@ -20,11 +20,18 @@ import {
   Upload,
   Play,
   Loader2,
+  Receipt,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
-export type IntegracaoCardType = 'bolt' | 'uber' | 'via_verde' | 'combustivel' | 'robot';
+export type IntegracaoCardType =
+  | 'bolt'
+  | 'uber'
+  | 'via_verde'
+  | 'combustivel'
+  | 'robot'
+  | 'faturacao';
 
 export interface IntegracaoCardData {
   id: string;
@@ -77,6 +84,11 @@ const PLATFORM_META: Record<IntegracaoCardType, { label: string; logo: string; c
     logo: '/images/comfort.png',
     color: 'hsl(var(--chart-5))',
   },
+  faturacao: {
+    label: 'Faturação',
+    logo: '',
+    color: 'hsl(var(--chart-1))',
+  },
 };
 export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
   data,
@@ -114,11 +126,15 @@ export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-muted/60 flex items-center justify-center overflow-hidden p-1">
-              <img
-                src={data.logoUrl || meta.logo}
-                alt={meta.label}
-                className="h-full w-full object-contain"
-              />
+              {data.type === 'faturacao' ? (
+                <Receipt className="h-5 w-5 text-muted-foreground" />
+              ) : (
+                <img
+                  src={data.logoUrl || meta.logo}
+                  alt={meta.label}
+                  className="h-full w-full object-contain"
+                />
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">
