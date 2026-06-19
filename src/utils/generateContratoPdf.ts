@@ -239,21 +239,26 @@ export const generateContratoPdf = async ({
   );
   const duracaoMeses = Math.max(1, Math.round(diasContrato / 30));
 
-  // Colaborador que gera o contrato — placeholder {{colaborador_nome}}
-  // (assinatura pela empresa). Vem do perfil do utilizador autenticado.
+  // Colaborador que gera o contrato — placeholders {{colaborador_nome}} e
+  // {{assinatura_colaborador}} (assinatura pela empresa). Vêm do perfil do
+  // utilizador autenticado. A assinatura é um data URL PNG; o motor de PDF
+  // desenha-a na célula "O Colaborador". Sem assinatura, fica em branco.
   let colaboradorNome = '';
+  let colaboradorAssinatura = '';
   try {
     const { data: auth } = await supabase.auth.getUser();
     if (auth.user) {
       const { data: perfil } = await supabase
         .from('profiles')
-        .select('nome')
+        .select('nome, assinatura_url')
         .eq('id', auth.user.id)
         .maybeSingle();
       colaboradorNome = (perfil as { nome?: string } | null)?.nome ?? '';
+      colaboradorAssinatura =
+        (perfil as { assinatura_url?: string | null } | null)?.assinatura_url ?? '';
     }
   } catch {
-    /* segue sem nome do colaborador */
+    /* segue sem nome/assinatura do colaborador */
   }
 
   // 3b) Resolver nomes das estações de levantamento/devolução (placeholders
@@ -292,6 +297,9 @@ export const generateContratoPdf = async ({
     dias: String(diasContrato),
     numero_contrato: contrato.codigo != null ? String(contrato.codigo) : '',
     colaborador_nome: colaboradorNome,
+    // Data URL PNG da assinatura (vazio = sem assinatura → linha em branco).
+    // Só o template de Aluguer tem a sentinela {{assinatura_colaborador}}.
+    assinatura_colaborador: colaboradorAssinatura,
     // Viatura
     viatura_matricula: contrato.matricula ?? viatura?.matricula ?? '—',
     viatura_marca_modelo: viatura ? `${viatura.marca} ${viatura.modelo}`.trim() : '—',

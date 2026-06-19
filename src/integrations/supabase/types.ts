@@ -1737,6 +1737,7 @@ export type Database = {
           descricao: string | null
           entidade_id: string
           id: string
+          nota_credito_id: string | null
           org_id: string
           origem: string
           primavera_ref: string | null
@@ -1754,6 +1755,7 @@ export type Database = {
           descricao?: string | null
           entidade_id: string
           id?: string
+          nota_credito_id?: string | null
           org_id: string
           origem: string
           primavera_ref?: string | null
@@ -1771,6 +1773,7 @@ export type Database = {
           descricao?: string | null
           entidade_id?: string
           id?: string
+          nota_credito_id?: string | null
           org_id?: string
           origem?: string
           primavera_ref?: string | null
@@ -1806,6 +1809,13 @@ export type Database = {
             columns: ["entidade_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conta_movimentos_nota_credito_id_fkey"
+            columns: ["nota_credito_id"]
+            isOneToOne: false
+            referencedRelation: "notas_credito"
             referencedColumns: ["id"]
           },
           {
@@ -1956,7 +1966,7 @@ export type Database = {
       contrato_cobrancas: {
         Row: {
           contrato_condutor_id: string | null
-          contrato_id: string
+          contrato_id: string | null
           created_at: string
           created_by: string | null
           descricao: string | null
@@ -1972,6 +1982,7 @@ export type Database = {
           pago_em: string | null
           periodo_ate: string
           periodo_de: string
+          reserva_id: string | null
           tarifa_id: string | null
           tarifa_nome: string | null
           taxa_iva: number
@@ -1982,7 +1993,7 @@ export type Database = {
         }
         Insert: {
           contrato_condutor_id?: string | null
-          contrato_id: string
+          contrato_id?: string | null
           created_at?: string
           created_by?: string | null
           descricao?: string | null
@@ -1998,6 +2009,7 @@ export type Database = {
           pago_em?: string | null
           periodo_ate: string
           periodo_de: string
+          reserva_id?: string | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
           taxa_iva?: number
@@ -2008,7 +2020,7 @@ export type Database = {
         }
         Update: {
           contrato_condutor_id?: string | null
-          contrato_id?: string
+          contrato_id?: string | null
           created_at?: string
           created_by?: string | null
           descricao?: string | null
@@ -2024,6 +2036,7 @@ export type Database = {
           pago_em?: string | null
           periodo_ate?: string
           periodo_de?: string
+          reserva_id?: string | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
           taxa_iva?: number
@@ -2066,6 +2079,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrato_cobrancas_reserva_id_fkey"
+            columns: ["reserva_id"]
+            isOneToOne: false
+            referencedRelation: "reservas"
             referencedColumns: ["id"]
           },
           {
@@ -2706,7 +2726,6 @@ export type Database = {
       }
       contratos_renting: {
         Row: {
-          gestor_id: string | null
           aluguer_longa_duracao: boolean
           caucao_valor: number | null
           cliente_id: string
@@ -2732,6 +2751,7 @@ export type Database = {
           estado_operacional: Database["public"]["Enums"]["contrato_estado_operacional_enum"]
           facturado_em: string | null
           franquia_valor: number | null
+          gestor_id: string | null
           grupo: string | null
           grupo_id: string | null
           grupo_nome: string | null
@@ -2773,7 +2793,6 @@ export type Database = {
           voucher_codigo: string | null
         }
         Insert: {
-          gestor_id?: string | null
           aluguer_longa_duracao?: boolean
           caucao_valor?: number | null
           cliente_id: string
@@ -2799,6 +2818,7 @@ export type Database = {
           estado_operacional?: Database["public"]["Enums"]["contrato_estado_operacional_enum"]
           facturado_em?: string | null
           franquia_valor?: number | null
+          gestor_id?: string | null
           grupo?: string | null
           grupo_id?: string | null
           grupo_nome?: string | null
@@ -2840,7 +2860,6 @@ export type Database = {
           voucher_codigo?: string | null
         }
         Update: {
-          gestor_id?: string | null
           aluguer_longa_duracao?: boolean
           caucao_valor?: number | null
           cliente_id?: string
@@ -2866,6 +2885,7 @@ export type Database = {
           estado_operacional?: Database["public"]["Enums"]["contrato_estado_operacional_enum"]
           facturado_em?: string | null
           franquia_valor?: number | null
+          gestor_id?: string | null
           grupo?: string | null
           grupo_id?: string | null
           grupo_nome?: string | null
@@ -2961,6 +2981,13 @@ export type Database = {
             columns: ["estacao_recolha_id"]
             isOneToOne: false
             referencedRelation: "estacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contratos_renting_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -3631,11 +3658,12 @@ export type Database = {
           data_emissao: string | null
           erro_msg: string | null
           id: string
-          ki_docnum: string | null
-          ki_doctype: string | null
           numero: string | null
           observacoes: string | null
           org_id: string
+          provider: string | null
+          provider_docnum: string | null
+          provider_doctype: string | null
           raw_response: Json | null
           referencia_externa: string | null
           serie: string | null
@@ -3653,11 +3681,12 @@ export type Database = {
           data_emissao?: string | null
           erro_msg?: string | null
           id?: string
-          ki_docnum?: string | null
-          ki_doctype?: string | null
           numero?: string | null
           observacoes?: string | null
           org_id: string
+          provider?: string | null
+          provider_docnum?: string | null
+          provider_doctype?: string | null
           raw_response?: Json | null
           referencia_externa?: string | null
           serie?: string | null
@@ -3675,11 +3704,12 @@ export type Database = {
           data_emissao?: string | null
           erro_msg?: string | null
           id?: string
-          ki_docnum?: string | null
-          ki_doctype?: string | null
           numero?: string | null
           observacoes?: string | null
           org_id?: string
+          provider?: string | null
+          provider_docnum?: string | null
+          provider_doctype?: string | null
           raw_response?: Json | null
           referencia_externa?: string | null
           serie?: string | null
@@ -5096,6 +5126,96 @@ export type Database = {
           },
         ]
       }
+      notas_credito: {
+        Row: {
+          cobranca_id: string
+          codigo: number
+          contrato_id: string | null
+          created_at: string
+          created_by: string | null
+          data_nota: string
+          documento_externo_ref: string | null
+          entidade_id: string
+          estado: string
+          id: string
+          motivo: string
+          org_id: string
+          sincronizado_primavera: boolean
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          cobranca_id: string
+          codigo?: number
+          contrato_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_nota?: string
+          documento_externo_ref?: string | null
+          entidade_id: string
+          estado?: string
+          id?: string
+          motivo: string
+          org_id: string
+          sincronizado_primavera?: boolean
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          cobranca_id?: string
+          codigo?: number
+          contrato_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_nota?: string
+          documento_externo_ref?: string | null
+          entidade_id?: string
+          estado?: string
+          id?: string
+          motivo?: string
+          org_id?: string
+          sincronizado_primavera?: boolean
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notas_credito_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "contrato_cobrancas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notas_credito_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contrato_renting_totais"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "notas_credito_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos_renting"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notas_credito_entidade_id_fkey"
+            columns: ["entidade_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notas_credito_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notificacao_dispensas: {
         Row: {
           created_at: string
@@ -5225,27 +5345,30 @@ export type Database = {
       }
       org_definicoes: {
         Row: {
-          privacidade_por_gestor: boolean
           created_at: string
+          faturacao_provider: string | null
           iva_rent_a_car: number
           iva_tvde: number
           org_id: string
+          privacidade_por_gestor: boolean
           updated_at: string
         }
         Insert: {
-          privacidade_por_gestor?: boolean
           created_at?: string
+          faturacao_provider?: string | null
           iva_rent_a_car?: number
           iva_tvde?: number
           org_id: string
+          privacidade_por_gestor?: boolean
           updated_at?: string
         }
         Update: {
-          privacidade_por_gestor?: boolean
           created_at?: string
+          faturacao_provider?: string | null
           iva_rent_a_car?: number
           iva_tvde?: number
           org_id?: string
+          privacidade_por_gestor?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -5314,6 +5437,7 @@ export type Database = {
           client_secret: string | null
           company_id: number | null
           company_name: string | null
+          config: Json | null
           cookies_json: string | null
           created_at: string | null
           criado_por: string | null
@@ -5353,6 +5477,7 @@ export type Database = {
           client_secret?: string | null
           company_id?: number | null
           company_name?: string | null
+          config?: Json | null
           cookies_json?: string | null
           created_at?: string | null
           criado_por?: string | null
@@ -5392,6 +5517,7 @@ export type Database = {
           client_secret?: string | null
           company_id?: number | null
           company_name?: string | null
+          config?: Json | null
           cookies_json?: string | null
           created_at?: string | null
           criado_por?: string | null
@@ -5552,6 +5678,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          assinatura_url: string | null
           cargo: string | null
           cargo_id: string | null
           created_at: string | null
@@ -5564,6 +5691,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          assinatura_url?: string | null
           cargo?: string | null
           cargo_id?: string | null
           created_at?: string | null
@@ -5576,6 +5704,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          assinatura_url?: string | null
           cargo?: string | null
           cargo_id?: string | null
           created_at?: string | null
@@ -6681,7 +6810,6 @@ export type Database = {
       }
       reservas: {
         Row: {
-          gestor_id: string | null
           caucao_valor: number | null
           cliente_id: string | null
           cliente_nome: string | null
@@ -6703,6 +6831,7 @@ export type Database = {
           estacao_recolha_id: string | null
           estado: Database["public"]["Enums"]["reserva_estado_enum"]
           franquia_valor: number | null
+          gestor_id: string | null
           grupo: string | null
           grupo_id: string | null
           grupo_nome: string | null
@@ -6729,7 +6858,6 @@ export type Database = {
           viatura_id: string | null
         }
         Insert: {
-          gestor_id?: string | null
           caucao_valor?: number | null
           cliente_id?: string | null
           cliente_nome?: string | null
@@ -6751,6 +6879,7 @@ export type Database = {
           estacao_recolha_id?: string | null
           estado?: Database["public"]["Enums"]["reserva_estado_enum"]
           franquia_valor?: number | null
+          gestor_id?: string | null
           grupo?: string | null
           grupo_id?: string | null
           grupo_nome?: string | null
@@ -6777,7 +6906,6 @@ export type Database = {
           viatura_id?: string | null
         }
         Update: {
-          gestor_id?: string | null
           caucao_valor?: number | null
           cliente_id?: string | null
           cliente_nome?: string | null
@@ -6799,6 +6927,7 @@ export type Database = {
           estacao_recolha_id?: string | null
           estado?: Database["public"]["Enums"]["reserva_estado_enum"]
           franquia_valor?: number | null
+          gestor_id?: string | null
           grupo?: string | null
           grupo_id?: string | null
           grupo_nome?: string | null
@@ -6865,6 +6994,13 @@ export type Database = {
             columns: ["estacao_recolha_id"]
             isOneToOne: false
             referencedRelation: "estacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservas_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -9268,6 +9404,16 @@ export type Database = {
         }[]
       }
       conta_corrente_saldo: { Args: { p_entidade_id: string }; Returns: number }
+      contrato_historico_resumo: {
+        Args: { p_contrato_id: string }
+        Returns: {
+          ator_id: string | null
+          ator_nome: string | null
+          criado_em: string
+          detalhe: string | null
+          evento_tipo: string
+        }[]
+      }
       contrato_tem_conflito: {
         Args: {
           p_data_fim: string
@@ -9465,6 +9611,7 @@ export type Database = {
       normalize_phone: { Args: { input_phone: string }; Returns: string }
       normalize_plate: { Args: { input_plate: string }; Returns: string }
       notificacao_dispensada: { Args: { p_id: string }; Returns: boolean }
+      org_privacidade_por_gestor: { Args: never; Returns: boolean }
       realizar_token_realizacao: {
         Args: { p_token: string }
         Returns: undefined
@@ -9536,10 +9683,10 @@ export type Database = {
         | "cancelada"
         | "expirada"
       tipo_documento_enum:
-        | "Cart├úo Cidad├úo"
+        | "Cartão Cidadão"
         | "Passaporte"
-        | "Autoriza├º├úo de Resid├¬ncia"
-        | "Carta de Condu├º├úo"
+        | "Autorização de Residência"
+        | "Carta de Condução"
         | "Outro"
     }
     CompositeTypes: {
@@ -9699,10 +9846,10 @@ export const Constants = {
         "expirada",
       ],
       tipo_documento_enum: [
-        "Cart├úo Cidad├úo",
+        "Cartão Cidadão",
         "Passaporte",
-        "Autoriza├º├úo de Resid├¬ncia",
-        "Carta de Condu├º├úo",
+        "Autorização de Residência",
+        "Carta de Condução",
         "Outro",
       ],
     },

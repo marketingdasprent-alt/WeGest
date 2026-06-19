@@ -272,7 +272,6 @@ export const SeccaoDadosPrincipais = ({
       <ValidatedTextField<ClienteFormData>
         name="iban"
         label="IBAN"
-        required={!isCondutor}
         placeholder="PT50 0000 0000 0000 0000 0000 0"
       />
 
@@ -415,10 +414,7 @@ export const SeccaoDocumento = ({ control }: { control: Control<ClienteFormData>
         name="doc_data_emissao"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>
-              Data de Emissão
-              <RequiredMark />
-            </FormLabel>
+            <FormLabel>Data de Emissão</FormLabel>
             <FormControl>
               <Input type="date" {...field} className="h-11" />
             </FormControl>
@@ -463,10 +459,7 @@ export const SeccaoCarta = ({ control }: { control: Control<ClienteFormData> }) 
         name="carta_pais"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>
-              País
-              <RequiredMark />
-            </FormLabel>
+            <FormLabel>País</FormLabel>
             <FormControl>
               <CountrySelect value={field.value || ''} onChange={field.onChange} className="h-11" />
             </FormControl>
@@ -482,10 +475,7 @@ export const SeccaoCarta = ({ control }: { control: Control<ClienteFormData> }) 
         name="carta_data_emissao"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>
-              Data de Emissão
-              <RequiredMark />
-            </FormLabel>
+            <FormLabel>Data de Emissão</FormLabel>
             <FormControl>
               <Input type="date" {...field} className="h-11" />
             </FormControl>
