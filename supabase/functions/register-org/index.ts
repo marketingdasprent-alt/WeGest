@@ -71,6 +71,32 @@ serve(async (req) => {
       return jsonResponse({ error: "Este código já está em uso. Escolha outro." }, 400);
     }
 
+    // Verificar se o NOME da empresa já existe (case-insensitive).
+    // Escapa % e _ para não serem tratados como wildcards do ilike.
+    const nomeNormalizado = nome_empresa.trim();
+    const nomeLikePattern = nomeNormalizado.replace(/[%_\\]/g, "\\$&");
+    const { data: nomeRows } = await supabase
+      .from("organizacoes")
+      .select("id")
+      .ilike("nome", nomeLikePattern)
+      .limit(1);
+    if (nomeRows && nomeRows.length > 0) {
+      return jsonResponse({ error: "Já existe uma organização com este nome." }, 400);
+    }
+
+    // Verificar se o NIF já existe.
+    const nifNormalizado = nif.trim();
+    if (nifNormalizado) {
+      const { data: nifRows } = await supabase
+        .from("organizacoes")
+        .select("id")
+        .eq("nif", nifNormalizado)
+        .limit(1);
+      if (nifRows && nifRows.length > 0) {
+        return jsonResponse({ error: "Já existe uma organização com este NIF." }, 400);
+      }
+    }
+
     // Verificar se o email já existe
     const { data: existingUsers } = await supabase.auth.admin.listUsers();
     const emailExists = existingUsers?.users?.some(

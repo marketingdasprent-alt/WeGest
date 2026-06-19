@@ -115,8 +115,28 @@ const RegistarOrg = () => {
         return;
       }
 
-      setResultData({ subdomain: data.org.subdomain });
-      setStep('success');
+      // Login direto: o subdomínio novo ({codigo}.wegest.pt) pode ainda não
+      // estar provisionado (DNS/Vercel) no momento, por isso autenticamos já
+      // com as credenciais introduzidas e entramos na app no domínio atual —
+      // a org é resolvida pelo profile.org_id / user_org_ativa (que o
+      // register-org já preencheu), não pelo subdomínio.
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: adminEmail.trim(),
+        password: adminPassword,
+      });
+
+      if (signInError) {
+        // Fallback: mostrar ecrã de sucesso com o link do subdomínio.
+        setResultData({ subdomain: data.org.subdomain });
+        setStep('success');
+        setLoading(false);
+        return;
+      }
+
+      // Sessão criada → entrar na app (reload completo para inicializar a
+      // sessão/contexto de org).
+      window.location.href = '/dashboard';
+      return;
     } catch (error: any) {
       console.error('Registration error:', error);
       toast({

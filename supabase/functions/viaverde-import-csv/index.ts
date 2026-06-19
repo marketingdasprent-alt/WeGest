@@ -5,6 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const jsonError = (error: string, status: number) =>
+  new Response(JSON.stringify({ success: false, error }), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+
 const stripAcc = (s: string) =>
   (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
@@ -84,26 +90,56 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+    // ── Autenticação + autorização do caller ──────────────────────────────
+    // A função usa a service-role key (bypassa RLS), por isso TEM de validar
+    // o caller e a org-alvo manualmente — senão qualquer utilizador autenticado
+    // injectava transações na org de outrem via integracao_id arbitrário.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) return jsonError('Não autenticado.', 401);
+
+    const anonClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const {
+      data: { user },
+      error: authErr,
+    } = await anonClient.auth.getUser();
+    if (authErr || !user) return jsonError('Sessão inválida.', 401);
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin, org_id')
+      .eq('id', user.id)
+      .single();
+    if (!profile?.is_admin) return jsonError('Sem permissão de administrador.', 403);
+    const callerOrgId = profile.org_id;
 
     const body = await req.json();
     const { integracao_id, combustivel_csv } = body;
     if (!integracao_id || !combustivel_csv) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'integracao_id e combustivel_csv são obrigatórios' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return jsonError('integracao_id e combustivel_csv são obrigatórios', 400);
     }
 
+    // A integração TEM de pertencer à org do caller — a org é derivada do
+    // caller (profile), NUNCA do row apontado pelo integracao_id do pedido.
     const { data: intConfig } = await supabase
       .from('plataformas_configuracao')
       .select('org_id')
       .eq('id', integracao_id)
       .single();
-    const orgId = intConfig?.org_id || null;
+    if (!intConfig || intConfig.org_id !== callerOrgId) {
+      return jsonError('Integração não encontrada ou sem acesso.', 403);
+    }
+    const orgId = callerOrgId;
 
-    // Viaturas: matrícula normalizada → id
-    const { data: viaturas } = await supabase.from('viaturas').select('id, matricula');
+    // Viaturas: matrícula normalizada → id (scoped à org do caller)
+    const { data: viaturas } = await supabase
+      .from('viaturas')
+      .select('id, matricula')
+      .eq('org_id', orgId);
     const matriculaMap = new Map<string, string>();
     (viaturas || []).forEach((v: any) => {
       if (v.matricula) matriculaMap.set(normMatricula(v.matricula), v.id);
@@ -112,7 +148,8 @@ Deno.serve(async (req) => {
     // Atribuições viatura↔motorista com janelas de data
     const { data: atrib } = await supabase
       .from('motorista_viaturas')
-      .select('motorista_id, viatura_id, data_inicio, data_fim');
+      .select('motorista_id, viatura_id, data_inicio, data_fim')
+      .eq('org_id', orgId);
     const atribByViatura = new Map<string, { ini: string; fim: string | null; mot: string }[]>();
     (atrib || []).forEach((a: any) => {
       if (!a.viatura_id || !a.motorista_id) return;
