@@ -43,6 +43,11 @@ import { useOrgDefinicoes, ivaParaModalidade } from '@/hooks/useOrgDefinicoes';
 import { useRentingCoberturas } from '@/hooks/useRentingCoberturas';
 import { useRentingExtras } from '@/hooks/useRentingExtras';
 import { useRentingTaxas } from '@/hooks/useRentingTaxas';
+import {
+  useRentingGruposMin,
+  useRentingTarifasMin,
+  calcularFaturacaoRenting,
+} from '@/hooks/useRentingGruposTarifas';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useMotoristas } from '@/hooks/useMotoristas';
 import { useReserva } from '@/hooks/useReservas';
@@ -103,6 +108,9 @@ const ContratoForm = () => {
   const { data: coberturas = [] } = useRentingCoberturas({ apenasAtivas: true });
   const { data: extrasCatalogo = [] } = useRentingExtras({ apenasAtivos: true });
   const { data: taxasCatalogo = [] } = useRentingTaxas({ apenasAtivas: true });
+  // Grupos/tarifas — para recalcular grupo + preço ao trocar de viatura no contrato.
+  const { data: grupos = [] } = useRentingGruposMin();
+  const { data: tarifas = [] } = useRentingTarifasMin();
   const { data: orgDefinicoes } = useOrgDefinicoes();
   const { data: contrato, isLoading: loadingContrato } = useContratoRenting(id ?? null);
 
@@ -236,6 +244,7 @@ const ContratoForm = () => {
         matricula: contrato.matricula ?? '',
         reserva_id: contrato.reserva_id,
         emissor_id: contrato.emissor_id ?? '',
+        gestor_id: contrato.gestor_id ?? null,
         estacao_entrega_id: contrato.estacao_entrega_id,
         data_inicio: isoToLocalInput(contrato.data_inicio),
         estacao_recolha_id: contrato.estacao_recolha_id,
@@ -277,6 +286,16 @@ const ContratoForm = () => {
         navigate(`/renting/reservas/${reservaFromQuery.id}`);
         return;
       }
+      // Reserva sem viatura — não pode gerar contrato. Redireciona com aviso.
+      if (!reservaFromQuery.viatura_id) {
+        toast({
+          title: 'Reserva sem viatura selecionada',
+          description: 'Seleciona uma viatura na reserva e guarda antes de criar o contrato.',
+          variant: 'destructive',
+        });
+        navigate(`/renting/reservas/${reservaFromQuery.id}`);
+        return;
+      }
       // Espera pelos condutores da reserva (request separado) para os incluir no
       // mesmo reset — senão o reset apagava-os. `undefined` = ainda a carregar.
       if (condutoresDaReserva === undefined) return;
@@ -291,6 +310,8 @@ const ContratoForm = () => {
         cliente_id: reservaFromQuery.cliente_id ?? '',
         // Emissor escolhido na reserva flui para o contrato.
         emissor_id: reservaFromQuery.emissor_id ?? '',
+        // Herda o gestor da reserva; a BD usa auth.uid() como fallback se null.
+        gestor_id: reservaFromQuery.gestor_id ?? null,
         viatura_id: reservaFromQuery.viatura_id ?? '',
         matricula: reservaFromQuery.matricula ?? '',
         grupo: reservaFromQuery.grupo ?? '',
@@ -396,6 +417,7 @@ const ContratoForm = () => {
   const valorTotalManual = form.watch('valor_total_manual');
   const descontoPercentagem = form.watch('desconto_percentagem');
   const regime = form.watch('regime');
+  const isLongaDuracao = form.watch('is_longa_duracao');
   // TVDE e Slot já têm IVA incluído no preço — o resumo não aplica IVA adicional
   const rawTaxaIva = form.watch('taxa_iva');
   const taxaIva = regime === 'tvde' || regime === 'slot' ? 0 : rawTaxaIva;
@@ -426,15 +448,38 @@ const ContratoForm = () => {
   // "desapareciam" condutores já adicionados ou hidratados da reserva). A tabela
   // mostra clientes (rent-a-car) ou motoristas (TVDE) conforme o tipo de cada linha.
 
-  // Regra de elegibilidade: qualquer viatura pode ser alugada em rent-a-car.
-  // No regime tvde só aparecem viaturas com "Elegível para TVDE? = Sim"
-  // (habilitada_tvde), opção que só existe em tipos com elegibilidade TVDE.
-  // A viatura já seleccionada mantém-se sempre visível (ex.: edição).
-  const viaturaIdSelecionada = form.watch('viatura_id');
-  const viaturasParaSelecao = useMemo(() => {
-    if (regime !== 'tvde') return viaturas;
-    return viaturas.filter((v) => v.habilitada_tvde || v.id === viaturaIdSelecionada);
-  }, [viaturas, regime, viaturaIdSelecionada]);
+  // Qualquer viatura pode ser usada em rent-a-car ou TVDE — habilitada_tvde é
+  // apenas informativo/administrativo, não restringe o seletor (alinhado com a
+  // reserva).
+  const viaturasParaSelecao = viaturas;
+
+  // Ao trocar de viatura no contrato: recalcula o snapshot `grupo` e o preço a
+  // partir do grupo da viatura nova. Isto é o que destrava a classificação
+  // troca-vs-upgrade na cascata SQL (compara OLD.grupo com NEW.grupo) e mantém o
+  // valor alinhado com o grupo. Valor negociado entra pelo campo desconto.
+  // Espelha o aplicarDadosViatura da reserva (ReservaTabGeral). A matrícula é
+  // tratada pelo próprio SectionViatura.
+  const aplicarDadosViatura = (viaturaIdNova: string) => {
+    const via = viaturas.find((x) => x.id === viaturaIdNova);
+    if (!via) return;
+
+    const grupo = via.grupo_id ? grupos.find((g) => g.id === via.grupo_id) : null;
+    form.setValue('grupo', grupo?.nome ?? '', { shouldDirty: true });
+
+    const tarifa = via.grupo_id ? (tarifas.find((t) => t.grupo_id === via.grupo_id) ?? null) : null;
+    if (!tarifa) return;
+
+    form.setValue('tarifa_diaria', tarifa.preco_dia, { shouldDirty: true });
+    form.setValue('kms_incluidos', tarifa.kms_incluidos, { shouldDirty: true });
+    form.setValue('km_adicional_valor', tarifa.km_adicional_valor, { shouldDirty: true });
+
+    // Recalcula o valor de tabela do novo grupo (mensal p/ TVDE/ALD, diário p/
+    // rent-a-car) e grava em valor_total_manual — a base que o ResumoContrato usa.
+    const ms = new Date(dataFim).getTime() - new Date(dataInicio).getTime();
+    const dias = Number.isFinite(ms) && ms > 0 ? Math.max(1, Math.ceil(ms / 86400000)) : null;
+    const fat = calcularFaturacaoRenting(regime, isLongaDuracao, dias, tarifa);
+    if (fat) form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
+  };
 
   // Soma do preço/dia das coberturas seleccionadas (× dias no ResumoContrato)
   const coberturasPrecoDia = useMemo(
@@ -510,6 +555,27 @@ const ContratoForm = () => {
       const antes = viaturas.find((v) => v.id === contrato.viatura_id)?.matricula ?? '—';
       const depois = viaturas.find((v) => v.id === values.viatura_id)?.matricula ?? '—';
       result.push({ label: 'Viatura', valorAntes: antes, valorDepois: depois });
+
+      // Mudança de grupo = upgrade/downgrade; mesmo grupo = troca simples.
+      // Mostrar a linha torna o tipo de operação explícito no dialog de versão.
+      const grupoAntes = contrato.grupo ?? '—';
+      const grupoDepois = values.grupo ?? '—';
+      if (grupoAntes !== grupoDepois) {
+        // Determinar direção via preco_dia da tarifa de cada grupo.
+        const gAntes = grupos.find((g) => g.nome === grupoAntes);
+        const gDepois = grupos.find((g) => g.nome === grupoDepois);
+        const tAntes = gAntes ? tarifas.find((t) => t.grupo_id === gAntes.id) : null;
+        const tDepois = gDepois ? tarifas.find((t) => t.grupo_id === gDepois.id) : null;
+        let direcao = 'upgrade/downgrade';
+        if (tAntes?.preco_dia != null && tDepois?.preco_dia != null) {
+          direcao = tDepois.preco_dia > tAntes.preco_dia ? 'upgrade' : 'downgrade';
+        }
+        result.push({
+          label: `Grupo (${direcao})`,
+          valorAntes: grupoAntes,
+          valorDepois: grupoDepois,
+        });
+      }
     }
     const numPair = (label: string, antes: number | null, depois: number | null, sufixo = '') => {
       if (antes === depois) return;
@@ -642,7 +708,9 @@ const ContratoForm = () => {
     if (isEdit && contrato) {
       // Editar: ficar na própria página (utilizador vê toast e continua a trabalhar).
       updateMutation.mutate(
-        { id: contrato.id, ...payload },
+        // gestor_id (reatribuição por superior) não é alteração material — vai
+        // no update in-place. Para não-superiores é o valor hidratado (sem efeito).
+        { id: contrato.id, ...payload, gestor_id: values.gestor_id ?? null },
         { onSuccess: () => void syncRelacoes(contrato.id) }
       );
     } else {
@@ -704,6 +772,7 @@ const ContratoForm = () => {
               reserva_id: values.reserva_id,
               cliente_id: values.cliente_id,
               emissor_id: values.emissor_id,
+              gestor_id: values.gestor_id ?? null,
               viatura_id: values.viatura_id,
               matricula: matriculaFinal,
               grupo: values.grupo || null,
@@ -796,7 +865,14 @@ const ContratoForm = () => {
           <ArrowLeft className="h-4 w-4" />
           Voltar
         </Button>
-        {isEdit && contrato && <ContratoEstadoActions contrato={contrato} />}
+        {isEdit && contrato && (
+          <ContratoEstadoActions
+            contrato={contrato}
+            motoristaId={
+              condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null
+            }
+          />
+        )}
         {isEdit && contrato && (
           <Button
             type="button"
@@ -905,6 +981,7 @@ const ContratoForm = () => {
                       estacoes={estacoes}
                       viaturaLocked={viaturaLocked}
                       reservaCodigo={reservaAssociada?.codigo ?? null}
+                      onViaturaChange={aplicarDadosViatura}
                     />
                   }
                   condutoresContent={

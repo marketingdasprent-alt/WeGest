@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { ArrowLeft, Camera, Car, CheckCircle, Film, Loader2, Upload, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { formatMatricula } from './calendarioUtils';
 import {
   CheckinDadosSection,
@@ -19,6 +20,7 @@ import { useEventosPendentesRenting } from '@/hooks/useEventosPendentesRenting';
 
 interface PendenteCheckout {
   id: string;
+  eventoId: string;
   numero_contrato: number | null;
   viatura_id: string;
   motorista_id: string | null;
@@ -57,34 +59,67 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
   const [checkinDados, setCheckinDados] = useState<CheckinDadosState>(emptyCheckinDados);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const dragOverRef = useRef<HTMLDivElement>(null);
 
   // Pendentes de renting — usado para o empty state e para o badge.
   const { data: rentingEntregasPendentes = [] } = useEventosPendentesRenting({
     tipo: 'entrega',
   });
 
+  // Two-step: evita join embed (sem FK directa calendario_eventos→contratos).
+  // Step 1: busca eventos pendentes; Step 2: busca contratos por origem_id.
   const { data: pendentes = [], isLoading } = useQuery({
     queryKey: ['contratos-checkout-pendentes'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Step 1: eventos de entrega pendentes
+      const { data: eventos, error: evErr } = await supabase
+        .from('calendario_eventos')
+        .select('id, data_inicio, origem_id')
+        .eq('tipo', 'entrega')
+        .eq('origem_tipo', 'contrato')
+        .is('realizado_em', null)
+        .order('data_inicio', { ascending: false });
+      if (evErr) throw evErr;
+
+      const contratoIds = [
+        ...new Set((eventos ?? []).map((e) => e.origem_id).filter((x): x is string => !!x)),
+      ];
+      if (contratoIds.length === 0) return [];
+
+      // Step 2: contratos activos com viaturas
+      const { data: contratos, error: ctErr } = await supabase
         .from('contratos')
         .select(
-          `
-          id, numero_contrato, viatura_id, motorista_id, data_inicio,
-          viaturas (id, matricula, marca, modelo, km_atual, combustivel)
-        `
+          'id, numero_contrato, viatura_id, motorista_id, status, viaturas(id, matricula, marca, modelo, km_atual, combustivel)'
         )
-        .eq('checkout_pendente', true)
-        .eq('status', 'ativo')
-        .order('data_inicio', { ascending: false });
-      if (error) throw error;
-      const items = (data || []) as any[];
-      if (items.length === 0) return [];
+        .in('id', contratoIds)
+        .eq('status', 'ativo');
+      if (ctErr) throw ctErr;
+
+      const eventoMap = new Map((eventos ?? []).map((ev) => [ev.origem_id, ev]));
+
+      const contractItems = (contratos ?? [])
+        .map((ct) => {
+          const ev = eventoMap.get(ct.id);
+          return {
+            id: ct.id,
+            eventoId: ev?.id ?? '',
+            numero_contrato: ct.numero_contrato,
+            viatura_id: ct.viatura_id,
+            motorista_id: ct.motorista_id,
+            data_inicio: ev?.data_inicio ?? null,
+            viaturas: (ct as any).viaturas ?? null,
+          };
+        })
+        .filter((i) => !!i.eventoId);
 
       const motIds = [
-        ...new Set(items.filter((i) => i.motorista_id).map((i: any) => i.motorista_id as string)),
+        ...new Set(
+          contractItems.filter((i) => i.motorista_id).map((i) => i.motorista_id as string)
+        ),
       ];
       let nomeMap: Record<string, string> = {};
       if (motIds.length > 0) {
@@ -96,9 +131,9 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
           nomeMap = Object.fromEntries(profiles.map((p: any) => [p.id, p.nome || '']));
         }
       }
-      return items.map((i: any) => ({
+      return contractItems.map((i) => ({
         ...i,
-        motoristaNome: nomeMap[i.motorista_id] || '',
+        motoristaNome: nomeMap[i.motorista_id ?? ''] || '',
       })) as PendenteCheckout[];
     },
     enabled: open,
@@ -123,6 +158,44 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
       if (f?.preview) URL.revokeObjectURL(f.preview);
       return prev.filter((x) => x.id !== id);
     });
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget === dragOverRef.current) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDropFiles = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const droppedFiles = e.dataTransfer.files;
+    if (droppedFiles.length > 0) {
+      const validFiles = Array.from(droppedFiles).filter(
+        (f) => f.type.startsWith('image/') || f.type.startsWith('video/')
+      );
+      if (validFiles.length === 0) {
+        toast.error('Por favor, arraste apenas imagens ou vídeos');
+        return;
+      }
+      setFiles((prev) => [
+        ...prev,
+        ...validFiles.map((f) => ({
+          id: Math.random().toString(36).slice(2),
+          file: f,
+          preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null,
+        })),
+      ]);
+    }
   };
 
   const resetCheckout = () => {
@@ -182,35 +255,14 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
         if (error) throw error;
       }
 
-      await supabase.from('contratos').update({ checkout_pendente: false }).eq('id', selected.id);
-
-      // Espelha no calendário: encontra o evento 'entrega' legacy pendente
-      // para esta matrícula e marca como realizado por este utilizador.
-      // Limita-se a eventos sem origem_tipo (legacy) para não mexer nos
-      // eventos do novo sistema de renting, que são tratados por trigger.
-      if (selected.viaturas?.matricula) {
-        const { data: evMatch } = await supabase
-          .from('calendario_eventos')
-          .select('id')
-          .eq('tipo', 'entrega')
-          .eq('matricula_devolver', selected.viaturas.matricula)
-          .is('realizado_em', null)
-          .is('origem_tipo', null)
-          .order('data_inicio', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        if (evMatch?.id) {
-          await supabase
-            .from('calendario_eventos')
-            .update({
-              realizado_em: new Date().toISOString(),
-              realizado_por_id: userId,
-            })
-            .eq('id', evMatch.id);
-        }
-      }
+      // Marca o evento 'entrega' como realizado (usa eventoId directamente — sem re-query)
+      await supabase
+        .from('calendario_eventos')
+        .update({ realizado_em: new Date().toISOString(), realizado_por_id: userId })
+        .eq('id', selected.eventoId);
 
       queryClient.invalidateQueries({ queryKey: ['contratos-checkout-pendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['checkout-pendentes-count'] });
       queryClient.invalidateQueries({ queryKey: ['viaturas-calendario'] });
       queryClient.invalidateQueries({ queryKey: ['calendario-eventos'] });
 
@@ -314,11 +366,23 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
                 className="hidden"
                 onChange={handleFileChange}
               />
-              <div className="grid grid-cols-2 gap-2">
+              <div
+                ref={dragOverRef}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDropFiles}
+                className={cn(
+                  'grid grid-cols-2 gap-2 p-2 rounded-lg transition-colors',
+                  isDragging && 'bg-primary/10 border-2 border-primary border-dashed'
+                )}
+              >
                 <button
                   type="button"
                   onClick={() => cameraInputRef.current?.click()}
-                  className="rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors py-6 flex flex-col items-center gap-2 text-sm text-muted-foreground"
+                  className={cn(
+                    'rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors py-6 flex flex-col items-center gap-2 text-sm text-muted-foreground',
+                    isDragging && 'border-primary/50 bg-primary/5'
+                  )}
                 >
                   <Camera className="h-6 w-6 opacity-40" />
                   <span>Câmara</span>
@@ -326,7 +390,10 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors py-6 flex flex-col items-center gap-2 text-sm text-muted-foreground"
+                  className={cn(
+                    'rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 transition-colors py-6 flex flex-col items-center gap-2 text-sm text-muted-foreground',
+                    isDragging && 'border-primary/50 bg-primary/5'
+                  )}
                 >
                   <Upload className="h-6 w-6 opacity-40" />
                   <span>Galeria / Ficheiros</span>

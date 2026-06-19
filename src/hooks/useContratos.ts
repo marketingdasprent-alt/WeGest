@@ -19,7 +19,6 @@ export interface GerarContratoParams {
   forceNewVersion?: boolean;
   viaturaId?: string | null;
   calendarioEventoId?: string | null;
-  checkoutPendente?: boolean;
 }
 
 export interface GerarContratoResult {
@@ -57,8 +56,6 @@ export async function gerarContratoAtomico(
   if (params.viaturaId !== undefined) rpcParams.p_viatura_id = params.viaturaId;
   if (params.calendarioEventoId !== undefined)
     rpcParams.p_calendario_evento_id = params.calendarioEventoId;
-  if (params.checkoutPendente !== undefined)
-    rpcParams.p_checkout_pendente = params.checkoutPendente;
 
   const { data, error } = await (
     supabase.rpc as unknown as (

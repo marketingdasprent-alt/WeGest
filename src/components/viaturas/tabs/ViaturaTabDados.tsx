@@ -42,6 +42,7 @@ import {
   AlertCircle,
   CheckCircle2,
   FolderUp,
+  Lock,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -668,11 +669,14 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                       <FormItem>
                         <FormLabel>Estado</FormLabel>
                         {estadoDerivedado && estadoDerivedado !== 'disponivel' ? (
-                          <div className="flex items-center gap-2 h-10 px-3 rounded-md border bg-muted/40 cursor-not-allowed">
-                            <Badge className={getStatusBadgeClass(estadoDerivedado)}>
+                          <div className="flex items-center gap-2.5 py-1.5">
+                            <Badge
+                              className={`${getStatusBadgeClass(estadoDerivedado)} whitespace-nowrap px-2.5 py-0.5 text-xs font-medium`}
+                            >
                               {getStatusLabel(estadoDerivedado)}
                             </Badge>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground/60">
+                              <Lock className="h-3 w-3 shrink-0" />
                               gerido automaticamente
                             </span>
                           </div>

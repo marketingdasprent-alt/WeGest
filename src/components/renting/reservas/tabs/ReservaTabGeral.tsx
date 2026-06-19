@@ -40,13 +40,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 
 import { ALDFields } from '@/components/renting/shared/ALDFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
 import { EmissorSelect } from '@/components/renting/EmissorSelect';
+import { GestorSelect } from '@/components/renting/GestorSelect';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useModules } from '@/hooks/useModules';
+import {
+  useRentingGruposMin,
+  useRentingTarifasMin,
+  calcularFaturacaoRenting,
+} from '@/hooks/useRentingGruposTarifas';
 import { AlertTriangle } from 'lucide-react';
 
 import type { ReservaFormValues } from '../reservaDialog.schema';
@@ -82,57 +87,35 @@ function diferencaDias(inicio: string, fim: string): number | null {
   return Math.max(1, Math.ceil((df - di) / (1000 * 60 * 60 * 24)));
 }
 
+const padDate = (n: number) => String(n).padStart(2, '0');
+
+function formatLocalInput(d: Date): string {
+  return `${d.getFullYear()}-${padDate(d.getMonth() + 1)}-${padDate(d.getDate())}T${padDate(d.getHours())}:${padDate(d.getMinutes())}`;
+}
+
 function addDaysToLocalInput(localInput: string, days: number): string | null {
   if (!localInput) return null;
   const d = new Date(localInput);
   if (Number.isNaN(d.getTime())) return null;
-  const novo = new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${novo.getFullYear()}-${pad(novo.getMonth() + 1)}-${pad(novo.getDate())}T${pad(novo.getHours())}:${pad(novo.getMinutes())}`;
+  return formatLocalInput(new Date(d.getTime() + days * 24 * 60 * 60 * 1000));
 }
 
-type TarifaPrecos = {
-  preco_dia: number | null;
-  preco_semana: number | null;
-  preco_mes: number | null;
-};
+function addOneMonthSameDayToLocalInput(localInput: string): string | null {
+  if (!localInput) return null;
+  const d = new Date(localInput);
+  if (Number.isNaN(d.getTime())) return null;
+  return formatLocalInput(
+    new Date(d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes())
+  );
+}
 
-type Faturacao = {
-  valor: number; // valor faturado ao cliente
-  modo: 'Diário' | 'Mensal';
-  descricao: string;
-  semanalCondutor: number | null; // preço/semana atribuído ao condutor (só TVDE)
-};
-
-// Faturação ao cliente:
-//   TVDE ou ALD       → mensal (preço/mês, período travado em 30 dias)
-//   Rent-a-Car normal → diário (nº dias × preço/dia)
-// No TVDE, o preço/semana vai para a conta-corrente do condutor.
-function calcularFaturacao(
-  regime: string,
-  isLongaDuracao: boolean,
-  dias: number | null,
-  tarifa: TarifaPrecos | null
-): Faturacao | null {
-  if (!tarifa) return null;
-
-  if (regime === 'tvde' || isLongaDuracao) {
-    if (tarifa.preco_mes == null) return null;
-    return {
-      valor: Number(tarifa.preco_mes.toFixed(2)),
-      modo: 'Mensal',
-      descricao: '30 dias · renova a cada mês',
-      semanalCondutor: regime === 'tvde' ? tarifa.preco_semana : null,
-    };
-  }
-
-  if (dias == null || dias <= 0 || tarifa.preco_dia == null) return null;
-  return {
-    valor: Number((dias * tarifa.preco_dia).toFixed(2)),
-    modo: 'Diário',
-    descricao: `${dias} dia(s) × ${tarifa.preco_dia} €`,
-    semanalCondutor: null,
-  };
+function firstDayNextMonthToLocalInput(localInput: string): string | null {
+  if (!localInput) return null;
+  const d = new Date(localInput);
+  if (Number.isNaN(d.getTime())) return null;
+  return formatLocalInput(
+    new Date(d.getFullYear(), d.getMonth() + 1, 1, d.getHours(), d.getMinutes())
+  );
 }
 
 export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
@@ -155,6 +138,7 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   const dataFim = form.watch('data_fim');
 
   const cliente = clienteId ? (clientes.find((c) => c.id === clienteId) ?? null) : null;
+  const { podeVerTodosRenting } = usePermissions();
 
   const dias = useMemo(() => diferencaDias(dataInicio, dataFim), [dataInicio, dataFim]);
 
@@ -167,31 +151,8 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   }, [dias]);
 
   // Grupos e tarifas — para preencher automaticamente ao escolher a viatura.
-  const { data: grupos = [] } = useQuery({
-    queryKey: ['renting_grupos_min'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('renting_grupos')
-        .select('id, nome')
-        .eq('ativo', true);
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: tarifas = [] } = useQuery({
-    queryKey: ['renting_tarifas_min'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('renting_tarifas')
-        .select(
-          'grupo_id, nome, kms_incluidos, km_adicional_valor, preco_dia, preco_semana, preco_mes'
-        )
-        .eq('ativa', true);
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: grupos = [] } = useRentingGruposMin();
+  const { data: tarifas = [] } = useRentingTarifasMin();
 
   // Tarifa aplicável = a do grupo da viatura escolhida.
   const viaturaIdSel = form.watch('viatura_id');
@@ -210,9 +171,11 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   const regime = form.watch('regime');
   const isSlot = regime === 'slot';
   const isLongaDuracao = form.watch('is_longa_duracao');
+  const renovacaoOpcao = form.watch('renovacao_opcao');
+  const renovacaoIntervalo = form.watch('renovacao_intervalo_dias');
   const modoMensal = !isSlot && (regime === 'tvde' || isLongaDuracao);
   const faturacao = useMemo(
-    () => calcularFaturacao(regime, isLongaDuracao, dias, tarifaAtual),
+    () => calcularFaturacaoRenting(regime, isLongaDuracao, dias, tarifaAtual),
     [regime, isLongaDuracao, dias, tarifaAtual]
   );
 
@@ -224,21 +187,29 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   }, [faturacao, isSlot, form]);
 
   // Lista de viaturas filtrada por regime: slot mostra só carros slot
-  // (do motorista); restantes regimes escondem carros slot.
+  // (do motorista); restantes regimes escondem carros slot. habilitada_tvde é
+  // apenas informativo/administrativo — não restringe o seletor.
   const viaturasFiltradas = useMemo(
     () => viaturas.filter((v) => (isSlot ? v.is_slot === true : v.is_slot !== true)),
     [viaturas, isSlot]
   );
 
-  // Modo mensal (TVDE ou ALD): trava o período em 30 dias.
+  // Modo mensal (TVDE ou ALD): data_fim calculada conforme a opção de renovação.
   useEffect(() => {
-    if (modoMensal && dataInicio) {
-      const fim = addDaysToLocalInput(dataInicio, 30);
-      if (fim && fim !== dataFim) {
-        form.setValue('data_fim', fim, { shouldValidate: true });
-      }
+    if (!modoMensal || !dataInicio) return;
+    let fim: string | null = null;
+    if (renovacaoOpcao === 'mesmo_dia_cada_mes') {
+      fim = addOneMonthSameDayToLocalInput(dataInicio);
+    } else if (renovacaoOpcao === 'primeiro_dia_mes') {
+      fim = firstDayNextMonthToLocalInput(dataInicio);
+    } else {
+      // 'intervalo_dias' ou sem opção definida → usar intervalo (default 30)
+      fim = addDaysToLocalInput(dataInicio, renovacaoIntervalo ?? 30);
     }
-  }, [modoMensal, dataInicio, dataFim, form]);
+    if (fim && fim !== dataFim) {
+      form.setValue('data_fim', fim, { shouldValidate: true });
+    }
+  }, [modoMensal, dataInicio, dataFim, renovacaoOpcao, renovacaoIntervalo, form]);
 
   const handleDiasManualChange = (raw: string) => {
     const cleaned = raw.replace(/\D/g, '');
@@ -249,6 +220,14 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
     if (!dataInicio) return;
     const novoFim = addDaysToLocalInput(dataInicio, n);
     if (novoFim) form.setValue('data_fim', novoFim, { shouldValidate: true });
+  };
+
+  const handleIntervaloChange = (raw: string) => {
+    const cleaned = raw.replace(/\D/g, '');
+    if (cleaned === '') return;
+    const n = parseInt(cleaned, 10);
+    if (!Number.isFinite(n) || n <= 0) return;
+    form.setValue('renovacao_intervalo_dias', n, { shouldDirty: true });
   };
 
   // Ao escolher a viatura: puxa o grupo e os valores da tarifa desse grupo.
@@ -319,6 +298,19 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
             </FormItem>
           )}
         />
+        {podeVerTodosRenting && (
+          <FormField
+            control={form.control}
+            name="gestor_id"
+            render={({ field }) => (
+              <FormItem className="max-w-md">
+                <FormLabel>Gestor responsável</FormLabel>
+                <GestorSelect value={field.value} onChange={field.onChange} />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
       </div>
 
       {/* === Cliente da Reserva (não aplicável a slot) === */}
@@ -500,7 +492,10 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                   </FormLabel>
                   <Select
                     value={field.value ?? SENTINEL_NONE}
-                    onValueChange={(v) => field.onChange(v === SENTINEL_NONE ? null : v)}
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      field.onChange(v === SENTINEL_NONE ? null : v);
+                    }}
                   >
                     <FormControl>
                       <SelectTrigger className="bg-background">
@@ -549,21 +544,35 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
               accent="violet"
               right={
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-muted-foreground">Nº Dias</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {modoMensal && renovacaoOpcao === 'intervalo_dias'
+                      ? 'Intervalo (dias)'
+                      : 'Nº Dias'}
+                  </span>
                   <Input
                     type="text"
                     inputMode="numeric"
-                    value={diasInput}
-                    onChange={(e) => handleDiasManualChange(e.target.value)}
-                    disabled={!dataInicio || modoMensal}
+                    value={
+                      modoMensal && renovacaoOpcao === 'intervalo_dias'
+                        ? (renovacaoIntervalo ?? 30).toString()
+                        : diasInput
+                    }
+                    onChange={(e) =>
+                      modoMensal && renovacaoOpcao === 'intervalo_dias'
+                        ? handleIntervaloChange(e.target.value)
+                        : handleDiasManualChange(e.target.value)
+                    }
+                    disabled={!dataInicio || (modoMensal && renovacaoOpcao !== 'intervalo_dias')}
                     className="h-9 w-16 text-center bg-background text-base font-semibold disabled:bg-muted"
                     placeholder="—"
                     title={
-                      modoMensal
-                        ? 'Período fixo de 30 dias (mensal)'
-                        : dataInicio
-                          ? 'Editar ajusta a Data Fim automaticamente'
-                          : 'Define primeiro a Data Início'
+                      modoMensal && renovacaoOpcao !== 'intervalo_dias'
+                        ? 'Calculado automaticamente pela opção de renovação'
+                        : modoMensal
+                          ? 'Intervalo de renovação — altera a Data Fim automaticamente'
+                          : dataInicio
+                            ? 'Editar ajusta a Data Fim automaticamente'
+                            : 'Define primeiro a Data Início'
                     }
                   />
                 </div>
@@ -585,7 +594,10 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                     </FormLabel>
                     <Select
                       value={field.value ?? SENTINEL_NONE}
-                      onValueChange={(v) => field.onChange(v === SENTINEL_NONE ? null : v)}
+                      onValueChange={(v) => {
+                        if (!v) return;
+                        field.onChange(v === SENTINEL_NONE ? null : v);
+                      }}
                     >
                       <FormControl>
                         <SelectTrigger className="bg-background">

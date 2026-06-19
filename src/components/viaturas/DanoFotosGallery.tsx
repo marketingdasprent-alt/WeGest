@@ -13,7 +13,16 @@ import { Camera, Upload, Loader2, Eye, Trash2, ImageIcon, Wrench } from 'lucide-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-const BUCKET = 'viatura-documentos';
+/**
+ * Detecta qual bucket usar baseado no path/URL
+ */
+function detectBucket(urlOrPath: string): 'viatura-documentos' | 'assistencia-anexos' {
+  // Detecta pelo prefixo do path
+  if (urlOrPath.startsWith('assistencia/')) return 'assistencia-anexos';
+  // Detecta pela URL completa
+  if (urlOrPath.includes('assistencia-anexos')) return 'assistencia-anexos';
+  return 'viatura-documentos';
+}
 
 /**
  * Aceita um valor guardado em ficheiro_url e retorna apenas o path
@@ -23,7 +32,7 @@ const BUCKET = 'viatura-documentos';
 function extractStoragePath(urlOrPath: string): string {
   if (!urlOrPath.startsWith('http')) return urlOrPath;
   const match = urlOrPath.match(
-    /\/storage\/v1\/object\/(?:public|sign)\/viatura-documentos\/([^?]+)/
+    /\/storage\/v1\/object\/(?:public|sign)\/(?:viatura-documentos|assistencia-anexos)\/([^?]+)/
   );
   return match ? decodeURIComponent(match[1]) : urlOrPath;
 }
@@ -45,8 +54,9 @@ function DanoFotoImage({
   useEffect(() => {
     let cancelled = false;
     const path = extractStoragePath(ficheiroUrl);
+    const bucket = detectBucket(ficheiroUrl);
     supabase.storage
-      .from(BUCKET)
+      .from(bucket)
       .createSignedUrl(path, 60 * 10)
       .then(({ data, error }) => {
         if (cancelled) return;

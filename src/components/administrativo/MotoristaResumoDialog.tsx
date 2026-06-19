@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, differenceInDays, parseISO, max, min } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -59,6 +59,15 @@ interface Props {
   dateRange: { from: Date; to: Date };
 }
 
+interface SlotPeriodo {
+  matricula: string;
+  dias: number;
+  taxaDiaria: number;
+  custo: number;
+  dataInicioStr: string;
+  dataFimStr: string;
+}
+
 interface PrintSettings {
   mostrarMatricula: boolean;
   mostrarGestor: boolean;
@@ -110,6 +119,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [emailTo, setEmailTo] = useState('');
   const [emailCC, setEmailCC] = useState('');
+  const [slotPeriodos, setSlotPeriodos] = useState<SlotPeriodo[]>([]);
 
   useEffect(() => {
     if (open && (motorista?.motorista_id || motorista?.driver_uuid)) {
@@ -132,6 +142,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     setGestor(null);
     setMotoristaIban(null);
     setExtraCosts({ caucao: 0, seguros: 0, outros: 0 });
+    setSlotPeriodos([]);
 
     try {
       let resolvedMotoristaId = motorista.motorista_id || null;
@@ -191,11 +202,37 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             .eq('motorista_id', resolvedMotoristaId)
             .gte('data_movimento', format(dateRange.from, 'yyyy-MM-dd'))
             .lte('data_movimento', format(dateRange.to, 'yyyy-MM-dd')),
+          // Todos os períodos de viatura na semana (pro-rata de troca/upgrade, todos os regimes)
+          supabase
+            .from('motorista_viaturas')
+            .select('viatura_id, data_inicio, data_fim, viaturas(matricula, valor_aluguer)')
+            .eq('motorista_id', resolvedMotoristaId)
+            .lte('data_inicio', format(dateRange.to, 'yyyy-MM-dd'))
+            .or(`data_fim.is.null,data_fim.gte.${format(dateRange.from, 'yyyy-MM-dd')}`)
+            .order('data_inicio', { ascending: true }),
+          // Reservas slot: slot_valor_semanal sobrepõe valor_aluguer da viatura quando negociado
+          supabase
+            .from('reservas')
+            .select('viatura_id, slot_valor_semanal')
+            .eq('condutor_id', resolvedMotoristaId)
+            .eq('regime', 'slot')
+            .lte('data_inicio', format(dateRange.to, 'yyyy-MM-dd'))
+            .or(`data_fim.is.null,data_fim.gte.${format(dateRange.from, 'yyyy-MM-dd')}`),
         ]);
 
         const viaturaData = results[0].data;
         const motoristaData = results[1].data;
         const financeiroData = results[2].data;
+        const viaturasPeriodo = (results[3].data ?? []) as Array<{
+          viatura_id: string;
+          data_inicio: string;
+          data_fim: string | null;
+          viaturas: { matricula: string; valor_aluguer: number | null } | null;
+        }>;
+        const reservasSlot = (results[4].data ?? []) as Array<{
+          viatura_id: string;
+          slot_valor_semanal: number | null;
+        }>;
 
         if (viaturaData?.viaturas) {
           const viatura = viaturaData.viaturas as any;
@@ -212,6 +249,43 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
           setMotoristaTelefone(m.telefone);
           setMotoristaIban(m.iban);
           setGestor(m.gestor_responsavel || null);
+        }
+
+        // Cálculo pro-rata por viatura (troca/upgrade mid-week) — todos os regimes
+        if (viaturasPeriodo.length > 0) {
+          const weekStart = dateRange.from;
+          const weekEnd = dateRange.to;
+          const totalWeekDays = differenceInDays(weekEnd, weekStart) + 1;
+
+          const periodos: SlotPeriodo[] = viaturasPeriodo
+            .map((mv) => {
+              // slot_valor_semanal tem prioridade (preço negociado); fallback para valor_aluguer da viatura
+              const reserva = reservasSlot.find((r) => r.viatura_id === mv.viatura_id);
+              const valorSemanal = Number(
+                reserva?.slot_valor_semanal ?? mv.viaturas?.valor_aluguer ?? 0
+              );
+              if (!valorSemanal) return null;
+
+              const periodStart = max([parseISO(mv.data_inicio), weekStart]);
+              const periodEnd = mv.data_fim ? min([parseISO(mv.data_fim), weekEnd]) : weekEnd;
+              if (periodStart > periodEnd) return null;
+
+              const dias = differenceInDays(periodEnd, periodStart) + 1;
+              const taxaDiaria = valorSemanal / totalWeekDays;
+              const custo = dias * taxaDiaria;
+
+              return {
+                matricula: mv.viaturas?.matricula ?? '—',
+                dias,
+                taxaDiaria,
+                custo,
+                dataInicioStr: format(periodStart, 'dd/MM'),
+                dataFimStr: format(periodEnd, 'dd/MM'),
+              };
+            })
+            .filter((p): p is SlotPeriodo => p !== null);
+
+          setSlotPeriodos(periodos);
         }
 
         if (financeiroData) {
@@ -274,7 +348,8 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
         seguros: extraCosts.seguros,
         reparacoes: motorista.reparacoes || 0,
       };
-  const totalDespesas = Object.values(despesas).reduce((a, b) => a + b, 0);
+  const totalSlot = slotPeriodos.reduce((s, p) => s + p.custo, 0);
+  const totalDespesas = Object.values(despesas).reduce((a, b) => a + b, 0) + totalSlot;
   const valoresSemanaAnterior = 0;
   const receitaAjustada = isImportado
     ? totalReceitas
@@ -328,6 +403,34 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       !motorista.recibo_verde && !isImportado
         ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
             <span>Ajuste (÷ 1.06)</span><span style="color:#ea580c">-${fmtEur(totalAReceber - liquido)}</span>
+          </div>`
+        : '';
+
+    const slotHtml =
+      slotPeriodos.length > 0
+        ? `<div style="margin-bottom:16px;border:1px solid #fde68a;border-radius:8px;overflow:hidden">
+            <div style="background:#f59e0b;padding:8px 14px">
+              <span style="color:#fff;font-weight:700;font-size:13px">ALUGUER — DETALHE</span>
+            </div>
+            <div style="background:#fffbeb;padding:12px 14px">
+              ${slotPeriodos
+                .map(
+                  (p) =>
+                    `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+                      <span>${p.matricula} (${p.dataInicioStr}–${p.dataFimStr}): ${p.dias} dias × ${fmtEur(p.taxaDiaria)}/dia</span>
+                      <span style="color:#b45309">${fmtEur(p.custo)}</span>
+                    </div>`
+                )
+                .join('')}
+              ${
+                slotPeriodos.length > 1
+                  ? `<div style="border-top:1px solid #fcd34d;margin:6px 0"></div>
+                     <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:3px 0">
+                       <span>TOTAL ALUGUER</span><span style="color:#b45309">${fmtEur(totalSlot)}</span>
+                     </div>`
+                  : ''
+              }
+            </div>
           </div>`
         : '';
 
@@ -398,6 +501,8 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
         </div>
       </div>
 
+      ${slotHtml}
+
       <!-- Resumo Final -->
       <div style="border:1px solid #bfdbfe;border-radius:8px;overflow:hidden">
         <div style="background:#2563eb;padding:8px 14px">
@@ -437,9 +542,21 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
 
   const handleSendEmail = () => {
     const subject = `Resumo Financeiro - ${motorista.driver_name} - ${format(dateRange.from, 'dd/MM/yyyy')}`;
+    const slotEmailDetalhe =
+      slotPeriodos.length > 0
+        ? '\nAluguer Slot:\n' +
+          slotPeriodos
+            .map(
+              (p) =>
+                `  ${p.matricula} (${p.dataInicioStr}–${p.dataFimStr}): ${p.dias} dias × ${fmt(p.taxaDiaria)}/dia = ${fmt(p.custo)}`
+            )
+            .join('\n') +
+          (slotPeriodos.length > 1 ? `\n  Total Slot: ${fmt(totalSlot)}` : '') +
+          '\n'
+        : '';
     const body =
       `Olá ${motorista.driver_name},\n\nSegue o resumo financeiro do período ${format(dateRange.from, 'dd/MM/yyyy')} a ${format(dateRange.to, 'dd/MM/yyyy')}:\n\n` +
-      `Receitas: ${fmt(totalReceitas)}\nDespesas: ${fmt(totalDespesas)}\nLíquido a Receber: ${fmt(liquido)}\n\nCumprimentos,\nEquipa WeGest`;
+      `Receitas: ${fmt(totalReceitas)}\nDespesas: ${fmt(totalDespesas)}\n${slotEmailDetalhe}Líquido a Receber: ${fmt(liquido)}\n\nCumprimentos,\nEquipa WeGest`;
     const cc = emailCC.trim() ? `&cc=${encodeURIComponent(emailCC.trim())}` : '';
     window.open(
       `mailto:${encodeURIComponent(emailTo)}?subject=${encodeURIComponent(subject)}${cc}&body=${encodeURIComponent(body)}`
@@ -448,10 +565,21 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
   };
 
   const handleSendWhatsApp = () => {
+    const slotDetalhe =
+      slotPeriodos.length > 0
+        ? '\n\n🚗 *Aluguer Slot:*\n' +
+          slotPeriodos
+            .map(
+              (p) =>
+                `  ${p.matricula} (${p.dataInicioStr}–${p.dataFimStr}): ${p.dias}d × ${fmt(p.taxaDiaria)}/d = ${fmt(p.custo)}`
+            )
+            .join('\n') +
+          (slotPeriodos.length > 1 ? `\n  Total Slot: ${fmt(totalSlot)}` : '')
+        : '';
     const message =
       `*RESUMO FINANCEIRO - WeGest*\n\nOlá *${motorista.driver_name}*,\n` +
       `Período: ${format(dateRange.from, 'dd/MM/yyyy')} a ${format(dateRange.to, 'dd/MM/yyyy')}\n\n` +
-      `💰 *Receitas:* ${fmt(totalReceitas)}\n💸 *Despesas:* ${fmt(totalDespesas)}\n🏁 *Líquido Final:* ${fmt(liquido)}\n\nSe tiver alguma dúvida, por favor contacte-nos.`;
+      `💰 *Receitas:* ${fmt(totalReceitas)}\n💸 *Despesas:* ${fmt(totalDespesas)}${slotDetalhe}\n🏁 *Líquido Final:* ${fmt(liquido)}\n\nSe tiver alguma dúvida, por favor contacte-nos.`;
     const phone = motoristaTelefone?.replace(/\s/g, '') || '';
     window.open(
       `https://wa.me/${phone.startsWith('+') ? phone : '+351' + phone}?text=${encodeURIComponent(message)}`,
@@ -783,6 +911,44 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                 </div>
               </div>
             </div>
+
+            {/* Aluguer — detalhe pro-rata de troca/upgrade (todos os regimes) */}
+            {slotPeriodos.length > 0 && (
+              <div className="rounded-lg overflow-hidden border border-amber-200 print:border-amber-300">
+                <div
+                  className="px-4 py-2 print:px-3 print:py-1.5"
+                  style={{ backgroundColor: '#f59e0b' }}
+                >
+                  <h2
+                    className="font-semibold flex items-center gap-2 text-sm print:text-xs"
+                    style={{ color: '#fff' }}
+                  >
+                    ALUGUER — DETALHE
+                  </h2>
+                </div>
+                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-amber-50 print:bg-amber-50">
+                  {slotPeriodos.map((p, i) => (
+                    <Row
+                      key={i}
+                      label={`${p.matricula} (${p.dataInicioStr}–${p.dataFimStr}): ${p.dias} dias × ${fmt(p.taxaDiaria)}/dia`}
+                      value={fmt(p.custo)}
+                      colored="text-amber-700"
+                    />
+                  ))}
+                  {slotPeriodos.length > 1 && (
+                    <>
+                      <Separator className="bg-amber-200" />
+                      <Row
+                        label="TOTAL ALUGUER"
+                        value={fmt(totalSlot)}
+                        bold
+                        colored="text-amber-700"
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Resumo Final */}
             <div className="rounded-lg overflow-hidden border border-blue-200 print:border-blue-300">

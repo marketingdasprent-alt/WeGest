@@ -24,6 +24,7 @@ const SELECT_COLUMNS = `
   cliente_id, cliente_nome,
   condutor_id, condutor_nome,
   emissor_id,
+  gestor_id,
   estado, regime, slot_valor_semanal, valor_total,
   observacoes, observacoes_internas,
   is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias,

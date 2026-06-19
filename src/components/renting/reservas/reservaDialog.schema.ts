@@ -39,6 +39,10 @@ export const reservaDialogSchema = z
     // documentos. Obrigatória a partir de confirmada (superRefine).
     emissor_id: z.string().uuid().nullable().optional(),
 
+    // Gestor responsável (profiles.id). Reatribuível por superiores; default
+    // (criador) tratado pela BD. Privacidade por gestor.
+    gestor_id: z.string().uuid().nullable().optional(),
+
     estado: z.enum(RESERVA_ESTADOS),
     regime: z.enum(RESERVA_REGIMES).default('rent_a_car'),
 
@@ -135,8 +139,20 @@ export const reservaDialogSchema = z
       return;
     }
 
+    // Viatura é SEMPRE obrigatória, mesmo em reserva pendente (rascunho) — não
+    // se cria reserva sem viatura associada (a disponibilidade/overbooking é
+    // calculada por viatura). Os restantes campos (cliente/estações) só são
+    // exigidos quando o estado avança para confirmada/em_curso.
+    if (!d.viatura_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['viatura_id'],
+        message: 'Viatura obrigatória',
+      });
+    }
+
     // Validação condicional: estado confirmada/em_curso exige dados completos.
-    // Reserva pendente pode ser rascunho com cliente/viatura/estações por preencher.
+    // Reserva pendente pode ser rascunho com cliente/estações por preencher.
     if (!exigeCompleto) return;
 
     if (!d.cliente_id) {
@@ -146,13 +162,7 @@ export const reservaDialogSchema = z
         message: 'Cliente obrigatório quando a reserva é confirmada ou está em curso',
       });
     }
-    if (!d.viatura_id) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['viatura_id'],
-        message: 'Viatura obrigatória quando a reserva é confirmada ou está em curso',
-      });
-    }
+    // Viatura já validada acima (obrigatória sempre) — não repetir aqui.
     if (!d.estacao_entrega_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

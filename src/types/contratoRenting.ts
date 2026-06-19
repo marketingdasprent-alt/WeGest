@@ -10,7 +10,7 @@ export const CONTRATO_ESTADO_OP_LABELS: Record<ContratoEstadoOperacional, string
   agendado: 'Agendado',
   em_curso: 'Em Curso',
   devolvido: 'Devolvido',
-  cancelado: 'Cancelado',
+  cancelado: 'Fechado',
 };
 
 // ============================================================
@@ -97,6 +97,10 @@ export type ContratoRenting = {
    *  os templates dos documentos gerados. Herdada da reserva na conversão. */
   emissor_id: string | null;
 
+  /** Gestor responsável (profiles.id). Default = quem cria. Base da privacidade
+   *  por gestor (só visível ao dono + superiores quando a org a tem ligada). */
+  gestor_id: string | null;
+
   viatura_id: string;
   matricula: string | null;
   grupo: string | null;
@@ -176,10 +180,14 @@ export type ContratoRentingInsert = Omit<
   | 'updated_by'
   | 'created_at'
   | 'updated_at'
+  // gestor_id é preenchido por DEFAULT na BD (= quem cria); fica de fora do
+  // payload de criação e é reatribuível via Update (só superiores).
+  | 'gestor_id'
 >;
 
 export type ContratoRentingUpdate = Partial<ContratoRentingInsert> & {
   deleted_at?: string | null;
+  gestor_id?: string | null;
 };
 
 // ============================================================

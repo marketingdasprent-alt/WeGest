@@ -25,6 +25,7 @@ const SELECT_COLUMNS = `
   reserva_id,
   cliente_id,
   emissor_id,
+  gestor_id,
   viatura_id, matricula, grupo,
   estacao_entrega_id, data_inicio,
   estacao_recolha_id, data_fim,
@@ -255,6 +256,100 @@ export function useUpdateContratoRenting() {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
       qc.invalidateQueries({ queryKey: ['contrato-historico'] });
       toast({ title: 'Contrato actualizado', description: 'As alterações foram guardadas.' });
+    },
+    onError: (error: unknown) => {
+      const { title, description } = contratoErrorMessage(error);
+      toast({ title, description, variant: 'destructive' });
+    },
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// Fechar contrato TVDE
+// ────────────────────────────────────────────────────────────
+
+export interface FecharContratoTVDEArgs {
+  contratoId: string;
+  contratoCodigo: number;
+  tipoEvento: 'recolhido' | 'devolvido';
+  dataEvento: string;
+  motivo?: string;
+  valorDivida?: number;
+  motoristaId?: string | null;
+  matricula?: string | null;
+}
+
+export function useFecharContratoTVDE() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({
+      contratoId,
+      contratoCodigo,
+      tipoEvento,
+      dataEvento,
+      motivo,
+      valorDivida,
+      motoristaId,
+      matricula,
+    }: FecharContratoTVDEArgs): Promise<void> => {
+      const { error: errUpdate } = await supabase
+        .from('contratos_renting')
+        .update({ estado_operacional: 'cancelado' })
+        .eq('id', contratoId);
+      if (errUpdate) throw errUpdate;
+
+      // Evento no calendário com a data escolhida pelo gestor
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const userId = session?.user?.id ?? null;
+
+      const tipoCalendario = tipoEvento === 'recolhido' ? 'recolha' : 'devolucao';
+      const matriculaNorm = matricula ? matricula.replace(/[\s-]/g, '').toUpperCase() : null;
+      const descricaoEvento = [motivo || null, `Fecho do contrato #${contratoCodigo}`]
+        .filter(Boolean)
+        .join(' — ');
+
+      const { error: errEvento } = await supabase.from('calendario_eventos').insert({
+        tipo: tipoCalendario,
+        titulo: matriculaNorm ?? '?',
+        descricao: descricaoEvento,
+        data_inicio: dataEvento,
+        data_fim: dataEvento,
+        dia_todo: false,
+        matricula_devolver: matriculaNorm,
+        origem_tipo: 'contrato_renting',
+        origem_id: contratoId,
+        criado_por: userId,
+      });
+      if (errEvento) throw errEvento;
+
+      if (valorDivida && valorDivida > 0 && motoristaId) {
+        const descricao = [
+          `Dívida no fecho do contrato #${contratoCodigo}`,
+          tipoEvento === 'recolhido' ? '(recolha)' : '(devolução)',
+          motivo ? `— ${motivo}` : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+
+        const { error: errFin } = await supabase.from('motorista_financeiro').insert({
+          motorista_id: motoristaId,
+          tipo: 'debito',
+          categoria: 'outro',
+          descricao,
+          valor: valorDivida,
+          data_movimento: new Date().toISOString().split('T')[0],
+          status: 'pendente',
+        });
+        if (errFin) throw errFin;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      toast({ title: 'Contrato fechado' });
     },
     onError: (error: unknown) => {
       const { title, description } = contratoErrorMessage(error);

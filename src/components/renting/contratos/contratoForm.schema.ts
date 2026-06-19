@@ -47,6 +47,10 @@ export const contratoFormSchema = z
     // templates dos documentos gerados a partir do contrato.
     emissor_id: z.string().uuid('Empresa emissora obrigatória'),
 
+    // Gestor responsável (profiles.id). Reatribuível por superiores; default
+    // (criador) é tratado pela BD. Privacidade por gestor.
+    gestor_id: z.string().uuid().nullable().optional(),
+
     // Entrega
     estacao_entrega_id: z.string().uuid().nullable().optional(),
     data_inicio: datetimeLocal,
@@ -190,6 +194,7 @@ export const DEFAULT_CONTRATO_VALUES: ContratoFormValues = {
   matricula: '',
   reserva_id: '',
   emissor_id: '',
+  gestor_id: null,
   estacao_entrega_id: null,
   data_inicio: '',
   estacao_recolha_id: null,

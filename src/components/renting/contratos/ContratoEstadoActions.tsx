@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { useUpdateContratoRenting } from '@/hooks/useContratosRenting';
+import { FecharContratoTVDEDialog } from '@/components/renting/contratos/FecharContratoTVDEDialog';
 import type { ContratoEstadoOperacional, ContratoRenting } from '@/types/contratoRenting';
 
 // Entrega e devolução são feitas via fluxo QR/check-out pendente — os
@@ -34,25 +35,32 @@ const ACCOES: Record<AccaoEstado, AccaoConfig> = {
   cancelar: {
     novoEstado: 'cancelado',
     estadosOrigem: ['agendado', 'em_curso'],
-    label: 'Cancelar contrato',
+    label: 'Fechar contrato',
     Icon: XCircle,
     variant: 'destructive',
-    dialogTitle: 'Cancelar este contrato?',
+    dialogTitle: 'Fechar este contrato?',
     dialogDescription: (codigo) =>
-      `O contrato #${codigo} passa a "cancelado". Se estava agendado, a reserva volta a "confirmada" (continua válida). Se estava em curso, a reserva também é cancelada. Os eventos derivados no calendário são apagados.`,
+      `O contrato #${codigo} passa a "fechado". Se estava agendado, a reserva volta a "confirmada" (continua válida). Se estava em curso, a reserva também é fechada. Os eventos derivados no calendário são apagados.`,
   },
 };
 
 interface ContratoEstadoActionsProps {
   contrato: ContratoRenting;
+  /** Motorista principal do contrato (só relevante em TVDE). */
+  motoristaId?: string | null;
 }
 
-export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({ contrato }) => {
+export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
+  contrato,
+  motoristaId,
+}) => {
   const [accaoAberta, setAccaoAberta] = useState<AccaoEstado | null>(null);
+  const [tvdeDialogAberto, setTvdeDialogAberto] = useState(false);
   const updateMutation = useUpdateContratoRenting();
 
   const isFacturado = contrato.estado_financeiro === 'facturado';
   const isPending = updateMutation.isPending;
+  const isTVDE = contrato.regime === 'tvde';
 
   const accoesVisiveis = (Object.entries(ACCOES) as [AccaoEstado, AccaoConfig][]).filter(
     ([, cfg]) => cfg.estadosOrigem.includes(contrato.estado_operacional)
@@ -81,7 +89,7 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({ co
             key={key}
             type="button"
             variant={cfg.variant}
-            onClick={() => setAccaoAberta(key)}
+            onClick={() => (isTVDE ? setTvdeDialogAberto(true) : setAccaoAberta(key))}
             disabled={isPending}
             className="gap-2"
           >
@@ -91,6 +99,17 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({ co
         );
       })}
 
+      {/* TVDE: dialog com tipo de evento + data + motivo + valor dívida */}
+      <FecharContratoTVDEDialog
+        open={tvdeDialogAberto}
+        onOpenChange={setTvdeDialogAberto}
+        contratoId={contrato.id}
+        contratoCodigo={contrato.codigo}
+        motoristaId={motoristaId}
+        matricula={contrato.matricula}
+      />
+
+      {/* Rent-a-car / outros: AlertDialog simples */}
       <AlertDialog open={!!accaoAberta} onOpenChange={(open) => !open && setAccaoAberta(null)}>
         <AlertDialogContent>
           {accaoActiva && (

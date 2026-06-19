@@ -69,7 +69,6 @@ export function validateCheckinDados(
   if (precisaGpl(tipoCombustivel) && !dados.nivelGpl) return 'Nível de GPL é obrigatório';
   for (const d of dados.novosDanos) {
     if (!d.descricao.trim()) return 'Todos os danos adicionados devem ter descrição';
-    if (d.files.length === 0) return 'Todos os danos devem ter pelo menos uma foto';
   }
   return null;
 }
@@ -732,9 +731,7 @@ export const CheckinDadosSection: React.FC<CheckinDadosSectionProps> = ({
                   e.target.value = '';
                 }}
               />
-              <p className="text-[10px] text-destructive mb-1 flex items-center gap-1">
-                <AlertTriangle className="h-2.5 w-2.5" /> Foto obrigatória
-              </p>
+              <p className="text-[10px] text-muted-foreground mb-1">Fotos e vídeos (opcional)</p>
               <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
