@@ -5,6 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const jsonError = (error: string, status: number) =>
+  new Response(JSON.stringify({ success: false, error }), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+
 function sanitizeCard(card: string): string {
   return (card || '').replace(/\D/g, '');
 }
@@ -117,11 +123,41 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const authHeader = req.headers.get('authorization') || '';
+    const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+    // ── Auth + org do caller (service-role bypassa RLS → validar à mão) ──
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) return jsonError('Não autenticado.', 401);
+    const anonClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const {
+      data: { user },
+      error: authErr,
+    } = await anonClient.auth.getUser();
+    if (authErr || !user) return jsonError('Sessão inválida.', 401);
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin, org_id')
+      .eq('id', user.id)
+      .single();
+    if (!profile?.is_admin) return jsonError('Sem permissão de administrador.', 403);
+    const callerOrgId = profile.org_id;
 
     const body = await req.json();
     const { integracao_id, combustivel_csv, movimentos } = body;
+
+    // A integração TEM de pertencer à org do caller.
+    const { data: intConfig } = await supabase
+      .from('plataformas_configuracao')
+      .select('org_id')
+      .eq('id', integracao_id)
+      .single();
+    if (!intConfig || intConfig.org_id !== callerOrgId) {
+      return jsonError('Integração não encontrada ou sem acesso.', 403);
+    }
+    const orgId = callerOrgId;
 
     let rows: Record<string, string>[] = [];
     if (movimentos && Array.isArray(movimentos)) {
@@ -135,8 +171,14 @@ Deno.serve(async (req) => {
     } else if (combustivel_csv) {
       rows = parseCsv(combustivel_csv);
     }
-    const { data: motoristas } = await supabase.from('motoristas_ativos').select('id, nome, cartao_repsol');
-    const { data: viaturas } = await supabase.from('viaturas').select('id, matricula');
+    const { data: motoristas } = await supabase
+      .from('motoristas_ativos')
+      .select('id, nome, cartao_repsol')
+      .eq('org_id', orgId);
+    const { data: viaturas } = await supabase
+      .from('viaturas')
+      .select('id, matricula')
+      .eq('org_id', orgId);
 
     const cardMap = new Map();
     const nameMap = new Map();
@@ -194,6 +236,7 @@ Deno.serve(async (req) => {
       // Usar Map para pre-deduplicar as transações gémeas do pacote.
       upsertMap.set(txId, {
         integracao_id,
+        org_id: orgId,
         transaction_id: txId,
         transaction_date: txDate,
         card_number: sanitized || null,

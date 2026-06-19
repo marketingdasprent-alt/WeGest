@@ -1,0 +1,59 @@
+name: 🧬 Regenerate types.ts
+
+# Botão manual: corre isto DEPOIS de aplicares migrations à mão na BD.
+# Gera o src/integrations/supabase/types.ts a partir do esquema vivo e abre
+# um PR com as diferenças. Corre no Linux → o ficheiro sai sempre em UTF-8/LF
+# (mata de vez o problema de encoding que parte o CI).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  regenerate:
+    name: 🧬 Gerar types e abrir PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Gerar types a partir da BD
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        run: |
+          # Extrai o project ref do subdomínio do URL (ex: https://abcd.supabase.co → abcd)
+          REF="$(printf '%s' "$SUPABASE_URL" | sed -E 's#https?://([^.]+)\..*#\1#')"
+          if [ -z "$REF" ]; then
+            echo "::error::Não consegui extrair o project ref de VITE_SUPABASE_URL."
+            exit 1
+          fi
+          echo "Project ref: $REF"
+          supabase gen types typescript --project-id "$REF" > src/integrations/supabase/types.ts
+
+      - name: Abrir PR se houver alterações
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- src/integrations/supabase/types.ts; then
+            echo "✅ types.ts já está sincronizado com a BD — nada a fazer."
+            exit 0
+          fi
+          BRANCH="chore/regen-types-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add src/integrations/supabase/types.ts
+          git commit -m "chore: regenerar types.ts a partir da BD"
+          git push origin "$BRANCH"
+          gh pr create \
+            --base "${{ github.ref_name }}" \
+            --head "$BRANCH" \
+            --title "chore: regenerar types.ts" \
+            --body "Gerado automaticamente por \`supabase gen types\` após migrations aplicadas à mão. Encoding UTF-8/LF garantido (corre no Linux). Faz merge depois do CI verde."
+          echo "📬 PR aberto contra ${{ github.ref_name }}."
