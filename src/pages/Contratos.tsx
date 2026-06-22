@@ -81,7 +81,13 @@ export default function Contratos() {
   const fetchContratos = async () => {
     try {
       setLoading(true);
-      let query = supabase.from('contratos').select('*').order('criado_em', { ascending: false });
+      // Cap defensivo: evita puxar a tabela inteira para o cliente à medida que
+      // cresce (a paginação/pesquisa continuam client-side sobre estes).
+      let query = supabase
+        .from('contratos')
+        .select('*')
+        .order('criado_em', { ascending: false })
+        .limit(1000);
 
       if (empresaFilter !== 'all') {
         query = query.eq('empresa_id', empresaFilter);
@@ -427,6 +433,11 @@ export default function Contratos() {
           </div>
         ) : (
           <>
+            {contratos.length >= 1000 && (
+              <div className="mb-2 rounded border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-700 dark:text-amber-300">
+                A mostrar os primeiros 1000 contratos. Refina os filtros para ver mais.
+              </div>
+            )}
             {viewMode === 'grouped' ? (
               <ContratosGroupedView
                 contratos={filteredContratos}

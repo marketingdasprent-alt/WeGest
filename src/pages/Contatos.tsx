@@ -221,24 +221,15 @@ const Contatos = () => {
 
   const fetchStats = async () => {
     try {
-      const statusCounts = await Promise.all(
-        Object.keys(statusLabels).map(async (status) => {
-          const { count } = await supabase
-            .from('leads_dasprent')
-            .select('*', { count: 'exact', head: true })
-            .eq('status', status);
-          return { status, count: count || 0 };
-        })
-      );
+      // 1 query agregada (RPC) em vez de N counts:'exact' (um por status)
+      // sobre leads_dasprent, a tabela de maior volume.
+      const { data, error } = await (supabase as any).rpc('leads_count_by_status');
+      if (error) throw error;
 
-      const statsObj = statusCounts.reduce(
-        (acc, { status, count }) => {
-          acc[status] = count;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
-
+      const statsObj: Record<string, number> = {};
+      for (const row of (data as { status: string; total: number }[]) ?? []) {
+        statsObj[row.status] = Number(row.total);
+      }
       setStats(statsObj);
     } catch (error) {
       console.error('Error fetching stats:', error);

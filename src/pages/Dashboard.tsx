@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -27,20 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  ComposedChart,
-  Bar,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
+// Gráfico (recharts ~400KB) carregado em lazy para sair do chunk inicial.
+const AtividadeChart = lazy(() => import('@/components/dashboard/AtividadeChart'));
 import {
   format,
   startOfWeek,
@@ -123,16 +111,6 @@ function formatPct(curr: number, prev: number): { pct: number; up: boolean } {
 }
 
 // ── Palette ──────────────────────────────────────────────────────────────────
-
-const COLORS = {
-  disponivel: '#22c55e',
-  ocupada: '#3b82f6',
-  manutencao: '#f59e0b',
-  inativo: '#6b7280',
-  rentabilidade: '#8b5cf6',
-  alugadas: '#3b82f6',
-  devolvidas: '#22c55e',
-};
 
 // ── Dashboard Component ───────────────────────────────────────────────────────
 
@@ -479,21 +457,6 @@ const Dashboard = () => {
 
   // ── Tooltip customizado ──────────────────────────────────────────────────
 
-  const CustomTooltipAtividade = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null;
-    const point = atividadeData.find((p) => p.periodo === label);
-    return (
-      <div className="bg-popover border border-border rounded-lg p-3 shadow-lg text-sm space-y-1">
-        <p className="font-medium text-foreground mb-1">{point?.label || label}</p>
-        {payload.map((p: any) => (
-          <p key={p.dataKey} style={{ color: p.color }}>
-            {p.name}: {p.dataKey === 'rentabilidade' ? formatCurrency(p.value) : p.value}
-          </p>
-        ))}
-      </div>
-    );
-  };
-
   const PRESET_LABELS: Record<PeriodPreset, string> = {
     semana: 'Esta Semana',
     mes: 'Este Mês',
@@ -670,63 +633,15 @@ const Dashboard = () => {
                     <p className="text-sm">Sem dados no período</p>
                   </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height={220}>
-                    <ComposedChart
-                      data={atividadeData}
-                      margin={{ top: 4, right: 8, left: -10, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
-                      <YAxis
-                        yAxisId="euro"
-                        tick={{ fontSize: 11 }}
-                        tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-                      />
-                      <YAxis
-                        yAxisId="count"
-                        orientation="right"
-                        tick={{ fontSize: 11 }}
-                        allowDecimals={false}
-                      />
-                      <Tooltip content={<CustomTooltipAtividade />} />
-                      <Legend
-                        wrapperStyle={{ fontSize: 12 }}
-                        formatter={(v) =>
-                          v === 'rentabilidade'
-                            ? 'Renda (€)'
-                            : v === 'alugadas'
-                              ? 'Alugadas'
-                              : 'Devolvidas'
-                        }
-                      />
-                      <Bar
-                        yAxisId="euro"
-                        dataKey="rentabilidade"
-                        fill={COLORS.rentabilidade}
-                        radius={[4, 4, 0, 0]}
-                        name="rentabilidade"
-                        opacity={0.85}
-                      />
-                      <Line
-                        yAxisId="count"
-                        type="monotone"
-                        dataKey="alugadas"
-                        stroke={COLORS.alugadas}
-                        strokeWidth={2}
-                        dot={{ r: 3 }}
-                        name="alugadas"
-                      />
-                      <Line
-                        yAxisId="count"
-                        type="monotone"
-                        dataKey="devolvidas"
-                        stroke={COLORS.devolvidas}
-                        strokeWidth={2}
-                        dot={{ r: 3 }}
-                        name="devolvidas"
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
+                  <Suspense
+                    fallback={
+                      <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
+                        A carregar gráfico…
+                      </div>
+                    }
+                  >
+                    <AtividadeChart data={atividadeData} formatCurrency={formatCurrency} />
+                  </Suspense>
                 )}
               </CardContent>
             </Card>

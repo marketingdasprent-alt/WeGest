@@ -11,6 +11,8 @@ import { useToast } from '@/hooks/use-toast';
 
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { useMovimentos } from '@/hooks/useMovimentos';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 import { MovimentosStatsCards } from '@/components/renting/movimentacoes/MovimentosStatsCards';
 import {
@@ -100,6 +102,12 @@ const RentingMovimentacoes = () => {
   const getEstacaoNome = useCallback(
     (id: string | null | undefined) => (id ? (estacaoNomeById.get(id) ?? '—') : '—'),
     [estacaoNomeById]
+  );
+
+  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
+    filtered,
+    50,
+    `${matriculaSearch}|${JSON.stringify(filtros)}`
   );
 
   const handleSort = (col: SortColumn) => {
@@ -207,7 +215,7 @@ const RentingMovimentacoes = () => {
           )}
 
           <MovimentosTabela
-            movimentos={filtered}
+            movimentos={pageItems}
             isLoading={isLoading}
             totalSemFiltros={movimentos.length}
             sortColumn={sortColumn}
@@ -216,10 +224,15 @@ const RentingMovimentacoes = () => {
             onRowClick={(m: Movimento) => navigate(`/renting/movimentacoes/${m.id}`)}
           />
 
-          <div className="px-4 py-3 border-t border-border/50 text-xs text-muted-foreground">
-            {filtered.length} movimento{filtered.length === 1 ? '' : 's'} (de {movimentos.length}{' '}
-            carregado{movimentos.length === 1 ? '' : 's'})
-          </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            start={start}
+            end={end}
+            onPageChange={setPage}
+            noun={['movimento', 'movimentos']}
+          />
         </CardContent>
       </Card>
     </div>

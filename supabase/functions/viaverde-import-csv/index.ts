@@ -170,6 +170,7 @@ Deno.serve(async (req) => {
     let imported = 0,
       matched = 0,
       skipped = 0;
+    const upsertMap = new Map<string, Record<string, unknown>>();
 
     for (const row of rows) {
       const matricula = findField(row, ['matricula']);
@@ -194,27 +195,36 @@ Deno.serve(async (req) => {
 
       const txId = `vv-${normMatricula(matricula)}-${txDate.replace(/\D/g, '')}-${stripAcc(barreira).replace(/\W/g, '')}-${(valorStr || '').replace(/\D/g, '')}`;
 
-      const { error } = await supabase.from('via_verde_transacoes').upsert(
-        {
-          integracao_id,
-          org_id: orgId,
-          transaction_id: txId,
-          contrato: contrato || null,
-          nr_equipamento: equip || null,
-          matricula: matricula || null,
-          viatura_id: viaturaId,
-          motorista_id: motoristaId,
-          tipo_evento: tipo || 'Portagens',
-          transaction_date: txDate,
-          barreira_saida: barreira || null,
-          operador: operador || null,
-          amount,
-          raw_data: row,
-        },
-        { onConflict: 'integracao_id,transaction_id' }
-      );
-      if (!error) imported++;
-      else skipped++;
+      upsertMap.set(txId, {
+        integracao_id,
+        org_id: orgId,
+        transaction_id: txId,
+        contrato: contrato || null,
+        nr_equipamento: equip || null,
+        matricula: matricula || null,
+        viatura_id: viaturaId,
+        motorista_id: motoristaId,
+        tipo_evento: tipo || 'Portagens',
+        transaction_date: txDate,
+        barreira_saida: barreira || null,
+        operador: operador || null,
+        amount,
+        raw_data: row,
+      });
+    }
+
+    // Upsert em lote: 1 round-trip à BD em vez de N (evita timeout em CSVs
+    // grandes). O Map já fez dedup por transaction_id (último vence = onConflict).
+    const batch = Array.from(upsertMap.values());
+    if (batch.length > 0) {
+      const { error } = await supabase
+        .from('via_verde_transacoes')
+        .upsert(batch, { onConflict: 'integracao_id,transaction_id' });
+      if (error) {
+        console.error('viaverde-import-csv bulk upsert error:', error.message);
+      } else {
+        imported = batch.length;
+      }
     }
 
     return new Response(

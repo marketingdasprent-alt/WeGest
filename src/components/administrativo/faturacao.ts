@@ -264,6 +264,28 @@ export function mergeMovimentosToRows(
   const reciboCreditos = raw
     .map((m, i) => ({ m, i }))
     .filter(({ m }) => m.origem === 'recibo' && m.tipo === 'credito');
+
+  // Pré-indexação dos recibos para emparelhar em O(1)/O(k) em vez de O(n²):
+  //   byRef           → por recibo.referencia (match primário = cobranca_id)
+  //   byContratoValor → por contrato_id + valor arredondado (fallback)
+  // Ambos preservam a ordem de reciboCreditos → o "primeiro não-usado" fica
+  // idêntico ao .find() original (ver faturacao.merge.test.ts).
+  type ReciboEntry = { m: MovimentoRaw; i: number };
+  const byRef = new Map<string, ReciboEntry[]>();
+  const byContratoValor = new Map<string, ReciboEntry[]>();
+  for (const entry of reciboCreditos) {
+    const ref = entry.m.recibo?.referencia;
+    if (ref) {
+      const arr = byRef.get(ref);
+      if (arr) arr.push(entry);
+      else byRef.set(ref, [entry]);
+    }
+    const key = `${entry.m.contrato_id}|${round2(entry.m.valor)}`;
+    const arr = byContratoValor.get(key);
+    if (arr) arr.push(entry);
+    else byContratoValor.set(key, [entry]);
+  }
+
   const usados = new Set<number>();
 
   const rows: FaturacaoRow[] = [];
@@ -277,14 +299,13 @@ export function mergeMovimentosToRows(
     // Cobrança "Factura-Recibo" → tentar absorver o recibo correspondente
     if (m.origem === 'cobranca' && m.tipo === 'debito' && isFaturaReciboDesc(m.descricao)) {
       const valor = round2(m.valor);
-      let par = reciboCreditos.find(
-        ({ m: r, i }) => !usados.has(i) && !!m.cobranca_id && r.recibo?.referencia === m.cobranca_id
-      );
+      // 1) match primário por referência (cobranca_id === recibo.referencia)
+      let par = m.cobranca_id
+        ? byRef.get(m.cobranca_id)?.find(({ i }) => !usados.has(i))
+        : undefined;
+      // 2) fallback por contrato + valor
       if (!par) {
-        par = reciboCreditos.find(
-          ({ m: r, i }) =>
-            !usados.has(i) && r.contrato_id === m.contrato_id && round2(r.valor) === valor
-        );
+        par = byContratoValor.get(`${m.contrato_id}|${valor}`)?.find(({ i }) => !usados.has(i));
       }
       if (par) {
         usados.add(par.i);
