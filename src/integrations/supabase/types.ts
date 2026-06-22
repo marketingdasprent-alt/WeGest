@@ -4201,6 +4201,7 @@ export type Database = {
           motivo_rejeicao: string | null
           nif: string | null
           nome: string
+          observacoes: string | null
           org_id: string | null
           outros_documentos: Json | null
           registo_criminal_url: string | null
@@ -4237,6 +4238,7 @@ export type Database = {
           motivo_rejeicao?: string | null
           nif?: string | null
           nome: string
+          observacoes?: string | null
           org_id?: string | null
           outros_documentos?: Json | null
           registo_criminal_url?: string | null
@@ -4273,6 +4275,7 @@ export type Database = {
           motivo_rejeicao?: string | null
           nif?: string | null
           nome?: string
+          observacoes?: string | null
           org_id?: string | null
           outros_documentos?: Json | null
           registo_criminal_url?: string | null
