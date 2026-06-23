@@ -171,6 +171,7 @@ Deno.serve(async (req) => {
     }
 
     let imported = 0, matched = 0, skipped = 0;
+    const upsertMap = new Map<string, Record<string, unknown>>();
 
     for (const row of rows) {
       // "Cartão" (PAN) — evitar "Nome cartão"; por isso candidatos específicos primeiro.
@@ -196,7 +197,7 @@ Deno.serve(async (req) => {
 
       if (motoristaId) matched++;
 
-      const { error } = await supabase.from('edp_transacoes').upsert({
+      upsertMap.set(txId, {
         integracao_id,
         transaction_id: txId,
         transaction_date: txDate,
@@ -207,9 +208,21 @@ Deno.serve(async (req) => {
         motorista_id: motoristaId,
         raw_data: row,
         org_id: orgId,
-      }, { onConflict: 'integracao_id,transaction_id' });
+      });
+    }
 
-      if (!error) imported++;
+    // Upsert em lote: 1 round-trip à BD em vez de N (evita timeout em CSVs
+    // grandes). O Map já fez dedup por transaction_id (último vence = onConflict).
+    const batch = Array.from(upsertMap.values());
+    if (batch.length > 0) {
+      const { error } = await supabase
+        .from('edp_transacoes')
+        .upsert(batch, { onConflict: 'integracao_id,transaction_id' });
+      if (error) {
+        console.error('edp-import-csv bulk upsert error:', error.message);
+      } else {
+        imported = batch.length;
+      }
     }
 
     return new Response(JSON.stringify({ success: true, imported, matched, skipped, total: rows.length }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

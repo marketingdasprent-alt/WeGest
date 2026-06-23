@@ -40,20 +40,26 @@ export const FormulariosTab = () => {
 
       if (formError) throw formError;
 
-      const formulariosComCampanhas = await Promise.all(
-        (formularios || []).map(async (form) => {
-          const { data: campanhas } = await supabase
-            .from('formulario_campanhas')
-            .select('campanha_tag')
-            .eq('formulario_id', form.id);
+      // Campanhas de todos os formulários numa única query (evita N+1).
+      const ids = (formularios || []).map((f) => f.id);
+      const campanhasPorForm = new Map<string, string[]>();
+      if (ids.length > 0) {
+        const { data: campanhas } = await supabase
+          .from('formulario_campanhas')
+          .select('formulario_id, campanha_tag')
+          .in('formulario_id', ids);
+        for (const c of campanhas ?? []) {
+          const arr = campanhasPorForm.get(c.formulario_id) ?? [];
+          arr.push(c.campanha_tag);
+          campanhasPorForm.set(c.formulario_id, arr);
+        }
+      }
 
-          return {
-            ...form,
-            configuracoes: {},
-            campanhas: campanhas?.map((c) => c.campanha_tag) || [],
-          } as Formulario;
-        })
-      );
+      const formulariosComCampanhas = (formularios || []).map((form) => ({
+        ...form,
+        configuracoes: {},
+        campanhas: campanhasPorForm.get(form.id) ?? [],
+      })) as Formulario[];
 
       setFormularios(formulariosComCampanhas);
     } catch (error) {

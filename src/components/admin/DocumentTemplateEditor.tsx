@@ -1,9 +1,13 @@
-﻿import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RichTextEditor, RichTextEditorRef } from './RichTextEditor';
+import type { RichTextEditorRef } from './RichTextEditor';
+// Editor TipTap (~380KB) carregado só quando o editor de template é usado (lazy).
+const RichTextEditor = lazy(() =>
+  import('./RichTextEditor').then((m) => ({ default: m.RichTextEditor }))
+);
 import {
   Select,
   SelectContent,
@@ -443,11 +447,19 @@ export const DocumentTemplateEditor = ({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <RichTextEditor
-                ref={editorRef}
-                content={conteudoCompleto}
-                onChange={setConteudoCompleto}
-              />
+              <Suspense
+                fallback={
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    A carregar editor…
+                  </div>
+                }
+              >
+                <RichTextEditor
+                  ref={editorRef}
+                  content={conteudoCompleto}
+                  onChange={setConteudoCompleto}
+                />
+              </Suspense>
               <div className="mt-2 text-xs text-muted-foreground">
                 {conteudoCompleto.length} caracteres
               </div>

@@ -3,8 +3,8 @@
 // título, subtítulo e, à direita, "Exportado em ..." + nº de viaturas listadas.
 // É gerado com jsPDF e aberto numa janela do browser (PDF viewer) para impressão.
 
-import jsPDF from 'jspdf';
-import * as XLSX from 'xlsx';
+// jsPDF e xlsx são carregados dinamicamente dentro de cada função (só quando
+// o utilizador exporta) — assim não entram no bundle da página Viaturas.
 import { format } from 'date-fns';
 import { getStatusLabel } from '@/lib/viaturas';
 
@@ -76,6 +76,7 @@ interface Coluna {
 }
 
 export async function exportViaturasPdf(viaturas: ViaturaExport[]): Promise<void> {
+  const { default: jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
   const pageW = 297;
   const pageH = 210;
@@ -206,7 +207,8 @@ export async function exportViaturasPdf(viaturas: ViaturaExport[]): Promise<void
 }
 
 // ── EXCEL ─────────────────────────────────────────────────────────
-export function exportViaturasExcel(viaturas: ViaturaExport[]): void {
+export async function exportViaturasExcel(viaturas: ViaturaExport[]): Promise<void> {
+  const XLSX = await import('xlsx');
   const headers = [
     'Matrícula',
     'Marca',

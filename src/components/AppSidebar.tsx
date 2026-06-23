@@ -104,7 +104,12 @@ const items: MenuItem[] = [
       },
     ],
   },
-  { title: 'Calendário', url: '/calendario', icon: CalendarDays, recurso: RECURSOS.CALENDARIO_VER },
+  {
+    title: 'Movimentações',
+    url: '/calendario',
+    icon: CalendarDays,
+    recurso: RECURSOS.CALENDARIO_VER,
+  },
   {
     title: 'Assistência',
     url: '/assistencia',

@@ -5,5 +5,8 @@
       "Bash(pnpm *)",
       "Bash(npx cap *)"
     ]
+  },
+  "enabledPlugins": {
+    "ponytail@ponytail": true
   }
 }

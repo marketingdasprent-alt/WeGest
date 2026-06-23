@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -169,6 +169,11 @@ export function MotoristaDialog({
 }: MotoristaDialogProps) {
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Lock SÍNCRONO contra duplo-submit. O state isSubmitting só desativa o
+  // botão no próximo render; a verificação de duplicado por NIF é TOCTOU
+  // (dois cliques rápidos fazem ambos o SELECT antes de qualquer INSERT).
+  // O ref bloqueia o 2º submit já, sem depender de re-render nem do NIF.
+  const submittingRef = useRef(false);
   const [gestores, setGestores] = useState<{ nome: string }[]>([]);
   const [gestorPopoverOpen, setGestorPopoverOpen] = useState(false);
   const { toast } = useToast();
@@ -374,8 +379,9 @@ export function MotoristaDialog({
   };
 
   const onSubmit = async (values: FormValues) => {
-    // Prevenir duplo clique
-    if (isSubmitting) return;
+    // Prevenir duplo clique (lock síncrono — ver submittingRef acima)
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -489,6 +495,7 @@ export function MotoristaDialog({
         variant: 'destructive',
       });
     } finally {
+      submittingRef.current = false;
       setLoading(false);
       setIsSubmitting(false);
     }

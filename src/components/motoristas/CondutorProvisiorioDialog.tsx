@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -42,6 +42,9 @@ interface Props {
 export function CondutorProvisiorioDialog({ open, onOpenChange, onCreated }: Props) {
   const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
+  // Lock síncrono contra duplo-submit (o disabled do botão só atua no
+  // próximo render — deixava passar um 2º clique rápido e duplicava).
+  const submittingRef = useRef(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -49,6 +52,8 @@ export function CondutorProvisiorioDialog({ open, onOpenChange, onCreated }: Pro
   });
 
   const onSubmit = async (values: FormValues) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       const { data, error } = await supabase
@@ -74,6 +79,7 @@ export function CondutorProvisiorioDialog({ open, onOpenChange, onCreated }: Pro
     } catch (err: any) {
       toast({ title: 'Erro ao criar condutor', description: err.message, variant: 'destructive' });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
