@@ -61,6 +61,9 @@ const baseSchema = z.object({
   tipo_cliente: z.enum(['particular', 'empresa', 'condutor']),
   // Derivado de tipo_cliente (mantido para a lógica de validação existente).
   is_empresa: z.boolean(),
+  // Edição vs criação. Só usado na validação (ex.: validade da carta no
+  // passado só bloqueia ao criar). Não vai para o payload.
+  is_edicao: z.boolean().optional(),
   nome: z.string().min(1, 'Nome é obrigatório'),
   nome_comercial: z.string().optional(),
   nif: optionalRefine(validarNIF),
@@ -152,16 +155,18 @@ function exigirCarta(data: ClienteFormData, ctx: Ctx) {
   exigirCampo(data, ctx, 'carta_pais');
   exigirCampo(data, ctx, 'carta_validade');
 
-  if (
-    data.carta_data_emissao &&
-    data.carta_validade &&
-    data.carta_validade < data.carta_data_emissao
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['carta_validade'],
-      message: 'A validade não pode ser anterior à data de emissão',
-    });
+  // Só ao criar: a carta não pode já estar expirada (apanha erros de
+  // digitação). Na edição não bloqueia — pode haver registos antigos com a
+  // carta vencida que só precisam de mexer noutro campo.
+  if (!data.is_edicao && data.carta_validade) {
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (data.carta_validade < hoje) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['carta_validade'],
+        message: 'A validade não pode estar no passado',
+      });
+    }
   }
 }
 
@@ -226,10 +231,12 @@ export const clienteFormSchema = baseSchema.superRefine((data, ctx) => {
   }
 
   validateComum(data, ctx);
-  validateDocumentos(data, ctx);
   if (data.is_empresa) {
+    // Empresa identifica-se pelo NIF — não tem documento de identificação
+    // (CC/Passaporte) nem carta de condução.
     validateEmpresa(data, ctx);
   } else {
+    validateDocumentos(data, ctx);
     validatePessoa(data, ctx);
   }
 });
@@ -238,6 +245,7 @@ export const clienteFormSchema = baseSchema.superRefine((data, ctx) => {
 export const emptyDefaults: ClienteFormData = {
   tipo_cliente: 'particular',
   is_empresa: false,
+  is_edicao: false,
   nome: '',
   nome_comercial: '',
   nif: '',
