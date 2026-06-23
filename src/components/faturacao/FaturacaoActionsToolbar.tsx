@@ -11,7 +11,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Receipt, FilePlus2, FileMinus } from 'lucide-react';
+import { Receipt, FilePlus2, FileMinus, FilePlus } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -64,6 +64,8 @@ interface Props {
   onFaturar?: () => void;
   faturarLabel?: string;
   faturarDisabled?: boolean;
+  /** Mostra o botão "Nova fatura" (fatura adicional com linhas livres). */
+  onNovaFatura?: () => void;
   /** Cobranças-alvo para recibo / nota de crédito. */
   cobrancas: ToolbarCobranca[];
   onChanged: () => void;
@@ -76,6 +78,7 @@ export function FaturacaoActionsToolbar({
   onFaturar,
   faturarLabel = 'Faturar',
   faturarDisabled,
+  onNovaFatura,
   cobrancas,
   onChanged,
   className,
@@ -148,6 +151,12 @@ export function FaturacaoActionsToolbar({
           <Button type="button" onClick={onFaturar} disabled={faturarDisabled} className="gap-2">
             <FilePlus2 className="h-4 w-4" />
             {faturarLabel}
+          </Button>
+        )}
+        {onNovaFatura && (
+          <Button type="button" variant="outline" onClick={onNovaFatura} className="gap-2">
+            <FilePlus className="h-4 w-4" />
+            Nova fatura
           </Button>
         )}
         <Button

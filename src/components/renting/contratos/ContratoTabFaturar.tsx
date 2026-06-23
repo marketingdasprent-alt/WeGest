@@ -45,6 +45,7 @@ import {
   FaturacaoActionsToolbar,
   type ToolbarCobranca,
 } from '@/components/faturacao/FaturacaoActionsToolbar';
+import { NovaFaturaDialog } from '@/components/faturacao/NovaFaturaDialog';
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -85,6 +86,7 @@ interface Props {
 export function ContratoTabFaturar({ contrato }: Props) {
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [novaFaturaOpen, setNovaFaturaOpen] = useState(false);
   const [reemitindoId, setReemitindoId] = useState<string | null>(null);
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
   const [anularOpen, setAnularOpen] = useState(false);
@@ -502,6 +504,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
             emitente={emitente}
             onFaturar={jaFacturado ? undefined : () => setDialogOpen(true)}
             faturarLabel="Faturar contrato"
+            onNovaFatura={() => setNovaFaturaOpen(true)}
             cobrancas={toolbarCobrancas}
             onChanged={refetchAll}
           />
@@ -649,6 +652,20 @@ export function ContratoTabFaturar({ contrato }: Props) {
         condutorEntidade={condutorEntidade}
         emitente={emitente}
         onFaturado={refetchAll}
+      />
+
+      <NovaFaturaDialog
+        open={novaFaturaOpen}
+        onOpenChange={setNovaFaturaOpen}
+        alvo={{
+          tipo: 'contrato',
+          id: contrato.id,
+          orgId: contrato.org_id,
+          codigoLabel: `Contrato #${String(contrato.codigo).padStart(4, '0')}`,
+        }}
+        destinatario={clienteEntidade}
+        emitente={emitente}
+        onCriada={refetchAll}
       />
 
       <AlertDialog

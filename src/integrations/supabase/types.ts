@@ -1978,6 +1978,7 @@ export type Database = {
           emitida_em: string | null
           estado: Database["public"]["Enums"]["cobranca_estado_enum"]
           id: string
+          manual: boolean
           org_id: string
           pago_em: string | null
           periodo_ate: string
@@ -2005,6 +2006,7 @@ export type Database = {
           emitida_em?: string | null
           estado?: Database["public"]["Enums"]["cobranca_estado_enum"]
           id?: string
+          manual?: boolean
           org_id: string
           pago_em?: string | null
           periodo_ate: string
@@ -2032,6 +2034,7 @@ export type Database = {
           emitida_em?: string | null
           estado?: Database["public"]["Enums"]["cobranca_estado_enum"]
           id?: string
+          manual?: boolean
           org_id?: string
           pago_em?: string | null
           periodo_ate?: string
