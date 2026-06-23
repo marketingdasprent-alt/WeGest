@@ -93,7 +93,7 @@ export const LeadDetailsDialog: React.FC<LeadDetailsDialogProps> = ({
 
   // Função para extrair dados das observações
   const getLeadDisplayData = (lead: Lead) => {
-    let displayData = {
+    const displayData = {
       nome: lead.nome,
       email: lead.email,
       telefone: lead.telefone,

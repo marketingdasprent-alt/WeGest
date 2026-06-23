@@ -46,6 +46,11 @@ import { Loader2, Plus, Pencil, Trash2, Webhook, Play, Settings } from 'lucide-r
 import { IntegracaoCard, type IntegracaoCardData } from './IntegracaoCard';
 import { IntegracaoDialog } from './IntegracaoDialog';
 import { IntegracaoDetailModal } from './IntegracaoDetailModal';
+import {
+  FaturacaoIntegracaoDialog,
+  type FaturacaoConfigRow,
+} from './faturacao/FaturacaoIntegracaoDialog';
+import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import { ImportRobotCsvDialog } from './ImportRobotCsvDialog';
 import { ViaVerdeContaDialog } from './via-verde/ViaVerdeContaDialog';
 import { ImportUberCsvDialog } from '../administrativo/ImportUberCsvDialog';
@@ -95,6 +100,8 @@ export const IntegracoesTab: React.FC = () => {
 
   // Dialogs
   const [newIntegracaoDialogOpen, setNewIntegracaoDialogOpen] = useState(false);
+  const [deleteIntegracaoDialogOpen, setDeleteIntegracaoDialogOpen] = useState(false);
+  const [selectedDeleteCard, setSelectedDeleteCard] = useState<IntegracaoCardData | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedIntegracao, setSelectedIntegracao] = useState<IntegracaoConfig | null>(null);
   const [viaVerdeDialogOpen, setViaVerdeDialogOpen] = useState(false);
@@ -104,6 +111,10 @@ export const IntegracoesTab: React.FC = () => {
   const [importUberDialogOpen, setImportUberDialogOpen] = useState(false);
   const [selectedUberIntegracaoId, setSelectedUberIntegracaoId] = useState<string>('');
   const [executingRobots, setExecutingRobots] = useState<Set<string>>(new Set());
+
+  // Faturação fiscal (config por-org)
+  const [faturacaoDialogOpen, setFaturacaoDialogOpen] = useState(false);
+  const [faturacaoRow, setFaturacaoRow] = useState<FaturacaoConfigRow | null>(null);
 
   // Webhooks
   const [webhooks, setWebhooks] = useState<IntegracaoWebhook[]>([]);
@@ -254,6 +265,24 @@ export const IntegracoesTab: React.FC = () => {
       });
     }
 
+    // Via Verde — integrations created via IntegracaoDialog (plataforma='viaverde', manual upload)
+    integracoes
+      .filter((i) => i.plataforma === ('viaverde' as any))
+      .forEach((i) => {
+        result.push({
+          id: i.id,
+          type: 'via_verde',
+          nome: i.nome,
+          ativo: i.ativo,
+          ultimoSync: i.ultimo_sync,
+          username: null,
+          password: null,
+          connectionMode: 'upload',
+          rawData: i,
+          logoUrl: i.logo_url || '/images/logo-via-verde.png',
+        });
+      });
+
     // Via Verde contas
     vvContas.forEach((conta) => {
       const contaActiva = conta.ftp_ativo || conta.sync_ativo;
@@ -272,12 +301,33 @@ export const IntegracoesTab: React.FC = () => {
       });
     });
 
+    // Faturação fiscal — cartão sempre presente (configurado ou não)
+    const fatRow = (integracoes as any[]).find((i) => i.plataforma === 'faturacao') || null;
+    result.push({
+      id: fatRow?.id ? `fat-${fatRow.id}` : 'fat-novo',
+      type: 'faturacao',
+      nome: 'Faturação',
+      ativo: !!fatRow?.ativo,
+      ultimoSync: null,
+      username: null,
+      password: null,
+      connectionMode: 'api',
+      subLabel: fatRow?.ativo
+        ? faturacaoProviderLabel(fatRow?.config?.provider)
+        : 'Não configurado',
+      rawData: fatRow,
+      logoUrl: null,
+    });
+
     setCards(result);
   };
 
   // Card handlers
   const handleCardEdit = (card: IntegracaoCardData) => {
-    if (card.type === 'via_verde') {
+    if (card.type === 'faturacao') {
+      setFaturacaoRow((card.rawData as FaturacaoConfigRow | null) ?? null);
+      setFaturacaoDialogOpen(true);
+    } else if (card.type === 'via_verde') {
       const conta = card.rawData as ViaVerdeConta;
       setSelectedViaVerdeConta(conta);
       setViaVerdeDialogOpen(true);
@@ -311,6 +361,38 @@ export const IntegracoesTab: React.FC = () => {
     } else {
       setSelectedRobotIntegracaoId(integracao.id);
       setImportRobotDialogOpen(true);
+    }
+  };
+
+  const handleDelete = (card: IntegracaoCardData) => {
+    setSelectedDeleteCard(card);
+    setDeleteIntegracaoDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedDeleteCard) return;
+    try {
+      const isVvConta = selectedDeleteCard.id.startsWith('vv-');
+      if (isVvConta) {
+        const contaId = selectedDeleteCard.id.slice(3);
+        const { error } = await (supabase as any)
+          .from('via_verde_contas')
+          .delete()
+          .eq('id', contaId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('plataformas_configuracao')
+          .delete()
+          .eq('id', selectedDeleteCard.id);
+        if (error) throw error;
+      }
+      toast({ title: 'Integração eliminada.' });
+      setDeleteIntegracaoDialogOpen(false);
+      setSelectedDeleteCard(null);
+      fetchAll();
+    } catch (error: any) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
     }
   };
 
@@ -582,11 +664,16 @@ export const IntegracoesTab: React.FC = () => {
                 key={card.id}
                 data={card}
                 onEdit={handleCardEdit}
-                onSync={card.type !== 'via_verde' ? handleCardSync : undefined}
+                onSync={
+                  card.type !== 'via_verde' && card.type !== 'faturacao'
+                    ? handleCardSync
+                    : undefined
+                }
                 onImport={hasImport ? handleCardImport : undefined}
                 onExecute={
                   isRobotBacked ? handleExecuteRobot : isUberBacked ? handleExecuteUber : undefined
                 }
+                onDelete={card.type !== 'faturacao' ? handleDelete : undefined}
                 isExecuting={executingRobots.has(card.id)}
               />
             );
@@ -724,6 +811,13 @@ export const IntegracoesTab: React.FC = () => {
         />
       )}
 
+      <FaturacaoIntegracaoDialog
+        open={faturacaoDialogOpen}
+        onOpenChange={setFaturacaoDialogOpen}
+        row={faturacaoRow}
+        onSuccess={fetchAll}
+      />
+
       {/* Webhook Create/Edit Dialog */}
       <Dialog open={webhookDialogOpen} onOpenChange={setWebhookDialogOpen}>
         <DialogContent>
@@ -833,6 +927,30 @@ export const IntegracoesTab: React.FC = () => {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteWebhook}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Integration Confirmation */}
+      <AlertDialog open={deleteIntegracaoDialogOpen} onOpenChange={setDeleteIntegracaoDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar integração</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem a certeza que deseja eliminar "{selectedDeleteCard?.nome}"? Todos os dados
+              associados serão removidos permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSelectedDeleteCard(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Eliminar

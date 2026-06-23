@@ -68,18 +68,12 @@ export const InviteGenerationForm = ({ onInviteGenerated }: InviteGenerationForm
     setLoading(true);
 
     try {
-      console.log('=== GERANDO CONVITE PARA USUÁRIO ===');
-      console.log('Email:', email);
-      console.log('Cargo ID:', cargoId);
-
       // Gerar token único
       const token = crypto.randomUUID().replace(/-/g, '');
-      console.log('Token gerado:', token);
 
       // Data de expiração (7 dias)
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
-      console.log('Expira em:', expiresAt.toISOString());
 
       // Remover convites antigos para este email
       await supabase.from('convites').delete().eq('email', email.toLowerCase().trim());
@@ -103,13 +97,9 @@ export const InviteGenerationForm = ({ onInviteGenerated }: InviteGenerationForm
         throw error;
       }
 
-      console.log('✅ Convite criado:', data);
-
       // Gerar link
       const baseUrl = window.location.origin;
       const inviteLink = `${baseUrl}/register?token=${token}`;
-
-      console.log('Link gerado:', inviteLink);
 
       onInviteGenerated(inviteLink);
       setEmail('');

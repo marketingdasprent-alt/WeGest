@@ -21,7 +21,7 @@ interface FranquiaKmsFieldsShape extends FieldValues {
   km_adicional_valor: number | null;
 }
 
-export const FranquiaKmsFields: React.FC = () => {
+export const FranquiaKmsFields: React.FC<{ kmsReadOnly?: boolean }> = ({ kmsReadOnly = false }) => {
   const form = useFormContext<FranquiaKmsFieldsShape>();
 
   return (
@@ -111,7 +111,8 @@ export const FranquiaKmsFields: React.FC = () => {
                     type="number"
                     min={0}
                     placeholder="Ilimitado"
-                    className="bg-background pr-12"
+                    readOnly={kmsReadOnly}
+                    className={kmsReadOnly ? 'bg-muted pr-12' : 'bg-background pr-12'}
                     value={(field.value as number | null) ?? ''}
                     onChange={(e) =>
                       field.onChange(e.target.value === '' ? null : Number(e.target.value))
@@ -143,7 +144,8 @@ export const FranquiaKmsFields: React.FC = () => {
                     min={0}
                     step="0.0001"
                     placeholder="0,00"
-                    className="bg-background pr-12"
+                    readOnly={kmsReadOnly}
+                    className={kmsReadOnly ? 'bg-muted pr-12' : 'bg-background pr-12'}
                     value={(field.value as number | null) ?? ''}
                     onChange={(e) =>
                       field.onChange(e.target.value === '' ? null : Number(e.target.value))

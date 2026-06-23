@@ -304,9 +304,9 @@ export function ReparaCartoes() {
 
         if (match) {
           // Extract cartões
-          let bp = [];
-          let repsol = [];
-          let edp = [];
+          const bp = [];
+          const repsol = [];
+          const edp = [];
 
           const tokens = cartaoRaw.split('/').map((t) => t.trim());
           for (const t of tokens) {

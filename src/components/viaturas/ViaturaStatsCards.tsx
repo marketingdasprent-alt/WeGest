@@ -1,4 +1,4 @@
-import { Car, CheckCircle, AlertTriangle, Wrench, BadgeX } from 'lucide-react';
+import { Car, CheckCircle, AlertTriangle, Wrench } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { ViaturaStatsSummary } from '@/lib/viaturas';
@@ -43,18 +43,10 @@ export function ViaturaStatsCards({ stats, activeFilter, onFilter }: ViaturaStat
       bgColor: 'bg-amber-500/10',
       filter: 'manutencao',
     },
-    {
-      title: 'Vendidas',
-      value: stats.vendidas,
-      icon: BadgeX,
-      color: 'text-destructive',
-      bgColor: 'bg-destructive/10',
-      filter: 'vendida',
-    },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
       {cards.map((card) => {
         const isActive = activeFilter === card.filter;
         return (

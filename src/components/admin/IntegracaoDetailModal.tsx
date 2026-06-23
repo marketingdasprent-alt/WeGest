@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { SINCRONIZACAO_ATIVA } from '@/config/sync';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesUpdate } from '@/integrations/supabase/types';
@@ -898,7 +899,7 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                   <Zap className="mr-2 h-4 w-4" /> Testar Conexão
                 </Button>
               )}
-              {integracao.plataforma === 'robot' && (
+              {SINCRONIZACAO_ATIVA && integracao.plataforma === 'robot' && (
                 <Button variant="outline" onClick={handleExecuteRobot} disabled={executingRobot}>
                   {executingRobot ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

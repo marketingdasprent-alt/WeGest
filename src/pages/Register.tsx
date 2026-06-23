@@ -39,9 +39,6 @@ const Register = () => {
   }, [user, token, navigate]);
 
   const validateAccess = async () => {
-    console.log('=== VALIDAÇÃO DE ACESSO ===');
-    console.log('Token:', token);
-
     try {
       // Verificar se há usuários no sistema
       const { count, error: countError } = await supabase
@@ -55,11 +52,8 @@ const Register = () => {
         return;
       }
 
-      console.log('Total de usuários:', count);
-
       // CASO 1: Sistema vazio (primeiro usuário) - SEM TOKEN
       if (count === 0 && !token) {
-        console.log('Sistema vazio - permitindo primeiro admin');
         setIsFirstUser(true);
         setTokenValid(true);
         setValidatingToken(false);
@@ -68,8 +62,6 @@ const Register = () => {
 
       // CASO 2: Token presente - validar convite
       if (token) {
-        console.log('Validando token:', token);
-
         // Buscar convite COM join para pegar nome do cargo
         const { data: convite, error } = await supabase
           .from('convites')
@@ -94,7 +86,6 @@ const Register = () => {
         }
 
         if (!convite) {
-          console.log('Convite não encontrado ou já usado');
           setTokenValid(false);
           setValidatingToken(false);
           return;
@@ -105,13 +96,11 @@ const Register = () => {
         const agora = new Date();
 
         if (expira < agora) {
-          console.log('Token expirado');
           setTokenValid(false);
           setValidatingToken(false);
           return;
         }
 
-        console.log('Token válido! Convite com cargo:', convite.cargos);
         setEmail(convite.email);
         setCargoId(convite.cargo_id);
         setCargoNome((convite.cargos as any)?.nome || null);
@@ -122,7 +111,6 @@ const Register = () => {
       }
 
       // CASO 3: Sistema tem usuários mas sem token
-      console.log('Sistema tem usuários mas sem token - acesso negado');
       setTokenValid(false);
       setValidatingToken(false);
     } catch (error) {
@@ -156,8 +144,6 @@ const Register = () => {
     setLoading(true);
 
     try {
-      console.log('Registrando usuário:', { email, nome, cargoId, cargoNome, isFirstUser });
-
       const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -177,7 +163,6 @@ const Register = () => {
 
       // Marcar convite como usado se tem token
       if (token) {
-        console.log('Marcando convite como usado');
         await supabase.from('convites').update({ usado: true }).eq('token', token);
       }
 

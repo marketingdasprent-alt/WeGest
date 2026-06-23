@@ -9,16 +9,26 @@ import { EventoDialog } from '@/components/calendario/EventoDialog';
 import { EventoHistoricoDialog } from '@/components/calendario/EventoHistoricoDialog';
 import { CalendarioConfig } from '@/components/calendario/CalendarioConfig';
 import { RelatorioDialog } from '@/components/calendario/RelatorioDialog';
-import { NovoEventoPage } from '@/components/calendario/NovoEventoPage';
+import { NovaMovimentacaoInternaDialog } from '@/components/calendario/NovaMovimentacaoInternaDialog';
 import { RecolhasPendentesDrawer } from '@/components/calendario/RecolhasPendentesDrawer';
 import { CheckOutPendentesDrawer } from '@/components/calendario/CheckOutPendentesDrawer';
 import { ListaEsperaDrawer } from '@/components/calendario/ListaEsperaDrawer';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Settings, CalendarDays, FileDown, PackageCheck, LogOut, Clock } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  CalendarDays,
+  Clock,
+  FileDown,
+  Info,
+  LogOut,
+  PackageCheck,
+  Settings,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { format } from 'date-fns';
+import { EVENTO_COLS } from '@/components/calendario/eventoColumns';
 
 export interface CalendarioEvento {
   id: string;
@@ -31,16 +41,20 @@ export interface CalendarioEvento {
   dia_todo: boolean;
   matricula_devolver: string | null;
   criado_por: string;
+  realizado_por_id: string | null;
+  realizado_em: string | null;
   created_at: string;
   updated_at: string;
   profiles: { nome: string } | null;
+  /** Nome de quem realizou (lookup em profiles via realizado_por_id). */
+  realizador?: { nome: string } | null;
 }
 
 const Calendario: React.FC = () => {
   const { user } = useAuth();
   const { hasPermission, isAdmin, cargo } = usePermissions();
   const queryClient = useQueryClient();
-  const [novoEventoOpen, setNovoEventoOpen] = useState(false);
+  const [novaMovimentacaoOpen, setNovaMovimentacaoOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [historicoOpen, setHistoricoOpen] = useState(false);
   const [relatorioOpen, setRelatorioOpen] = useState(false);
@@ -50,7 +64,6 @@ const Calendario: React.FC = () => {
   const [editingEvento, setEditingEvento] = useState<CalendarioEvento | null>(null);
   const [detailsEvento, setDetailsEvento] = useState<CalendarioEvento | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
   // Realtime subscription - actualiza automaticamente quando qualquer gestor cria/edita/elimina eventos
   useEffect(() => {
@@ -59,6 +72,8 @@ const Calendario: React.FC = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'calendario_eventos' }, () => {
         queryClient.invalidateQueries({ queryKey: ['calendario-eventos'] });
         queryClient.invalidateQueries({ queryKey: ['lista-espera-count'] });
+        queryClient.invalidateQueries({ queryKey: ['checkout-pendentes-count'] });
+        queryClient.invalidateQueries({ queryKey: ['checkin-pendentes-count'] });
       })
       .subscribe();
 
@@ -67,17 +82,53 @@ const Calendario: React.FC = () => {
     };
   }, [queryClient]);
 
-  const { data: recolhasPendentes = [] } = useQuery({
-    queryKey: ['viaturas-pendentes-recolha'],
+  // Badge check-in: lê de eventos (realizado_em IS NULL) — unifica recolha/devolucao/troca.
+  const { data: recolhasPendentesCount = 0 } = useQuery({
+    queryKey: ['checkin-pendentes-count'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('viaturas')
-        .select('id, matricula, marca, modelo, categoria')
-        .eq('status', 'em_recolha')
-        .order('matricula');
+      const now = new Date().toISOString();
+      const { count, error } = await (
+        supabase.from('calendario_eventos').select('id', { count: 'exact', head: true }) as any
+      )
+        .in('tipo', ['recolha', 'devolucao', 'troca'])
+        .eq(EVENTO_COLS.origemTipo, 'contrato')
+        .is(EVENTO_COLS.realizadoEm, null)
+        .lte('data_inicio', now);
       if (error) throw error;
-      return data || [];
+      return count ?? 0;
     },
+    staleTime: 30_000,
+  });
+
+  // Contagem combinada (legacy + renting) para os badges nos botões.
+  const { data: rentingEntregaPendentesCount = 0 } = useQuery({
+    queryKey: ['calendario', 'eventos-pendentes-renting', 'entrega', 'count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('calendario_eventos')
+        .select('id', { count: 'exact', head: true })
+        .eq('origem_tipo', 'contrato_renting')
+        .eq('tipo', 'entrega')
+        .is('realizado_em', null);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    staleTime: 30_000,
+  });
+
+  const { data: rentingRecolhaPendentesCount = 0 } = useQuery({
+    queryKey: ['calendario', 'eventos-pendentes-renting', 'recolha', 'count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('calendario_eventos')
+        .select('id', { count: 'exact', head: true })
+        .eq('origem_tipo', 'contrato_renting')
+        .eq('tipo', 'recolha')
+        .is('realizado_em', null);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    staleTime: 30_000,
   });
 
   const canManageListaEspera = isAdmin || !!cargo?.toLowerCase().includes('supervisor');
@@ -94,17 +145,29 @@ const Calendario: React.FC = () => {
     },
   });
 
-  const { data: checkoutPendentes = [] } = useQuery({
-    queryKey: ['contratos-checkout-pendentes'],
+  // Badge check-out: two-step para evitar falsos positivos de eventos históricos
+  // (realizado_em IS NULL mas contrato já encerrado antes da Fase 4).
+  const { data: checkoutPendentesCount = 0 } = useQuery({
+    queryKey: ['checkout-pendentes-count'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: evs, error: evErr } = await supabase
+        .from('calendario_eventos')
+        .select('origem_id')
+        .eq('tipo', 'entrega')
+        .eq(EVENTO_COLS.origemTipo, 'contrato')
+        .is(EVENTO_COLS.realizadoEm, null);
+      if (evErr) throw evErr;
+      const ids = (evs ?? []).map((e) => e.origem_id).filter((x): x is string => !!x);
+      if (ids.length === 0) return 0;
+      const { count, error: ctErr } = await supabase
         .from('contratos')
-        .select('id')
-        .eq('checkout_pendente', true)
+        .select('id', { count: 'exact', head: true })
+        .in('id', ids)
         .eq('status', 'ativo');
-      if (error) throw error;
-      return data || [];
+      if (ctErr) throw ctErr;
+      return count ?? 0;
     },
+    staleTime: 30_000,
   });
 
   const { data: eventos = [], isLoading } = useQuery({
@@ -133,14 +196,19 @@ const Calendario: React.FC = () => {
 
       if (error) throw error;
 
-      // Buscar nomes dos criadores em separado
-      const criadorIds = [...new Set((data || []).map((e) => e.criado_por))];
+      // Buscar nomes dos criadores E dos realizadores em separado
+      const criadorIds = (data || []).map((e) => e.criado_por);
+      const realizadorIds = (data || [])
+        .map((e) => e.realizado_por_id)
+        .filter((id): id is string => !!id);
+      const allIds = [...new Set([...criadorIds, ...realizadorIds])];
+
       let profilesMap: Record<string, string> = {};
-      if (criadorIds.length > 0) {
+      if (allIds.length > 0) {
         const { data: profiles } = await supabase
           .from('profiles')
           .select('id, nome')
-          .in('id', criadorIds);
+          .in('id', allIds);
         if (profiles) {
           profilesMap = Object.fromEntries(profiles.map((p) => [p.id, p.nome || '']));
         }
@@ -149,6 +217,10 @@ const Calendario: React.FC = () => {
       return (data || []).map((e) => ({
         ...e,
         profiles: profilesMap[e.criado_por] ? { nome: profilesMap[e.criado_por] } : null,
+        realizador:
+          e.realizado_por_id && profilesMap[e.realizado_por_id]
+            ? { nome: profilesMap[e.realizado_por_id] }
+            : null,
       })) as CalendarioEvento[];
     },
   });
@@ -229,10 +301,6 @@ const Calendario: React.FC = () => {
     setEditingEvento(evento);
   };
 
-  const handleNew = () => {
-    setNovoEventoOpen(true);
-  };
-
   const handleDetails = (evento: CalendarioEvento) => {
     setDetailsEvento(evento);
     setHistoricoOpen(true);
@@ -255,13 +323,6 @@ const Calendario: React.FC = () => {
         onOpenChange={setCheckoutPendentesOpen}
         userId={user?.id || ''}
       />
-      {novoEventoOpen && (
-        <NovoEventoPage
-          userId={user?.id || ''}
-          defaultDate={selectedDay || undefined}
-          onClose={() => setNovoEventoOpen(false)}
-        />
-      )}
       {editingEvento && (
         <EventoDialog
           evento={editingEvento}
@@ -269,26 +330,13 @@ const Calendario: React.FC = () => {
           onClose={() => setEditingEvento(null)}
         />
       )}
-      <div className="space-y-6">
+      <div className="flex flex-col h-[calc(100dvh-6rem)] md:h-[calc(100dvh-8rem)] lg:h-[calc(100dvh-4rem)]">
         <StickyPageHeader
-          title="Calendário"
-          description="Agendamento de entregas, devoluções e manutenções"
+          title="Movimentações"
+          description="Agendamento de entregas, devoluções e transferências"
           icon={CalendarDays}
         >
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setListaEsperaOpen(true)}
-              className="relative gap-2"
-            >
-              <Clock className="h-4 w-4 text-pink-500" />
-              <span className="hidden sm:inline">Lista de Espera</span>
-              {listaEsperaCount > 0 && (
-                <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1 flex items-center justify-center text-[10px] bg-pink-500 text-white border-0">
-                  {listaEsperaCount}
-                </Badge>
-              )}
-            </Button>
             {hasPermission('calendario_exportar') && (
               <Button variant="outline" size="icon" onClick={() => setRelatorioOpen(true)}>
                 <FileDown className="h-4 w-4" />
@@ -306,9 +354,9 @@ const Calendario: React.FC = () => {
                 >
                   <LogOut className="h-4 w-4" />
                   <span className="hidden sm:inline">Check Out</span>
-                  {checkoutPendentes.length > 0 && (
+                  {checkoutPendentesCount + rentingEntregaPendentesCount > 0 && (
                     <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1 flex items-center justify-center text-[10px] bg-green-600 text-white border-0">
-                      {checkoutPendentes.length}
+                      {checkoutPendentesCount + rentingEntregaPendentesCount}
                     </Badge>
                   )}
                 </Button>
@@ -319,46 +367,71 @@ const Calendario: React.FC = () => {
                 >
                   <PackageCheck className="h-4 w-4" />
                   <span className="hidden sm:inline">Check In</span>
-                  {recolhasPendentes.length > 0 && (
+                  {recolhasPendentesCount + rentingRecolhaPendentesCount > 0 && (
                     <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1 flex items-center justify-center text-[10px] bg-orange-500 text-white border-0">
-                      {recolhasPendentes.length}
+                      {recolhasPendentesCount + rentingRecolhaPendentesCount}
                     </Badge>
                   )}
                 </Button>
               </>
             )}
-            {hasPermission('calendario_criar') && (
-              <Button onClick={handleNew} className="gap-2">
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Novo Evento</span>
+            <Button
+              variant="outline"
+              onClick={() => setListaEsperaOpen(true)}
+              className="relative gap-2"
+            >
+              <Clock className="h-4 w-4 text-pink-500" />
+              <span className="hidden sm:inline">Lista de Espera</span>
+              {listaEsperaCount > 0 && (
+                <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1 flex items-center justify-center text-[10px] bg-pink-500 text-white border-0">
+                  {listaEsperaCount}
+                </Badge>
+              )}
+            </Button>
+            {hasPermission('renting_movimentacoes') && (
+              <Button
+                variant="outline"
+                onClick={() => setNovaMovimentacaoOpen(true)}
+                className="gap-2"
+              >
+                <ArrowRightLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">Nova Movimentação Interna</span>
               </Button>
             )}
           </div>
         </StickyPageHeader>
 
-        <CalendarioGrid
-          eventos={eventos}
-          currentMonth={currentMonth}
-          onMonthChange={setCurrentMonth}
-          onEventClick={
-            hasPermission('calendario_editar') || hasPermission('calendario_gerir_todos')
-              ? (ev) => {
-                  if (ev.tipo === 'lista_espera' && !canManageListaEspera) return;
-                  handleEdit(ev);
-                }
-              : undefined
-          }
-          onDeleteEvent={
-            hasPermission('calendario_eliminar') || hasPermission('calendario_gerir_todos')
-              ? (id) => deleteMutation.mutate(id)
-              : undefined
-          }
-          onEventDetails={handleDetails}
-          onDaySelect={setSelectedDay}
-          isLoading={isLoading}
-          currentUserId={user?.id}
-          canEditAll={hasPermission('calendario_gerir_todos')}
-        />
+        <div className="shrink-0 mt-2 flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-foreground shadow-sm">
+          <Info className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+          <p className="leading-relaxed">
+            <strong className="font-semibold text-primary">Os eventos são automáticos.</strong>{' '}
+            Entregas, recolhas, trocas e upgrades vêm dos{' '}
+            <strong className="font-semibold">contratos</strong> (ao criar ou versionar); as
+            transferências internas vêm das <strong className="font-semibold">movimentações</strong>
+            . Aqui só consultas e fazes check-in / check-out.
+          </p>
+        </div>
+
+        <div className="flex-1 min-h-0">
+          <CalendarioGrid
+            eventos={eventos}
+            currentMonth={currentMonth}
+            onMonthChange={setCurrentMonth}
+            onEventClick={
+              isAdmin
+                ? (ev) => {
+                    if (ev.tipo === 'lista_espera' && !canManageListaEspera) return;
+                    handleEdit(ev);
+                  }
+                : undefined
+            }
+            onDeleteEvent={isAdmin ? (id) => deleteMutation.mutate(id) : undefined}
+            onEventDetails={handleDetails}
+            isLoading={isLoading}
+            currentUserId={user?.id}
+            canEditAll={hasPermission('calendario_gerir_todos')}
+          />
+        </div>
 
         <EventoHistoricoDialog
           open={historicoOpen}
@@ -372,6 +445,11 @@ const Calendario: React.FC = () => {
           open={relatorioOpen}
           onOpenChange={setRelatorioOpen}
           currentMonth={currentMonth}
+        />
+
+        <NovaMovimentacaoInternaDialog
+          open={novaMovimentacaoOpen}
+          onOpenChange={setNovaMovimentacaoOpen}
         />
       </div>
     </>

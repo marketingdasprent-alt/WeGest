@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { RENOVACAO_OPCOES, RESERVA_ESTADOS } from '@/types/reserva';
-import { CONTRATO_MODALIDADES } from '@/types/contratoRenting';
+import { RENOVACAO_OPCOES, RESERVA_ESTADOS, RESERVA_REGIMES } from '@/types/reserva';
 
 const optionalNumber = z
   .union([z.number(), z.string()])
@@ -27,7 +26,8 @@ export const reservaDialogSchema = z
     estacao_recolha_id: z.string().uuid().nullable().optional(),
 
     data_inicio: datetimeLocal,
-    data_fim: datetimeLocal,
+    // Slot é aberto (sem data fim). Validação condicional no superRefine.
+    data_fim: z.string().optional().nullable(),
 
     cliente_id: z.string().uuid().nullable().optional(),
     cliente_nome: z.string().max(255).optional().nullable(),
@@ -35,12 +35,19 @@ export const reservaDialogSchema = z
     condutor_id: z.string().uuid().nullable().optional(),
     condutor_nome: z.string().max(255).optional().nullable(),
 
-    estado: z.enum(RESERVA_ESTADOS),
+    // Empresa emissora (cliente tipo='empresa') — determina os templates dos
+    // documentos. Obrigatória a partir de confirmada (superRefine).
+    emissor_id: z.string().uuid().nullable().optional(),
 
-    // Modalidade — determina a taxa de IVA (rent-a-car vs TVDE)
-    modalidade: z.enum(CONTRATO_MODALIDADES),
+    // Gestor responsável (profiles.id). Reatribuível por superiores; default
+    // (criador) tratado pela BD. Privacidade por gestor.
+    gestor_id: z.string().uuid().nullable().optional(),
+
+    estado: z.enum(RESERVA_ESTADOS),
+    regime: z.enum(RESERVA_REGIMES).default('rent_a_car'),
 
     valor_total: optionalNumber,
+    slot_valor_semanal: optionalNumber,
     franquia_valor: optionalNumber,
     caucao_valor: optionalNumber,
     kms_incluidos: optionalNumber,
@@ -55,40 +62,97 @@ export const reservaDialogSchema = z
 
     condutores: z
       .array(
-        z.object({
-          cliente_id: z.string().uuid('Cliente inválido'),
-          is_principal: z.boolean().default(false),
-        })
+        z
+          .object({
+            cliente_id: z.string().uuid().nullable().default(null),
+            motorista_id: z.string().uuid().nullable().default(null),
+            is_principal: z.boolean().default(false),
+          })
+          .refine((c) => (c.cliente_id !== null) !== (c.motorista_id !== null), {
+            message: 'Cada condutor tem que ser cliente OU motorista (não ambos).',
+          })
       )
+      .min(1, 'É obrigatório pelo menos um condutor.')
       .default([])
       .refine(
         (lista) => {
-          const ids = lista.map((c) => c.cliente_id);
-          return new Set(ids).size === ids.length;
+          const chaves = lista.map((c) => c.cliente_id ?? c.motorista_id);
+          return new Set(chaves).size === chaves.length;
         },
-        { message: 'Cada cliente só pode aparecer uma vez como condutor.' }
+        { message: 'Cada entidade só pode aparecer uma vez como condutor.' }
       )
       .refine((lista) => lista.filter((c) => c.is_principal).length <= 1, {
         message: 'Apenas um condutor pode ser principal.',
       }),
   })
-  .refine((d) => new Date(d.data_fim).getTime() > new Date(d.data_inicio).getTime(), {
-    message: 'Data fim tem que ser posterior à data início',
-    path: ['data_fim'],
-  })
-  .refine(
-    (d) => {
-      const diffDays =
-        (new Date(d.data_fim).getTime() - new Date(d.data_inicio).getTime()) /
-        (1000 * 60 * 60 * 24);
-      return diffDays <= 365;
-    },
-    { message: 'Duração máxima: 365 dias', path: ['data_fim'] }
-  )
-  // Validação condicional: estado confirmada/em_curso exige dados completos.
-  // Reserva pendente pode ser rascunho com cliente/viatura/estações por preencher.
+  // Validações condicionais ao regime e estado.
   .superRefine((d, ctx) => {
+    const isSlot = d.regime === 'slot';
     const exigeCompleto = d.estado === 'confirmada' || d.estado === 'em_curso';
+
+    // Emissor: obrigatório a partir de confirmada, em qualquer regime —
+    // é a empresa cujos templates assinam os documentos da reserva.
+    if (exigeCompleto && !d.emissor_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['emissor_id'],
+        message: 'Empresa emissora obrigatória quando a reserva é confirmada ou está em curso',
+      });
+    }
+
+    // data_fim: obrigatória e válida fora do regime slot (slot é aberto).
+    if (!isSlot) {
+      if (!d.data_fim || Number.isNaN(new Date(d.data_fim).getTime())) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['data_fim'],
+          message: 'Data fim obrigatória',
+        });
+      } else {
+        const inicio = new Date(d.data_inicio).getTime();
+        const fim = new Date(d.data_fim).getTime();
+        if (fim <= inicio) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['data_fim'],
+            message: 'Data fim tem que ser posterior à data início',
+          });
+        } else if ((fim - inicio) / (1000 * 60 * 60 * 24) > 365) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['data_fim'],
+            message: 'Duração máxima: 365 dias',
+          });
+        }
+      }
+    }
+
+    // Slot: exige a viatura (carro do motorista); cliente/estações não se aplicam.
+    if (isSlot) {
+      if (!d.viatura_id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['viatura_id'],
+          message: 'Seleciona a viatura (carro do motorista)',
+        });
+      }
+      return;
+    }
+
+    // Viatura é SEMPRE obrigatória, mesmo em reserva pendente (rascunho) — não
+    // se cria reserva sem viatura associada (a disponibilidade/overbooking é
+    // calculada por viatura). Os restantes campos (cliente/estações) só são
+    // exigidos quando o estado avança para confirmada/em_curso.
+    if (!d.viatura_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['viatura_id'],
+        message: 'Viatura obrigatória',
+      });
+    }
+
+    // Validação condicional: estado confirmada/em_curso exige dados completos.
+    // Reserva pendente pode ser rascunho com cliente/estações por preencher.
     if (!exigeCompleto) return;
 
     if (!d.cliente_id) {
@@ -98,13 +162,7 @@ export const reservaDialogSchema = z
         message: 'Cliente obrigatório quando a reserva é confirmada ou está em curso',
       });
     }
-    if (!d.viatura_id) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['viatura_id'],
-        message: 'Viatura obrigatória quando a reserva é confirmada ou está em curso',
-      });
-    }
+    // Viatura já validada acima (obrigatória sempre) — não repetir aqui.
     if (!d.estacao_entrega_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -112,7 +170,9 @@ export const reservaDialogSchema = z
         message: 'Estação de entrega obrigatória',
       });
     }
-    if (!d.estacao_recolha_id) {
+    // Estação de recolha só é obrigatória em rent-a-car. Em TVDE o condutor fica
+    // com a viatura (sem devolução), por isso não se exige recolha.
+    if (d.regime === 'rent_a_car' && !d.estacao_recolha_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['estacao_recolha_id'],

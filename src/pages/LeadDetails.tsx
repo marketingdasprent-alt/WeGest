@@ -317,7 +317,7 @@ const LeadDetails: React.FC = () => {
   const [formFieldsData, setFormFieldsData] = useState<Record<string, FormFieldData>>({});
 
   const getLeadDisplayData = (lead: Lead) => {
-    let displayData = {
+    const displayData = {
       nome: lead.nome,
       email: lead.email,
       telefone: lead.telefone,

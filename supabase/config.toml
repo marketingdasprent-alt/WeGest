@@ -107,3 +107,8 @@ verify_jwt = false
 
 [functions.primavera-api]
 verify_jwt = false
+
+# Faturação fiscal (provider-agnostic). Iniciada sempre por utilizador
+# autenticado → exige JWT válido (usa get_current_org_id + RLS no invoices).
+[functions.faturacao-emitir]
+verify_jwt = true

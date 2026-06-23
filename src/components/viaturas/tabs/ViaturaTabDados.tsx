@@ -42,6 +42,7 @@ import {
   AlertCircle,
   CheckCircle2,
   FolderUp,
+  Lock,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -50,7 +51,9 @@ import {
   getStatusBadgeClass,
   getStatusLabel,
   getStatusColorClass,
+  deriveViaturaEstado,
 } from '@/lib/viaturas';
+import { useViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 
 const viaturaSchema = z.object({
   matricula: z
@@ -74,6 +77,7 @@ const viaturaSchema = z.object({
   observacoes: z.string().optional(),
   grupo_id: z.string().optional(),
   is_slot: z.boolean().default(false),
+  habilitada_tvde: z.boolean().default(false),
   estacao_id: z.string().optional(),
   extintor_numero: z.string().optional(),
   extintor_validade: z.string().optional(),
@@ -102,6 +106,7 @@ interface Viatura {
   observacoes?: string | null;
   grupo_id?: string | null;
   is_slot?: boolean | null;
+  habilitada_tvde?: boolean | null;
   estacao_id?: string | null;
   extintor_numero?: string | null;
   extintor_validade?: string | null;
@@ -201,6 +206,7 @@ interface Estacao {
 interface ViaturasTipo {
   id: string;
   nome: string;
+  elegivel_tvde?: boolean;
 }
 
 interface RentingGrupo {
@@ -218,6 +224,12 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   const [marcas, setMarcas] = useState<ViaturaMarca[]>([]);
   const [modelos, setModelos] = useState<ViaturaModelo[]>([]);
   const [combustiveis, setCombustiveis] = useState<ViaturaCombustivel[]>([]);
+
+  // Estado derivado da viatura (considera ocupações ativas: contrato, reserva, movimento)
+  const { data: fontesMap } = useViaturasOcupacao();
+  const estadoDerivedado = viatura
+    ? deriveViaturaEstado(viatura, fontesMap?.get(viatura.id))
+    : null;
 
   // Batch upload
   const batchInputRef = useRef<HTMLInputElement | null>(null);
@@ -237,7 +249,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       );
     supabase
       .from('viatura_tipos')
-      .select('id, nome')
+      .select('id, nome, elegivel_tvde')
       .eq('ativo', true)
       .order('nome')
       .then(
@@ -294,6 +306,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       observacoes: '',
       grupo_id: '',
       is_slot: false,
+      habilitada_tvde: false,
       estacao_id: '',
       extintor_numero: '',
       extintor_validade: '',
@@ -301,35 +314,50 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
     },
   });
 
+  // Subscrição ao estado dirty (lida em render) para o guard do reset abaixo.
+  const isFormDirty = form.formState.isDirty;
+
+  // Sincroniza o formulário com a viatura. É reaplicado à medida que as listas de
+  // opções (marcas, modelos, combustíveis, tipos, grupos, estações) carregam,
+  // porque os <Select> ligados aos IDs (marca_id, modelo_id, …) só mostram o valor
+  // guardado se a respetiva <SelectItem> já estiver montada quando o valor é
+  // definido. Sem isto, ao reentrar numa viatura os dropdowns apareciam vazios
+  // (as opções chegavam depois do reset). O guard isFormDirty evita sobrepor
+  // edições do utilizador ainda por guardar.
   useEffect(() => {
-    if (viatura) {
-      form.reset({
-        matricula: viatura.matricula || '',
-        marca: viatura.marca || '',
-        modelo: viatura.modelo || '',
-        marca_id: viatura.marca_id || '',
-        modelo_id: viatura.modelo_id || '',
-        combustivel_id: viatura.combustivel_id || '',
-        ano: viatura.ano?.toString() || '',
-        cor: viatura.cor || '',
-        categoria: viatura.categoria || '',
-        combustivel: viatura.combustivel || '',
-        status: viatura.status || 'disponivel',
-        km_atual: viatura.km_atual?.toString() || '',
-        numero_motor: viatura.numero_motor || '',
-        numero_chassis: viatura.numero_chassis || '',
-        data_matricula: viatura.data_matricula || '',
-        observacoes: viatura.observacoes || '',
-        grupo_id: viatura.grupo_id || '',
-        is_slot: viatura.is_slot || false,
-        estacao_id: viatura.estacao_id || '',
-        extintor_numero: viatura.extintor_numero || '',
-        extintor_validade: viatura.extintor_validade || '',
-        tipo_id: viatura.tipo_id || '',
-      });
-      loadDocuments();
-    }
-  }, [viatura, form, viaturasTipos]);
+    if (!viatura || isFormDirty) return;
+    form.reset({
+      matricula: viatura.matricula || '',
+      marca: viatura.marca || '',
+      modelo: viatura.modelo || '',
+      marca_id: viatura.marca_id || '',
+      modelo_id: viatura.modelo_id || '',
+      combustivel_id: viatura.combustivel_id || '',
+      ano: viatura.ano?.toString() || '',
+      cor: viatura.cor || '',
+      categoria: viatura.categoria || '',
+      combustivel: viatura.combustivel || '',
+      status: viatura.status === 'em_uso' ? 'disponivel' : viatura.status || 'disponivel',
+      km_atual: viatura.km_atual?.toString() || '',
+      numero_motor: viatura.numero_motor || '',
+      numero_chassis: viatura.numero_chassis || '',
+      data_matricula: viatura.data_matricula || '',
+      observacoes: viatura.observacoes || '',
+      grupo_id: viatura.grupo_id || '',
+      is_slot: viatura.is_slot || false,
+      habilitada_tvde: viatura.habilitada_tvde || false,
+      estacao_id: viatura.estacao_id || '',
+      extintor_numero: viatura.extintor_numero || '',
+      extintor_validade: viatura.extintor_validade || '',
+      tipo_id: viatura.tipo_id || '',
+    });
+  }, [viatura, form, isFormDirty, viaturasTipos, marcas, modelos, combustiveis, grupos, estacoes]);
+
+  // Documentos: carregar uma vez por viatura.
+  useEffect(() => {
+    if (viatura?.id) loadDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viatura?.id]);
 
   // Fetch modelos when marca_id changes
   const watchedMarcaId = form.watch('marca_id');
@@ -399,6 +427,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       observacoes: data.observacoes || null,
       grupo_id: data.grupo_id || null,
       is_slot: data.is_slot,
+      habilitada_tvde: data.habilitada_tvde,
       estacao_id: data.estacao_id || null,
       extintor_numero: data.extintor_numero || null,
       extintor_validade: data.extintor_validade || null,
@@ -638,27 +667,43 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                     name="status"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger
-                              className={`font-bold transition-all ${getStatusColorClass(field.value)}`}
+                        <FormLabel>Estado</FormLabel>
+                        {estadoDerivedado && estadoDerivedado !== 'disponivel' ? (
+                          <div className="flex items-center gap-2.5 py-1.5">
+                            <Badge
+                              className={`${getStatusBadgeClass(estadoDerivedado)} whitespace-nowrap px-2.5 py-0.5 text-xs font-medium`}
                             >
-                              <SelectValue placeholder="Selecionar Status" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="disponivel">🟢 Disponível</SelectItem>
-                            <SelectItem value="em_uso">🔵 Em Uso</SelectItem>
-                            <SelectItem value="manutencao" disabled={field.value !== 'manutencao'}>
-                              🟠 Manutenção {field.value !== 'manutencao' && '(Apenas via Ticket)'}
-                            </SelectItem>
-                            <SelectItem value="inativo">⚪ Inativo</SelectItem>
-                            <SelectItem value="vendida" disabled={field.value !== 'vendida'}>
-                              🔴 Vendida {field.value !== 'vendida' && '(Apenas via Financeiro)'}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
+                              {getStatusLabel(estadoDerivedado)}
+                            </Badge>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground/60">
+                              <Lock className="h-3 w-3 shrink-0" />
+                              gerido automaticamente
+                            </span>
+                          </div>
+                        ) : (
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger
+                                className={`font-medium transition-all ${getStatusColorClass(field.value)}`}
+                              >
+                                <SelectValue placeholder="Selecionar estado" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="disponivel">Disponível</SelectItem>
+                              <SelectItem value="inativo">Inativo</SelectItem>
+                              <SelectItem
+                                value="manutencao"
+                                disabled={field.value !== 'manutencao'}
+                              >
+                                Manutenção{field.value !== 'manutencao' && ' (Automático)'}
+                              </SelectItem>
+                              <SelectItem value="vendida" disabled={field.value !== 'vendida'}>
+                                Vendida{field.value !== 'vendida' && ' (Apenas via Financeiro)'}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -835,7 +880,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                   {(() => {
                     const tipoId = form.watch('tipo_id');
                     const tipo = viaturasTipos.find((t) => t.id === tipoId);
-                    if (!tipo?.nome?.toLowerCase().includes('tvde')) return null;
+                    if (!tipo?.elegivel_tvde) return null;
                     return (
                       <FormField
                         control={form.control}
@@ -922,19 +967,31 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                   />
                 </div>
 
-                {/* Card Viatura SLOT — só visível para TVDE */}
+                {/* Cards TVDE — só visíveis para tipos elegíveis a TVDE */}
                 {(() => {
                   const tipoId = form.watch('tipo_id');
                   const tipo = viaturasTipos.find((t) => t.id === tipoId);
-                  if (!tipo?.nome?.toLowerCase().includes('tvde')) return null;
+                  if (!tipo?.elegivel_tvde) return null;
                   return (
-                    <div className="md:col-span-3 mt-2">
+                    <div className="md:col-span-3 mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+                        <div>
+                          <p className="font-medium">Elegível para TVDE?</p>
+                          <Badge variant={form.watch('habilitada_tvde') ? 'default' : 'secondary'}>
+                            {form.watch('habilitada_tvde') ? 'Sim' : 'Não'}
+                          </Badge>
+                        </div>
+                        <Switch
+                          checked={form.watch('habilitada_tvde')}
+                          onCheckedChange={(checked) => form.setValue('habilitada_tvde', checked)}
+                        />
+                      </div>
                       <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
                         <div>
                           <p className="font-medium">Viatura SLOT</p>
-                          <p className="text-sm text-muted-foreground">
-                            {form.watch('is_slot') ? '🟢 Activo' : '🔴 Inactivo'}
-                          </p>
+                          <Badge variant={form.watch('is_slot') ? 'default' : 'secondary'}>
+                            {form.watch('is_slot') ? 'Ativo' : 'Inativo'}
+                          </Badge>
                         </div>
                         <Switch
                           checked={form.watch('is_slot')}

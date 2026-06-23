@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import {
   Building,
   Car,
   IdCard,
+  MessageSquare,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -55,7 +56,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { DocumentPreviewPanel } from '@/components/motoristas/DocumentPreviewPanel';
-import { cn, normalizeString } from '@/lib/utils';
+import { cn, matchesSearch } from '@/lib/utils';
 
 interface Candidatura {
   id: string;
@@ -70,10 +71,12 @@ interface Candidatura {
   documento_numero: string | null;
   documento_validade: string | null;
   documento_ficheiro_url: string | null;
+  documento_identificacao_verso_url: string | null;
   carta_conducao: string | null;
   carta_categorias: string[] | null;
   carta_validade: string | null;
   carta_ficheiro_url: string | null;
+  carta_conducao_verso_url: string | null;
   licenca_tvde_numero: string | null;
   licenca_tvde_validade: string | null;
   licenca_tvde_ficheiro_url: string | null;
@@ -85,6 +88,7 @@ interface Candidatura {
   data_submissao: string | null;
   data_decisao: string | null;
   motivo_rejeicao: string | null;
+  observacoes?: string | null;
   created_at: string;
 }
 
@@ -135,10 +139,28 @@ const MotoristaCandidaturas: React.FC = () => {
   const [approvedMotorista, setApprovedMotorista] = useState<any>(null);
 
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     loadCandidaturas();
   }, []);
+
+  // Deep-link a partir do popup de notificações (?candidatura=<id>):
+  // abre logo o detalhe assim que as candidaturas carregam, e limpa o param.
+  useEffect(() => {
+    const id = searchParams.get('candidatura');
+    if (!id || candidaturas.length === 0) return;
+
+    const found = candidaturas.find((c) => c.id === id);
+    if (found) {
+      setSelectedCandidatura(found);
+      setSelectedDocIndex(0);
+      setDetailsOpen(true);
+    }
+
+    searchParams.delete('candidatura');
+    setSearchParams(searchParams, { replace: true });
+  }, [candidaturas, searchParams, setSearchParams]);
 
   const loadCandidaturas = async () => {
     setLoading(true);
@@ -163,15 +185,14 @@ const MotoristaCandidaturas: React.FC = () => {
   };
 
   const filteredCandidaturas = candidaturas.filter((c) => {
-    const term = normalizeString(searchTerm);
-    const matchesSearch =
-      normalizeString(c.nome).includes(term) ||
-      normalizeString(c.email).includes(term) ||
-      (c.nif && normalizeString(c.nif).includes(term));
+    const matchesSearchResult =
+      matchesSearch(c.nome, searchTerm) ||
+      matchesSearch(c.email, searchTerm) ||
+      (c.nif && matchesSearch(c.nif, searchTerm));
 
     const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
 
-    return matchesSearch && matchesStatus;
+    return matchesSearchResult && matchesStatus;
   });
 
   const stats = {
@@ -282,7 +303,7 @@ const MotoristaCandidaturas: React.FC = () => {
   const getDocumentsForCandidatura = (candidatura: Candidatura): DocumentInfo[] => {
     return [
       {
-        label: 'Documento de Identificação',
+        label: 'Documento de Identificação (Frente)',
         url: candidatura.documento_ficheiro_url,
         type:
           TIPO_DOCUMENTO_LABELS[candidatura.documento_tipo || ''] ||
@@ -292,8 +313,25 @@ const MotoristaCandidaturas: React.FC = () => {
         validity: candidatura.documento_validade,
       },
       {
-        label: 'Carta de Condução',
+        label: 'Documento de Identificação (Verso)',
+        url: candidatura.documento_identificacao_verso_url,
+        type:
+          TIPO_DOCUMENTO_LABELS[candidatura.documento_tipo || ''] ||
+          candidatura.documento_tipo ||
+          'ID',
+        icon: <IdCard className="h-4 w-4" />,
+        validity: candidatura.documento_validade,
+      },
+      {
+        label: 'Carta de Condução (Frente)',
         url: candidatura.carta_ficheiro_url,
+        type: 'Carta',
+        icon: <Car className="h-4 w-4" />,
+        validity: candidatura.carta_validade,
+      },
+      {
+        label: 'Carta de Condução (Verso)',
+        url: candidatura.carta_conducao_verso_url,
         type: 'Carta',
         icon: <Car className="h-4 w-4" />,
         validity: candidatura.carta_validade,
@@ -558,6 +596,21 @@ const MotoristaCandidaturas: React.FC = () => {
                         </div>
                       </div>
                     </div>
+
+                    {selectedCandidatura.observacoes && (
+                      <>
+                        <Separator />
+                        <div>
+                          <h4 className="font-semibold mb-3 flex items-center gap-2">
+                            <MessageSquare className="h-4 w-4" />
+                            Observações do candidato
+                          </h4>
+                          <p className="whitespace-pre-wrap rounded-lg bg-muted/30 p-4 text-sm">
+                            {selectedCandidatura.observacoes}
+                          </p>
+                        </div>
+                      </>
+                    )}
 
                     <Separator />
 

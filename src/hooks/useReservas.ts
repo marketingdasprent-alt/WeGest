@@ -18,12 +18,14 @@ export interface UseReservasOptions {
 }
 
 const SELECT_COLUMNS = `
-  id, codigo, viatura_id, matricula, grupo,
+  id, org_id, codigo, viatura_id, matricula, grupo,
   estacao_entrega_id, estacao_recolha_id,
   data_inicio, data_fim,
   cliente_id, cliente_nome,
   condutor_id, condutor_nome,
-  estado, modalidade, valor_total,
+  emissor_id,
+  gestor_id,
+  estado, regime, slot_valor_semanal, valor_total,
   observacoes, observacoes_internas,
   is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias,
   franquia_valor, caucao_valor, kms_incluidos, km_adicional_valor,

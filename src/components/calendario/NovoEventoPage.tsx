@@ -21,6 +21,7 @@ import {
   ArrowLeftRight,
   Info,
   AlertCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 export { SearchableDropdown, formatMatricula } from './calendarioUtils';
@@ -111,36 +112,50 @@ interface Props {
 // upgrade   → igual à troca, mas o tipo fica gravado para o dashboard calcular
 //             variação de renda (valor_aluguer).
 
-const TIPOS = [
+type TipoEvento = {
+  value: string;
+  label: string;
+  color: string;
+  desc: string;
+  /** Em transição: vai ser substituído pelo fluxo Reserva → Contrato. */
+  legacy?: boolean;
+};
+
+const TIPOS: TipoEvento[] = [
   {
     value: 'entrega',
     label: 'Entrega',
     color: 'border-green-500 bg-green-500/10 text-green-700',
     desc: 'Entregar viatura a um motorista',
+    legacy: true,
   },
   {
     value: 'recolha',
     label: 'Recolha',
     color: 'border-blue-500 bg-blue-500/10 text-blue-700',
     desc: 'Motorista entrega a viatura — pendente chegada ao parque',
+    legacy: true,
   },
   {
     value: 'devolucao',
     label: 'Devolução',
     color: 'border-orange-500 bg-orange-500/10 text-orange-700',
     desc: 'Viatura já entregue no parque — fica disponível imediatamente',
+    legacy: true,
   },
   {
     value: 'troca',
     label: 'Troca',
     color: 'border-purple-500 bg-purple-500/10 text-purple-700',
     desc: 'Substituir viatura para o mesmo motorista',
+    legacy: true,
   },
   {
     value: 'upgrade',
     label: 'Upgrade / Downgrade',
     color: 'border-yellow-500 bg-yellow-500/10 text-yellow-700',
     desc: 'Mudar categoria de viatura (impacto no dashboard)',
+    legacy: true,
   },
   {
     value: 'lista_espera',
@@ -690,13 +705,23 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
                   type="button"
                   onClick={() => setTipo(t.value)}
                   className={cn(
-                    'rounded-lg border-2 px-3 py-2.5 text-left transition-all text-sm',
+                    'rounded-lg border-2 px-3 py-2.5 text-left transition-all text-sm relative',
                     tipo === t.value
                       ? t.color + ' font-semibold border-opacity-100'
                       : 'border-border hover:border-primary/40 hover:bg-muted/50 text-foreground'
                   )}
                 >
-                  <div className="font-medium">{t.label}</div>
+                  <div className="font-medium flex items-center justify-between gap-1">
+                    <span>{t.label}</span>
+                    {t.legacy && (
+                      <span
+                        className="text-[9px] uppercase tracking-wide px-1 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-semibold"
+                        title="Este fluxo vai ser substituído por Reserva → Contrato"
+                      >
+                        legado
+                      </span>
+                    )}
+                  </div>
                   <div
                     className={cn(
                       'text-xs mt-0.5 leading-tight',
@@ -708,6 +733,17 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
                 </button>
               ))}
             </div>
+            {TIPOS.find((t) => t.value === tipo)?.legacy && (
+              <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  Este tipo de evento vai ser substituído pelo fluxo{' '}
+                  <strong>Reserva → Contrato</strong>. Quando os contratos passarem a uso
+                  operacional, prefere criar a partir de uma reserva — os eventos no calendário
+                  passam a ser gerados automaticamente.
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── Viatura + Motorista ── */}

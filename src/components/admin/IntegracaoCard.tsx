@@ -1,4 +1,5 @@
 import React from 'react';
+import { SINCRONIZACAO_ATIVA } from '@/config/sync';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,11 +20,18 @@ import {
   Upload,
   Play,
   Loader2,
+  Receipt,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 
-export type IntegracaoCardType = 'bolt' | 'uber' | 'via_verde' | 'combustivel' | 'robot';
+export type IntegracaoCardType =
+  | 'bolt'
+  | 'uber'
+  | 'via_verde'
+  | 'combustivel'
+  | 'robot'
+  | 'faturacao';
 
 export interface IntegracaoCardData {
   id: string;
@@ -63,7 +71,7 @@ const PLATFORM_META: Record<IntegracaoCardType, { label: string; logo: string; c
   },
   via_verde: {
     label: 'Via Verde',
-    logo: '/images/x-saver.png',
+    logo: '/images/logo-via-verde.png',
     color: 'hsl(var(--chart-2))',
   },
   combustivel: {
@@ -75,6 +83,11 @@ const PLATFORM_META: Record<IntegracaoCardType, { label: string; logo: string; c
     label: 'Robot',
     logo: '/images/comfort.png',
     color: 'hsl(var(--chart-5))',
+  },
+  faturacao: {
+    label: 'Faturação',
+    logo: '',
+    color: 'hsl(var(--chart-1))',
   },
 };
 export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
@@ -113,11 +126,15 @@ export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-muted/60 flex items-center justify-center overflow-hidden p-1">
-              <img
-                src={data.logoUrl || meta.logo}
-                alt={meta.label}
-                className="h-full w-full object-contain"
-              />
+              {data.type === 'faturacao' ? (
+                <Receipt className="h-5 w-5 text-muted-foreground" />
+              ) : (
+                <img
+                  src={data.logoUrl || meta.logo}
+                  alt={meta.label}
+                  className="h-full w-full object-contain"
+                />
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -144,7 +161,7 @@ export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
                 <Pencil className="mr-2 h-4 w-4" />
                 Editar
               </DropdownMenuItem>
-              {onSync && (
+              {SINCRONIZACAO_ATIVA && onSync && (
                 <DropdownMenuItem onClick={() => onSync(data)}>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Sincronizar
@@ -179,7 +196,7 @@ export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${connectionDotColor}`} />
           <span className="text-xs text-muted-foreground">{connectionLabel}</span>
-          {data.ativo && onExecute && (
+          {SINCRONIZACAO_ATIVA && data.ativo && onExecute && (
             <Button
               variant="ghost"
               size="icon"

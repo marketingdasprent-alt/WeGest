@@ -6,7 +6,15 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { ArrowLeft, Loader2, Car, CalendarDays, MapPin, ArrowLeftRight } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Loader2,
+  Car,
+  CalendarDays,
+  MapPin,
+  ArrowLeftRight,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMatricula } from './calendarioUtils';
 import { DatePickerField, TimePickerField } from './calendarioPickers';
@@ -180,6 +188,27 @@ export const EventoDialog: React.FC<Props> = ({ evento, userId, onClose }) => {
       {/* ── Body ── */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+          {/* Banner de realização — preenchido pelo trigger quando alguém
+              executa a entrega/recolha. Só aparece se evento foi realizado. */}
+          {evento.realizado_em && (
+            <div className="flex items-start gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-emerald-800 dark:text-emerald-300">
+              <CheckCircle2 className="h-5 w-5 mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <p className="font-semibold">Evento realizado</p>
+                <p>
+                  Por <span className="font-medium">{evento.realizador?.nome ?? '—'}</span> em{' '}
+                  {new Date(evento.realizado_em).toLocaleString('pt-PT', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Tipo de Evento */}
           <div className="space-y-2">
             <Label>Tipo de Evento</Label>

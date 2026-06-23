@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Car,
@@ -12,6 +12,11 @@ import {
   ArrowUp,
   ArrowDown,
   Layers,
+  ChevronLeft,
+  ChevronRight,
+  Printer,
+  FileSpreadsheet,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,8 +27,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -42,9 +45,17 @@ import { ViaturaStatsCards } from '@/components/viaturas/ViaturaStatsCards';
 import { DeleteViaturaDialog } from '@/components/viaturas/DeleteViaturaDialog';
 import { ImportViaturasDialog } from '@/components/viaturas/ImportViaturasDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getCategoriaBadgeClass, getStatusBadgeClass, getStatusLabel } from '@/lib/viaturas';
+import {
+  getCategoriaBadgeClass,
+  getStatusBadgeClass,
+  getStatusLabel,
+  deriveViaturaEstado,
+  ESTADOS_EM_USO,
+} from '@/lib/viaturas';
 import { cn } from '@/lib/utils';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
+import { exportViaturasPdf, exportViaturasExcel } from '@/utils/viaturasExport';
+import { useViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 
 interface ViaturasTipo {
   id: string;
@@ -78,6 +89,20 @@ interface Viatura {
 type SortColumn = 'matricula' | 'marca' | 'ano' | 'km_atual' | 'status';
 type SortDirection = 'asc' | 'desc';
 
+const PAGE_SIZE_OPTIONS = ['10', '25', '50', '100', 'all'] as const;
+
+/** Lower-case + strip diacritics + strip dashes/spaces — pesquisa de matrícula/marca/modelo. */
+function normalizeSearch(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[-\s]/g, '');
+}
+
+/** Define se uma viatura entra no âmbito do filtro de status quanto a vendidas. */
+function matchesVendaScope(v: { is_vendida?: boolean | null }, statusFilter: string): boolean {
+  if (statusFilter === 'vendido') return !!v.is_vendida;
+  if (statusFilter === 'todos_vendidos') return true;
+  return !v.is_vendida;
+}
+
 export default function Viaturas() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -87,7 +112,6 @@ export default function Viaturas() {
   const [statusFilter, setStatusFilter] = useState<string>(
     () => searchParams.get('status') || 'all'
   );
-  const [mostrarVendidas, setMostrarVendidas] = useState(false);
   const [categoriaFilter, setCategoriaFilter] = useState<string>('all');
   const [combustivelFilter, setCombustivelFilter] = useState<string>('all');
   const [tipoFilter, setTipoFilter] = useState<string>('all');
@@ -95,12 +119,27 @@ export default function Viaturas() {
   const [sortColumn, setSortColumn] = useState<SortColumn>('matricula');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
+  // Paginação
+  const [pageSizeStr, setPageSizeStr] = useState<string>('25');
+  const [currentPage, setCurrentPage] = useState(1);
+
   // Dialog states
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedViatura, setSelectedViatura] = useState<Viatura | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [printing, setPrinting] = useState(false);
 
   const isMobile = useIsMobile();
+
+  // Ocupação atual (reservas/contratos/movimentos/reparações ativos) para
+  // derivar o estado de cada viatura. Uma reserva/contrato marcado para o
+  // futuro já conta como ocupação.
+  const { data: fontesMap } = useViaturasOcupacao();
+
+  const estadoDe = useCallback(
+    (v: Viatura) => deriveViaturaEstado(v, fontesMap?.get(v.id)),
+    [fontesMap]
+  );
 
   useEffect(() => {
     loadViaturas();
@@ -136,25 +175,18 @@ export default function Viaturas() {
   const stats = useMemo(() => {
     return {
       total: viaturas.length,
-      disponiveis: viaturas.filter((v) => {
-        const s = (v.status || '').toLowerCase().replace('í', 'i');
-        return s === 'disponivel' && !v.is_vendida;
-      }).length,
-      emUso: viaturas.filter((v) => {
-        const s = (v.status || '').toLowerCase();
-        return (s === 'em_uso' || s === 'em uso') && !v.is_vendida;
-      }).length,
-      manutencao: viaturas.filter((v) => {
-        const s = (v.status || '').toLowerCase().replace('ç', 'c').replace('ã', 'a');
-        return (s === 'manutencao' || s === 'manutencao') && !v.is_vendida;
-      }).length,
+      disponiveis: viaturas.filter((v) => !v.is_vendida && estadoDe(v) === 'disponivel').length,
+      emUso: viaturas.filter(
+        (v) => !v.is_vendida && (ESTADOS_EM_USO as readonly string[]).includes(estadoDe(v))
+      ).length,
+      manutencao: viaturas.filter((v) => !v.is_vendida && estadoDe(v) === 'manutencao').length,
       vendidas: viaturas.filter((v) => v.is_vendida).length,
       slot: viaturas.filter((v) => v.is_slot && !v.is_vendida).length,
       slotDisponiveis: viaturas.filter(
-        (v) => v.is_slot && !v.is_vendida && v.status === 'disponivel'
+        (v) => v.is_slot && !v.is_vendida && estadoDe(v) === 'disponivel'
       ).length,
     };
-  }, [viaturas]);
+  }, [viaturas, estadoDe]);
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -180,38 +212,43 @@ export default function Viaturas() {
     const total: Record<string, number> = {};
     const disponiveis: Record<string, number> = {};
     viaturas
-      .filter((v) => !v.is_vendida || mostrarVendidas)
+      .filter((v) => !v.is_slot && matchesVendaScope(v, statusFilter))
       .forEach((v) => {
         if (v.tipo_id) {
           total[v.tipo_id] = (total[v.tipo_id] || 0) + 1;
-          if (v.status === 'disponivel') disponiveis[v.tipo_id] = (disponiveis[v.tipo_id] || 0) + 1;
+          if (estadoDe(v) === 'disponivel')
+            disponiveis[v.tipo_id] = (disponiveis[v.tipo_id] || 0) + 1;
         }
       });
     return { total, disponiveis };
-  }, [viaturas, mostrarVendidas]);
+  }, [viaturas, statusFilter, estadoDe]);
 
   const filteredViaturas = useMemo(() => {
     let result = [...viaturas];
 
-    // Ocultar vendidas por defeito
-    if (!mostrarVendidas) {
+    // Âmbito de vendidas + estado derivado (controlado pelo filtro de status)
+    if (statusFilter === 'vendido') {
+      result = result.filter((v) => v.is_vendida);
+    } else if (statusFilter === 'todos_vendidos') {
+      // mostra tudo, incluindo vendidas
+    } else {
       result = result.filter((v) => !v.is_vendida);
+      if (statusFilter === 'em_uso') {
+        result = result.filter((v) => (ESTADOS_EM_USO as readonly string[]).includes(estadoDe(v)));
+      } else if (statusFilter !== 'all') {
+        result = result.filter((v) => estadoDe(v) === statusFilter);
+      }
     }
 
-    // Filtro de pesquisa
+    // Filtro de pesquisa (ignora maiúsculas, acentos e traços)
     if (searchTerm) {
-      const term = searchTerm.toLowerCase();
+      const term = normalizeSearch(searchTerm);
       result = result.filter(
         (v) =>
-          v.matricula.toLowerCase().includes(term) ||
-          v.marca.toLowerCase().includes(term) ||
-          v.modelo.toLowerCase().includes(term)
+          normalizeSearch(v.matricula).includes(term) ||
+          normalizeSearch(v.marca).includes(term) ||
+          normalizeSearch(v.modelo).includes(term)
       );
-    }
-
-    // Filtro de status
-    if (statusFilter !== 'all') {
-      result = result.filter((v) => v.status === statusFilter);
     }
 
     // Filtro de categoria
@@ -224,17 +261,20 @@ export default function Viaturas() {
       result = result.filter((v) => v.combustivel === combustivelFilter);
     }
 
-    // Filtro de tipo / SLOT
+    // Filtro de tipo / SLOT — viaturas SLOT só aparecem ao clicar em SLOT
     if (tipoFilter === 'slot') {
       result = result.filter((v) => v.is_slot);
-    } else if (tipoFilter !== 'all') {
-      result = result.filter((v) => v.tipo_id === tipoFilter);
+    } else {
+      result = result.filter((v) => !v.is_slot);
+      if (tipoFilter !== 'all') {
+        result = result.filter((v) => v.tipo_id === tipoFilter);
+      }
     }
 
     // Ordenação
     result.sort((a, b) => {
-      let aVal: any = a[sortColumn];
-      let bVal: any = b[sortColumn];
+      let aVal: any = sortColumn === 'status' ? estadoDe(a) : a[sortColumn];
+      let bVal: any = sortColumn === 'status' ? estadoDe(b) : b[sortColumn];
 
       if (aVal === null || aVal === undefined) aVal = '';
       if (bVal === null || bVal === undefined) bVal = '';
@@ -257,8 +297,22 @@ export default function Viaturas() {
     tipoFilter,
     sortColumn,
     sortDirection,
-    mostrarVendidas,
+    estadoDe,
   ]);
+
+  // Reset para a 1ª página sempre que os filtros ou o tamanho de página mudam
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, categoriaFilter, combustivelFilter, tipoFilter, pageSizeStr]);
+
+  const totalItems = filteredViaturas.length;
+  const showAll = pageSizeStr === 'all';
+  const pageSize = showAll ? totalItems || 1 : parseInt(pageSizeStr, 10);
+  const totalPages = showAll ? 1 : Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIdx = showAll ? 0 : (safePage - 1) * pageSize;
+  const endIdx = showAll ? totalItems : Math.min(startIdx + pageSize, totalItems);
+  const paginatedViaturas = showAll ? filteredViaturas : filteredViaturas.slice(startIdx, endIdx);
 
   const getCategoriaColor = (categoria: string | null | undefined) =>
     getCategoriaBadgeClass(categoria);
@@ -313,6 +367,30 @@ export default function Viaturas() {
     navigate(`/viaturas/${viatura.id}`);
   };
 
+  const viaturasParaExport = () =>
+    filteredViaturas.map((v) => ({ ...v, estado: getStatusLabel(estadoDe(v)) }));
+
+  const handlePrint = async () => {
+    setPrinting(true);
+    try {
+      await exportViaturasPdf(viaturasParaExport());
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      await exportViaturasExcel(viaturasParaExport());
+    } catch (error) {
+      console.error('Erro ao exportar Excel:', error);
+      toast.error('Erro ao exportar Excel');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <StickyPageHeader
@@ -321,6 +399,28 @@ export default function Viaturas() {
         icon={Car}
       >
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          <Button
+            variant="outline"
+            onClick={handlePrint}
+            disabled={printing || filteredViaturas.length === 0}
+            className="w-full sm:w-auto"
+          >
+            {printing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="mr-2 h-4 w-4" />
+            )}
+            Imprimir
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={filteredViaturas.length === 0}
+            className="w-full sm:w-auto"
+          >
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Exportar Excel
+          </Button>
           <ImportViaturasDialog onImportComplete={loadViaturas} />
           <Button onClick={handleNewViatura} className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" />
@@ -333,24 +433,18 @@ export default function Viaturas() {
       <ViaturaStatsCards
         stats={stats}
         activeFilter={statusFilter}
-        onFilter={(filter) => {
-          if (filter === 'vendida') {
-            setMostrarVendidas(true);
-            setStatusFilter('all');
-          } else {
-            setStatusFilter(filter);
-            setMostrarVendidas(false);
-          }
-        }}
+        onFilter={(filter) => setStatusFilter(filter)}
       />
 
       {/* Tipo + SLOT filter cards */}
       {tipos.length > 0 && (
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
           {(() => {
-            const todosTotal = viaturas.filter((v) => !v.is_vendida || mostrarVendidas).length;
+            const todosTotal = viaturas.filter(
+              (v) => !v.is_slot && matchesVendaScope(v, statusFilter)
+            ).length;
             const todosDisponiveis = viaturas.filter(
-              (v) => (!v.is_vendida || mostrarVendidas) && v.status === 'disponivel'
+              (v) => !v.is_slot && matchesVendaScope(v, statusFilter) && v.status === 'disponivel'
             ).length;
             const items = [
               {
@@ -423,7 +517,7 @@ export default function Viaturas() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -433,54 +527,52 @@ export default function Viaturas() {
             className="pl-10"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
-            <SelectItem value="disponivel">Disponível</SelectItem>
-            <SelectItem value="em_uso">Em Uso</SelectItem>
-            <SelectItem value="manutencao">Manutenção</SelectItem>
-            <SelectItem value="inativo">Inativo</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={categoriaFilter} onValueChange={setCategoriaFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Categoria" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as categorias</SelectItem>
-            <SelectItem value="green">Green</SelectItem>
-            <SelectItem value="comfort">Comfort</SelectItem>
-            <SelectItem value="black">Black</SelectItem>
-            <SelectItem value="x-saver">X-Saver</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={combustivelFilter} onValueChange={setCombustivelFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Combustível" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="eletrico">Elétrico</SelectItem>
-            <SelectItem value="hibrido">Híbrido</SelectItem>
-            <SelectItem value="gasolina">Gasolina</SelectItem>
-            <SelectItem value="diesel">Diesel</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="flex items-center gap-2 px-1 shrink-0">
-          <Switch
-            id="mostrar-vendidas"
-            checked={mostrarVendidas}
-            onCheckedChange={setMostrarVendidas}
-          />
-          <Label
-            htmlFor="mostrar-vendidas"
-            className="text-sm cursor-pointer whitespace-nowrap text-muted-foreground"
-          >
-            Mostrar vendidas {mostrarVendidas && `(${stats.vendidas})`}
-          </Label>
+        <div className="flex flex-col gap-1 w-full sm:w-[240px]">
+          <span className="text-xs font-medium text-muted-foreground">Estado</span>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="em_reserva">Em reserva</SelectItem>
+              <SelectItem value="em_contrato">Em contrato</SelectItem>
+              <SelectItem value="em_movimentacao">Em movimentação</SelectItem>
+              <SelectItem value="todos_vendidos">Todos (incluindo vendidos)</SelectItem>
+              <SelectItem value="vendido">Vendidos</SelectItem>
+              <SelectItem value="inativo">Inativos</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1 w-full sm:w-[180px]">
+          <span className="text-xs font-medium text-muted-foreground">Categoria</span>
+          <Select value={categoriaFilter} onValueChange={setCategoriaFilter}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Categoria" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as categorias</SelectItem>
+              <SelectItem value="green">Green</SelectItem>
+              <SelectItem value="comfort">Comfort</SelectItem>
+              <SelectItem value="black">Black</SelectItem>
+              <SelectItem value="x-saver">X-Saver</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1 w-full sm:w-[180px]">
+          <span className="text-xs font-medium text-muted-foreground">Combustível</span>
+          <Select value={combustivelFilter} onValueChange={setCombustivelFilter}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Combustível" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="eletrico">Elétrico</SelectItem>
+              <SelectItem value="hibrido">Híbrido</SelectItem>
+              <SelectItem value="gasolina">Gasolina</SelectItem>
+              <SelectItem value="diesel">Diesel</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -502,7 +594,7 @@ export default function Viaturas() {
       ) : isMobile ? (
         // Mobile: Cards
         <div className="space-y-3">
-          {filteredViaturas.map((viatura) => (
+          {paginatedViaturas.map((viatura) => (
             <Card key={viatura.id} className="border-border/50">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-3">
@@ -516,8 +608,8 @@ export default function Viaturas() {
                     <Badge className={getCategoriaColor(viatura.categoria)}>
                       {viatura.categoria || 'N/D'}
                     </Badge>
-                    <Badge variant="outline" className={getStatusColor(viatura.status)}>
-                      {getStatusText(viatura.status)}
+                    <Badge variant="outline" className={getStatusColor(estadoDe(viatura))}>
+                      {getStatusText(estadoDe(viatura))}
                     </Badge>
                   </div>
                 </div>
@@ -615,7 +707,7 @@ export default function Viaturas() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredViaturas.map((viatura) => (
+              {paginatedViaturas.map((viatura) => (
                 <TableRow
                   key={viatura.id}
                   className="cursor-pointer hover:bg-muted/50 h-10"
@@ -639,9 +731,9 @@ export default function Viaturas() {
                   <TableCell className="py-2">
                     <Badge
                       variant="outline"
-                      className={`text-xs ${getStatusColor(viatura.status)}`}
+                      className={`text-xs ${getStatusColor(estadoDe(viatura))}`}
                     >
-                      {getStatusText(viatura.status)}
+                      {getStatusText(estadoDe(viatura))}
                     </Badge>
                   </TableCell>
                   <TableCell className="py-2 text-sm">
@@ -693,6 +785,59 @@ export default function Viaturas() {
               ))}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {/* Paginação */}
+      {!loading && totalItems > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="whitespace-nowrap">Mostrar</span>
+            <Select value={pageSizeStr} onValueChange={setPageSizeStr}>
+              <SelectTrigger className="h-8 w-[110px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt} value={opt}>
+                    {opt === 'all' ? 'Todas' : opt}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="whitespace-nowrap">por página</span>
+          </div>
+
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-muted-foreground whitespace-nowrap">
+              {startIdx + 1}–{endIdx} de {totalItems}
+            </span>
+            {!showAll && totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="whitespace-nowrap">
+                  Página {safePage} de {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage >= totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

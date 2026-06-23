@@ -153,7 +153,7 @@ export function ViaturaTabReparacoes({ viaturaId, onUpdate }: ViaturaTabReparaco
 
       // 3. Carregar Parcelas
       const idsComCobranca = (repsData || []).filter((r) => r.cobrar_motorista).map((r) => r.id);
-      let pMap: Record<string, Parcela[]> = {};
+      const pMap: Record<string, Parcela[]> = {};
       if (idsComCobranca.length > 0) {
         const { data: parcData } = await supabase
           .from('reparacao_parcelas')

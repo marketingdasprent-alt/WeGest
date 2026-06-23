@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { validarNIF } from '@/lib/pt-validators';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -71,6 +72,21 @@ const RegistarOrg = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // NIF da org vai para documentos/faturação — valida checksum antes de registar.
+    const nifNormalizado = nif.replace(/\s/g, '');
+    if (nifNormalizado) {
+      const res = validarNIF(nifNormalizado);
+      if (!res.valid) {
+        toast({
+          title: 'NIF inválido',
+          description: res.message || 'Verifica o NIF da empresa.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -78,7 +94,7 @@ const RegistarOrg = () => {
         body: {
           nome_empresa: nomeEmpresa,
           codigo,
-          nif,
+          nif: nifNormalizado,
           morada,
           telefone,
           admin_nome: adminNome,
@@ -99,8 +115,28 @@ const RegistarOrg = () => {
         return;
       }
 
-      setResultData({ subdomain: data.org.subdomain });
-      setStep('success');
+      // Login direto: o subdomínio novo ({codigo}.wegest.pt) pode ainda não
+      // estar provisionado (DNS/Vercel) no momento, por isso autenticamos já
+      // com as credenciais introduzidas e entramos na app no domínio atual —
+      // a org é resolvida pelo profile.org_id / user_org_ativa (que o
+      // register-org já preencheu), não pelo subdomínio.
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: adminEmail.trim(),
+        password: adminPassword,
+      });
+
+      if (signInError) {
+        // Fallback: mostrar ecrã de sucesso com o link do subdomínio.
+        setResultData({ subdomain: data.org.subdomain });
+        setStep('success');
+        setLoading(false);
+        return;
+      }
+
+      // Sessão criada → entrar na app (reload completo para inicializar a
+      // sessão/contexto de org).
+      window.location.href = '/dashboard';
+      return;
     } catch (error: any) {
       console.error('Registration error:', error);
       toast({

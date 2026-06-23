@@ -2,9 +2,20 @@ import React from 'react';
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { AlertCircle, Car, User, Calendar, Clock, FileText, Image, PlayCircle } from 'lucide-react';
+import {
+  AlertCircle,
+  Car,
+  User,
+  Calendar,
+  Clock,
+  FileText,
+  Image,
+  PlayCircle,
+  Eye,
+} from 'lucide-react';
 import type { Ticket, Anexo, Viatura, Motorista } from './types';
 
 interface Props {
@@ -13,7 +24,7 @@ interface Props {
   viatura: Viatura | null;
   motorista: Motorista | null;
   criador: { nome: string } | null;
-  onOpenLightbox: (mediaList: Anexo[], index: number) => void;
+  onOpenGallery: () => void;
 }
 
 export const TicketSidebar: React.FC<Props> = ({
@@ -22,9 +33,9 @@ export const TicketSidebar: React.FC<Props> = ({
   viatura,
   motorista,
   criador,
-  onOpenLightbox,
+  onOpenGallery,
 }) => (
-  <div className="space-y-4 lg:space-y-6 lg:h-full lg:overflow-y-auto pr-1 custom-scrollbar">
+  <div className="space-y-6 lg:h-full lg:overflow-y-auto pr-1 custom-scrollbar">
     {ticket.descricao && (
       <Card className="border-l-4 border-l-primary shadow-sm">
         <CardHeader className="py-3 pb-2">
@@ -48,33 +59,28 @@ export const TicketSidebar: React.FC<Props> = ({
         </Badge>
       </CardHeader>
       <CardContent className="pt-0 pb-3">
-        <div
-          className="flex gap-2 overflow-x-auto pb-2 mb-1"
-          style={
-            { scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties
-          }
-        >
-          {anexos.map((anexo, i) => {
-            const isImg =
-              anexo.tipo_ficheiro?.startsWith('image/') ||
-              !!anexo.ficheiro_url?.match(/\.(jpg|jpeg|png|webp)$/i);
-            return (
-              <div
-                key={anexo.id}
-                className="flex-shrink-0 w-16 h-16 rounded-lg border overflow-hidden bg-muted cursor-pointer active:opacity-70"
-                onClick={() => onOpenLightbox(anexos, i)}
-              >
-                {isImg ? (
-                  <img src={anexo.ficheiro_url} className="w-full h-full object-cover" alt="" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-slate-900">
-                    <PlayCircle className="h-5 w-5 text-white/70" />
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <div className="flex gap-1 overflow-hidden h-12 mb-3">
+          {anexos.slice(0, 4).map((anexo) => (
+            <div key={anexo.id} className="w-1/4 h-full rounded border overflow-hidden bg-muted">
+              {anexo.tipo_ficheiro?.startsWith('image/') ||
+              anexo.nome_ficheiro?.match(/\.(jpg|jpeg|png|webp)$/i) ? (
+                <img src={anexo.ficheiro_url} className="w-full h-full object-cover" alt="" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <PlayCircle className="h-4 w-4 opacity-30" />
+                </div>
+              )}
+            </div>
+          ))}
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full h-8 text-xs font-bold gap-2"
+          onClick={onOpenGallery}
+        >
+          <Eye className="h-3.5 w-3.5" /> Ver Galeria Completa
+        </Button>
       </CardContent>
     </Card>
 

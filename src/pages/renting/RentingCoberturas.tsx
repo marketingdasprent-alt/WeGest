@@ -37,6 +37,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { matchesSearch } from '@/lib/utils';
 
 interface RentingCobertura {
   id: string;
@@ -84,9 +85,7 @@ const RentingCoberturas = () => {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const filtered = coberturas.filter(
-    (c) => !search || c.nome.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = coberturas.filter((c) => !search || matchesSearch(c.nome, search));
 
   const openNew = () => {
     setEditing(null);

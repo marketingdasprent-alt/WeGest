@@ -31,45 +31,15 @@ import {
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
+import { matchesSearch } from '@/lib/utils';
 
 import type { TicketEnriched as Ticket, TicketCategoria as Categoria } from '@/types/ticket';
+import { statusConfig, prioridadeConfig } from '@/lib/ticketsConfig';
 
 interface Criador {
   id: string;
   nome: string;
 }
-
-const statusConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  pendente: {
-    label: 'Pendente de Aprovação',
-    color: 'bg-purple-600',
-    icon: <Clock className="h-4 w-4" />,
-  },
-  aberto: { label: 'Aberto', color: 'bg-blue-500', icon: <AlertCircle className="h-4 w-4" /> },
-  em_andamento: {
-    label: 'Em Manutenção',
-    color: 'bg-yellow-500',
-    icon: <Clock className="h-4 w-4" />,
-  },
-  aguardando: {
-    label: 'Aguardando Peças',
-    color: 'bg-orange-500',
-    icon: <Clock className="h-4 w-4" />,
-  },
-  resolvido: {
-    label: 'Concluído',
-    color: 'bg-green-500',
-    icon: <CheckCircle2 className="h-4 w-4" />,
-  },
-  fechado: { label: 'Fechado', color: 'bg-gray-500', icon: <CheckCircle2 className="h-4 w-4" /> },
-};
-
-const prioridadeConfig: Record<string, { label: string; color: string }> = {
-  baixa: { label: 'Baixa', color: 'bg-gray-400' },
-  media: { label: 'Média', color: 'bg-blue-400' },
-  alta: { label: 'Alta', color: 'bg-orange-500' },
-  urgente: { label: 'Urgente', color: 'bg-red-500' },
-};
 
 const Assistencia = () => {
   const { user } = useAuth();
@@ -246,11 +216,11 @@ const Assistencia = () => {
   };
 
   const filteredTickets = tickets.filter((ticket) => {
-    const matchesSearch =
-      ticket.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.viatura?.matricula.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearchResult =
+      matchesSearch(ticket.titulo, searchTerm) ||
+      matchesSearch(ticket.viatura?.matricula, searchTerm) ||
       ticket.numero.toString().includes(searchTerm) ||
-      ticket.criador?.nome.toLowerCase().includes(searchTerm.toLowerCase());
+      matchesSearch(ticket.criador?.nome, searchTerm);
 
     // Status filter - "pendentes" shows open, in progress, and waiting
     let matchesStatus = true;
@@ -278,7 +248,7 @@ const Assistencia = () => {
     if (ticket.status === 'pendente' && !canSeePendente) return false;
 
     return (
-      matchesSearch &&
+      matchesSearchResult &&
       matchesStatus &&
       matchesPrioridade &&
       matchesCategoria &&

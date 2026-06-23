@@ -11,8 +11,6 @@ import { formatMatricula } from './EventoCard';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { CalendarioEvento } from '@/pages/Calendario';
-import jsPDF from 'jspdf';
-import * as XLSX from 'xlsx';
 
 const TIPOS_CONFIG = [
   {
@@ -51,6 +49,12 @@ const TIPOS_CONFIG = [
     color: 'border-pink-500 bg-pink-500/10 text-pink-700 dark:text-pink-400',
     colorActive: 'border-pink-500 bg-pink-500 text-white',
   },
+  {
+    value: 'slot',
+    label: 'Slot',
+    color: 'border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+    colorActive: 'border-amber-500 bg-amber-500 text-white',
+  },
 ];
 
 const TIPO_LABELS: Record<string, string> = Object.fromEntries(
@@ -64,6 +68,7 @@ const TIPO_COLORS_PDF: Record<string, [number, number, number]> = {
   troca: [168, 85, 247],
   upgrade: [234, 179, 8],
   lista_espera: [236, 72, 153],
+  slot: [245, 158, 11],
 };
 
 async function loadImageWithDimensions(
@@ -163,9 +168,13 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
     return true;
   });
 
+  const eventosNormais = eventosFiltrados.filter((ev) => ev.tipo !== 'slot');
+  const eventosSlot = eventosFiltrados.filter((ev) => ev.tipo === 'slot');
+
   const exportarPDF = async () => {
     setExportLoading(true);
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
       const pageW = 210;
       const pageH = 297;
@@ -323,7 +332,7 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
         doc.setFontSize(9.5);
         doc.setTextColor(20, 20, 25);
         const matricula =
-          ev.tipo === 'lista_espera'
+          ev.tipo === 'lista_espera' || ev.tipo === 'slot'
             ? ev.titulo
             : ev.tipo === 'troca'
               ? `${formatMatricula(ev.titulo)}${ev.matricula_devolver ? `  <>  ${formatMatricula(ev.matricula_devolver)}` : ''}`
@@ -548,9 +557,10 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
   };
 
   // ── EXCEL (.xlsx) EXPORT ────────────────────────────────────────
-  const exportarExcel = () => {
+  const exportarExcel = async () => {
     setExportExcelLoading(true);
     try {
+      const XLSX = await import('xlsx');
       const headers = [
         'Data',
         'Hora',
@@ -612,6 +622,7 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
   const exportarPDFPorGestor = async () => {
     setExportGestorLoading(true);
     try {
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
       const pageW = 210;
       const pageH = 297;
@@ -769,7 +780,7 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
 
           const ty = y + 5.5;
           const titulo =
-            ev.tipo === 'lista_espera'
+            ev.tipo === 'lista_espera' || ev.tipo === 'slot'
               ? ev.titulo
               : ev.tipo === 'troca'
                 ? `${formatMatricula(ev.titulo)}${ev.matricula_devolver ? ` ↔ ${formatMatricula(ev.matricula_devolver)}` : ''}`
@@ -891,32 +902,39 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
 
       gy += 10;
 
-      // Tabela resumo
+      // Tabela matriz: Gestor × Tipo (entregas, devoluções, etc. por gestor)
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
       doc.setTextColor(20, 20, 25);
-      doc.text('Resumo', marginL, gy);
+      doc.text('Resumo por Gestor e Tipo', marginL, gy);
       gy += 6;
 
+      const tiposPdf = TIPOS_CONFIG.filter((t) =>
+        eventosFiltrados.some((ev) => ev.tipo === t.value)
+      );
       const cGestor = marginL;
-      const cTotal = marginL + 90;
-      const cPct = marginL + 115;
+      const cTotal = pageW - marginR; // alinhado à direita
+      const gestorW = 56;
+      const totalW = 16;
+      const tiposX0 = marginL + gestorW;
+      const tiposW = cTotal - totalW - tiposX0;
+      const colW = tiposPdf.length > 0 ? tiposW / tiposPdf.length : 0;
+      const tipoX = (idx: number) => tiposX0 + idx * colW + colW / 2;
 
       doc.setFillColor(39, 39, 42);
       doc.rect(marginL - 2, gy - 4, pageW - marginL - marginR + 4, 8, 'F');
       doc.setTextColor(200, 200, 210);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
+      doc.setFontSize(7);
       doc.text('GESTOR', cGestor, gy);
-      doc.text('TOTAL', cTotal, gy);
-      doc.text('% DO PERÍODO', cPct, gy);
+      tiposPdf.forEach((t, idx) => {
+        doc.text((t.label || t.value).toUpperCase(), tipoX(idx), gy, { align: 'center' });
+      });
+      doc.text('TOTAL', cTotal, gy, { align: 'right' });
       gy += 6;
 
       gestores.forEach((g, i) => {
-        const pct =
-          eventosFiltrados.length > 0
-            ? ((g.eventos.length / eventosFiltrados.length) * 100).toFixed(1)
-            : '0.0';
+        if (gy > pageH - 18) return; // segurança de página
         const [r, gc2, b] = gestorColors[i % gestorColors.length];
 
         doc.setFillColor(i % 2 === 0 ? 248 : 255, i % 2 === 0 ? 248 : 255, i % 2 === 0 ? 252 : 255);
@@ -926,23 +944,39 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
         doc.circle(cGestor + 1.5, gy - 0.5, 1.5, 'F');
 
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8.5);
+        doc.setFontSize(8);
         doc.setTextColor(40, 40, 50);
-        doc.text(g.nome, cGestor + 5, gy);
-        doc.text(String(g.eventos.length), cTotal, gy);
-        doc.setTextColor(100, 100, 110);
-        doc.text(`${pct}%`, cPct, gy);
+        const nomeLines = doc.splitTextToSize(g.nome, gestorW - 6);
+        doc.text(nomeLines[0], cGestor + 5, gy);
+
+        tiposPdf.forEach((t, idx) => {
+          const c = g.eventos.filter((ev) => ev.tipo === t.value).length;
+          if (c > 0) {
+            doc.setTextColor(40, 40, 50);
+            doc.text(String(c), tipoX(idx), gy, { align: 'center' });
+          } else {
+            doc.setTextColor(190, 190, 195);
+            doc.text('·', tipoX(idx), gy, { align: 'center' });
+          }
+        });
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(20, 20, 25);
+        doc.text(String(g.eventos.length), cTotal, gy, { align: 'right' });
         gy += 7;
       });
 
       doc.setFillColor(230, 230, 240);
       doc.rect(marginL - 2, gy - 3.5, pageW - marginL - marginR + 4, 7, 'F');
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       doc.setTextColor(20, 20, 25);
       doc.text('TOTAL', cGestor, gy);
-      doc.text(String(eventosFiltrados.length), cTotal, gy);
-      doc.text('100%', cPct, gy);
+      tiposPdf.forEach((t, idx) => {
+        const c = eventosFiltrados.filter((ev) => ev.tipo === t.value).length;
+        doc.text(String(c), tipoX(idx), gy, { align: 'center' });
+      });
+      doc.text(String(eventosFiltrados.length), cTotal, gy, { align: 'right' });
 
       drawFooter(pageNum);
 
@@ -961,6 +995,7 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
 
       const eventosDoGestor = eventosFiltrados.filter((ev) => ev.criado_por === gestorId);
 
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
       const pageW = 210;
       const pageH = 297;
@@ -1354,6 +1389,23 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
     }))
     .sort((a, b) => b.count - a.count);
 
+  // Tipos que existem no período (colunas dinâmicas da matriz gestor × tipo).
+  const tiposPresentes = TIPOS_CONFIG.filter((t) =>
+    eventosFiltrados.some((ev) => ev.tipo === t.value)
+  );
+
+  // Matriz gestor × tipo: quantas entregas / devoluções / etc. cada gestor tem.
+  const matrizGestorTipo = Array.from(
+    new Map(eventosFiltrados.map((ev) => [ev.criado_por, ev.profiles?.nome || 'Desconhecido']))
+  )
+    .map(([id, nome]) => {
+      const evs = eventosFiltrados.filter((ev) => ev.criado_por === id);
+      const porTipo: Record<string, number> = {};
+      for (const t of TIPOS_CONFIG) porTipo[t.value] = evs.filter((e) => e.tipo === t.value).length;
+      return { id, nome, total: evs.length, porTipo };
+    })
+    .sort((a, b) => b.total - a.total);
+
   const GESTOR_PALETTE = [
     'bg-indigo-500',
     'bg-green-500',
@@ -1368,6 +1420,56 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
 
   const maxTipoCount = Math.max(...totalPorTipo.map((t) => t.count), 1);
   const maxGestorCount = Math.max(...totalPorGestor.map((g) => g.count), 1);
+
+  const EventoCard = ({ ev }: { ev: CalendarioEvento }) => {
+    const tipoConfig = TIPOS_CONFIG.find((t) => t.value === ev.tipo);
+    const titulo =
+      ev.tipo === 'lista_espera' || ev.tipo === 'slot'
+        ? ev.titulo
+        : ev.tipo === 'troca'
+          ? `${formatMatricula(ev.titulo)}${ev.matricula_devolver ? ` ↔ ${formatMatricula(ev.matricula_devolver)}` : ''}`
+          : formatMatricula(ev.titulo);
+    return (
+      <div
+        className={cn(
+          'border border-l-4 rounded-lg p-3 text-sm space-y-1 bg-card',
+          ev.tipo === 'entrega' && 'border-l-green-500',
+          ev.tipo === 'recolha' && 'border-l-blue-500',
+          ev.tipo === 'devolucao' && 'border-l-orange-500',
+          ev.tipo === 'troca' && 'border-l-purple-500',
+          ev.tipo === 'upgrade' && 'border-l-yellow-500',
+          ev.tipo === 'lista_espera' && 'border-l-pink-500',
+          ev.tipo === 'slot' && 'border-l-amber-500'
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-semibold truncate">
+            {titulo}
+            {ev.cidade && ` — ${ev.cidade.toUpperCase()}`}
+          </span>
+          {tipoConfig && (
+            <span
+              className={cn(
+                'text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0',
+                tipoConfig.color
+              )}
+            >
+              {tipoConfig.label}
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5">
+          <span>
+            {format(new Date(ev.data_inicio), ev.dia_todo ? 'dd/MM/yyyy' : 'dd/MM/yyyy HH:mm', {
+              locale: pt,
+            })}
+          </span>
+          {ev.profiles?.nome && <span>Por: {ev.profiles.nome}</span>}
+          {ev.descricao && <span className="w-full italic">Obs: {ev.descricao}</span>}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1657,6 +1759,70 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
           {/* ── Painel direito: lista de eventos ── */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {/* Matriz Gestor × Tipo (quantas entregas/devoluções/... por gestor) */}
+              {podeVerGestores && !isLoading && eventosFiltrados.length > 0 && (
+                <div className="rounded-lg border bg-card overflow-hidden">
+                  <div className="px-3 py-2 border-b bg-muted/40">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Por Gestor &times; Tipo
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="px-3 py-1.5 text-left font-medium">Gestor</th>
+                          {tiposPresentes.map((t) => (
+                            <th
+                              key={t.value}
+                              className="px-2 py-1.5 text-center font-medium whitespace-nowrap"
+                            >
+                              {t.label}
+                            </th>
+                          ))}
+                          <th className="px-3 py-1.5 text-center font-semibold">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {matrizGestorTipo.map((g, i) => (
+                          <tr
+                            key={g.id}
+                            className={cn('border-b last:border-0', i % 2 === 1 && 'bg-muted/20')}
+                          >
+                            <td className="px-3 py-1.5 font-medium truncate max-w-[180px]">
+                              {g.nome}
+                            </td>
+                            {tiposPresentes.map((t) => (
+                              <td key={t.value} className="px-2 py-1.5 text-center tabular-nums">
+                                {g.porTipo[t.value] > 0 ? (
+                                  g.porTipo[t.value]
+                                ) : (
+                                  <span className="text-muted-foreground/30">·</span>
+                                )}
+                              </td>
+                            ))}
+                            <td className="px-3 py-1.5 text-center font-bold tabular-nums">
+                              {g.total}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="border-t-2 bg-muted/40 font-semibold">
+                          <td className="px-3 py-1.5">Total</td>
+                          {tiposPresentes.map((t) => (
+                            <td key={t.value} className="px-2 py-1.5 text-center tabular-nums">
+                              {eventosFiltrados.filter((e) => e.tipo === t.value).length}
+                            </td>
+                          ))}
+                          <td className="px-3 py-1.5 text-center tabular-nums">
+                            {eventosFiltrados.length}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               {isLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -1666,57 +1832,45 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
                   Nenhum evento no período selecionado.
                 </p>
               ) : (
-                eventosFiltrados.map((ev) => {
-                  const tipoConfig = TIPOS_CONFIG.find((t) => t.value === ev.tipo);
-                  const titulo =
-                    ev.tipo === 'lista_espera'
-                      ? ev.titulo
-                      : ev.tipo === 'troca'
-                        ? `${formatMatricula(ev.titulo)}${ev.matricula_devolver ? ` ↔ ${formatMatricula(ev.matricula_devolver)}` : ''}`
-                        : formatMatricula(ev.titulo);
-                  return (
-                    <div
-                      key={ev.id}
-                      className={cn(
-                        'border border-l-4 rounded-lg p-3 text-sm space-y-1 bg-card',
-                        ev.tipo === 'entrega' && 'border-l-green-500',
-                        ev.tipo === 'recolha' && 'border-l-blue-500',
-                        ev.tipo === 'devolucao' && 'border-l-orange-500',
-                        ev.tipo === 'troca' && 'border-l-purple-500',
-                        ev.tipo === 'upgrade' && 'border-l-yellow-500',
-                        ev.tipo === 'lista_espera' && 'border-l-pink-500'
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold truncate">
-                          {titulo}
-                          {ev.cidade && ` — ${ev.cidade.toUpperCase()}`}
-                        </span>
-                        {tipoConfig && (
-                          <span
-                            className={cn(
-                              'text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0',
-                              tipoConfig.color
-                            )}
-                          >
-                            {tipoConfig.label}
+                <>
+                  {/* ── Eventos normais ── */}
+                  {eventosNormais.length > 0 && (
+                    <>
+                      {eventosSlot.length > 0 && (
+                        <div className="flex items-center gap-2 pt-1 pb-0.5">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Eventos
                           </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5">
-                        <span>
-                          {format(
-                            new Date(ev.data_inicio),
-                            ev.dia_todo ? 'dd/MM/yyyy' : 'dd/MM/yyyy HH:mm',
-                            { locale: pt }
-                          )}
+                          <span className="text-xs text-muted-foreground">
+                            ({eventosNormais.length})
+                          </span>
+                          <div className="flex-1 h-px bg-border" />
+                        </div>
+                      )}
+                      {eventosNormais.map((ev) => (
+                        <EventoCard key={ev.id} ev={ev} />
+                      ))}
+                    </>
+                  )}
+
+                  {/* ── Slots (secção separada) ── */}
+                  {eventosSlot.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2 pt-2 pb-0.5">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                          Slots
                         </span>
-                        {ev.profiles?.nome && <span>Por: {ev.profiles.nome}</span>}
-                        {ev.descricao && <span className="w-full italic">Obs: {ev.descricao}</span>}
+                        <span className="text-xs text-muted-foreground">
+                          ({eventosSlot.length})
+                        </span>
+                        <div className="flex-1 h-px bg-amber-500/30" />
                       </div>
-                    </div>
-                  );
-                })
+                      {eventosSlot.map((ev) => (
+                        <EventoCard key={ev.id} ev={ev} />
+                      ))}
+                    </>
+                  )}
+                </>
               )}
             </div>
           </div>

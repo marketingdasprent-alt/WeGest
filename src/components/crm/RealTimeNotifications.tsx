@@ -25,8 +25,6 @@ export const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
   const [notifications, setNotifications] = useState<RealtimeNotification[]>([]);
 
   const handleRealtimeEvent = (payload: any) => {
-    console.log('📢 Notificação de lead:', payload);
-
     const leadData = payload.new || payload.old;
     const leadName = (leadData as any)?.nome || 'Lead sem nome';
 
@@ -49,12 +47,7 @@ export const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
     onNewActivity?.();
   };
 
-  useEffect(() => {
-    if (onRealtimeEvent) {
-      // This component will be called by parent when events occur
-      console.log('🔔 Notificações configuradas via callback...');
-    }
-  }, [onRealtimeEvent]);
+  useEffect(() => {}, [onRealtimeEvent]);
 
   const getNotificationMessage = (eventType: string, leadName?: string) => {
     switch (eventType) {

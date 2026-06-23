@@ -78,13 +78,20 @@ const RentingClienteForm = () => {
     mode: 'onBlur',
     reValidateMode: 'onChange',
   });
-  const { control, handleSubmit, reset } = form;
-  const isEmpresa = useWatch({ control, name: 'is_empresa' });
+  const { control, handleSubmit, reset, setValue } = form;
+  const tipoCliente = useWatch({ control, name: 'tipo_cliente' });
+  const isEmpresa = tipoCliente === 'empresa';
+
+  // Mantém is_empresa (validação/payload) em sincronia com tipo_cliente.
+  useEffect(() => {
+    setValue('is_empresa', tipoCliente === 'empresa');
+  }, [tipoCliente, setValue]);
 
   // Hidratação do form a partir do cliente carregado
   useEffect(() => {
     if (cliente) {
       reset({
+        tipo_cliente: cliente.tipo_cliente ?? (cliente.is_empresa ? 'empresa' : 'particular'),
         is_empresa: cliente.is_empresa,
         nome: cliente.nome,
         nome_comercial: cliente.nome_comercial || '',
@@ -303,10 +310,11 @@ const RentingClienteForm = () => {
                     <SeccaoDadosPrincipais
                       control={control}
                       isEmpresa={!!isEmpresa}
+                      isCondutor={tipoCliente === 'condutor'}
                       disabledTipo={!!cliente}
                     />
-                    <SeccaoMorada control={control} />
-                    <SeccaoDocumento control={control} />
+                    {tipoCliente !== 'condutor' && <SeccaoMorada control={control} />}
+                    {tipoCliente !== 'condutor' && <SeccaoDocumento control={control} />}
                     {!isEmpresa && <SeccaoCarta control={control} />}
                     <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                       <RequiredMark /> Campos obrigatórios.

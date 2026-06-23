@@ -25,6 +25,10 @@ import {
   Percent,
   Fuel,
   CarFront,
+  Calculator,
+  CreditCard,
+  Wifi,
+  Banknote,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
@@ -134,7 +138,7 @@ const MENU_ITEMS: MenuItem[] = [
     ],
   },
   {
-    label: 'Viaturas',
+    label: 'Frota',
     icon: Car,
     recurso: 'viaturas_ver',
     subItems: [
@@ -145,9 +149,19 @@ const MENU_ITEMS: MenuItem[] = [
       { label: 'Tipos', url: '/viaturas/tipos', icon: Tag },
     ],
   },
-  { label: 'Financeiro', url: '/financeiro', icon: Wallet, recurso: 'financeiro_recibos' },
+  {
+    label: 'Administrativo',
+    icon: Wallet,
+    recurso: 'financeiro_recibos',
+    subItems: [
+      { label: 'Resumos', url: '/administrativo', icon: Calculator },
+      { label: 'Faturação', url: '/administrativo/faturacao', icon: Banknote },
+      { label: 'Cartões Frota', url: '/administrativo/cartoes', icon: CreditCard },
+      { label: 'Dispositivos OBE', url: '/administrativo/obe', icon: Wifi },
+    ],
+  },
   { label: 'Assistência', url: '/assistencia', icon: Wrench, recurso: 'assistencia_tickets' },
-  { label: 'Calendário', url: '/calendario', icon: CalendarDays, recurso: 'calendario_ver' },
+  { label: 'Movimentações', url: '/calendario', icon: CalendarDays, recurso: 'calendario_ver' },
   { label: 'Marketing', url: '/marketing', icon: Mail, recurso: 'marketing_ver' },
 ];
 
@@ -242,7 +256,13 @@ export const SidebarMenu: React.FC = () => {
           <Button variant="ghost" size="icon" className="mr-4">
             <Menu className="h-6 w-6" />
           </Button>
-          <img src={logoSrc} alt="Logo" className="h-8 w-auto" />
+          <NavLink
+            to="/dashboard"
+            aria-label="Ir para a Dashboard"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img src={logoSrc} alt="Logo" className="h-8 w-auto cursor-pointer" />
+          </NavLink>
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
             <UserMenu />
@@ -260,7 +280,13 @@ export const SidebarMenu: React.FC = () => {
       {/* Header with Logo */}
       <div className="p-4 mb-0">
         <div className="flex items-center justify-center w-full py-1">
-          <img src={logoSrc} alt="Logo" className="h-20 w-auto object-contain" />
+          <NavLink to="/dashboard" aria-label="Ir para a Dashboard">
+            <img
+              src={logoSrc}
+              alt="Logo"
+              className="h-20 w-auto object-contain cursor-pointer transition-opacity hover:opacity-80"
+            />
+          </NavLink>
         </div>
         <OrgSelector className="w-full mt-2 justify-center" />
       </div>
@@ -384,23 +410,9 @@ export const SidebarMenu: React.FC = () => {
             }
             return <NavItem key={item.label} item={item} />;
           })}
-        </div>
-
-        {/* Admin Section Separator */}
-        <div className="mt-8 mb-4">
           {hasAdminAccess && (
-            <>
-              <div className="px-4 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">
-                SISTEMA
-              </div>
-              <div className="space-y-1 mb-2">
-                <NavItem
-                  item={{ label: 'Administração', url: '/admin/settings', icon: Settings }}
-                />
-              </div>
-            </>
+            <NavItem item={{ label: 'Administração', url: '/admin/settings', icon: Settings }} />
           )}
-          <ThemeToggle variant="full" />
         </div>
       </ScrollArea>
 

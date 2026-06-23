@@ -43,11 +43,22 @@ export type ClienteAnexo = {
 
 export type Genero = 'M' | 'F' | 'Outro';
 
+export const TIPOS_CLIENTE = ['particular', 'empresa', 'condutor'] as const;
+export type TipoCliente = (typeof TIPOS_CLIENTE)[number];
+
+export const TIPO_CLIENTE_LABELS: Record<TipoCliente, string> = {
+  particular: 'Particular',
+  empresa: 'Empresa',
+  condutor: 'Condutor',
+};
+
 export type Cliente = {
   id: string;
   org_id: string;
   codigo: number;
   is_empresa: boolean;
+  /** Classificação: particular | empresa | condutor. Sincroniza is_empresa. */
+  tipo_cliente: TipoCliente;
   nome: string; // pessoa: nome completo · empresa: denominação social
   nome_comercial: string | null; // só empresa
   nif: string | null;
@@ -63,6 +74,13 @@ export type Cliente = {
   localidade: string | null;
   cidade: string | null;
   pais: string | null;
+  // campos usados quando tipo_cliente='empresa'
+  sede: string | null;
+  representante: string | null;
+  cargo_representante: string | null;
+  licenca_tvde: string | null;
+  licenca_validade: string | null;
+  papel_timbrado: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;

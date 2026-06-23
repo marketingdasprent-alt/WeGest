@@ -15,7 +15,9 @@ import {
 import type { ReservaFormValues } from '../reservaDialog.schema';
 import type { Estacao } from '@/hooks/useEstacoes';
 
-const IVA_RATE = 0.23;
+function ivaRate(regime: string): number {
+  return regime === 'tvde' || regime === 'slot' ? 0 : 0.23;
+}
 
 function diferencaDias(inicio: string, fim: string): number | null {
   if (!inicio || !fim) return null;
@@ -51,10 +53,12 @@ export const ReservaTabCaixa: React.FC<ReservaTabCaixaProps> = ({
   const valorTotal = form.watch('valor_total');
   const dataInicio = form.watch('data_inicio');
   const dataFim = form.watch('data_fim');
+  const regime = form.watch('regime');
 
   const dias = useMemo(() => diferencaDias(dataInicio, dataFim), [dataInicio, dataFim]);
   const total = valorTotal ?? 0;
-  const subtotal = total > 0 ? total / (1 + IVA_RATE) : 0;
+  const taxaIVA = ivaRate(regime);
+  const subtotal = taxaIVA > 0 && total > 0 ? total / (1 + taxaIVA) : total;
   const iva = total - subtotal;
   const precoUnitarioDerivado = dias && dias > 0 ? total / dias : 0;
 
@@ -139,7 +143,7 @@ export const ReservaTabCaixa: React.FC<ReservaTabCaixaProps> = ({
                   />
                 </TableCell>
                 <TableCell className="text-center align-middle text-muted-foreground text-sm">
-                  {(IVA_RATE * 100).toFixed(0)}%
+                  {(taxaIVA * 100).toFixed(0)}%
                 </TableCell>
                 <TableCell className="text-right align-middle font-semibold tabular-nums">
                   {formatEur(total || null)}
@@ -166,7 +170,7 @@ export const ReservaTabCaixa: React.FC<ReservaTabCaixaProps> = ({
             <span className="text-right tabular-nums">{formatEur(subtotal)}</span>
           </div>
           <div className="grid grid-cols-2 px-4 py-2 text-sm border-t bg-muted/20">
-            <span className="text-muted-foreground">IVA ({(IVA_RATE * 100).toFixed(0)}%)</span>
+            <span className="text-muted-foreground">IVA ({(taxaIVA * 100).toFixed(0)}%)</span>
             <span className="text-right tabular-nums">{formatEur(iva)}</span>
           </div>
           <div className="grid grid-cols-2 px-4 py-3 text-base font-semibold border-t bg-primary/5">

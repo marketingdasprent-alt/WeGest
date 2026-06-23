@@ -1,9 +1,13 @@
-﻿import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RichTextEditor, RichTextEditorRef } from './RichTextEditor';
+import type { RichTextEditorRef } from './RichTextEditor';
+// Editor TipTap (~380KB) carregado só quando o editor de template é usado (lazy).
+const RichTextEditor = lazy(() =>
+  import('./RichTextEditor').then((m) => ({ default: m.RichTextEditor }))
+);
 import {
   Select,
   SelectContent,
@@ -17,18 +21,31 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Save, X, Upload, Trash2, Image as ImageIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useCamposDinamicos } from '@/hooks/useCamposDinamicos';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import { categoriasOrdenadas, labelCategoria, type BaseCategoria } from '@/lib/camposDinamicos';
+import type { DocumentTemplate } from '@/types/documentTemplate';
 
-interface DocumentTemplate {
-  id?: string;
-  nome: string;
-  tipo: string;
-  empresa_id: string;
-  template_data: any;
-  campos_dinamicos: any;
-  ativo: boolean;
-  versao: number;
-  papel_timbrado_url?: string;
-}
+const CATEGORIA_EMOJI: Record<BaseCategoria, string> = {
+  motorista: '👤',
+  cliente: '👥',
+  empresa: '🏢',
+  viatura: '🚗',
+  contrato: '📄',
+};
+
+// Tipos de template (coluna `tipo`, TEXT livre). Os de contrato têm semântica
+// no gerador (escolha por regime); os restantes são documentos genéricos que
+// aparecem no checklist "Gerar Documentos".
+const TIPO_TEMPLATE_OPTIONS = [
+  { value: 'contrato_aluguer', label: 'Contrato de Aluguer' },
+  { value: 'contrato_prestacao', label: 'Contrato de Prestação' },
+  { value: 'contrato_tvde', label: 'Contrato TVDE' },
+  { value: 'declaracao', label: 'Declaração' },
+  { value: 'procedimentos', label: 'Procedimentos' },
+  { value: 'recibo', label: 'Recibo' },
+  { value: 'outro', label: 'Outro documento' },
+] as const;
 
 interface DocumentTemplateEditorProps {
   template: DocumentTemplate | null;
@@ -42,16 +59,42 @@ export const DocumentTemplateEditor = ({
   onCancel,
 }: DocumentTemplateEditorProps) => {
   const [nome, setNome] = useState(template?.nome || '');
-  const [empresaId, setEmpresaId] = useState(template?.empresa_id || 'decada_ousada');
+  const { empresas } = useClientesEmpresas();
+  const [empresaId, setEmpresaId] = useState(
+    template?.cliente_empresa_id || template?.empresa_id || ''
+  );
+  const [tipo, setTipo] = useState(template?.tipo || 'contrato_tvde');
   const [ativo, setAtivo] = useState(template?.ativo ?? true);
   const [conteudoCompleto, setConteudoCompleto] = useState('');
   const [papelTimbradoUrl, setPapelTimbradoUrl] = useState(template?.papel_timbrado_url || '');
+  // Margens superior/inferior (mm) só usadas quando há papel timbrado.
+  // Permitem ajustar o documento por template (cada timbrado tem logo/faixa
+  // de altura diferente). Defaults globais: 50/38 (seguros). Baixar num
+  // template específico quando o seu conteúdo precisa de caber numa só página.
+  const [topMargin, setTopMargin] = useState<number>(
+    typeof template?.template_data?.topMargin === 'number' ? template.template_data.topMargin : 50
+  );
+  const [bottomMargin, setBottomMargin] = useState<number>(
+    typeof template?.template_data?.bottomMargin === 'number'
+      ? template.template_data.bottomMargin
+      : 38
+  );
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const editorRef = useRef<RichTextEditorRef>(null);
 
+  // Se for novo template e ainda não tiver empresa seleccionada, usar a primeira disponível.
+  // Depende intencionalmente só de `empresas` — não queremos re-executar quando empresaId muda.
+
+  useEffect(() => {
+    if (!template && !empresaId && empresas.length > 0) {
+      setEmpresaId(empresas[0].id);
+    }
+  }, [empresas]);
+
   useEffect(() => {
     if (template) {
+      setTipo(template.tipo || 'contrato_tvde');
       let content = '';
 
       if (template?.template_data?.conteudo) {
@@ -97,47 +140,29 @@ export const DocumentTemplateEditor = ({
       if (template?.papel_timbrado_url) {
         setPapelTimbradoUrl(template.papel_timbrado_url);
       }
+
+      if (typeof template?.template_data?.topMargin === 'number') {
+        setTopMargin(template.template_data.topMargin);
+      }
+      if (typeof template?.template_data?.bottomMargin === 'number') {
+        setBottomMargin(template.template_data.bottomMargin);
+      }
     }
   }, [template]);
 
-  const camposDinamicos = [
-    {
-      label: '👤 Motorista',
-      icon: '👤',
-      fields: [
-        '{{motorista_nome}}',
-        '{{motorista_nif}}',
-        '{{motorista_documento_tipo}}',
-        '{{motorista_documento_numero}}',
-        '{{carta_conducao}}',
-        '{{carta_categorias}}',
-        '{{motorista_morada}}',
-        '{{motorista_email}}',
-        '{{motorista_telefone}}',
-      ],
-    },
-    {
-      label: '🏢 Empresa',
-      icon: '🏢',
-      fields: [
-        '{{empresa_nome_completo}}',
-        '{{empresa_nif}}',
-        '{{empresa_sede}}',
-        '{{empresa_licenca_tvde}}',
-        '{{empresa_representante}}',
-      ],
-    },
-    {
-      label: '📄 Contrato',
-      icon: '📄',
-      fields: [
-        '{{data_inicio}}',
-        '{{data_assinatura}}',
-        '{{cidade_assinatura}}',
-        '{{duracao_meses}}',
-      ],
-    },
-  ];
+  // Paleta vinda da configuração por organização (catálogo + overrides).
+  // Renomear/esconder/reordenar é feito na tab Configurações → Campos.
+  const { campos: camposEfetivos } = useCamposDinamicos();
+  const camposDinamicos = categoriasOrdenadas(camposEfetivos)
+    .map((cat) => ({
+      key: cat,
+      label: labelCategoria(cat),
+      icon: (CATEGORIA_EMOJI as Record<string, string>)[cat] ?? '🏷️',
+      campos: camposEfetivos
+        .filter((c) => c.categoria === cat && c.ativo)
+        .sort((a, b) => a.ordem - b.ordem),
+    }))
+    .filter((g) => g.campos.length > 0);
 
   const insertField = (field: string) => {
     if (editorRef.current) {
@@ -276,8 +301,8 @@ export const DocumentTemplateEditor = ({
         const { data: maxVersionTemplate } = await supabase
           .from('document_templates')
           .select('versao')
-          .eq('empresa_id', empresaId)
-          .eq('tipo', 'contrato_tvde')
+          .eq('cliente_empresa_id', empresaId)
+          .eq('tipo', tipo)
           .order('versao', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -287,16 +312,18 @@ export const DocumentTemplateEditor = ({
 
       const templateData = {
         nome,
-        tipo: 'contrato_tvde',
-        empresa_id: empresaId,
+        tipo,
+        cliente_empresa_id: empresaId || null,
         template_data: {
           conteudo: conteudoCompleto,
+          topMargin,
+          bottomMargin,
         } as any,
-        campos_dinamicos: {
-          motorista: camposDinamicos[0].fields,
-          empresa: camposDinamicos[1].fields,
-          contrato: camposDinamicos[2].fields,
-        } as any,
+        // Snapshot da paleta efectiva no momento (informativo). A config real
+        // vive em org_campos_dinamicos; aqui guardamos só um registo.
+        campos_dinamicos: Object.fromEntries(
+          camposDinamicos.map((g) => [g.key, g.campos.map((c) => `{{${c.chave}}}`)])
+        ) as any,
         papel_timbrado_url: papelTimbradoUrl || null,
         ativo,
         versao,
@@ -361,15 +388,30 @@ export const DocumentTemplateEditor = ({
           <Card className="bg-card/50 border-border">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <div className="flex-1 grid grid-cols-2 gap-4">
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label className="text-foreground">Nome do Template</Label>
                     <Input
                       value={nome}
                       onChange={(e) => setNome(e.target.value)}
-                      placeholder="Ex: Contrato TVDE Padrão"
+                      placeholder="Ex: Contrato Aluguer - WeGest"
                       className="bg-card border-border text-foreground"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-foreground">Tipo de Documento</Label>
+                    <Select value={tipo} onValueChange={setTipo}>
+                      <SelectTrigger className="bg-card border-border text-foreground">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIPO_TEMPLATE_OPTIONS.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-foreground">Empresa</Label>
@@ -378,8 +420,11 @@ export const DocumentTemplateEditor = ({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="decada_ousada">WeGest</SelectItem>
-                        <SelectItem value="distancia_arrojada">Distância Arrojada</SelectItem>
+                        {empresas.map((e) => (
+                          <SelectItem key={e.id} value={e.id}>
+                            {e.nome}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -402,11 +447,19 @@ export const DocumentTemplateEditor = ({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <RichTextEditor
-                ref={editorRef}
-                content={conteudoCompleto}
-                onChange={setConteudoCompleto}
-              />
+              <Suspense
+                fallback={
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    A carregar editor…
+                  </div>
+                }
+              >
+                <RichTextEditor
+                  ref={editorRef}
+                  content={conteudoCompleto}
+                  onChange={setConteudoCompleto}
+                />
+              </Suspense>
               <div className="mt-2 text-xs text-muted-foreground">
                 {conteudoCompleto.length} caracteres
               </div>
@@ -414,32 +467,42 @@ export const DocumentTemplateEditor = ({
           </Card>
         </div>
 
-        {/* COLUNA LATERAL - FERRAMENTAS */}
+        {/* COLUNA LATERAL - FERRAMENTAS (fluxo normal, scroll da página) */}
         <div className="space-y-4 pr-2">
           {/* Campos Dinâmicos */}
-          <Card className="bg-card/50 border-border sticky top-0 z-50 shadow-lg">
+          <Card className="bg-card border-border shadow-lg">
             <CardHeader>
               <CardTitle className="text-foreground text-lg">Campos Dinâmicos</CardTitle>
               <CardDescription className="text-muted-foreground text-xs">
-                Clique para inserir no cursor
+                Clica para inserir no cursor, ou arrasta para o documento
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4 max-h-[calc(100vh-320px)] md:max-h-[calc(100vh-200px)] overflow-y-auto">
+            <CardContent className="space-y-4">
               {camposDinamicos.map((categoria) => (
-                <div key={categoria.label} className="space-y-2">
+                <div key={categoria.key} className="space-y-2">
                   <Label className="text-sm text-foreground font-bold flex items-center gap-2">
                     <span>{categoria.icon}</span>
                     {categoria.label}
                   </Label>
                   <div className="flex flex-wrap gap-1.5">
-                    {categoria.fields.map((field) => (
+                    {categoria.campos.map((campo) => (
                       <Badge
-                        key={field}
+                        key={campo.chave}
                         variant="outline"
-                        className="cursor-pointer hover:bg-yellow-500/20 hover:border-yellow-500 transition-all text-xs px-2 py-1"
-                        onClick={() => insertField(field)}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData(
+                            'application/x-campo-dinamico',
+                            `{{${campo.chave}}}`
+                          );
+                          e.dataTransfer.setData('text/plain', `{{${campo.chave}}}`);
+                          e.dataTransfer.effectAllowed = 'copy';
+                        }}
+                        className="cursor-grab active:cursor-grabbing hover:bg-yellow-500/20 hover:border-yellow-500 transition-all text-xs px-2 py-1 select-none"
+                        onClick={() => insertField(`{{${campo.chave}}}`)}
+                        title={`{{${campo.chave}}}`}
                       >
-                        {field.replace(/[{}]/g, '')}
+                        {campo.label}
                       </Badge>
                     ))}
                   </div>
@@ -502,6 +565,42 @@ export const DocumentTemplateEditor = ({
               <p className="text-xs text-gray-500">
                 A imagem será usada como fundo do documento ao gerar contratos
               </p>
+
+              {papelTimbradoUrl && (
+                <div className="space-y-3 border-t border-border pt-3">
+                  <div>
+                    <Label className="text-foreground text-sm">Margens (mm)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Ajusta a distância ao topo e ao fundo se o conteúdo bater na logo ou na faixa
+                      do timbrado.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Topo</Label>
+                      <Input
+                        type="number"
+                        min={10}
+                        max={120}
+                        value={topMargin}
+                        onChange={(e) => setTopMargin(Number(e.target.value) || 50)}
+                        className="bg-card border-border text-foreground"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Fundo</Label>
+                      <Input
+                        type="number"
+                        min={10}
+                        max={120}
+                        value={bottomMargin}
+                        onChange={(e) => setBottomMargin(Number(e.target.value) || 38)}
+                        className="bg-card border-border text-foreground"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

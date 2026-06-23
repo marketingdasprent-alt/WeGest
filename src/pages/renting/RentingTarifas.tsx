@@ -28,6 +28,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { matchesSearch } from '@/lib/utils';
 
 interface RentingTarifa {
   id: string;
@@ -83,10 +84,7 @@ const RentingTarifas = () => {
   });
 
   const filtered = tarifas.filter((t) => {
-    const q = search.toLowerCase();
-    return (
-      !q || t.nome.toLowerCase().includes(q) || (t.grupo?.nome ?? '').toLowerCase().includes(q)
-    );
+    return !search || matchesSearch(t.nome, search) || matchesSearch(t.grupo?.nome, search);
   });
 
   return (

@@ -3,21 +3,27 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTenant } from '@/contexts/TenantContext';
+import { useModules } from '@/hooks/useModules';
 import { computeDefaultRoute } from '@/hooks/useDefaultRoute';
 import { getUnauthenticatedRoute } from '@/lib/native';
-import { Loader2, Shield } from 'lucide-react';
+import { Loader2, Shield, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import type { Modulo } from '@/types/modulo';
+import { MODULO_LABELS } from '@/types/modulo';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
-  requiredResource?: string;
+  /** Um recurso, ou uma lista — o acesso é concedido se o utilizador tiver QUALQUER um. */
+  requiredResource?: string | string[];
+  requiredModule?: Modulo;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requireAdmin = false,
   requiredResource,
+  requiredModule,
 }) => {
   const { user, loading: authLoading } = useAuth();
   const { orgId, orgs, loading: tenantLoading } = useTenant();
@@ -29,11 +35,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     recursos,
     tipoUtilizador,
   } = usePermissions();
+  const { has: hasModulo, isLoading: modulesLoading } = useModules();
   const navigate = useNavigate();
   const location = useLocation();
   const unauthenticatedRoute = getUnauthenticatedRoute();
 
-  const loading = authLoading || tenantLoading || permissionsLoading;
+  const loading = authLoading || tenantLoading || permissionsLoading || modulesLoading;
 
   // Redirecionar para seleção de org se user tem múltiplas orgs sem seleção
   useEffect(() => {
@@ -57,17 +64,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }, [user, loading, navigate, unauthenticatedRoute]);
 
   useEffect(() => {
-    if (loading || !user || !defaultRoute) return;
-
-    if (location.pathname === '/my-account' && defaultRoute !== '/my-account') {
-      navigate(defaultRoute, { replace: true });
-    }
-  }, [loading, user, defaultRoute, location.pathname, navigate]);
-
-  useEffect(() => {
     if (loading || !user || !requiredResource) return;
 
-    const hasAccess = isAdmin || hasAccessToResource(requiredResource);
+    const resources = Array.isArray(requiredResource) ? requiredResource : [requiredResource];
+    const hasAccess = isAdmin || resources.some((r) => hasAccessToResource(r));
 
     if (!hasAccess && defaultRoute && defaultRoute !== location.pathname) {
       navigate(defaultRoute, { replace: true });
@@ -110,6 +110,29 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           <h2 className="mb-2 text-xl font-bold text-foreground">Acesso restrito</h2>
           <p className="mb-4 text-muted-foreground">
             Precisa de permissões de administrador para aceder a esta página.
+          </p>
+          <Button
+            onClick={() => defaultRoute && navigate(defaultRoute)}
+            className="auth-primary-button"
+          >
+            Voltar ao painel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (requiredModule && !hasModulo(requiredModule)) {
+    return (
+      <div className="auth-screen auth-screen-safe">
+        <div className="auth-screen__background" aria-hidden="true" />
+        <div className="auth-screen__pattern" aria-hidden="true" />
+        <div className="relative z-10 max-w-md text-center">
+          <Package className="mx-auto mb-4 h-12 w-12 text-primary" />
+          <h2 className="mb-2 text-xl font-bold text-foreground">Módulo não disponível</h2>
+          <p className="mb-4 text-muted-foreground">
+            O módulo <strong>{MODULO_LABELS[requiredModule]}</strong> não está ativo nesta
+            organização. Contacte o administrador para ativar.
           </p>
           <Button
             onClick={() => defaultRoute && navigate(defaultRoute)}

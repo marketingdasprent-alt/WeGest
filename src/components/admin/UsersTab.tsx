@@ -50,6 +50,7 @@ import {
   Plus,
 } from 'lucide-react';
 import type { Cargo } from '@/hooks/useRBAC';
+import { matchesSearch } from '@/lib/utils';
 
 interface Profile {
   id: string;
@@ -163,9 +164,8 @@ export const UsersTab = () => {
 
     // Filtro por texto
     if (searchTerm) {
-      const term = searchTerm.toLowerCase();
       result = result.filter(
-        (p) => p.nome?.toLowerCase().includes(term) || p.email?.toLowerCase().includes(term)
+        (p) => matchesSearch(p.nome, searchTerm) || matchesSearch(p.email, searchTerm)
       );
     }
 
@@ -305,6 +305,9 @@ export const UsersTab = () => {
     setIsSaving(true);
     try {
       const cargoNome = grupos.find((g) => g.id === editingProfile.cargo_id)?.nome || null;
+      // O nome do grupo define se é administrador (alinhado com a edge function create-user).
+      // Assim, escolher o grupo "Administrador" liga a flag is_admin que as rotas /admin e o RLS exigem.
+      const isAdminCargo = (cargoNome || '').toLowerCase().includes('admin');
 
       const { error } = await supabase
         .from('profiles')
@@ -312,6 +315,7 @@ export const UsersTab = () => {
           nome: editingProfile.nome,
           cargo_id: editingProfile.cargo_id,
           cargo: cargoNome,
+          is_admin: isAdminCargo,
         })
         .eq('id', editingProfile.id);
 
@@ -412,9 +416,32 @@ export const UsersTab = () => {
         },
       });
 
-      if (error) throw error;
+      // invoke marca `error` em qualquer resposta não-2xx — a mensagem amigável
+      // vem no corpo (error.context). Sem isto, mostrava o genérico "non-2xx".
+      if (error) {
+        let description = 'Não foi possível resetar a password. Tenta novamente.';
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+          try {
+            const body = await ctx.json();
+            if (
+              body?.code === 'weak_password' ||
+              /Password should contain|weak[_ ]?password/i.test(body?.error ?? '')
+            ) {
+              description =
+                'A palavra-passe é demasiado fraca. Tem de incluir pelo menos uma letra minúscula, uma maiúscula, um número e um símbolo (ex.: ! @ # $ % &).';
+            } else if (body?.error) {
+              description = body.error;
+            }
+          } catch {
+            /* corpo não-JSON — fica a mensagem genérica */
+          }
+        }
+        toast({ title: 'Erro ao resetar password', description, variant: 'destructive' });
+        return;
+      }
 
-      if (data.error) {
+      if (data?.error) {
         toast({
           title: 'Erro ao resetar password',
           description: data.error,
@@ -874,6 +901,9 @@ export const UsersTab = () => {
                 placeholder="Mínimo 6 caracteres"
                 className="bg-background border-border"
               />
+              <p className="text-xs text-muted-foreground">
+                Deve incluir minúscula, maiúscula, número e símbolo (ex.: ! @ # $ %).
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirmPassword" className="text-foreground">

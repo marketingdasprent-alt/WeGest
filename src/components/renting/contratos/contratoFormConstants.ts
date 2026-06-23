@@ -5,18 +5,11 @@
 
 export const SENTINEL_NONE = '__none__';
 
-export const ORIGEM_OPTIONS = [
-  { value: 'sistema', label: 'Sistema' },
-  { value: 'online', label: 'Online' },
-  { value: 'telefone', label: 'Telefone' },
-  { value: 'balcao', label: 'Balcão' },
-] as const;
-
 export const ESTADO_OP_OPTIONS = [
   { value: 'agendado', label: 'Agendado' },
   { value: 'em_curso', label: 'Em Curso' },
   { value: 'devolvido', label: 'Devolvido' },
-  { value: 'cancelado', label: 'Cancelado' },
+  { value: 'cancelado', label: 'Fechado' },
 ] as const;
 
 export const ESTADO_FIN_OPTIONS = [

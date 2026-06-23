@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ArrowLeft, Search, Car, ChevronRight, Loader2, Wrench } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, matchesSearch } from '@/lib/utils';
 
 interface Viatura {
   id: string;
@@ -100,9 +100,9 @@ export const NovoTicketPage: React.FC<Props> = ({ onClose, onSuccess }) => {
 
   const filteredViaturas = viaturas.filter(
     (v) =>
-      v.matricula.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.marca.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.modelo.toLowerCase().includes(searchTerm.toLowerCase())
+      matchesSearch(v.matricula, searchTerm) ||
+      matchesSearch(v.marca, searchTerm) ||
+      matchesSearch(v.modelo, searchTerm)
   );
 
   const handleSubmit = async () => {

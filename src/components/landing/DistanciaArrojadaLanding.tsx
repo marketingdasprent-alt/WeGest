@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { initPixel } from '@/lib/pixel';
 import { HeroSection } from './HeroSection';
 import { StatsSection } from './StatsSection';
 import { AwardsSection } from './AwardsSection';
@@ -16,6 +17,11 @@ export const DistanciaArrojadaLanding = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'rent' | 'slot' | null>(null);
   const formSectionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Landing pública → carrega FB Pixel + dispara PageView.
+    initPixel();
+  }, []);
 
   const handleRentClick = () => {
     setModalType('rent');

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Car,
@@ -13,6 +13,9 @@ import {
   Paperclip,
   Loader2,
   Wallet,
+  CalendarPlus,
+  Eye,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +35,7 @@ import { ViaturaTabFinanceira } from '@/components/viaturas/tabs/ViaturaTabFinan
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCategoriaBadgeClass, getStatusBadgeClass, getStatusLabel } from '@/lib/viaturas';
+import { useViaturaVinculosAtivos } from '@/hooks/useViaturaVinculosAtivos';
 
 interface Viatura {
   id: string;
@@ -109,6 +113,7 @@ const TABS = [
 export default function ViaturaDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const isNew = id === 'nova';
 
@@ -123,8 +128,13 @@ export default function ViaturaDetalhe() {
   const [viatura, setViatura] = useState<Viatura | null>(null);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('dados');
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') ?? 'dados');
   const [reparacoesAbertas, setReparacoesAbertas] = useState<any[]>([]);
+
+  // Vínculos ativos (reserva / contrato / movimentação) para os botões do header.
+  const { data: vinculos, isLoading: loadingVinculos } = useViaturaVinculosAtivos(
+    !isNew ? id : null
+  );
 
   useEffect(() => {
     if (!isNew && id) {
@@ -266,6 +276,62 @@ export default function ViaturaDetalhe() {
             )}
           </div>
         </div>
+        {!isNew && viatura?.id && !loadingVinculos && (
+          <div className="flex flex-wrap items-center gap-2">
+            {vinculos?.reserva || vinculos?.contrato || vinculos?.movimento ? (
+              <>
+                {vinculos.reserva && (
+                  <Button
+                    variant="secondary"
+                    className="gap-2"
+                    onClick={() => navigate(`/renting/reservas/${vinculos.reserva!.id}`)}
+                  >
+                    <Eye className="h-4 w-4" />
+                    Visualizar reserva
+                  </Button>
+                )}
+                {vinculos.contrato && (
+                  <Button
+                    variant="secondary"
+                    className="gap-2"
+                    onClick={() => navigate(`/renting/contratos/${vinculos.contrato!.id}`)}
+                  >
+                    <Eye className="h-4 w-4" />
+                    Visualizar contrato
+                  </Button>
+                )}
+                {vinculos.movimento && (
+                  <Button
+                    variant="secondary"
+                    className="gap-2"
+                    onClick={() => navigate(`/renting/movimentacoes/${vinculos.movimento!.id}`)}
+                  >
+                    <Eye className="h-4 w-4" />
+                    Visualizar movimentação
+                  </Button>
+                )}
+              </>
+            ) : (
+              <>
+                <Button
+                  onClick={() => navigate(`/renting/reservas/nova?viatura_id=${viatura.id}`)}
+                  className="gap-2"
+                >
+                  <CalendarPlus className="h-4 w-4" />
+                  Nova reserva
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(`/renting/movimentacoes/novo?viatura_id=${viatura.id}`)}
+                  className="gap-2"
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                  Nova movimentação
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Content with Tabs */}

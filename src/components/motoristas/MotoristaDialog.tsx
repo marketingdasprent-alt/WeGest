@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -46,10 +46,31 @@ import { PhoneInput } from '@/components/ui/phone-input';
 import { DocumentUploader } from '@/components/motorista-portal/DocumentUploader';
 import { Loader2, X, Check, ChevronsUpDown, CreditCard } from 'lucide-react';
 import { validateDateYear } from '@/utils/dateValidators';
+import {
+  validarNIF,
+  validarIBAN,
+  validarCodigoPostal,
+  validarCartaConducao,
+  validarNumeroDocumento,
+} from '@/lib/pt-validators';
+
+// Mapeia os labels do select para as chaves de regra do pt-validators
+// (mesmo mapeamento do clienteDialog.schema).
+const DOC_TYPE_KEY: Record<string, string> = {
+  'Cartão Cidadão': 'cc',
+  Passaporte: 'passaporte',
+  'Autorização de Residência': 'ar',
+};
 
 const formSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
-  nif: z.string().min(9, 'NIF é obrigatório (mínimo 9 caracteres)'),
+  nif: z
+    .string()
+    .min(1, 'NIF é obrigatório')
+    .refine(
+      (v) => validarNIF(v).valid,
+      (v) => ({ message: validarNIF(v).message || 'NIF inválido' })
+    ),
   telefone: z.string().optional(),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
   documento_tipo: z.string().min(1, 'Tipo de documento é obrigatório'),
@@ -57,7 +78,13 @@ const formSchema = z.object({
   documento_validade: z.string().optional().refine(validateDateYear, {
     message: 'Ano inválido (use entre 1900 e 2100)',
   }),
-  carta_conducao: z.string().min(1, 'Número da carta de condução é obrigatório'),
+  carta_conducao: z
+    .string()
+    .min(1, 'Número da carta de condução é obrigatório')
+    .refine(
+      (v) => validarCartaConducao(v).valid,
+      (v) => ({ message: validarCartaConducao(v).message || 'Carta de condução inválida' })
+    ),
   carta_categorias: z.array(z.string()).optional(),
   carta_validade: z.string().optional().refine(validateDateYear, {
     message: 'Ano inválido (use entre 1900 e 2100)',
@@ -67,7 +94,13 @@ const formSchema = z.object({
     message: 'Ano inválido (use entre 1900 e 2100)',
   }),
   morada: z.string().optional(),
-  codigo_postal: z.string().optional(),
+  codigo_postal: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || validarCodigoPostal(v).valid,
+      (v) => ({ message: (v ? validarCodigoPostal(v).message : '') || 'Código postal inválido' })
+    ),
   data_contratacao: z
     .string()
     .min(1, 'Data de contratação é obrigatória')
@@ -77,7 +110,13 @@ const formSchema = z.object({
   cidade: z.string().optional(),
   status_ativo: z.boolean().optional(),
   observacoes: z.string().optional(),
-  iban: z.string().optional(),
+  iban: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || validarIBAN(v).valid,
+      (v) => ({ message: (v ? validarIBAN(v).message : '') || 'IBAN inválido' })
+    ),
   gestor_responsavel: z.string().optional().nullable(),
   bolt_id: z.string().optional().nullable(),
   uber_uuid: z.string().optional().nullable(),
@@ -89,6 +128,23 @@ const formSchema = z.object({
   registo_criminal_url: z.string().optional(),
   comprovativo_morada_url: z.string().optional(),
   comprovativo_iban_url: z.string().optional(),
+});
+
+const formSchemaValidado = formSchema.superRefine((data, ctx) => {
+  // Nº do documento validado conforme o tipo seleccionado (CC, passaporte, AR).
+  if (data.documento_tipo && data.documento_numero) {
+    const res = validarNumeroDocumento(
+      DOC_TYPE_KEY[data.documento_tipo] ?? data.documento_tipo,
+      data.documento_numero
+    );
+    if (!res.valid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['documento_numero'],
+        message: res.message || 'Número de documento inválido',
+      });
+    }
+  }
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -113,6 +169,11 @@ export function MotoristaDialog({
 }: MotoristaDialogProps) {
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Lock SÍNCRONO contra duplo-submit. O state isSubmitting só desativa o
+  // botão no próximo render; a verificação de duplicado por NIF é TOCTOU
+  // (dois cliques rápidos fazem ambos o SELECT antes de qualquer INSERT).
+  // O ref bloqueia o 2º submit já, sem depender de re-render nem do NIF.
+  const submittingRef = useRef(false);
   const [gestores, setGestores] = useState<{ nome: string }[]>([]);
   const [gestorPopoverOpen, setGestorPopoverOpen] = useState(false);
   const { toast } = useToast();
@@ -188,7 +249,7 @@ export function MotoristaDialog({
   }, []);
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchemaValidado),
     defaultValues: {
       nome: '',
       nif: '',
@@ -318,19 +379,24 @@ export function MotoristaDialog({
   };
 
   const onSubmit = async (values: FormValues) => {
-    // Prevenir duplo clique
-    if (isSubmitting) return;
+    // Prevenir duplo clique (lock síncrono — ver submittingRef acima)
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setIsSubmitting(true);
 
     try {
       setLoading(true);
 
+      // Normalização: NIF sem espaços; IBAN sem espaços e em maiúsculas.
+      const nifNormalizado = values.nif.replace(/\s/g, '');
+      const ibanNormalizado = values.iban ? values.iban.replace(/\s/g, '').toUpperCase() : '';
+
       // Verificar duplicado por NIF antes de criar (apenas para novos motoristas)
-      if (!motorista && values.nif) {
+      if (!motorista && nifNormalizado) {
         const { data: existing } = await supabase
           .from('motoristas_ativos')
           .select('id, nome, codigo')
-          .eq('nif', values.nif)
+          .eq('nif', nifNormalizado)
           .maybeSingle();
 
         if (existing) {
@@ -345,7 +411,7 @@ export function MotoristaDialog({
 
       const dataToSave = {
         nome: values.nome,
-        nif: values.nif || null,
+        nif: nifNormalizado || null,
         telefone: values.telefone || null,
         email: values.email || null,
         documento_tipo: values.documento_tipo || null,
@@ -362,7 +428,7 @@ export function MotoristaDialog({
         cidade: values.cidade || null,
         status_ativo: values.status_ativo ?? true,
         observacoes: values.observacoes || null,
-        iban: values.iban || null,
+        iban: ibanNormalizado || null,
         gestor_responsavel:
           values.gestor_responsavel === 'none' ? null : values.gestor_responsavel || null,
         bolt_id: values.bolt_id || null,
@@ -429,6 +495,7 @@ export function MotoristaDialog({
         variant: 'destructive',
       });
     } finally {
+      submittingRef.current = false;
       setLoading(false);
       setIsSubmitting(false);
     }

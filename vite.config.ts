@@ -15,6 +15,9 @@ export default defineConfig(({ mode }) => ({
     
     VitePWA({
       registerType: 'prompt',
+      devOptions: {
+        enabled: false,
+      },
       includeAssets: ['favicon.ico', 'Icon_Favicon.png', 'Logo.png'],
       manifest: {
         name: 'WeGest',
@@ -98,6 +101,13 @@ export default defineConfig(({ mode }) => ({
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-query': ['@tanstack/react-query'],
           'vendor-ui': ['lucide-react', 'clsx', 'tailwind-merge', 'class-variance-authority'],
+          // Libs pesadas isoladas: chunk próprio (cacheável e fora do caminho
+          // crítico quando carregadas via dynamic import).
+          'vendor-xlsx': ['xlsx'],
+          'vendor-pdf': ['jspdf'],
+          'vendor-charts': ['recharts'],
+          'vendor-motion': ['framer-motion'],
+          'vendor-tiptap': ['@tiptap/react', '@tiptap/starter-kit'],
         },
       },
     },

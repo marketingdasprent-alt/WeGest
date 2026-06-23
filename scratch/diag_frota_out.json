@@ -1,0 +1,35 @@
+{
+  "total_viaturas_nao_vendidas": 969,
+  "por_status_gravado": {
+    "em_uso": 293,
+    "disponivel": 85,
+    "inativo": 571,
+    "em_recolha": 11,
+    "manutencao": 9
+  },
+  "fontes_reais": {
+    "reservas": 3,
+    "contratos_renting": 0,
+    "movimentos": 0,
+    "reparacoes": 0
+  },
+  "viaturas_com_ocupacao_real": [
+    {
+      "matricula": "16-UZ-35",
+      "status_gravado": "disponivel",
+      "fontes": "reserva"
+    },
+    {
+      "matricula": "AA00BB",
+      "status_gravado": "disponivel",
+      "fontes": "reserva"
+    },
+    {
+      "matricula": "26-ZC-03",
+      "status_gravado": "disponivel",
+      "fontes": "reserva"
+    }
+  ],
+  "total_ocupacao_real": 3,
+  "total_fantasmas_em_uso": 293
+}

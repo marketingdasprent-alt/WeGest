@@ -48,13 +48,20 @@ export const getCategoriaBadgeClass = (categoria?: string | null) => {
 };
 
 export const getStatusBadgeClass = (status?: string | null) => {
-  const s = (status || '').toLowerCase().replace('í', 'i');
+  const s = (status || '').toLowerCase().replace('í', 'i').replace('ç', 'c').replace('ã', 'a');
   switch (s) {
     case 'disponivel':
       return 'bg-green-500/10 text-green-600 border-green-500/20';
     case 'em_uso':
     case 'em uso':
+    case 'em_contrato':
       return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
+    case 'em_reserva':
+      return 'bg-violet-500/10 text-violet-600 border-violet-500/20';
+    case 'em_movimentacao':
+      return 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20';
+    case 'em_tvde':
+      return 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20';
     case 'manutencao':
     case 'manutenção':
       return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
@@ -88,13 +95,21 @@ export const getStatusColorClass = (status?: string | null) => {
 };
 
 export const getStatusLabel = (status?: string | null) => {
-  const s = (status || '').toLowerCase().replace('í', 'i');
+  const s = (status || '').toLowerCase().replace('í', 'i').replace('ç', 'c').replace('ã', 'a');
   switch (s) {
     case 'disponivel':
       return 'Disponível';
     case 'em_uso':
     case 'em uso':
       return 'Em Uso';
+    case 'em_reserva':
+      return 'Em reserva';
+    case 'em_contrato':
+      return 'Em contrato';
+    case 'em_movimentacao':
+      return 'Em movimentação';
+    case 'em_tvde':
+      return 'Em TVDE';
     case 'manutencao':
     case 'manutenção':
       return 'Manutenção';
@@ -105,4 +120,44 @@ export const getStatusLabel = (status?: string | null) => {
     default:
       return status || 'N/D';
   }
+};
+
+// ── Estado derivado da viatura ──────────────────────────────────────
+// O estado de exibição é derivado das ocupações ativas (contrato, reserva,
+// movimento, reparação) cruzadas pelo RPC viaturas_com_disponibilidade,
+// sobrepostas ao status base guardado (disponivel/inativo/manutencao/vendida).
+// 'em_uso' como status manual foi descontinuado — passou a ser o agregado
+// de em_reserva + em_contrato + em_movimentacao.
+
+export type ViaturaEstadoFonte = 'contrato' | 'reserva' | 'movimento' | 'reparacao' | 'tvde';
+
+/** Estados que contam como "Em Uso" (viatura ocupada). */
+export const ESTADOS_EM_USO = [
+  'em_reserva',
+  'em_contrato',
+  'em_movimentacao',
+  'em_tvde',
+  'em_uso',
+] as const;
+
+export const deriveViaturaEstado = (
+  v: { status?: string | null; is_vendida?: boolean | null },
+  fontes?: Set<string> | null
+): string => {
+  if (v.is_vendida) return 'vendida';
+  const base = (v.status || '').toLowerCase();
+  if (base === 'inativo') return 'inativo';
+  if (base === 'manutencao' || base === 'manutenção' || fontes?.has('reparacao'))
+    return 'manutencao';
+  if (fontes?.has('movimento')) return 'em_movimentacao';
+  if (fontes?.has('contrato')) return 'em_contrato';
+  if (fontes?.has('reserva')) return 'em_reserva';
+  // TVDE/slot é a ocupação base (carro com motorista). Só ganha se não houver
+  // um estado de renting mais específico acima.
+  if (fontes?.has('tvde')) return 'em_tvde';
+  // Rede de segurança: campo legado `status='em_uso'` — é o que o main conta
+  // como ocupada. Mantém-se até as atribuições reais (motorista_viaturas)
+  // estarem todas criadas; depois pode ser removido.
+  if (base === 'em_uso' || base === 'em uso') return 'em_uso';
+  return 'disponivel';
 };

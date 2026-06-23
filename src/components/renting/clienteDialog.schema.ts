@@ -58,7 +58,12 @@ const optionalDateYear = () =>
 
 // ── Schema base (formato dos campos) ──────────────────────────
 const baseSchema = z.object({
+  tipo_cliente: z.enum(['particular', 'empresa', 'condutor']),
+  // Derivado de tipo_cliente (mantido para a lógica de validação existente).
   is_empresa: z.boolean(),
+  // Edição vs criação. Só usado na validação (ex.: validade da carta no
+  // passado só bloqueia ao criar). Não vai para o payload.
+  is_edicao: z.boolean().optional(),
   nome: z.string().min(1, 'Nome é obrigatório'),
   nome_comercial: z.string().optional(),
   nif: optionalRefine(validarNIF),
@@ -120,7 +125,6 @@ function validateComum(data: ClienteFormData, ctx: Ctx) {
     'data_nascimento',
     data.is_empresa ? 'Data de criação obrigatória' : 'Data de nascimento obrigatória'
   );
-  exigirCampo(data, ctx, 'iban');
   exigirCampo(data, ctx, 'morada');
   exigirCampo(data, ctx, 'codigo_postal');
   exigirCampo(data, ctx, 'localidade');
@@ -128,8 +132,8 @@ function validateComum(data: ClienteFormData, ctx: Ctx) {
   exigirCampo(data, ctx, 'pais');
 }
 
-function validatePessoa(data: ClienteFormData, ctx: Ctx) {
-  // Pessoa: exigir nome + pelo menos um apelido (≥ 2 palavras)
+/** Exige nome + pelo menos um apelido (≥ 2 palavras). */
+function exigirNomeApelido(data: ClienteFormData, ctx: Ctx) {
   if (data.nome.trim()) {
     const palavras = data.nome
       .trim()
@@ -143,13 +147,44 @@ function validatePessoa(data: ClienteFormData, ctx: Ctx) {
       });
     }
   }
+}
 
-  exigirCampo(data, ctx, 'genero', 'Selecione o género');
-  exigirCampo(data, ctx, 'naturalidade');
+/** Carta de condução completa — obrigatória para quem conduz. */
+function exigirCarta(data: ClienteFormData, ctx: Ctx) {
   exigirCampo(data, ctx, 'carta_numero');
   exigirCampo(data, ctx, 'carta_pais');
-  exigirCampo(data, ctx, 'carta_data_emissao');
   exigirCampo(data, ctx, 'carta_validade');
+
+  // Só ao criar: a carta não pode já estar expirada (apanha erros de
+  // digitação). Na edição não bloqueia — pode haver registos antigos com a
+  // carta vencida que só precisam de mexer noutro campo.
+  if (!data.is_edicao && data.carta_validade) {
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (data.carta_validade < hoje) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['carta_validade'],
+        message: 'A validade não pode estar no passado',
+      });
+    }
+  }
+}
+
+function validatePessoa(data: ClienteFormData, ctx: Ctx) {
+  exigirNomeApelido(data, ctx);
+  exigirCampo(data, ctx, 'genero', 'Selecione o género');
+  exigirCampo(data, ctx, 'naturalidade');
+  exigirCarta(data, ctx);
+}
+
+/**
+ * Condutor: só conduz, não é o titular/pagador. Validação mínima —
+ * nome + apelido e carta de condução. Sem IBAN, morada, NIF,
+ * documento de identificação, etc. (tudo opcional).
+ */
+function validateCondutor(data: ClienteFormData, ctx: Ctx) {
+  exigirNomeApelido(data, ctx);
+  exigirCarta(data, ctx);
 }
 
 function validateEmpresa(data: ClienteFormData, ctx: Ctx) {
@@ -159,8 +194,16 @@ function validateEmpresa(data: ClienteFormData, ctx: Ctx) {
 function validateDocumentos(data: ClienteFormData, ctx: Ctx) {
   exigirCampo(data, ctx, 'doc_tipo', 'Selecione o tipo de documento');
   exigirCampo(data, ctx, 'doc_numero');
-  exigirCampo(data, ctx, 'doc_data_emissao');
   exigirCampo(data, ctx, 'doc_validade');
+
+  // Validade não pode ser anterior à data de emissão
+  if (data.doc_data_emissao && data.doc_validade && data.doc_validade < data.doc_data_emissao) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['doc_validade'],
+      message: 'A validade não pode ser anterior à data de emissão',
+    });
+  }
 
   // Número do documento: validar formato conforme o tipo seleccionado
   if (data.doc_numero && data.doc_tipo && isTipoDocumento(data.doc_tipo)) {
@@ -180,18 +223,29 @@ function validateDocumentos(data: ClienteFormData, ctx: Ctx) {
 
 // ── Schema final exportado ────────────────────────────────────
 export const clienteFormSchema = baseSchema.superRefine((data, ctx) => {
+  // Condutor: validação leve (só identidade de condução). Não passa
+  // pelas exigências de pagador (NIF, IBAN, morada, doc identificação).
+  if (data.tipo_cliente === 'condutor') {
+    validateCondutor(data, ctx);
+    return;
+  }
+
   validateComum(data, ctx);
-  validateDocumentos(data, ctx);
   if (data.is_empresa) {
+    // Empresa identifica-se pelo NIF — não tem documento de identificação
+    // (CC/Passaporte) nem carta de condução.
     validateEmpresa(data, ctx);
   } else {
+    validateDocumentos(data, ctx);
     validatePessoa(data, ctx);
   }
 });
 
 // ── Defaults ──────────────────────────────────────────────────
 export const emptyDefaults: ClienteFormData = {
+  tipo_cliente: 'particular',
   is_empresa: false,
+  is_edicao: false,
   nome: '',
   nome_comercial: '',
   nif: '',

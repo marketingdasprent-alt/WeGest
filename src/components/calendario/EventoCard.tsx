@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pencil, Trash2, Clock, User, MessageSquareText } from 'lucide-react';
+import { CheckCircle2, Pencil, Trash2, Clock, User, MessageSquareText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -20,6 +20,8 @@ const TIPO_LABELS: Record<string, string> = {
   troca: 'Troca',
   upgrade: 'Upgrade',
   lista_espera: 'Lista de Espera',
+  transferencia: 'Transferência',
+  slot: 'Slot',
 };
 
 const TIPO_COLORS: Record<string, string> = {
@@ -29,6 +31,8 @@ const TIPO_COLORS: Record<string, string> = {
   troca: 'border-l-purple-500',
   upgrade: 'border-l-yellow-500',
   lista_espera: 'border-l-pink-500',
+  transferencia: 'border-l-cyan-500',
+  slot: 'border-l-amber-500',
 };
 
 export function formatMatricula(val: string): string {
@@ -49,7 +53,7 @@ export const EventoCard: React.FC<Props> = ({ evento, onEdit, onDelete, onDetail
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-sm truncate">
-              {evento.tipo === 'lista_espera' ? (
+              {evento.tipo === 'lista_espera' || evento.tipo === 'slot' ? (
                 evento.titulo
               ) : evento.tipo === 'troca' ? (
                 <>
@@ -64,6 +68,20 @@ export const EventoCard: React.FC<Props> = ({ evento, onEdit, onDelete, onDetail
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
               {TIPO_LABELS[evento.tipo] || evento.tipo}
             </span>
+            {evento.profiles?.nome && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                {evento.profiles.nome}
+              </span>
+            )}
+            {evento.realizado_em && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                title={`Realizado por ${evento.realizador?.nome ?? '—'}`}
+              >
+                <CheckCircle2 className="h-3 w-3" />
+                Realizado
+              </span>
+            )}
           </div>
           {!evento.dia_todo && (
             <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
@@ -82,6 +100,15 @@ export const EventoCard: React.FC<Props> = ({ evento, onEdit, onDelete, onDetail
             <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
               <User className="h-3 w-3" />
               <span>{evento.profiles.nome}</span>
+            </div>
+          )}
+          {evento.realizador?.nome && evento.realizado_em && (
+            <div className="flex items-center gap-1 mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="h-3 w-3" />
+              <span>
+                Por {evento.realizador.nome}{' '}
+                {format(new Date(evento.realizado_em), "dd/MM 'às' HH:mm")}
+              </span>
             </div>
           )}
         </div>

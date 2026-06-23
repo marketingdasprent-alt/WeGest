@@ -38,10 +38,8 @@ const RegistoMotorista: React.FC = () => {
 
   const pwdReqs = (pwd: string) => ({
     minLength: pwd.length >= 8,
-    hasUpper: /[A-Z]/.test(pwd),
-    hasLower: /[a-z]/.test(pwd),
+    hasLetter: /[a-zA-Z]/.test(pwd),
     hasNumber: /[0-9]/.test(pwd),
-    hasSpecial: /[!@#$%^&*()_+\-=[\]{};':"\\|<>?,./`~]/.test(pwd),
   });
 
   const isPasswordValid = (pwd: string) => Object.values(pwdReqs(pwd)).every(Boolean);
@@ -61,7 +59,7 @@ const RegistoMotorista: React.FC = () => {
       m.includes('password should') ||
       m.includes('at least 8')
     )
-      return 'A palavra-passe não cumpre os requisitos: mínimo 8 caracteres, com letra maiúscula, minúscula, número e carácter especial.';
+      return 'A palavra-passe não cumpre os requisitos: mínimo 8 caracteres, com letras e números.';
     if (m.includes('pwned') || m.includes('compromised'))
       return 'Esta palavra-passe foi comprometida em fugas de dados. Escolha uma diferente.';
     if (m.includes('invalid') && m.includes('email')) return 'O email introduzido não é válido.';
@@ -88,7 +86,7 @@ const RegistoMotorista: React.FC = () => {
       toast({
         title: 'Erro',
         description:
-          'A palavra-passe não cumpre os requisitos: mínimo 8 caracteres, com letra maiúscula, minúscula, número e carácter especial.',
+          'A palavra-passe não cumpre os requisitos: mínimo 8 caracteres, com letras e números.',
         variant: 'destructive',
       });
       return;
@@ -231,10 +229,8 @@ const RegistoMotorista: React.FC = () => {
               {(
                 [
                   { key: 'minLength', label: 'Mínimo 8 caracteres' },
-                  { key: 'hasUpper', label: 'Letra maiúscula (A-Z)' },
-                  { key: 'hasLower', label: 'Letra minúscula (a-z)' },
-                  { key: 'hasNumber', label: 'Número (0-9)' },
-                  { key: 'hasSpecial', label: 'Carácter especial (!@#$…)' },
+                  { key: 'hasLetter', label: 'Pelo menos uma letra' },
+                  { key: 'hasNumber', label: 'Pelo menos um número (0-9)' },
                 ] as const
               ).map(({ key, label }) => {
                 const ok = pwdReqs(password)[key];

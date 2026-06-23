@@ -12,6 +12,7 @@ import {
 
 // ── Cliente ───────────────────────────────────────────────────
 export type ClientePayload = {
+  tipo_cliente: 'particular' | 'empresa' | 'condutor';
   is_empresa: boolean;
   nome: string;
   nome_comercial: string | null;
@@ -31,8 +32,9 @@ export type ClientePayload = {
 };
 
 export function buildClientePayload(values: ClienteFormData): ClientePayload {
-  const isEmp = values.is_empresa;
+  const isEmp = values.tipo_cliente === 'empresa';
   return {
+    tipo_cliente: values.tipo_cliente,
     is_empresa: isEmp,
     nome: values.nome,
     nome_comercial: isEmp ? values.nome_comercial || null : null,

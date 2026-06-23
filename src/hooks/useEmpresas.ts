@@ -6,6 +6,7 @@ import { getEmpresasList, type EmpresaConfig } from '@/config/empresas';
 function rowToConfig(d: Record<string, any>): EmpresaConfig {
   return {
     id: d.id,
+    orgId: d.org_id ?? null,
     nome: d.nome,
     nomeCompleto: d.nome_completo,
     nif: d.nif ?? '',

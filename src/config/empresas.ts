@@ -1,5 +1,7 @@
 export interface EmpresaConfig {
   id: string;
+  /** Org dona desta empresa — usado para escolher o template correcto em ambientes multi-tenant. */
+  orgId?: string | null;
   nome: string;
   nomeCompleto: string;
   nif: string;
@@ -9,20 +11,21 @@ export interface EmpresaConfig {
   representante: string;
   cargoRepresentante: string;
   papelTimbrado: string;
+  logoUrl?: string | null;
 }
 
 export const EMPRESAS: Record<string, EmpresaConfig> = {
   decada_ousada: {
     id: 'decada_ousada',
-    nome: 'WeGest',
-    nomeCompleto: 'WeGest, Lda.',
+    nome: 'Década Ousada',
+    nomeCompleto: 'Década Ousada, Lda.',
     nif: '515127850',
     sede: 'Rua do Mourato Nº 70 A correio 70, 9600-224 Ribeira Grande',
     licencaTVDE: '(informação a confirmar)',
     licencaValidade: '(informação a confirmar)',
     representante: 'Beatriz Veloso',
     cargoRepresentante: 'gerente com poderes para o ato',
-    papelTimbrado: '/images/papel-timbrado-rota-liquida.png',
+    papelTimbrado: '/images/papel-timbrado-decada-ousada.png',
   },
   distancia_arrojada: {
     id: 'distancia_arrojada',
@@ -45,3 +48,19 @@ export const getEmpresaById = (id: string): EmpresaConfig | undefined => {
 export const getEmpresasList = (): EmpresaConfig[] => {
   return Object.values(EMPRESAS);
 };
+
+/** Rodapé "Nome · NIF · Sede" usado nos PDFs gerados (sem papel timbrado). */
+export const empresaFooterText = (e: EmpresaConfig): string =>
+  [e.nomeCompleto, e.nif ? `NIF ${e.nif}` : null, e.sede].filter(Boolean).join('   ·   ');
+
+/** Dados da empresa no formato esperado por `documentData.empresaData`
+ *  (placeholders {{empresa_*}}). */
+export const empresaDocData = (e: EmpresaConfig) => ({
+  nomeCompleto: e.nomeCompleto,
+  nif: e.nif,
+  sede: e.sede,
+  licencaTVDE: e.licencaTVDE,
+  licencaValidade: e.licencaValidade,
+  representante: e.representante,
+  cargoRepresentante: e.cargoRepresentante,
+});

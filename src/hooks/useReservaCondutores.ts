@@ -5,6 +5,11 @@ import type { CondutorFormItem, ReservaCondutor } from '@/types/reserva';
 
 const QUERY_KEY_BASE = ['renting', 'reserva-condutores'] as const;
 
+/** Chave estável: cliente_id em rent-a-car, motorista_id em TVDE. */
+function chaveCondutor(c: { cliente_id: string | null; motorista_id: string | null }): string {
+  return (c.cliente_id ?? c.motorista_id) as string;
+}
+
 /** Carrega os condutores de uma reserva. */
 export function useReservaCondutores(reservaId: string | null | undefined) {
   return useQuery({
@@ -13,7 +18,9 @@ export function useReservaCondutores(reservaId: string | null | undefined) {
       if (!reservaId) return [];
       const { data, error } = await supabase
         .from('reserva_condutores')
-        .select('id, org_id, reserva_id, cliente_id, is_principal, created_by, created_at')
+        .select(
+          'id, org_id, reserva_id, cliente_id, motorista_id, is_principal, created_by, created_at'
+        )
         .eq('reserva_id', reservaId)
         .order('created_at', { ascending: true });
       if (error) throw error;
@@ -30,11 +37,8 @@ interface SyncArgs {
 }
 
 /**
- * Sincroniza a lista de condutores duma reserva contra o estado actual na BD:
- *   • Apaga os condutores que existem na BD mas não estão na lista desejada.
- *   • Insere os condutores que estão na lista mas ainda não existem.
- *   • Garante que apenas um condutor é principal — limpa a flag em todos e
- *     marca o desejado.
+ * Sincroniza a lista de condutores duma reserva contra o estado actual na BD.
+ * Identifica linhas por `cliente_id` ou `motorista_id` (exactamente um dos dois).
  */
 export function useSyncReservaCondutores() {
   const qc = useQueryClient();
@@ -42,16 +46,16 @@ export function useSyncReservaCondutores() {
     mutationFn: async ({ reservaId, desejados }: SyncArgs): Promise<void> => {
       const { data: actuais, error: fetchErr } = await supabase
         .from('reserva_condutores')
-        .select('id, cliente_id, is_principal')
+        .select('id, cliente_id, motorista_id, is_principal')
         .eq('reserva_id', reservaId);
       if (fetchErr) throw fetchErr;
 
-      const actuaisPorCliente = new Map((actuais ?? []).map((c) => [c.cliente_id, c]));
-      const desejadosClientes = new Set(desejados.map((c) => c.cliente_id));
+      const actuaisPorChave = new Map((actuais ?? []).map((c) => [chaveCondutor(c), c]));
+      const desejadosChaves = new Set(desejados.map(chaveCondutor));
 
       // 1) Apagar os que sobram
       const idsApagar = (actuais ?? [])
-        .filter((c) => !desejadosClientes.has(c.cliente_id))
+        .filter((c) => !desejadosChaves.has(chaveCondutor(c)))
         .map((c) => c.id);
       if (idsApagar.length > 0) {
         const { error } = await supabase.from('reserva_condutores').delete().in('id', idsApagar);
@@ -60,22 +64,21 @@ export function useSyncReservaCondutores() {
 
       // 2) Inserir os que faltam (sempre is_principal=false; corrigimos depois)
       const aInserir = desejados
-        .filter((c) => !actuaisPorCliente.has(c.cliente_id))
+        .filter((c) => !actuaisPorChave.has(chaveCondutor(c)))
         .map((c) => ({
           reserva_id: reservaId,
           cliente_id: c.cliente_id,
+          motorista_id: c.motorista_id,
           is_principal: false,
         }));
       if (aInserir.length > 0) {
-        // org_id é preenchido por trigger na BD — daí o cast.
         const { error } = await supabase
           .from('reserva_condutores')
           .insert(aInserir as TablesInsert<'reserva_condutores'>[]);
         if (error) throw error;
       }
 
-      // 3) Resetar todos para is_principal=false (necessário antes de marcar
-      //    o novo principal por causa do índice único parcial).
+      // 3) Resetar todos para is_principal=false
       const { error: errReset } = await supabase
         .from('reserva_condutores')
         .update({ is_principal: false })
@@ -86,11 +89,16 @@ export function useSyncReservaCondutores() {
       // 4) Marcar o principal desejado (se houver)
       const principal = desejados.find((c) => c.is_principal);
       if (principal) {
-        const { error } = await supabase
+        let q = supabase
           .from('reserva_condutores')
           .update({ is_principal: true })
-          .eq('reserva_id', reservaId)
-          .eq('cliente_id', principal.cliente_id);
+          .eq('reserva_id', reservaId);
+        if (principal.cliente_id) {
+          q = q.eq('cliente_id', principal.cliente_id);
+        } else if (principal.motorista_id) {
+          q = q.eq('motorista_id', principal.motorista_id);
+        }
+        const { error } = await q;
         if (error) throw error;
       }
     },

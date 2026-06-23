@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import { AlertTriangle, Calculator, Check } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
 import type { ReservaFormValues } from './reservaDialog.schema';
@@ -16,7 +17,10 @@ interface ReservaResumoSidebarProps {
   isEdit: boolean;
 }
 
-const IVA_RATE = 0.23;
+function ivaRate(regime: string): number {
+  // TVDE e Slot já têm IVA incluído no preço — não aplica IVA adicional
+  return regime === 'tvde' || regime === 'slot' ? 0 : 0.23;
+}
 
 function diferencaDias(inicio: string, fim: string): number | null {
   if (!inicio || !fim) return null;
@@ -61,6 +65,7 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
   const franquiaValor = form.watch('franquia_valor');
   const caucaoValor = form.watch('caucao_valor');
   const longaDuracao = form.watch('is_longa_duracao');
+  const regime = form.watch('regime');
 
   const estacaoEntrega = useMemo(
     () => estacoes.find((e) => e.id === estacaoEntregaId),
@@ -74,11 +79,46 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
 
   const dias = diferencaDias(dataInicio, dataFim);
   const total = valorTotal ?? 0;
-  const subtotal = total > 0 ? total / (1 + IVA_RATE) : 0;
+  const taxaIVA = ivaRate(regime);
+  const subtotal = taxaIVA > 0 && total > 0 ? total / (1 + taxaIVA) : total;
   const iva = total - subtotal;
 
   const horaEntrega = formatHora(dataInicio);
   const horaRecolha = formatHora(dataFim);
+
+  const inputFocused = useRef(false);
+  const [precoUnitInput, setPrecoUnitInput] = useState<string>('');
+
+  // Só sincroniza quando o input não está em foco (mudança externa, ex: carregar dados)
+  useEffect(() => {
+    if (inputFocused.current) return;
+    const novo = dias && dias > 0 && total > 0 ? (total / dias).toFixed(2) : '';
+    setPrecoUnitInput(novo);
+  }, [total, dias]);
+
+  const handlePrecoUnitarioChange = (raw: string) => {
+    const normalized = raw.replace(',', '.').replace(/[^0-9.]/g, '');
+    setPrecoUnitInput(normalized);
+    if (!dias || dias <= 0) return;
+    if (normalized === '' || normalized === '.') {
+      form.setValue('valor_total', null, { shouldValidate: true });
+      return;
+    }
+    const n = Number(normalized);
+    if (!Number.isFinite(n) || n < 0) return;
+    form.setValue('valor_total', Number((n * dias).toFixed(2)), { shouldValidate: true });
+  };
+
+  const handlePrecoBlur = () => {
+    inputFocused.current = false;
+    // Formata ao sair do campo
+    const n = Number(precoUnitInput);
+    if (precoUnitInput && Number.isFinite(n) && n > 0) {
+      setPrecoUnitInput(n.toFixed(2));
+    } else if (!precoUnitInput || n === 0) {
+      setPrecoUnitInput('');
+    }
+  };
 
   return (
     <aside className="space-y-3">
@@ -185,31 +225,48 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
         </div>
 
         <div className="border-t">
-          <div className="px-4 py-2 grid grid-cols-2 text-xs font-semibold text-muted-foreground bg-muted/30">
-            <span>Tarifa</span>
-            <span className="text-right">Custo</span>
+          <div className="px-4 py-2 text-xs font-semibold text-muted-foreground bg-muted/30">
+            Preço
           </div>
-          <div className="px-4 py-2 grid grid-cols-2 text-sm border-t">
-            {valorTotal && valorTotal > 0 ? (
-              <span className="text-foreground">Aluguer</span>
+          <div className="px-4 py-2.5 border-t space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-muted-foreground shrink-0">Preço/dia (IVA inc.)</span>
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={precoUnitInput}
+                onChange={(e) => handlePrecoUnitarioChange(e.target.value)}
+                onFocus={() => {
+                  inputFocused.current = true;
+                }}
+                onBlur={handlePrecoBlur}
+                disabled={!dias}
+                placeholder="0,00"
+                className="h-8 w-24 text-right tabular-nums text-sm"
+                title={!dias ? 'Define primeiro as datas' : 'Preço por dia (IVA incluído)'}
+              />
+            </div>
+            {dias ? (
+              <p className="text-xs text-muted-foreground text-right">
+                × {dias} dia{dias === 1 ? '' : 's'}
+              </p>
             ) : (
-              <span className="text-amber-600 dark:text-amber-400 italic flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" /> Tarifa?
-              </span>
+              <p className="text-xs text-amber-600 dark:text-amber-400 text-right flex items-center justify-end gap-1">
+                <AlertTriangle className="h-3 w-3" /> Define as datas primeiro
+              </p>
             )}
-            <span className="text-right">{formatEur(valorTotal)}</span>
           </div>
           <div className="px-4 py-1.5 grid grid-cols-2 text-sm border-t">
             <span className="text-muted-foreground">Sub-total</span>
-            <span className="text-right">{formatEur(subtotal)}</span>
+            <span className="text-right tabular-nums">{formatEur(subtotal)}</span>
           </div>
           <div className="px-4 py-1.5 grid grid-cols-2 text-sm border-t bg-muted/20">
-            <span className="text-muted-foreground">IVA</span>
-            <span className="text-right">{formatEur(iva)}</span>
+            <span className="text-muted-foreground">IVA ({(taxaIVA * 100).toFixed(0)}%)</span>
+            <span className="text-right tabular-nums">{formatEur(iva)}</span>
           </div>
           <div className="px-4 py-2 grid grid-cols-2 text-sm border-t font-semibold">
             <span>Total</span>
-            <span className="text-right">{formatEur(total)}</span>
+            <span className="text-right tabular-nums">{formatEur(total)}</span>
           </div>
         </div>
       </Card>

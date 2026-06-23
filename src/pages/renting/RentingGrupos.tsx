@@ -28,6 +28,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { matchesSearch } from '@/lib/utils';
 
 interface RentingGrupo {
   id: string;
@@ -72,8 +73,7 @@ const RentingGrupos = () => {
   });
 
   const filtered = grupos.filter((g) => {
-    const q = search.toLowerCase();
-    return !q || g.nome.toLowerCase().includes(q) || g.codigo.toLowerCase().includes(q);
+    return !search || matchesSearch(g.nome, search) || matchesSearch(g.codigo, search);
   });
 
   return (

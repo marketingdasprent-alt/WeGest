@@ -8,6 +8,7 @@ import { FormField } from '@/components/formularios/DynamicFieldEditor';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { initPixel } from '@/lib/pixel';
 
 export const RentCarLanding = () => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -23,6 +24,8 @@ export const RentCarLanding = () => {
   const fieldsPerStep = 2; // Número de campos por step
 
   useEffect(() => {
+    // Landing pública → carrega FB Pixel + dispara PageView.
+    initPixel();
     fetchFormulario();
   }, []);
   const fetchFormulario = async () => {
@@ -44,7 +47,6 @@ export const RentCarLanding = () => {
         setFormulario(formulario);
         const campos = formulario.campos || [];
         setFormFields(campos);
-        console.log('Formulário carregado:', formulario.nome, 'com', campos.length, 'campos');
       }
     } catch (error) {
       console.error('Erro ao carregar formulário:', error);
@@ -137,15 +139,12 @@ export const RentCarLanding = () => {
 
     // Bloqueio síncrono imediato para evitar duplo clique
     if (isSubmittingRef.current) {
-      console.log('Envio já em andamento, ignorando clique duplicado');
       return;
     }
     isSubmittingRef.current = true;
 
     try {
       setIsSubmitting(true);
-      console.log('TVDE FormData antes do processamento:', formData);
-      console.log('TVDE Campos do formulário:', formulario?.campos);
 
       // Buscar campanhas associadas ao formulário
       let campanhas: string[] = [];
@@ -264,8 +263,6 @@ export const RentCarLanding = () => {
         }
       }
 
-      console.log('TVDE Lead data final:', leadData);
-
       // Verificar duplicidade antes de inserir (mesmo email nos últimos 5 minutos)
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
       const { data: existingLead } = await (supabase as any)
@@ -276,14 +273,12 @@ export const RentCarLanding = () => {
         .maybeSingle();
 
       if (existingLead) {
-        console.log('Lead duplicado detectado, redirecionando sem criar novo');
         navigate('/obrigado');
         return;
       }
 
       const { error } = await (supabase as any).from('leads_dasprent').insert(leadData);
       if (error) throw error;
-      console.log('Lead TVDE salvo com sucesso');
 
       // Track form submission success
       if (typeof window !== 'undefined') {

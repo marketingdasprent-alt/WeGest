@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useForm, useFormContext, useWatch, type Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -50,7 +50,7 @@ import {
   buildDocumentoPayload,
   buildCartaPayload,
 } from '@/components/renting/clienteDialog.payloads';
-import type { ClienteComDocumentos } from '@/types/cliente';
+import type { ClienteComDocumentos, TipoCliente } from '@/types/cliente';
 
 // ── Helpers UI ────────────────────────────────────────────────
 const SectionHeader = ({ title }: { title: string }) => (
@@ -111,42 +111,44 @@ const TelemovelField = ({ control }: { control: Control<ClienteFormData> }) => {
   );
 };
 
-/** Secção "Dados Pessoais / Dados da Empresa". Recebe is_empresa por props para evitar watch no parent. */
+/** Secção "Dados Pessoais / Dados da Empresa". Recebe is_empresa por props para evitar watch no parent.
+ *  isCondutor torna os campos de pagador (NIF, email, IBAN, data, género, naturalidade) opcionais. */
 export const SeccaoDadosPrincipais = ({
   control,
   isEmpresa,
+  isCondutor = false,
   disabledTipo,
 }: {
   control: Control<ClienteFormData>;
   isEmpresa: boolean;
+  isCondutor?: boolean;
   disabledTipo: boolean;
 }) => {
   return (
     <section className="space-y-5">
-      <SectionHeader title={isEmpresa ? 'Dados da Empresa' : 'Dados Pessoais'} />
+      <SectionHeader
+        title={isEmpresa ? 'Dados da Empresa' : isCondutor ? 'Dados do Condutor' : 'Dados Pessoais'}
+      />
 
       <FormField
         control={control}
-        name="is_empresa"
+        name="tipo_cliente"
         render={({ field }) => (
           <FormItem>
             <FormLabel>
               Tipo de Cliente
               <RequiredMark />
             </FormLabel>
-            <Select
-              onValueChange={(v) => field.onChange(v === 'true')}
-              value={field.value ? 'true' : 'false'}
-              disabled={disabledTipo}
-            >
+            <Select onValueChange={field.onChange} value={field.value} disabled={disabledTipo}>
               <FormControl>
                 <SelectTrigger className="h-11">
                   <SelectValue />
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
-                <SelectItem value="false">Particular (pessoa)</SelectItem>
-                <SelectItem value="true">Empresa</SelectItem>
+                <SelectItem value="particular">Particular (pessoa)</SelectItem>
+                <SelectItem value="empresa">Empresa</SelectItem>
+                <SelectItem value="condutor">Condutor</SelectItem>
               </SelectContent>
             </Select>
             <FormMessage />
@@ -190,7 +192,7 @@ export const SeccaoDadosPrincipais = ({
         <ValidatedTextField<ClienteFormData>
           name="nif"
           label="NIF"
-          required
+          required={!isCondutor}
           placeholder="123456789"
           inputMode="numeric"
           maxLength={9}
@@ -198,7 +200,7 @@ export const SeccaoDadosPrincipais = ({
         <ValidatedTextField<ClienteFormData>
           name="email"
           label="Email"
-          required
+          required={!isCondutor}
           type="email"
           placeholder="email@exemplo.com"
         />
@@ -216,7 +218,7 @@ export const SeccaoDadosPrincipais = ({
             <FormItem>
               <FormLabel>
                 {isEmpresa ? 'Data de Criação' : 'Data de Nascimento'}
-                <RequiredMark />
+                {!isCondutor && <RequiredMark />}
               </FormLabel>
               <FormControl>
                 <Input
@@ -229,7 +231,7 @@ export const SeccaoDadosPrincipais = ({
             </FormItem>
           )}
         />
-        {!isEmpresa && (
+        {!isEmpresa && !isCondutor && (
           <>
             <FormField
               control={control}
@@ -270,7 +272,6 @@ export const SeccaoDadosPrincipais = ({
       <ValidatedTextField<ClienteFormData>
         name="iban"
         label="IBAN"
-        required
         placeholder="PT50 0000 0000 0000 0000 0000 0"
       />
 
@@ -413,10 +414,7 @@ export const SeccaoDocumento = ({ control }: { control: Control<ClienteFormData>
         name="doc_data_emissao"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>
-              Data de Emissão
-              <RequiredMark />
-            </FormLabel>
+            <FormLabel>Data de Emissão</FormLabel>
             <FormControl>
               <Input type="date" {...field} className="h-11" />
             </FormControl>
@@ -461,10 +459,7 @@ export const SeccaoCarta = ({ control }: { control: Control<ClienteFormData> }) 
         name="carta_pais"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>
-              País
-              <RequiredMark />
-            </FormLabel>
+            <FormLabel>País</FormLabel>
             <FormControl>
               <CountrySelect value={field.value || ''} onChange={field.onChange} className="h-11" />
             </FormControl>
@@ -475,22 +470,6 @@ export const SeccaoCarta = ({ control }: { control: Control<ClienteFormData> }) 
     </div>
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-      <FormField
-        control={control}
-        name="carta_data_emissao"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>
-              Data de Emissão
-              <RequiredMark />
-            </FormLabel>
-            <FormControl>
-              <Input type="date" {...field} className="h-11" />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
       <FormField
         control={control}
         name="carta_validade"
@@ -536,11 +515,31 @@ interface ClienteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   cliente: ClienteComDocumentos | null;
+  /**
+   * Callback chamado após criar um cliente novo com sucesso. Recebe o `id`
+   * do cliente criado. Útil para fluxos inline (ex.: adicionar como condutor
+   * imediatamente após criar).
+   */
+  onCreated?: (clienteId: string) => void;
+  /** Tipo pré-seleccionado ao criar um cliente novo (ex.: 'condutor'
+   *  quando aberto a partir da tab de condutores). Default 'particular'. */
+  defaultTipoCliente?: TipoCliente;
 }
 
 // ── Componente principal ──────────────────────────────────────
-export function ClienteDialog({ open, onOpenChange, cliente }: ClienteDialogProps) {
+export function ClienteDialog({
+  open,
+  onOpenChange,
+  cliente,
+  onCreated,
+  defaultTipoCliente = 'particular',
+}: ClienteDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Lock SÍNCRONO contra duplo-submit. O state isSubmitting só desativa o
+  // botão no próximo render — entre o 1º clique e esse render há uma janela
+  // onde um 2º clique (duplo-clique/Enter) passava a guarda e criava em
+  // duplicado. O ref atualiza já, fechando essa janela.
+  const submittingRef = useRef(false);
   const [activeTab, setActiveTab] = useState<'dados' | 'anexos'>('dados');
   const createMutation = useCreateCliente();
   const updateMutation = useUpdateCliente();
@@ -551,11 +550,17 @@ export function ClienteDialog({ open, onOpenChange, cliente }: ClienteDialogProp
     mode: 'onBlur',
     reValidateMode: 'onChange',
   });
-  const { control, handleSubmit, reset } = form;
+  const { control, handleSubmit, reset, setValue } = form;
 
-  // is_empresa muda raramente — usamos useWatch isolado (não re-renderiza este componente
-  // a cada keystroke de outros campos).
-  const isEmpresa = useWatch({ control, name: 'is_empresa' });
+  // tipo_cliente é a fonte de verdade; is_empresa é derivado dele.
+  const tipoCliente = useWatch({ control, name: 'tipo_cliente' });
+  const isEmpresa = tipoCliente === 'empresa';
+  const isCondutor = tipoCliente === 'condutor';
+
+  // Mantém o campo is_empresa (usado na validação/payload) em sincronia.
+  useEffect(() => {
+    setValue('is_empresa', tipoCliente === 'empresa');
+  }, [tipoCliente, setValue]);
 
   // Reset tab activa ao abrir o dialog (evita ficar em "Anexos" entre aberturas)
   useEffect(() => {
@@ -566,7 +571,9 @@ export function ClienteDialog({ open, onOpenChange, cliente }: ClienteDialogProp
   useEffect(() => {
     if (cliente) {
       reset({
+        tipo_cliente: cliente.tipo_cliente ?? (cliente.is_empresa ? 'empresa' : 'particular'),
         is_empresa: cliente.is_empresa,
+        is_edicao: true,
         nome: cliente.nome,
         nome_comercial: cliente.nome_comercial || '',
         nif: cliente.nif || '',
@@ -593,13 +600,14 @@ export function ClienteDialog({ open, onOpenChange, cliente }: ClienteDialogProp
         carta_validade: cliente.cartaConducao?.validade || '',
       });
     } else {
-      reset(emptyDefaults);
+      reset({ ...emptyDefaults, tipo_cliente: defaultTipoCliente });
     }
-  }, [cliente, reset]);
+  }, [cliente, reset, defaultTipoCliente]);
 
   const onSubmit = useCallback(
     async (values: ClienteFormData) => {
-      if (isSubmitting) return;
+      if (submittingRef.current) return;
+      submittingRef.current = true;
       setIsSubmitting(true);
       try {
         const clientePayload = buildClientePayload(values);
@@ -616,20 +624,22 @@ export function ClienteDialog({ open, onOpenChange, cliente }: ClienteDialogProp
             cartaConducao: cartaPayload,
           });
         } else {
-          await createMutation.mutateAsync({
+          const novoCliente = await createMutation.mutateAsync({
             cliente: clientePayload,
             documentoIdentificacao: documentoPayload,
             cartaConducao: cartaPayload,
           });
+          onCreated?.(novoCliente.id);
         }
         onOpenChange(false);
       } catch {
         // erro tratado pelos mutations via toast
       } finally {
+        submittingRef.current = false;
         setIsSubmitting(false);
       }
     },
-    [cliente, createMutation, updateMutation, isSubmitting, onOpenChange]
+    [cliente, createMutation, updateMutation, onOpenChange, onCreated]
   );
 
   const loading = isSubmitting || createMutation.isPending || updateMutation.isPending;
@@ -691,10 +701,14 @@ export function ClienteDialog({ open, onOpenChange, cliente }: ClienteDialogProp
                 <SeccaoDadosPrincipais
                   control={control}
                   isEmpresa={isEmpresa}
+                  isCondutor={isCondutor}
                   disabledTipo={!!cliente}
                 />
-                <SeccaoMorada control={control} />
-                <SeccaoDocumento control={control} />
+                {/* Condutor não é pagador — sem morada nem documento de identificação. */}
+                {!isCondutor && <SeccaoMorada control={control} />}
+                {/* Documento de identificação (CC/Passaporte) é de pessoa singular —
+                    empresa identifica-se pelo NIF, condutor não é pagador. */}
+                {!isCondutor && !isEmpresa && <SeccaoDocumento control={control} />}
                 {!isEmpresa && <SeccaoCarta control={control} />}
               </form>
             </Form>

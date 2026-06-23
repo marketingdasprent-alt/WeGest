@@ -38,6 +38,8 @@ import {
 import { MotoristaResumoDialog } from './MotoristaResumoDialog';
 import { ImportarDadosWizard } from './ImportarDadosWizard';
 import { Checkbox } from '@/components/ui/checkbox';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 import {
   Printer,
   Mail,
@@ -66,6 +68,8 @@ import {
 
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn, matchesSearch } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 interface MotoristaResumo {
   /** id único estável por linha — usar SEMPRE para selectedIds, react keys, filtros.
@@ -82,6 +86,8 @@ interface MotoristaResumo {
   viagens_uber: number;
   recibo_verde: boolean;
   liquido: number;
+  /** Soma de gorjetas (Bolt + Uber) no período. Entra no líquido SEM IVA. */
+  gorjeta: number;
   combustivel: number;
   portagens: number;
   reparacoes: number;
@@ -102,6 +108,8 @@ const getWeekShortcuts = () => [
 
 export function ContasResumoTab() {
   const isMobile = useIsMobile();
+  const { hasAccessToResource } = usePermissions();
+  const canImportar = hasAccessToResource(RECURSOS.ADMINISTRATIVO_IMPORTAR);
   const [loading, setLoading] = useState(true);
   const [resumos, setResumos] = useState<MotoristaResumo[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -145,6 +153,7 @@ export function ContasResumoTab() {
   type SortField =
     | 'driver_name'
     | 'total_faturado'
+    | 'gorjeta'
     | 'liquido'
     | 'aluguer'
     | 'combustivel'
@@ -586,8 +595,16 @@ export function ContasResumoTab() {
         }
       });
 
+      // Index id → dados (O(1)) — evita Object.values(nomeToMotoristaMap).find(
+      // m=>m.id===X) repetido nos loops abaixo. Primeira ocorrência por id, que
+      // é a mesma semântica do .find() sobre Object.values (dados idênticos por id).
+      const motoristaById = new Map<string, { id: string; nome: string; recibo_verde: boolean }>();
+      for (const v of Object.values(nomeToMotoristaMap)) {
+        if (!motoristaById.has(v.id)) motoristaById.set(v.id, v);
+      }
+
       // 3. Buscar viagens Bolt
-      let boltQuery = supabase
+      const boltQuery = supabase
         .from('bolt_viagens')
         .select('driver_name, driver_uuid, driver_earnings, order_status, integracao_id')
         .gt('driver_earnings', 0)
@@ -595,7 +612,7 @@ export function ContasResumoTab() {
         .lte('payment_confirmed_timestamp', weekEnd.toISOString());
 
       // 4. Buscar transações Uber no mesmo período
-      let uberQuery = supabase
+      const uberQuery = supabase
         .from('uber_transactions')
         .select('uber_driver_id, gross_amount, raw_transaction')
         .gte('occurred_at', weekStart.toISOString())
@@ -606,7 +623,7 @@ export function ContasResumoTab() {
       const fmtD = (d: Date) =>
         `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
       const periodoStr = `${fmtD(weekStart)}-${fmtD(weekEnd)}`;
-      let atividadeQuery = supabase
+      const atividadeQuery = supabase
         .from('uber_atividade_motoristas')
         .select('uber_driver_id, viagens_concluidas')
         .eq('periodo', periodoStr);
@@ -616,34 +633,40 @@ export function ContasResumoTab() {
         .from('uber_drivers')
         .select('uber_driver_id, motorista_id, full_name');
 
+      // Fronteira de semana por DATA UTC. Antes usava-se weekStart.toISOString()
+      // (meia-noite local → 23:00 UTC do dia anterior), o que puxava transações
+      // da véspera para a semana seguinte. Por data UTC o bucket fica correto.
+      const weekStartUtc = `${format(weekStart, 'yyyy-MM-dd')}T00:00:00Z`;
+      const weekEndUtc = `${format(weekEnd, 'yyyy-MM-dd')}T23:59:59Z`;
+
       // 4d. Buscar transações de combustível no período
-      let combustivelQuery = (supabase as any)
+      const combustivelQuery = (supabase as any)
         .from('bp_transacoes')
         .select('motorista_id, amount')
-        .gte('transaction_date', weekStart.toISOString())
-        .lte('transaction_date', weekEnd.toISOString())
+        .gte('transaction_date', weekStartUtc)
+        .lte('transaction_date', weekEndUtc)
         .not('motorista_id', 'is', null);
 
-      let repsolQuery = supabase
+      const repsolQuery = supabase
         .from('repsol_transacoes')
         .select('motorista_id, amount')
-        .gte('transaction_date', weekStart.toISOString())
-        .lte('transaction_date', weekEnd.toISOString())
+        .gte('transaction_date', weekStartUtc)
+        .lte('transaction_date', weekEndUtc)
         .not('motorista_id', 'is', null);
 
-      let edpQuery = supabase
+      const edpQuery = supabase
         .from('edp_transacoes')
         .select('motorista_id, amount')
-        .gte('transaction_date', weekStart.toISOString())
-        .lte('transaction_date', weekEnd.toISOString())
+        .gte('transaction_date', weekStartUtc)
+        .lte('transaction_date', weekEndUtc)
         .not('motorista_id', 'is', null);
 
       // 4d-ter. Buscar portagens Via Verde no período
       const viaVerdeQuery = (supabase as any)
         .from('via_verde_transacoes')
         .select('motorista_id, amount')
-        .gte('transaction_date', weekStart.toISOString())
-        .lte('transaction_date', weekEnd.toISOString())
+        .gte('transaction_date', weekStartUtc)
+        .lte('transaction_date', weekEndUtc)
         .not('motorista_id', 'is', null);
 
       // 4d-bis. Buscar valor de aluguer de viatura (bulk) para todos os motoristas activos
@@ -664,10 +687,10 @@ export function ContasResumoTab() {
         .lte('data_movimento', weekEndStr)
         .eq('status', 'pendente');
 
-      let boltResumosQuery = supabase
+      const boltResumosQuery = supabase
         .from('bolt_resumos_semanais')
         .select(
-          'motorista_id, motorista_nome, ganhos_liquidos, viagens_terminadas, integracao_id, identificador_motorista'
+          'motorista_id, motorista_nome, ganhos_liquidos, gorjetas, viagens_terminadas, integracao_id, identificador_motorista'
         )
         .lte('periodo_inicio', weekEndStr)
         .gte('periodo_fim', weekStartStr);
@@ -819,6 +842,8 @@ export function ContasResumoTab() {
         faturado_uber: number;
         viagens_bolt: number;
         viagens_uber: number;
+        /** Gorjetas (Bolt + Uber). Opcional: somado com `|| 0` para não tocar nas inits. */
+        gorjeta?: number;
         identificador_bolt?: string;
       }
       const agrupado: Record<string, AgrupadoEntry> = {};
@@ -877,6 +902,10 @@ export function ContasResumoTab() {
         if (entry.faturado_bolt > 0) boltResumosTracked.add(key);
       });
 
+      // Gorjeta do Bolt: vive no relatório semanal (bolt_resumos_semanais.gorjetas),
+      // por motorista. Capturada à parte para somar mesmo quando os ganhos vêm da API.
+      const gorjetaBoltById: Record<string, number> = {};
+
       (boltResumosResult.data || []).forEach((r: any) => {
         let motoristaId: string | null = r.motorista_id || null;
         const identificadorBolt = r.identificador_motorista || '';
@@ -900,6 +929,12 @@ export function ContasResumoTab() {
         }
 
         const key = motoristaId || `bolt_csv_${r.identificador_motorista || displayName}`;
+
+        // Gorjeta Bolt (CSV) — somar por motorista, mesmo que os ganhos venham da API.
+        if (motoristaId) {
+          gorjetaBoltById[motoristaId] =
+            (gorjetaBoltById[motoristaId] || 0) + (Number(r.gorjetas) || 0);
+        }
 
         // Se já temos dados da API (bolt_viagens) para este motorista, ignorar CSV
         if (boltResumosTracked.has(key)) return;
@@ -925,21 +960,30 @@ export function ContasResumoTab() {
       // 5b. Processar Uber — aggregate by uber_driver_id
       const uberByDriver: Record<
         string,
-        { firstName: string; lastName: string; total: number; count: number }
+        { firstName: string; lastName: string; total: number; count: number; gorjeta: number }
       > = {};
       (uberResult.data || []).forEach((t) => {
         const driverId = t.uber_driver_id || 'unknown';
+        const csvRow = (t.raw_transaction as any)?.csv_row || {};
         if (!uberByDriver[driverId]) {
-          const csvRow = (t.raw_transaction as any)?.csv_row || {};
           uberByDriver[driverId] = {
             firstName: csvRow['Nome próprio do motorista'] || '',
             lastName: csvRow['Apelido do motorista'] || '',
             total: 0,
             count: 0,
+            gorjeta: 0,
           };
         }
         uberByDriver[driverId].total += Number(t.gross_amount) || 0;
         uberByDriver[driverId].count = uberViagensByDriver[driverId] || 0;
+        // Gorjeta Uber: coluna "Pago a si:Os seus rendimentos:Gratificação" no raw_transaction.
+        const gratKey = Object.keys(csvRow).find(
+          (k) => k.includes('Gratificação') || k.includes('Gratificacao')
+        );
+        if (gratKey) {
+          uberByDriver[driverId].gorjeta +=
+            parseFloat(String(csvRow[gratKey]).replace(',', '.')) || 0;
+        }
       });
 
       // Also inject drivers that only have atividade but no payment transactions
@@ -950,6 +994,7 @@ export function ContasResumoTab() {
             lastName: uberDriverNameMap[driverId]?.split(' ').slice(1).join(' ') || '',
             total: 0,
             count: viagens,
+            gorjeta: 0,
           };
         }
       }
@@ -968,9 +1013,7 @@ export function ContasResumoTab() {
 
         if (matchedMotoristaId) {
           // Use name from motoristas_ativos if available
-          const motData = Object.values(nomeToMotoristaMap).find(
-            (m) => m.id === matchedMotoristaId
-          );
+          const motData = motoristaById.get(matchedMotoristaId);
           if (motData) {
             matchedName = motData.nome;
             reciboVerdeMap[motData.id] = motData.recibo_verde;
@@ -1004,12 +1047,13 @@ export function ContasResumoTab() {
             viagens_uber: uberData.count,
           };
         }
+        agrupado[key].gorjeta = (agrupado[key].gorjeta || 0) + (uberData.gorjeta || 0);
       });
 
       // 5b-bis. Ensure drivers with ONLY fuel/reparacoes are added to agrupado
       for (const [motoristaId, totalFuel] of Object.entries(combustivelByMotorista)) {
         if (!agrupado[motoristaId] && totalFuel > 0) {
-          const motData = Object.values(nomeToMotoristaMap).find((m) => m.id === motoristaId);
+          const motData = motoristaById.get(motoristaId);
           agrupado[motoristaId] = {
             motorista_id: motoristaId,
             driver_name: motData?.nome || 'Desconhecido',
@@ -1024,7 +1068,7 @@ export function ContasResumoTab() {
 
       for (const [motoristaId, totalRep] of Object.entries(reparacoesByMotorista)) {
         if (!agrupado[motoristaId] && totalRep > 0) {
-          const motData = Object.values(nomeToMotoristaMap).find((m) => m.id === motoristaId);
+          const motData = motoristaById.get(motoristaId);
           agrupado[motoristaId] = {
             motorista_id: motoristaId,
             driver_name: motData?.nome || 'Desconhecido',
@@ -1039,7 +1083,7 @@ export function ContasResumoTab() {
 
       for (const [motoristaId, totalAdhoc] of Object.entries(adhocByMotorista)) {
         if (!agrupado[motoristaId] && totalAdhoc > 0) {
-          const motData = Object.values(nomeToMotoristaMap).find((m) => m.id === motoristaId);
+          const motData = motoristaById.get(motoristaId);
           agrupado[motoristaId] = {
             motorista_id: motoristaId,
             driver_name: motData?.nome || 'Desconhecido',
@@ -1059,6 +1103,7 @@ export function ContasResumoTab() {
         if (!dup || !agrupado[alvoKey]) return;
         agrupado[alvoKey].faturado_bolt += dup.faturado_bolt;
         agrupado[alvoKey].faturado_uber += dup.faturado_uber;
+        agrupado[alvoKey].gorjeta = (agrupado[alvoKey].gorjeta || 0) + (dup.gorjeta || 0);
         agrupado[alvoKey].viagens_bolt += dup.viagens_bolt;
         agrupado[alvoKey].viagens_uber += dup.viagens_uber;
         if (!agrupado[alvoKey].motorista_id && dup.motorista_id) {
@@ -1130,8 +1175,18 @@ export function ContasResumoTab() {
         const aluguerValor = m.motorista_id ? aluguerByMotorista[m.motorista_id] || 0 : 0;
         const reparacoesValor = m.motorista_id ? reparacoesByMotorista[m.motorista_id] || 0 : 0;
         const adhocValor = m.motorista_id ? adhocByMotorista[m.motorista_id] || 0 : 0;
+        // Gorjeta (Bolt + Uber): entra no líquido SEM IVA (não passa pela receita ÷1.06).
+        // Uber vem agregado em m.gorjeta; Bolt vem do resumo semanal por motorista.
+        const gorjetaBolt = m.motorista_id ? gorjetaBoltById[m.motorista_id] || 0 : 0;
+        const gorjetaValor = (m.gorjeta || 0) + gorjetaBolt;
         const liquido =
-          receita - combustivelValor - portagensValor - aluguerValor - reparacoesValor - adhocValor;
+          receita -
+          combustivelValor -
+          portagensValor -
+          aluguerValor -
+          reparacoesValor -
+          adhocValor +
+          gorjetaValor;
 
         return {
           driver_name: displayNameFinal,
@@ -1145,6 +1200,7 @@ export function ContasResumoTab() {
           viagens_uber: m.viagens_uber,
           recibo_verde: passaReciboVerde,
           liquido,
+          gorjeta: gorjetaValor,
           combustivel: combustivelValor,
           portagens: portagensValor,
           reparacoes: reparacoesValor,
@@ -1224,6 +1280,14 @@ export function ContasResumoTab() {
     sortField,
     sortDir,
   ]);
+
+  // Paginação (render): só corta as linhas mostradas — totais, select-all e
+  // export continuam a usar filteredResumos completo.
+  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
+    filteredResumos,
+    50,
+    `${searchTerm}|${filterRecibo}|${filterSaldo}|${filterGestor}|${weekStart?.getTime?.() ?? ''}`
+  );
 
   // Totais gerais
   const totais = useMemo(() => {
@@ -1544,13 +1608,15 @@ export function ContasResumoTab() {
               <FileDown className="h-4 w-4 mr-2" />
               Exportar Excel
             </Button>
-            <Button
-              className="gap-2 bg-gradient-to-r from-primary to-primary/80 text-white hover:opacity-90"
-              onClick={() => setImportarWizardOpen(true)}
-            >
-              <Upload className="h-4 w-4" />
-              Importar Dados
-            </Button>
+            {canImportar && (
+              <Button
+                className="gap-2 bg-gradient-to-r from-primary to-primary/80 text-white hover:opacity-90"
+                onClick={() => setImportarWizardOpen(true)}
+              >
+                <Upload className="h-4 w-4" />
+                Importar Dados
+              </Button>
+            )}
           </div>
         </div>
 
@@ -1731,6 +1797,9 @@ export function ContasResumoTab() {
                   <SortTh field="total_faturado" right>
                     Faturado
                   </SortTh>
+                  <SortTh field="gorjeta" right>
+                    Gorjeta
+                  </SortTh>
                   <SortTh field="liquido" right>
                     Líquido
                   </SortTh>
@@ -1754,12 +1823,12 @@ export function ContasResumoTab() {
               <TableBody>
                 {filteredResumos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       Nenhum dado encontrado para o período selecionado
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredResumos.map((resumo, idx) => {
+                  pageItems.map((resumo, idx) => {
                     const rowId = resumo._uid || `row-${idx}`;
                     return (
                       <TableRow
@@ -1793,6 +1862,15 @@ export function ContasResumoTab() {
                               B: {formatCurrency(resumo.faturado_bolt)} | U:{' '}
                               {formatCurrency(resumo.faturado_uber)}
                             </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right" onClick={() => handleRowClick(resumo)}>
+                          {resumo.gorjeta > 0 ? (
+                            <span className="font-medium text-emerald-600">
+                              {formatCurrency(resumo.gorjeta)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">€0,00</span>
                           )}
                         </TableCell>
                         <TableCell
@@ -1868,7 +1946,7 @@ export function ContasResumoTab() {
             </CardContent>
           </Card>
         ) : (
-          filteredResumos.map((resumo, idx) => {
+          pageItems.map((resumo, idx) => {
             const rowId = resumo._uid || `row-${idx}`;
             return (
               <Card
@@ -1982,6 +2060,18 @@ export function ContasResumoTab() {
           })
         )}
       </div>
+
+      {total > 0 && (
+        <TablePagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          start={start}
+          end={end}
+          onPageChange={setPage}
+          noun={['motorista', 'motoristas']}
+        />
+      )}
 
       {/* Floating Bulk Actions Bar */}
       {selectedIds.size > 0 && (

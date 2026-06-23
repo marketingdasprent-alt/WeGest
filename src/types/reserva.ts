@@ -1,5 +1,3 @@
-import type { ContratoModalidade } from './contratoRenting';
-
 export const RESERVA_ESTADOS = [
   'pendente',
   'confirmada',
@@ -40,6 +38,15 @@ export const RENOVACAO_OPCAO_LABELS: Record<RenovacaoOpcao, string> = {
   intervalo_dias: 'A cada intervalo específico de dias',
 };
 
+export const RESERVA_REGIMES = ['rent_a_car', 'tvde', 'slot'] as const;
+export type ReservaRegime = (typeof RESERVA_REGIMES)[number];
+
+export const REGIME_LABELS: Record<ReservaRegime, string> = {
+  rent_a_car: 'Rent-a-Car',
+  tvde: 'TVDE',
+  slot: 'Slot',
+};
+
 export type Reserva = {
   id: string;
   org_id: string;
@@ -55,9 +62,17 @@ export type Reserva = {
   cliente_nome: string | null;
   condutor_id: string | null;
   condutor_nome: string | null;
+  /** Empresa emissora (clientes.id com tipo_cliente='empresa') — determina
+   *  os templates dos documentos gerados. Obrigatória a partir de confirmada. */
+  emissor_id: string | null;
+  /** Gestor responsável (profiles.id). Default = quem cria. Base da privacidade
+   *  por gestor (só visível ao dono + superiores quando a org a tem ligada). */
+  gestor_id: string | null;
   estado: ReservaEstado;
-  /** rent_a_car ou tvde — determina a taxa de IVA. */
-  modalidade: ContratoModalidade;
+  /** rent_a_car, tvde ou slot — determina o regime de aluguer e a taxa de IVA. */
+  regime: ReservaRegime;
+  /** Valor semanal cobrado ao motorista no regime slot (por carro). */
+  slot_valor_semanal: number | null;
   valor_total: number | null;
   observacoes: string | null;
   observacoes_internas: string | null;
@@ -88,9 +103,14 @@ export type ReservaInsert = Omit<
   | 'updated_by'
   | 'created_at'
   | 'updated_at'
+  // gestor_id é preenchido por DEFAULT na BD (= quem cria); reatribuível via Update.
+  | 'gestor_id'
 >;
 
-export type ReservaUpdate = Partial<ReservaInsert> & { deleted_at?: string | null };
+export type ReservaUpdate = Partial<ReservaInsert> & {
+  deleted_at?: string | null;
+  gestor_id?: string | null;
+};
 
 // ============================================================
 // Condutores (m:n entre reservas e clientes)
@@ -99,15 +119,20 @@ export type ReservaCondutor = {
   id: string;
   org_id: string;
   reserva_id: string;
-  cliente_id: string;
+  /** XOR com motorista_id — exactamente um dos dois preenchido. */
+  cliente_id: string | null;
+  /** XOR com cliente_id — usado em regime TVDE. */
+  motorista_id: string | null;
   is_principal: boolean;
   created_by: string | null;
   created_at: string;
 };
 
-/** Forma usada no formulário antes da reserva ter ID na BD. */
+/** Forma usada no formulário antes da reserva ter ID na BD.
+ *  Exactamente um dos dois (cliente_id/motorista_id) preenchido. */
 export type CondutorFormItem = {
-  cliente_id: string;
+  cliente_id: string | null;
+  motorista_id: string | null;
   is_principal: boolean;
 };
 

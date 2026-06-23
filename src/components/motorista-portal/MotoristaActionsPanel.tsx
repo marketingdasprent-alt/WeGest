@@ -40,7 +40,6 @@ export const MotoristaActionsPanel: React.FC = () => {
   ];
 
   const handleAction = (label: string) => {
-    console.log(`Ação clicada: ${label}`);
     // Implementar navegação conforme necessário futuramente
   };
 

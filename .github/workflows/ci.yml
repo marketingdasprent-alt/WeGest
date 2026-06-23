@@ -2,7 +2,9 @@ name: 🚀 CI Pipeline
 
 on:
   push:
-    branches: [main, develop]
+    # teste-fluxo incluído: é o branch de trabalho partilhado — pushes directos
+    # (sem PR) também têm de passar pelo gate.
+    branches: [main, develop, teste-fluxo]
   pull_request:
     branches: ['**']
   workflow_dispatch:
@@ -62,6 +64,23 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm type-check
+
+  test:
+    name: 🧪 Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
 
   build:
     name: 🏗️ Build

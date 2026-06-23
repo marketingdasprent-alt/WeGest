@@ -31,7 +31,10 @@ export const EstacaoSelectField: React.FC<EstacaoSelectFieldProps> = ({
     <FormLabel>{label}</FormLabel>
     <Select
       value={value ?? SENTINEL_NONE}
-      onValueChange={(v) => onChange(v === SENTINEL_NONE ? null : v)}
+      onValueChange={(v) => {
+        if (!v) return;
+        onChange(v === SENTINEL_NONE ? null : v);
+      }}
     >
       <FormControl>
         <SelectTrigger className="bg-background">

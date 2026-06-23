@@ -40,12 +40,11 @@ export function useOrgDefinicoes() {
   });
 }
 
-interface UpdateOrgDefinicoesArgs {
-  iva_rent_a_car: number;
-  iva_tvde: number;
-}
+type UpdateOrgDefinicoesArgs = Partial<
+  Pick<OrgDefinicoes, 'iva_rent_a_car' | 'iva_tvde' | 'privacidade_por_gestor'>
+>;
 
-/** Atualiza as taxas de IVA da organização actual (só admin — gerido por RLS). */
+/** Atualiza definições da organização actual (só admin — gerido por RLS). */
 export function useUpdateOrgDefinicoes() {
   const qc = useQueryClient();
   const { orgId } = useTenant();

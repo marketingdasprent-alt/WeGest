@@ -33,7 +33,12 @@ dist-ssr
 # Supabase CLI — ficheiros temporários/estado local
 supabase/.temp/
 
+# Scripts locais de debug/diagnóstico (one-off) — não fazem parte do produto.
+scripts-local/
 
-#claude
+# Documentação interna (markdown) — fica local, não vai para o repo.
+# AGENTS.md e README.md (root) ficam tracked.
+docs/**/*.md
 
-.claude/skills
+# Skills locais do Claude Code — ferramentas de apoio, não fazem parte do produto.
+.claude/skills/

@@ -75,6 +75,13 @@ interface ViaturaDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  /** Regime slot: cria a viatura como is_slot=true e liga ao motorista
+   *  (motorista_viaturas). Quando definido, a viatura é externa do motorista. */
+  slotMotoristaId?: string | null;
+  /** Devolve a viatura recém-criada (id + dados básicos) ao criador. */
+  onCreated?: (viatura: { id: string; matricula: string; marca: string; modelo: string }) => void;
+  /** Matrícula a pré-preencher quando o dialog abre para criar (vem do campo de pesquisa). */
+  initialMatricula?: string;
 }
 
 const CATEGORIAS = [
@@ -102,7 +109,15 @@ const STATUS_OPTIONS = [
   { value: 'vendida', label: 'Vendida', restricted: true, hint: '(Apenas via Financeiro)' },
 ];
 
-export function ViaturaDialog({ viatura, open, onOpenChange, onSuccess }: ViaturaDialogProps) {
+export function ViaturaDialog({
+  viatura,
+  open,
+  onOpenChange,
+  onSuccess,
+  slotMotoristaId = null,
+  onCreated,
+  initialMatricula,
+}: ViaturaDialogProps) {
   const [loading, setLoading] = useState(false);
   const isEditing = !!viatura;
 
@@ -148,7 +163,7 @@ export function ViaturaDialog({ viatura, open, onOpenChange, onSuccess }: Viatur
       });
     } else {
       form.reset({
-        matricula: '',
+        matricula: initialMatricula ?? '',
         marca: '',
         modelo: '',
         ano: '',
@@ -165,7 +180,7 @@ export function ViaturaDialog({ viatura, open, onOpenChange, onSuccess }: Viatur
         extintor_validade: '',
       });
     }
-  }, [viatura, form]);
+  }, [viatura, initialMatricula, form]);
 
   const onSubmit = async (data: ViaturaFormData) => {
     setLoading(true);
@@ -186,6 +201,8 @@ export function ViaturaDialog({ viatura, open, onOpenChange, onSuccess }: Viatur
         observacoes: data.observacoes || null,
         extintor_numero: data.extintor_numero || null,
         extintor_validade: data.extintor_validade || null,
+        // Slot: carro externo do motorista, marcado como is_slot.
+        ...(slotMotoristaId ? { is_slot: true } : {}),
       };
 
       if (isEditing && viatura) {
@@ -194,10 +211,27 @@ export function ViaturaDialog({ viatura, open, onOpenChange, onSuccess }: Viatur
         if (error) throw error;
         toast.success('Viatura atualizada com sucesso!');
       } else {
-        const { error } = await supabase.from('viaturas').insert(payload);
+        const { data: nova, error } = await supabase
+          .from('viaturas')
+          .insert(payload)
+          .select('id, matricula, marca, modelo')
+          .single();
 
         if (error) throw error;
+
+        // Slot: liga a viatura ao motorista (motorista_viaturas).
+        if (slotMotoristaId && nova) {
+          const { error: linkErr } = await supabase.from('motorista_viaturas').insert({
+            motorista_id: slotMotoristaId,
+            viatura_id: nova.id,
+            data_inicio: new Date().toISOString().split('T')[0],
+            status: 'ativo',
+          });
+          if (linkErr) throw linkErr;
+        }
+
         toast.success('Viatura criada com sucesso!');
+        if (nova) onCreated?.(nova);
       }
 
       onSuccess();

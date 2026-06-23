@@ -194,7 +194,7 @@ export function MotoristaDashboard() {
         })) || [];
 
       let recibosEmFalta = 0;
-      let semanasEmFalta: { value: string; label: string }[] = [];
+      const semanasEmFalta: { value: string; label: string }[] = [];
       if (motoristaData.data_contratacao) {
         const dataContratacao = new Date(motoristaData.data_contratacao);
         const hoje = new Date();
@@ -225,7 +225,7 @@ export function MotoristaDashboard() {
       semanasEmFalta.reverse();
 
       let documentosAExpirar = 0;
-      let docsExpirando: { label: string; data: string; tipo: string }[] = [];
+      const docsExpirando: { label: string; data: string; tipo: string }[] = [];
       const proximoLimite = addDays(new Date(), 30);
 
       const docTypes = [

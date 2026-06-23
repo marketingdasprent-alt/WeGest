@@ -390,9 +390,14 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       >
         {!viaturaAtual && (
           <div className="flex justify-end mb-4">
-            <Button size="sm" onClick={() => setDialogOpen(true)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDialogOpen(true)}
+              title="Atribuição directa sem contrato formal — para uso interno (trocas, substitutas)"
+            >
               <Plus className="h-4 w-4 mr-2" />
-              Associar Viatura
+              Atribuição interna
             </Button>
           </div>
         )}
@@ -568,7 +573,12 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Associar Viatura</DialogTitle>
+            <DialogTitle>Atribuição interna</DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              Atribui uma viatura ao motorista <strong>sem criar contrato formal</strong>. Use para
+              trocas, viaturas substitutas ou uso interno. Para TVDE/rent-a-car com cliente, cria
+              uma reserva → contrato.
+            </p>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">

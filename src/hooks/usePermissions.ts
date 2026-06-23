@@ -9,6 +9,9 @@ interface UsePermissionsReturn {
   canEdit: (resource: string) => boolean;
   hasAccessToResource: (recurso: string) => boolean;
   isAdmin: boolean;
+  /** Vê todos os contratos/reservas (ignora privacidade por gestor): admin ou
+   *  permissão 'renting_ver_todos'. */
+  podeVerTodosRenting: boolean;
   loading: boolean;
   roles: AppRole[];
   recursos: string[];
@@ -47,6 +50,7 @@ export const usePermissions = (): UsePermissionsReturn => {
     canEdit,
     hasAccessToResource,
     isAdmin,
+    podeVerTodosRenting: isAdmin || hasAccessToResource('renting_ver_todos'),
     loading,
     roles: isAdmin ? ['admin'] : [],
     recursos,

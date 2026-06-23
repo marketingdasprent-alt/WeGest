@@ -83,3 +83,4 @@ O workflow também dispara automaticamente quando criar uma tag com o formato `i
 ## Licença
 
 Projeto privado — todos os direitos reservados.
+

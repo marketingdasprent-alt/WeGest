@@ -5,9 +5,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Sincronização automática/Apify DESATIVADA — só import manual por CSV.
+const SYNC_AUTOMATICO_DESATIVADO = true;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (SYNC_AUTOMATICO_DESATIVADO) {
+    return new Response(
+      JSON.stringify({ success: false, disabled: true, error: 'Sincronização automática desativada. Use o import manual por CSV.' }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   }
 
   try {

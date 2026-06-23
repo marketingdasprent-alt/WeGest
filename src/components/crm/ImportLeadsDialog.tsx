@@ -147,12 +147,8 @@ export const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({ onImportCo
         leadsData = parseCSV(text);
       }
 
-      console.log('Dados brutos importados:', leadsData.slice(0, 2)); // Debug: ver primeiros 2 registros
-
       const processedLeads = leadsData
         .map((lead) => {
-          console.log('Lead original:', lead); // Debug
-
           // Mapear colunas comuns diretamente
           const finalLead = {
             nome: lead.nome || lead.name || lead.Name || lead.NOME || '',
@@ -169,7 +165,6 @@ export const ImportLeadsDialog: React.FC<ImportLeadsDialogProps> = ({ onImportCo
             tem_formacao_tvde: null,
           };
 
-          console.log('Lead processado:', finalLead); // Debug
           return finalLead;
         })
         .filter((lead) => {

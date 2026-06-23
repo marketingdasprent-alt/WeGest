@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { Reserva } from '@/types/reserva';
 import { EstadoBadge } from './EstadoBadge';
+import { RegimeBadge } from './RegimeBadge';
 import { formatDateTime } from './reservasUtils';
 
 export type SortColumn =
@@ -95,6 +96,9 @@ export const ReservasTabela: React.FC<ReservasTabelaProps> = ({
             <SortableHead column="codigo" label="Código" {...headProps} />
             <SortableHead column="matricula" label="Matrícula" {...headProps} />
             <SortableHead column="grupo" label="Grupo" {...headProps} />
+            <TableHead className="h-10 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Regime
+            </TableHead>
             <SortableHead column="estacao_entrega_id" label="Estação Entrega" {...headProps} />
             <SortableHead column="data_inicio" label="Data Início" {...headProps} />
             <SortableHead column="data_fim" label="Data Fim" {...headProps} />
@@ -106,7 +110,7 @@ export const ReservasTabela: React.FC<ReservasTabelaProps> = ({
         <TableBody>
           {isLoading ? (
             <TableRow className="border-border hover:bg-transparent">
-              <TableCell colSpan={9} className="py-16">
+              <TableCell colSpan={10} className="py-16">
                 <div className="flex items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
@@ -114,7 +118,7 @@ export const ReservasTabela: React.FC<ReservasTabelaProps> = ({
             </TableRow>
           ) : reservas.length === 0 ? (
             <TableRow className="border-border hover:bg-transparent">
-              <TableCell colSpan={9} className="py-16">
+              <TableCell colSpan={10} className="py-16">
                 <div className="flex flex-col items-center justify-center gap-2 text-center">
                   <CalendarCheck className="h-10 w-10 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
@@ -135,6 +139,9 @@ export const ReservasTabela: React.FC<ReservasTabelaProps> = ({
                 <TableCell className="font-medium text-foreground">{r.codigo}</TableCell>
                 <TableCell className="text-foreground">{r.matricula ?? '—'}</TableCell>
                 <TableCell className="text-muted-foreground">{r.grupo ?? '—'}</TableCell>
+                <TableCell>
+                  <RegimeBadge regime={r.regime} />
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {getEstacaoNome(r.estacao_entrega_id)}
                 </TableCell>

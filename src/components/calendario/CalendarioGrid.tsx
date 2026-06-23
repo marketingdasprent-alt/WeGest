@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useCallback, useRef } from 'react';
+import { ChevronLeft, ChevronRight, X, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { EventoCard, formatMatricula } from './EventoCard';
@@ -47,6 +47,37 @@ export const CalendarioGrid: React.FC<Props> = ({
   canEditAll,
 }) => {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [panelWidth, setPanelWidth] = useState(280);
+  const isResizing = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
+
+  const onResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      isResizing.current = true;
+      startX.current = e.clientX;
+      startWidth.current = panelWidth;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!isResizing.current) return;
+        const delta = startX.current - ev.clientX;
+        const next = Math.min(520, Math.max(200, startWidth.current + delta));
+        setPanelWidth(next);
+      };
+      const onMouseUp = () => {
+        isResizing.current = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      };
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    },
+    [panelWidth]
+  );
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -60,8 +91,9 @@ export const CalendarioGrid: React.FC<Props> = ({
     day = addDays(day, 1);
   }
 
+  // Eventos slot aparecem só no Relatório de Eventos, não no grid do calendário.
   const getEventsForDay = (d: Date) =>
-    eventos.filter((ev) => isSameDay(new Date(ev.data_inicio), d));
+    eventos.filter((ev) => ev.tipo !== 'slot' && isSameDay(new Date(ev.data_inicio), d));
 
   const today = new Date();
 
@@ -69,21 +101,23 @@ export const CalendarioGrid: React.FC<Props> = ({
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-full" />
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: 35 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full" />
+      <div className="flex flex-col h-full gap-2">
+        <Skeleton className="h-8 w-full shrink-0" />
+        <div className="grid grid-cols-7 grid-rows-6 gap-1 flex-1 min-h-0">
+          {Array.from({ length: 42 }).map((_, i) => (
+            <Skeleton key={i} className="w-full h-full" />
           ))}
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+  const weeksCount = Math.max(1, Math.ceil(days.length / 7));
+
+  const calendarPane = (
+    <div className="flex flex-col h-full min-h-0 min-w-0">
+      {/* Month nav */}
+      <div className="flex items-center justify-between shrink-0">
         <Button
           variant="ghost"
           size="icon"
@@ -91,7 +125,7 @@ export const CalendarioGrid: React.FC<Props> = ({
         >
           <ChevronLeft className="h-5 w-5" />
         </Button>
-        <h2 className="text-lg font-semibold capitalize">
+        <h2 className="text-base font-semibold capitalize">
           {format(currentMonth, 'MMMM yyyy', { locale: pt })}
         </h2>
         <Button
@@ -104,23 +138,29 @@ export const CalendarioGrid: React.FC<Props> = ({
       </div>
 
       {/* Weekday headers */}
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-1 shrink-0 mt-1">
         {WEEKDAYS.map((wd) => (
-          <div key={wd} className="text-center text-xs font-medium text-muted-foreground py-2">
+          <div
+            key={wd}
+            className="text-center text-[11px] font-medium text-muted-foreground py-0.5"
+          >
             {wd}
           </div>
         ))}
       </div>
 
-      {/* Days grid */}
-      <div className="grid grid-cols-7 gap-1">
+      {/* Days grid (fills remaining height) */}
+      <div
+        className="grid grid-cols-7 gap-1 flex-1 min-h-0 mt-1"
+        style={{ gridTemplateRows: `repeat(${weeksCount}, minmax(0, 1fr))` }}
+      >
         {days.map((d, i) => {
           const dayEvts = getEventsForDay(d);
           const isCurrentMonth = isSameMonth(d, currentMonth);
           const isToday = isSameDay(d, today);
           const isSelected = selectedDay && isSameDay(d, selectedDay);
 
-          const visibleEvts = dayEvts.slice(0, 2);
+          const visibleEvts = dayEvts.slice(0, 3);
           const extraCount = dayEvts.length - visibleEvts.length;
 
           return (
@@ -129,11 +169,16 @@ export const CalendarioGrid: React.FC<Props> = ({
               role="button"
               tabIndex={0}
               onClick={() => {
-                setSelectedDay(d);
-                onDaySelect?.(d);
+                const wasSelected = selectedDay && isSameDay(d, selectedDay);
+                if (wasSelected) {
+                  setSelectedDay(null);
+                } else {
+                  setSelectedDay(d);
+                  onDaySelect?.(d);
+                }
               }}
               className={cn(
-                'relative aspect-square p-1 rounded-md border transition-colors text-left flex flex-col cursor-pointer touch-manipulation',
+                'relative h-full min-h-0 p-1.5 rounded-md border transition-colors text-left flex flex-col cursor-pointer touch-manipulation overflow-hidden',
                 !isCurrentMonth && 'opacity-40',
                 isToday && 'border-primary bg-primary/5',
                 isSelected && 'ring-2 ring-primary',
@@ -162,7 +207,9 @@ export const CalendarioGrid: React.FC<Props> = ({
                         ev.tipo === 'upgrade' &&
                           'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300',
                         ev.tipo === 'lista_espera' &&
-                          'bg-pink-500/20 text-pink-700 dark:text-pink-300'
+                          'bg-pink-500/20 text-pink-700 dark:text-pink-300',
+                        ev.tipo === 'transferencia' &&
+                          'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300'
                       )}
                     >
                       {ev.tipo === 'lista_espera' ? ev.titulo : formatMatricula(ev.titulo)}
@@ -180,15 +227,44 @@ export const CalendarioGrid: React.FC<Props> = ({
           );
         })}
       </div>
+    </div>
+  );
 
-      {/* Selected day events */}
-      {selectedDay && (
-        <div className="space-y-3 pt-2">
-          <h3 className="text-sm font-semibold">
-            Eventos de {format(selectedDay, "d 'de' MMMM", { locale: pt })}
+  const sidePanel = selectedDay && (
+    <>
+      {/* Resize handle */}
+      <div
+        onMouseDown={onResizeStart}
+        className="hidden lg:flex items-center justify-center w-2 shrink-0 cursor-col-resize group self-stretch"
+        title="Arrastar para redimensionar"
+      >
+        <div className="w-0.5 h-10 rounded-full bg-border group-hover:bg-primary/50 transition-colors" />
+      </div>
+
+      <aside
+        className="hidden lg:flex flex-col h-full min-h-0 shrink-0 rounded-lg border border-border bg-card/40"
+        style={{ width: panelWidth }}
+      >
+        <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60 shrink-0">
+          <h3 className="text-xs font-semibold capitalize">
+            {format(selectedDay, "d 'de' MMM", { locale: pt })}
           </h3>
+          <div className="flex items-center gap-1">
+            <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 hidden lg:block" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => setSelectedDay(null)}
+              aria-label="Fechar painel"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2 [&_.text-sm]:text-xs [&_.text-xs]:text-[10px] [&_.p-3]:p-2 [&_.h-3]:h-2.5 [&_.w-3]:w-2.5 [&_.h-4]:h-3 [&_.w-4]:w-3">
           {dayEvents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sem eventos neste dia.</p>
+            <p className="text-xs text-muted-foreground">Sem eventos neste dia.</p>
           ) : (
             dayEvents.map((ev) => (
               <EventoCard
@@ -202,7 +278,14 @@ export const CalendarioGrid: React.FC<Props> = ({
             ))
           )}
         </div>
-      )}
+      </aside>
+    </>
+  );
+
+  return (
+    <div className="flex h-full min-h-0 gap-3">
+      <div className="flex-1 min-w-0 min-h-0">{calendarPane}</div>
+      {sidePanel}
     </div>
   );
 };

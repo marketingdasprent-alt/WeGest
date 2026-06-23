@@ -67,23 +67,56 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { validateDateYear, YEAR_RANGE_MESSAGE } from '@/utils/dateValidators';
+import {
+  validarNIF,
+  validarIBAN,
+  validarCodigoPostal,
+  validarCartaConducao,
+  validarNumeroDocumento,
+} from '@/lib/pt-validators';
+
+// Mapeia os labels do select deste form para as chaves de regra do pt-validators.
+const DOC_TYPE_KEY: Record<string, string> = {
+  'Cartão de Cidadão': 'cc',
+  'Bilhete de Identidade': 'bi',
+  Passaporte: 'passaporte',
+  'Título de Residência': 'tr',
+};
 
 const CARTA_CATEGORIAS = ['AM', 'A1', 'A2', 'A', 'B1', 'B', 'BE', 'C1', 'C', 'CE', 'D1', 'D', 'DE'];
 
 const formSchema = z.object({
   nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
-  nif: z.string().optional(),
+  nif: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || validarNIF(v).valid,
+      (v) => ({ message: (v ? validarNIF(v).message : '') || 'NIF inválido' })
+    ),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
   telefone: z.string().optional(),
   morada: z.string().optional(),
-  codigo_postal: z.string().optional(),
+  codigo_postal: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || validarCodigoPostal(v).valid,
+      (v) => ({ message: (v ? validarCodigoPostal(v).message : '') || 'Código postal inválido' })
+    ),
   cidade: z.string().optional(),
   documento_tipo: z.string().optional(),
   documento_numero: z.string().optional(),
   documento_validade: z.string().optional().refine(validateDateYear, {
     message: YEAR_RANGE_MESSAGE,
   }),
-  carta_conducao: z.string().optional(),
+  carta_conducao: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || validarCartaConducao(v).valid,
+      (v) => ({ message: (v ? validarCartaConducao(v).message : '') || 'Carta inválida' })
+    ),
   carta_categorias: z.array(z.string()).optional(),
   carta_validade: z.string().optional().refine(validateDateYear, {
     message: YEAR_RANGE_MESSAGE,
@@ -104,7 +137,13 @@ const formSchema = z.object({
   slot_valor_semanal: z.number().optional().nullable(),
   status_ativo: z.boolean().default(true),
   observacoes: z.string().optional(),
-  iban: z.string().optional(),
+  iban: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || validarIBAN(v).valid,
+      (v) => ({ message: (v ? validarIBAN(v).message : '') || 'IBAN inválido' })
+    ),
   gestor_responsavel: z.string().optional().nullable(),
   bolt_id: z.string().optional().nullable(),
   uber_uuid: z.string().optional().nullable(),
@@ -116,6 +155,23 @@ const formSchema = z.object({
   registo_criminal_url: z.string().optional().nullable(),
   comprovativo_morada_url: z.string().optional().nullable(),
   comprovativo_iban_url: z.string().optional().nullable(),
+});
+
+const formSchemaValidado = formSchema.superRefine((data, ctx) => {
+  // Nº do documento validado conforme o tipo seleccionado (CC, BI, passaporte, TR).
+  if (data.documento_tipo && data.documento_numero) {
+    const res = validarNumeroDocumento(
+      DOC_TYPE_KEY[data.documento_tipo] ?? data.documento_tipo,
+      data.documento_numero
+    );
+    if (!res.valid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['documento_numero'],
+        message: res.message || 'Número de documento inválido',
+      });
+    }
+  }
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -168,7 +224,7 @@ export function MotoristaTabDados({
   }, []);
 
   const form = useForm<FormData>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchemaValidado),
     defaultValues: {
       nome: '',
       nif: '',
@@ -285,7 +341,8 @@ export function MotoristaTabDados({
     try {
       const updateData = {
         nome: data.nome,
-        nif: data.nif || null,
+        // Normalização: NIF sem espaços; IBAN sem espaços e em maiúsculas.
+        nif: data.nif ? data.nif.replace(/\s/g, '') : null,
         email: data.email || null,
         telefone: data.telefone || null,
         morada: data.morada || null,
@@ -309,7 +366,7 @@ export function MotoristaTabDados({
         slot_valor_semanal: data.is_slot ? data.slot_valor_semanal : null,
         status_ativo: data.status_ativo,
         observacoes: data.observacoes || null,
-        iban: data.iban || null,
+        iban: data.iban ? data.iban.replace(/\s/g, '').toUpperCase() : null,
         gestor_responsavel:
           data.gestor_responsavel === 'none' ? null : data.gestor_responsavel || null,
         uber_uuid: data.uber_uuid || null,

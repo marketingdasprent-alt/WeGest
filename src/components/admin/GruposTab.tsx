@@ -198,7 +198,7 @@ export const GruposTab = () => {
 
       // ── Gravação com Auto-Recuperação de Emergência ─────────────────────
       if (toInsert.length > 0) {
-        let currentToInsert = toInsert.map((p) => ({
+        const currentToInsert = toInsert.map((p) => ({
           cargo_id: p.cargo_id,
           recurso_id: p.recurso_id,
           tem_acesso: true,

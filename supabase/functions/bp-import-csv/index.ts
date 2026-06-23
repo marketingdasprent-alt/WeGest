@@ -5,6 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const jsonError = (error: string, status: number) =>
+  new Response(JSON.stringify({ success: false, error }), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+
 function sanitizeCard(card: string): string {
   return (card || '').replace(/\D/g, '');
 }
@@ -172,8 +178,30 @@ function findField(row: Record<string, string>, candidates: string[]): string {
 
 function parseNumber(val: string): number | null {
   if (!val) return null;
-  const clean = val.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
-  const n = parseFloat(clean);
+  let s = (val || '').replace(/[^\d.,-]/g, '').trim();
+  if (!s) return null;
+  if (s.includes(',') && s.includes('.')) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+      s = s.replace(/\./g, '').replace(',', '.'); // 1.234,56 → 1234.56
+    } else {
+      s = s.replace(/,/g, ''); // 1,234.56 → 1234.56
+    }
+  } else if (s.includes(',')) {
+    const afterComma = s.substring(s.lastIndexOf(',') + 1);
+    if (afterComma.length <= 2) {
+      s = s.replace(',', '.'); // 15,96 → 15.96
+    } else {
+      s = s.replace(/,/g, ''); // 1,596 → 1596
+    }
+  } else if (s.includes('.')) {
+    const parts = s.split('.');
+    const afterLastDot = parts[parts.length - 1];
+    if (parts.length > 2 || afterLastDot.length === 3) {
+      s = s.replace(/\./g, ''); // 1.596 → 1596
+    }
+    // else: 15.96 → keep as is (dot is decimal separator)
+  }
+  const n = parseFloat(s);
   return isNaN(n) ? null : n;
 }
 
@@ -192,22 +220,45 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-    const authHeader = req.headers.get('authorization') || '';
-    const token = authHeader.replace('Bearer ', '');
-    if (!token) {
-      return new Response(JSON.stringify({ success: false, error: 'Token em falta' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
+    const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+    // ── Auth + org do caller (service-role bypassa RLS → validar à mão) ──
+    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
+    if (!authHeader.startsWith('Bearer ')) return jsonError('Não autenticado.', 401);
+    const anonClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const {
+      data: { user },
+      error: authErr,
+    } = await anonClient.auth.getUser();
+    if (authErr || !user) return jsonError('Sessão inválida.', 401);
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin, org_id')
+      .eq('id', user.id)
+      .single();
+    if (!profile?.is_admin) return jsonError('Sem permissão de administrador.', 403);
+    const callerOrgId = profile.org_id;
+
     const body = await req.json();
     const { integracao_id, combustivel_csv } = body;
 
     if (!integracao_id || !combustivel_csv) {
-      return new Response(JSON.stringify({ success: false, error: 'integracao_id e combustivel_csv são obrigatórios' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonError('integracao_id e combustivel_csv são obrigatórios', 400);
     }
+
+    // A integração TEM de pertencer à org do caller.
+    const { data: intConfig } = await supabase
+      .from('plataformas_configuracao')
+      .select('org_id')
+      .eq('id', integracao_id)
+      .single();
+    if (!intConfig || intConfig.org_id !== callerOrgId) {
+      return jsonError('Integração não encontrada ou sem acesso.', 403);
+    }
+    const orgId = callerOrgId;
 
     console.log(`bp-import-csv: Processing CSV for integration ${integracao_id}, length=${combustivel_csv.length}`);
 
@@ -221,7 +272,8 @@ Deno.serve(async (req) => {
     // Load drivers with fuel cards or name
     const { data: motoristas } = await supabase
       .from('motoristas_ativos')
-      .select('id, nome, cartao_frota, cartao_bp, cartao_repsol, cartao_edp');
+      .select('id, nome, cartao_frota, cartao_bp, cartao_repsol, cartao_edp')
+      .eq('org_id', orgId);
 
     // Build card→motorista lookups
     const cardMapFull = new Map<string, { id: string; nome: string }>();
@@ -293,6 +345,7 @@ Deno.serve(async (req) => {
           .from('bp_transacoes')
           .upsert({
             integracao_id,
+            org_id: orgId,
             transaction_id: txId,
             transaction_date: transactionDate,
             amount,
@@ -321,7 +374,8 @@ Deno.serve(async (req) => {
     await supabase
       .from('plataformas_configuracao')
       .update({ ultimo_sync: new Date().toISOString() })
-      .eq('id', integracao_id);
+      .eq('id', integracao_id)
+      .eq('org_id', orgId);
 
     const result = { success: true, total_rows: rows.length, imported, skipped, matched, unmatched, errors: errors.slice(0, 10) };
     console.log('bp-import-csv: Result:', JSON.stringify(result));

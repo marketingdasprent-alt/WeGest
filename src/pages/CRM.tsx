@@ -1,17 +1,4 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  closestCenter,
-  rectIntersection,
-  pointerWithin,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useCampaignTags } from '@/hooks/useCampaignTags';
@@ -21,14 +8,15 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { matchesSearch } from '@/lib/utils';
 
 import { LeadCard } from '@/components/crm/LeadCard';
-import { ColumnContainer } from '@/components/crm/ColumnContainer';
 import { CRMStats } from '@/components/crm/CRMStats';
 import { CRMFilters, FilterState } from '@/components/crm/CRMFilters';
 import { RealtimeStatus } from '@/components/crm/RealtimeStatus';
 import { CRMListView } from '@/components/crm/CRMListView';
 import { CRMViewToggle } from '@/components/crm/CRMViewToggle';
+import { KanbanBoard } from '@/components/ui/kanban-board';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2 } from 'lucide-react';
+import type { Column, Task } from '@/components/ui/kanban-board';
 
 import type { Lead } from '@/types/lead';
 
@@ -36,32 +24,32 @@ const statusColumns = [
   {
     id: 'novo',
     title: 'Novos',
-    color: 'from-blue-500/20 to-blue-600/20 border-blue-500/50',
-    icon: '🆕',
+    color: 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800',
+    icon: '→',
   },
   {
     id: 'contactado',
     title: 'Contactados',
-    color: 'from-yellow-500/20 to-yellow-600/20 border-yellow-500/50',
-    icon: '📞',
+    color: 'bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800',
+    icon: '→',
   },
   {
     id: 'interessado',
     title: 'Interessados',
-    color: 'from-green-500/20 to-green-600/20 border-green-500/50',
-    icon: '✅',
+    color: 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800',
+    icon: '→',
   },
   {
     id: 'convertido',
     title: 'Convertidos',
-    color: 'from-purple-500/20 to-purple-600/20 border-purple-500/50',
-    icon: '🎉',
+    color: 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800',
+    icon: '→',
   },
   {
     id: 'perdido',
     title: 'Perdidos',
-    color: 'from-red-500/20 to-red-600/20 border-red-500/50',
-    icon: '❌',
+    color: 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800',
+    icon: '→',
   },
 ];
 
@@ -96,7 +84,6 @@ const CRM = () => {
   });
 
   const { tagsMap, getTagsForFormulario } = useFormularioTags();
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'kanban' | 'lista'>(() => {
     const saved = localStorage.getItem('crm-view-mode');
     return saved === 'lista' ? 'lista' : 'kanban';
@@ -110,15 +97,6 @@ const CRM = () => {
   const [userLeadHistory, setUserLeadHistory] = useState<Record<string, string[]>>({});
   const { toast } = useToast();
   const { availableTags, refreshTags } = useCampaignTags();
-
-  // Configure sensors for better drag detection
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 3,
-      },
-    })
-  );
 
   // Buscar usuário atual e configurar filtro inicial
   useEffect(() => {
@@ -267,7 +245,6 @@ const CRM = () => {
 
             if (!profileError && profile?.nome) {
               updateData.gestor_responsavel = profile.nome;
-              console.log(`Gestor ${profile.nome} atribuído automaticamente ao lead`);
             }
           }
         } catch (error) {
@@ -295,8 +272,6 @@ const CRM = () => {
   };
 
   const updateLead = async (updatedLead: Partial<Lead> & { id: string }) => {
-    console.log('CRM updateLead - updatedLead received:', updatedLead);
-
     try {
       const { error } = await supabase
         .from('leads_dasprent')
@@ -305,8 +280,6 @@ const CRM = () => {
           updated_at: new Date().toISOString(),
         })
         .eq('id', updatedLead.id);
-
-      console.log('CRM updateLead - Supabase update result:', { error });
 
       updateLeadHook(updatedLead);
 
@@ -326,8 +299,6 @@ const CRM = () => {
 
   const assignGestorsFromHistory = async () => {
     try {
-      console.log('🔄 Executando atribuição automática de gestores...');
-
       const { data, error } = await supabase.rpc('execute_gestor_assignment');
 
       if (error) throw error;
@@ -342,8 +313,6 @@ const CRM = () => {
           title: '✅ Atribuição Concluída',
           description: `${updatedCount} leads foram atualizados com gestores baseado no histórico`,
         });
-
-        console.log(`🎉 ${updatedCount} leads atualizados com gestores!`);
       } else {
         toast({
           title: 'ℹ️ Nenhuma alteração',
@@ -380,74 +349,15 @@ const CRM = () => {
     }
   };
 
-  const handleDragStart = (event: DragStartEvent) => {
-    console.log('Drag started:', event.active.id);
-    setActiveId(event.active.id as string);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    console.log('Drag ended:', {
-      active: event.active.id,
-      over: event.over?.id,
-      overData: event.over?.data?.current,
-    });
-    const { active, over } = event;
-
-    if (!over) {
-      console.log('No drop target found');
-      setActiveId(null);
-      return;
+  const handleTaskMove = async (task: Task, sourceColumnId: string, targetColumnId: string) => {
+    const leadId = task.id;
+    if (sourceColumnId !== targetColumnId) {
+      await updateLeadStatus(leadId, targetColumnId);
     }
-
-    const leadId = active.id as string;
-    const overElement = over.id as string;
-    const overData = over.data?.current;
-
-    console.log('Processing drop:', { leadId, overElement, overType: overData?.type });
-
-    let newStatus: string;
-    const validStatuses = statusColumns.map((col) => col.id);
-
-    // Prioritize column drops over lead drops
-    if (overData?.type === 'column' && validStatuses.includes(overElement)) {
-      // Dropped directly on a column
-      console.log('Dropped on column:', overElement);
-      newStatus = overElement;
-    } else if (validStatuses.includes(overElement)) {
-      // Dropped directly on a column (fallback)
-      console.log('Dropped on column (fallback):', overElement);
-      newStatus = overElement;
-    } else {
-      // Dropped on another lead, find which column it belongs to
-      const targetLead = filteredLeads.find((lead) => lead.id === overElement);
-      if (targetLead) {
-        console.log('Dropped on lead:', targetLead.nome, 'with status:', targetLead.status);
-        newStatus = targetLead.status;
-      } else {
-        console.log('Invalid drop target:', overElement);
-        setActiveId(null);
-        return;
-      }
-    }
-
-    // Only update if status actually changed
-    const currentLead = leads.find((lead) => lead.id === leadId);
-    if (currentLead && currentLead.status !== newStatus) {
-      console.log(
-        `Updating lead ${leadId} (${currentLead.nome}) from ${currentLead.status} to ${newStatus}`
-      );
-      updateLeadStatus(leadId, newStatus);
-    } else {
-      console.log('No status change needed or lead not found');
-    }
-
-    setActiveId(null);
   };
 
   const generateReport = async (userId: string, userLeads: any[]) => {
     try {
-      console.log('Generating report for:', userId, 'with leads:', userLeads.length);
-
       // Calculate local statistics
       const totalLeads = userLeads.length;
       const statusCounts = {
@@ -998,8 +908,6 @@ const CRM = () => {
           </html>
         `);
         reportWindow.document.close();
-
-        console.log('Report window opened successfully');
       } else {
         console.error('Failed to open report window');
         throw new Error('Não foi possível abrir a janela do relatório');
@@ -1022,8 +930,6 @@ const CRM = () => {
   const getLeadsByStatus = (status: string) => {
     return filteredLeads.filter((lead) => lead.status === status);
   };
-
-  const activeLead = activeId ? leads.find((lead) => lead.id === activeId) : null;
 
   if (loading) {
     return (
@@ -1067,92 +973,44 @@ const CRM = () => {
             />
           </div>
 
-          {/* Kanban Board - Mobile with Tabs, Desktop with Drag & Drop */}
+          {/* Kanban Board - Lista ou Kanban Vista */}
           {viewMode === 'lista' ? (
             <CRMListView
               leads={filteredLeads}
               statusColumns={statusColumns}
               getTagsForFormulario={getTagsForFormulario}
             />
-          ) : isMobile ? (
-            <Tabs defaultValue="novo" className="w-full">
-              <TabsList className="grid w-full grid-cols-5 mb-4">
-                {statusColumns.map((column) => (
-                  <TabsTrigger key={column.id} value={column.id} className="text-xs px-2">
-                    {column.icon}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-              {statusColumns.map((column) => (
-                <TabsContent key={column.id} value={column.id} className="mt-0">
-                  <ColumnContainer
-                    key={column.id}
-                    id={column.id}
-                    title={column.title}
-                    color={column.color}
-                    icon={column.icon}
-                    count={getLeadsByStatus(column.id).length}
-                  >
-                    <SortableContext
-                      items={getLeadsByStatus(column.id).map((lead) => lead.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {getLeadsByStatus(column.id).map((lead) => (
-                        <LeadCard
-                          key={lead.id}
-                          lead={lead}
-                          customTags={getTagsForFormulario(lead.formulario_id)}
-                        />
-                      ))}
-                    </SortableContext>
-                  </ColumnContainer>
-                </TabsContent>
-              ))}
-            </Tabs>
           ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={pointerWithin}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mt-8">
-                {statusColumns.map((column) => (
-                  <ColumnContainer
-                    key={column.id}
-                    id={column.id}
-                    title={column.title}
-                    color={column.color}
-                    icon={column.icon}
-                    count={getLeadsByStatus(column.id).length}
-                  >
-                    <SortableContext
-                      items={getLeadsByStatus(column.id).map((lead) => lead.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {getLeadsByStatus(column.id).map((lead) => (
-                        <LeadCard
-                          key={lead.id}
-                          lead={lead}
-                          customTags={getTagsForFormulario(lead.formulario_id)}
-                        />
-                      ))}
-                    </SortableContext>
-                  </ColumnContainer>
-                ))}
-              </div>
-
-              <DragOverlay>
-                {activeLead && (
-                  <div className="rotate-3 scale-105">
-                    <LeadCard
-                      lead={activeLead}
-                      customTags={getTagsForFormulario(activeLead.formulario_id)}
-                    />
-                  </div>
-                )}
-              </DragOverlay>
-            </DndContext>
+            <KanbanBoard
+              columns={statusColumns.map((col) => ({
+                id: col.id,
+                title: col.title,
+                color:
+                  col.id === 'novo'
+                    ? '#3B82F6'
+                    : col.id === 'contactado'
+                      ? '#A855F7'
+                      : col.id === 'interessado'
+                        ? '#EAB308'
+                        : col.id === 'convertido'
+                          ? '#22C55E'
+                          : '#EF4444',
+                tasks: getLeadsByStatus(col.id).map((lead) => ({
+                  id: lead.id,
+                  title: lead.nome || 'Lead sem nome',
+                  email: lead.email,
+                  telefone: lead.telefone,
+                  zona: lead.zona,
+                  observacoes: lead.observacoes,
+                  tipo_viatura: lead.tipo_viatura,
+                  tags: lead.campaign_tags || getTagsForFormulario(lead.formulario_id),
+                  dueDate: lead.created_at
+                    ? new Date(lead.created_at).toLocaleDateString('pt-PT')
+                    : undefined,
+                })),
+              }))}
+              onTaskMove={handleTaskMove}
+            />
           )}
         </div>
       </div>

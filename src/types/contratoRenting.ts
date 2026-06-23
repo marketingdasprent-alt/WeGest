@@ -10,7 +10,7 @@ export const CONTRATO_ESTADO_OP_LABELS: Record<ContratoEstadoOperacional, string
   agendado: 'Agendado',
   em_curso: 'Em Curso',
   devolvido: 'Devolvido',
-  cancelado: 'Cancelado',
+  cancelado: 'Fechado',
 };
 
 // ============================================================
@@ -67,6 +67,20 @@ export const CONTRATO_RENOVACAO_OPCAO_LABELS: Record<ContratoRenovacaoOpcao, str
 };
 
 // ============================================================
+// Regime (rent-a-car vs TVDE)
+// ============================================================
+// Nota: 'slot' existe no enum partilhado mas NÃO gera contratos_renting
+// (a reserva slot fica só como reserva). Mantido aqui por consistência do enum.
+export const CONTRATO_REGIMES = ['rent_a_car', 'tvde', 'slot'] as const;
+export type ContratoRegime = (typeof CONTRATO_REGIMES)[number];
+
+export const CONTRATO_REGIME_LABELS: Record<ContratoRegime, string> = {
+  rent_a_car: 'Rent-a-Car',
+  tvde: 'TVDE',
+  slot: 'Slot',
+};
+
+// ============================================================
 // Tipo principal
 // ============================================================
 export type ContratoRenting = {
@@ -78,6 +92,14 @@ export type ContratoRenting = {
   reserva_id: string;
 
   cliente_id: string;
+
+  /** Empresa emissora (clientes.id com tipo_cliente='empresa') — determina
+   *  os templates dos documentos gerados. Herdada da reserva na conversão. */
+  emissor_id: string | null;
+
+  /** Gestor responsável (profiles.id). Default = quem cria. Base da privacidade
+   *  por gestor (só visível ao dono + superiores quando a org a tem ligada). */
+  gestor_id: string | null;
 
   viatura_id: string;
   matricula: string | null;
@@ -94,9 +116,8 @@ export type ContratoRenting = {
   estado_operacional: ContratoEstadoOperacional;
   estado_financeiro: ContratoEstadoFinanceiro;
   origem: ContratoOrigem;
-
-  /** rent_a_car ou tvde — determina a taxa de IVA (ver org_definicoes). */
-  modalidade: ContratoModalidade;
+  /** rent_a_car ou tvde — determina o regime e a taxa de IVA (ver org_definicoes). */
+  regime: ContratoRegime;
 
   // Tarifário simples (MVP)
   tarifa_diaria: number | null;
@@ -124,15 +145,15 @@ export type ContratoRenting = {
 
   voucher_codigo: string | null;
 
-  numero_processo: string | null;
-  voo_referencia: string | null;
-  local_entrega: string | null;
-  local_recolha: string | null;
-  comentarios_entrega: string | null;
-  comentarios_recolha: string | null;
-
   observacoes: string | null;
   observacoes_internas: string | null;
+
+  // Versionamento (upgrade/downgrade)
+  versao: number;
+  contrato_anterior_id: string | null;
+  /** NULL = versão actual. NOT NULL = foi substituído nesta data. */
+  substituido_em: string | null;
+  motivo_versao: string | null;
 
   deleted_at: string | null;
   created_by: string | null;
@@ -150,15 +171,23 @@ export type ContratoRentingInsert = Omit<
   | 'total_iva'
   | 'total_final'
   | 'facturado_em'
+  | 'versao'
+  | 'contrato_anterior_id'
+  | 'substituido_em'
+  | 'motivo_versao'
   | 'deleted_at'
   | 'created_by'
   | 'updated_by'
   | 'created_at'
   | 'updated_at'
+  // gestor_id é preenchido por DEFAULT na BD (= quem cria); fica de fora do
+  // payload de criação e é reatribuível via Update (só superiores).
+  | 'gestor_id'
 >;
 
 export type ContratoRentingUpdate = Partial<ContratoRentingInsert> & {
   deleted_at?: string | null;
+  gestor_id?: string | null;
 };
 
 // ============================================================
@@ -168,7 +197,10 @@ export type ContratoCondutor = {
   id: string;
   org_id: string;
   contrato_id: string;
-  cliente_id: string;
+  /** XOR com motorista_id — exactamente um dos dois preenchido. */
+  cliente_id: string | null;
+  /** XOR com cliente_id — usado em regime TVDE. */
+  motorista_id: string | null;
   is_principal: boolean;
   created_by: string | null;
   created_at: string;

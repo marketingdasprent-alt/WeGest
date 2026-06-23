@@ -2,8 +2,8 @@ import { z } from 'zod';
 import {
   CONTRATO_ESTADOS_FIN,
   CONTRATO_ESTADOS_OP,
-  CONTRATO_MODALIDADES,
   CONTRATO_ORIGENS,
+  CONTRATO_REGIMES,
   CONTRATO_RENOVACAO_OPCOES,
 } from '@/types/contratoRenting';
 
@@ -43,6 +43,14 @@ export const contratoFormSchema = z
     // Reserva associada (obrigatória — contrato sempre origina de reserva)
     reserva_id: z.string().uuid('Reserva inválida'),
 
+    // Empresa emissora (cliente tipo='empresa') — obrigatória; determina os
+    // templates dos documentos gerados a partir do contrato.
+    emissor_id: z.string().uuid('Empresa emissora obrigatória'),
+
+    // Gestor responsável (profiles.id). Reatribuível por superiores; default
+    // (criador) é tratado pela BD. Privacidade por gestor.
+    gestor_id: z.string().uuid().nullable().optional(),
+
     // Entrega
     estacao_entrega_id: z.string().uuid().nullable().optional(),
     data_inicio: datetimeLocal,
@@ -58,9 +66,7 @@ export const contratoFormSchema = z
     estado_operacional: z.enum(CONTRATO_ESTADOS_OP),
     estado_financeiro: z.enum(CONTRATO_ESTADOS_FIN),
     origem: z.enum(CONTRATO_ORIGENS),
-
-    // Modalidade — determina a taxa de IVA (rent-a-car vs TVDE)
-    modalidade: z.enum(CONTRATO_MODALIDADES),
+    regime: z.enum(CONTRATO_REGIMES).default('rent_a_car'),
 
     // Tarifário simples
     tarifa_diaria: optionalNonNegativeNumber,
@@ -145,30 +151,30 @@ export const contratoFormSchema = z
 
     // Voucher + info adicional
     voucher_codigo: z.string().max(50).optional().nullable(),
-    numero_processo: z.string().max(100).optional().nullable(),
-    voo_referencia: z.string().max(100).optional().nullable(),
-    local_entrega: z.string().max(255).optional().nullable(),
-    local_recolha: z.string().max(255).optional().nullable(),
-    comentarios_entrega: z.string().max(2000).optional().nullable(),
-    comentarios_recolha: z.string().max(2000).optional().nullable(),
 
     observacoes: z.string().max(2000).optional().nullable(),
     observacoes_internas: z.string().max(2000).optional().nullable(),
 
     condutores: z
       .array(
-        z.object({
-          cliente_id: z.string().uuid('Cliente inválido'),
-          is_principal: z.boolean().default(false),
-        })
+        z
+          .object({
+            cliente_id: z.string().uuid().nullable().default(null),
+            motorista_id: z.string().uuid().nullable().default(null),
+            is_principal: z.boolean().default(false),
+          })
+          .refine((c) => (c.cliente_id !== null) !== (c.motorista_id !== null), {
+            message: 'Cada condutor tem que ser cliente OU motorista (não ambos).',
+          })
       )
+      .min(1, 'É obrigatório pelo menos um condutor.')
       .default([])
       .refine(
         (lista) => {
-          const ids = lista.map((c) => c.cliente_id);
-          return new Set(ids).size === ids.length;
+          const chaves = lista.map((c) => c.cliente_id ?? c.motorista_id);
+          return new Set(chaves).size === chaves.length;
         },
-        { message: 'Cada cliente só pode aparecer uma vez como condutor.' }
+        { message: 'Cada entidade só pode aparecer uma vez como condutor.' }
       )
       .refine((lista) => lista.filter((c) => c.is_principal).length <= 1, {
         message: 'Apenas um condutor pode ser principal.',
@@ -187,6 +193,8 @@ export const DEFAULT_CONTRATO_VALUES: ContratoFormValues = {
   grupo: '',
   matricula: '',
   reserva_id: '',
+  emissor_id: '',
+  gestor_id: null,
   estacao_entrega_id: null,
   data_inicio: '',
   estacao_recolha_id: null,
@@ -195,7 +203,7 @@ export const DEFAULT_CONTRATO_VALUES: ContratoFormValues = {
   estado_operacional: 'agendado',
   estado_financeiro: 'pendente',
   origem: 'sistema',
-  modalidade: 'rent_a_car',
+  regime: 'rent_a_car',
   tarifa_diaria: null,
   desconto_percentagem: null,
   taxa_iva: 23,
@@ -211,12 +219,6 @@ export const DEFAULT_CONTRATO_VALUES: ContratoFormValues = {
   extras: [],
   taxas: [],
   voucher_codigo: '',
-  numero_processo: '',
-  voo_referencia: '',
-  local_entrega: '',
-  local_recolha: '',
-  comentarios_entrega: '',
-  comentarios_recolha: '',
   observacoes: '',
   observacoes_internas: '',
   condutores: [],

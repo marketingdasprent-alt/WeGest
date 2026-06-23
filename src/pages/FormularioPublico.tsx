@@ -19,7 +19,7 @@ import { FormField } from '@/components/formularios/DynamicFieldEditor';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
-import { trackLeadOnce } from '@/lib/pixel';
+import { initPixel, trackLeadOnce } from '@/lib/pixel';
 
 interface FormData {
   [key: string]: any;
@@ -43,6 +43,8 @@ const FormularioPublico = () => {
   const totalSteps = formulario?.campos ? Math.ceil(formulario.campos.length / fieldsPerStep) : 1;
 
   useEffect(() => {
+    // Página pública → inicializa FB Pixel para PageView + Lead attribution.
+    initPixel();
     if (id) {
       fetchFormulario();
     }
@@ -69,9 +71,6 @@ const FormularioPublico = () => {
       if (campanhasError) {
         console.error('Erro ao buscar campanhas:', campanhasError);
       }
-
-      console.log('Formulário carregado:', formularioData);
-      console.log('Campanhas encontradas:', campanhasData);
 
       setFormulario(formularioData);
       setCampanhas(campanhasData?.map((c) => c.campanha_tag) || []);
@@ -196,16 +195,12 @@ const FormularioPublico = () => {
 
     // Bloqueio síncrono imediato para evitar duplo clique
     if (isSubmittingRef.current) {
-      console.log('Envio já em andamento, ignorando clique duplicado');
       return;
     }
     isSubmittingRef.current = true;
 
     try {
       setIsSubmitting(true);
-
-      console.log('FormData antes do processamento:', formData);
-      console.log('Campos do formulário:', formulario?.campos);
 
       // Criar objeto com todos os dados do formulário incluindo labels
       const formDataWithLabels: Record<string, { label: string; value: any; type: string }> = {};
@@ -360,8 +355,6 @@ const FormularioPublico = () => {
         }
       }
 
-      console.log('Lead data final:', leadData);
-
       // Verificar duplicidade antes de inserir (mesmo email nos últimos 5 minutos)
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
       const { data: existingLead } = await supabase
@@ -372,7 +365,6 @@ const FormularioPublico = () => {
         .maybeSingle();
 
       if (existingLead) {
-        console.log('Lead duplicado detectado, redirecionando sem criar novo');
         navigate('/obrigado');
         return;
       }
@@ -380,8 +372,6 @@ const FormularioPublico = () => {
       const { error } = await supabase.from('leads_dasprent').insert(leadData);
 
       if (error) throw error;
-
-      console.log('Lead salvo com sucesso');
 
       // Enviar evento de lead para Facebook Pixel
       trackLeadOnce({

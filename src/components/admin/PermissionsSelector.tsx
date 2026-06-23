@@ -61,7 +61,7 @@ const MODULOS = [
   { key: 'Motoristas', label: 'Motoristas', icon: Users },
   { key: 'Viaturas', label: 'Viaturas', icon: Car },
   { key: 'Contratos', label: 'Contratos', icon: FileText },
-  { key: 'Financeiro', label: 'Financeiro', icon: Wallet },
+  { key: 'Administrativo', label: 'Administrativo', icon: Wallet },
   { key: 'Marketing', label: 'Marketing', icon: Megaphone },
   { key: 'Calendário', label: 'Calendário', icon: CalendarDays },
   { key: 'Assistência', label: 'Assistência', icon: Wrench },
@@ -108,9 +108,13 @@ const RECURSO_LABELS: Record<string, string> = {
   contratos_reimprimir: 'Reimprimir contratos',
   motoristas_contratos: 'Gestão completa de contratos',
   motoristas_editar_data_contrato: 'Editar data do 1.º contrato',
-  // Financeiro
+  // Administrativo
   financeiro_recibos: 'Gestão de recibos verdes',
   recibos_verdes_adicionar: 'Adicionar recibos verdes manualmente',
+  administrativo_resumos: 'Ver resumos e contas dos motoristas',
+  administrativo_importar: 'Importar dados das plataformas',
+  administrativo_plataformas: 'Ver dados das plataformas (Bolt/Uber/BP/Repsol/EDP)',
+  administrativo_cartoes: 'Gerir cartões de frota e dispositivos OBE',
   // Marketing
   marketing_ver: 'Aceder ao módulo de Marketing',
   // Calendário
@@ -130,6 +134,8 @@ const RECURSO_LABELS: Record<string, string> = {
   admin_utilizadores: 'Gerir utilizadores e contas',
   admin_grupos: 'Gerir grupos e permissões',
   admin_documentos: 'Gerir templates de documentos',
+  admin_documentos_preview: 'Pré-visualizar templates de documentos',
+  admin_campos_dinamicos: 'Gerir campos dinâmicos',
   admin_formularios: 'Gerir formulários',
   admin_integracoes: 'Gerir integrações externas',
   admin_configuracoes: 'Configurações do sistema',

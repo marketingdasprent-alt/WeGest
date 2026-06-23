@@ -71,6 +71,32 @@ serve(async (req) => {
       return jsonResponse({ error: "Este código já está em uso. Escolha outro." }, 400);
     }
 
+    // Verificar se o NOME da empresa já existe (case-insensitive).
+    // Escapa % e _ para não serem tratados como wildcards do ilike.
+    const nomeNormalizado = nome_empresa.trim();
+    const nomeLikePattern = nomeNormalizado.replace(/[%_\\]/g, "\\$&");
+    const { data: nomeRows } = await supabase
+      .from("organizacoes")
+      .select("id")
+      .ilike("nome", nomeLikePattern)
+      .limit(1);
+    if (nomeRows && nomeRows.length > 0) {
+      return jsonResponse({ error: "Já existe uma organização com este nome." }, 400);
+    }
+
+    // Verificar se o NIF já existe.
+    const nifNormalizado = nif.trim();
+    if (nifNormalizado) {
+      const { data: nifRows } = await supabase
+        .from("organizacoes")
+        .select("id")
+        .eq("nif", nifNormalizado)
+        .limit(1);
+      if (nifRows && nifRows.length > 0) {
+        return jsonResponse({ error: "Já existe uma organização com este NIF." }, 400);
+      }
+    }
+
     // Verificar se o email já existe
     const { data: existingUsers } = await supabase.auth.admin.listUsers();
     const emailExists = existingUsers?.users?.some(
@@ -136,29 +162,59 @@ serve(async (req) => {
       .select("id")
       .single();
 
-    if (cargoError) {
+    if (cargoError || !cargo?.id) {
       console.error("[register-org] Erro ao criar cargo:", cargoError);
+      return jsonResponse({ error: "Erro ao criar cargo de administrador" }, 500);
     }
+
+    console.log(`[register-org] Cargo criado: ${cargo.id}`);
 
     // ========== ASSOCIAR USER À ORG (override do trigger) ==========
     // Atualizar profile com a org correta e cargo admin
-    await supabase
+    const { error: profileError, data: profileData } = await supabase
       .from("profiles")
       .update({
         org_id: org.id,
-        cargo_id: cargo?.id || null,
+        cargo_id: cargo.id,
         cargo: "Administrador",
         is_admin: true,
       })
-      .eq("id", userId);
+      .eq("id", userId)
+      .select("id, cargo_id");
+
+    if (profileError) {
+      console.error("[register-org] Erro ao atualizar profile:", profileError);
+      return jsonResponse({ error: "Erro ao configurar perfil do admin: " + profileError.message }, 500);
+    }
+
+    // Validar que o cargo foi realmente atribuído
+    if (!profileData || profileData.length === 0 || profileData[0].cargo_id !== cargo.id) {
+      console.error("[register-org] Profile atualizado mas cargo_id não foi definido corretamente");
+      // Tentar novamente com service role
+      const { error: retryError } = await supabase
+        .from("profiles")
+        .update({ cargo_id: cargo.id })
+        .eq("id", userId);
+
+      if (retryError) {
+        console.error("[register-org] Retry falhou:", retryError);
+        return jsonResponse({ error: "Erro ao definir cargo do admin (retry falhou)" }, 500);
+      }
+    }
+
+    console.log(`[register-org] Profile atualizado: ${userId} com cargo_id: ${cargo.id}`);
 
     // Garantir associação user ↔ org como owner
-    await supabase
+    const { error: userOrgError } = await supabase
       .from("user_organizacoes")
       .upsert(
         { user_id: userId, org_id: org.id, role: "owner" },
         { onConflict: "user_id,org_id" }
       );
+
+    if (userOrgError) {
+      console.error("[register-org] Erro ao associar user à org:", userOrgError);
+    }
 
     // Remover associações incorretas que o trigger possa ter criado
     await supabase
@@ -168,27 +224,47 @@ serve(async (req) => {
       .neq("org_id", org.id);
 
     // Definir org ativa
-    await supabase
+    const { error: orgAtivaError } = await supabase
       .from("user_org_ativa")
       .upsert(
         { user_id: userId, org_id: org.id },
         { onConflict: "user_id" }
       );
 
+    if (orgAtivaError) {
+      console.error("[register-org] Erro ao definir org ativa:", orgAtivaError);
+    }
+
     // ========== ATRIBUIR TODAS AS PERMISSÕES AO ADMIN ==========
-    if (cargo?.id) {
-      const { data: recursos } = await supabase
-        .from("recursos")
-        .select("id");
+    const { data: recursos, error: recursosError } = await supabase
+      .from("recursos")
+      .select("id");
 
-      if (recursos && recursos.length > 0) {
-        const permissoes = recursos.map((r) => ({
-          cargo_id: cargo.id,
-          recurso_id: r.id,
-        }));
+    if (recursosError) {
+      console.error("[register-org] Erro ao carregar recursos:", recursosError);
+      return jsonResponse({ error: "Erro ao carregar recursos" }, 500);
+    }
 
-        await supabase.from("cargo_permissoes").insert(permissoes);
+    if (recursos && recursos.length > 0) {
+      const permissoes = recursos.map((r) => ({
+        cargo_id: cargo.id,
+        recurso_id: r.id,
+        pode_ver: true,
+        pode_criar: true,
+        pode_editar: true,
+        pode_deletar: true,
+      }));
+
+      const { error: permissoesError } = await supabase
+        .from("cargo_permissoes")
+        .insert(permissoes);
+
+      if (permissoesError) {
+        console.error("[register-org] Erro ao atribuir permissões:", permissoesError);
+        return jsonResponse({ error: "Erro ao atribuir permissões: " + permissoesError.message }, 500);
       }
+
+      console.log(`[register-org] ${recursos.length} permissões atribuídas ao cargo admin`);
     }
 
     console.log(`[register-org] Setup completo para org ${org.codigo} com admin ${admin_email}`);

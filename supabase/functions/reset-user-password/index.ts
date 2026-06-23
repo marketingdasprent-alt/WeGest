@@ -99,9 +99,14 @@ Deno.serve(async (req) => {
 
     if (updateError) {
       console.error('Error updating password:', updateError);
+      const code = (updateError as { code?: string }).code;
+      const isWeak = code === 'weak_password' || updateError.name === 'AuthWeakPasswordError';
+      const message = isWeak
+        ? 'A palavra-passe é demasiado fraca. Tem de incluir pelo menos uma letra minúscula, uma maiúscula, um número e um símbolo (ex.: ! @ # $ % &).'
+        : `Erro ao atualizar password: ${updateError.message}`;
       return new Response(
-        JSON.stringify({ error: `Erro ao atualizar password: ${updateError.message}` }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: message, code: code ?? 'update_failed' }),
+        { status: isWeak ? 422 : 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

@@ -24,10 +24,29 @@ const TIPO_CARTA: TipoDocumento = 'Carta de Condução';
 // ── Tipos de input ───────────────────────────────────────────
 
 // org_id é preenchido por trigger na BD — fica de fora do payload do formulário.
+// Campos de empresa (sede, representante, ...) são opcionais: o formulário de
+// cliente não os captura, e enviá-los a null apagaria dados de emissor já
+// preenchidos na BD (semântica PATCH — só escreve quem os fornecer).
+type CamposEmpresa =
+  | 'sede'
+  | 'representante'
+  | 'cargo_representante'
+  | 'licenca_tvde'
+  | 'licenca_validade'
+  | 'papel_timbrado';
+
 type ClienteInsert = Omit<
   Cliente,
-  'id' | 'codigo' | 'created_at' | 'updated_at' | 'created_by' | 'updated_by' | 'org_id'
->;
+  | 'id'
+  | 'codigo'
+  | 'created_at'
+  | 'updated_at'
+  | 'created_by'
+  | 'updated_by'
+  | 'org_id'
+  | CamposEmpresa
+> &
+  Partial<Pick<Cliente, CamposEmpresa>>;
 type DocumentoInsert = Omit<
   Documento,
   'id' | 'created_at' | 'updated_at' | 'created_by' | 'updated_by'
@@ -121,7 +140,10 @@ async function upsertDocumento(
 ): Promise<void> {
   if (documentoId) {
     // Documento já existe — actualizar (mesmo que fique "vazio", mantém histórico)
-    const { error } = await supabase.from('documentos').update(dados).eq('id', documentoId);
+    const { error } = await supabase
+      .from('documentos')
+      .update(dados as any)
+      .eq('id', documentoId);
     if (error) throw error;
     return;
   }
@@ -131,7 +153,7 @@ async function upsertDocumento(
 
   const { data: novoDoc, error: errDoc } = await supabase
     .from('documentos')
-    .insert(dados)
+    .insert(dados as any)
     .select('id')
     .single();
   if (errDoc) throw errDoc;

@@ -45,6 +45,7 @@ const PLATFORMS: { id: PlataformaOperacional; name: string; logo: string }[] = [
   { id: 'bp', name: 'BP', logo: '/images/logo-bp.png' },
   { id: 'repsol', name: 'Repsol', logo: '/images/logo-repsol.png' },
   { id: 'edp', name: 'EDP', logo: '/images/logo-edp.png' },
+  { id: 'viaverde', name: 'Via Verde', logo: '/images/logo-via-verde.png' },
 ];
 
 const STEP_LABELS = ['Seleção de plataforma', 'Credenciais', 'Confirmação'];
@@ -133,6 +134,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
   const isBp = formData.plataforma === 'bp';
   const isRepsol = formData.plataforma === 'repsol';
   const isEdp = formData.plataforma === 'edp';
+  const isViaVerde = formData.plataforma === 'viaverde';
   const defaults = isBolt
     ? BOLT_DEFAULTS
     : isBp
@@ -146,7 +148,8 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
   const selectedPlatform = PLATFORMS.find((p) => p.id === formData.plataforma);
 
   const canProceedStep1 = !!formData.plataforma;
-  const canProceedStep2 = !!(formData.login && formData.password);
+  // Via Verde é manual (sem credenciais) → basta ter nome.
+  const canProceedStep2 = isViaVerde ? !!formData.nome : !!(formData.login && formData.password);
 
   const handleNext = () => {
     if (step === 1 && !canProceedStep1) {
@@ -181,6 +184,21 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
 
     try {
       setSaving(true);
+
+      // Via Verde: integração manual (sem robot/Apify/credenciais).
+      if (isViaVerde) {
+        const { error: vvError } = await supabase.from('plataformas_configuracao').insert({
+          nome: formData.nome,
+          plataforma: 'viaverde',
+          ativo: true,
+        });
+        if (vvError) throw vvError;
+        toast({ title: 'Integração criada', description: `Via Verde "${formData.nome}" criada.` });
+        setSaving(false);
+        onOpenChange(false);
+        onSuccess();
+        return;
+      }
 
       let apifyApiToken: string | null = null;
       const { data: existingIntegrations } = await supabase
@@ -290,6 +308,9 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                       src={platform.logo}
                       alt={platform.name}
                       className="h-16 w-16 object-contain"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                      }}
                     />
                     <span className="text-sm font-semibold text-foreground">{platform.name}</span>
                     {isSelected && (
@@ -313,6 +334,9 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                 src={selectedPlatform.logo}
                 alt={selectedPlatform.name}
                 className="h-20 w-20 object-contain mb-3"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                }}
               />
               <span className="text-base font-semibold text-foreground">
                 {selectedPlatform.name}
@@ -321,44 +345,73 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
 
             {/* Right: Form */}
             <div className="flex-1 space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Introduza as credenciais da sua conta {selectedPlatform.name}.
-              </p>
-              <div className="space-y-2">
-                <Label htmlFor="login">
-                  Email <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="login"
-                  type="email"
-                  placeholder="email@empresa.com"
-                  value={formData.login}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, login: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">
-                  Password <span className="text-red-500">*</span>
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={formData.password}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
+              {isViaVerde ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    A Via Verde é uma integração <strong>manual</strong> — sem credenciais nem robô.
+                    Os dados são importados a partir do extrato (Excel/CSV) no separador
+                    <em> Contas › Importar Dados</em>.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="nome-vv">
+                      Nome da integração <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="nome-vv"
+                      placeholder="Ex: Via Verde Frota"
+                      value={formData.nome}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Introduza as credenciais da sua conta {selectedPlatform.name}.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="login">
+                      Email <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="login"
+                      type="email"
+                      placeholder="email@empresa.com"
+                      value={formData.login}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, login: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">
+                      Password <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        value={formData.password}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, password: e.target.value }))
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -372,6 +425,9 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                 src={selectedPlatform.logo}
                 alt={selectedPlatform.name}
                 className="h-14 w-14 object-contain"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                }}
               />
               <div>
                 <p className="font-semibold text-foreground">{selectedPlatform.name}</p>

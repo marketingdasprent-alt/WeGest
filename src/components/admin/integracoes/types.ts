@@ -1,7 +1,8 @@
 export type PlataformaIntegracao = 'bolt' | 'uber' | 'via_verde' | 'combustivel' | 'robot';
 
 // Available platforms for creation — internally stored as 'robot' with robot_target_platform
-export type PlataformaOperacional = 'uber' | 'bolt' | 'bp' | 'repsol' | 'edp';
+// (exceto 'viaverde', que é manual: armazenada como plataforma='viaverde', sem robot/credenciais)
+export type PlataformaOperacional = 'uber' | 'bolt' | 'bp' | 'repsol' | 'edp' | 'viaverde';
 
 export interface IntegracaoConfig {
   id: string;
@@ -80,4 +81,10 @@ export const EDP_DEFAULTS = {
   auth_mode: 'password' as const,
   robot_target_platform: 'edp',
   apify_api_token: 'apify_api_zyXNhVu0c2aYqhETTy6fgfDI5ZNrOA3DM0vc',
+};
+
+// Via Verde — importação manual (sem robot/scraping, sem credenciais).
+export const VIAVERDE_DEFAULTS = {
+  manual: true as const,
+  robot_target_platform: 'viaverde',
 };

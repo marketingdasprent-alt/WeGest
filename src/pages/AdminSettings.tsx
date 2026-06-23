@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UsersTab } from '@/components/admin/UsersTab';
 import { GruposTab } from '@/components/admin/GruposTab';
 import { DocumentosTab } from '@/components/admin/DocumentosTab';
+import { CamposTab } from '@/components/admin/CamposTab';
 import { FormulariosTab } from '@/components/admin/FormulariosTab';
 import { CategoriasAssistenciaTab } from '@/components/admin/CategoriasAssistenciaTab';
 import { IntegracoesTab } from '@/components/admin/IntegracoesTab';
@@ -14,6 +15,7 @@ import { EstacoesTab } from '@/components/admin/EstacoesTab';
 import { EmpresasTab } from '@/components/admin/EmpresasTab';
 import { ViaturasTiposTab } from '@/components/admin/ViaturasTiposTab';
 import { FiscalTab } from '@/components/admin/FiscalTab';
+import { PrivacidadeTab } from '@/components/admin/PrivacidadeTab';
 import { OrganizacoesTab } from '@/components/admin/OrganizacoesTab';
 import { ImportExcelDialog } from '@/components/admin/ImportExcelDialog';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
@@ -72,6 +74,12 @@ const AdminSettings = () => {
           Documentos
         </TabsTrigger>
         <TabsTrigger
+          value="campos"
+          className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto text-xs"
+        >
+          Campos
+        </TabsTrigger>
+        <TabsTrigger
           value="formularios"
           className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto text-xs"
         >
@@ -113,6 +121,12 @@ const AdminSettings = () => {
         >
           Fiscal
         </TabsTrigger>
+        <TabsTrigger
+          value="privacidade"
+          className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto text-xs"
+        >
+          Privacidade
+        </TabsTrigger>
         {isDecadaOusada && (
           <TabsTrigger
             value="organizacoes"
@@ -134,6 +148,10 @@ const AdminSettings = () => {
 
         <TabsContent value="documentos" className="mt-0">
           <DocumentosTab />
+        </TabsContent>
+
+        <TabsContent value="campos" className="mt-0">
+          <CamposTab />
         </TabsContent>
 
         <TabsContent value="formularios" className="mt-0">
@@ -162,6 +180,10 @@ const AdminSettings = () => {
 
         <TabsContent value="fiscal" className="mt-0">
           <FiscalTab />
+        </TabsContent>
+
+        <TabsContent value="privacidade" className="mt-0">
+          <PrivacidadeTab />
         </TabsContent>
 
         {isDecadaOusada && (

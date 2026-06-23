@@ -16,6 +16,9 @@ import {
   Briefcase,
   CalendarDays,
   LayoutDashboard,
+  CreditCard,
+  Wifi,
+  Calculator,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
@@ -40,13 +43,15 @@ interface SubItem {
   title: string;
   url: string;
   icon?: any;
+  recurso?: string;
 }
 
 interface MenuItem {
   title: string;
   url?: string;
   icon: any;
-  recurso: string;
+  recurso?: string;
+  recursosAny?: string[];
   subItems?: SubItem[];
 }
 
@@ -70,14 +75,41 @@ const items: MenuItem[] = [
       { title: 'Contratos', url: '/contratos', icon: FileSignature },
     ],
   },
-  { title: 'Viaturas', url: '/viaturas', icon: Car, recurso: RECURSOS.VIATURAS_VER },
+  { title: 'Frota', url: '/viaturas', icon: Car, recurso: RECURSOS.VIATURAS_VER },
   {
     title: 'Administrativo',
-    url: '/administrativo',
     icon: Briefcase,
-    recurso: RECURSOS.FINANCEIRO_RECIBOS,
+    // Mostra com QUALQUER permissão do módulo Administrativo.
+    recursosAny: [
+      RECURSOS.FINANCEIRO_RECIBOS,
+      RECURSOS.RECIBOS_VERDES_ADICIONAR,
+      RECURSOS.ADMINISTRATIVO_RESUMOS,
+      RECURSOS.ADMINISTRATIVO_IMPORTAR,
+      RECURSOS.ADMINISTRATIVO_PLATAFORMAS,
+      RECURSOS.ADMINISTRATIVO_CARTOES,
+    ],
+    subItems: [
+      { title: 'Resumos', url: '/administrativo', icon: Calculator },
+      {
+        title: 'Cartões Frota',
+        url: '/administrativo/cartoes',
+        icon: CreditCard,
+        recurso: RECURSOS.ADMINISTRATIVO_CARTOES,
+      },
+      {
+        title: 'Dispositivos OBE',
+        url: '/administrativo/obe',
+        icon: Wifi,
+        recurso: RECURSOS.ADMINISTRATIVO_CARTOES,
+      },
+    ],
   },
-  { title: 'Calendário', url: '/calendario', icon: CalendarDays, recurso: RECURSOS.CALENDARIO_VER },
+  {
+    title: 'Movimentações',
+    url: '/calendario',
+    icon: CalendarDays,
+    recurso: RECURSOS.CALENDARIO_VER,
+  },
   {
     title: 'Assistência',
     url: '/assistencia',
@@ -119,8 +151,13 @@ export function AppSidebar() {
   const location = useLocation();
   const { isAdmin, hasAccessToResource } = usePermissions();
 
+  // Acesso a um item: por um recurso único OU por QUALQUER recurso de uma lista (recursosAny).
+  const canAccessItem = (item: { recurso?: string; recursosAny?: string[] }) =>
+    (!!item.recurso && hasAccessToResource(item.recurso)) ||
+    (Array.isArray(item.recursosAny) && item.recursosAny.some((r) => hasAccessToResource(r)));
+
   // Filtrar itens baseado em permissões
-  const visibleItems = items.filter((item) => hasAccessToResource(item.recurso));
+  const visibleItems = items.filter(canAccessItem);
   // CRÍTICO: Filtrar adminItems por permissão, não por isAdmin
   const visibleAdminItems = adminItems.filter((item) => hasAccessToResource(item.recurso));
 
@@ -147,7 +184,13 @@ export function AppSidebar() {
                 {visibleItems.map((item) => {
                   // Se tem subitens, renderiza collapsible
                   if (item.subItems && item.subItems.length > 0) {
-                    const isSubActive = item.subItems.some(
+                    // Subitens podem exigir o seu próprio recurso.
+                    const subItems = item.subItems.filter(
+                      (sub: { recurso?: string }) =>
+                        !sub.recurso || hasAccessToResource(sub.recurso)
+                    );
+                    if (subItems.length === 0) return null;
+                    const isSubActive = subItems.some(
                       (sub) =>
                         location.pathname === sub.url || location.pathname.startsWith(sub.url + '/')
                     );
@@ -177,7 +220,7 @@ export function AppSidebar() {
                           </CollapsibleTrigger>
                           <CollapsibleContent>
                             <SidebarMenuSub>
-                              {item.subItems.map((subItem) => {
+                              {subItems.map((subItem) => {
                                 const SubIcon = subItem.icon || item.icon;
                                 return (
                                   <SidebarMenuSubItem key={subItem.url}>

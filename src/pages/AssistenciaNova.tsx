@@ -49,6 +49,7 @@ import {
   Eraser,
 } from 'lucide-react';
 import { AssistenciaMultimediaUpload } from '@/components/assistencia/AssistenciaMultimediaUpload';
+import { matchesSearch } from '@/lib/utils';
 
 interface Viatura {
   id: string;
@@ -143,13 +144,12 @@ export default function AssistenciaNova() {
   };
 
   useEffect(() => {
-    const term = searchTerm.toLowerCase();
     setFilteredViaturas(
       viaturas.filter(
         (v) =>
-          v.matricula.toLowerCase().includes(term) ||
-          v.marca.toLowerCase().includes(term) ||
-          v.modelo.toLowerCase().includes(term)
+          matchesSearch(v.matricula, searchTerm) ||
+          matchesSearch(v.marca, searchTerm) ||
+          matchesSearch(v.modelo, searchTerm)
       )
     );
   }, [searchTerm, viaturas]);
@@ -250,7 +250,16 @@ export default function AssistenciaNova() {
 
         const { error: anexosError } = await supabase.from('assistencia_anexos').insert(anexos);
 
-        if (anexosError) console.error('Erro ao salvar anexos:', anexosError);
+        if (anexosError) {
+          console.error('Erro ao salvar anexos:', anexosError);
+          toast({
+            title: 'Aviso: fotos não guardadas',
+            description:
+              'O ticket foi criado mas as fotografias não foram associadas. Abre o ticket e faz upload manualmente.',
+            variant: 'destructive',
+            duration: 10000,
+          });
+        }
 
         // 2.1 TAMBÉM salvar como "Dano" da viatura para histórico centralizado
         const { data: novoDano, error: danoError } = await supabase
@@ -550,7 +559,11 @@ export default function AssistenciaNova() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <AssistenciaMultimediaUpload onComplete={handleMultimediaComplete} />
+            <AssistenciaMultimediaUpload
+              onComplete={handleMultimediaComplete}
+              initialFiles={mediaFiles}
+              requiredPhotos={4}
+            />
           </CardContent>
         </Card>
       )}
@@ -851,11 +864,7 @@ export default function AssistenciaNova() {
                               />
                               <div className="max-h-32 overflow-y-auto space-y-1">
                                 {viaturasDisponiveis
-                                  .filter((v) =>
-                                    v.matricula
-                                      .toLowerCase()
-                                      .includes(substituteSearchTerm.toLowerCase())
-                                  )
+                                  .filter((v) => matchesSearch(v.matricula, substituteSearchTerm))
                                   .map((v) => (
                                     <button
                                       key={v.id}

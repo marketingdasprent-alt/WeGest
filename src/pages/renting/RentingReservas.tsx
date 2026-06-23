@@ -11,6 +11,8 @@ import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { useReservas } from '@/hooks/useReservas';
 import { useToast } from '@/hooks/use-toast';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 import {
   ReservasTabela,
@@ -21,6 +23,7 @@ import {
   ReservasFiltros,
   type ReservasFiltrosState,
 } from '@/components/renting/reservas/ReservasFiltros';
+import { ReservasStats } from '@/components/renting/reservas/ReservasStats';
 import {
   csvEscape,
   formatDateTime,
@@ -115,6 +118,12 @@ const RentingReservas = () => {
     return result;
   }, [reservas, matriculaSearch, filtros, sortColumn, sortDir, getEstacaoNome]);
 
+  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
+    filtered,
+    50,
+    `${matriculaSearch}|${JSON.stringify(filtros)}`
+  );
+
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -187,6 +196,8 @@ const RentingReservas = () => {
         icon={CalendarCheck}
       />
 
+      <ReservasStats reservas={reservas} />
+
       <Card className="bg-card border-border">
         <CardContent className="p-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 border-b border-border/50">
@@ -225,7 +236,7 @@ const RentingReservas = () => {
           )}
 
           <ReservasTabela
-            reservas={filtered}
+            reservas={pageItems}
             isLoading={isLoading}
             totalSemFiltros={reservas.length}
             sortColumn={sortColumn}
@@ -235,10 +246,15 @@ const RentingReservas = () => {
             getEstacaoNome={getEstacaoNome}
           />
 
-          <div className="px-4 py-3 border-t border-border/50 text-xs text-muted-foreground">
-            {filtered.length} reserva{filtered.length === 1 ? '' : 's'} (de {reservas.length}{' '}
-            carregada{reservas.length === 1 ? '' : 's'})
-          </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            start={start}
+            end={end}
+            onPageChange={setPage}
+            noun={['reserva', 'reservas']}
+          />
         </CardContent>
       </Card>
     </div>
