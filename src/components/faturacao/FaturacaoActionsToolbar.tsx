@@ -146,9 +146,7 @@ export function FaturacaoActionsToolbar({
 
   return (
     <>
-      <div
-        className={cn('flex flex-nowrap items-center gap-2 overflow-x-auto', className)}
-      >
+      <div className={cn('flex flex-nowrap items-center gap-2 overflow-x-auto', className)}>
         {onFaturar && (
           <Button
             type="button"

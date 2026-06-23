@@ -150,7 +150,8 @@ export function NovaFaturaDialog({
       const linhaSemIva = taxa > 0 ? round2(linhaComIva / (1 + taxa / 100)) : linhaComIva;
       subtotal += linhaSemIva;
       totalComIva += linhaComIva;
-      const descricaoFinal = [l.tipo, l.descricao].filter(Boolean).join(' — ') || l.tipo || 'Artigo';
+      const descricaoFinal =
+        [l.tipo, l.descricao].filter(Boolean).join(' — ') || l.tipo || 'Artigo';
       itens.push({
         descricao: descricaoFinal,
         quantidade: unidades,
@@ -417,7 +418,13 @@ export function NovaFaturaDialog({
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Artigos · preços com IVA incluído
               </span>
-              <Button type="button" variant="ghost" size="sm" className="h-7 gap-1" onClick={addLinha}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1"
+                onClick={addLinha}
+              >
                 <Plus className="h-3.5 w-3.5" />
                 Inserir linha
               </Button>
