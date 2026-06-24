@@ -330,7 +330,7 @@ const RentingMovimentacaoForm = () => {
                     </TabsContent>
 
                     <TabsContent value="detalhes" className="pt-4">
-                      <MovimentoTabDetalhes form={form} estacoes={estacoes} />
+                      <MovimentoTabDetalhes form={form} estacoes={estacoes} viaturas={viaturas} />
                     </TabsContent>
 
                     <TabsContent value="anexos" className="pt-4">
