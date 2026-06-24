@@ -3,7 +3,9 @@ export const ELETRICO_OPTS = ['0%', '25%', '50%', '75%', '100%'] as const;
 export const GPL_OPTS = ['Vazio', '1/4', '1/2', '3/4', 'Cheio'] as const;
 
 function norm(tipoCombustivel: string | null | undefined): string {
-  return (tipoCombustivel ?? '').toLowerCase();
+  // lowercase + remover acentos: o catálogo viatura_combustiveis guarda nomes
+  // de exibição como "Elétrico"/"Híbrido" — o matching tem de os reconhecer.
+  return (tipoCombustivel ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
 /** Combustão (ou tipo desconhecido) usa nível de combustível. */

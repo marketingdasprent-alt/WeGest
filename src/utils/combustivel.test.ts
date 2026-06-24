@@ -45,3 +45,20 @@ describe('precisaGpl', () => {
     expect(precisaGpl('')).toBe(false);
   });
 });
+
+// O catálogo viatura_combustiveis guarda nomes de exibição (ex.: "Elétrico",
+// "Híbrido"). O matching tem de ignorar acentos e maiúsculas.
+describe('insensível a acentos e maiúsculas (nomes do catálogo)', () => {
+  it('Elétrico → bateria, não combustível', () => {
+    expect(precisaEletrico('Elétrico')).toBe(true);
+    expect(precisaCombustivel('Elétrico')).toBe(false);
+  });
+  it('Híbrido → combustível e bateria', () => {
+    expect(precisaEletrico('Híbrido')).toBe(true);
+    expect(precisaCombustivel('Híbrido')).toBe(true);
+  });
+  it('Gasolina / Diesel → combustível', () => {
+    expect(precisaCombustivel('Gasolina')).toBe(true);
+    expect(precisaCombustivel('Diesel')).toBe(true);
+  });
+});
