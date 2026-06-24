@@ -50,6 +50,10 @@ export type Movimento = {
   km_final: number | null;
   combustivel_inicial: number | null;
   combustivel_final: number | null;
+  eletricidade_inicial: string | null;
+  eletricidade_final: string | null;
+  gpl_inicial: string | null;
+  gpl_final: string | null;
 
   motivo: string | null;
   prestador: string | null;
