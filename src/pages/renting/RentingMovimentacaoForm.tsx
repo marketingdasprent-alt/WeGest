@@ -321,23 +321,19 @@ const RentingMovimentacaoForm = () => {
               <Card className="bg-card border-border">
                 <CardContent className="p-4 sm:p-6">
                   <Tabs defaultValue="geral" className="w-full">
-                    <TabsList className="grid grid-cols-4 w-full sm:w-auto sm:inline-flex">
+                    <TabsList className="grid grid-cols-3 w-full sm:w-auto sm:inline-flex">
                       <TabsTrigger value="geral">Geral</TabsTrigger>
-                      <TabsTrigger value="detalhes">Detalhes</TabsTrigger>
                       <TabsTrigger value="anexos">Fotos & Anexos</TabsTrigger>
                       <TabsTrigger value="observacoes">Observações</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="geral" className="pt-4">
+                    <TabsContent value="geral" className="pt-4 space-y-8">
                       <MovimentoTabGeral
                         form={form}
                         viaturas={viaturas}
                         colaboradores={colaboradores}
                         movimentoId={isEdit ? (id ?? null) : null}
                       />
-                    </TabsContent>
-
-                    <TabsContent value="detalhes" className="pt-4">
                       <MovimentoTabDetalhes form={form} estacoes={estacoes} viaturas={viaturas} />
                     </TabsContent>
 
