@@ -62,6 +62,10 @@ const DEFAULT_VALUES: MovimentoFormValues = {
   km_final: null,
   combustivel_inicial: null,
   combustivel_final: null,
+  eletricidade_inicial: null,
+  eletricidade_final: null,
+  gpl_inicial: null,
+  gpl_final: null,
   motivo: '',
   prestador: '',
   custo_estimado: null,
@@ -118,6 +122,10 @@ const RentingMovimentacaoForm = () => {
       km_final: movimento.km_final,
       combustivel_inicial: movimento.combustivel_inicial,
       combustivel_final: movimento.combustivel_final,
+      eletricidade_inicial: movimento.eletricidade_inicial,
+      eletricidade_final: movimento.eletricidade_final,
+      gpl_inicial: movimento.gpl_inicial,
+      gpl_final: movimento.gpl_final,
       motivo: movimento.motivo ?? '',
       prestador: movimento.prestador ?? '',
       custo_estimado: movimento.custo_estimado,
@@ -179,6 +187,10 @@ const RentingMovimentacaoForm = () => {
       km_final: values.km_final,
       combustivel_inicial: values.combustivel_inicial,
       combustivel_final: values.combustivel_final,
+      eletricidade_inicial: values.eletricidade_inicial ?? null,
+      eletricidade_final: values.eletricidade_final ?? null,
+      gpl_inicial: values.gpl_inicial ?? null,
+      gpl_final: values.gpl_final ?? null,
       motivo: null,
       prestador: null,
       custo_estimado: null,
@@ -309,24 +321,20 @@ const RentingMovimentacaoForm = () => {
               <Card className="bg-card border-border">
                 <CardContent className="p-4 sm:p-6">
                   <Tabs defaultValue="geral" className="w-full">
-                    <TabsList className="grid grid-cols-4 w-full sm:w-auto sm:inline-flex">
+                    <TabsList className="grid grid-cols-3 w-full sm:w-auto sm:inline-flex">
                       <TabsTrigger value="geral">Geral</TabsTrigger>
-                      <TabsTrigger value="detalhes">Detalhes</TabsTrigger>
                       <TabsTrigger value="anexos">Fotos & Anexos</TabsTrigger>
                       <TabsTrigger value="observacoes">Observações</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="geral" className="pt-4">
+                    <TabsContent value="geral" className="pt-4 space-y-8">
                       <MovimentoTabGeral
                         form={form}
                         viaturas={viaturas}
                         colaboradores={colaboradores}
                         movimentoId={isEdit ? (id ?? null) : null}
                       />
-                    </TabsContent>
-
-                    <TabsContent value="detalhes" className="pt-4">
-                      <MovimentoTabDetalhes form={form} estacoes={estacoes} />
+                      <MovimentoTabDetalhes form={form} estacoes={estacoes} viaturas={viaturas} />
                     </TabsContent>
 
                     <TabsContent value="anexos" className="pt-4">

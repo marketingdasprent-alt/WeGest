@@ -16,7 +16,6 @@ import {
   Mail,
   KeyRound,
   CalendarCheck,
-  ArrowRightLeft,
   Users,
   Layers,
   Tag,
@@ -84,12 +83,6 @@ const MENU_ITEMS: MenuItem[] = [
         url: '/renting/reservas',
         icon: CalendarCheck,
         recurso: 'renting_reservas',
-      },
-      {
-        label: 'Movimentações',
-        url: '/renting/movimentacoes',
-        icon: ArrowRightLeft,
-        recurso: 'renting_movimentacoes',
       },
       {
         label: 'Clientes',
