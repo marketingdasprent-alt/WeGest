@@ -4961,9 +4961,13 @@ export type Database = {
           custo_final: number | null
           data_chegada: string | null
           data_partida: string | null
+          eletricidade_final: string | null
+          eletricidade_inicial: string | null
           estacao_destino_id: string | null
           estacao_origem_id: string | null
           estado: string
+          gpl_final: string | null
+          gpl_inicial: string | null
           id: string
           info: string | null
           km_final: number | null
@@ -4990,9 +4994,13 @@ export type Database = {
           custo_final?: number | null
           data_chegada?: string | null
           data_partida?: string | null
+          eletricidade_final?: string | null
+          eletricidade_inicial?: string | null
           estacao_destino_id?: string | null
           estacao_origem_id?: string | null
           estado?: string
+          gpl_final?: string | null
+          gpl_inicial?: string | null
           id?: string
           info?: string | null
           km_final?: number | null
@@ -5019,9 +5027,13 @@ export type Database = {
           custo_final?: number | null
           data_chegada?: string | null
           data_partida?: string | null
+          eletricidade_final?: string | null
+          eletricidade_inicial?: string | null
           estacao_destino_id?: string | null
           estacao_origem_id?: string | null
           estado?: string
+          gpl_final?: string | null
+          gpl_inicial?: string | null
           id?: string
           info?: string | null
           km_final?: number | null

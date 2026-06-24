@@ -1,5 +1,5 @@
 import type { UseFormReturn } from 'react-hook-form';
-import { Fuel, Gauge, MapPin } from 'lucide-react';
+import { Gauge, MapPin } from 'lucide-react';
 
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -12,14 +12,16 @@ import {
 } from '@/components/ui/select';
 
 import type { MovimentoFormValues } from '../movimentoForm.schema';
-import { COMBUSTIVEL_OPTIONS } from '../movimentosUtils';
 import type { Estacao } from '@/hooks/useEstacoes';
+import type { ViaturaBasic } from '@/hooks/useViaturas';
+import { NivelEnergiaFields } from '../NivelEnergiaFields';
 
 const SENTINEL_NONE = '__none__';
 
 interface MovimentoTabDetalhesProps {
   form: UseFormReturn<MovimentoFormValues>;
   estacoes: Estacao[];
+  viaturas: ViaturaBasic[];
 }
 
 /** Select de estação reutilizável. */
@@ -104,81 +106,52 @@ const NumberField: React.FC<{
   />
 );
 
-/** Select de combustível em oitavos. */
-const CombustivelField: React.FC<{
-  form: UseFormReturn<MovimentoFormValues>;
-  name: 'combustivel_inicial' | 'combustivel_final';
-  label: string;
-}> = ({ form, name, label }) => (
-  <FormField
-    control={form.control}
-    name={name}
-    render={({ field }) => (
-      <FormItem>
-        <FormLabel className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground font-semibold">
-          <Fuel className="h-3.5 w-3.5" />
-          {label}
-        </FormLabel>
-        <Select
-          value={field.value == null ? SENTINEL_NONE : String(field.value)}
-          onValueChange={(v) => field.onChange(v === SENTINEL_NONE ? null : Number(v))}
-        >
-          <FormControl>
-            <SelectTrigger className="bg-background">
-              <SelectValue placeholder="Nível de combustível..." />
-            </SelectTrigger>
-          </FormControl>
-          <SelectContent>
-            <SelectItem value={SENTINEL_NONE}>— Não registado —</SelectItem>
-            {COMBUSTIVEL_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={String(o.value)}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <FormMessage />
-      </FormItem>
-    )}
-  />
-);
+export const MovimentoTabDetalhes: React.FC<MovimentoTabDetalhesProps> = ({
+  form,
+  estacoes,
+  viaturas,
+}) => {
+  const viaturaId = form.watch('viatura_id');
+  const tipoCombustivel = viaturas.find((v) => v.id === viaturaId)?.combustivel ?? null;
 
-export const MovimentoTabDetalhes: React.FC<MovimentoTabDetalhesProps> = ({ form, estacoes }) => (
-  <div className="space-y-8">
-    {/* Trajeto */}
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 pb-2 border-b">
-        <MapPin className="h-4 w-4 text-primary" />
-        <h3 className="text-base font-semibold">Trajeto da Transferência</h3>
+  return (
+    <div className="space-y-8">
+      {/* Trajeto */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 pb-2 border-b">
+          <MapPin className="h-4 w-4 text-primary" />
+          <h3 className="text-base font-semibold">Trajeto da Transferência</h3>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <EstacaoField
+            form={form}
+            name="estacao_origem_id"
+            label="Estação de Origem"
+            estacoes={estacoes}
+          />
+          <EstacaoField
+            form={form}
+            name="estacao_destino_id"
+            label="Estação de Destino"
+            estacoes={estacoes}
+          />
+        </div>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <EstacaoField
-          form={form}
-          name="estacao_origem_id"
-          label="Estação de Origem"
-          estacoes={estacoes}
-        />
-        <EstacaoField
-          form={form}
-          name="estacao_destino_id"
-          label="Estação de Destino"
-          estacoes={estacoes}
-        />
+
+      {/* Quilometragem & Combustível */}
+      <div className="rounded-lg border bg-gradient-to-br from-muted/40 to-muted/10 p-5 space-y-5">
+        <div className="flex items-center gap-2">
+          <Gauge className="h-5 w-5 text-primary" />
+          <h3 className="text-base font-semibold">Quilometragem & Combustível</h3>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <NumberField form={form} name="km_inicial" label="KM Inicial" suffix="km" icon={Gauge} />
+          <NumberField form={form} name="km_final" label="KM Final" suffix="km" icon={Gauge} />
+          <div className="sm:col-span-2 lg:col-span-4">
+            <NivelEnergiaFields form={form} tipoCombustivel={tipoCombustivel} />
+          </div>
+        </div>
       </div>
     </div>
-
-    {/* Quilometragem & Combustível */}
-    <div className="rounded-lg border bg-gradient-to-br from-muted/40 to-muted/10 p-5 space-y-5">
-      <div className="flex items-center gap-2">
-        <Gauge className="h-5 w-5 text-primary" />
-        <h3 className="text-base font-semibold">Quilometragem & Combustível</h3>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <NumberField form={form} name="km_inicial" label="KM Inicial" suffix="km" icon={Gauge} />
-        <NumberField form={form} name="km_final" label="KM Final" suffix="km" icon={Gauge} />
-        <CombustivelField form={form} name="combustivel_inicial" label="Combustível Inicial" />
-        <CombustivelField form={form} name="combustivel_final" label="Combustível Final" />
-      </div>
-    </div>
-  </div>
-);
+  );
+};

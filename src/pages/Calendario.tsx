@@ -1,6 +1,7 @@
 // Calendario module
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -9,7 +10,6 @@ import { EventoDialog } from '@/components/calendario/EventoDialog';
 import { EventoHistoricoDialog } from '@/components/calendario/EventoHistoricoDialog';
 import { CalendarioConfig } from '@/components/calendario/CalendarioConfig';
 import { RelatorioDialog } from '@/components/calendario/RelatorioDialog';
-import { NovaMovimentacaoInternaDialog } from '@/components/calendario/NovaMovimentacaoInternaDialog';
 import { RecolhasPendentesDrawer } from '@/components/calendario/RecolhasPendentesDrawer';
 import { CheckOutPendentesDrawer } from '@/components/calendario/CheckOutPendentesDrawer';
 import { ListaEsperaDrawer } from '@/components/calendario/ListaEsperaDrawer';
@@ -54,7 +54,7 @@ const Calendario: React.FC = () => {
   const { user } = useAuth();
   const { hasPermission, isAdmin, cargo } = usePermissions();
   const queryClient = useQueryClient();
-  const [novaMovimentacaoOpen, setNovaMovimentacaoOpen] = useState(false);
+  const navigate = useNavigate();
   const [configOpen, setConfigOpen] = useState(false);
   const [historicoOpen, setHistoricoOpen] = useState(false);
   const [relatorioOpen, setRelatorioOpen] = useState(false);
@@ -391,11 +391,11 @@ const Calendario: React.FC = () => {
             {hasPermission('renting_movimentacoes') && (
               <Button
                 variant="outline"
-                onClick={() => setNovaMovimentacaoOpen(true)}
+                onClick={() => navigate('/renting/movimentacoes')}
                 className="gap-2"
               >
                 <ArrowRightLeft className="h-4 w-4" />
-                <span className="hidden sm:inline">Nova Movimentação Interna</span>
+                <span className="hidden sm:inline">Movimentação Interna</span>
               </Button>
             )}
           </div>
@@ -445,11 +445,6 @@ const Calendario: React.FC = () => {
           open={relatorioOpen}
           onOpenChange={setRelatorioOpen}
           currentMonth={currentMonth}
-        />
-
-        <NovaMovimentacaoInternaDialog
-          open={novaMovimentacaoOpen}
-          onOpenChange={setNovaMovimentacaoOpen}
         />
       </div>
     </>
