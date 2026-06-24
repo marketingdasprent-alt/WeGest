@@ -16,9 +16,9 @@ interface EmissorSelectProps {
 }
 
 /**
- * Seletor da empresa emissora (clientes tipo='empresa') de uma reserva/contrato.
+ * Seletor da empresa emissora (clientes com is_emissora=true) de uma reserva/contrato.
  * Os documentos gerados usam os templates da empresa escolhida.
- * Org com uma única empresa: pré-selecciona automaticamente (sem fricção);
+ * Org com uma única empresa emissora: pré-selecciona automaticamente (sem fricção);
  * com várias, obriga a escolha explícita.
  */
 export const EmissorSelect: React.FC<EmissorSelectProps> = ({ value, onChange, disabled }) => {
