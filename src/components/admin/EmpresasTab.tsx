@@ -195,8 +195,8 @@ export const EmpresasTab: React.FC = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Empresas emissoras do grupo — as que emitem contratos e documentos. Os
-          clientes que são empresas ficam na lista de Clientes.
+          Empresas emissoras do grupo — as que emitem contratos e documentos. Os clientes que são
+          empresas ficam na lista de Clientes.
         </p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
