@@ -10,7 +10,6 @@ import {
   Car,
   Check,
   ChevronsUpDown,
-  Fuel,
   Gauge,
   Loader2,
   MapPin,
@@ -56,10 +55,8 @@ import {
   movimentoFormSchema,
   type MovimentoFormValues,
 } from '@/components/renting/movimentacoes/movimentoForm.schema';
-import {
-  COMBUSTIVEL_OPTIONS,
-  localInputToIso,
-} from '@/components/renting/movimentacoes/movimentosUtils';
+import { localInputToIso } from '@/components/renting/movimentacoes/movimentosUtils';
+import { NivelEnergiaFields } from '@/components/renting/movimentacoes/NivelEnergiaFields';
 
 import type { MovimentoInsert } from '@/types/movimento';
 
@@ -91,6 +88,10 @@ const DEFAULT_VALUES: MovimentoFormValues = {
   km_final: null,
   combustivel_inicial: null,
   combustivel_final: null,
+  eletricidade_inicial: null,
+  eletricidade_final: null,
+  gpl_inicial: null,
+  gpl_final: null,
   motivo: '',
   prestador: '',
   custo_estimado: null,
@@ -562,7 +563,7 @@ export const NovaMovimentacaoInternaDialog: React.FC<NovaMovimentacaoInternaDial
               />
 
               {/* ── KM & Combustível ── */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <FormField
                   control={form.control}
                   name="km_inicial"
@@ -613,73 +614,8 @@ export const NovaMovimentacaoInternaDialog: React.FC<NovaMovimentacaoInternaDial
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="combustivel_inicial"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                        <Fuel className="h-3.5 w-3.5" />
-                        Comb. Inicial
-                      </FormLabel>
-                      <Select
-                        value={field.value == null ? SENTINEL_NONE : String(field.value)}
-                        onValueChange={(v) =>
-                          field.onChange(v === SENTINEL_NONE ? null : Number(v))
-                        }
-                      >
-                        <FormControl>
-                          <SelectTrigger className="bg-background h-9">
-                            <SelectValue placeholder="—" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value={SENTINEL_NONE}>— Não registado —</SelectItem>
-                          {COMBUSTIVEL_OPTIONS.map((o) => (
-                            <SelectItem key={o.value} value={String(o.value)}>
-                              {o.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="combustivel_final"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                        <Fuel className="h-3.5 w-3.5" />
-                        Comb. Final
-                      </FormLabel>
-                      <Select
-                        value={field.value == null ? SENTINEL_NONE : String(field.value)}
-                        onValueChange={(v) =>
-                          field.onChange(v === SENTINEL_NONE ? null : Number(v))
-                        }
-                      >
-                        <FormControl>
-                          <SelectTrigger className="bg-background h-9">
-                            <SelectValue placeholder="—" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value={SENTINEL_NONE}>— Não registado —</SelectItem>
-                          {COMBUSTIVEL_OPTIONS.map((o) => (
-                            <SelectItem key={o.value} value={String(o.value)}>
-                              {o.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
+              <NivelEnergiaFields form={form} tipoCombustivel={selectedViatura?.combustivel} />
 
               {/* ── Descrição ── */}
               <FormField
