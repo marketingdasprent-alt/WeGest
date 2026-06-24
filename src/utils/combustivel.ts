@@ -4,22 +4,27 @@ export const GPL_OPTS = ['Vazio', '1/4', '1/2', '3/4', 'Cheio'] as const;
 
 function norm(tipoCombustivel: string | null | undefined): string {
   // lowercase + remover acentos: o catálogo viatura_combustiveis guarda nomes
-  // de exibição como "Elétrico"/"Híbrido" — o matching tem de os reconhecer.
+  // de exibição como "Elétrico" / "Híbrido/Gasolina".
   return (tipoCombustivel ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
-/** Combustão (ou tipo desconhecido) usa nível de combustível. */
+// Matching por SUBSTRING (não igualdade): os nomes do catálogo são descritivos,
+// ex.: "Híbrido Plug-in", "Híbrido/Diesel", "Bi-Fuel - Gasolina/GPL".
+
+/** Tem motor de combustão (gasolina/diesel/híbrido), ou tipo desconhecido. */
 export function precisaCombustivel(tipoCombustivel: string | null | undefined): boolean {
   const tc = norm(tipoCombustivel);
-  return !tc || ['gasolina', 'diesel', 'hibrido', 'gasolina_gpl', 'diesel_gpl'].includes(tc);
+  if (!tc) return true;
+  return tc.includes('gasolina') || tc.includes('diesel') || tc.includes('hibrid');
 }
 
-/** Elétrico/híbrido têm bateria. */
+/** Tem bateria (elétrico ou híbrido). */
 export function precisaEletrico(tipoCombustivel: string | null | undefined): boolean {
-  return ['eletrico', 'hibrido'].includes(norm(tipoCombustivel));
+  const tc = norm(tipoCombustivel);
+  return tc.includes('eletric') || tc.includes('hibrid');
 }
 
-/** GPL/bi-fuel têm depósito de GPL. */
+/** Tem depósito de GPL (GPL ou bi-fuel). */
 export function precisaGpl(tipoCombustivel: string | null | undefined): boolean {
-  return ['gpl', 'gasolina_gpl', 'diesel_gpl'].includes(norm(tipoCombustivel));
+  return norm(tipoCombustivel).includes('gpl');
 }

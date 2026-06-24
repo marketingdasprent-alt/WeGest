@@ -62,3 +62,27 @@ describe('insensível a acentos e maiúsculas (nomes do catálogo)', () => {
     expect(precisaCombustivel('Diesel')).toBe(true);
   });
 });
+
+// Valores REAIS do catálogo viatura_combustiveis (nomes descritivos) — exigem
+// matching por substring, não por igualdade exata.
+describe('valores reais do catálogo', () => {
+  it('Elétrico → só bateria', () => {
+    expect(precisaEletrico('Elétrico')).toBe(true);
+    expect(precisaCombustivel('Elétrico')).toBe(false);
+    expect(precisaGpl('Elétrico')).toBe(false);
+  });
+  it('Híbrido Plug-in → combustível + bateria', () => {
+    expect(precisaCombustivel('Híbrido Plug-in')).toBe(true);
+    expect(precisaEletrico('Híbrido Plug-in')).toBe(true);
+  });
+  it('Híbrido/Diesel e Híbrido/Gasolina → combustível + bateria', () => {
+    expect(precisaCombustivel('Híbrido/Diesel')).toBe(true);
+    expect(precisaEletrico('Híbrido/Diesel')).toBe(true);
+    expect(precisaCombustivel('Híbrido/Gasolina')).toBe(true);
+    expect(precisaEletrico('Híbrido/Gasolina')).toBe(true);
+  });
+  it('Bi-Fuel - Gasolina/GPL → combustível + GPL', () => {
+    expect(precisaCombustivel('Bi-Fuel - Gasolina/GPL')).toBe(true);
+    expect(precisaGpl('Bi-Fuel - Gasolina/GPL')).toBe(true);
+  });
+});
