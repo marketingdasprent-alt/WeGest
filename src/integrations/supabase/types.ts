@@ -1628,6 +1628,7 @@ export type Database = {
           genero: Database["public"]["Enums"]["genero_enum"] | null
           iban: string | null
           id: string
+          is_emissora: boolean
           is_empresa: boolean
           licenca_tvde: string | null
           licenca_validade: string | null
@@ -1662,6 +1663,7 @@ export type Database = {
           genero?: Database["public"]["Enums"]["genero_enum"] | null
           iban?: string | null
           id?: string
+          is_emissora?: boolean
           is_empresa?: boolean
           licenca_tvde?: string | null
           licenca_validade?: string | null
@@ -1696,6 +1698,7 @@ export type Database = {
           genero?: Database["public"]["Enums"]["genero_enum"] | null
           iban?: string | null
           id?: string
+          is_emissora?: boolean
           is_empresa?: boolean
           licenca_tvde?: string | null
           licenca_validade?: string | null

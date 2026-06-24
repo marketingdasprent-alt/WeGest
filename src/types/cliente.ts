@@ -57,6 +57,8 @@ export type Cliente = {
   org_id: string;
   codigo: number;
   is_empresa: boolean;
+  /** True nas empresas EMISSORAS (do grupo) — distingue-as dos clientes que são empresas. */
+  is_emissora: boolean;
   /** Classificação: particular | empresa | condutor. Sincroniza is_empresa. */
   tipo_cliente: TipoCliente;
   nome: string; // pessoa: nome completo · empresa: denominação social

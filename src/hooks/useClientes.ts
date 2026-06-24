@@ -44,6 +44,7 @@ type ClienteInsert = Omit<
   | 'created_by'
   | 'updated_by'
   | 'org_id'
+  | 'is_emissora' // auto-gerido: default false na BD; só a aba Empresas o marca true
   | CamposEmpresa
 > &
   Partial<Pick<Cliente, CamposEmpresa>>;
