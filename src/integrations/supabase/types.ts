@@ -4146,6 +4146,7 @@ export type Database = {
           id: string
           nome: string
           org_id: string | null
+          origem: string
         }
         Insert: {
           atualizado_em?: string
@@ -4155,6 +4156,7 @@ export type Database = {
           id?: string
           nome: string
           org_id?: string | null
+          origem?: string
         }
         Update: {
           atualizado_em?: string
@@ -4164,6 +4166,7 @@ export type Database = {
           id?: string
           nome?: string
           org_id?: string | null
+          origem?: string
         }
         Relationships: [
           {
@@ -9392,6 +9395,10 @@ export type Database = {
         Returns: string
       }
       current_user_cargo: { Args: never; Returns: string }
+      ensure_lista_motoristas: {
+        Args: never
+        Returns: Database["public"]["Tables"]["marketing_listas"]["Row"]
+      }
       execute_gestor_assignment: { Args: never; Returns: number }
       fn_contrato_dias: {
         Args: { p_data_fim: string; p_data_inicio: string }
@@ -9563,6 +9570,10 @@ export type Database = {
           p_job_name: string
         }
         Returns: Json
+      }
+      marketing_lista_contagem: {
+        Args: { p_lista_id: string }
+        Returns: number
       }
       merge_motoristas: {
         Args: { p_principal: string; p_secundaria: string }
