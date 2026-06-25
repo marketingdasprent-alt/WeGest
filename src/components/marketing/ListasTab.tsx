@@ -83,8 +83,18 @@ export const ListasTab = () => {
 
       {!listasOrdenadas.length ? (
         <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Nenhuma lista criada. Crie uma lista para adicionar contactos.
+          <CardContent className="py-12 flex flex-col items-center gap-3 text-center">
+            <Users className="h-10 w-10 text-muted-foreground/40" />
+            <p className="text-muted-foreground">Ainda não há listas.</p>
+            <Button
+              onClick={() => {
+                setEditingLista(null);
+                setDialogOpen(true);
+              }}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" /> Criar primeira lista
+            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -112,6 +122,8 @@ export const ListasTab = () => {
                       <Button
                         variant="ghost"
                         size="sm"
+                        title="Eliminar lista"
+                        aria-label="Eliminar lista"
                         onClick={(e) => {
                           e.stopPropagation();
                           setDeleteId(l.id);

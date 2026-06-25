@@ -201,6 +201,8 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
                       <Button
                         variant="ghost"
                         size="sm"
+                        title="Remover contacto"
+                        aria-label="Remover contacto"
                         onClick={() => deleteMutation.mutate(c.id)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
