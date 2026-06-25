@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/table';
 import { Plus, Trash2, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { toast } from 'sonner';
+import { useMotoristasAudiencia } from '@/hooks/useMotoristasAudiencia';
 
 interface Props {
   open: boolean;
@@ -37,6 +38,8 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
     }
   };
 
+  const isSistema = lista.origem === 'motoristas_ativos';
+
   const { data: contactos, isLoading } = useQuery({
     queryKey: ['marketing-contactos', lista.id],
     queryFn: async () => {
@@ -48,17 +51,24 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
       if (error) throw error;
       return data;
     },
-    enabled: open,
+    enabled: open && !isSistema,
   });
 
+  const { data: membrosSistema, isLoading: loadingSistema } = useMotoristasAudiencia(
+    open && isSistema
+  );
+
+  const linhas = isSistema ? membrosSistema : contactos;
+  const carregando = isSistema ? loadingSistema : isLoading;
+
   const sortedContactos = useMemo(() => {
-    if (!contactos || !sortField) return contactos;
-    return [...contactos].sort((a, b) => {
+    if (!linhas || !sortField) return linhas;
+    return [...linhas].sort((a, b) => {
       const valA = (a[sortField] || '').toLowerCase();
       const valB = (b[sortField] || '').toLowerCase();
       return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
     });
-  }, [contactos, sortField, sortDirection]);
+  }, [linhas, sortField, sortDirection]);
 
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -99,38 +109,40 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
           <DialogTitle>Contactos - {lista.nome}</DialogTitle>
         </DialogHeader>
 
-        <div className="flex gap-2 items-end">
-          <div className="flex-1">
-            <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome" />
+        {!isSistema && (
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome" />
+            </div>
+            <div className="flex-1">
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+              />
+            </div>
+            <Button
+              onClick={() => addMutation.mutate()}
+              disabled={!nome || !email || addMutation.isPending}
+              size="sm"
+              className="gap-1"
+            >
+              {addMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Adicionar
+            </Button>
           </div>
-          <div className="flex-1">
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
-            />
-          </div>
-          <Button
-            onClick={() => addMutation.mutate()}
-            disabled={!nome || !email || addMutation.isPending}
-            size="sm"
-            className="gap-1"
-          >
-            {addMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
-            Adicionar
-          </Button>
-        </div>
+        )}
 
-        {isLoading ? (
+        {carregando ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-        ) : !contactos?.length ? (
+        ) : !linhas?.length ? (
           <p className="text-center text-muted-foreground py-8">Nenhum contacto nesta lista.</p>
         ) : (
           <Table>
@@ -174,7 +186,7 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
                     )}
                   </Button>
                 </TableHead>
-                <TableHead className="w-10" />
+                {!isSistema && <TableHead className="w-10" />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -182,11 +194,17 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
                 <TableRow key={c.id}>
                   <TableCell>{c.nome}</TableCell>
                   <TableCell>{c.email}</TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="sm" onClick={() => deleteMutation.mutate(c.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </TableCell>
+                  {!isSistema && (
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteMutation.mutate(c.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -194,7 +212,7 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
         )}
 
         <p className="text-xs text-muted-foreground">
-          {contactos?.length || 0} contacto(s) nesta lista
+          {linhas?.length || 0} {isSistema ? 'motorista(s) ativo(s)' : 'contacto(s) nesta lista'}
         </p>
       </DialogContent>
     </Dialog>
