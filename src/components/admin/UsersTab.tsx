@@ -276,8 +276,10 @@ export const UsersTab = () => {
       }
 
       toast({
-        title: 'Utilizador criado',
-        description: 'O utilizador foi criado com sucesso.',
+        title: data?.existing ? 'Utilizador adicionado' : 'Utilizador criado',
+        description: data?.existing
+          ? 'O utilizador já tinha conta e foi adicionado a esta organização.'
+          : 'O utilizador foi criado com sucesso.',
       });
 
       setIsCreateDialogOpen(false);

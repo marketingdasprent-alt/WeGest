@@ -10,6 +10,7 @@ afterEach(() => {
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: vi.fn(),
+    rpc: vi.fn(),
     auth: {
       getSession: vi.fn(),
     },

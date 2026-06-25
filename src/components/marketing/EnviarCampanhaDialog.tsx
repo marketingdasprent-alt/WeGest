@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useMarketingListaContagem } from '@/hooks/useMarketingListaContagem';
+import { useMarketingListas } from '@/hooks/useMarketingListas';
 import {
   Dialog,
   DialogContent,
@@ -40,21 +42,11 @@ export const EnviarCampanhaDialog = ({
   useEffect(() => {
     if (campanha) {
       setAssinaturaId(campanha.assinatura_id || '');
+      setListaId(campanha.lista_id || '');
     }
   }, [campanha]);
 
-  const { data: listas } = useQuery({
-    queryKey: ['marketing-listas-envio'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('marketing_listas')
-        .select('id, nome')
-        .order('nome');
-      if (error) throw error;
-      return data;
-    },
-    enabled: open,
-  });
+  const { data: listas } = useMarketingListas(open);
 
   const { data: assinaturas } = useQuery({
     queryKey: ['marketing-assinaturas-envio'],
@@ -69,18 +61,7 @@ export const EnviarCampanhaDialog = ({
     enabled: open,
   });
 
-  const { data: totalContactos } = useQuery({
-    queryKey: ['marketing-contactos-count', listaId],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('marketing_contactos')
-        .select('*', { count: 'exact', head: true })
-        .eq('lista_id', listaId);
-      if (error) throw error;
-      return count ?? 0;
-    },
-    enabled: !!listaId,
-  });
+  const { data: totalContactos } = useMarketingListaContagem(listaId || undefined);
 
   const assinaturaSelecionada = assinaturas?.find((a) => a.id === assinaturaId);
 
@@ -90,7 +71,7 @@ export const EnviarCampanhaDialog = ({
         <DialogHeader>
           <DialogTitle>Enviar Campanha</DialogTitle>
           <DialogDescription>
-            Selecione a lista de transmissão para enviar "<strong>{campanha?.nome}</strong>"
+            Confirme a lista de transmissão para enviar "<strong>{campanha?.nome}</strong>"
           </DialogDescription>
         </DialogHeader>
 
@@ -115,7 +96,7 @@ export const EnviarCampanhaDialog = ({
             <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-md p-3">
               <Users className="h-4 w-4" />
               <span>
-                {totalContactos} contacto{totalContactos !== 1 ? 's' : ''} nesta lista
+                {totalContactos} destinatário{totalContactos !== 1 ? 's' : ''}
               </span>
             </div>
           )}

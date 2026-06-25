@@ -63,42 +63,46 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setState((prev) => ({ ...prev, loading: true }));
 
     try {
-      let { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('is_admin, cargo_id, cargo, tipo_utilizador')
-        .eq('id', user.id)
+      // Papel (cargo/admin) vem do membership da ORG ATIVA — suporta multi-org.
+      const { data: membership, error: membershipError } = await supabase
+        .from('user_organizacoes')
+        .select('is_admin, cargo_id, cargos(nome)')
+        .eq('user_id', user.id)
         .eq('org_id', orgId)
         .single();
 
-      // Fallback se tipo_utilizador não existir na tabela
-      if (profileError && profileError.message?.includes('tipo_utilizador')) {
-        console.warn(
-          '[PermissionsContext] Coluna tipo_utilizador não encontrada, tentando fallback...'
-        );
-        const { data: fallbackProfile, error: fallbackError } = await supabase
-          .from('profiles')
-          .select('is_admin, cargo_id, cargo')
-          .eq('id', user.id)
-          .eq('org_id', orgId)
-          .single();
-
-        // A BD legada não tem a coluna tipo_utilizador — o cast mantém o tipo.
-        profile = fallbackProfile as typeof profile;
-        profileError = fallbackError;
-      }
-
-      if (profileError || currentFetchId !== fetchIdRef.current) {
-        if (profileError && currentFetchId === fetchIdRef.current) {
-          console.error('[PermissionsContext] Erro ao carregar perfil:', profileError);
+      if (membershipError || currentFetchId !== fetchIdRef.current) {
+        if (membershipError && currentFetchId === fetchIdRef.current) {
+          console.error('[PermissionsContext] Sem membership na org ativa:', membershipError);
           lastFetchedUserIdRef.current = user.id;
           setState({ ...DEFAULT_STATE, loading: false, initialized: true });
         }
         return;
       }
 
-      const tipoUtilizador: 'motorista' | 'colaborador' =
-        (profile?.tipo_utilizador as 'motorista' | 'colaborador') ||
-        (profile?.cargo_id === CARGO_MOTORISTA_ID ? 'motorista' : 'colaborador');
+      // tipo_utilizador é identidade global (motorista é single-org).
+      let tipoUtilizador: 'motorista' | 'colaborador' =
+        membership.cargo_id === CARGO_MOTORISTA_ID ? 'motorista' : 'colaborador';
+      try {
+        const { data: tp } = await supabase
+          .from('profiles')
+          .select('tipo_utilizador')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (tp?.tipo_utilizador) {
+          tipoUtilizador = tp.tipo_utilizador as 'motorista' | 'colaborador';
+        }
+      } catch {
+        // BD legada sem tipo_utilizador — mantém o derivado do cargo.
+      }
+      if (currentFetchId !== fetchIdRef.current) return;
+
+      const profile = {
+        is_admin: membership.is_admin as boolean,
+        cargo_id: (membership.cargo_id as string | null) ?? null,
+        cargo: (membership as { cargos?: { nome?: string } | null }).cargos?.nome ?? null,
+        tipo_utilizador: tipoUtilizador,
+      };
 
       // Admins têm tudo
       if (profile?.is_admin) {
