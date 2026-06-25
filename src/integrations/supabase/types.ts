@@ -8110,22 +8110,28 @@ export type Database = {
       }
       user_organizacoes: {
         Row: {
+          cargo_id: string | null
           created_at: string
           id: string
+          is_admin: boolean
           org_id: string
           role: string
           user_id: string
         }
         Insert: {
+          cargo_id?: string | null
           created_at?: string
           id?: string
+          is_admin?: boolean
           org_id: string
           role?: string
           user_id: string
         }
         Update: {
+          cargo_id?: string | null
           created_at?: string
           id?: string
+          is_admin?: boolean
           org_id?: string
           role?: string
           user_id?: string

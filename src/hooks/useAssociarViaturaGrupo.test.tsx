@@ -20,7 +20,10 @@ describe('useAssociarViaturaGrupo', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('associa: update grupo_id e invalida as queries', async () => {
-    const chain: any = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ error: null }) };
+    const chain: any = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    };
     (supabase.from as any).mockReturnValue(chain);
     const { wrapper, spy } = makeWrapper();
 
@@ -37,7 +40,10 @@ describe('useAssociarViaturaGrupo', () => {
   });
 
   it('remove: update grupo_id = null', async () => {
-    const chain: any = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ error: null }) };
+    const chain: any = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    };
     (supabase.from as any).mockReturnValue(chain);
     const { wrapper } = makeWrapper();
 

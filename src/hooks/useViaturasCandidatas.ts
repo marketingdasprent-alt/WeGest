@@ -24,7 +24,9 @@ export function useViaturasCandidatas(grupoId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('viaturas')
-        .select('id, matricula, marca, modelo, ano, status, grupo_id, is_vendida, renting_grupos(nome)')
+        .select(
+          'id, matricula, marca, modelo, ano, status, grupo_id, is_vendida, renting_grupos(nome)'
+        )
         .eq('is_vendida', false)
         .order('matricula');
       if (error) throw error;

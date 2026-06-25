@@ -12,9 +12,39 @@ function createWrapper() {
 }
 
 const rows = [
-  { id: 'v1', matricula: 'AA-00-AA', marca: 'Volvo', modelo: 'XC40', ano: 2024, status: 'disponivel', grupo_id: null, is_vendida: false, renting_grupos: null },
-  { id: 'v2', matricula: 'BB-11-BB', marca: 'Tesla', modelo: 'Model 3', ano: 2023, status: 'disponivel', grupo_id: 'outro', is_vendida: false, renting_grupos: { nome: 'Económico' } },
-  { id: 'v3', matricula: 'CC-22-CC', marca: 'BMW', modelo: 'X1', ano: 2022, status: 'disponivel', grupo_id: 'g1', is_vendida: false, renting_grupos: { nome: 'Este' } },
+  {
+    id: 'v1',
+    matricula: 'AA-00-AA',
+    marca: 'Volvo',
+    modelo: 'XC40',
+    ano: 2024,
+    status: 'disponivel',
+    grupo_id: null,
+    is_vendida: false,
+    renting_grupos: null,
+  },
+  {
+    id: 'v2',
+    matricula: 'BB-11-BB',
+    marca: 'Tesla',
+    modelo: 'Model 3',
+    ano: 2023,
+    status: 'disponivel',
+    grupo_id: 'outro',
+    is_vendida: false,
+    renting_grupos: { nome: 'Económico' },
+  },
+  {
+    id: 'v3',
+    matricula: 'CC-22-CC',
+    marca: 'BMW',
+    modelo: 'X1',
+    ano: 2022,
+    status: 'disponivel',
+    grupo_id: 'g1',
+    is_vendida: false,
+    renting_grupos: { nome: 'Este' },
+  },
 ];
 
 describe('useViaturasCandidatas', () => {
@@ -40,7 +70,9 @@ describe('useViaturasCandidatas', () => {
   });
 
   it('não executa sem grupoId', () => {
-    const { result } = renderHook(() => useViaturasCandidatas(undefined), { wrapper: createWrapper() });
+    const { result } = renderHook(() => useViaturasCandidatas(undefined), {
+      wrapper: createWrapper(),
+    });
     expect(result.current.fetchStatus).toBe('idle');
   });
 });

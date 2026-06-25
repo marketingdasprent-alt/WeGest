@@ -208,7 +208,7 @@ serve(async (req) => {
     const { error: userOrgError } = await supabase
       .from("user_organizacoes")
       .upsert(
-        { user_id: userId, org_id: org.id, role: "owner" },
+        { user_id: userId, org_id: org.id, role: "owner", cargo_id: cargo.id, is_admin: true },
         { onConflict: "user_id,org_id" }
       );
 
@@ -249,10 +249,8 @@ serve(async (req) => {
       const permissoes = recursos.map((r) => ({
         cargo_id: cargo.id,
         recurso_id: r.id,
-        pode_ver: true,
-        pode_criar: true,
+        tem_acesso: true,
         pode_editar: true,
-        pode_deletar: true,
       }));
 
       const { error: permissoesError } = await supabase

@@ -165,7 +165,11 @@ export const CampanhasTab = () => {
                     <p className="flex items-center gap-1.5">
                       <Users className="h-3.5 w-3.5 shrink-0" />
                       Lista:{' '}
-                      <span className={c.marketing_listas?.nome ? 'text-foreground font-medium' : 'italic'}>
+                      <span
+                        className={
+                          c.marketing_listas?.nome ? 'text-foreground font-medium' : 'italic'
+                        }
+                      >
                         {c.marketing_listas?.nome || 'por escolher'}
                       </span>
                     </p>
