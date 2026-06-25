@@ -36,7 +36,7 @@ export function AdicionarViaturaGrupo({ grupoId }: Props) {
 
   const escolher = (v: ViaturaCandidata) => {
     setOpen(false);
-    if (v.grupo_nome) {
+    if (v.grupo_id) {
       setMover(v); // já tem grupo → confirmar antes de mover
     } else {
       associar.mutate({ viaturaId: v.id, novoGrupoId: grupoId });
