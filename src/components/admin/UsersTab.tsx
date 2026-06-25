@@ -113,38 +113,43 @@ export const UsersTab = () => {
 
   const fetchProfiles = async () => {
     try {
-      // Consulta via user_organizacoes para mostrar todos os membros da org ativa,
-      // independentemente de profiles.org_id (suporte multi-org).
-      const { data, error } = await supabase
+      // 1. Membros da org ativa (user_organizacoes é scoped por RLS)
+      const { data: memberships, error: membershipError } = await supabase
         .from('user_organizacoes')
-        .select(
-          `
-          cargo_id,
-          is_admin,
-          profiles!inner (
-            id,
-            email,
-            nome,
-            created_at
-          ),
-          cargos:cargo_id (
-            nome
-          )
-        `
-        )
-        .neq('cargo_id', 'a0000000-0000-0000-0000-000000000001')
-        .order('created_at', { ascending: false, referencedTable: 'profiles' });
+        .select('user_id, cargo_id, is_admin')
+        .neq('cargo_id', 'a0000000-0000-0000-0000-000000000001');
 
-      if (error) throw error;
+      if (membershipError) throw membershipError;
 
-      const mapped = (data || []).map((row: any) => ({
-        id: row.profiles.id,
-        email: row.profiles.email,
-        nome: row.profiles.nome,
-        created_at: row.profiles.created_at,
-        cargo_id: row.cargo_id,
-        is_admin: row.is_admin,
+      if (!memberships || memberships.length === 0) {
+        setProfiles([]);
+        return;
+      }
+
+      const userIds = memberships.map((m) => m.user_id);
+
+      // 2. Profiles desses utilizadores (RLS alargada por migration 140006)
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email, nome, created_at')
+        .in('id', userIds)
+        .order('created_at', { ascending: false });
+
+      if (profilesError) throw profilesError;
+
+      const membershipMap = Object.fromEntries(
+        memberships.map((m) => [m.user_id, m])
+      );
+
+      const mapped = (profilesData || []).map((p) => ({
+        id: p.id,
+        email: p.email,
+        nome: p.nome,
+        created_at: p.created_at,
+        cargo_id: membershipMap[p.id]?.cargo_id ?? null,
+        is_admin: membershipMap[p.id]?.is_admin ?? false,
       }));
+
       setProfiles(mapped);
     } catch (error: any) {
       toast({
