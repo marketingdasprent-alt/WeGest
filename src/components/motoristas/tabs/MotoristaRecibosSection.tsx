@@ -312,15 +312,19 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         .lte('data_movimento', weekEndStr)
         .eq('status', 'pendente');
 
-      // 5b. Fetch Fixed Vehicle Rent (SUM all active to match Admin robustly)
+      // 5b. Aluguer semanal = preco_semana da tarifa do grupo da viatura ativa
       const { data: viaturaContratos } = await supabase
         .from('motorista_viaturas')
-        .select('viaturas(valor_aluguer)')
+        .select(
+          'viaturas(grupo_id, renting_grupos(renting_tarifas(preco_semana, ativa)))'
+        )
         .eq('motorista_id', motoristaId)
         .eq('status', 'ativo');
 
       const fixedRent = (viaturaContratos || []).reduce((acc, curr) => {
-        return acc + (Number((curr.viaturas as any)?.valor_aluguer) || 0);
+        const tarifas = (curr.viaturas as any)?.renting_grupos?.renting_tarifas || [];
+        const tarifa = tarifas.find((t: any) => t.ativa);
+        return acc + (Number(tarifa?.preco_semana) || 0);
       }, 0);
 
       // 5c. Fetch Additional Costs (motorista_custos_adicionais)
