@@ -41,6 +41,7 @@ export const EnviarCampanhaDialog = ({
   useEffect(() => {
     if (campanha) {
       setAssinaturaId(campanha.assinatura_id || '');
+      setListaId(campanha.lista_id || '');
     }
   }, [campanha]);
 

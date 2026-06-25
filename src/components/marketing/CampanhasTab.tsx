@@ -152,6 +152,12 @@ export const CampanhasTab = () => {
                       Assunto:{' '}
                       <span className="text-foreground">{c.assunto || '(sem assunto)'}</span>
                     </p>
+                    <p>
+                      Lista:{' '}
+                      <span className="text-foreground">
+                        {c.marketing_listas?.nome || '(por escolher)'}
+                      </span>
+                    </p>
 
                     {c.enviado_em && (
                       <p>
