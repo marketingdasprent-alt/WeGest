@@ -24,6 +24,7 @@ import {
   Building,
   Car,
   IdCard,
+  MessageSquare,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -87,6 +88,7 @@ interface Candidatura {
   data_submissao: string | null;
   data_decisao: string | null;
   motivo_rejeicao: string | null;
+  observacoes?: string | null;
   created_at: string;
 }
 
@@ -594,6 +596,21 @@ const MotoristaCandidaturas: React.FC = () => {
                         </div>
                       </div>
                     </div>
+
+                    {selectedCandidatura.observacoes && (
+                      <>
+                        <Separator />
+                        <div>
+                          <h4 className="font-semibold mb-3 flex items-center gap-2">
+                            <MessageSquare className="h-4 w-4" />
+                            Observações do candidato
+                          </h4>
+                          <p className="whitespace-pre-wrap rounded-lg bg-muted/30 p-4 text-sm">
+                            {selectedCandidatura.observacoes}
+                          </p>
+                        </div>
+                      </>
+                    )}
 
                     <Separator />
 

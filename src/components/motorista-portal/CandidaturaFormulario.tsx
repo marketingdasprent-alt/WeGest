@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -99,6 +100,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
   const [morada, setMorada] = useState(candidatura?.morada || '');
   const [codigoPostal, setCodigoPostal] = useState(candidatura?.codigo_postal || '');
   const [cidade, setCidade] = useState(candidatura?.cidade || '');
+  const [observacoes, setObservacoes] = useState(candidatura?.observacoes || '');
 
   // Documento de identificação
   const [documentoTipo, setDocumentoTipo] = useState(candidatura?.documento_tipo || '');
@@ -384,6 +386,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
     registo_criminal_url: registoCriminalUrl || null,
     comprovativo_morada_url: comprovativoMoradaUrl || null,
     comprovativo_iban_url: comprovativoIbanUrl || null,
+    observacoes: observacoes || null,
   });
 
   // Traduz qualquer erro do sistema para uma mensagem clara para o motorista.
@@ -1199,6 +1202,24 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
               </p>
               {renderError('comprovativoIbanUrl')}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Observações (opcional) — visível para a equipa na análise */}
+        <Card>
+          <CardContent className="space-y-2 pt-6">
+            <Label htmlFor="observacoes">Observações (opcional)</Label>
+            <Textarea
+              id="observacoes"
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              placeholder="Algo que queiras dizer-nos? (ex.: disponibilidade, experiência, se tens viatura própria...)"
+              className="min-h-[100px] resize-none"
+              maxLength={1000}
+            />
+            <p className="text-xs text-muted-foreground">
+              Esta nota é vista pela equipa ao analisar a tua candidatura.
+            </p>
           </CardContent>
         </Card>
 

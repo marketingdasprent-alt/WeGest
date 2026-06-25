@@ -68,6 +68,8 @@ import {
 
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn, matchesSearch } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 interface MotoristaResumo {
   /** id único estável por linha — usar SEMPRE para selectedIds, react keys, filtros.
@@ -593,6 +595,14 @@ export function ContasResumoTab() {
         }
       });
 
+      // Index id → dados (O(1)) — evita Object.values(nomeToMotoristaMap).find(
+      // m=>m.id===X) repetido nos loops abaixo. Primeira ocorrência por id, que
+      // é a mesma semântica do .find() sobre Object.values (dados idênticos por id).
+      const motoristaById = new Map<string, { id: string; nome: string; recibo_verde: boolean }>();
+      for (const v of Object.values(nomeToMotoristaMap)) {
+        if (!motoristaById.has(v.id)) motoristaById.set(v.id, v);
+      }
+
       // 3. Buscar viagens Bolt
       const boltQuery = supabase
         .from('bolt_viagens')
@@ -1023,9 +1033,7 @@ export function ContasResumoTab() {
 
         if (matchedMotoristaId) {
           // Use name from motoristas_ativos if available
-          const motData = Object.values(nomeToMotoristaMap).find(
-            (m) => m.id === matchedMotoristaId
-          );
+          const motData = motoristaById.get(matchedMotoristaId);
           if (motData) {
             matchedName = motData.nome;
             reciboVerdeMap[motData.id] = motData.recibo_verde;
@@ -1065,7 +1073,7 @@ export function ContasResumoTab() {
       // 5b-bis. Ensure drivers with ONLY fuel/reparacoes are added to agrupado
       for (const [motoristaId, totalFuel] of Object.entries(combustivelByMotorista)) {
         if (!agrupado[motoristaId] && totalFuel > 0) {
-          const motData = Object.values(nomeToMotoristaMap).find((m) => m.id === motoristaId);
+          const motData = motoristaById.get(motoristaId);
           agrupado[motoristaId] = {
             motorista_id: motoristaId,
             driver_name: motData?.nome || 'Desconhecido',
@@ -1080,7 +1088,7 @@ export function ContasResumoTab() {
 
       for (const [motoristaId, totalRep] of Object.entries(reparacoesByMotorista)) {
         if (!agrupado[motoristaId] && totalRep > 0) {
-          const motData = Object.values(nomeToMotoristaMap).find((m) => m.id === motoristaId);
+          const motData = motoristaById.get(motoristaId);
           agrupado[motoristaId] = {
             motorista_id: motoristaId,
             driver_name: motData?.nome || 'Desconhecido',
@@ -1095,7 +1103,7 @@ export function ContasResumoTab() {
 
       for (const [motoristaId, totalAdhoc] of Object.entries(adhocByMotorista)) {
         if (!agrupado[motoristaId] && totalAdhoc > 0) {
-          const motData = Object.values(nomeToMotoristaMap).find((m) => m.id === motoristaId);
+          const motData = motoristaById.get(motoristaId);
           agrupado[motoristaId] = {
             motorista_id: motoristaId,
             driver_name: motData?.nome || 'Desconhecido',
@@ -1292,6 +1300,14 @@ export function ContasResumoTab() {
     sortField,
     sortDir,
   ]);
+
+  // Paginação (render): só corta as linhas mostradas — totais, select-all e
+  // export continuam a usar filteredResumos completo.
+  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
+    filteredResumos,
+    50,
+    `${searchTerm}|${filterRecibo}|${filterSaldo}|${filterGestor}|${weekStart?.getTime?.() ?? ''}`
+  );
 
   // Totais gerais
   const totais = useMemo(() => {
@@ -1832,7 +1848,7 @@ export function ContasResumoTab() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredResumos.map((resumo, idx) => {
+                  pageItems.map((resumo, idx) => {
                     const rowId = resumo._uid || `row-${idx}`;
                     return (
                       <TableRow
@@ -1950,7 +1966,7 @@ export function ContasResumoTab() {
             </CardContent>
           </Card>
         ) : (
-          filteredResumos.map((resumo, idx) => {
+          pageItems.map((resumo, idx) => {
             const rowId = resumo._uid || `row-${idx}`;
             return (
               <Card
@@ -2064,6 +2080,18 @@ export function ContasResumoTab() {
           })
         )}
       </div>
+
+      {total > 0 && (
+        <TablePagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          start={start}
+          end={end}
+          onPageChange={setPage}
+          noun={['motorista', 'motoristas']}
+        />
+      )}
 
       {/* Floating Bulk Actions Bar */}
       {selectedIds.size > 0 && (

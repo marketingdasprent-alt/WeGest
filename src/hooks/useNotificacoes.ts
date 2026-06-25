@@ -27,9 +27,16 @@ const db = supabase as unknown as {
 /**
  * Subscreve as notificações ativas do utilizador (filtradas por RLS ao seu cargo/org).
  * `enabled=false` desativa a ligação (ex.: utilizador sem cargo relevante).
+ *
+ * Estratégia: tempo-real (instantâneo quando funciona) + rede de segurança por
+ * polling/foco da janela, para o aviso aparecer mesmo que o realtime falhe.
  */
 export const useNotificacoes = (enabled: boolean) => {
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+
+  // IDs já conhecidos — para tocar som só em avisos novos, não nos já existentes.
+  const conhecidasRef = useRef<Set<string>>(new Set());
+  const primeiroFetchRef = useRef(true);
 
   const fetchAtivas = useCallback(async () => {
     const { data, error } = await db
@@ -41,17 +48,31 @@ export const useNotificacoes = (enabled: boolean) => {
       console.error('Erro ao carregar notificações:', error);
       return;
     }
-    setNotificacoes((data as Notificacao[]) || []);
-  }, []);
+    const lista = (data as Notificacao[]) || [];
 
-  // Evitar tocar som para notificações que já existiam no primeiro carregamento.
-  const conhecidasRef = useRef<Set<string>>(new Set());
+    // Som para avisos urgentes novos detetados via polling/foco
+    // (exceto no primeiro carregamento, para não tocar ao abrir a app).
+    if (!primeiroFetchRef.current) {
+      const haNovoUrgente = lista.some(
+        (n) => n.severidade === 'urgente' && !conhecidasRef.current.has(n.id)
+      );
+      if (haNovoUrgente) playNotificationSound(true);
+    }
+    lista.forEach((n) => conhecidasRef.current.add(n.id));
+    primeiroFetchRef.current = false;
+
+    setNotificacoes(lista);
+  }, []);
 
   useEffect(() => {
     if (!enabled) {
       setNotificacoes([]);
       return;
     }
+
+    // Reinicia o estado de deteção a cada (re)ativação.
+    primeiroFetchRef.current = true;
+    conhecidasRef.current = new Set();
 
     fetchAtivas();
 
@@ -88,8 +109,16 @@ export const useNotificacoes = (enabled: boolean) => {
       )
       .subscribe();
 
+    // Rede de segurança: se o tempo-real falhar/cair, recarrega periodicamente
+    // e ao voltar o foco à janela — o aviso aparece sem refresh manual.
+    const interval = window.setInterval(fetchAtivas, 20000);
+    const onFocus = () => fetchAtivas();
+    window.addEventListener('focus', onFocus);
+
     return () => {
       supabase.removeChannel(channel);
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
     };
   }, [enabled, fetchAtivas]);
 

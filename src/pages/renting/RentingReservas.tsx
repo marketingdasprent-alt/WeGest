@@ -11,6 +11,8 @@ import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { useReservas } from '@/hooks/useReservas';
 import { useToast } from '@/hooks/use-toast';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 import {
   ReservasTabela,
@@ -115,6 +117,12 @@ const RentingReservas = () => {
 
     return result;
   }, [reservas, matriculaSearch, filtros, sortColumn, sortDir, getEstacaoNome]);
+
+  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
+    filtered,
+    50,
+    `${matriculaSearch}|${JSON.stringify(filtros)}`
+  );
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
@@ -228,7 +236,7 @@ const RentingReservas = () => {
           )}
 
           <ReservasTabela
-            reservas={filtered}
+            reservas={pageItems}
             isLoading={isLoading}
             totalSemFiltros={reservas.length}
             sortColumn={sortColumn}
@@ -238,10 +246,15 @@ const RentingReservas = () => {
             getEstacaoNome={getEstacaoNome}
           />
 
-          <div className="px-4 py-3 border-t border-border/50 text-xs text-muted-foreground">
-            {filtered.length} reserva{filtered.length === 1 ? '' : 's'} (de {reservas.length}{' '}
-            carregada{reservas.length === 1 ? '' : 's'})
-          </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            start={start}
+            end={end}
+            onPageChange={setPage}
+            noun={['reserva', 'reservas']}
+          />
         </CardContent>
       </Card>
     </div>

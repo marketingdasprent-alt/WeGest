@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,7 +14,8 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import MarketingEmailEditor from './MarketingEmailEditor';
+// Editor TipTap (~350KB) carregado só quando o diálogo abre (lazy).
+const MarketingEmailEditor = lazy(() => import('./MarketingEmailEditor'));
 
 interface Props {
   open: boolean;
@@ -119,7 +120,15 @@ export const NovaCampanhaDialog = ({ open, onOpenChange, campanha }: Props) => {
 
           <div className="space-y-2">
             <Label>Conteúdo do email</Label>
-            <MarketingEmailEditor content={conteudoHtml} onChange={setConteudoHtml} />
+            <Suspense
+              fallback={
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  A carregar editor…
+                </div>
+              }
+            >
+              <MarketingEmailEditor content={conteudoHtml} onChange={setConteudoHtml} />
+            </Suspense>
           </div>
 
           <div className="space-y-2">

@@ -12,7 +12,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-export type OcupacaoFonte = 'reserva' | 'contrato' | 'movimento' | 'reparacao';
+export type OcupacaoFonte = 'reserva' | 'contrato' | 'movimento' | 'reparacao' | 'tvde';
 
 /**
  * Consulta as fontes que ocupam uma viatura (reserva / contrato / movimento /
@@ -31,7 +31,7 @@ export async function fetchViaturasOcupacao(): Promise<Map<string, Set<string>>>
     set.add(fonte);
   };
 
-  const [reservas, contratos, movimentos, reparacoes] = await Promise.all([
+  const [reservas, contratos, movimentos, reparacoes, tvde] = await Promise.all([
     // Reservas: excluir as soft-deleted (deleted_at) — uma reserva eliminada
     // não deve ocupar a viatura, tal como já não aparece na lista de Reservas.
     supabase
@@ -59,6 +59,16 @@ export async function fetchViaturasOcupacao(): Promise<Map<string, Set<string>>>
       .not('viatura_id', 'is', null)
       .not('data_entrada', 'is', null)
       .is('data_saida', null),
+    // Atribuições TVDE/slot (motorista↔viatura) ATIVAS: a viatura está com um
+    // motorista, logo está ocupada. Critério usado em todo o código:
+    // status='ativo' E data_fim IS NULL. Sem isto, viaturas TVDE (a maioria da
+    // frota) apareciam como "disponíveis".
+    supabase
+      .from('motorista_viaturas')
+      .select('viatura_id')
+      .eq('status', 'ativo')
+      .is('data_fim', null)
+      .not('viatura_id', 'is', null),
   ]);
 
   (reservas.data ?? []).forEach((r: { viatura_id: string | null }) => add(r.viatura_id, 'reserva'));
@@ -71,6 +81,7 @@ export async function fetchViaturasOcupacao(): Promise<Map<string, Set<string>>>
   (reparacoes.data ?? []).forEach((r: { viatura_id: string | null }) =>
     add(r.viatura_id, 'reparacao')
   );
+  (tvde.data ?? []).forEach((r: { viatura_id: string | null }) => add(r.viatura_id, 'tvde'));
 
   return map;
 }

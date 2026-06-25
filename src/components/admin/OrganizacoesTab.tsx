@@ -76,15 +76,23 @@ export const OrganizacoesTab: React.FC = () => {
       console.error('Erro ao carregar organizações:', error);
       toast.error('Erro ao carregar organizações');
     } else {
-      const orgsWithCount = await Promise.all(
-        (data || []).map(async (org: any) => {
-          const { count } = await supabase
-            .from('user_organizacoes')
-            .select('*', { count: 'exact', head: true })
-            .eq('org_id', org.id);
-          return { ...org, _user_count: count || 0 };
-        })
-      );
+      // Contagem de utilizadores por org numa única query (evita N+1: antes
+      // era um count por organização).
+      const ids = (data || []).map((o: any) => o.id);
+      const countByOrg = new Map<string, number>();
+      if (ids.length > 0) {
+        const { data: vinculos } = await supabase
+          .from('user_organizacoes')
+          .select('org_id')
+          .in('org_id', ids);
+        for (const v of vinculos ?? []) {
+          countByOrg.set(v.org_id, (countByOrg.get(v.org_id) ?? 0) + 1);
+        }
+      }
+      const orgsWithCount = (data || []).map((org: any) => ({
+        ...org,
+        _user_count: countByOrg.get(org.id) ?? 0,
+      }));
       setOrgs(orgsWithCount);
     }
     setLoading(false);

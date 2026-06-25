@@ -12,6 +12,8 @@ import { useClientes } from '@/hooks/useClientes';
 import { useContratosRenting } from '@/hooks/useContratosRenting';
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { useToast } from '@/hooks/use-toast';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 import { ContratoSelectorReserva } from '@/components/renting/contratos/ContratoSelectorReserva';
 import {
@@ -139,6 +141,12 @@ const RentingContratos = () => {
     return result;
   }, [contratos, matriculaSearch, filtros, sortColumn, sortDir, getClienteNome]);
 
+  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
+    filtered,
+    50,
+    `${matriculaSearch}|${JSON.stringify(filtros)}`
+  );
+
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -250,7 +258,7 @@ const RentingContratos = () => {
           )}
 
           <ContratosTabela
-            contratos={filtered}
+            contratos={pageItems}
             isLoading={isLoading}
             totalSemFiltros={contratos.length}
             sortColumn={sortColumn}
@@ -261,10 +269,15 @@ const RentingContratos = () => {
             getEstacaoNome={getEstacaoNome}
           />
 
-          <div className="px-4 py-3 border-t border-border/50 text-xs text-muted-foreground">
-            {filtered.length} contrato{filtered.length === 1 ? '' : 's'} (de {contratos.length}{' '}
-            carregado{contratos.length === 1 ? '' : 's'})
-          </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            start={start}
+            end={end}
+            onPageChange={setPage}
+            noun={['contrato', 'contratos']}
+          />
         </CardContent>
       </Card>
 
