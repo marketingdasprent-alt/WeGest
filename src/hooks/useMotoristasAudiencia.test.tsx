@@ -38,5 +38,7 @@ describe('useMotoristasAudiencia', () => {
     expect(supabase.from).toHaveBeenCalledWith('motoristas_ativos');
     expect(chain.eq).toHaveBeenCalledWith('status_ativo', true);
     expect(chain.neq).toHaveBeenCalledWith('email', '');
+    expect(chain.not).toHaveBeenCalledWith('email', 'is', null);
+    expect(chain.not).toHaveBeenCalledWith('perfil_rascunho', 'is', true);
   });
 });

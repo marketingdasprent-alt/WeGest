@@ -143,7 +143,9 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : !linhas?.length ? (
-          <p className="text-center text-muted-foreground py-8">Nenhum contacto nesta lista.</p>
+          <p className="text-center text-muted-foreground py-8">
+            {isSistema ? 'Nenhum motorista ativo com email.' : 'Nenhum contacto nesta lista.'}
+          </p>
         ) : (
           <Table>
             <TableHeader>
