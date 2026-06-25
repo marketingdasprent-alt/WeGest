@@ -137,9 +137,7 @@ export const UsersTab = () => {
 
       if (profilesError) throw profilesError;
 
-      const membershipMap = Object.fromEntries(
-        memberships.map((m) => [m.user_id, m])
-      );
+      const membershipMap = Object.fromEntries(memberships.map((m) => [m.user_id, m]));
 
       const mapped = (profilesData || []).map((p) => ({
         id: p.id,
