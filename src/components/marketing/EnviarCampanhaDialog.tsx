@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useMarketingListaContagem } from '@/hooks/useMarketingListaContagem';
 import {
   Dialog,
   DialogContent,
@@ -69,18 +70,7 @@ export const EnviarCampanhaDialog = ({
     enabled: open,
   });
 
-  const { data: totalContactos } = useQuery({
-    queryKey: ['marketing-contactos-count', listaId],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('marketing_contactos')
-        .select('*', { count: 'exact', head: true })
-        .eq('lista_id', listaId);
-      if (error) throw error;
-      return count ?? 0;
-    },
-    enabled: !!listaId,
-  });
+  const { data: totalContactos } = useMarketingListaContagem(listaId || undefined);
 
   const assinaturaSelecionada = assinaturas?.find((a) => a.id === assinaturaId);
 
