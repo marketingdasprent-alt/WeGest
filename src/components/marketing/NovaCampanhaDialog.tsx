@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner';
 import { Loader2, Users } from 'lucide-react';
 import { useMarketingListaContagem } from '@/hooks/useMarketingListaContagem';
+import { useMarketingListas } from '@/hooks/useMarketingListas';
 // Editor TipTap (~350KB) carregado só quando o diálogo abre (lazy).
 const MarketingEmailEditor = lazy(() => import('./MarketingEmailEditor'));
 
@@ -45,18 +46,7 @@ export const NovaCampanhaDialog = ({ open, onOpenChange, campanha }: Props) => {
     enabled: open,
   });
 
-  const { data: listas } = useQuery({
-    queryKey: ['marketing-listas-campanha'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('marketing_listas')
-        .select('id, nome, origem')
-        .order('nome');
-      if (error) throw error;
-      return data;
-    },
-    enabled: open,
-  });
+  const { data: listas } = useMarketingListas(open);
 
   const { data: totalDestinatarios } = useMarketingListaContagem(listaId || undefined);
 
