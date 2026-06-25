@@ -113,21 +113,39 @@ export const UsersTab = () => {
 
   const fetchProfiles = async () => {
     try {
+      // Consulta via user_organizacoes para mostrar todos os membros da org ativa,
+      // independentemente de profiles.org_id (suporte multi-org).
       const { data, error } = await supabase
-        .from('profiles')
+        .from('user_organizacoes')
         .select(
           `
-          *,
+          cargo_id,
+          is_admin,
+          profiles!inner (
+            id,
+            email,
+            nome,
+            created_at
+          ),
           cargos:cargo_id (
             nome
           )
         `
         )
-        .or('cargo_id.neq.a0000000-0000-0000-0000-000000000001,cargo_id.is.null')
-        .order('created_at', { ascending: false });
+        .neq('cargo_id', 'a0000000-0000-0000-0000-000000000001')
+        .order('created_at', { ascending: false, referencedTable: 'profiles' });
 
       if (error) throw error;
-      setProfiles(data || []);
+
+      const mapped = (data || []).map((row: any) => ({
+        id: row.profiles.id,
+        email: row.profiles.email,
+        nome: row.profiles.nome,
+        created_at: row.profiles.created_at,
+        cargo_id: row.cargo_id,
+        is_admin: row.is_admin,
+      }));
+      setProfiles(mapped);
     } catch (error: any) {
       toast({
         title: 'Erro ao carregar utilizadores',
