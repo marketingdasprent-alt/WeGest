@@ -72,6 +72,7 @@ const DEFAULT_VALUES: ReservaFormValues = {
   kms_incluidos: null,
   km_adicional_valor: null,
   slot_valor_semanal: null,
+  slot_valor_mensal: null,
   is_longa_duracao: false,
   renovacao_opcao: null,
   renovacao_intervalo_dias: null,
@@ -238,6 +239,7 @@ const RentingReservaForm = () => {
       estado: reserva.estado,
       regime: reserva.regime,
       slot_valor_semanal: reserva.slot_valor_semanal,
+      slot_valor_mensal: reserva.slot_valor_mensal,
       valor_total: reserva.valor_total,
       franquia_valor: reserva.franquia_valor,
       caucao_valor: reserva.caucao_valor,
@@ -378,6 +380,7 @@ const RentingReservaForm = () => {
         regime: values.regime,
         // Valor semanal só no regime slot (cobrado por carro).
         slot_valor_semanal: values.regime === 'slot' ? (values.slot_valor_semanal ?? null) : null,
+        slot_valor_mensal: values.regime === 'slot' ? (values.slot_valor_mensal ?? null) : null,
         valor_total: values.valor_total,
         franquia_valor: values.franquia_valor,
         caucao_valor: values.caucao_valor,

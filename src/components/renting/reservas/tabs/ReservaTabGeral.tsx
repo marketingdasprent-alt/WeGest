@@ -914,7 +914,7 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
         </div>
       )}
 
-      {/* === Slot: valor semanal (cobrado por carro) === */}
+      {/* === Slot: valor mensal (cobrado por carro) === */}
       {isSlot && (
         <div>
           <SectionHeader
@@ -922,15 +922,15 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
             title="Valor do Slot"
             accent="amber"
             required
-            hint="Cobrado semanalmente ao motorista, por carro"
+            hint="Cobrado mensalmente ao motorista, por carro"
           />
           <FormField
             control={form.control}
-            name="slot_valor_semanal"
+            name="slot_valor_mensal"
             render={({ field }) => (
               <FormItem className="max-w-xs">
                 <FormLabel>
-                  Valor semanal (€) <span className="text-red-500">*</span>
+                  Valor mensal (€) <span className="text-red-500">*</span>
                 </FormLabel>
                 <FormControl>
                   <Input
@@ -946,6 +946,9 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                     }
                   />
                 </FormControl>
+                <p className="text-xs text-muted-foreground">
+                  Valor BRUTO (IVA incl.) cobrado todo mês.
+                </p>
                 <FormMessage />
               </FormItem>
             )}

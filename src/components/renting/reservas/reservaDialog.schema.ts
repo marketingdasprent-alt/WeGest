@@ -48,6 +48,7 @@ export const reservaDialogSchema = z
 
     valor_total: optionalNumber,
     slot_valor_semanal: optionalNumber,
+    slot_valor_mensal: optionalNumber,
     franquia_valor: optionalNumber,
     caucao_valor: optionalNumber,
     kms_incluidos: optionalNumber,

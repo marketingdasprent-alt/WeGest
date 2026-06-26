@@ -70,8 +70,9 @@ export const SlotMotoristaViatura: React.FC<Props> = ({ form, motoristas, onCria
     });
     form.setValue('condutor_id', id, { shouldDirty: true });
     form.setValue('condutor_nome', m?.nome ?? null, { shouldDirty: true });
-    if (m?.slot_valor_semanal != null && !form.getValues('slot_valor_semanal')) {
-      form.setValue('slot_valor_semanal', m.slot_valor_semanal, { shouldDirty: true });
+    if (m?.slot_valor_semanal != null && !form.getValues('slot_valor_mensal')) {
+      // O valor de slot guardado no motorista é o mensal (regime cobrado ao mês).
+      form.setValue('slot_valor_mensal', m.slot_valor_semanal, { shouldDirty: true });
     }
     // Trocar de motorista invalida a viatura escolhida.
     form.setValue('viatura_id', null, { shouldDirty: true });
