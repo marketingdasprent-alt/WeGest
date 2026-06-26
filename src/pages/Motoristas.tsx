@@ -16,7 +16,7 @@ import { startOfWeek, format as formatDate } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
+import { MotoristaFullModal } from '@/components/motoristas/MotoristaFullModal';
 import { MotoristasPlataformaNaoAssociados } from '@/components/motoristas/MotoristasPlataformaNaoAssociados';
 import { CartoesNaoReconhecidos } from '@/components/motoristas/CartoesNaoReconhecidos';
 import { PortagensNaoAssociadas } from '@/components/motoristas/PortagensNaoAssociadas';
@@ -611,9 +611,17 @@ export default function Motoristas() {
   };
 
   const handleMotoristaCreated = (motorista: Motorista) => {
+    // Fechar primeiro o modal de criação (evita dois modais sobrepostos), depois
+    // abrir o de gerar documentos já apontado ao motorista recém-criado.
+    setIsDialogOpen(false);
+    setMotoristaToEdit(null);
+    setNovaFichaPrefill(null);
     setNewMotoristaForContract(motorista);
     setContractDialogOpen(true);
     loadMotoristas();
+    // Se foi criado a partir do fluxo "criar ficha" (prefill de bolt_id/uber_uuid),
+    // o badge "X sem ficha" tem de refletir que esta pessoa deixou de estar pendente.
+    loadNaoAssociadosCount();
   };
 
   return (
@@ -886,11 +894,12 @@ export default function Motoristas() {
         />
       )}
 
-      {/* Dialog para Adicionar Motorista */}
-      <MotoristaDialog
+      {/* Modal grande para Adicionar Motorista (mesmo modal da edição, em modo criação) */}
+      <MotoristaFullModal
         open={isDialogOpen}
         onOpenChange={handleDialogClose}
         motorista={motoristaToEdit}
+        isCreating
         prefill={novaFichaPrefill || undefined}
         onMotoristaCreated={handleMotoristaCreated}
       />

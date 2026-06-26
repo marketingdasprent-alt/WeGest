@@ -353,7 +353,7 @@ const Calendario: React.FC = () => {
                   className="relative gap-2"
                 >
                   <LogOut className="h-4 w-4" />
-                  <span className="hidden sm:inline">Check Out</span>
+                  <span className="hidden sm:inline">Entrega</span>
                   {checkoutPendentesCount + rentingEntregaPendentesCount > 0 && (
                     <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1 flex items-center justify-center text-[10px] bg-green-600 text-white border-0">
                       {checkoutPendentesCount + rentingEntregaPendentesCount}
@@ -366,7 +366,7 @@ const Calendario: React.FC = () => {
                   className="relative gap-2"
                 >
                   <PackageCheck className="h-4 w-4" />
-                  <span className="hidden sm:inline">Check In</span>
+                  <span className="hidden sm:inline">Devolução</span>
                   {recolhasPendentesCount + rentingRecolhaPendentesCount > 0 && (
                     <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1 flex items-center justify-center text-[10px] bg-orange-500 text-white border-0">
                       {recolhasPendentesCount + rentingRecolhaPendentesCount}

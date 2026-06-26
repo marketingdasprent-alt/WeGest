@@ -11,7 +11,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Receipt, FilePlus2, FileMinus } from 'lucide-react';
+import { Receipt, FilePlus2, FileMinus, FilePlus } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -64,6 +64,8 @@ interface Props {
   onFaturar?: () => void;
   faturarLabel?: string;
   faturarDisabled?: boolean;
+  /** Mostra o botão "Nova fatura" (fatura adicional com linhas livres). */
+  onNovaFatura?: () => void;
   /** Cobranças-alvo para recibo / nota de crédito. */
   cobrancas: ToolbarCobranca[];
   onChanged: () => void;
@@ -76,6 +78,7 @@ export function FaturacaoActionsToolbar({
   onFaturar,
   faturarLabel = 'Faturar',
   faturarDisabled,
+  onNovaFatura,
   cobrancas,
   onChanged,
   className,
@@ -143,17 +146,33 @@ export function FaturacaoActionsToolbar({
 
   return (
     <>
-      <div className={cn('flex flex-wrap items-center gap-2', className)}>
+      <div className={cn('flex flex-nowrap items-center gap-2 overflow-x-auto', className)}>
         {onFaturar && (
-          <Button type="button" onClick={onFaturar} disabled={faturarDisabled} className="gap-2">
+          <Button
+            type="button"
+            onClick={onFaturar}
+            disabled={faturarDisabled}
+            className="gap-2 shrink-0 whitespace-nowrap"
+          >
             <FilePlus2 className="h-4 w-4" />
             {faturarLabel}
+          </Button>
+        )}
+        {onNovaFatura && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onNovaFatura}
+            className="gap-2 shrink-0 whitespace-nowrap"
+          >
+            <FilePlus className="h-4 w-4" />
+            Nova fatura
           </Button>
         )}
         <Button
           type="button"
           variant="outline"
-          className="gap-2"
+          className="gap-2 shrink-0 whitespace-nowrap"
           onClick={() => setReciboOpen(true)}
           disabled={liquidaveis.length === 0}
           title={liquidaveis.length === 0 ? 'Sem faturas em aberto para liquidar' : undefined}
@@ -164,7 +183,7 @@ export function FaturacaoActionsToolbar({
         <Button
           type="button"
           variant="outline"
-          className="gap-2 text-fuchsia-700 dark:text-fuchsia-300"
+          className="gap-2 shrink-0 whitespace-nowrap text-fuchsia-700 dark:text-fuchsia-300"
           onClick={abrirNC}
           disabled={creditaveis.length === 0}
           title={creditaveis.length === 0 ? 'Sem faturas para creditar' : undefined}
