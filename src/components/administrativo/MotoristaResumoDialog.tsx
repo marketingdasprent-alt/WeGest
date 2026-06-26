@@ -203,36 +203,32 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             .eq('motorista_id', resolvedMotoristaId)
             .gte('data_movimento', format(dateRange.from, 'yyyy-MM-dd'))
             .lte('data_movimento', format(dateRange.to, 'yyyy-MM-dd')),
-          // Todos os períodos de viatura na semana (pro-rata de troca/upgrade, todos os regimes)
+          // Períodos de viatura na semana — com tarifa do grupo para detalhe de aluguer
           supabase
             .from('motorista_viaturas')
-            .select('viatura_id, data_inicio, data_fim, viaturas(matricula, valor_aluguer)')
+            .select(
+              'viatura_id, data_inicio, data_fim, viaturas(matricula, grupo_id, renting_grupos(renting_tarifas(preco_semana, ativa)))'
+            )
             .eq('motorista_id', resolvedMotoristaId)
             .lte('data_inicio', format(dateRange.to, 'yyyy-MM-dd'))
             .or(`data_fim.is.null,data_fim.gte.${format(dateRange.from, 'yyyy-MM-dd')}`)
             .order('data_inicio', { ascending: true }),
-          // Reservas slot: slot_valor_semanal sobrepõe valor_aluguer da viatura quando negociado
-          supabase
-            .from('reservas')
-            .select('viatura_id, slot_valor_semanal')
-            .eq('condutor_id', resolvedMotoristaId)
-            .eq('regime', 'slot')
-            .lte('data_inicio', format(dateRange.to, 'yyyy-MM-dd'))
-            .or(`data_fim.is.null,data_fim.gte.${format(dateRange.from, 'yyyy-MM-dd')}`),
         ]);
 
         const viaturaData = results[0].data;
         const motoristaData = results[1].data;
         const financeiroData = results[2].data;
-        const viaturasPeriodo = (results[3].data ?? []) as Array<{
+        const viaturasPeriodoData = (results[3].data ?? []) as Array<{
           viatura_id: string;
           data_inicio: string;
           data_fim: string | null;
-          viaturas: { matricula: string; valor_aluguer: number | null } | null;
-        }>;
-        const reservasSlot = (results[4].data ?? []) as Array<{
-          viatura_id: string;
-          slot_valor_semanal: number | null;
+          viaturas: {
+            matricula: string;
+            grupo_id: string | null;
+            renting_grupos: {
+              renting_tarifas: Array<{ preco_semana: number | null; ativa: boolean }>;
+            } | null;
+          } | null;
         }>;
 
         if (viaturaData?.viaturas) {
@@ -252,19 +248,17 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
           setGestor(m.gestor_responsavel || null);
         }
 
-        // Cálculo pro-rata por viatura (troca/upgrade mid-week) — todos os regimes
-        if (viaturasPeriodo.length > 0) {
+        // Detalhe pro-rata por viatura (troca/upgrade mid-week) com preço da tarifa do grupo
+        if (viaturasPeriodoData.length > 0) {
           const weekStart = dateRange.from;
           const weekEnd = dateRange.to;
           const totalWeekDays = differenceInDays(weekEnd, weekStart) + 1;
 
-          const periodos: SlotPeriodo[] = viaturasPeriodo
+          const periodos: SlotPeriodo[] = viaturasPeriodoData
             .map((mv) => {
-              // slot_valor_semanal tem prioridade (preço negociado); fallback para valor_aluguer da viatura
-              const reserva = reservasSlot.find((r) => r.viatura_id === mv.viatura_id);
-              const valorSemanal = Number(
-                reserva?.slot_valor_semanal ?? mv.viaturas?.valor_aluguer ?? 0
-              );
+              const tarifas = mv.viaturas?.renting_grupos?.renting_tarifas || [];
+              const tarifa = tarifas.find((t) => t.ativa);
+              const valorSemanal = Number(tarifa?.preco_semana ?? 0);
               if (!valorSemanal) return null;
 
               const periodStart = max([parseISO(mv.data_inicio), weekStart]);
@@ -350,7 +344,8 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
         reparacoes: motorista.reparacoes || 0,
       };
   const totalSlot = slotPeriodos.reduce((s, p) => s + p.custo, 0);
-  const totalDespesas = Object.values(despesas).reduce((a, b) => a + b, 0) + totalSlot;
+  // totalSlot é apenas informacional (detalhe do contrato) — o valor já está em despesas.aluguer
+  const totalDespesas = Object.values(despesas).reduce((a, b) => a + b, 0);
   const valoresSemanaAnterior = 0;
   const receitaAjustada = isImportado
     ? totalReceitas
