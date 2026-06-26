@@ -53,6 +53,6 @@ SELECT
   true,
   1
 FROM public.clientes c
-WHERE c.tipo = 'empresa'
+WHERE c.tipo_cliente = 'empresa'
   AND c.org_id IS NOT NULL
 ON CONFLICT ON CONSTRAINT uq_doc_templates_cliente_tipo_versao DO NOTHING;
