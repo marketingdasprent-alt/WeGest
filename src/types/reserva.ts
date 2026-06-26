@@ -73,6 +73,8 @@ export type Reserva = {
   regime: ReservaRegime;
   /** Valor semanal cobrado ao motorista no regime slot (por carro). */
   slot_valor_semanal: number | null;
+  /** Valor mensal BRUTO (IVA incl.) cobrado ao motorista no regime slot. */
+  slot_valor_mensal: number | null;
   valor_total: number | null;
   observacoes: string | null;
   observacoes_internas: string | null;

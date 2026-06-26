@@ -1990,6 +1990,7 @@ export type Database = {
           tarifa_id: string | null
           tarifa_nome: string | null
           taxa_iva: number
+          tipo_cobranca: string
           updated_at: string
           valor_iva: number | null
           valor_sem_iva: number
@@ -2018,6 +2019,7 @@ export type Database = {
           tarifa_id?: string | null
           tarifa_nome?: string | null
           taxa_iva?: number
+          tipo_cobranca?: string
           updated_at?: string
           valor_iva?: number | null
           valor_sem_iva: number
@@ -2046,6 +2048,7 @@ export type Database = {
           tarifa_id?: string | null
           tarifa_nome?: string | null
           taxa_iva?: number
+          tipo_cobranca?: string
           updated_at?: string
           valor_iva?: number | null
           valor_sem_iva?: number
@@ -4759,6 +4762,7 @@ export type Database = {
           cartao_repsol: string | null
           cidade: string | null
           cidade_assinatura: string | null
+          cliente_id: string | null
           codigo: number
           codigo_postal: string | null
           comprovativo_iban_url: string | null
@@ -4807,6 +4811,7 @@ export type Database = {
           cartao_repsol?: string | null
           cidade?: string | null
           cidade_assinatura?: string | null
+          cliente_id?: string | null
           codigo?: number
           codigo_postal?: string | null
           comprovativo_iban_url?: string | null
@@ -4855,6 +4860,7 @@ export type Database = {
           cartao_repsol?: string | null
           cidade?: string | null
           cidade_assinatura?: string | null
+          cliente_id?: string | null
           codigo?: number
           codigo_postal?: string | null
           comprovativo_iban_url?: string | null
@@ -6816,6 +6822,7 @@ export type Database = {
           regime: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias: number | null
           renovacao_opcao: string | null
+          slot_valor_mensal: number | null
           slot_valor_semanal: number | null
           tarifa_id: string | null
           tarifa_nome: string | null
@@ -6864,6 +6871,7 @@ export type Database = {
           regime?: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias?: number | null
           renovacao_opcao?: string | null
+          slot_valor_mensal?: number | null
           slot_valor_semanal?: number | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
@@ -6912,6 +6920,7 @@ export type Database = {
           regime?: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias?: number | null
           renovacao_opcao?: string | null
+          slot_valor_mensal?: number | null
           slot_valor_semanal?: number | null
           tarifa_id?: string | null
           tarifa_nome?: string | null

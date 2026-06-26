@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { generateFinanceiroPDF } from '@/utils/generateFinanceiroPDF';
 import { Separator } from '@/components/ui/separator';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
+import { SlotMensalidadeCard } from './SlotMensalidadeCard';
 
 interface MotoristaResumoProps {
   driver_name: string;
@@ -949,6 +950,8 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                 </div>
               </div>
             )}
+
+            <SlotMensalidadeCard motoristaId={motorista.motorista_id} />
 
             {/* Resumo Final */}
             <div className="rounded-lg overflow-hidden border border-blue-200 print:border-blue-300">
