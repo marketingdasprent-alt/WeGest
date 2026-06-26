@@ -6,9 +6,9 @@
 UPDATE public.document_templates
 SET template_data = jsonb_build_object(
   'conteudo', $html$<h1 style="text-align:center">FOLHA DE REGISTO DE DANOS</h1>
-<p style="text-align:center"><strong>{{empresa_nomeCompleto}}</strong> · NIF {{empresa_nif}}</p>
+<p style="text-align:center"><strong>{{empresa_nome_completo}}</strong> · NIF {{empresa_nif}}</p>
 <br>
-<p>A presente folha documenta os danos existentes na viatura à data de emissão deste documento, pertencente à frota de <strong>{{empresa_nomeCompleto}}</strong>.</p>
+<p>A presente folha documenta os danos existentes na viatura à data de emissão deste documento, pertencente à frota de <strong>{{empresa_nome_completo}}</strong>.</p>
 <p>Os danos identificados encontram-se detalhados na listagem abaixo, incluindo localização, descrição, estado atual e respetivo registo fotográfico.</p>
 <br>
 {{secao_danos}}
@@ -26,7 +26,11 @@ SET template_data = jsonb_build_object(
 <br>
 <br>
 <p>_________________________________</p>
-<p>Assinatura e carimbo</p>$html$,
+<p>Condutor: {{motorista_nome}}</p>
+<br>
+<br>
+<p>_________________________________</p>
+<p>Assinatura e carimbo: {{empresa_nomeCompleto}}</p>$html$,
   'topMargin', 50,
   'bottomMargin', 38
 ),

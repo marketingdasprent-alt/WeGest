@@ -47,7 +47,11 @@ SELECT
 <br>
 <br>
 <p>_________________________________</p>
-<p>Assinatura e carimbo</p>$html$,
+<p>Condutor: {{motorista_nome}}</p>
+<br>
+<br>
+<p>_________________________________</p>
+<p>Assinatura e carimbo: {{empresa_nomeCompleto}}</p>$html$,
     'topMargin', 50,
     'bottomMargin', 38
   ),
