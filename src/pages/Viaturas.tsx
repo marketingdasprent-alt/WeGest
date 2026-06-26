@@ -12,8 +12,6 @@ import {
   ArrowUp,
   ArrowDown,
   Layers,
-  ChevronLeft,
-  ChevronRight,
   Printer,
   FileSpreadsheet,
   Loader2,
@@ -56,6 +54,8 @@ import { cn } from '@/lib/utils';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { exportViaturasPdf, exportViaturasExcel } from '@/utils/viaturasExport';
 import { useViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 interface ViaturasTipo {
   id: string;
@@ -89,8 +89,6 @@ interface Viatura {
 type SortColumn = 'matricula' | 'marca' | 'ano' | 'km_atual' | 'status';
 type SortDirection = 'asc' | 'desc';
 
-const PAGE_SIZE_OPTIONS = ['10', '25', '50', '100', 'all'] as const;
-
 /** Lower-case + strip diacritics + strip dashes/spaces — pesquisa de matrícula/marca/modelo. */
 function normalizeSearch(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[-\s]/g, '');
@@ -118,10 +116,6 @@ export default function Viaturas() {
   const [tipos, setTipos] = useState<ViaturasTipo[]>([]);
   const [sortColumn, setSortColumn] = useState<SortColumn>('matricula');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-
-  // Paginação
-  const [pageSizeStr, setPageSizeStr] = useState<string>('25');
-  const [currentPage, setCurrentPage] = useState(1);
 
   // Dialog states
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -300,19 +294,23 @@ export default function Viaturas() {
     estadoDe,
   ]);
 
-  // Reset para a 1ª página sempre que os filtros ou o tamanho de página mudam
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter, categoriaFilter, combustivelFilter, tipoFilter, pageSizeStr]);
-
-  const totalItems = filteredViaturas.length;
-  const showAll = pageSizeStr === 'all';
-  const pageSize = showAll ? totalItems || 1 : parseInt(pageSizeStr, 10);
-  const totalPages = showAll ? 1 : Math.max(1, Math.ceil(totalItems / pageSize));
-  const safePage = Math.min(currentPage, totalPages);
-  const startIdx = showAll ? 0 : (safePage - 1) * pageSize;
-  const endIdx = showAll ? totalItems : Math.min(startIdx + pageSize, totalItems);
-  const paginatedViaturas = showAll ? filteredViaturas : filteredViaturas.slice(startIdx, endIdx);
+  // Paginação partilhada (com seletor de tamanho). O resetKey volta à 1ª página
+  // sempre que os filtros/pesquisa mudam.
+  const {
+    page: safePage,
+    setPage: setCurrentPage,
+    totalPages,
+    total: totalItems,
+    pageItems: paginatedViaturas,
+    start: startIdx,
+    end: endIdx,
+    pageSizeStr,
+    setPageSizeStr,
+  } = usePagination(
+    filteredViaturas,
+    25,
+    `${searchTerm}|${statusFilter}|${categoriaFilter}|${combustivelFilter}|${tipoFilter}`
+  );
 
   const getCategoriaColor = (categoria: string | null | undefined) =>
     getCategoriaBadgeClass(categoria);
@@ -790,54 +788,18 @@ export default function Viaturas() {
 
       {/* Paginação */}
       {!loading && totalItems > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="whitespace-nowrap">Mostrar</span>
-            <Select value={pageSizeStr} onValueChange={setPageSizeStr}>
-              <SelectTrigger className="h-8 w-[110px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PAGE_SIZE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt} value={opt}>
-                    {opt === 'all' ? 'Todas' : opt}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <span className="whitespace-nowrap">por página</span>
-          </div>
-
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-muted-foreground whitespace-nowrap">
-              {startIdx + 1}–{endIdx} de {totalItems}
-            </span>
-            {!showAll && totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={safePage <= 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="whitespace-nowrap">
-                  Página {safePage} de {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={safePage >= totalPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          </div>
+        <div className="rounded-lg border border-border">
+          <TablePagination
+            page={safePage}
+            totalPages={totalPages}
+            total={totalItems}
+            start={startIdx}
+            end={endIdx}
+            onPageChange={setCurrentPage}
+            noun={['viatura', 'viaturas']}
+            pageSizeStr={pageSizeStr}
+            onPageSizeChange={setPageSizeStr}
+          />
         </div>
       )}
 

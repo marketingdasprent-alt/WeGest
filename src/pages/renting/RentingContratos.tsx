@@ -141,11 +141,8 @@ const RentingContratos = () => {
     return result;
   }, [contratos, matriculaSearch, filtros, sortColumn, sortDir, getClienteNome]);
 
-  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
-    filtered,
-    50,
-    `${matriculaSearch}|${JSON.stringify(filtros)}`
-  );
+  const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
+    usePagination(filtered, 50, `${matriculaSearch}|${JSON.stringify(filtros)}`);
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
@@ -277,6 +274,8 @@ const RentingContratos = () => {
             end={end}
             onPageChange={setPage}
             noun={['contrato', 'contratos']}
+            pageSizeStr={pageSizeStr}
+            onPageSizeChange={setPageSizeStr}
           />
         </CardContent>
       </Card>

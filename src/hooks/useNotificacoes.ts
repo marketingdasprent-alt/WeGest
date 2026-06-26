@@ -5,8 +5,10 @@ import { playNotificationSound } from '@/lib/notificationSound';
 export interface Notificacao {
   id: string;
   org_id: string | null;
-  tipo: 'motorista_pendente' | 'escalonamento';
+  tipo: 'motorista_pendente' | 'escalonamento' | 'viatura_disponivel';
   candidatura_id: string | null;
+  /** Rota de destino do botão "Ver" (notificações genéricas, ex.: lista de espera). */
+  link: string | null;
   titulo: string;
   mensagem: string | null;
   severidade: 'normal' | 'urgente';

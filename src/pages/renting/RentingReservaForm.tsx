@@ -27,6 +27,7 @@ import { useReservaCondutores, useSyncReservaCondutores } from '@/hooks/useReser
 import { useContratoIdByReserva } from '@/hooks/useContratosRenting';
 import { uploadReservaAnexoSync } from '@/hooks/useReservaAnexos';
 import { useViaturas } from '@/hooks/useViaturas';
+import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
 
 import { ClienteDialog } from '@/components/renting/ClienteDialog';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
@@ -333,9 +334,23 @@ const RentingReservaForm = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regimeWatched]);
 
+  // Viaturas ocupadas (reserva/contrato sobreposto) no período escolhido — para
+  // não as oferecer a outro cliente nas mesmas datas. Em edição, ignora a própria
+  // reserva (e o contrato que dela derive) para não se auto-excluir.
+  const { data: viaturasOcupadas } = useViaturasOcupadasPeriodo({
+    dataInicio,
+    dataFim,
+    excluirReservaId: isEdit ? id : null,
+    excluirContratoId: contratoExistente?.id ?? null,
+  });
+
   // Qualquer viatura pode ser alugada em rent-a-car ou TVDE.
   // O campo habilitada_tvde é apenas informativo/administrativo, não restringe.
-  const viaturasParaSelecao = viaturas;
+  // Excluímos as ocupadas no período, MAS mantemos sempre a já selecionada
+  // (senão desaparecia da lista ao abrir a reserva existente).
+  const viaturasParaSelecao = !viaturasOcupadas
+    ? viaturas
+    : viaturas.filter((v) => v.id === viaturaId || !viaturasOcupadas.has(v.id));
 
   // Faturação da reserva: só em edição, com reserva guardada e fora do regime slot
   // (slot fatura via Contrato de Prestação).

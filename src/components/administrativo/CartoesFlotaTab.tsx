@@ -49,6 +49,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 import {
   Plus,
   Pencil,
@@ -422,6 +424,9 @@ export function CartoesFlotaTab() {
     });
     return list;
   }, [cartoes, search, tipoFilter, sortField, sortDir]);
+
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(filtered, 25, `${search}|${tipoFilter}|${sortField}|${sortDir}`);
 
   // ── CRUD ──────────────────────────────────────────────────────────────
   const openCreate = () => {
@@ -835,7 +840,7 @@ export function CartoesFlotaTab() {
               })()}
             </TableHeader>
             <TableBody>
-              {filtered.map((c) => {
+              {pageItems.map((c) => {
                 const info = TIPO_INFO[c.tipo];
                 const Icon = info.Icon;
                 const titular = titularLabel(c);
@@ -911,6 +916,19 @@ export function CartoesFlotaTab() {
               })}
             </TableBody>
           </Table>
+          {total > 0 && (
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              start={start}
+              end={end}
+              onPageChange={setPage}
+              noun={['cartao', 'cartoes']}
+              pageSizeStr={pageSizeStr}
+              onPageSizeChange={setPageSizeStr}
+            />
+          )}
         </div>
       )}
 

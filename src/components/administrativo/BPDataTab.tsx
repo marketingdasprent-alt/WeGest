@@ -36,6 +36,8 @@ import { matchesSearch } from '@/lib/utils';
 import { format, subDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 interface BpTransacao {
   id: string;
@@ -149,6 +151,13 @@ export const BPDataTab: React.FC = () => {
         matchesSearch(t.station_name, searchTerm)
     );
   }, [transacoes, searchTerm]);
+
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      filteredTransacoes,
+      25,
+      `${searchTerm}|${selectedIntegracao}|${dateRange?.from?.toISOString() ?? ''}|${dateRange?.to?.toISOString() ?? ''}`
+    );
 
   const stats = useMemo(() => {
     const total = filteredTransacoes.length;
@@ -317,7 +326,7 @@ export const BPDataTab: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTransacoes.map((t) => (
+              {pageItems.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell className="font-medium">
                     {format(new Date(t.transaction_date), 'dd/MM/yyyy HH:mm', { locale: pt })}
@@ -361,6 +370,19 @@ export const BPDataTab: React.FC = () => {
               ))}
             </TableBody>
           </Table>
+          {total > 0 && (
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              start={start}
+              end={end}
+              onPageChange={setPage}
+              noun={['transacao', 'transacoes']}
+              pageSizeStr={pageSizeStr}
+              onPageSizeChange={setPageSizeStr}
+            />
+          )}
         </div>
       )}
     </div>

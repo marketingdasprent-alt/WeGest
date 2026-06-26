@@ -366,11 +366,12 @@ export default function Motoristas() {
     return result;
   }, [motoristas, searchTerm, statusFilter, cidadeFilter, gestorFilter, sortColumn, sortDirection]);
 
-  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
-    filteredMotoristas,
-    50,
-    `${searchTerm}|${statusFilter}|${cidadeFilter}|${gestorFilter}`
-  );
+  const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      filteredMotoristas,
+      50,
+      `${searchTerm}|${statusFilter}|${cidadeFilter}|${gestorFilter}`
+    );
 
   const handleRowClick = (motorista: Motorista) => {
     navigate(`/motoristas/${motorista.id}`, {
@@ -891,6 +892,8 @@ export default function Motoristas() {
           end={end}
           onPageChange={setPage}
           noun={['motorista', 'motoristas']}
+          pageSizeStr={pageSizeStr}
+          onPageSizeChange={setPageSizeStr}
         />
       )}
 

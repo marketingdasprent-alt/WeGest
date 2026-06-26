@@ -53,6 +53,7 @@ import { useMotoristas } from '@/hooks/useMotoristas';
 import { useReserva } from '@/hooks/useReservas';
 import { useReservaCondutores } from '@/hooks/useReservaCondutores';
 import { useViaturas } from '@/hooks/useViaturas';
+import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
 
 import { ClienteDialog } from '@/components/renting/ClienteDialog';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
@@ -448,10 +449,22 @@ const ContratoForm = () => {
   // "desapareciam" condutores já adicionados ou hidratados da reserva). A tabela
   // mostra clientes (rent-a-car) ou motoristas (TVDE) conforme o tipo de cada linha.
 
+  // Viaturas ocupadas (reserva/contrato sobreposto) no período escolhido — para
+  // não as oferecer a outro cliente nas mesmas datas. Ignora o próprio contrato e
+  // a reserva que lhe deu origem (não conflitar consigo próprio).
+  const { data: viaturasOcupadas } = useViaturasOcupadasPeriodo({
+    dataInicio,
+    dataFim,
+    excluirContratoId: isEdit ? id : null,
+    excluirReservaId: reservaIdActiva,
+  });
+
   // Qualquer viatura pode ser usada em rent-a-car ou TVDE — habilitada_tvde é
   // apenas informativo/administrativo, não restringe o seletor (alinhado com a
-  // reserva).
-  const viaturasParaSelecao = viaturas;
+  // reserva). Excluímos as ocupadas no período, mantendo sempre a já selecionada.
+  const viaturasParaSelecao = !viaturasOcupadas
+    ? viaturas
+    : viaturas.filter((v) => v.id === viaturaId || !viaturasOcupadas.has(v.id));
 
   // Ao trocar de viatura no contrato: recalcula o snapshot `grupo` e o preço a
   // partir do grupo da viatura nova. Isto é o que destrava a classificação

@@ -39,6 +39,8 @@ import { pt } from 'date-fns/locale';
 import { cn, matchesSearch } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 interface Integracao {
   id: string;
@@ -339,6 +341,13 @@ export const UberDataTab: React.FC = () => {
     });
   }, [transactions, searchTerm, selectedStatus, driverNameMap, uberDriversMap]);
 
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      filteredTransactions,
+      25,
+      `${searchTerm}|${selectedStatus}|${selectedIntegracao}`
+    );
+
   const stats = useMemo(() => {
     const total = filteredTransactions.length;
     const totalValor = filteredTransactions.reduce((sum, t) => sum + (t.gross_amount || 0), 0);
@@ -608,7 +617,7 @@ export const UberDataTab: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTransactions.map((t) => (
+              {pageItems.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell>
                     <Badge variant="outline" className="gap-1">
@@ -680,6 +689,19 @@ export const UberDataTab: React.FC = () => {
               ))}
             </TableBody>
           </Table>
+          {total > 0 && (
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              start={start}
+              end={end}
+              onPageChange={setPage}
+              noun={['transação', 'transações']}
+              pageSizeStr={pageSizeStr}
+              onPageSizeChange={setPageSizeStr}
+            />
+          )}
         </div>
       )}
     </div>

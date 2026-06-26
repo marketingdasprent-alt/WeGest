@@ -118,11 +118,8 @@ const RentingReservas = () => {
     return result;
   }, [reservas, matriculaSearch, filtros, sortColumn, sortDir, getEstacaoNome]);
 
-  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
-    filtered,
-    50,
-    `${matriculaSearch}|${JSON.stringify(filtros)}`
-  );
+  const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
+    usePagination(filtered, 50, `${matriculaSearch}|${JSON.stringify(filtros)}`);
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
@@ -254,6 +251,8 @@ const RentingReservas = () => {
             end={end}
             onPageChange={setPage}
             noun={['reserva', 'reservas']}
+            pageSizeStr={pageSizeStr}
+            onPageSizeChange={setPageSizeStr}
           />
         </CardContent>
       </Card>

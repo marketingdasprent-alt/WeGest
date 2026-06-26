@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/table';
 
 import { useClientes } from '@/hooks/useClientes';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 import { cn, matchesSearch } from '@/lib/utils';
 
@@ -325,6 +327,14 @@ const RentingClientes = () => {
     telemovelFiltro,
     expiradosFiltro,
   ]);
+
+  // Paginação client-side sobre a lista já filtrada.
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      filtered,
+      25,
+      `${search}|${visibleFilters.join(',')}|${codigoFiltro}|${tipoFiltro}|${paisFiltro}|${cidadeFiltro}|${localidadeFiltro}|${codigoPostalFiltro}|${generoFiltro}|${nifFiltro}|${emailFiltro}|${telemovelFiltro}|${expiradosFiltro}`
+    );
 
   const filtrosActivos =
     (visibleFilters.includes('codigo') && !!codigoFiltro.trim()) ||
@@ -658,7 +668,7 @@ const RentingClientes = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((cliente) => (
+              {pageItems.map((cliente) => (
                 <TableRow
                   key={cliente.id}
                   className="hover:bg-muted/50 cursor-pointer"
@@ -758,6 +768,19 @@ const RentingClientes = () => {
               ))}
             </TableBody>
           </Table>
+          {total > 0 && (
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              start={start}
+              end={end}
+              onPageChange={setPage}
+              noun={['cliente', 'clientes']}
+              pageSizeStr={pageSizeStr}
+              onPageSizeChange={setPageSizeStr}
+            />
+          )}
         </div>
       )}
     </div>

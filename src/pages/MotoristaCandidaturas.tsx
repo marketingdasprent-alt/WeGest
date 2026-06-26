@@ -57,6 +57,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { DocumentPreviewPanel } from '@/components/motoristas/DocumentPreviewPanel';
 import { cn, matchesSearch } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 interface Candidatura {
   id: string;
@@ -194,6 +196,9 @@ const MotoristaCandidaturas: React.FC = () => {
 
     return matchesSearchResult && matchesStatus;
   });
+
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(filteredCandidaturas, 25, `${searchTerm}|${statusFilter}`);
 
   const stats = {
     total: candidaturas.length,
@@ -489,7 +494,7 @@ const MotoristaCandidaturas: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredCandidaturas.map((candidatura) => (
+                {pageItems.map((candidatura) => (
                   <TableRow key={candidatura.id}>
                     <TableCell className="font-medium">{candidatura.nome}</TableCell>
                     <TableCell className="hidden md:table-cell">{candidatura.email}</TableCell>
@@ -528,6 +533,19 @@ const MotoristaCandidaturas: React.FC = () => {
                 ))}
               </TableBody>
             </Table>
+          )}
+          {total > 0 && (
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              start={start}
+              end={end}
+              onPageChange={setPage}
+              noun={['candidatura', 'candidaturas']}
+              pageSizeStr={pageSizeStr}
+              onPageSizeChange={setPageSizeStr}
+            />
           )}
         </CardContent>
       </Card>

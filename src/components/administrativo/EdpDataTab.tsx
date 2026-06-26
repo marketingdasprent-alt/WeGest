@@ -39,6 +39,8 @@ import { pt } from 'date-fns/locale';
 import { cn, matchesSearch } from '@/lib/utils';
 import { ImportRobotCsvDialog } from '@/components/admin/ImportRobotCsvDialog';
 import { DateRange } from 'react-day-picker';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 interface Transacao {
   id: string;
@@ -132,6 +134,15 @@ export const EdpDataTab: React.FC = () => {
     valor: filtered.reduce((s, t) => s + (t.amount || 0), 0),
   };
 
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      filtered,
+      25,
+      `${searchTerm}|${selectedIntegracao}|${dateRange?.from?.toISOString() ?? ''}|${
+        dateRange?.to?.toISOString() ?? ''
+      }`
+    );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-center">
@@ -213,7 +224,7 @@ export const EdpDataTab: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((t) => (
+              {pageItems.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell>{format(new Date(t.transaction_date), 'dd/MM/yyyy HH:mm')}</TableCell>
                   <TableCell>
@@ -233,6 +244,19 @@ export const EdpDataTab: React.FC = () => {
               ))}
             </TableBody>
           </Table>
+        )}
+        {!loading && total > 0 && (
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            start={start}
+            end={end}
+            onPageChange={setPage}
+            noun={['transacao', 'transacoes']}
+            pageSizeStr={pageSizeStr}
+            onPageSizeChange={setPageSizeStr}
+          />
         )}
       </div>
     </div>

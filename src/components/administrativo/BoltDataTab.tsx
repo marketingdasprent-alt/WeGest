@@ -40,6 +40,8 @@ import { pt } from 'date-fns/locale';
 import { cn, matchesSearch } from '@/lib/utils';
 import { ImportRobotCsvDialog } from '@/components/admin/ImportRobotCsvDialog';
 import { DateRange } from 'react-day-picker';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 interface Integracao {
   id: string;
@@ -189,6 +191,14 @@ export const BoltDataTab: React.FC = () => {
         matchesSearch(r.telefone, searchTerm)
     );
   }, [resumos, searchTerm]);
+
+  // Pagination (apresentação) sobre a lista já filtrada/ordenada
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      filteredResumos,
+      25,
+      `${searchTerm}|${selectedIntegracao}|${dateRange?.from?.toISOString() ?? ''}|${dateRange?.to?.toISOString() ?? ''}`
+    );
 
   // Stats
   const stats = useMemo(() => {
@@ -494,7 +504,7 @@ export const BoltDataTab: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredResumos.map((resumo) => (
+              {pageItems.map((resumo) => (
                 <TableRow key={resumo.id}>
                   <TableCell>
                     <Badge variant="outline" className="gap-1">
@@ -553,6 +563,19 @@ export const BoltDataTab: React.FC = () => {
               ))}
             </TableBody>
           </Table>
+          {total > 0 && (
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              start={start}
+              end={end}
+              onPageChange={setPage}
+              noun={['resumo', 'resumos']}
+              pageSizeStr={pageSizeStr}
+              onPageSizeChange={setPageSizeStr}
+            />
+          )}
         </div>
       )}
     </div>
