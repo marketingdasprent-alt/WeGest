@@ -44,6 +44,7 @@ const TIPO_TEMPLATE_OPTIONS = [
   { value: 'declaracao', label: 'Declaração' },
   { value: 'procedimentos', label: 'Procedimentos' },
   { value: 'recibo', label: 'Recibo' },
+  { value: 'anexo_danos', label: 'Folha de Danos' },
   { value: 'outro', label: 'Outro documento' },
 ] as const;
 
