@@ -55,4 +55,8 @@ SELECT
 FROM public.clientes c
 WHERE c.is_emissora = true
   AND c.org_id IS NOT NULL
-ON CONFLICT ON CONSTRAINT uq_doc_templates_cliente_tipo_versao DO NOTHING;
+AND NOT EXISTS (
+  SELECT 1 FROM public.document_templates dt
+  WHERE dt.tipo = 'anexo_danos'
+    AND dt.cliente_empresa_id = c.id
+);
