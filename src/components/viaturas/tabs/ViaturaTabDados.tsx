@@ -221,6 +221,16 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   const [estacoes, setEstacoes] = useState<Estacao[]>([]);
   const [viaturasTipos, setViaturasTipos] = useState<ViaturasTipo[]>([]);
   const [grupos, setGrupos] = useState<RentingGrupo[]>([]);
+  const [allTarifas, setAllTarifas] = useState<
+    Array<{
+      grupo_id: string;
+      nome: string;
+      preco_dia: number | null;
+      preco_semana: number | null;
+      preco_mes: number | null;
+      kms_incluidos: number | null;
+    }>
+  >([]);
   const [marcas, setMarcas] = useState<ViaturaMarca[]>([]);
   const [modelos, setModelos] = useState<ViaturaModelo[]>([]);
   const [combustiveis, setCombustiveis] = useState<ViaturaCombustivel[]>([]);
@@ -264,6 +274,14 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       .then(
         ({ data }) => setGrupos(data || []),
         (err) => console.error('Erro ao carregar grupos:', err)
+      );
+    supabase
+      .from('renting_tarifas')
+      .select('grupo_id, nome, preco_dia, preco_semana, preco_mes, kms_incluidos')
+      .eq('ativa', true)
+      .then(
+        ({ data }) => setAllTarifas((data as any) || []),
+        (err) => console.error('Erro ao carregar tarifas:', err)
       );
     supabase
       .from('viatura_marcas')
@@ -936,6 +954,43 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                       </FormItem>
                     )}
                   />
+                  {/* Tarifas do grupo — leitura apenas */}
+                  {(() => {
+                    const grupoId = form.watch('grupo_id');
+                    if (!grupoId) return null;
+                    const tarifas = allTarifas.filter((t) => t.grupo_id === grupoId);
+                    if (tarifas.length === 0) return null;
+                    const fmt = (v: number | null) =>
+                      v != null
+                        ? new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v)
+                        : '—';
+                    return (
+                      <div className="md:col-span-3 rounded-lg border bg-muted/20 p-4">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                          Tarifas do Grupo
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {tarifas.map((t) => (
+                            <div key={t.nome} className="space-y-1">
+                              <p className="text-xs text-muted-foreground">{t.nome}</p>
+                              {t.preco_dia != null && (
+                                <p className="text-sm font-medium">{fmt(t.preco_dia)} <span className="text-xs text-muted-foreground">/dia</span></p>
+                              )}
+                              {t.preco_semana != null && (
+                                <p className="text-sm font-semibold text-primary">{fmt(t.preco_semana)} <span className="text-xs text-muted-foreground">/semana</span></p>
+                              )}
+                              {t.preco_mes != null && (
+                                <p className="text-sm font-medium">{fmt(t.preco_mes)} <span className="text-xs text-muted-foreground">/mês</span></p>
+                              )}
+                              {t.kms_incluidos != null && (
+                                <p className="text-xs text-muted-foreground">{t.kms_incluidos} km incl.</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <FormField
                     control={form.control}
                     name="estacao_id"
