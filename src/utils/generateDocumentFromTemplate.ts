@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { printPdf } from '@/lib/printPdf';
+import { fetchAnexoDanos } from './fetchAnexoDanos';
 
 interface DocumentTemplate {
   id: string;
@@ -60,6 +61,8 @@ interface GenerateDocumentParams {
   anexoFotos?: Array<{ titulo: string; urls: string[] }>;
   /** Danos da viatura a anexar numa folha extra: lista + fotos (máx 6) + QR. */
   anexoDanos?: AnexoDanos;
+  /** ID da viatura. Obrigatório para templates do tipo `anexo_danos`. */
+  viaturaId?: string;
 }
 
 interface UploadDocumentParams extends GenerateDocumentParams {
@@ -1235,9 +1238,19 @@ export const generateDocumentFromTemplate = async (
       }
     }
 
+    // Para templates do tipo anexo_danos, buscar danos automaticamente se não fornecidos.
+    let efectivoAnexoDanos = params.anexoDanos;
+    if (templateData.tipo === 'anexo_danos' && params.viaturaId && !efectivoAnexoDanos) {
+      const matricula = (documentData?.viatura_matricula as string | undefined) ?? '';
+      efectivoAnexoDanos = await fetchAnexoDanos(params.viaturaId, matricula);
+      if (!efectivoAnexoDanos) {
+        console.warn('Template anexo_danos: viatura sem danos activos ou erro ao buscar');
+      }
+    }
+
     // Anexar folha de danos da viatura (lista + fotos máx 6 + QR code).
-    if (params.anexoDanos) {
-      const ad = params.anexoDanos;
+    if (efectivoAnexoDanos) {
+      const ad = efectivoAnexoDanos;
       const blue: [number, number, number] = [43, 58, 107];
       const gray: [number, number, number] = [90, 90, 100];
       const borderColor: [number, number, number] = [200, 202, 210];
