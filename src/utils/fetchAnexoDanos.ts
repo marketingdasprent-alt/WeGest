@@ -4,36 +4,46 @@ import type { AnexoDanos } from './generateDocumentFromTemplate';
 
 export async function fetchAnexoDanos(
   viaturaId: string,
-  matricula = ''
+  matricula = '',
+  contratoId?: string
 ): Promise<AnexoDanos | undefined> {
   try {
-    const { data: danosRows } = await supabase
+    let query = supabase
       .from('viatura_danos')
       .select('id, localizacao, descricao, estado, data_registo, data_ocorrencia, valor')
       .eq('viatura_id', viaturaId)
       .not('estado', 'eq', 'reparado')
       .order('created_at', { ascending: false });
+    if (contratoId) query = query.eq('contrato_id', contratoId);
+    const { data: danosRows } = await query;
 
-    const danos = danosRows ?? [];
-    if (danos.length === 0) return undefined;
+    const danos = (danosRows as typeof danosRows) ?? [];
 
     const danoIds = danos.map((d) => d.id);
-    const { data: fotosRows } = await supabase
-      .from('viatura_dano_fotos')
-      .select('dano_id, ficheiro_url')
-      .in('dano_id', danoIds)
-      .order('created_at', { ascending: false });
+    const { data: fotosRows } = danoIds.length
+      ? await supabase
+          .from('viatura_dano_fotos')
+          .select('dano_id, ficheiro_url')
+          .in('dano_id', danoIds)
+          .order('created_at', { ascending: false })
+      : { data: [], error: null };
 
+    type Bucket = 'viatura-documentos' | 'assistencia-anexos' | 'viatura-danos';
     const extractPath = (urlOrPath: string): string => {
       if (!urlOrPath.startsWith('http')) return urlOrPath;
       const m = urlOrPath.match(
-        /\/storage\/v1\/object\/(?:public|sign)\/(?:viatura-documentos|assistencia-anexos)\/([^?]+)/
+        /\/storage\/v1\/object\/(?:public|sign)\/(?:viatura-documentos|assistencia-anexos|viatura-danos)\/([^?]+)/
       );
       return m ? decodeURIComponent(m[1]) : urlOrPath;
     };
-    const detectBucket = (urlOrPath: string): 'viatura-documentos' | 'assistencia-anexos' => {
+    const detectBucket = (urlOrPath: string): Bucket => {
       if (urlOrPath.startsWith('assistencia/') || urlOrPath.includes('assistencia-anexos'))
         return 'assistencia-anexos';
+      // Fotos do check-in/out (CheckinDadosSection) guardam path nu no bucket
+      // viatura-danos. As manuais (ViaturaTabDanos) guardam URL http completo
+      // do bucket viatura-documentos.
+      if (urlOrPath.includes('viatura-danos')) return 'viatura-danos';
+      if (!urlOrPath.startsWith('http')) return 'viatura-danos';
       return 'viatura-documentos';
     };
 
@@ -45,6 +55,7 @@ export async function fetchAnexoDanos(
     const byBucket: Record<string, { raw: string; path: string }[]> = {
       'viatura-documentos': [],
       'assistencia-anexos': [],
+      'viatura-danos': [],
     };
     for (const raw of rawUrls) {
       byBucket[detectBucket(raw)].push({ raw, path: extractPath(raw) });
@@ -85,9 +96,7 @@ export async function fetchAnexoDanos(
         localizacao: (d.localizacao as string | null) ?? '—',
         descricao: (d.descricao as string | null) ?? '—',
         estado: (d.estado as string | null) ?? '—',
-        data: fmtData(
-          (d.data_ocorrencia as string | null) ?? (d.data_registo as string | null)
-        ),
+        data: fmtData((d.data_ocorrencia as string | null) ?? (d.data_registo as string | null)),
         valor: fmtValor(d.valor as number | null),
       })),
       fotos: fotoSignedUrls,

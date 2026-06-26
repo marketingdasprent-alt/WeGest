@@ -427,6 +427,10 @@ export const generateContratoPdf = async ({
     headerLogoUrl: empresa.logoUrl || '/Logo.png',
     footerText,
     anexoFotos: i === idxFotos ? anexoFotos : undefined,
+    // Folha de danos: passar a viatura para o renderer puxar TODOS os danos
+    // activos + fotos + QR no placeholder {{secao_danos}}. Sem contratoId para
+    // mostrar todos os danos existentes da viatura (não só os deste contrato).
+    ...(t.tipo === 'anexo_danos' ? { viaturaId: viatura?.id } : {}),
   }));
 
   const fileName =

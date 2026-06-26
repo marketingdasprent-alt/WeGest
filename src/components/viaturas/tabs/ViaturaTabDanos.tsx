@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { DanoFotosGallery } from '../DanoFotosGallery';
+import { GenerateDocumentsDialog } from '@/components/motoristas/GenerateDocumentsDialog';
 
 interface Dano {
   id: string;
@@ -113,6 +114,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
   const [motoristas, setMotoristas] = useState<MotoristaOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [folhaDanosOpen, setFolhaDanosOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Form state
@@ -450,214 +452,220 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
           <AlertTriangle className="h-5 w-5" />
           Registo de Danos
         </CardTitle>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Registar Dano
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Registar Novo Dano</DialogTitle>
-              <DialogDescription className="sr-only">
-                Preencha os detalhes para registar um novo dano na viatura.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto">
-              <div>
-                <Label htmlFor="descricao">
-                  Descrição <span className="text-red-500">*</span>
-                </Label>
-                <Textarea
-                  id="descricao"
-                  placeholder="Descreva o dano..."
-                  value={descricao}
-                  onChange={(e) => setDescricao(e.target.value)}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setFolhaDanosOpen(true)}>
+            <FileText className="h-4 w-4 mr-2" />
+            Gerar Folha de Danos
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Registar Dano
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Registar Novo Dano</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Preencha os detalhes para registar um novo dano na viatura.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto">
                 <div>
-                  <Label>Localização</Label>
-                  <Select value={localizacao} onValueChange={setLocalizacao}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LOCALIZACOES.map((loc) => (
-                        <SelectItem key={loc.value} value={loc.value}>
-                          {loc.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Estado</Label>
-                  <Select value={estado} onValueChange={setEstado}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ESTADOS.map((est) => (
-                        <SelectItem key={est.value} value={est.value}>
-                          {est.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="dataOcorrencia">Data de Ocorrência</Label>
-                  <Input
-                    id="dataOcorrencia"
-                    type="date"
-                    value={dataOcorrencia}
-                    onChange={(e) => setDataOcorrencia(e.target.value)}
+                  <Label htmlFor="descricao">
+                    Descrição <span className="text-red-500">*</span>
+                  </Label>
+                  <Textarea
+                    id="descricao"
+                    placeholder="Descreva o dano..."
+                    value={descricao}
+                    onChange={(e) => setDescricao(e.target.value)}
                   />
                 </div>
-                <div>
-                  <Label htmlFor="valor">Valor (€)</Label>
-                  <Input
-                    id="valor"
-                    type="text"
-                    placeholder="0,00"
-                    value={valor}
-                    onChange={(e) => setValor(e.target.value)}
-                  />
-                </div>
-              </div>
 
-              <div>
-                <Label>Motorista Responsável</Label>
-                <Select
-                  value={motoristaId || 'none'}
-                  onValueChange={(val) => setMotoristaId(val === 'none' ? '' : val)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecionar motorista (opcional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {motoristas.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        #{m.codigo} - {m.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {motoristaId && contratoId && (
-                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                    <FileText className="h-3 w-3" />
-                    Contrato ativo associado automaticamente
-                  </p>
-                )}
-                {motoristaId && !contratoId && (
-                  <p className="text-xs text-yellow-600 mt-1">Motorista sem contrato ativo</p>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="observacoes">Observações</Label>
-                <Textarea
-                  id="observacoes"
-                  placeholder="Notas adicionais..."
-                  value={observacoes}
-                  onChange={(e) => setObservacoes(e.target.value)}
-                />
-              </div>
-
-              {/* Secção de Fotografias */}
-              <div className="space-y-3">
-                <Label>Fotografias do Dano</Label>
-
-                {/* Preview das fotos selecionadas */}
-                {previewUrls.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {previewUrls.map((url, i) => (
-                      <div
-                        key={i}
-                        className="relative w-20 h-20 rounded-lg overflow-hidden border bg-muted"
-                      >
-                        <img
-                          src={url}
-                          alt={`Preview ${i + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="destructive"
-                          className="absolute top-1 right-1 h-5 w-5"
-                          onClick={() => removeFotoTemp(i)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Localização</Label>
+                    <Select value={localizacao} onValueChange={setLocalizacao}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecionar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LOCALIZACOES.map((loc) => (
+                          <SelectItem key={loc.value} value={loc.value}>
+                            {loc.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                )}
+                  <div>
+                    <Label>Estado</Label>
+                    <Select value={estado} onValueChange={setEstado}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ESTADOS.map((est) => (
+                          <SelectItem key={est.value} value={est.value}>
+                            {est.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-                {/* Botões de upload */}
-                <div className="flex flex-wrap gap-2">
-                  {/* Câmera (abre diretamente no mobile) */}
-                  <Label
-                    htmlFor="foto-camera"
-                    className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground text-sm font-medium"
-                  >
-                    <Camera className="h-4 w-4" />
-                    Tirar Foto
-                  </Label>
-                  <input
-                    id="foto-camera"
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={handleFotoSelect}
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="dataOcorrencia">Data de Ocorrência</Label>
+                    <Input
+                      id="dataOcorrencia"
+                      type="date"
+                      value={dataOcorrencia}
+                      onChange={(e) => setDataOcorrencia(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="valor">Valor (€)</Label>
+                    <Input
+                      id="valor"
+                      type="text"
+                      placeholder="0,00"
+                      value={valor}
+                      onChange={(e) => setValor(e.target.value)}
+                    />
+                  </div>
+                </div>
 
-                  {/* Galeria (permite múltiplas) */}
-                  <Label
-                    htmlFor="foto-galeria"
-                    className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground text-sm font-medium"
+                <div>
+                  <Label>Motorista Responsável</Label>
+                  <Select
+                    value={motoristaId || 'none'}
+                    onValueChange={(val) => setMotoristaId(val === 'none' ? '' : val)}
                   >
-                    <ImagePlus className="h-4 w-4" />
-                    Galeria
-                  </Label>
-                  <input
-                    id="foto-galeria"
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={handleFotoSelect}
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecionar motorista (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                      {motoristas.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          #{m.codigo} - {m.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {motoristaId && contratoId && (
+                    <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                      <FileText className="h-3 w-3" />
+                      Contrato ativo associado automaticamente
+                    </p>
+                  )}
+                  {motoristaId && !contratoId && (
+                    <p className="text-xs text-yellow-600 mt-1">Motorista sem contrato ativo</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="observacoes">Observações</Label>
+                  <Textarea
+                    id="observacoes"
+                    placeholder="Notas adicionais..."
+                    value={observacoes}
+                    onChange={(e) => setObservacoes(e.target.value)}
                   />
                 </div>
 
-                <p className="text-xs text-muted-foreground">
-                  {fotosTemp.length > 0
-                    ? `${fotosTemp.length} foto(s) selecionada(s)`
-                    : 'Pode adicionar fotos do dano (opcional)'}
-                </p>
-              </div>
+                {/* Secção de Fotografias */}
+                <div className="space-y-3">
+                  <Label>Fotografias do Dano</Label>
 
-              <div className="flex justify-end gap-2 pt-4">
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleSubmit} disabled={saving}>
-                  {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Registar
-                </Button>
+                  {/* Preview das fotos selecionadas */}
+                  {previewUrls.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {previewUrls.map((url, i) => (
+                        <div
+                          key={i}
+                          className="relative w-20 h-20 rounded-lg overflow-hidden border bg-muted"
+                        >
+                          <img
+                            src={url}
+                            alt={`Preview ${i + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="destructive"
+                            className="absolute top-1 right-1 h-5 w-5"
+                            onClick={() => removeFotoTemp(i)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Botões de upload */}
+                  <div className="flex flex-wrap gap-2">
+                    {/* Câmera (abre diretamente no mobile) */}
+                    <Label
+                      htmlFor="foto-camera"
+                      className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground text-sm font-medium"
+                    >
+                      <Camera className="h-4 w-4" />
+                      Tirar Foto
+                    </Label>
+                    <input
+                      id="foto-camera"
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handleFotoSelect}
+                    />
+
+                    {/* Galeria (permite múltiplas) */}
+                    <Label
+                      htmlFor="foto-galeria"
+                      className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground text-sm font-medium"
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                      Galeria
+                    </Label>
+                    <input
+                      id="foto-galeria"
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleFotoSelect}
+                    />
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    {fotosTemp.length > 0
+                      ? `${fotosTemp.length} foto(s) selecionada(s)`
+                      : 'Pode adicionar fotos do dano (opcional)'}
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleSubmit} disabled={saving}>
+                    {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Registar
+                  </Button>
+                </div>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -778,6 +786,13 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
           </div>
         )}
       </CardContent>
+      {viaturaId && (
+        <GenerateDocumentsDialog
+          open={folhaDanosOpen}
+          onOpenChange={setFolhaDanosOpen}
+          viaturaId={viaturaId}
+        />
+      )}
     </Card>
   );
 }

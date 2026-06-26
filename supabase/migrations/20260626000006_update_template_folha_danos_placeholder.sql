@@ -30,9 +30,9 @@ SET template_data = jsonb_build_object(
 <br>
 <br>
 <p>_________________________________</p>
-<p>Assinatura e carimbo: {{empresa_nomeCompleto}}</p>$html$,
+<p>Assinatura: {{cliente_cargo_representante}}</p>$html$,
   'topMargin', 50,
   'bottomMargin', 38
 ),
 versao = versao + 1
-WHERE tipo = 'anexo_danos';
+WHERE tipo = 'anexo_danos'; 
