@@ -1,11 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
 import { empresaDocData, empresaFooterText, type EmpresaConfig } from '@/config/empresas';
-import { fetchAnexoDanos } from './fetchAnexoDanos';
 
 import {
   generateDocumentosCombinados,
   type DocumentoCombinado,
-  type AnexoDanos,
 } from './generateDocumentFromTemplate';
 
 import type { ContratoRenting } from '@/types/contratoRenting';
@@ -392,14 +390,6 @@ export const generateContratoPdf = async ({
     console.warn('Não foi possível anexar fotos de check-in/out:', error);
   }
 
-  // 6) Anexo de danos — só se a viatura tiver danos activos (não reparados).
-  let anexoDanos: AnexoDanos | undefined;
-  const viaturaId = contrato.viatura_id ?? viatura?.id ?? null;
-  if (viaturaId) {
-    const matricula = contrato.matricula ?? viatura?.matricula ?? '';
-    anexoDanos = await fetchAnexoDanos(viaturaId, matricula);
-  }
-
   // Rodapé da empresa (nome · NIF · sede) em todos os documentos gerados.
   const footerText = empresaFooterText(empresa);
 
@@ -430,8 +420,6 @@ export const generateContratoPdf = async ({
   }
 
   const idxFotos = anexoFotos ? anexarFotosA(templatesEscolhidos) : -1;
-  // Danos e fotos de check-in/out anexam-se ao mesmo documento (aluguer ou último).
-  const idxDanos = anexoDanos ? (idxFotos >= 0 ? idxFotos : anexarFotosA(templatesEscolhidos)) : -1;
   const docs: DocumentoCombinado[] = templatesEscolhidos.map((t, i) => ({
     templateId: t.id,
     motoristaData,
@@ -439,7 +427,6 @@ export const generateContratoPdf = async ({
     headerLogoUrl: empresa.logoUrl || '/Logo.png',
     footerText,
     anexoFotos: i === idxFotos ? anexoFotos : undefined,
-    anexoDanos: i === idxDanos ? anexoDanos : undefined,
   }));
 
   const fileName =
