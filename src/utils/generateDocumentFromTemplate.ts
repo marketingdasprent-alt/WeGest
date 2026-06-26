@@ -820,6 +820,23 @@ export const generateDocumentFromTemplate = async (
     // Substituir campos dinâmicos no conteúdo
     const processedContent = replaceDynamicFields(conteudo, motoristaData, documentData);
 
+    // Suporte ao placeholder {{secao_danos}}: dividir em antes/depois.
+    // O bloco de danos (tabela+fotos+QR) é renderizado inline no ponto do placeholder.
+    // TipTap envolve o placeholder em <p>...</p> — removemos esses tags residuais.
+    const DANOS_PLACEHOLDER = '{{secao_danos}}';
+    const hasDanosPlaceholder = processedContent.includes(DANOS_PLACEHOLDER);
+    let htmlPart1 = processedContent;
+    let htmlPart2 = '';
+    if (hasDanosPlaceholder) {
+      const idx = processedContent.indexOf(DANOS_PLACEHOLDER);
+      let before = processedContent.slice(0, idx);
+      let after = processedContent.slice(idx + DANOS_PLACEHOLDER.length);
+      before = before.replace(/<p>\s*$/, '');
+      after = after.replace(/^\s*<\/p>/, '');
+      htmlPart1 = before;
+      htmlPart2 = after;
+    }
+
     // Criar PDF ou usar existente
     const pdf =
       params.existingPdf ||
@@ -895,7 +912,7 @@ export const generateDocumentFromTemplate = async (
     const lineFactor = hasLetterhead ? 1.24 : 1.5;
 
     // Processar HTML e renderizar no PDF diretamente
-    const contentElements = htmlToText(processedContent);
+    const contentElements = htmlToText(htmlPart1);
 
     // Pré-carregar imagens de assinatura embebidas em células de tabela.
     // renderTable é síncrono, por isso resolvemos as imagens (data URLs) aqui
@@ -1255,18 +1272,18 @@ export const generateDocumentFromTemplate = async (
       const gray: [number, number, number] = [90, 90, 100];
       const borderColor: [number, number, number] = [200, 202, 210];
 
-      // Páginas do anexo de danos não usam o papel timbrado — são folhas
-      // funcionais; o fundo decorativo sobrepõe-se ao conteúdo e ao QR code.
+      // Se o template usa {{secao_danos}}, renderizar inline (sem nova página).
+      // Caso contrário (append clássico), forçar nova página sem papel timbrado.
+      const danosInline = hasDanosPlaceholder;
       const adPage = () => {
         pdf.addPage();
-        // Linha fina azul no topo como separador visual de secção
         pdf.setDrawColor(...blue);
         pdf.setLineWidth(0.5);
         pdf.line(leftMargin, 8, pageWidth - rightMargin, 8);
         pdf.setLineWidth(0.2);
       };
 
-      adPage();
+      if (!danosInline) adPage();
 
       const LOCALIZACAO_LABELS: Record<string, string> = {
         frente: 'Frente',
@@ -1287,13 +1304,14 @@ export const generateDocumentFromTemplate = async (
       };
 
       // — Título do anexo —
+      const danosStartY = danosInline ? yPos + 6 : topMargin;
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(11);
       pdf.setTextColor(...blue);
-      pdf.text(ad.titulo, leftMargin, topMargin + 4);
+      pdf.text(ad.titulo, leftMargin, danosStartY + 4);
       pdf.setTextColor(0, 0, 0);
 
-      let ty = topMargin + 12;
+      let ty = danosStartY + 12;
 
       // — Fotos (grelha 2×3, máx 6) — vêm ANTES da tabela —
       if (ad.fotos.length > 0) {
@@ -1431,6 +1449,36 @@ export const generateDocumentFromTemplate = async (
       pdf.setTextColor(...blue);
       pdf.text(ad.linkUrl, leftMargin + qrSize + 4, ty + 17);
       pdf.setTextColor(0, 0, 0);
+
+      // Actualizar yPos para conteúdo após a secção de danos (htmlPart2).
+      if (danosInline) yPos = ty + qrSize + 8;
+    }
+
+    // Renderizar conteúdo após {{secao_danos}} (se existir).
+    if (hasDanosPlaceholder && htmlPart2.trim()) {
+      const part2Elements = htmlToText(htmlPart2);
+      for (const element of part2Elements) {
+        if (element.type !== 'text' && element.type !== 'image') continue;
+        const { text, style } = element as { text: string; style: any };
+        if (!text || text === '\n') {
+          yPos += 10 * 0.352777778 * lineFactor;
+          continue;
+        }
+        pdf.setFont('helvetica', style.bold ? 'bold' : style.italic ? 'italic' : 'normal');
+        pdf.setFontSize(style.fontSize || 10);
+        pdf.setTextColor(0, 0, 0);
+        const lines = pdf.splitTextToSize(text, maxWidth);
+        for (const line of lines) {
+          if (yPos > pageHeight - bottomMargin) {
+            pdf.addPage();
+            if (bg) pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
+            yPos = topMargin;
+          }
+          const lineH = (style.fontSize || 10) * 0.352777778 * lineFactor;
+          pdf.text(line, leftMargin, yPos);
+          yPos += lineH;
+        }
+      }
     }
 
     // Adicionar numeração de páginas (apenas deste documento, não de PDFs anteriores)

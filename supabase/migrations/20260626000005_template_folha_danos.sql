@@ -32,6 +32,8 @@ SELECT
 <p>A presente folha documenta os danos existentes na viatura à data de emissão deste documento, pertencente à frota de <strong>{{empresa_nomeCompleto}}</strong>.</p>
 <p>Os danos identificados encontram-se detalhados na listagem abaixo, incluindo localização, descrição, estado atual e respetivo registo fotográfico.</p>
 <br>
+{{secao_danos}}
+<br>
 <p><strong>Observações adicionais:</strong></p>
 <br>
 <p>_______________________________________________________________________________</p>
