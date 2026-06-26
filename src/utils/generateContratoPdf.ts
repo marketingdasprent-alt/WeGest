@@ -1,6 +1,6 @@
-import QRCode from 'qrcode';
 import { supabase } from '@/integrations/supabase/client';
 import { empresaDocData, empresaFooterText, type EmpresaConfig } from '@/config/empresas';
+import { fetchAnexoDanos } from './fetchAnexoDanos';
 
 import {
   generateDocumentosCombinados,
@@ -396,106 +396,8 @@ export const generateContratoPdf = async ({
   let anexoDanos: AnexoDanos | undefined;
   const viaturaId = contrato.viatura_id ?? viatura?.id ?? null;
   if (viaturaId) {
-    try {
-      const { data: danosRows } = await supabase
-        .from('viatura_danos')
-        .select('id, localizacao, descricao, estado, data_registo, data_ocorrencia, valor')
-        .eq('viatura_id', viaturaId)
-        .not('estado', 'eq', 'reparado')
-        .order('created_at', { ascending: false });
-
-      const danos = danosRows ?? [];
-      if (danos.length > 0) {
-        // Buscar fotos de todos os danos de uma vez
-        const danoIds = danos.map((d) => d.id);
-        const { data: fotosRows } = await supabase
-          .from('viatura_dano_fotos')
-          .select('dano_id, ficheiro_url')
-          .in('dano_id', danoIds)
-          .order('created_at', { ascending: false });
-
-        // ficheiro_url pode ser URL completa (dados antigos) ou path relativo.
-        // O bucket é viatura-documentos (padrão) ou assistencia-anexos.
-        const extractPath = (urlOrPath: string): string => {
-          if (!urlOrPath.startsWith('http')) return urlOrPath;
-          const m = urlOrPath.match(
-            /\/storage\/v1\/object\/(?:public|sign)\/(?:viatura-documentos|assistencia-anexos)\/([^?]+)/
-          );
-          return m ? decodeURIComponent(m[1]) : urlOrPath;
-        };
-        const detectBucket = (urlOrPath: string): 'viatura-documentos' | 'assistencia-anexos' => {
-          if (urlOrPath.startsWith('assistencia/') || urlOrPath.includes('assistencia-anexos'))
-            return 'assistencia-anexos';
-          return 'viatura-documentos';
-        };
-
-        const rawUrls = (fotosRows ?? [])
-          .map((f) => f.ficheiro_url)
-          .filter((u): u is string => !!u)
-          .slice(0, 6);
-
-        // Agrupar por bucket e gerar signed URLs de uma vez
-        const byBucket: Record<string, { raw: string; path: string }[]> = {
-          'viatura-documentos': [],
-          'assistencia-anexos': [],
-        };
-        for (const raw of rawUrls) {
-          byBucket[detectBucket(raw)].push({ raw, path: extractPath(raw) });
-        }
-        const signedByPath = new Map<string, string>();
-        for (const [bucket, items] of Object.entries(byBucket)) {
-          if (!items.length) continue;
-          const { data: signed } = await supabase.storage.from(bucket).createSignedUrls(
-            items.map((i) => i.path),
-            60 * 30
-          );
-          (signed ?? []).forEach((s) => {
-            if (s.signedUrl && s.path) signedByPath.set(s.path, s.signedUrl);
-          });
-        }
-        // Manter a ordem original; fallback para URL original se signed falhar
-        const fotoSignedUrls = rawUrls
-          .map((raw) => signedByPath.get(extractPath(raw)) ?? (raw.startsWith('http') ? raw : null))
-          .filter((u): u is string => !!u);
-
-        // URL da página de danos (deep-link para a tab)
-        const linkUrl = `${window.location.origin}/viaturas/${viaturaId}?tab=danos`;
-
-        // Gerar QR code como data URL
-        const qrCodeDataUrl = await QRCode.toDataURL(linkUrl, {
-          width: 200,
-          margin: 1,
-          errorCorrectionLevel: 'M',
-        });
-
-        const fmtData = (iso: string | null | undefined) => {
-          if (!iso) return '—';
-          const [y, m, d] = iso.split('-');
-          return d && m && y ? `${d}/${m}/${y}` : iso;
-        };
-        const fmtValor = (v: number | null | undefined) =>
-          v != null && !Number.isNaN(Number(v)) ? `${Number(v).toFixed(2)} €` : undefined;
-
-        const matricula = contrato.matricula ?? viatura?.matricula ?? '';
-        anexoDanos = {
-          titulo: `ANEXO — DANOS DA VIATURA${matricula ? ` ${matricula}` : ''}`,
-          danos: danos.map((d) => ({
-            localizacao: (d.localizacao as string | null) ?? '—',
-            descricao: (d.descricao as string | null) ?? '—',
-            estado: (d.estado as string | null) ?? '—',
-            data: fmtData(
-              (d.data_ocorrencia as string | null) ?? (d.data_registo as string | null)
-            ),
-            valor: fmtValor(d.valor as number | null),
-          })),
-          fotos: fotoSignedUrls,
-          linkUrl,
-          qrCodeDataUrl,
-        };
-      }
-    } catch (err) {
-      console.warn('Não foi possível gerar o anexo de danos:', err);
-    }
+    const matricula = contrato.matricula ?? viatura?.matricula ?? '';
+    anexoDanos = await fetchAnexoDanos(viaturaId, matricula);
   }
 
   // Rodapé da empresa (nome · NIF · sede) em todos os documentos gerados.
