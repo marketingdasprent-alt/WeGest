@@ -33,7 +33,7 @@ export function useClientesEmpresas() {
         .select(
           'id, org_id, nome, nome_comercial, nif, sede, representante, cargo_representante, licenca_tvde, licenca_validade, papel_timbrado, logo_url'
         )
-        .eq('tipo_cliente', 'empresa')
+        .eq('is_emissora', true)
         .is('deleted_at', null)
         .order('nome');
       if (error) throw error;

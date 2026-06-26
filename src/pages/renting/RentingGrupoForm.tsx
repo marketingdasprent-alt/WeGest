@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Layers, Save, Trash2, Car } from 'lucide-react';
+import { Layers, Save, Trash2, Car, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,6 +40,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { getStatusLabel, getStatusBadgeClass } from '@/lib/viaturas';
+import { AdicionarViaturaGrupo } from '@/components/renting/AdicionarViaturaGrupo';
+import { useAssociarViaturaGrupo } from '@/hooks/useAssociarViaturaGrupo';
 
 const IDADES = [
   { value: '', label: '— Sem Restrições —' },
@@ -142,6 +144,8 @@ const RentingGrupoForm = () => {
     retry: false,
     refetchOnMount: 'always',
   });
+
+  const removerViatura = useAssociarViaturaGrupo(id);
 
   useEffect(() => {
     if (!grupo) return;
@@ -512,6 +516,7 @@ const RentingGrupoForm = () => {
 
         {/* Tab: Viaturas Associadas */}
         <TabsContent value="viaturas">
+          {id && <AdicionarViaturaGrupo grupoId={id} />}
           {viaturasError ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 border rounded-lg border-dashed border-destructive/50">
               <Car className="h-10 w-10 text-destructive" />
@@ -529,8 +534,8 @@ const RentingGrupoForm = () => {
                 Nenhuma viatura associada a este grupo
               </p>
               <p className="text-xs text-muted-foreground">
-                Associa viaturas na página de detalhe de cada viatura, no campo &quot;Grupo&quot;, e
-                clica em <strong>Guardar</strong>.
+                Usa o campo <strong>Adicionar viatura</strong> acima para associar viaturas a este
+                grupo.
               </p>
             </div>
           ) : (
@@ -543,6 +548,7 @@ const RentingGrupoForm = () => {
                     <TableHead>Modelo</TableHead>
                     <TableHead>Ano</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead className="w-12" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -559,6 +565,20 @@ const RentingGrupoForm = () => {
                         >
                           {getStatusLabel(v.status)}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          aria-label={`Remover ${v.matricula} do grupo`}
+                          disabled={removerViatura.isPending}
+                          onClick={() =>
+                            removerViatura.mutate({ viaturaId: v.id, novoGrupoId: null })
+                          }
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}

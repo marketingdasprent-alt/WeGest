@@ -60,6 +60,8 @@ export const getStatusBadgeClass = (status?: string | null) => {
       return 'bg-violet-500/10 text-violet-600 border-violet-500/20';
     case 'em_movimentacao':
       return 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20';
+    case 'em_tvde':
+      return 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20';
     case 'manutencao':
     case 'manutenção':
       return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
@@ -106,6 +108,8 @@ export const getStatusLabel = (status?: string | null) => {
       return 'Em contrato';
     case 'em_movimentacao':
       return 'Em movimentação';
+    case 'em_tvde':
+      return 'Em TVDE';
     case 'manutencao':
     case 'manutenção':
       return 'Manutenção';
@@ -125,10 +129,16 @@ export const getStatusLabel = (status?: string | null) => {
 // 'em_uso' como status manual foi descontinuado — passou a ser o agregado
 // de em_reserva + em_contrato + em_movimentacao.
 
-export type ViaturaEstadoFonte = 'contrato' | 'reserva' | 'movimento' | 'reparacao';
+export type ViaturaEstadoFonte = 'contrato' | 'reserva' | 'movimento' | 'reparacao' | 'tvde';
 
 /** Estados que contam como "Em Uso" (viatura ocupada). */
-export const ESTADOS_EM_USO = ['em_reserva', 'em_contrato', 'em_movimentacao'] as const;
+export const ESTADOS_EM_USO = [
+  'em_reserva',
+  'em_contrato',
+  'em_movimentacao',
+  'em_tvde',
+  'em_uso',
+] as const;
 
 export const deriveViaturaEstado = (
   v: { status?: string | null; is_vendida?: boolean | null },
@@ -142,5 +152,12 @@ export const deriveViaturaEstado = (
   if (fontes?.has('movimento')) return 'em_movimentacao';
   if (fontes?.has('contrato')) return 'em_contrato';
   if (fontes?.has('reserva')) return 'em_reserva';
+  // TVDE/slot é a ocupação base (carro com motorista). Só ganha se não houver
+  // um estado de renting mais específico acima.
+  if (fontes?.has('tvde')) return 'em_tvde';
+  // Rede de segurança: campo legado `status='em_uso'` — é o que o main conta
+  // como ocupada. Mantém-se até as atribuições reais (motorista_viaturas)
+  // estarem todas criadas; depois pode ser removido.
+  if (base === 'em_uso' || base === 'em uso') return 'em_uso';
   return 'disponivel';
 };

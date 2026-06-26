@@ -16,7 +16,6 @@ import {
   Mail,
   KeyRound,
   CalendarCheck,
-  ArrowRightLeft,
   Users,
   Layers,
   Tag,
@@ -86,12 +85,6 @@ const MENU_ITEMS: MenuItem[] = [
         url: '/renting/reservas',
         icon: CalendarCheck,
         recurso: 'renting_reservas',
-      },
-      {
-        label: 'Movimentações',
-        url: '/renting/movimentacoes',
-        icon: ArrowRightLeft,
-        recurso: 'renting_movimentacoes',
       },
       {
         label: 'Clientes',
@@ -191,7 +184,7 @@ const MENU_ITEMS: MenuItem[] = [
     ],
   },
   { label: 'Assistência', url: '/assistencia', icon: Wrench, recurso: 'assistencia_tickets' },
-  { label: 'Calendário', url: '/calendario', icon: CalendarDays, recurso: 'calendario_ver' },
+  { label: 'Movimentações', url: '/calendario', icon: CalendarDays, recurso: 'calendario_ver' },
   { label: 'Marketing', url: '/marketing', icon: Mail, recurso: 'marketing_ver' },
 ];
 

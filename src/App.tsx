@@ -12,6 +12,7 @@ import NativeAppRoutes from '@/routes/NativeAppRoutes';
 import WebAppRoutes from '@/routes/WebAppRoutes';
 import { UpdateNotification } from '@/components/UpdateNotification';
 import { NotificacoesPopup } from '@/components/notificacoes/NotificacoesPopup';
+import { OnboardingColaboradorDialog } from '@/components/onboarding/OnboardingColaboradorDialog';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -39,6 +40,7 @@ const App = () => {
                     <>
                       <WebAppRoutes />
                       <NotificacoesPopup />
+                      <OnboardingColaboradorDialog />
                     </>
                   )}
                 </BrowserRouter>

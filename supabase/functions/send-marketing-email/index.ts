@@ -57,12 +57,46 @@ serve(async (req) => {
     await supabase.from("marketing_campanhas").update({ status: "enviando", lista_id }).eq("id", campanha_id);
 
     try {
-      // Buscar contactos
-      const { data: contactos, error: contErr } = await supabase
-        .from("marketing_contactos")
-        .select("nome, email")
-        .eq("lista_id", lista_id);
-      if (contErr) throw new Error("Erro ao buscar contactos");
+      // Determinar origem da lista (manual vs audiência automática)
+      const { data: lista, error: listaErr } = await supabase
+        .from("marketing_listas")
+        .select("origem, org_id")
+        .eq("id", lista_id)
+        .single();
+      if (listaErr || !lista) throw new Error("Lista não encontrada");
+      // Defesa multi-tenant: service role ignora RLS — validar org da lista == org da campanha
+      if (lista.org_id !== orgId) throw new Error("Lista de outra organização");
+
+      let contactos: Array<{ nome: string | null; email: string }> = [];
+
+      if (lista.origem === "motoristas_ativos") {
+        // Audiência ao vivo: motoristas ativos com email, da org da campanha (server-side)
+        const { data: motoristas, error: motErr } = await supabase
+          .from("motoristas_ativos")
+          .select("nome, email")
+          .eq("org_id", orgId)
+          .eq("status_ativo", true)
+          .not("email", "is", null)
+          .neq("email", "")
+          .not("perfil_rascunho", "is", true);
+        if (motErr) throw new Error("Erro ao buscar motoristas ativos");
+
+        const seen = new Set<string>();
+        for (const m of motoristas ?? []) {
+          const key = (m.email ?? "").trim().toLowerCase();
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          contactos.push({ nome: m.nome, email: m.email });
+        }
+      } else {
+        const { data: manuais, error: contErr } = await supabase
+          .from("marketing_contactos")
+          .select("nome, email")
+          .eq("lista_id", lista_id);
+        if (contErr) throw new Error("Erro ao buscar contactos");
+        contactos = manuais ?? [];
+      }
+
       if (!contactos?.length) throw new Error("Lista sem contactos");
 
       let totalEnviados = 0;

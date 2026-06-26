@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
+// xlsx carregado dinamicamente em parseExcelFile (só quando o utilizador
+// importa) — fora do bundle da página Viaturas.
 import { FileSpreadsheet, Loader2, Upload, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import {
   Dialog,
@@ -51,6 +52,7 @@ export function ImportViaturasDialog({ onImportComplete }: ImportViaturasDialogP
   };
 
   const parseExcelFile = async (selectedFile: File) => {
+    const XLSX = await import('xlsx');
     const buffer = await selectedFile.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];

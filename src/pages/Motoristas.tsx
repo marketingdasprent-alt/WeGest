@@ -43,6 +43,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { MotoristaDetailsDrawer } from '@/components/motoristas/MotoristaDetailsDrawer';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 import { cn, normalizeString } from '@/lib/utils';
 
 import type { Motorista } from '@/types/motorista';
@@ -139,10 +141,8 @@ export default function Motoristas() {
 
   const loadBpNaoAssociadasCount = async () => {
     try {
-      const { count } = await supabase
-        .from('bp_transacoes')
-        .select('card_number', { count: 'exact', head: false })
-        .is('motorista_id', null);
+      // Uma só query (antes havia uma com count:'exact' descartada — o valor
+      // usado é o tamanho do Set de card_number distintos).
       const { data } = await supabase
         .from('bp_transacoes')
         .select('card_number')
@@ -158,9 +158,10 @@ export default function Motoristas() {
 
   const loadPortagensCount = async () => {
     try {
+      // Sem count:'exact' (não era usado) — evita o COUNT(*) extra no servidor.
       const { data } = await (supabase as any)
         .from('via_verde_transacoes')
-        .select('matricula', { count: 'exact', head: false })
+        .select('matricula')
         .is('motorista_id', null)
         .not('matricula', 'is', null);
       const unique = new Set<string>(((data as any[]) || []).map((r: any) => r.matricula));
@@ -364,6 +365,12 @@ export default function Motoristas() {
 
     return result;
   }, [motoristas, searchTerm, statusFilter, cidadeFilter, gestorFilter, sortColumn, sortDirection]);
+
+  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
+    filteredMotoristas,
+    50,
+    `${searchTerm}|${statusFilter}|${cidadeFilter}|${gestorFilter}`
+  );
 
   const handleRowClick = (motorista: Motorista) => {
     navigate(`/motoristas/${motorista.id}`, {
@@ -778,7 +785,7 @@ export default function Motoristas() {
       ) : isMobile ? (
         /* Mobile: Card Grid */
         <div className="grid gap-3">
-          {filteredMotoristas.map((motorista) => (
+          {pageItems.map((motorista) => (
             <MotoristaCard
               key={motorista.id}
               motorista={motorista}
@@ -814,7 +821,7 @@ export default function Motoristas() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredMotoristas.map((motorista) => (
+              {pageItems.map((motorista) => (
                 <TableRow
                   key={motorista.id}
                   className="cursor-pointer h-10"
@@ -865,6 +872,18 @@ export default function Motoristas() {
             </TableBody>
           </Table>
         </div>
+      )}
+
+      {!loading && total > 0 && (
+        <TablePagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          start={start}
+          end={end}
+          onPageChange={setPage}
+          noun={['motorista', 'motoristas']}
+        />
       )}
 
       {/* Dialog para Adicionar Motorista */}

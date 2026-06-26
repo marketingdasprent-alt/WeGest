@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Send, Eye, Trash2, Loader2, History } from 'lucide-react';
+import { Plus, Send, Eye, Trash2, Loader2, History, Users, Megaphone } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -129,8 +129,18 @@ export const CampanhasTab = () => {
 
       {!campanhas?.length ? (
         <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Nenhuma campanha criada. Clique em "Nova Campanha" para começar.
+          <CardContent className="py-12 flex flex-col items-center gap-3 text-center">
+            <Megaphone className="h-10 w-10 text-muted-foreground/40" />
+            <p className="text-muted-foreground">Ainda não há campanhas.</p>
+            <Button
+              onClick={() => {
+                setEditingCampanha(null);
+                setDialogOpen(true);
+              }}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" /> Criar primeira campanha
+            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -152,6 +162,17 @@ export const CampanhasTab = () => {
                       Assunto:{' '}
                       <span className="text-foreground">{c.assunto || '(sem assunto)'}</span>
                     </p>
+                    <p className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5 shrink-0" />
+                      Lista:{' '}
+                      <span
+                        className={
+                          c.marketing_listas?.nome ? 'text-foreground font-medium' : 'italic'
+                        }
+                      >
+                        {c.marketing_listas?.nome || 'por escolher'}
+                      </span>
+                    </p>
 
                     {c.enviado_em && (
                       <p>
@@ -165,16 +186,23 @@ export const CampanhasTab = () => {
                       </p>
                     )}
                   </div>
-                  <div className="flex gap-2 flex-shrink-0">
+                  <div className="flex flex-wrap gap-2 justify-end flex-shrink-0">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setHistoricoCampanha(c)}
                       title="Histórico de envios"
+                      aria-label="Histórico de envios"
                     >
                       <History className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setPreviewCampanha(c)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPreviewCampanha(c)}
+                      title="Pré-visualizar email"
+                      aria-label="Pré-visualizar email"
+                    >
                       <Eye className="h-4 w-4" />
                     </Button>
                     <Button
@@ -196,7 +224,13 @@ export const CampanhasTab = () => {
                       <Send className="h-4 w-4" />
                       Enviar
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={() => setDeleteId(c.id)}>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setDeleteId(c.id)}
+                      title="Eliminar campanha"
+                      aria-label="Eliminar campanha"
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>

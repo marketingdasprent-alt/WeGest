@@ -49,6 +49,7 @@ export interface Candidatura {
   data_submissao: string | null;
   data_decisao: string | null;
   motivo_rejeicao: string | null;
+  observacoes?: string | null;
   created_at: string;
   updated_at: string;
 }

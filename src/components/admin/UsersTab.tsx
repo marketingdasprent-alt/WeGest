@@ -113,21 +113,42 @@ export const UsersTab = () => {
 
   const fetchProfiles = async () => {
     try {
-      const { data, error } = await supabase
+      // 1. Membros da org ativa (user_organizacoes é scoped por RLS)
+      const { data: memberships, error: membershipError } = await supabase
+        .from('user_organizacoes')
+        .select('user_id, cargo_id, is_admin')
+        .neq('cargo_id', 'a0000000-0000-0000-0000-000000000001');
+
+      if (membershipError) throw membershipError;
+
+      if (!memberships || memberships.length === 0) {
+        setProfiles([]);
+        return;
+      }
+
+      const userIds = memberships.map((m) => m.user_id);
+
+      // 2. Profiles desses utilizadores (RLS alargada por migration 140006)
+      const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select(
-          `
-          *,
-          cargos:cargo_id (
-            nome
-          )
-        `
-        )
-        .or('cargo_id.neq.a0000000-0000-0000-0000-000000000001,cargo_id.is.null')
+        .select('id, email, nome, created_at')
+        .in('id', userIds)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setProfiles(data || []);
+      if (profilesError) throw profilesError;
+
+      const membershipMap = Object.fromEntries(memberships.map((m) => [m.user_id, m]));
+
+      const mapped = (profilesData || []).map((p) => ({
+        id: p.id,
+        email: p.email,
+        nome: p.nome,
+        created_at: p.created_at,
+        cargo_id: membershipMap[p.id]?.cargo_id ?? null,
+        is_admin: membershipMap[p.id]?.is_admin ?? false,
+      }));
+
+      setProfiles(mapped);
     } catch (error: any) {
       toast({
         title: 'Erro ao carregar utilizadores',
@@ -276,8 +297,10 @@ export const UsersTab = () => {
       }
 
       toast({
-        title: 'Utilizador criado',
-        description: 'O utilizador foi criado com sucesso.',
+        title: data?.existing ? 'Utilizador adicionado' : 'Utilizador criado',
+        description: data?.existing
+          ? 'O utilizador já tinha conta e foi adicionado a esta organização.'
+          : 'O utilizador foi criado com sucesso.',
       });
 
       setIsCreateDialogOpen(false);

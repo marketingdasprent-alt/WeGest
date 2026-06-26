@@ -42,6 +42,10 @@ export const movimentoFormSchema = z
     km_final: optionalNumber,
     combustivel_inicial: optionalNumber,
     combustivel_final: optionalNumber,
+    eletricidade_inicial: z.string().optional().nullable(),
+    eletricidade_final: z.string().optional().nullable(),
+    gpl_inicial: z.string().optional().nullable(),
+    gpl_final: z.string().optional().nullable(),
 
     motivo: z.string().max(255).optional().nullable(),
     prestador: z.string().max(255).optional().nullable(),

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useForm, useFormContext, useWatch, type Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -472,19 +472,6 @@ export const SeccaoCarta = ({ control }: { control: Control<ClienteFormData> }) 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
       <FormField
         control={control}
-        name="carta_data_emissao"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Data de Emissão</FormLabel>
-            <FormControl>
-              <Input type="date" {...field} className="h-11" />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={control}
         name="carta_validade"
         render={({ field }) => (
           <FormItem>
@@ -548,6 +535,11 @@ export function ClienteDialog({
   defaultTipoCliente = 'particular',
 }: ClienteDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Lock SÍNCRONO contra duplo-submit. O state isSubmitting só desativa o
+  // botão no próximo render — entre o 1º clique e esse render há uma janela
+  // onde um 2º clique (duplo-clique/Enter) passava a guarda e criava em
+  // duplicado. O ref atualiza já, fechando essa janela.
+  const submittingRef = useRef(false);
   const [activeTab, setActiveTab] = useState<'dados' | 'anexos'>('dados');
   const createMutation = useCreateCliente();
   const updateMutation = useUpdateCliente();
@@ -581,6 +573,7 @@ export function ClienteDialog({
       reset({
         tipo_cliente: cliente.tipo_cliente ?? (cliente.is_empresa ? 'empresa' : 'particular'),
         is_empresa: cliente.is_empresa,
+        is_edicao: true,
         nome: cliente.nome,
         nome_comercial: cliente.nome_comercial || '',
         nif: cliente.nif || '',
@@ -613,7 +606,8 @@ export function ClienteDialog({
 
   const onSubmit = useCallback(
     async (values: ClienteFormData) => {
-      if (isSubmitting) return;
+      if (submittingRef.current) return;
+      submittingRef.current = true;
       setIsSubmitting(true);
       try {
         const clientePayload = buildClientePayload(values);
@@ -641,10 +635,11 @@ export function ClienteDialog({
       } catch {
         // erro tratado pelos mutations via toast
       } finally {
+        submittingRef.current = false;
         setIsSubmitting(false);
       }
     },
-    [cliente, createMutation, updateMutation, isSubmitting, onOpenChange, onCreated]
+    [cliente, createMutation, updateMutation, onOpenChange, onCreated]
   );
 
   const loading = isSubmitting || createMutation.isPending || updateMutation.isPending;
@@ -711,7 +706,9 @@ export function ClienteDialog({
                 />
                 {/* Condutor não é pagador — sem morada nem documento de identificação. */}
                 {!isCondutor && <SeccaoMorada control={control} />}
-                {!isCondutor && <SeccaoDocumento control={control} />}
+                {/* Documento de identificação (CC/Passaporte) é de pessoa singular —
+                    empresa identifica-se pelo NIF, condutor não é pagador. */}
+                {!isCondutor && !isEmpresa && <SeccaoDocumento control={control} />}
                 {!isEmpresa && <SeccaoCarta control={control} />}
               </form>
             </Form>
