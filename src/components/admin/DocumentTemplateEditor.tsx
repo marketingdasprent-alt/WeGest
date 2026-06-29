@@ -32,6 +32,7 @@ const CATEGORIA_EMOJI: Record<BaseCategoria, string> = {
   empresa: '🏢',
   viatura: '🚗',
   contrato: '📄',
+  danos: '🛠️',
 };
 
 // Tipos de template (coluna `tipo`, TEXT livre). Os de contrato têm semântica

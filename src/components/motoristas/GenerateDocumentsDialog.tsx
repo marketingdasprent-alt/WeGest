@@ -221,7 +221,10 @@ export const GenerateDocumentsDialog = ({
   };
 
   const filteredTemplates = templates.filter(
-    (t) => !selectedEmpresa || t.cliente_empresa_id === selectedEmpresa
+    // A Folha de Danos (anexo_danos) só se gera no fluxo de check-in/out
+    // (entrega/recolha), nunca por este diálogo de documentos do contrato.
+    (t) =>
+      t.tipo !== 'anexo_danos' && (!selectedEmpresa || t.cliente_empresa_id === selectedEmpresa)
   );
 
   // Contador de templates visíveis e selecionados

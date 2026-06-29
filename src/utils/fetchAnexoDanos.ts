@@ -10,7 +10,9 @@ export async function fetchAnexoDanos(
   try {
     let query = supabase
       .from('viatura_danos')
-      .select('id, localizacao, descricao, estado, data_registo, data_ocorrencia, valor')
+      .select(
+        'id, localizacao, descricao, estado, data_registo, data_ocorrencia, valor, registo_fotografico'
+      )
       .eq('viatura_id', viaturaId)
       .not('estado', 'eq', 'reparado')
       .order('created_at', { ascending: false });
@@ -19,14 +21,17 @@ export async function fetchAnexoDanos(
 
     const danos = (danosRows as typeof danosRows) ?? [];
 
+    // As fotos da grelha vêm de TODOS os registos (incluindo os de registo
+    // fotográfico do momento). A tabela, porém, só lista danos catalogados.
     const danoIds = danos.map((d) => d.id);
+    const danosTabela = danos.filter((d) => !d.registo_fotografico);
     const { data: fotosRows } = danoIds.length
       ? await supabase
           .from('viatura_dano_fotos')
           .select('dano_id, ficheiro_url')
           .in('dano_id', danoIds)
           .order('created_at', { ascending: false })
-      : { data: [], error: null };
+      : { data: [] };
 
     type Bucket = 'viatura-documentos' | 'assistencia-anexos' | 'viatura-danos';
     const extractPath = (urlOrPath: string): string => {
@@ -75,7 +80,18 @@ export async function fetchAnexoDanos(
       .map((raw) => signedByPath.get(extractPath(raw)) ?? (raw.startsWith('http') ? raw : null))
       .filter((u): u is string => !!u);
 
-    const linkUrl = `${window.location.origin}/viaturas/${viaturaId}?tab=danos`;
+    // QR público: gera (ou reutiliza) um token e aponta para a galeria pública
+    // /danos/:token (sem login). Fallback para a página interna se falhar.
+    let linkUrl = `${window.location.origin}/viaturas/${viaturaId}?tab=danos`;
+    try {
+      const { data: tokenId } = await supabase.rpc('gerar_token_danos', {
+        p_viatura_id: viaturaId,
+        p_contrato_renting_id: contratoId ?? null,
+      });
+      if (tokenId) linkUrl = `${window.location.origin}/danos/${tokenId}`;
+    } catch {
+      /* sem token — mantém o link interno */
+    }
     const qrCodeDataUrl = await QRCode.toDataURL(linkUrl, {
       width: 200,
       margin: 1,
@@ -92,7 +108,7 @@ export async function fetchAnexoDanos(
 
     return {
       titulo: `ANEXO — DANOS DA VIATURA${matricula ? ` ${matricula}` : ''}`,
-      danos: danos.map((d) => ({
+      danos: danosTabela.map((d) => ({
         localizacao: (d.localizacao as string | null) ?? '—',
         descricao: (d.descricao as string | null) ?? '—',
         estado: (d.estado as string | null) ?? '—',

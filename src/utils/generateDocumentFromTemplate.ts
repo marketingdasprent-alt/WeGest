@@ -70,6 +70,16 @@ interface GenerateDocumentParams {
   km_entrada?: string;
   combustivel_saida?: string;
   combustivel_entrada?: string;
+  /** Momento da folha de danos: 'ENTREGA' | 'RECOLHA' | 'DEVOLUÇÃO'. Preenche {{momento_folha}}. */
+  momentoFolha?: string;
+  /** Fotos locais (data URLs) a juntar à grelha de danos — usado na pré-visualização
+   *  antes de as fotos serem gravadas na BD. Máx 6 no total (com as da BD). */
+  fotosMomento?: string[];
+  /** Danos locais (ainda não gravados) a juntar à tabela — usado na
+   *  pré-visualização dos danos registados no momento. */
+  danosMomento?: AnexoDanoItem[];
+  /** Observações do gestor no momento — preenche {{observacoes_momento}}. */
+  observacoesMomento?: string;
 }
 
 interface UploadDocumentParams extends GenerateDocumentParams {
@@ -354,6 +364,8 @@ const replaceDynamicFields = (
     'km_entrada',
     'combustivel_saida',
     'combustivel_entrada',
+    'momento_folha',
+    'observacoes_momento',
   ];
   contratoFields.forEach((field) => {
     const regex = new RegExp(`\\{\\{${field}\\}\\}`, 'g');
@@ -837,6 +849,10 @@ export const generateDocumentFromTemplate = async (
       ...(params.combustivel_entrada != null
         ? { combustivel_entrada: params.combustivel_entrada }
         : {}),
+      ...(params.momentoFolha != null ? { momento_folha: params.momentoFolha } : {}),
+      ...(params.observacoesMomento != null
+        ? { observacoes_momento: params.observacoesMomento }
+        : {}),
     };
     const processedContent = replaceDynamicFields(conteudo, motoristaData, enrichedDocumentData);
 
@@ -1292,6 +1308,20 @@ export const generateDocumentFromTemplate = async (
       }
     }
 
+    // Pré-visualização: juntar fotos e danos locais (ainda não gravados) aos da BD.
+    if (efectivoAnexoDanos && params.fotosMomento?.length) {
+      efectivoAnexoDanos = {
+        ...efectivoAnexoDanos,
+        fotos: [...params.fotosMomento, ...efectivoAnexoDanos.fotos].slice(0, 6),
+      };
+    }
+    if (efectivoAnexoDanos && params.danosMomento?.length) {
+      efectivoAnexoDanos = {
+        ...efectivoAnexoDanos,
+        danos: [...params.danosMomento, ...efectivoAnexoDanos.danos],
+      };
+    }
+
     // Anexar folha de danos da viatura (lista + fotos máx 6 + QR code).
     if (efectivoAnexoDanos) {
       const ad = efectivoAnexoDanos;
@@ -1410,8 +1440,11 @@ export const generateDocumentFromTemplate = async (
         const rowH = 7;
         const headerH = 8;
 
-        // Nova página se não couber tabela + QR (mínimo 3 linhas + QR = ~60mm)
-        if (ty + headerH + rowH + 44 > pageHeight - bottomMargin) {
+        // Para não partir a tabela: se a tabela INTEIRA (header + todas as
+        // linhas) + QR não couber no espaço restante, começa numa nova página.
+        // (Só parte se exceder uma página inteira — caso raro de muitos danos.)
+        const alturaTabelaQR = headerH + ad.danos.length * rowH + 6 + 44;
+        if (ty + alturaTabelaQR > pageHeight - bottomMargin) {
           adPage();
           ty = topMargin + 8;
         }

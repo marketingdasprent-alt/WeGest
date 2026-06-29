@@ -1,13 +1,13 @@
 -- Actualiza o template "Folha de Danos" para incluir tabela de KM e combustível.
 UPDATE public.document_templates
 SET template_data = jsonb_build_object(
-  'conteudo', $html$<h1 style="text-align:center">FOLHA DE REGISTO DE DANOS</h1>
+  'conteudo', $html$<h1 style="text-align:center">FOLHA DE REGISTO DE DANOS — {{momento_folha}}</h1>
 <p style="text-align:center"><strong>{{empresa_nome_completo}}</strong> · NIF {{empresa_nif}}</p>
 <br>
 <p>A presente folha documenta os danos existentes na viatura à data de emissão deste documento, pertencente à frota de <strong>{{empresa_nome_completo}}</strong>.</p>
 <p>Os danos identificados encontram-se detalhados na listagem abaixo, incluindo localização, descrição, estado atual e respetivo registo fotográfico.</p>
 <br>
-<table style="width:100%;border-collapse:collapse;font-size:10pt">
+<table border="1" style="width:100%;border-collapse:collapse;font-size:10pt">
   <tr>
     <td style="border:1px solid #cccccc;padding:4px 8px;background-color:#f5f5f5;font-weight:bold;width:25%">Matrícula</td>
     <td style="border:1px solid #cccccc;padding:4px 8px;width:25%">{{viatura_matricula}}</td>
@@ -30,15 +30,24 @@ SET template_data = jsonb_build_object(
 <br>
 {{secao_danos}}
 <br>
+<p><strong>Observações:</strong> {{observacoes_momento}}</p>
+<br>
 <p>{{cidade_assinatura}}, {{data_assinatura}}</p>
 <br>
 <br>
-<p>_________________________________</p>
-<p>Condutor: {{motorista_nome}}</p>
 <br>
-<br>
-<p>_________________________________</p>
-<p>Assinatura: {{cliente_cargo_representante}}</p>$html$,
+<table style="width:100%; border-collapse:collapse; text-align:center;">
+  <tr>
+    <td style="width:50%; vertical-align:top;">
+      <p>_________________________________</p>
+      <p>O Cliente {{cliente_nome}}</p>
+    </td>
+    <td style="width:50%; vertical-align:top;">
+      <p>_________________________________</p>
+      <p>O Condutor {{motorista_nome}}</p>
+    </td>
+  </tr>
+</table>,
   'topMargin', 50,
   'bottomMargin', 38
 ),

@@ -281,12 +281,13 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
         // 6b. Folha de danos (template) — danos ligados a este contrato + KMs
         if (contrato && viaturaId) {
           try {
-            const { data: tmpl } = await supabase
+            const { data: tmplRows } = await supabase
               .from('document_templates')
               .select('id')
               .eq('tipo', 'anexo_danos')
               .eq('ativo', true)
-              .maybeSingle();
+              .limit(1);
+            const tmpl = tmplRows?.[0];
             if (tmpl) {
               await generateDocumentFromTemplate({
                 templateId: tmpl.id,
@@ -298,6 +299,7 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
                 km_entrada: checkinDados.km,
                 combustivel_saida: contrato.combustivel_checkout ?? '',
                 combustivel_entrada: checkinDados.combustivel,
+                momentoFolha: isDevolucao ? 'DEVOLUÇÃO' : 'RECOLHA',
                 action: 'print',
               });
             }
