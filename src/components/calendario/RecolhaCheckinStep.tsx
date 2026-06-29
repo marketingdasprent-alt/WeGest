@@ -26,6 +26,7 @@ import {
 } from './CheckinDadosSection';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
 import type { CheckinDadosState } from './CheckinDadosSection';
+import { useOrgId } from '@/contexts/TenantContext';
 
 export interface RecolhaCheckinStepProps {
   eventoData: PendingEventoData;
@@ -58,6 +59,7 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
     estacaoNome,
   } = eventoData;
   const fazerDepois = eventoData.fazerDepois ?? false;
+  const orgId = useOrgId();
 
   const queryClient = useQueryClient();
   const [files, setFiles] = useState<SelectedFile[]>([]);
@@ -248,6 +250,7 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
             tipo: 'recolha',
             data_inicio: dataISO,
             dia_todo: diaTodo,
+            org_id: orgId,
           },
         });
       } catch {

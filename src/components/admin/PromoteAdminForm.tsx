@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAdmin } from '@/hooks/useAdmin';
+import { useOrgId } from '@/contexts/TenantContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +14,7 @@ export const PromoteAdminForm = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { isAdmin } = useAdmin();
+  const orgId = useOrgId();
 
   if (!isAdmin) {
     return null; // Não mostrar o componente se não for admin
@@ -34,7 +36,7 @@ export const PromoteAdminForm = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke('promote-admin', {
-        body: { email },
+        body: { email, org_id: orgId },
       });
 
       if (error) {

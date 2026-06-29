@@ -38,30 +38,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify admin
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-    const { data: isAdmin } = await supabase.rpc('is_current_user_admin');
-
-    // Fallback: check profiles table
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile?.is_admin) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Sem permissão de administrador' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
 
     const body = await req.json();
-    const { integracao_id, pagamentos_csv, viagens_csv } = body;
+    const { integracao_id, pagamentos_csv, viagens_csv, org_id: orgId } = body;
 
     if (!integracao_id) {
       return new Response(
         JSON.stringify({ success: false, error: 'integracao_id é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+    if (!orgId) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'org_id é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -73,12 +63,28 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify robot integration exists
+    // Admin DESTA org (papel per-org em user_organizacoes, não profiles legado).
+    const { data: membership } = await supabase
+      .from('user_organizacoes')
+      .select('is_admin')
+      .eq('user_id', user.id)
+      .eq('org_id', orgId)
+      .maybeSingle();
+
+    if (!membership?.is_admin) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Sem permissão de administrador' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // A integração tem de pertencer à org do caller (sem import cross-org).
     const { data: robotConfig } = await supabase
       .from('plataformas_configuracao')
       .select('id, nome')
       .eq('id', integracao_id)
       .eq('plataforma', 'robot')
+      .eq('org_id', orgId)
       .single();
 
     if (!robotConfig) {

@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Upload, FileSpreadsheet, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { validarNIF } from '@/lib/pt-validators';
+import { useOrgId } from '@/contexts/TenantContext';
 
 // ── Column name normalisation ────────────────────────────────────────────────
 // Maps Excel header variations → internal key
@@ -70,6 +71,7 @@ interface Props {
 type Step = 'idle' | 'preview' | 'importing' | 'done';
 
 export const ImportExcelDialog: React.FC<Props> = ({ open, onOpenChange }) => {
+  const orgId = useOrgId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('idle');
   const [fileName, setFileName] = useState('');
@@ -189,7 +191,7 @@ export const ImportExcelDialog: React.FC<Props> = ({ open, onOpenChange }) => {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ rows: rowsNormalizadas }),
+        body: JSON.stringify({ rows: rowsNormalizadas, org_id: orgId }),
       });
 
       const data = await response.json();

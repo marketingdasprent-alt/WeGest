@@ -41,6 +41,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useOrgId } from '@/contexts/TenantContext';
 import { Motorista } from '@/pages/Motoristas';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { DocumentUploader } from '@/components/motorista-portal/DocumentUploader';
@@ -182,6 +183,7 @@ export function MotoristaDialog({
   const [pendingSlotMotorista, setPendingSlotMotorista] = useState<Motorista | null>(null);
   const cancelCountRef = useRef(0);
   const [gestores, setGestores] = useState<{ nome: string }[]>([]);
+  const orgId = useOrgId();
   const [gestorPopoverOpen, setGestorPopoverOpen] = useState(false);
   const { toast } = useToast();
 
@@ -228,24 +230,31 @@ export function MotoristaDialog({
   }, [open, motorista?.id]);
 
   useEffect(() => {
+    if (!orgId) return;
     const fetchGestores = async () => {
       try {
+        // Gestores TVDE da ORG ATIVA via user_organizacoes (per-org). Filtra
+        // por NOME do cargo (cargos são por-org com ids distintos).
         const { data, error } = await supabase
-          .from('profiles')
-          .select('nome, cargo')
-          .not('nome', 'is', null)
-          .ilike('cargo', '%Gestor%TVDE%')
-          .order('nome');
+          .from('user_organizacoes')
+          .select('cargos(nome), profiles(nome)')
+          .eq('org_id', orgId);
 
         if (error) throw error;
 
-        // Remover duplicados por nome
-        const uniqueGestores = (data || []).reduce((acc: { nome: string }[], current) => {
-          if (!acc.find((item) => item.nome === current.nome)) {
-            acc.push({ nome: current.nome });
-          }
-          return acc;
-        }, []);
+        const uniqueGestores = ((data as any[]) || []).reduce(
+          (acc: { nome: string }[], current) => {
+            const cargoNome = (current.cargos?.nome || '').toLowerCase();
+            const nome = current.profiles?.nome as string | undefined;
+            const isGestorTvde = cargoNome.includes('gestor') && cargoNome.includes('tvde');
+            if (isGestorTvde && nome && !acc.find((item) => item.nome === nome)) {
+              acc.push({ nome });
+            }
+            return acc;
+          },
+          []
+        );
+        uniqueGestores.sort((a, b) => a.nome.localeCompare(b.nome));
 
         setGestores(uniqueGestores);
       } catch (error) {
@@ -253,7 +262,7 @@ export function MotoristaDialog({
       }
     };
     fetchGestores();
-  }, []);
+  }, [orgId]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchemaValidado),

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrgId } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
 import {
   Card,
@@ -72,6 +73,7 @@ interface Categoria {
 export default function AssistenciaNova() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const orgId = useOrgId();
   const { toast } = useToast();
 
   const [step, setStep] = useState(1);
@@ -360,15 +362,23 @@ export default function AssistenciaNova() {
           '0cf27801-80ff-4480-857e-e90bfb75d5a6', // Supervisor Gestor TVDE
         ];
 
-        const [adminsRes, gestoresByIdRes, gestoresByNomeRes] = await Promise.all([
-          supabase.from('profiles').select('id').eq('is_admin', true),
-          supabase.from('profiles').select('id').in('cargo_id', GESTOR_ASSISTENCIA_CARGO_IDS),
-          supabase.from('profiles').select('id').ilike('cargo', '%Gestor%Assist%'),
-        ]);
+        // Admins/gestores da ORG ATIVA (papel per-org em user_organizacoes,
+        // não profiles legado). Inclui cargo "Gestor de Assistência" por nome.
+        const { data: orgStaff } = await supabase
+          .from('user_organizacoes')
+          .select('user_id, is_admin, cargo_id, cargos(nome)')
+          .eq('org_id', orgId);
 
-        adminsRes.data?.forEach((p) => userIdsSet.add(p.id));
-        gestoresByIdRes.data?.forEach((p) => userIdsSet.add(p.id));
-        gestoresByNomeRes.data?.forEach((p) => userIdsSet.add(p.id));
+        (orgStaff || []).forEach((m: any) => {
+          const cargoNome = (m.cargos?.nome || '').toLowerCase();
+          if (
+            m.is_admin ||
+            GESTOR_ASSISTENCIA_CARGO_IDS.includes(m.cargo_id) ||
+            (cargoNome.includes('gestor') && cargoNome.includes('assist'))
+          ) {
+            userIdsSet.add(m.user_id);
+          }
+        });
 
         if (motoristaId) {
           const { data: motorista } = await supabase
