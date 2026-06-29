@@ -54,6 +54,7 @@ import {
 } from '@/hooks/useRentingGruposTarifas';
 import { AlertTriangle } from 'lucide-react';
 
+import { SLOT_ESTADOS_PERMITIDOS, SLOT_ESTADO_LABELS } from '@/types/reserva';
 import type { ReservaFormValues } from '../reservaDialog.schema';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import type { Estacao } from '@/hooks/useEstacoes';
@@ -911,6 +912,48 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* === Slot: estado (controlo manual do gestor) === */}
+      {isSlot && (
+        <div>
+          <SectionHeader
+            icon={ClipboardList}
+            title="Estado do Slot"
+            accent="navy"
+            hint="O gestor controla o estado — o slot não muda sozinho"
+          />
+          <FormField
+            control={form.control}
+            name="estado"
+            render={({ field }) => (
+              <FormItem className="max-w-xs">
+                <FormLabel>Estado</FormLabel>
+                <Select
+                  value={field.value}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    field.onChange(v);
+                  }}
+                >
+                  <FormControl>
+                    <SelectTrigger className="bg-background">
+                      <SelectValue placeholder="Selecciona estado..." />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {SLOT_ESTADOS_PERMITIDOS.map((e) => (
+                      <SelectItem key={e} value={e}>
+                        {SLOT_ESTADO_LABELS[e]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
       )}
 

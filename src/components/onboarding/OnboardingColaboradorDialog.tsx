@@ -12,8 +12,6 @@ import {
 } from '@/components/ui/dialog';
 import { markOnboardingSeen, shouldShowOnboarding } from '@/lib/onboarding';
 
-const CONTACTO_SUPORTE = 'o Thiago ou o João';
-
 export function OnboardingColaboradorDialog() {
   const { user } = useAuth();
   const { tipoUtilizador, initialized, loading } = usePermissionsContext();
@@ -60,7 +58,7 @@ export function OnboardingColaboradorDialog() {
           </div>
           <div>
             <p className="font-semibold">Encontraste algum erro?</p>
-            <p className="text-muted-foreground">Não hesites em falar com {CONTACTO_SUPORTE}.</p>
+            <p className="text-muted-foreground">Não hesites em falar com o Thiago ou o João.</p>
           </div>
         </div>
 
