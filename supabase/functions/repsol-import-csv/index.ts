@@ -15,15 +15,55 @@ function sanitizeCard(card: string): string {
   return (card || '').replace(/\D/g, '');
 }
 
-function parseRepsolDate(raw: string, time: string = '00:00'): string | null {
+function parseRepsolDate(raw: string, time: string = ''): string | null {
   if (!raw) return null;
-  // Common format: DD/MM/YYYY
-  const m = raw.trim().match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
-  if (m) {
-    const t = time.trim().match(/^(\d{2})[:h](\d{2})/) || ['00:00', '00', '00'];
-    return `${m[3]}-${m[2]}-${m[1]}T${t[1]}:${t[2]}:00Z`;
+  let s = raw.trim();
+
+  // Campo pode trazer data+hora junto: "15/03/2024 08:30:00" ou "15/03/2024T08:30"
+  const dateTime = s.match(/^(\S+)[ T]+(\d{1,2}[:h]\d{2}(?::\d{2})?)/);
+  if (dateTime) {
+    s = dateTime[1];
+    if (!time) time = dateTime[2];
   }
-  const d = new Date(raw);
+
+  // Normalizar hora → HH:MM
+  let hh = '00',
+    mm = '00';
+  const tm = (time || '').trim().match(/(\d{1,2})[:h](\d{2})/);
+  if (tm) {
+    hh = tm[1].padStart(2, '0');
+    mm = tm[2];
+  }
+
+  // DD/MM/YYYY · DD-MM-YYYY · DD.MM.YYYY  (ano 2 ou 4 dígitos)
+  let m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if (m) {
+    let [, d, mo, y] = m;
+    if (y.length === 2) y = (parseInt(y, 10) >= 70 ? '19' : '20') + y;
+    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}T${hh}:${mm}:00Z`;
+  }
+
+  // YYYY/MM/DD · YYYY-MM-DD · YYYY.MM.DD
+  m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+  if (m) {
+    const [, y, mo, d] = m;
+    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}T${hh}:${mm}:00Z`;
+  }
+
+  // YYYYMMDD (8 dígitos, começa por 19/20)
+  m = s.match(/^(19|20)(\d{2})(\d{2})(\d{2})$/);
+  if (m) {
+    return `${m[1]}${m[2]}-${m[3]}-${m[4]}T${hh}:${mm}:00Z`;
+  }
+
+  // DDMMYYYY (8 dígitos)
+  m = s.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (m) {
+    return `${m[3]}-${m[2]}-${m[1]}T${hh}:${mm}:00Z`;
+  }
+
+  // Último recurso: parser nativo
+  const d = new Date(s);
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
@@ -31,22 +71,38 @@ function parseCsvLine(line: string, sep: string): string[] {
   const fields: string[] = [];
   let i = 0;
   while (i <= line.length) {
-    if (i === line.length) { fields.push(''); break; }
+    if (i === line.length) {
+      fields.push('');
+      break;
+    }
     if (line[i] === '"') {
       let value = '';
       i++;
       while (i < line.length) {
         if (line[i] === '"') {
-          if (i + 1 < line.length && line[i + 1] === '"') { value += '"'; i += 2; }
-          else { i++; break; }
-        } else { value += line[i]; i++; }
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            value += '"';
+            i += 2;
+          } else {
+            i++;
+            break;
+          }
+        } else {
+          value += line[i];
+          i++;
+        }
       }
       fields.push(value);
       if (i < line.length && line[i] === sep) i++;
     } else {
       const nextSep = line.indexOf(sep, i);
-      if (nextSep === -1) { fields.push(line.substring(i)); break; }
-      else { fields.push(line.substring(i, nextSep)); i = nextSep + 1; }
+      if (nextSep === -1) {
+        fields.push(line.substring(i));
+        break;
+      } else {
+        fields.push(line.substring(i, nextSep));
+        i = nextSep + 1;
+      }
     }
   }
   return fields;
@@ -61,16 +117,18 @@ function detectSeparator(lines: string[]): string {
 
 function parseCsv(text: string): Record<string, string>[] {
   const clean = text.replace(/^\uFEFF/, '');
-  const lines = clean.split(/\r?\n/).filter(l => l.trim());
+  const lines = clean.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
   const sep = detectSeparator(lines);
-  const headers = parseCsvLine(lines[0], sep).map(h => h.trim());
+  const headers = parseCsvLine(lines[0], sep).map((h) => h.trim());
   const rows: Record<string, string>[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const vals = parseCsvLine(lines[i], sep).map(v => v.trim());
+    const vals = parseCsvLine(lines[i], sep).map((v) => v.trim());
     if (vals.length < 2) continue;
     const row: Record<string, string> = {};
-    headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+    headers.forEach((h, idx) => {
+      row[h] = vals[idx] || '';
+    });
     rows.push(row);
   }
   return rows;
@@ -78,7 +136,7 @@ function parseCsv(text: string): Record<string, string>[] {
 
 function findField(row: Record<string, string>, candidates: string[]): string {
   for (const c of candidates) {
-    const key = Object.keys(row).find(k => k.toLowerCase().includes(c.toLowerCase()));
+    const key = Object.keys(row).find((k) => k.toLowerCase().includes(c.toLowerCase()));
     if (key && row[key]) return row[key];
   }
   return '';
@@ -114,7 +172,12 @@ function parseNumber(val: string): number | null {
 }
 
 function normalizeName(name: string): string {
-  return (name || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+  return (name || '')
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
 }
 
 Deno.serve(async (req) => {
@@ -161,7 +224,7 @@ Deno.serve(async (req) => {
 
     let rows: Record<string, string>[] = [];
     if (movimentos && Array.isArray(movimentos)) {
-      rows = movimentos.map(m => {
+      rows = movimentos.map((m) => {
         const row: Record<string, string> = {};
         Object.entries(m).forEach(([k, v]) => {
           row[k] = v !== null && v !== undefined ? String(v) : '';
@@ -188,7 +251,10 @@ Deno.serve(async (req) => {
       const normalName = normalizeName(m.nome);
       if (normalName) nameMap.set(normalName, m.id);
       if (m.cartao_repsol) {
-        const parts = m.cartao_repsol.split('/').map(p => sanitizeCard(p.trim())).filter(p => p.length >= 3);
+        const parts = m.cartao_repsol
+          .split('/')
+          .map((p) => sanitizeCard(p.trim()))
+          .filter((p) => p.length >= 3);
         for (const p of parts) {
           cardMap.set(p, m.id);
           if (p.length >= 4) cardMap.set(p.slice(-4), m.id);
@@ -200,22 +266,57 @@ Deno.serve(async (req) => {
       if (v.matricula) matriculaMap.set(v.matricula.toUpperCase().replace(/\s/g, ''), v.id);
     }
 
-    let imported = 0, matched = 0, skipped = 0;
+    let imported = 0,
+      matched = 0,
+      skipped = 0;
     const upsertMap = new Map();
 
     for (const row of rows) {
-      const cardNumber = findField(row, ['tarjeta', 'cartao_dispositivo', 'cartao', 'card', 'PAN']);
-      const dateStr = findField(row, ['fecha', 'data', 'date']);
-      const timeStr = findField(row, ['hora', 'time']);
-      const amountStr = findField(row, ['montante', 'importe', 'valor', 'total', 'amount']);
-      const qtyStr = findField(row, ['litros', 'cantidad', 'quantidade', 'volume']);
-      const product = findField(row, ['producto', 'produto', 'product']);
-      const station = findField(row, ['estacion', 'posto', 'station']);
+      const cardNumber = findField(row, [
+        'num_tarjet',
+        'tarjeta',
+        'tarjet',
+        'cartao_dispositivo',
+        'cartao',
+        'card',
+        'PAN',
+      ]);
+      const dateStr = findField(row, ['fec_oper', 'fec_factur', 'fec', 'fecha', 'data', 'date']);
+      const timeStr = findField(row, ['hor_oper', 'hor', 'hora', 'time']);
+      const amountStr = findField(row, [
+        'imp_total',
+        'imp',
+        'montante',
+        'importe',
+        'valor',
+        'total',
+        'amount',
+      ]);
+      const qtyStr = findField(row, [
+        'num_litro',
+        'litro',
+        'litros',
+        'cantidad',
+        'quantidade',
+        'volume',
+      ]);
+      const product = findField(row, [
+        'des_produ',
+        'cod_produ',
+        'produ',
+        'producto',
+        'produto',
+        'product',
+      ]);
+      const station = findField(row, ['nom_estab', 'estab', 'estacion', 'posto', 'station']);
       const driverName = findField(row, ['conductor', 'motorista', 'driver', 'nombre']);
       const matriculaRaw = findField(row, ['matricula', 'viatura', 'vehicle']);
 
       const txDate = parseRepsolDate(dateStr, timeStr);
-      if (!txDate) { skipped++; continue; }
+      if (!txDate) {
+        skipped++;
+        continue;
+      }
 
       const amount = parseNumber(amountStr);
       const qty = parseNumber(qtyStr);
@@ -246,19 +347,37 @@ Deno.serve(async (req) => {
         station_name: station || null,
         motorista_id: motoristaId,
         viatura_id: viaturaId || null,
-        raw_data: row
+        raw_data: row,
       });
     }
 
     const upsertBatch = Array.from(upsertMap.values());
     if (upsertBatch.length > 0) {
-      const { error } = await supabase.from('repsol_transacoes').upsert(upsertBatch, { onConflict: 'integracao_id,transaction_id' });
+      const { error } = await supabase
+        .from('repsol_transacoes')
+        .upsert(upsertBatch, { onConflict: 'integracao_id,transaction_id' });
       if (!error) imported = upsertBatch.length;
-      else console.error("Bulk upsert error:", error);
+      else console.error('Bulk upsert error:', error);
     }
 
-    return new Response(JSON.stringify({ success: true, imported, matched, skipped, total: rows.length }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const firstRow = rows[0] ?? null;
+    return new Response(
+      JSON.stringify({
+        success: true,
+        imported,
+        matched,
+        skipped,
+        total: rows.length,
+        // debug_headers: nomes das colunas recebidas — alimenta o diagnóstico do
+        // wizard quando linhas são ignoradas (mostra as colunas no toast).
+        debug_headers: firstRow ? Object.keys(firstRow) : [],
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: false, error: err.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 });
