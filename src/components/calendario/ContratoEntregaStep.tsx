@@ -417,25 +417,54 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
             .eq('id', contratoId);
         }
 
-        // Adicionar folha de danos ao PDF (existentes + novos)
+        // Adicionar folha de danos ao PDF (template com fotos reais)
         if (danosExistentes.length > 0 || checkinDados.novosDanos.length > 0) {
-          const targetPdf = isMultiple && combinedPdf ? combinedPdf : undefined;
-          gerarFolhaDanos({
-            matricula: viatura.matricula,
-            motoristaNome,
-            tipo: 'checkout',
-            tipoCombustivel: viatura.combustivel ?? '',
-            km: checkinDados.km,
-            combustivel: checkinDados.combustivel,
-            nivelEletrico: checkinDados.nivelEletrico,
-            nivelGpl: checkinDados.nivelGpl,
-            danosExistentes,
-            novosDanos: checkinDados.novosDanos,
-            dataEvento: dataInicio,
-            contratoNumero: ct.numero_contrato,
-            existingPdf: targetPdf,
-          });
-          if (targetPdf) successCount++;
+          try {
+            const { data: tmplRows } = await supabase
+              .from('document_templates')
+              .select('id')
+              .eq('tipo', 'anexo_danos')
+              .eq('ativo', true)
+              .limit(1);
+            const tmpl = tmplRows?.[0];
+            if (tmpl) {
+              const targetPdf = isMultiple && combinedPdf ? combinedPdf : undefined;
+              await generateDocumentFromTemplate({
+                templateId: tmpl.id,
+                motoristaData: motoristaFull ?? { nome: motoristaNome },
+                documentData: { ...docData, viatura_matricula: viatura.matricula },
+                viaturaId: viatura.id,
+                km_saida: checkinDados.km,
+                combustivel_saida: checkinDados.combustivel,
+                momentoFolha: 'ENTREGA',
+                action: isMultiple ? 'print' : 'print',
+                skipOutput: isMultiple,
+                existingPdf: targetPdf,
+              });
+              if (targetPdf) successCount++;
+            } else {
+              // Fallback para o gerador básico se o template não existir
+              const targetPdf = isMultiple && combinedPdf ? combinedPdf : undefined;
+              gerarFolhaDanos({
+                matricula: viatura.matricula,
+                motoristaNome,
+                tipo: 'checkout',
+                tipoCombustivel: viatura.combustivel ?? '',
+                km: checkinDados.km,
+                combustivel: checkinDados.combustivel,
+                nivelEletrico: checkinDados.nivelEletrico,
+                nivelGpl: checkinDados.nivelGpl,
+                danosExistentes,
+                novosDanos: checkinDados.novosDanos,
+                dataEvento: dataInicio,
+                contratoNumero: ct.numero_contrato,
+                existingPdf: targetPdf,
+              });
+              if (targetPdf) successCount++;
+            }
+          } catch {
+            /* PDF non-critical */
+          }
         }
 
         // Imprimir PDF combinado quando múltiplos documentos

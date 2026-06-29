@@ -24,6 +24,7 @@ import {
   validateCheckinDados,
   saveCheckinDados,
 } from './CheckinDadosSection';
+import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
 import type { CheckinDadosState } from './CheckinDadosSection';
 
 export interface RecolhaCheckinStepProps {
@@ -75,7 +76,7 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
     queryFn: async () => {
       const query = supabase
         .from('contratos')
-        .select('id, numero_contrato, status')
+        .select('id, numero_contrato, status, km_checkout, combustivel_checkout')
         .eq('status', 'ativo')
         .order('criado_em', { ascending: false })
         .limit(1);
@@ -83,7 +84,13 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
         ? await query.eq('motorista_id', motoristaId).maybeSingle()
         : await query.eq('viatura_id', viaturaId).maybeSingle();
       if (error) throw error;
-      return data as { id: string; numero_contrato: number | null; status: string } | null;
+      return data as {
+        id: string;
+        numero_contrato: number | null;
+        status: string;
+        km_checkout: number | null;
+        combustivel_checkout: string | null;
+      } | null;
     },
     enabled: !!motoristaId || !!viaturaId,
   });
@@ -269,6 +276,36 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
             tipo: 'checkin',
             motoristaId,
           });
+        }
+
+        // 6b. Folha de danos (template) — danos ligados a este contrato + KMs
+        if (contrato && viaturaId) {
+          try {
+            const { data: tmplRows } = await supabase
+              .from('document_templates')
+              .select('id')
+              .eq('tipo', 'anexo_danos')
+              .eq('ativo', true)
+              .limit(1);
+            const tmpl = tmplRows?.[0];
+            if (tmpl) {
+              await generateDocumentFromTemplate({
+                templateId: tmpl.id,
+                motoristaData: { nome: motoristaNome ?? '' },
+                documentData: { viatura_matricula: viatura?.matricula ?? '' },
+                viaturaId,
+                contratoId: contrato.id,
+                km_saida: contrato.km_checkout?.toString() ?? '',
+                km_entrada: checkinDados.km,
+                combustivel_saida: contrato.combustivel_checkout ?? '',
+                combustivel_entrada: checkinDados.combustivel,
+                momentoFolha: isDevolucao ? 'DEVOLUÇÃO' : 'RECOLHA',
+                action: 'print',
+              });
+            }
+          } catch {
+            /* não bloqueia o fluxo principal */
+          }
         }
 
         // 7. Upload checkin media

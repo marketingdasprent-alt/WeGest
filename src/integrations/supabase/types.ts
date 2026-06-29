@@ -8463,6 +8463,7 @@ export type Database = {
           observacoes: string | null
           org_id: string | null
           registado_por: string | null
+          registo_fotografico: boolean
           ticket_id: string | null
           updated_at: string | null
           valor: number | null
@@ -8486,6 +8487,7 @@ export type Database = {
           observacoes?: string | null
           org_id?: string | null
           registado_por?: string | null
+          registo_fotografico?: boolean
           ticket_id?: string | null
           updated_at?: string | null
           valor?: number | null
@@ -8509,6 +8511,7 @@ export type Database = {
           observacoes?: string | null
           org_id?: string | null
           registado_por?: string | null
+          registo_fotografico?: boolean
           ticket_id?: string | null
           updated_at?: string | null
           valor?: number | null
@@ -9466,6 +9469,10 @@ export type Database = {
           numero_contrato: number
           status: string
         }[]
+      }
+      gerar_token_danos: {
+        Args: { p_viatura_id: string; p_contrato_renting_id?: string | null }
+        Returns: string
       }
       gerar_token_realizacao: { Args: { p_evento_id: string }; Returns: string }
       get_cartao_historico_consumo: {

@@ -74,9 +74,12 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gerando, setGerando] = useState(false);
 
-  const { data: templates = [], isLoading: loading } = useDocumentTemplates(
+  const { data: todosTemplates = [], isLoading: loading } = useDocumentTemplates(
     open ? empresaId : null
   );
+  // A Folha de Danos (anexo_danos) gera-se só no fluxo de check-in/out
+  // (entrega/recolha), nunca por este diálogo do contrato.
+  const templates = todosTemplates.filter((t) => t.tipo !== 'anexo_danos');
 
   // Ao abrir, repõe a empresa por defeito. Ao fechar, limpa a selecção.
   useEffect(() => {
