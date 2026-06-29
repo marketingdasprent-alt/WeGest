@@ -33,18 +33,15 @@ SET template_data = jsonb_build_object(
 <p><strong>Observações:</strong> {{observacoes_momento}}</p>
 <br>
 <p>{{cidade_assinatura}}, {{data_assinatura}}</p>
-<br>
-<br>
-<br>
-<table style="width:100%; border-collapse:collapse; text-align:center;">
+<table style="width:100%; border-collapse:collapse; text-align:center; break-inside: avoid;">
   <tr>
     <td style="width:50%; vertical-align:top;">
       <p>_________________________________</p>
-      <p>O Cliente {{cliente_nome}}</p>
+      <p>O Cliente</p>
     </td>
     <td style="width:50%; vertical-align:top;">
       <p>_________________________________</p>
-      <p>O Condutor {{motorista_nome}}</p>
+      <p>O Condutor</p>
     </td>
   </tr>
 </table>,
