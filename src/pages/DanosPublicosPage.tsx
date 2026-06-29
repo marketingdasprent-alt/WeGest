@@ -112,36 +112,62 @@ const DanosPublicosPage = () => {
       )}
 
       {data.danos.length > 0 && (
-        <Card>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50 text-left">
-                  <th className="p-2 font-medium">Localização</th>
-                  <th className="p-2 font-medium">Descrição</th>
-                  <th className="p-2 font-medium">Estado</th>
-                  <th className="p-2 font-medium">Data</th>
-                  <th className="p-2 text-right font-medium">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.danos.map((d) => (
-                  <tr key={d.id} className="border-b last:border-0">
-                    <td className="p-2">
+        <>
+          {/* Mobile: cartões (a tabela não cabe no telemóvel) */}
+          <div className="space-y-2 sm:hidden">
+            {data.danos.map((d) => (
+              <Card key={d.id}>
+                <CardContent className="space-y-1 p-3 text-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-medium">
                       {LOCALIZACAO_LABEL[d.localizacao ?? ''] ?? d.localizacao ?? '—'}
-                    </td>
-                    <td className="p-2">{d.descricao ?? '—'}</td>
-                    <td className="p-2">{ESTADO_LABEL[d.estado ?? ''] ?? d.estado ?? '—'}</td>
-                    <td className="p-2">{fmtData(d.data_ocorrencia ?? d.data_registo)}</td>
-                    <td className="p-2 text-right">
+                    </span>
+                    <span className="shrink-0 font-medium">
                       {d.valor != null ? `${Number(d.valor).toFixed(2)} €` : '—'}
-                    </td>
+                    </span>
+                  </div>
+                  <p className="break-words text-muted-foreground">{d.descricao ?? '—'}</p>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{ESTADO_LABEL[d.estado ?? ''] ?? d.estado ?? '—'}</span>
+                    <span>{fmtData(d.data_ocorrencia ?? d.data_registo)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Desktop: tabela */}
+          <Card className="hidden sm:block">
+            <CardContent className="p-0">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50 text-left">
+                    <th className="p-2 font-medium">Localização</th>
+                    <th className="p-2 font-medium">Descrição</th>
+                    <th className="p-2 font-medium">Estado</th>
+                    <th className="p-2 font-medium">Data</th>
+                    <th className="p-2 text-right font-medium">Valor</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+                </thead>
+                <tbody>
+                  {data.danos.map((d) => (
+                    <tr key={d.id} className="border-b last:border-0">
+                      <td className="p-2">
+                        {LOCALIZACAO_LABEL[d.localizacao ?? ''] ?? d.localizacao ?? '—'}
+                      </td>
+                      <td className="p-2">{d.descricao ?? '—'}</td>
+                      <td className="p-2">{ESTADO_LABEL[d.estado ?? ''] ?? d.estado ?? '—'}</td>
+                      <td className="p-2">{fmtData(d.data_ocorrencia ?? d.data_registo)}</td>
+                      <td className="p-2 text-right">
+                        {d.valor != null ? `${Number(d.valor).toFixed(2)} €` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );
