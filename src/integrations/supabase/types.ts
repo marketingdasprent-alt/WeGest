@@ -1142,6 +1142,9 @@ export type Database = {
           id: string
           lembrete_enviado_dia: boolean
           lembrete_enviado_vespera: boolean
+          lista_marca: string | null
+          lista_modelo: string | null
+          lista_notificada_em: string | null
           matricula_devolver: string | null
           motorista_id: string | null
           org_id: string | null
@@ -1164,6 +1167,9 @@ export type Database = {
           id?: string
           lembrete_enviado_dia?: boolean
           lembrete_enviado_vespera?: boolean
+          lista_marca?: string | null
+          lista_modelo?: string | null
+          lista_notificada_em?: string | null
           matricula_devolver?: string | null
           motorista_id?: string | null
           org_id?: string | null
@@ -1186,6 +1192,9 @@ export type Database = {
           id?: string
           lembrete_enviado_dia?: boolean
           lembrete_enviado_vespera?: boolean
+          lista_marca?: string | null
+          lista_modelo?: string | null
+          lista_notificada_em?: string | null
           matricula_devolver?: string | null
           motorista_id?: string | null
           org_id?: string | null
@@ -5218,6 +5227,7 @@ export type Database = {
         Row: {
           candidatura_id: string | null
           created_at: string
+          destinatario_id: string | null
           id: string
           mensagem: string | null
           org_id: string | null
@@ -5228,10 +5238,12 @@ export type Database = {
           severidade: string
           tipo: string
           titulo: string
+          viatura_id: string | null
         }
         Insert: {
           candidatura_id?: string | null
           created_at?: string
+          destinatario_id?: string | null
           id?: string
           mensagem?: string | null
           org_id?: string | null
@@ -5242,10 +5254,12 @@ export type Database = {
           severidade?: string
           tipo: string
           titulo: string
+          viatura_id?: string | null
         }
         Update: {
           candidatura_id?: string | null
           created_at?: string
+          destinatario_id?: string | null
           id?: string
           mensagem?: string | null
           org_id?: string | null
@@ -5256,6 +5270,7 @@ export type Database = {
           severidade?: string
           tipo?: string
           titulo?: string
+          viatura_id?: string | null
         }
         Relationships: [
           {
