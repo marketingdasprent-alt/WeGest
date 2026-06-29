@@ -50,29 +50,51 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Check if user is admin using service role (bypasses RLS)
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError || !profile?.is_admin) {
-      console.error('Admin check failed:', profileError);
-      return new Response(
-        JSON.stringify({ error: 'Permissão negada. Apenas administradores podem resetar passwords.' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     // Parse request body
-    const { userId, newPassword } = await req.json();
+    const { userId, newPassword, org_id: orgId } = await req.json();
 
     // Validate inputs
     if (!userId || !newPassword) {
       return new Response(
         JSON.stringify({ error: 'userId e newPassword são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (!orgId) {
+      return new Response(
+        JSON.stringify({ error: 'org_id é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Caller tem de ser admin DESTA org (papel per-org em user_organizacoes).
+    const { data: callerMembership, error: callerError } = await supabaseAdmin
+      .from('user_organizacoes')
+      .select('is_admin')
+      .eq('user_id', user.id)
+      .eq('org_id', orgId)
+      .single();
+
+    if (callerError || !callerMembership?.is_admin) {
+      console.error('Admin check failed:', callerError);
+      return new Response(
+        JSON.stringify({ error: 'Permissão negada. Apenas administradores podem resetar passwords.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // O alvo tem de pertencer à MESMA org (sem reset cross-org).
+    const { data: targetMembership, error: targetError } = await supabaseAdmin
+      .from('user_organizacoes')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('org_id', orgId)
+      .single();
+
+    if (targetError || !targetMembership) {
+      return new Response(
+        JSON.stringify({ error: 'Não pode resetar a password de utilizadores de outra organização.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

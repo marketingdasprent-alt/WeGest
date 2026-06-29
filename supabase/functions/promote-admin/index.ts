@@ -24,7 +24,25 @@ serve(async (req) => {
       }
     )
 
-    const { email } = await req.json()
+    // Caller tem de estar autenticado (verify_jwt garante assinatura).
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const callerToken = authHeader.replace('Bearer ', '')
+    if (!callerToken) {
+      return new Response(
+        JSON.stringify({ error: 'Não autenticado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    const { data: { user: caller }, error: callerAuthError } =
+      await supabaseAdmin.auth.getUser(callerToken)
+    if (callerAuthError || !caller) {
+      return new Response(
+        JSON.stringify({ error: 'Sessão inválida' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const { email, org_id: orgId } = await req.json()
 
     if (!email) {
       return new Response(
@@ -32,10 +50,31 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+    if (!orgId) {
+      return new Response(
+        JSON.stringify({ error: 'org_id é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Só um admin DESTA org pode promover (papel per-org em user_organizacoes).
+    const { data: callerMembership, error: callerMembershipError } = await supabaseAdmin
+      .from('user_organizacoes')
+      .select('is_admin')
+      .eq('user_id', caller.id)
+      .eq('org_id', orgId)
+      .single()
+
+    if (callerMembershipError || !callerMembership?.is_admin) {
+      return new Response(
+        JSON.stringify({ error: 'Apenas administradores podem promover utilizadores' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     // Buscar usuário pelo email
     const { data: users, error: userError } = await supabaseAdmin.auth.admin.listUsers()
-    
+
     if (userError) {
       console.error('Erro ao buscar usuários:', userError)
       return new Response(
@@ -45,7 +84,7 @@ serve(async (req) => {
     }
 
     const user = users.users.find(u => u.email === email)
-    
+
     if (!user) {
       return new Response(
         JSON.stringify({ error: 'Usuário não encontrado' }),
@@ -53,34 +92,30 @@ serve(async (req) => {
       )
     }
 
-    // Buscar org_id do profile existente (necessário para NOT NULL constraint)
-    const { data: existingProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('org_id')
-      .eq('id', user.id)
-      .single();
+    // Alvo tem de ser membro DESTA org.
+    const { data: targetMembership, error: targetMembershipError } = await supabaseAdmin
+      .from('user_organizacoes')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('org_id', orgId)
+      .single()
 
-    if (!existingProfile?.org_id) {
+    if (targetMembershipError || !targetMembership) {
       return new Response(
-        JSON.stringify({ error: 'Usuário não tem organização associada' }),
+        JSON.stringify({ error: 'O utilizador não pertence a esta organização' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Atualizar o perfil do usuário para admin
+    // Promover a admin NA ORG (per-org). Não tocar em profiles (legado).
     const { error: updateError } = await supabaseAdmin
-      .from('profiles')
-      .upsert({
-        id: user.id,
-        email: user.email,
-        nome: user.user_metadata?.nome || 'Admin',
-        is_admin: true,
-        org_id: existingProfile.org_id,
-        updated_at: new Date().toISOString()
-      })
+      .from('user_organizacoes')
+      .update({ is_admin: true })
+      .eq('user_id', user.id)
+      .eq('org_id', orgId)
 
     if (updateError) {
-      console.error('Erro ao atualizar perfil:', updateError)
+      console.error('Erro ao promover na org:', updateError)
       return new Response(
         JSON.stringify({ error: 'Erro ao promover usuário a admin' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -88,9 +123,9 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         message: 'Usuário promovido a administrador com sucesso',
-        user_id: user.id 
+        user_id: user.id
       }),
       { 
         status: 200, 

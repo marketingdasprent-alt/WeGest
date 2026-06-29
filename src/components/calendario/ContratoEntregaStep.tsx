@@ -26,6 +26,7 @@ import { formatMatricula } from './calendarioUtils';
 import type { PendingEventoData } from './NovoEventoPage';
 import jsPDF from 'jspdf';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import { useOrgId } from '@/contexts/TenantContext';
 import {
   uploadDocumentToStorage,
   generateDocumentFromTemplate,
@@ -72,6 +73,7 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
   const fazerDepois = eventoData.fazerDepois ?? false;
 
   const queryClient = useQueryClient();
+  const orgId = useOrgId();
   const { empresas } = useClientesEmpresas();
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
   const [dataInicio, setDataInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -289,6 +291,7 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
             tipo: 'entrega',
             data_inicio: dataISO,
             dia_todo: diaTodo,
+            org_id: orgId,
           },
         });
       } catch {

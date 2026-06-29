@@ -1,9 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
 
-export const promoteUserToAdmin = async (email: string) => {
+export const promoteUserToAdmin = async (email: string, orgId: string) => {
   try {
     const { data, error } = await supabase.functions.invoke('promote-admin', {
-      body: { email },
+      body: { email, org_id: orgId },
     });
 
     if (error) {

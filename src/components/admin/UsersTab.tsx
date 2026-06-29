@@ -332,20 +332,26 @@ export const UsersTab = () => {
     try {
       const cargoNome = grupos.find((g) => g.id === editingProfile.cargo_id)?.nome || null;
       // O nome do grupo define se é administrador (alinhado com a edge function create-user).
-      // Assim, escolher o grupo "Administrador" liga a flag is_admin que as rotas /admin e o RLS exigem.
       const isAdminCargo = (cargoNome || '').toLowerCase().includes('admin');
 
-      const { error } = await supabase
+      // Papel (cargo/admin) é PER-ORG: escrever no membership da org ativa,
+      // não em profiles (legado single-org). O trigger trg_uorg_sync_is_admin
+      // re-deriva is_admin do cargo, mas setamos explicitamente por robustez.
+      const { error: roleError } = await supabase
+        .from('user_organizacoes')
+        .update({ cargo_id: editingProfile.cargo_id, is_admin: isAdminCargo })
+        .eq('user_id', editingProfile.id)
+        .eq('org_id', orgId);
+
+      if (roleError) throw roleError;
+
+      // Nome é identidade global (org-neutra) — fica em profiles.
+      const { error: nomeError } = await supabase
         .from('profiles')
-        .update({
-          nome: editingProfile.nome,
-          cargo_id: editingProfile.cargo_id,
-          cargo: cargoNome,
-          is_admin: isAdminCargo,
-        })
+        .update({ nome: editingProfile.nome })
         .eq('id', editingProfile.id);
 
-      if (error) throw error;
+      if (nomeError) throw nomeError;
 
       toast({
         title: 'Utilizador atualizado',
@@ -441,6 +447,7 @@ export const UsersTab = () => {
         body: {
           userId: resetPasswordProfile.id,
           newPassword: newPassword,
+          org_id: orgId,
         },
       });
 

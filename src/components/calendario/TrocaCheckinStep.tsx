@@ -20,6 +20,7 @@ import {
 } from './CheckinDadosSection';
 import type { CheckinDadosState } from './CheckinDadosSection';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import { useOrgId } from '@/contexts/TenantContext';
 
 interface SelectedFile {
   id: string;
@@ -49,6 +50,7 @@ export const TrocaCheckinStep: React.FC<{
   } = trocaData;
 
   const queryClient = useQueryClient();
+  const orgId = useOrgId();
   const { empresas } = useClientesEmpresas();
 
   const [filesCheckin, setFilesCheckin] = useState<SelectedFile[]>([]);
@@ -306,6 +308,7 @@ export const TrocaCheckinStep: React.FC<{
             tipo,
             data_inicio: dataISO,
             dia_todo: diaTodo,
+            org_id: orgId,
           },
         });
       } catch {

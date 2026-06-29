@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrgId } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -59,6 +60,7 @@ export const NovoTicketDialog: React.FC<NovoTicketDialogProps> = ({
   viaturaId,
 }) => {
   const { user } = useAuth();
+  const orgId = useOrgId();
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
@@ -186,15 +188,22 @@ export const NovoTicketDialog: React.FC<NovoTicketDialogProps> = ({
 
         const GESTOR_ASSISTENCIA_CARGO_IDS = ['d8680e20-5025-47c1-bcc0-ae432f8afb96'];
 
-        const [adminsRes, gestoresByIdRes, gestoresByNomeRes] = await Promise.all([
-          supabase.from('profiles').select('id').eq('is_admin', true),
-          supabase.from('profiles').select('id').in('cargo_id', GESTOR_ASSISTENCIA_CARGO_IDS),
-          supabase.from('profiles').select('id').ilike('cargo', '%Gestor%Assist%'),
-        ]);
+        // Admins/gestores da ORG ATIVA (papel per-org em user_organizacoes).
+        const { data: orgStaff } = await supabase
+          .from('user_organizacoes')
+          .select('user_id, is_admin, cargo_id, cargos(nome)')
+          .eq('org_id', orgId);
 
-        adminsRes.data?.forEach((p) => userIdsSet.add(p.id));
-        gestoresByIdRes.data?.forEach((p) => userIdsSet.add(p.id));
-        gestoresByNomeRes.data?.forEach((p) => userIdsSet.add(p.id));
+        (orgStaff || []).forEach((m: any) => {
+          const cargoNome = (m.cargos?.nome || '').toLowerCase();
+          if (
+            m.is_admin ||
+            GESTOR_ASSISTENCIA_CARGO_IDS.includes(m.cargo_id) ||
+            (cargoNome.includes('gestor') && cargoNome.includes('assist'))
+          ) {
+            userIdsSet.add(m.user_id);
+          }
+        });
 
         if (motoristaId) {
           const { data: motorista } = await supabase

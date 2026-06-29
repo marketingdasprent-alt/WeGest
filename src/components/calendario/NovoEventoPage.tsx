@@ -24,6 +24,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useOrgId } from '@/contexts/TenantContext';
 export { SearchableDropdown, formatMatricula } from './calendarioUtils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -249,6 +250,7 @@ const ViaturaAtualDisplay: React.FC<{
 
 export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }) => {
   const queryClient = useQueryClient();
+  const orgId = useOrgId();
 
   const [tipo, setTipo] = useState('entrega');
   const [motoristaId, setMotoristaId] = useState('');
@@ -447,6 +449,7 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
               tipo: 'lista_espera',
               data_inicio: dataISO,
               dia_todo: diaTodo,
+              org_id: orgId,
             },
           });
         } catch {
@@ -530,6 +533,7 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
             tipo: eventoPayload.tipo,
             data_inicio: eventoPayload.data_inicio,
             dia_todo: eventoPayload.dia_todo,
+            org_id: orgId,
           },
         });
       } catch {

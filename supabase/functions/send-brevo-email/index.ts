@@ -46,9 +46,28 @@ const handler = async (req: Request): Promise<Response> => {
       }
       const isRecovery = type === 'password_recovery';
       const baseUrl = siteUrlEnv || new URL(req.url).origin;
-      const redirectTo = (redirect_to && (!siteUrlEnv || redirect_to.startsWith(siteUrlEnv)))
-        ? redirect_to
-        : `${baseUrl}${isRecovery ? '/reset-password' : '/crm'}`;
+      const targetPath = isRecovery ? '/reset-password' : '/crm';
+
+      // Resolver o redirect mantendo o HOST do caller (suporta multi-org por
+      // subdomínio) mas FORÇANDO o path correto. O recovery TEM de aterrar em
+      // /reset-password — se o redirect vier para a raiz, o Supabase cria
+      // sessão e o utilizador cai logado no sistema sem trocar a senha.
+      let redirectTo = `${baseUrl}${targetPath}`;
+      if (redirect_to) {
+        try {
+          const u = new URL(redirect_to);
+          const allowedHost =
+            u.hostname === 'wegest.pt' || u.hostname.endsWith('.wegest.pt');
+          if (allowedHost) {
+            u.pathname = targetPath;
+            u.search = '';
+            u.hash = '';
+            redirectTo = u.toString();
+          }
+        } catch {
+          /* redirect_to inválido — fica o default */
+        }
+      }
 
       const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
         type: isRecovery ? 'recovery' : 'magiclink',

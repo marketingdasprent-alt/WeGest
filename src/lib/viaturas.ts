@@ -163,6 +163,8 @@ export const deriveViaturaEstado = (
   // Rede de segurança: campo legado `status='em_uso'` — é o que o main conta
   // como ocupada. Mantém-se até as atribuições reais (motorista_viaturas)
   // estarem todas criadas; depois pode ser removido.
-  if (base === 'em_uso' || base === 'em uso') return 'em_uso';
+  // Carros slot NÃO usam esta rede: sem motorista ligado real, um slot está
+  // disponível. Sem isto, mostravam "Em Uso" genérico de forma incoerente.
+  if (!v.is_slot && (base === 'em_uso' || base === 'em uso')) return 'em_uso';
   return 'disponivel';
 };
