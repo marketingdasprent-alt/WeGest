@@ -45,7 +45,9 @@ async function preencherEsubmeter() {
   fireEvent.change(screen.getByLabelText(/^Email$/i), { target: { value: 'ze@x.pt' } });
   fireEvent.change(screen.getByLabelText(/Telefone/i), { target: { value: '+351912345678' } });
   fireEvent.change(screen.getByLabelText(/^Palavra-passe$/i), { target: { value: 'abcd1234' } });
-  fireEvent.change(screen.getByLabelText(/Confirmar palavra-passe/i), { target: { value: 'abcd1234' } });
+  fireEvent.change(screen.getByLabelText(/Confirmar palavra-passe/i), {
+    target: { value: 'abcd1234' },
+  });
   fireEvent.click(screen.getByRole('button', { name: /Criar conta/i }));
 }
 
@@ -92,7 +94,9 @@ describe('RegistoMotorista (nativa)', () => {
   it('sem ?org= mostra campo de código e resolve no submit', async () => {
     resolveOrgByCodigo.mockResolvedValue({ id: 'org-y', nome: 'Empresa Y' });
     renderAt('/motorista/registo');
-    fireEvent.change(screen.getByLabelText(/Código da empresa/i), { target: { value: 'empresa-y' } });
+    fireEvent.change(screen.getByLabelText(/Código da empresa/i), {
+      target: { value: 'empresa-y' },
+    });
     await preencherEsubmeter();
     await waitFor(() => expect(signUp).toHaveBeenCalled());
     expect(signUp.mock.calls[0][0].options.data.org_id).toBe('org-y');
