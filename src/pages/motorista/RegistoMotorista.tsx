@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Eye, EyeOff, Car, CheckCircle2, Circle } from 'lucide-react';
 import { PhoneInput, validatePhoneNumber } from '@/components/ui/phone-input';
-import { getEmailRedirectUrl } from '@/lib/native';
+import { getEmailRedirectUrl, isNativeApp } from '@/lib/native';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
+import { resolveOrgByCodigo, normalizeCodigo, type ResolvedOrg } from '@/lib/org-codigo';
 
 const CARGO_MOTORISTA_ID = 'a0000000-0000-0000-0000-000000000001';
 
@@ -26,11 +27,46 @@ const RegistoMotorista: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [searchParams] = useSearchParams();
+  const urlOrgCode = searchParams.get('org') ?? '';
+  const native = isNativeApp();
+
+  const [orgCode, setOrgCode] = useState(urlOrgCode);
+  const [org, setOrg] = useState<ResolvedOrg | null>(null);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+
   useEffect(() => {
     if (user) {
       navigate('/motorista/painel');
     }
   }, [user, navigate]);
+
+  // Resolve a org a partir do código do URL (web) ou pré-preenchido.
+  useEffect(() => {
+    let cancelled = false;
+    const code = urlOrgCode;
+    if (!code) {
+      // Web sem ?org= → erro (bloqueia). Nativa → campo manual, sem erro.
+      if (!native) setResolveError('Link inválido — peça um link de registo à empresa.');
+      return;
+    }
+    setResolving(true);
+    setResolveError(null);
+    resolveOrgByCodigo(code).then((res) => {
+      if (cancelled) return;
+      setResolving(false);
+      if (!res) {
+        setResolveError('Empresa não encontrada. Verifique o link de registo.');
+        setOrg(null);
+        return;
+      }
+      setOrg(res);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [urlOrgCode, native]);
 
   const handleTelefoneChange = (value: string) => {
     setTelefone(value);
@@ -101,6 +137,29 @@ const RegistoMotorista: React.FC = () => {
       return;
     }
 
+    // Garantir org resolvida (nativa pode resolver agora a partir do campo manual)
+    let orgToUse = org;
+    if (!orgToUse) {
+      if (!normalizeCodigo(orgCode)) {
+        toast({
+          title: 'Código da empresa em falta',
+          description: 'Introduza o código da empresa para criar a conta.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      orgToUse = await resolveOrgByCodigo(orgCode);
+      if (!orgToUse) {
+        toast({
+          title: 'Empresa não encontrada',
+          description: 'O código da empresa não é válido.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      setOrg(orgToUse);
+    }
+
     setLoading(true);
 
     try {
@@ -115,6 +174,7 @@ const RegistoMotorista: React.FC = () => {
             cargo_id: CARGO_MOTORISTA_ID,
             cargo_nome: 'Motorista',
             tipo_utilizador: 'motorista',
+            org_id: orgToUse.id,
           },
         },
       });
@@ -140,10 +200,38 @@ const RegistoMotorista: React.FC = () => {
     }
   };
 
+  // Web bloqueado: erro de link / org inválida e SEM campo manual
+  if (!native && resolveError) {
+    return (
+      <AuthMobileShell
+        title="Registo de Motorista"
+        description={resolveError}
+        logoAlt="WeGest"
+        headerIcon={<Car className="auth-icon-accent" />}
+        footer={
+          <p>
+            Já tem conta?{' '}
+            <Link to="/motorista/login" className="auth-link">
+              Iniciar sessão
+            </Link>
+          </p>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Contacte a sua empresa para obter um link de registo válido.
+        </p>
+      </AuthMobileShell>
+    );
+  }
+
   return (
     <AuthMobileShell
       title="Registo de Motorista"
-      description="Crie a sua conta para se candidatar à frota."
+      description={
+        org
+          ? `Crie a sua conta de motorista para ${org.nome}.`
+          : 'Crie a sua conta para se candidatar à frota.'
+      }
       logoAlt="WeGest"
       headerIcon={<Car className="auth-icon-accent" />}
       footer={
@@ -156,6 +244,24 @@ const RegistoMotorista: React.FC = () => {
       }
     >
       <form onSubmit={handleRegister} className="space-y-4">
+        {(native || (!org && !resolveError)) && (
+          <div className="space-y-2">
+            <Label htmlFor="orgCode">Código da empresa</Label>
+            <Input
+              id="orgCode"
+              type="text"
+              placeholder="Ex.: a-sua-empresa"
+              value={orgCode}
+              onChange={(e) => setOrgCode(e.target.value)}
+              required
+              disabled={loading || resolving || (!!urlOrgCode && !!org)}
+              className="auth-input"
+              autoCapitalize="none"
+            />
+            {org && <p className="text-xs text-muted-foreground">Empresa: {org.nome}</p>}
+          </div>
+        )}
+
         <div className="space-y-2">
           <Label htmlFor="nome">Nome completo</Label>
           <Input
