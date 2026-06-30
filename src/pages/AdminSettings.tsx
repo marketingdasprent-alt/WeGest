@@ -5,6 +5,7 @@ import { AdminAccessDenied } from '@/components/admin/AdminAccessDenied';
 import { AdminLoadingState } from '@/components/admin/AdminLoadingState';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UsersTab } from '@/components/admin/UsersTab';
+import { ConvitesTab } from '@/components/admin/ConvitesTab';
 import { GruposTab } from '@/components/admin/GruposTab';
 import { DocumentosTab } from '@/components/admin/DocumentosTab';
 import { CamposTab } from '@/components/admin/CamposTab';
@@ -60,6 +61,12 @@ const AdminSettings = () => {
           className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto text-xs"
         >
           Utilizadores
+        </TabsTrigger>
+        <TabsTrigger
+          value="convites"
+          className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto text-xs"
+        >
+          Convites
         </TabsTrigger>
         <TabsTrigger
           value="grupos"
@@ -140,6 +147,10 @@ const AdminSettings = () => {
       <div className="space-y-6">
         <TabsContent value="users" className="mt-0">
           <UsersTab />
+        </TabsContent>
+
+        <TabsContent value="convites" className="mt-0">
+          <ConvitesTab />
         </TabsContent>
 
         <TabsContent value="grupos" className="mt-0">
