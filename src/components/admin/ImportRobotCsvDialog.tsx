@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useOrgId } from '@/contexts/TenantContext';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ export const ImportRobotCsvDialog: React.FC<ImportRobotCsvDialogProps> = ({
   integracaoId,
   onImportComplete,
 }) => {
+  const orgId = useOrgId();
   const [importing, setImporting] = useState(false);
   const [activeTab, setActiveTab] = useState('uber');
 
@@ -77,7 +79,7 @@ export const ImportRobotCsvDialog: React.FC<ImportRobotCsvDialogProps> = ({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ integracao_id: integracaoId, ...body }),
+        body: JSON.stringify({ integracao_id: integracaoId, org_id: orgId, ...body }),
       });
 
       const data = await response.json();

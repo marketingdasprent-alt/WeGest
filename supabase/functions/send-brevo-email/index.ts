@@ -46,9 +46,28 @@ const handler = async (req: Request): Promise<Response> => {
       }
       const isRecovery = type === 'password_recovery';
       const baseUrl = siteUrlEnv || new URL(req.url).origin;
-      const redirectTo = (redirect_to && (!siteUrlEnv || redirect_to.startsWith(siteUrlEnv)))
-        ? redirect_to
-        : `${baseUrl}${isRecovery ? '/reset-password' : '/crm'}`;
+      const targetPath = isRecovery ? '/reset-password' : '/crm';
+
+      // Resolver o redirect mantendo o HOST do caller (suporta multi-org por
+      // subdomínio) mas FORÇANDO o path correto. O recovery TEM de aterrar em
+      // /reset-password — se o redirect vier para a raiz, o Supabase cria
+      // sessão e o utilizador cai logado no sistema sem trocar a senha.
+      let redirectTo = `${baseUrl}${targetPath}`;
+      if (redirect_to) {
+        try {
+          const u = new URL(redirect_to);
+          const allowedHost =
+            u.hostname === 'wegest.pt' || u.hostname.endsWith('.wegest.pt');
+          if (allowedHost) {
+            u.pathname = targetPath;
+            u.search = '';
+            u.hash = '';
+            redirectTo = u.toString();
+          }
+        } catch {
+          /* redirect_to inválido — fica o default */
+        }
+      }
 
       const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
         type: isRecovery ? 'recovery' : 'magiclink',
@@ -63,7 +82,7 @@ const handler = async (req: Request): Promise<Response> => {
       actionLink = (linkData.properties as any).action_link as string;
     }
     if (type === 'password_recovery') {
-      templateSubject = "Redefinir sua senha - Dasprent CRM";
+      templateSubject = "Redefinir a sua palavra-passe - WeGest";
       htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -75,17 +94,17 @@ const handler = async (req: Request): Promise<Response> => {
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 30px;">
             <h1 style="color: white; margin: 0; font-size: 28px;">Redefinir Senha</h1>
-            <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">Dasprent CRM</p>
+            <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">WeGest</p>
           </div>
-          
+
           <div style="background: #f9f9f9; padding: 30px; border-radius: 10px; margin-bottom: 30px;">
-            <h2 style="color: #333; margin-top: 0;">Solicitação de Redefinição de Senha</h2>
+            <h2 style="color: #333; margin-top: 0;">Pedido de redefinição de palavra-passe</h2>
             <p>Olá,</p>
-            <p>Recebemos uma solicitação para redefinir a senha da sua conta no Dasprent CRM.</p>
+            <p>Recebemos um pedido para redefinir a palavra-passe da sua conta no WeGest.</p>
             
             <div style="text-align: center; margin: 30px 0;">
               <a href="${actionLink}" style="background: #000000; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px;">
-                Redefinir Senha
+                Redefinir palavra-passe
               </a>
             </div>
             
@@ -93,18 +112,18 @@ const handler = async (req: Request): Promise<Response> => {
             <p style="background: #e9ecef; padding: 15px; border-radius: 5px; word-break: break-all; font-size: 14px;">${actionLink}</p>
             
             <p><strong>Este link é válido por 1 hora.</strong></p>
-            <p>Se você não solicitou esta redefinição de senha, pode ignorar este email com segurança.</p>
+            <p>Se não solicitou esta redefinição, pode ignorar este email com segurança.</p>
           </div>
           
           <div style="text-align: center; color: #666; font-size: 14px;">
-            <p>© ${new Date().getFullYear()} Dasprent. Todos os direitos reservados.</p>
+            <p>© ${new Date().getFullYear()} WeGest. Todos os direitos reservados.</p>
             <p>Este é um email automático, não responda a esta mensagem.</p>
           </div>
         </body>
         </html>
       `;
     } else if (type === 'magic_link') {
-      templateSubject = "Seu link de acesso - Dasprent CRM";
+      templateSubject = "O seu link de acesso - WeGest";
       htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -116,17 +135,17 @@ const handler = async (req: Request): Promise<Response> => {
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 30px;">
             <h1 style="color: white; margin: 0; font-size: 28px;">Acesso Rápido</h1>
-            <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">Dasprent CRM</p>
+            <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">WeGest</p>
           </div>
-          
+
           <div style="background: #f9f9f9; padding: 30px; border-radius: 10px; margin-bottom: 30px;">
-            <h2 style="color: #333; margin-top: 0;">Seu Link Mágico de Acesso</h2>
+            <h2 style="color: #333; margin-top: 0;">O seu link de acesso</h2>
             <p>Olá,</p>
-            <p>Clique no botão abaixo para acessar sua conta no Dasprent CRM de forma rápida e segura:</p>
+            <p>Clique no botão abaixo para aceder à sua conta no WeGest de forma rápida e segura:</p>
             
             <div style="text-align: center; margin: 30px 0;">
               <a href="${actionLink}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px;">
-                Acessar Conta
+                Aceder à conta
               </a>
             </div>
             
@@ -134,11 +153,11 @@ const handler = async (req: Request): Promise<Response> => {
             <p style="background: #e9ecef; padding: 15px; border-radius: 5px; word-break: break-all; font-size: 14px;">${actionLink}</p>
             
             <p><strong>Este link é válido por 1 hora.</strong></p>
-            <p>Se você não solicitou este acesso, pode ignorar este email com segurança.</p>
+            <p>Se não solicitou este acesso, pode ignorar este email com segurança.</p>
           </div>
           
           <div style="text-align: center; color: #666; font-size: 14px;">
-            <p>© ${new Date().getFullYear()} Dasprent. Todos os direitos reservados.</p>
+            <p>© ${new Date().getFullYear()} WeGest. Todos os direitos reservados.</p>
             <p>Este é um email automático, não responda a esta mensagem.</p>
           </div>
         </body>
@@ -148,7 +167,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const emailData = {
       sender: {
-        name: "Dasprent CRM",
+        name: "WeGest",
         email: "noreply@dasprent.pt"
       },
       to: [{

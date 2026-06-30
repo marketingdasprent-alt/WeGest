@@ -1142,6 +1142,9 @@ export type Database = {
           id: string
           lembrete_enviado_dia: boolean
           lembrete_enviado_vespera: boolean
+          lista_marca: string | null
+          lista_modelo: string | null
+          lista_notificada_em: string | null
           matricula_devolver: string | null
           motorista_id: string | null
           org_id: string | null
@@ -1164,6 +1167,9 @@ export type Database = {
           id?: string
           lembrete_enviado_dia?: boolean
           lembrete_enviado_vespera?: boolean
+          lista_marca?: string | null
+          lista_modelo?: string | null
+          lista_notificada_em?: string | null
           matricula_devolver?: string | null
           motorista_id?: string | null
           org_id?: string | null
@@ -1186,6 +1192,9 @@ export type Database = {
           id?: string
           lembrete_enviado_dia?: boolean
           lembrete_enviado_vespera?: boolean
+          lista_marca?: string | null
+          lista_modelo?: string | null
+          lista_notificada_em?: string | null
           matricula_devolver?: string | null
           motorista_id?: string | null
           org_id?: string | null
@@ -1990,6 +1999,7 @@ export type Database = {
           tarifa_id: string | null
           tarifa_nome: string | null
           taxa_iva: number
+          tipo_cobranca: string
           updated_at: string
           valor_iva: number | null
           valor_sem_iva: number
@@ -2018,6 +2028,7 @@ export type Database = {
           tarifa_id?: string | null
           tarifa_nome?: string | null
           taxa_iva?: number
+          tipo_cobranca?: string
           updated_at?: string
           valor_iva?: number | null
           valor_sem_iva: number
@@ -2046,6 +2057,7 @@ export type Database = {
           tarifa_id?: string | null
           tarifa_nome?: string | null
           taxa_iva?: number
+          tipo_cobranca?: string
           updated_at?: string
           valor_iva?: number | null
           valor_sem_iva?: number
@@ -4759,6 +4771,7 @@ export type Database = {
           cartao_repsol: string | null
           cidade: string | null
           cidade_assinatura: string | null
+          cliente_id: string | null
           codigo: number
           codigo_postal: string | null
           comprovativo_iban_url: string | null
@@ -4807,6 +4820,7 @@ export type Database = {
           cartao_repsol?: string | null
           cidade?: string | null
           cidade_assinatura?: string | null
+          cliente_id?: string | null
           codigo?: number
           codigo_postal?: string | null
           comprovativo_iban_url?: string | null
@@ -4855,6 +4869,7 @@ export type Database = {
           cartao_repsol?: string | null
           cidade?: string | null
           cidade_assinatura?: string | null
+          cliente_id?: string | null
           codigo?: number
           codigo_postal?: string | null
           comprovativo_iban_url?: string | null
@@ -5215,6 +5230,7 @@ export type Database = {
         Row: {
           candidatura_id: string | null
           created_at: string
+          destinatario_id: string | null
           id: string
           mensagem: string | null
           org_id: string | null
@@ -5225,10 +5241,12 @@ export type Database = {
           severidade: string
           tipo: string
           titulo: string
+          viatura_id: string | null
         }
         Insert: {
           candidatura_id?: string | null
           created_at?: string
+          destinatario_id?: string | null
           id?: string
           mensagem?: string | null
           org_id?: string | null
@@ -5239,10 +5257,12 @@ export type Database = {
           severidade?: string
           tipo: string
           titulo: string
+          viatura_id?: string | null
         }
         Update: {
           candidatura_id?: string | null
           created_at?: string
+          destinatario_id?: string | null
           id?: string
           mensagem?: string | null
           org_id?: string | null
@@ -5253,6 +5273,7 @@ export type Database = {
           severidade?: string
           tipo?: string
           titulo?: string
+          viatura_id?: string | null
         }
         Relationships: [
           {
@@ -6816,6 +6837,7 @@ export type Database = {
           regime: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias: number | null
           renovacao_opcao: string | null
+          slot_valor_mensal: number | null
           slot_valor_semanal: number | null
           tarifa_id: string | null
           tarifa_nome: string | null
@@ -6864,6 +6886,7 @@ export type Database = {
           regime?: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias?: number | null
           renovacao_opcao?: string | null
+          slot_valor_mensal?: number | null
           slot_valor_semanal?: number | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
@@ -6912,6 +6935,7 @@ export type Database = {
           regime?: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias?: number | null
           renovacao_opcao?: string | null
+          slot_valor_mensal?: number | null
           slot_valor_semanal?: number | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
@@ -8454,6 +8478,7 @@ export type Database = {
           observacoes: string | null
           org_id: string | null
           registado_por: string | null
+          registo_fotografico: boolean
           ticket_id: string | null
           updated_at: string | null
           valor: number | null
@@ -8477,6 +8502,7 @@ export type Database = {
           observacoes?: string | null
           org_id?: string | null
           registado_por?: string | null
+          registo_fotografico?: boolean
           ticket_id?: string | null
           updated_at?: string | null
           valor?: number | null
@@ -8500,6 +8526,7 @@ export type Database = {
           observacoes?: string | null
           org_id?: string | null
           registado_por?: string | null
+          registo_fotografico?: boolean
           ticket_id?: string | null
           updated_at?: string | null
           valor?: number | null
@@ -9457,6 +9484,10 @@ export type Database = {
           numero_contrato: number
           status: string
         }[]
+      }
+      gerar_token_danos: {
+        Args: { p_viatura_id: string; p_contrato_renting_id?: string | null }
+        Returns: string
       }
       gerar_token_realizacao: { Args: { p_evento_id: string }; Returns: string }
       get_cartao_historico_consumo: {

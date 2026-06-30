@@ -1183,13 +1183,13 @@ export function MotoristaTabDados({
                         name="slot_valor_semanal"
                         render={({ field: valorField }) => (
                           <FormItem>
-                            <FormLabel>Valor Semanal (€)</FormLabel>
+                            <FormLabel>Valor Mensal (€)</FormLabel>
                             <FormControl>
                               <Input
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                placeholder="Ex: 150.00"
+                                placeholder="Ex: 400.00"
                                 value={valorField.value ?? ''}
                                 onChange={(e) =>
                                   valorField.onChange(

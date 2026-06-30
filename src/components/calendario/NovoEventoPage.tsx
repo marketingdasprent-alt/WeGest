@@ -24,6 +24,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useOrgId } from '@/contexts/TenantContext';
 export { SearchableDropdown, formatMatricula } from './calendarioUtils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -249,6 +250,7 @@ const ViaturaAtualDisplay: React.FC<{
 
 export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }) => {
   const queryClient = useQueryClient();
+  const orgId = useOrgId();
 
   const [tipo, setTipo] = useState('entrega');
   const [motoristaId, setMotoristaId] = useState('');
@@ -422,6 +424,7 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
         const dataISO = diaTodo
           ? new Date(`${data}T00:00:00`).toISOString()
           : new Date(`${data}T${hora}:00`).toISOString();
+        const mm = marcaModeloByKey.get(reservaMarcaModelo.trim());
         const payload: Record<string, any> = {
           titulo: reservaMarcaModelo.trim(),
           tipo: 'lista_espera',
@@ -432,6 +435,9 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
           descricao: observacoes.trim() || null,
           matricula_devolver: null,
           criado_por: userId,
+          // Marca/modelo separados → match fiável do aviso de viatura disponível.
+          lista_marca: mm?.marca ?? null,
+          lista_modelo: mm?.modelo ?? null,
         };
         const res = await supabase.from('calendario_eventos').insert(payload).select('id').single();
         if (res.error) throw res.error;
@@ -443,6 +449,7 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
               tipo: 'lista_espera',
               data_inicio: dataISO,
               dia_todo: diaTodo,
+              org_id: orgId,
             },
           });
         } catch {
@@ -526,6 +533,7 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
             tipo: eventoPayload.tipo,
             data_inicio: eventoPayload.data_inicio,
             dia_todo: eventoPayload.dia_todo,
+            org_id: orgId,
           },
         });
       } catch {
@@ -626,6 +634,11 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
         { id: `${v.marca} ${v.modelo}`, primary: `${v.marca} ${v.modelo}` },
       ])
     ).values()
+  );
+  // Recuperar marca e modelo separados a partir do id escolhido (mesma chave),
+  // para guardar na lista de espera sem fazer split frágil do título.
+  const marcaModeloByKey = new Map(
+    viaturas.map((v) => [`${v.marca} ${v.modelo}`, { marca: v.marca, modelo: v.modelo }])
   );
 
   // ── Render ──────────────────────────────────────────────────────────────────

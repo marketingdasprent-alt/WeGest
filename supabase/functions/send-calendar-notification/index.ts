@@ -25,27 +25,40 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { matricula, cidade, tipo, data_inicio, dia_todo } = await req.json();
+    const { matricula, cidade, tipo, data_inicio, dia_todo, org_id: orgId } = await req.json();
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const brevoApiKey = Deno.env.get("BREVO_API_KEY");
 
     if (!brevoApiKey) throw new Error("BREVO_API_KEY not configured");
+    if (!orgId) throw new Error("org_id é obrigatório");
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // 1. Buscar todos os perfis que NAO sao motoristas (ou seja, gestores/colaboradores)
-    const { data: gestorProfiles, error: profilesError } = await supabase
-      .from("profiles")
-      .select("id, nome")
-      .neq("tipo_utilizador", "motorista");
+    // 1. Membros (não-motoristas) DESTA org — recipientes scoped por user_organizacoes.
+    const { data: orgMembers, error: membersError } = await supabase
+      .from("user_organizacoes")
+      .select("user_id")
+      .eq("org_id", orgId);
 
-    if (profilesError) {
-      console.warn("Erro ao buscar perfis de gestores:", profilesError.message);
+    if (membersError) {
+      console.warn("Erro ao buscar membros da org:", membersError.message);
     }
 
-    const gestorIds = (gestorProfiles || []).map((p: any) => p.id);
+    const memberIds = (orgMembers || []).map((m: any) => m.user_id);
+    const gestorIds: string[] = [];
+
+    if (memberIds.length > 0) {
+      // Excluir motoristas (tipo_utilizador é identidade global em profiles).
+      const { data: gestorProfiles } = await supabase
+        .from("profiles")
+        .select("id")
+        .in("id", memberIds)
+        .neq("tipo_utilizador", "motorista");
+      for (const p of gestorProfiles || []) gestorIds.push(p.id as string);
+    }
+
     const gestorEmails: string[] = [];
 
     if (gestorIds.length > 0) {
@@ -65,10 +78,11 @@ serve(async (req: Request) => {
       }
     }
 
-    // 2. Buscar CCs extras configurados manualmente em calendario_config
+    // 2. Buscar CCs extras configurados manualmente em calendario_config (DESTA org)
     const { data: configs } = await supabase
       .from("calendario_config")
       .select("email_cc")
+      .eq("org_id", orgId)
       .not("email_cc", "is", null);
 
     const extraCcEmails = (configs || [])

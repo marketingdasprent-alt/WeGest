@@ -669,15 +669,21 @@ export function ContasResumoTab() {
         .lte('transaction_date', weekEndUtc)
         .not('motorista_id', 'is', null);
 
-      // 4d-bis. Buscar valor de aluguer de viatura (bulk) para todos os motoristas activos
+      // 4d-bis. Buscar viaturas ativas e respetivo grupo para cruzar com tarifa
       const viaturasQuery = supabase
         .from('motorista_viaturas')
-        .select('motorista_id, viaturas(valor_aluguer, matricula)')
+        .select('motorista_id, viaturas(matricula, grupo_id)')
         .eq('status', 'ativo');
 
       // 4e. Buscar resumos semanais Bolt (dados CSV) cujo intervalo intersecte a semana seleccionada
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
       const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+
+      // 4g. Tarifas de renting ativas — preco_semana é o custo semanal do motorista
+      const tarifasQuery = supabase
+        .from('renting_tarifas')
+        .select('grupo_id, preco_semana')
+        .eq('ativa', true);
 
       // 4f. Buscar movimentos financeiros unificados para a semana
       const financeiroQuery = supabase
@@ -707,6 +713,7 @@ export function ContasResumoTab() {
         financeiroResult,
         viaturasResult,
         viaVerdeResult,
+        tarifasResult,
       ] = await Promise.all([
         boltQuery,
         uberQuery,
@@ -719,6 +726,7 @@ export function ContasResumoTab() {
         financeiroQuery,
         viaturasQuery,
         viaVerdeQuery,
+        tarifasQuery,
       ]);
 
       if (boltResult.error) throw boltResult.error;
@@ -772,11 +780,23 @@ export function ContasResumoTab() {
       });
       setMatriculaMap(mMap);
 
-      // Mapa: motorista_id → valor semanal de aluguer de viatura
+      // Mapa: grupo_id → preco_semana da tarifa ativa
+      const grupoTarifaMap: Record<string, number> = {};
+      (tarifasResult.data || []).forEach((t: any) => {
+        if (t.grupo_id && t.preco_semana != null) {
+          grupoTarifaMap[t.grupo_id] = Number(t.preco_semana) || 0;
+        }
+      });
+
+      // Mapa: motorista_id → preco_semana via grupo da viatura ativa
       const aluguerByMotorista: Record<string, number> = {};
       (viaturasResult.data || []).forEach((mv: any) => {
-        if (mv.motorista_id && mv.viaturas?.valor_aluguer) {
-          aluguerByMotorista[mv.motorista_id] = Number(mv.viaturas.valor_aluguer) || 0;
+        if (mv.motorista_id) {
+          const grupoId = (mv.viaturas as any)?.grupo_id;
+          const preco = grupoId ? grupoTarifaMap[grupoId] : undefined;
+          if (preco != null && preco > 0) {
+            aluguerByMotorista[mv.motorista_id] = preco;
+          }
         }
       });
 

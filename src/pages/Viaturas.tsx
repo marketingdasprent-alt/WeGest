@@ -255,14 +255,12 @@ export default function Viaturas() {
       result = result.filter((v) => v.combustivel === combustivelFilter);
     }
 
-    // Filtro de tipo / SLOT — viaturas SLOT só aparecem ao clicar em SLOT
+    // Filtro de tipo / SLOT — "Todos" mostra tudo (incluindo slot); o separador
+    // SLOT mostra só slot; um tipo específico mostra só os desse tipo (não-slot).
     if (tipoFilter === 'slot') {
       result = result.filter((v) => v.is_slot);
-    } else {
-      result = result.filter((v) => !v.is_slot);
-      if (tipoFilter !== 'all') {
-        result = result.filter((v) => v.tipo_id === tipoFilter);
-      }
+    } else if (tipoFilter !== 'all') {
+      result = result.filter((v) => !v.is_slot && v.tipo_id === tipoFilter);
     }
 
     // Ordenação

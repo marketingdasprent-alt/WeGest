@@ -54,6 +54,7 @@ import {
 } from '@/hooks/useRentingGruposTarifas';
 import { AlertTriangle } from 'lucide-react';
 
+import { SLOT_ESTADOS_PERMITIDOS, SLOT_ESTADO_LABELS } from '@/types/reserva';
 import type { ReservaFormValues } from '../reservaDialog.schema';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import type { Estacao } from '@/hooks/useEstacoes';
@@ -914,7 +915,49 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
         </div>
       )}
 
-      {/* === Slot: valor semanal (cobrado por carro) === */}
+      {/* === Slot: estado (controlo manual do gestor) === */}
+      {isSlot && (
+        <div>
+          <SectionHeader
+            icon={ClipboardList}
+            title="Estado do Slot"
+            accent="navy"
+            hint="O gestor controla o estado — o slot não muda sozinho"
+          />
+          <FormField
+            control={form.control}
+            name="estado"
+            render={({ field }) => (
+              <FormItem className="max-w-xs">
+                <FormLabel>Estado</FormLabel>
+                <Select
+                  value={field.value}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    field.onChange(v);
+                  }}
+                >
+                  <FormControl>
+                    <SelectTrigger className="bg-background">
+                      <SelectValue placeholder="Selecciona estado..." />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {SLOT_ESTADOS_PERMITIDOS.map((e) => (
+                      <SelectItem key={e} value={e}>
+                        {SLOT_ESTADO_LABELS[e]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+      )}
+
+      {/* === Slot: valor mensal (cobrado por carro) === */}
       {isSlot && (
         <div>
           <SectionHeader
@@ -922,15 +965,15 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
             title="Valor do Slot"
             accent="amber"
             required
-            hint="Cobrado semanalmente ao motorista, por carro"
+            hint="Cobrado mensalmente ao motorista, por carro"
           />
           <FormField
             control={form.control}
-            name="slot_valor_semanal"
+            name="slot_valor_mensal"
             render={({ field }) => (
               <FormItem className="max-w-xs">
                 <FormLabel>
-                  Valor semanal (€) <span className="text-red-500">*</span>
+                  Valor mensal (€) <span className="text-red-500">*</span>
                 </FormLabel>
                 <FormControl>
                   <Input
@@ -946,6 +989,9 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                     }
                   />
                 </FormControl>
+                <p className="text-xs text-muted-foreground">
+                  Valor BRUTO (IVA incl.) cobrado todo mês.
+                </p>
                 <FormMessage />
               </FormItem>
             )}

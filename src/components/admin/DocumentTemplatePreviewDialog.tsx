@@ -15,6 +15,7 @@ interface Props {
 const TIPO_LABELS: Record<string, string> = {
   contrato_aluguer: 'Contrato de Aluguer',
   contrato_prestacao: 'Contrato de Prestação',
+  anexo_danos: 'Folha de Danos',
   outro: 'Outro',
 };
 

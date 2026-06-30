@@ -130,6 +130,17 @@ export default function ViaturaDetalhe() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') ?? 'dados');
   const [reparacoesAbertas, setReparacoesAbertas] = useState<any[]>([]);
+  const [grupoNome, setGrupoNome] = useState<string | null>(null);
+  const [tarifasGrupo, setTarifasGrupo] = useState<
+    Array<{
+      nome: string;
+      preco_dia: number | null;
+      preco_semana: number | null;
+      preco_mes: number | null;
+      kms_incluidos: number | null;
+      km_adicional_valor: number | null;
+    }>
+  >([]);
 
   // Vínculos ativos (reserva / contrato / movimentação) para os botões do header.
   const { data: vinculos, isLoading: loadingVinculos } = useViaturaVinculosAtivos(
@@ -142,6 +153,26 @@ export default function ViaturaDetalhe() {
       loadReparacoesAbertas();
     }
   }, [id, isNew]);
+
+  useEffect(() => {
+    if (!viatura?.grupo_id) {
+      setGrupoNome(null);
+      setTarifasGrupo([]);
+      return;
+    }
+    supabase
+      .from('renting_grupos')
+      .select('nome')
+      .eq('id', viatura.grupo_id)
+      .maybeSingle()
+      .then(({ data }) => setGrupoNome(data?.nome ?? null));
+    supabase
+      .from('renting_tarifas')
+      .select('nome, preco_dia, preco_semana, preco_mes, kms_incluidos, km_adicional_valor')
+      .eq('grupo_id', viatura.grupo_id)
+      .eq('ativa', true)
+      .then(({ data }) => setTarifasGrupo((data as any) ?? []));
+  }, [viatura?.grupo_id]);
 
   const loadReparacoesAbertas = async () => {
     if (!id || isNew) return;
@@ -333,6 +364,58 @@ export default function ViaturaDetalhe() {
           </div>
         )}
       </div>
+
+      {/* Card de tarifas do grupo */}
+      {tarifasGrupo.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              Tarifas{grupoNome ? ` — ${grupoNome}` : ''}
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {tarifasGrupo.map((t) => {
+                const fmt = (v: number | null) =>
+                  v != null
+                    ? new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(
+                        v
+                      )
+                    : null;
+                return (
+                  <div key={t.nome} className="rounded-lg border bg-muted/20 p-3 space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">{t.nome}</p>
+                    {fmt(t.preco_dia) && (
+                      <p className="text-sm">
+                        {fmt(t.preco_dia)}{' '}
+                        <span className="text-xs text-muted-foreground">/dia</span>
+                      </p>
+                    )}
+                    {fmt(t.preco_semana) && (
+                      <p className="text-base font-bold text-primary">
+                        {fmt(t.preco_semana)}{' '}
+                        <span className="text-xs font-normal text-muted-foreground">/semana</span>
+                      </p>
+                    )}
+                    {fmt(t.preco_mes) && (
+                      <p className="text-sm">
+                        {fmt(t.preco_mes)}{' '}
+                        <span className="text-xs text-muted-foreground">/mês</span>
+                      </p>
+                    )}
+                    {t.kms_incluidos != null && (
+                      <p className="text-xs text-muted-foreground">{t.kms_incluidos} km incl.</p>
+                    )}
+                    {fmt(t.km_adicional_valor) && (
+                      <p className="text-xs text-muted-foreground">
+                        {fmt(t.km_adicional_valor)}/km extra
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Content with Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

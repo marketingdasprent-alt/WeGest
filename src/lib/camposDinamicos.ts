@@ -19,7 +19,7 @@
  */
 
 /** Categorias base (código). O provider pode criar outras (string livre). */
-export type BaseCategoria = 'motorista' | 'cliente' | 'empresa' | 'viatura' | 'contrato';
+export type BaseCategoria = 'motorista' | 'cliente' | 'empresa' | 'viatura' | 'contrato' | 'danos';
 /** Uma categoria pode ser uma das base OU uma criada pelo provider. */
 export type CampoCategoria = string;
 
@@ -50,6 +50,7 @@ export const CATEGORIA_LABELS: Record<BaseCategoria, string> = {
   empresa: 'Empresa',
   viatura: 'Viatura',
   contrato: 'Contrato',
+  danos: 'Folha de Danos',
 };
 
 export const CATEGORIA_ORDEM: BaseCategoria[] = [
@@ -58,6 +59,7 @@ export const CATEGORIA_ORDEM: BaseCategoria[] = [
   'empresa',
   'viatura',
   'contrato',
+  'danos',
 ];
 
 /** Rótulo de uma categoria: base → traduzido; custom → o próprio nome. */
@@ -150,6 +152,15 @@ export const CAMPOS_CATALOGO: CampoDinamico[] = [
   { chave: 'observacoes', label: 'Observações', categoria: 'contrato' },
   { chave: 'data_atual', label: 'Data actual', categoria: 'contrato' },
   { chave: 'data_atual_extenso', label: 'Data actual (extenso)', categoria: 'contrato' },
+
+  // ── Folha de Danos (templates anexo_danos) ──────────────────
+  { chave: 'momento_folha', label: 'Momento (ENTREGA/RECOLHA)', categoria: 'danos' },
+  { chave: 'secao_danos', label: 'Secção de danos (tabela+fotos+QR)', categoria: 'danos' },
+  { chave: 'observacoes_momento', label: 'Observações do momento', categoria: 'danos' },
+  { chave: 'km_saida', label: 'KM saída', categoria: 'danos' },
+  { chave: 'km_entrada', label: 'KM entrada', categoria: 'danos' },
+  { chave: 'combustivel_saida', label: 'Combustível saída', categoria: 'danos' },
+  { chave: 'combustivel_entrada', label: 'Combustível entrada', categoria: 'danos' },
 ];
 
 /** Override por organização (linha em org_campos_dinamicos). */

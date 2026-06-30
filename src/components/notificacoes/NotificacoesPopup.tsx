@@ -1,28 +1,25 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useNotificacoes } from '@/hooks/useNotificacoes';
+import { useNotificacoes, type Notificacao } from '@/hooks/useNotificacoes';
 import { armNotificationSound } from '@/lib/notificationSound';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, Bell, Eye, X } from 'lucide-react';
 
-// Abre a lista de candidaturas; com candidatura_id, abre logo o detalhe.
-const candidaturaLink = (candidaturaId: string | null) =>
-  candidaturaId
-    ? `/motoristas/candidaturas?candidatura=${candidaturaId}`
+// Destino do botão "Ver" por tipo de notificação.
+// `link` genérico tem prioridade (ex.: avisos de lista de espera); depois
+// resolve-se por tipo (viatura disponível → detalhe da viatura) e, por fim,
+// cai nas candidaturas.
+const notificacaoLink = (n: Notificacao): string => {
+  if (n.link) return n.link;
+  if (n.tipo === 'viatura_disponivel' && n.viatura_id) return `/viaturas/${n.viatura_id}`;
+  return n.candidatura_id
+    ? `/motoristas/candidaturas?candidatura=${n.candidatura_id}`
     : '/motoristas/candidaturas';
-
-// Rota de destino do botão "Ver" conforme o tipo de notificação.
-const destinoNotificacao = (n: {
-  tipo: string;
-  candidatura_id: string | null;
-  link: string | null;
-}) => n.link ?? candidaturaLink(n.candidatura_id);
-
-// Texto do botão de ação conforme o tipo.
-const labelAcao = (tipo: string) =>
-  tipo === 'viatura_disponivel' ? 'Ver no calendário' : 'Ver candidatura';
+};
+const notificacaoLabel = (n: Notificacao): string =>
+  n.tipo === 'viatura_disponivel' ? 'Ver viatura' : 'Ver candidatura';
 
 export const NotificacoesPopup = () => {
   const { tipoUtilizador, loading } = usePermissions();
@@ -89,10 +86,10 @@ export const NotificacoesPopup = () => {
                     size="sm"
                     variant={urgente ? 'destructive' : 'default'}
                     className="h-8"
-                    onClick={() => navigate(destinoNotificacao(n))}
+                    onClick={() => navigate(notificacaoLink(n))}
                   >
                     <Eye className="mr-1.5 h-3.5 w-3.5" />
-                    {labelAcao(n.tipo)}
+                    {notificacaoLabel(n)}
                   </Button>
                   <Button size="sm" variant="ghost" className="h-8" onClick={() => resolver(n.id)}>
                     Fechar

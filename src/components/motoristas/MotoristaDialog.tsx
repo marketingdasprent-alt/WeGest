@@ -41,9 +41,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useOrgId } from '@/contexts/TenantContext';
 import { Motorista } from '@/pages/Motoristas';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { DocumentUploader } from '@/components/motorista-portal/DocumentUploader';
+import { ViaturaDialog } from '@/components/viaturas/ViaturaDialog';
 import { Loader2, X, Check, ChevronsUpDown, CreditCard } from 'lucide-react';
 import { validateDateYear } from '@/utils/dateValidators';
 import {
@@ -109,6 +111,7 @@ const formSchema = z.object({
     }),
   cidade: z.string().optional(),
   status_ativo: z.boolean().optional(),
+  is_slot: z.boolean().optional(),
   observacoes: z.string().optional(),
   iban: z
     .string()
@@ -174,7 +177,13 @@ export function MotoristaDialog({
   // (dois cliques rápidos fazem ambos o SELECT antes de qualquer INSERT).
   // O ref bloqueia o 2º submit já, sem depender de re-render nem do NIF.
   const submittingRef = useRef(false);
+  // Encadeamento slot: após criar um motorista slot, abre o ViaturaDialog
+  // para criar o carro próprio (obrigatório). pendingSlotMotorista guarda o
+  // motorista recém-criado; cancelCountRef permite escape no 2º cancelamento.
+  const [pendingSlotMotorista, setPendingSlotMotorista] = useState<Motorista | null>(null);
+  const cancelCountRef = useRef(0);
   const [gestores, setGestores] = useState<{ nome: string }[]>([]);
+  const orgId = useOrgId();
   const [gestorPopoverOpen, setGestorPopoverOpen] = useState(false);
   const { toast } = useToast();
 
@@ -221,24 +230,31 @@ export function MotoristaDialog({
   }, [open, motorista?.id]);
 
   useEffect(() => {
+    if (!orgId) return;
     const fetchGestores = async () => {
       try {
+        // Gestores TVDE da ORG ATIVA via user_organizacoes (per-org). Filtra
+        // por NOME do cargo (cargos são por-org com ids distintos).
         const { data, error } = await supabase
-          .from('profiles')
-          .select('nome, cargo')
-          .not('nome', 'is', null)
-          .ilike('cargo', '%Gestor%TVDE%')
-          .order('nome');
+          .from('user_organizacoes')
+          .select('cargos(nome), profiles(nome)')
+          .eq('org_id', orgId);
 
         if (error) throw error;
 
-        // Remover duplicados por nome
-        const uniqueGestores = (data || []).reduce((acc: { nome: string }[], current) => {
-          if (!acc.find((item) => item.nome === current.nome)) {
-            acc.push({ nome: current.nome });
-          }
-          return acc;
-        }, []);
+        const uniqueGestores = ((data as any[]) || []).reduce(
+          (acc: { nome: string }[], current) => {
+            const cargoNome = (current.cargos?.nome || '').toLowerCase();
+            const nome = current.profiles?.nome as string | undefined;
+            const isGestorTvde = cargoNome.includes('gestor') && cargoNome.includes('tvde');
+            if (isGestorTvde && nome && !acc.find((item) => item.nome === nome)) {
+              acc.push({ nome });
+            }
+            return acc;
+          },
+          []
+        );
+        uniqueGestores.sort((a, b) => a.nome.localeCompare(b.nome));
 
         setGestores(uniqueGestores);
       } catch (error) {
@@ -246,7 +262,7 @@ export function MotoristaDialog({
       }
     };
     fetchGestores();
-  }, []);
+  }, [orgId]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchemaValidado),
@@ -268,6 +284,7 @@ export function MotoristaDialog({
       data_contratacao: '',
       cidade: '',
       status_ativo: true,
+      is_slot: false,
       observacoes: '',
       iban: '',
       gestor_responsavel: '',
@@ -304,6 +321,7 @@ export function MotoristaDialog({
         data_contratacao: motorista.data_contratacao || '',
         cidade: motorista.cidade || '',
         status_ativo: motorista.status_ativo ?? true,
+        is_slot: (motorista as { is_slot?: boolean | null }).is_slot ?? false,
         observacoes: motorista.observacoes || '',
         iban: motorista.iban || '',
         gestor_responsavel: motorista.gestor_responsavel || '',
@@ -337,6 +355,7 @@ export function MotoristaDialog({
         data_contratacao: '',
         cidade: '',
         status_ativo: true,
+        is_slot: false,
         observacoes: '',
         iban: '',
         gestor_responsavel: '',
@@ -427,6 +446,7 @@ export function MotoristaDialog({
         data_contratacao: values.data_contratacao || null,
         cidade: values.cidade || null,
         status_ativo: values.status_ativo ?? true,
+        is_slot: values.is_slot ?? false,
         observacoes: values.observacoes || null,
         iban: ibanNormalizado || null,
         gestor_responsavel:
@@ -479,12 +499,17 @@ export function MotoristaDialog({
           description: 'O motorista foi criado com sucesso.',
         });
 
-        // Fechar diálogo primeiro
-        onOpenChange(false);
-
-        // Depois notificar que um novo motorista foi criado
-        if (newMotorista) {
-          onMotoristaCreated?.(newMotorista as Motorista);
+        // Slot: NÃO fecha já — abre o ViaturaDialog para criar o carro próprio
+        // (obrigatório). Só fecha e notifica quando o carro for criado (ou no
+        // escape do 2º cancelamento).
+        if (newMotorista && values.is_slot) {
+          cancelCountRef.current = 0;
+          setPendingSlotMotorista(newMotorista as Motorista);
+        } else {
+          onOpenChange(false);
+          if (newMotorista) {
+            onMotoristaCreated?.(newMotorista as Motorista);
+          }
         }
       }
     } catch (error: any) {
@@ -502,203 +527,185 @@ export function MotoristaDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={() => onOpenChange(false)}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden [&>button:last-child]:hidden">
-        <DialogHeader className="px-6 py-4 border-b bg-card flex flex-row items-center justify-between shrink-0">
-          <div className="space-y-0.5">
-            <DialogTitle className="text-2xl font-bold">
-              {motorista ? 'Editar Motorista' : 'Adicionar Motorista'}
-            </DialogTitle>
-            <DialogDescription>
-              {motorista
-                ? 'Atualize as informações do motorista'
-                : 'Preencha os dados do novo motorista'}
-            </DialogDescription>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onOpenChange(false)}
-            className="rounded-full"
-          >
-            <X className="h-5 w-5" />
-          </Button>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={() => onOpenChange(false)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden [&>button:last-child]:hidden">
+          <DialogHeader className="px-6 py-4 border-b bg-card flex flex-row items-center justify-between shrink-0">
+            <div className="space-y-0.5">
+              <DialogTitle className="text-2xl font-bold">
+                {motorista ? 'Editar Motorista' : 'Adicionar Motorista'}
+              </DialogTitle>
+              <DialogDescription>
+                {motorista
+                  ? 'Atualize as informações do motorista'
+                  : 'Preencha os dados do novo motorista'}
+              </DialogDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onOpenChange(false)}
+              className="rounded-full"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-8">
-              {/* Dados Pessoais */}
-              <section className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b">
-                  <div className="h-8 w-1 bg-primary rounded-full" />
-                  <h3 className="text-lg font-semibold">Dados Pessoais</h3>
-                </div>
+          <div className="flex-1 overflow-y-auto">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-8">
+                {/* Dados Pessoais */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b">
+                    <div className="h-8 w-1 bg-primary rounded-full" />
+                    <h3 className="text-lg font-semibold">Dados Pessoais</h3>
+                  </div>
 
-                <FormField
-                  control={form.control}
-                  name="gestor_responsavel"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center gap-2">Gestor Responsável</FormLabel>
-                      <Popover
-                        open={gestorPopoverOpen}
-                        onOpenChange={setGestorPopoverOpen}
-                        modal={true}
-                      >
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              role="combobox"
-                              className={cn(
-                                'w-full h-11 justify-between bg-yellow-50/50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900/30',
-                                !field.value && 'text-muted-foreground'
-                              )}
-                            >
-                              {field.value && field.value !== 'none'
-                                ? gestores.find((gestor) => gestor.nome === field.value)?.nome ||
-                                  field.value
-                                : 'Selecione o gestor responsável...'}
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          className="w-[var(--radix-popover-trigger-width)] p-0 z-[200]"
-                          align="start"
+                  <FormField
+                    control={form.control}
+                    name="gestor_responsavel"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-2">
+                          Gestor Responsável
+                        </FormLabel>
+                        <Popover
+                          open={gestorPopoverOpen}
+                          onOpenChange={setGestorPopoverOpen}
+                          modal={true}
                         >
-                          <Command>
-                            <CommandInput placeholder="Pesquisar gestor..." className="h-9" />
-                            <CommandList>
-                              <CommandEmpty>Nenhum gestor encontrado.</CommandEmpty>
-                              <CommandGroup>
-                                <CommandItem
-                                  value="none"
-                                  onSelect={() => {
-                                    form.setValue('gestor_responsavel', 'none');
-                                    setGestorPopoverOpen(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      'mr-2 h-4 w-4',
-                                      field.value === 'none' ? 'opacity-100' : 'opacity-0'
-                                    )}
-                                  />
-                                  Nenhum
-                                </CommandItem>
-                                {gestores.map((gestor) => (
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className={cn(
+                                  'w-full h-11 justify-between bg-yellow-50/50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900/30',
+                                  !field.value && 'text-muted-foreground'
+                                )}
+                              >
+                                {field.value && field.value !== 'none'
+                                  ? gestores.find((gestor) => gestor.nome === field.value)?.nome ||
+                                    field.value
+                                  : 'Selecione o gestor responsável...'}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-[var(--radix-popover-trigger-width)] p-0 z-[200]"
+                            align="start"
+                          >
+                            <Command>
+                              <CommandInput placeholder="Pesquisar gestor..." className="h-9" />
+                              <CommandList>
+                                <CommandEmpty>Nenhum gestor encontrado.</CommandEmpty>
+                                <CommandGroup>
                                   <CommandItem
-                                    key={gestor.nome}
-                                    value={gestor.nome}
+                                    value="none"
                                     onSelect={() => {
-                                      form.setValue('gestor_responsavel', gestor.nome);
+                                      form.setValue('gestor_responsavel', 'none');
                                       setGestorPopoverOpen(false);
                                     }}
                                   >
                                     <Check
                                       className={cn(
                                         'mr-2 h-4 w-4',
-                                        field.value === gestor.nome ? 'opacity-100' : 'opacity-0'
+                                        field.value === 'none' ? 'opacity-100' : 'opacity-0'
                                       )}
                                     />
-                                    {gestor.nome}
+                                    Nenhum
                                   </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                                  {gestores.map((gestor) => (
+                                    <CommandItem
+                                      key={gestor.nome}
+                                      value={gestor.nome}
+                                      onSelect={() => {
+                                        form.setValue('gestor_responsavel', gestor.nome);
+                                        setGestorPopoverOpen(false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          'mr-2 h-4 w-4',
+                                          field.value === gestor.nome ? 'opacity-100' : 'opacity-0'
+                                        )}
+                                      />
+                                      {gestor.nome}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="nome"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        Nome Completo <span className="text-red-500">*</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: João Silva" {...field} className="h-11" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <FormField
                     control={form.control}
-                    name="nif"
+                    name="nome"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>
-                          NIF <span className="text-red-500">*</span>
+                          Nome Completo <span className="text-red-500">*</span>
                         </FormLabel>
                         <FormControl>
-                          <Input placeholder="123456789" {...field} className="h-11" />
+                          <Input placeholder="Ex: João Silva" {...field} className="h-11" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="telefone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Telefone</FormLabel>
-                        <FormControl>
-                          <PhoneInput
-                            value={field.value || ''}
-                            onChange={field.onChange}
-                            defaultCountry="PT"
-                            className="h-11"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="email"
-                            placeholder="email@exemplo.com"
-                            {...field}
-                            className="h-11"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="md:col-span-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <FormField
                       control={form.control}
-                      name="morada"
+                      name="nif"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Morada</FormLabel>
+                          <FormLabel>
+                            NIF <span className="text-red-500">*</span>
+                          </FormLabel>
+                          <FormControl>
+                            <Input placeholder="123456789" {...field} className="h-11" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="telefone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Telefone</FormLabel>
+                          <FormControl>
+                            <PhoneInput
+                              value={field.value || ''}
+                              onChange={field.onChange}
+                              defaultCountry="PT"
+                              className="h-11"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
                           <FormControl>
                             <Input
-                              placeholder="Rua, número, andar..."
+                              type="email"
+                              placeholder="email@exemplo.com"
                               {...field}
                               className="h-11"
                             />
@@ -708,382 +715,144 @@ export function MotoristaDialog({
                       )}
                     />
                   </div>
-                  <FormField
-                    control={form.control}
-                    name="codigo_postal"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Código Postal</FormLabel>
-                        <FormControl>
-                          <Input placeholder="0000-000" {...field} className="h-11" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="cidade"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Cidade (Residência)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ex: Lisboa" {...field} className="h-11" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="data_contratacao"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          Data de Contratação <span className="text-red-500">*</span>
-                        </FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} className="h-11" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="iban"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>IBAN</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="PT50 0000 0000 0000 0000 0000 0"
-                          {...field}
-                          className="h-11"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Cartões Frota */}
-                <div className="bg-orange-50/40 dark:bg-orange-950/10 p-4 rounded-xl border border-orange-100 dark:border-orange-900/30 space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-orange-700 dark:text-orange-400">
-                    <CreditCard className="h-4 w-4" />
-                    Cartões Frota
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {(['bp', 'repsol', 'edp'] as const).map((tipo) => (
-                      <div key={tipo} className="space-y-1">
-                        <label className="text-xs font-medium text-muted-foreground uppercase">
-                          {tipo === 'edp' ? 'EDP' : tipo === 'bp' ? 'BP' : 'Repsol'}
-                        </label>
-                        <Select
-                          value={selectedCartao[tipo]}
-                          onValueChange={(v) =>
-                            setSelectedCartao((s) => ({ ...s, [tipo]: v === '__none__' ? '' : v }))
-                          }
-                        >
-                          <SelectTrigger className="h-9 bg-background text-sm">
-                            <SelectValue placeholder="Sem cartão" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">
-                              <span className="text-muted-foreground italic">Sem cartão</span>
-                            </SelectItem>
-                            {cartoesFrota[tipo].map((c) => (
-                              <SelectItem key={c.id} value={c.id}>
-                                {c.numero}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-purple-50/30 dark:bg-purple-950/10 p-4 rounded-xl border border-purple-100 dark:border-purple-900/30">
-                  <FormField
-                    control={form.control}
-                    name="uber_uuid"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Uber UUID</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="ID da Uber"
-                            {...field}
-                            className="h-11 bg-background"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="bolt_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Bolt ID</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="ID da Bolt"
-                            {...field}
-                            className="h-11 bg-background"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </section>
-
-              {/* Seções de Documentos com Cores */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Identificação - AZUL */}
-                <div className="bg-blue-100/40 dark:bg-blue-900/20 p-6 rounded-2xl border-2 border-blue-200 dark:border-blue-800/50 space-y-4 shadow-sm">
-                  <div className="flex items-center gap-2 pb-2 border-b border-blue-300/50 dark:border-blue-800/50">
-                    <h3 className="font-bold text-blue-800 dark:text-blue-300">Identificação</h3>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="md:col-span-2">
+                      <FormField
+                        control={form.control}
+                        name="morada"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Morada</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Rua, número, andar..."
+                                {...field}
+                                className="h-11"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                     <FormField
                       control={form.control}
-                      name="documento_tipo"
+                      name="codigo_postal"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Código Postal</FormLabel>
+                          <FormControl>
+                            <Input placeholder="0000-000" {...field} className="h-11" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="cidade"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Cidade (Residência)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Ex: Lisboa" {...field} className="h-11" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="data_contratacao"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>
-                            Tipo <span className="text-red-500">*</span>
+                            Data de Contratação <span className="text-red-500">*</span>
                           </FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger className="bg-background">
-                                <SelectValue placeholder="Selecione" />
-                              </SelectTrigger>
-                            </FormControl>
+                          <FormControl>
+                            <Input type="date" {...field} className="h-11" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="iban"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>IBAN</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="PT50 0000 0000 0000 0000 0000 0"
+                            {...field}
+                            className="h-11"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Cartões Frota */}
+                  <div className="bg-orange-50/40 dark:bg-orange-950/10 p-4 rounded-xl border border-orange-100 dark:border-orange-900/30 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-orange-700 dark:text-orange-400">
+                      <CreditCard className="h-4 w-4" />
+                      Cartões Frota
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {(['bp', 'repsol', 'edp'] as const).map((tipo) => (
+                        <div key={tipo} className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground uppercase">
+                            {tipo === 'edp' ? 'EDP' : tipo === 'bp' ? 'BP' : 'Repsol'}
+                          </label>
+                          <Select
+                            value={selectedCartao[tipo]}
+                            onValueChange={(v) =>
+                              setSelectedCartao((s) => ({
+                                ...s,
+                                [tipo]: v === '__none__' ? '' : v,
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="h-9 bg-background text-sm">
+                              <SelectValue placeholder="Sem cartão" />
+                            </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Cartão Cidadão">Cartão Cidadão</SelectItem>
-                              <SelectItem value="Passaporte">Passaporte</SelectItem>
-                              <SelectItem value="Autorização de Residência">AR</SelectItem>
+                              <SelectItem value="__none__">
+                                <span className="text-muted-foreground italic">Sem cartão</span>
+                              </SelectItem>
+                              {cartoesFrota[tipo].map((c) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {c.numero}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="documento_numero"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            Número <span className="text-red-500">*</span>
-                          </FormLabel>
-                          <FormControl>
-                            <Input placeholder="Número" {...field} className="bg-background" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <FormField
-                    control={form.control}
-                    name="documento_validade"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Validade</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} className="bg-background" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="documento_ficheiro_url"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Frente</FormLabel>
-                          <FormControl>
-                            <DocumentUploader
-                              folder="documentos"
-                              motoristaId={motorista?.id}
-                              currentUrl={field.value}
-                              onUpload={field.onChange}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="documento_identificacao_verso_url"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Verso</FormLabel>
-                          <FormControl>
-                            <DocumentUploader
-                              folder="documentos"
-                              motoristaId={motorista?.id}
-                              currentUrl={field.value}
-                              onUpload={field.onChange}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
-                {/* Carta de Condução - VERDE */}
-                <div className="bg-emerald-100/40 dark:bg-emerald-900/20 p-6 rounded-2xl border-2 border-emerald-200 dark:border-emerald-800/50 space-y-4 shadow-sm">
-                  <div className="flex items-center gap-2 pb-2 border-b border-emerald-300/50 dark:border-emerald-800/50">
-                    <h3 className="font-bold text-emerald-800 dark:text-emerald-300">
-                      Carta de Condução
-                    </h3>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="carta_conducao"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            Número <span className="text-red-500">*</span>
-                          </FormLabel>
-                          <FormControl>
-                            <Input placeholder="Número" {...field} className="bg-background" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="carta_validade"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Validade</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} className="bg-background" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="carta_ficheiro_url"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Frente</FormLabel>
-                          <FormControl>
-                            <DocumentUploader
-                              folder="cartas"
-                              motoristaId={motorista?.id}
-                              currentUrl={field.value}
-                              onUpload={field.onChange}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="carta_conducao_verso_url"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Verso</FormLabel>
-                          <FormControl>
-                            <DocumentUploader
-                              folder="cartas"
-                              motoristaId={motorista?.id}
-                              currentUrl={field.value}
-                              onUpload={field.onChange}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <FormField
-                    control={form.control}
-                    name="carta_categorias"
-                    render={() => (
-                      <FormItem>
-                        <FormLabel>Categorias</FormLabel>
-                        <div className="grid grid-cols-5 gap-2">
-                          {CATEGORIAS_CARTA.map((categoria) => (
-                            <FormField
-                              key={categoria}
-                              control={form.control}
-                              name="carta_categorias"
-                              render={({ field }) => (
-                                <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value?.includes(categoria)}
-                                      onCheckedChange={(checked) => {
-                                        const current = field.value || [];
-                                        return checked
-                                          ? field.onChange([...current, categoria])
-                                          : field.onChange(
-                                              current.filter((value) => value !== categoria)
-                                            );
-                                      }}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="text-xs font-normal cursor-pointer">
-                                    {categoria}
-                                  </FormLabel>
-                                </FormItem>
-                              )}
-                            />
-                          ))}
                         </div>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                {/* TVDE - ROXO */}
-                <div className="bg-indigo-100/40 dark:bg-indigo-900/20 p-6 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800/50 space-y-4 shadow-sm">
-                  <div className="flex items-center gap-2 pb-2 border-b border-indigo-300/50 dark:border-indigo-800/50">
-                    <h3 className="font-bold text-indigo-800 dark:text-indigo-300">Licença TVDE</h3>
+                      ))}
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-purple-50/30 dark:bg-purple-950/10 p-4 rounded-xl border border-purple-100 dark:border-purple-900/30">
                     <FormField
                       control={form.control}
-                      name="licenca_tvde_numero"
+                      name="uber_uuid"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Número</FormLabel>
+                          <FormLabel>Uber UUID</FormLabel>
                           <FormControl>
-                            <Input placeholder="Número" {...field} className="bg-background" />
+                            <Input
+                              placeholder="ID da Uber"
+                              {...field}
+                              className="h-11 bg-background"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1091,7 +860,77 @@ export function MotoristaDialog({
                     />
                     <FormField
                       control={form.control}
-                      name="licenca_tvde_validade"
+                      name="bolt_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Bolt ID</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="ID da Bolt"
+                              {...field}
+                              className="h-11 bg-background"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </section>
+
+                {/* Seções de Documentos com Cores */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Identificação - AZUL */}
+                  <div className="bg-blue-100/40 dark:bg-blue-900/20 p-6 rounded-2xl border-2 border-blue-200 dark:border-blue-800/50 space-y-4 shadow-sm">
+                    <div className="flex items-center gap-2 pb-2 border-b border-blue-300/50 dark:border-blue-800/50">
+                      <h3 className="font-bold text-blue-800 dark:text-blue-300">Identificação</h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="documento_tipo"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              Tipo <span className="text-red-500">*</span>
+                            </FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="bg-background">
+                                  <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Cartão Cidadão">Cartão Cidadão</SelectItem>
+                                <SelectItem value="Passaporte">Passaporte</SelectItem>
+                                <SelectItem value="Autorização de Residência">AR</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="documento_numero"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              Número <span className="text-red-500">*</span>
+                            </FormLabel>
+                            <FormControl>
+                              <Input placeholder="Número" {...field} className="bg-background" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="documento_validade"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Validade</FormLabel>
@@ -1102,151 +941,409 @@ export function MotoristaDialog({
                         </FormItem>
                       )}
                     />
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="documento_ficheiro_url"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Frente</FormLabel>
+                            <FormControl>
+                              <DocumentUploader
+                                folder="documentos"
+                                motoristaId={motorista?.id}
+                                currentUrl={field.value}
+                                onUpload={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="documento_identificacao_verso_url"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Verso</FormLabel>
+                            <FormControl>
+                              <DocumentUploader
+                                folder="documentos"
+                                motoristaId={motorista?.id}
+                                currentUrl={field.value}
+                                onUpload={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Carta de Condução - VERDE */}
+                  <div className="bg-emerald-100/40 dark:bg-emerald-900/20 p-6 rounded-2xl border-2 border-emerald-200 dark:border-emerald-800/50 space-y-4 shadow-sm">
+                    <div className="flex items-center gap-2 pb-2 border-b border-emerald-300/50 dark:border-emerald-800/50">
+                      <h3 className="font-bold text-emerald-800 dark:text-emerald-300">
+                        Carta de Condução
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="carta_conducao"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              Número <span className="text-red-500">*</span>
+                            </FormLabel>
+                            <FormControl>
+                              <Input placeholder="Número" {...field} className="bg-background" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="carta_validade"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Validade</FormLabel>
+                            <FormControl>
+                              <Input type="date" {...field} className="bg-background" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="carta_ficheiro_url"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Frente</FormLabel>
+                            <FormControl>
+                              <DocumentUploader
+                                folder="cartas"
+                                motoristaId={motorista?.id}
+                                currentUrl={field.value}
+                                onUpload={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="carta_conducao_verso_url"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Verso</FormLabel>
+                            <FormControl>
+                              <DocumentUploader
+                                folder="cartas"
+                                motoristaId={motorista?.id}
+                                currentUrl={field.value}
+                                onUpload={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="carta_categorias"
+                      render={() => (
+                        <FormItem>
+                          <FormLabel>Categorias</FormLabel>
+                          <div className="grid grid-cols-5 gap-2">
+                            {CATEGORIAS_CARTA.map((categoria) => (
+                              <FormField
+                                key={categoria}
+                                control={form.control}
+                                name="carta_categorias"
+                                render={({ field }) => (
+                                  <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                                    <FormControl>
+                                      <Checkbox
+                                        checked={field.value?.includes(categoria)}
+                                        onCheckedChange={(checked) => {
+                                          const current = field.value || [];
+                                          return checked
+                                            ? field.onChange([...current, categoria])
+                                            : field.onChange(
+                                                current.filter((value) => value !== categoria)
+                                              );
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormLabel className="text-xs font-normal cursor-pointer">
+                                      {categoria}
+                                    </FormLabel>
+                                  </FormItem>
+                                )}
+                              />
+                            ))}
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* TVDE - ROXO */}
+                  <div className="bg-indigo-100/40 dark:bg-indigo-900/20 p-6 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800/50 space-y-4 shadow-sm">
+                    <div className="flex items-center gap-2 pb-2 border-b border-indigo-300/50 dark:border-indigo-800/50">
+                      <h3 className="font-bold text-indigo-800 dark:text-indigo-300">
+                        Licença TVDE
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="licenca_tvde_numero"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Número</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Número" {...field} className="bg-background" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="licenca_tvde_validade"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Validade</FormLabel>
+                            <FormControl>
+                              <Input type="date" {...field} className="bg-background" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="licenca_tvde_ficheiro_url"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Ficheiro TVDE</FormLabel>
+                          <FormControl>
+                            <DocumentUploader
+                              folder="tvde"
+                              motoristaId={motorista?.id}
+                              currentUrl={field.value}
+                              onUpload={field.onChange}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* Adicional - LARANJA */}
+                  <div className="bg-amber-100/40 dark:bg-amber-900/20 p-6 rounded-2xl border-2 border-amber-200 dark:border-amber-800/50 space-y-4 shadow-sm">
+                    <div className="flex items-center gap-2 pb-2 border-b border-amber-300/50 dark:border-amber-800/50">
+                      <h3 className="font-bold text-amber-800 dark:text-amber-300">
+                        Documentação Extra
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="registo_criminal_url"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Registo Criminal</FormLabel>
+                            <FormControl>
+                              <DocumentUploader
+                                folder="documentos"
+                                motoristaId={motorista?.id}
+                                currentUrl={field.value}
+                                onUpload={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="comprovativo_morada_url"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Comprovativo de Morada</FormLabel>
+                            <FormControl>
+                              <DocumentUploader
+                                folder="documentos"
+                                motoristaId={motorista?.id}
+                                currentUrl={field.value}
+                                onUpload={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="comprovativo_iban_url"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">Comprovativo de IBAN</FormLabel>
+                            <FormControl>
+                              <DocumentUploader
+                                folder="documentos"
+                                motoristaId={motorista?.id}
+                                currentUrl={field.value}
+                                onUpload={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Observações */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b">
+                    <div className="h-8 w-1 bg-primary rounded-full" />
+                    <h3 className="text-lg font-semibold">Notas e Outros</h3>
                   </div>
 
                   <FormField
                     control={form.control}
-                    name="licenca_tvde_ficheiro_url"
+                    name="observacoes"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">Ficheiro TVDE</FormLabel>
+                        <FormLabel>Observações Internas</FormLabel>
                         <FormControl>
-                          <DocumentUploader
-                            folder="tvde"
-                            motoristaId={motorista?.id}
-                            currentUrl={field.value}
-                            onUpload={field.onChange}
+                          <Textarea
+                            placeholder="Notas sobre o motorista, histórico ou observações relevantes..."
+                            className="min-h-[120px] resize-none"
+                            {...field}
                           />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
 
-                {/* Adicional - LARANJA */}
-                <div className="bg-amber-100/40 dark:bg-amber-900/20 p-6 rounded-2xl border-2 border-amber-200 dark:border-amber-800/50 space-y-4 shadow-sm">
-                  <div className="flex items-center gap-2 pb-2 border-b border-amber-300/50 dark:border-amber-800/50">
-                    <h3 className="font-bold text-amber-800 dark:text-amber-300">
-                      Documentação Extra
-                    </h3>
-                  </div>
+                  <FormField
+                    control={form.control}
+                    name="is_slot"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">
+                            Motorista de slot (carro próprio)
+                          </FormLabel>
+                          <p className="text-sm text-muted-foreground">
+                            O carro é do motorista (externo à frota). Ao criar, será pedido o carro
+                            slot.
+                          </p>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </section>
+              </form>
+            </Form>
+          </div>
 
-                  <div className="grid grid-cols-1 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="registo_criminal_url"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Registo Criminal</FormLabel>
-                          <FormControl>
-                            <DocumentUploader
-                              folder="documentos"
-                              motoristaId={motorista?.id}
-                              currentUrl={field.value}
-                              onUpload={field.onChange}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="comprovativo_morada_url"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Comprovativo de Morada</FormLabel>
-                          <FormControl>
-                            <DocumentUploader
-                              folder="documentos"
-                              motoristaId={motorista?.id}
-                              currentUrl={field.value}
-                              onUpload={field.onChange}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="comprovativo_iban_url"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Comprovativo de IBAN</FormLabel>
-                          <FormControl>
-                            <DocumentUploader
-                              folder="documentos"
-                              motoristaId={motorista?.id}
-                              currentUrl={field.value}
-                              onUpload={field.onChange}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-              </div>
+          <div className="px-6 py-4 border-t bg-card flex items-center justify-end gap-3 shrink-0">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={loading}
+              className="h-11 px-8"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={form.handleSubmit(onSubmit)}
+              disabled={loading || isSubmitting}
+              className="h-11 px-10 font-bold"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Gravando...
+                </>
+              ) : motorista ? (
+                'Guardar Alterações'
+              ) : (
+                'Criar Motorista'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-              {/* Observações */}
-              <section className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b">
-                  <div className="h-8 w-1 bg-primary rounded-full" />
-                  <h3 className="text-lg font-semibold">Notas e Outros</h3>
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="observacoes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Observações Internas</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Notas sobre o motorista, histórico ou observações relevantes..."
-                          className="min-h-[120px] resize-none"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </section>
-            </form>
-          </Form>
-        </div>
-
-        <div className="px-6 py-4 border-t bg-card flex items-center justify-end gap-3 shrink-0">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={loading}
-            className="h-11 px-8"
-          >
-            Cancelar
-          </Button>
-          <Button
-            onClick={form.handleSubmit(onSubmit)}
-            disabled={loading || isSubmitting}
-            className="h-11 px-10 font-bold"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Gravando...
-              </>
-            ) : motorista ? (
-              'Guardar Alterações'
-            ) : (
-              'Criar Motorista'
-            )}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      {pendingSlotMotorista && (
+        <ViaturaDialog
+          open={true}
+          viatura={null}
+          slotMotoristaId={pendingSlotMotorista.id}
+          onOpenChange={(o) => {
+            if (o) return;
+            // Cancelamento sem criar carro: obrigatório → 1º avisa e reabre,
+            // 2º permite sair com motorista incompleto.
+            cancelCountRef.current += 1;
+            if (cancelCountRef.current >= 2) {
+              toast({
+                title: 'Motorista sem carro',
+                description:
+                  'O motorista de slot ficou sem carro associado. Adiciona o carro mais tarde.',
+                variant: 'destructive',
+              });
+              const m = pendingSlotMotorista;
+              setPendingSlotMotorista(null);
+              onOpenChange(false);
+              onMotoristaCreated?.(m);
+            } else {
+              toast({
+                title: 'Carro obrigatório',
+                description: 'Um motorista de slot precisa de um carro próprio associado.',
+                variant: 'destructive',
+              });
+              // Mantém pendingSlotMotorista → ViaturaDialog reabre (open={true}).
+            }
+          }}
+          onSuccess={() => {
+            /* fecho tratado em onCreated */
+          }}
+          onCreated={() => {
+            const m = pendingSlotMotorista;
+            setPendingSlotMotorista(null);
+            onOpenChange(false);
+            if (m) onMotoristaCreated?.(m);
+          }}
+        />
+      )}
+    </>
   );
 }

@@ -66,6 +66,8 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
   const caucaoValor = form.watch('caucao_valor');
   const longaDuracao = form.watch('is_longa_duracao');
   const regime = form.watch('regime');
+  const slotValorMensal = form.watch('slot_valor_mensal');
+  const isSlot = regime === 'slot';
 
   const estacaoEntrega = useMemo(
     () => estacoes.find((e) => e.id === estacaoEntregaId),
@@ -78,8 +80,10 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
   const viatura = useMemo(() => viaturas.find((v) => v.id === viaturaId), [viaturas, viaturaId]);
 
   const dias = diferencaDias(dataInicio, dataFim);
-  const total = valorTotal ?? 0;
-  const taxaIVA = ivaRate(regime);
+  // Slot é cobrado ao mês (valor BRUTO com IVA) e é aberto (sem data fim/dias).
+  // O resumo reparte 23% só para mostrar a base/IVA da futura fatura.
+  const total = isSlot ? (slotValorMensal ?? 0) : (valorTotal ?? 0);
+  const taxaIVA = isSlot ? 0.23 : ivaRate(regime);
   const subtotal = taxaIVA > 0 && total > 0 ? total / (1 + taxaIVA) : total;
   const iva = total - subtotal;
 
@@ -129,7 +133,9 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
           </p>
         </div>
         <div className="px-4 py-3 bg-muted/20 border-b text-center text-sm font-medium">
-          Total: {formatEur(total)} <span className="text-muted-foreground">(IVA inc.)</span>
+          Total: {formatEur(total)}
+          {isSlot && <span className="text-muted-foreground">/mês</span>}{' '}
+          <span className="text-muted-foreground">(IVA inc.)</span>
         </div>
 
         <div className="m-3 p-3 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs flex items-start gap-2">
@@ -143,11 +149,15 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
 
         <div className="px-4 py-3 space-y-3 text-sm border-t">
           <div>
-            <p className="text-xs font-semibold text-foreground">Entrega</p>
+            <p className="text-xs font-semibold text-foreground">
+              {isSlot ? 'Início do slot' : 'Entrega'}
+            </p>
             <div className="flex items-center justify-between mt-0.5">
-              <span className={cn(!estacaoEntrega && 'text-muted-foreground italic')}>
-                {estacaoEntrega?.nome ?? 'Estação?'}
-              </span>
+              {!isSlot && (
+                <span className={cn(!estacaoEntrega && 'text-muted-foreground italic')}>
+                  {estacaoEntrega?.nome ?? 'Estação?'}
+                </span>
+              )}
               {horaEntrega ? (
                 <span className="text-xs text-muted-foreground">{horaEntrega}</span>
               ) : (
@@ -158,45 +168,56 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
             </div>
           </div>
 
-          <div>
-            <p className="text-xs font-semibold text-foreground">Recolha</p>
-            <div className="flex items-center justify-between mt-0.5">
-              <span className={cn(!estacaoRecolha && 'text-muted-foreground italic')}>
-                {estacaoRecolha?.nome ?? 'Estação?'}
-              </span>
-              {horaRecolha ? (
-                <span className="text-xs text-muted-foreground">{horaRecolha}</span>
-              ) : (
-                <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" /> Hora?
+          {!isSlot && (
+            <div>
+              <p className="text-xs font-semibold text-foreground">Recolha</p>
+              <div className="flex items-center justify-between mt-0.5">
+                <span className={cn(!estacaoRecolha && 'text-muted-foreground italic')}>
+                  {estacaoRecolha?.nome ?? 'Estação?'}
                 </span>
-              )}
+                {horaRecolha ? (
+                  <span className="text-xs text-muted-foreground">{horaRecolha}</span>
+                ) : (
+                  <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" /> Hora?
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="px-4 py-3 space-y-2 text-sm border-t">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-foreground">Grupo</p>
-            <p className="text-xs font-semibold text-foreground">Kms Permitidos</p>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            {grupo ? (
-              <span className="flex items-center gap-1">
-                <Check className="h-3 w-3 text-emerald-500" />
-                {grupo}
-              </span>
-            ) : (
-              <span className="text-amber-600 dark:text-amber-400 italic flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" /> Grupo?
-              </span>
-            )}
-            <span className="text-muted-foreground">
-              {kmsIncluidos && kmsIncluidos > 0
-                ? `${kmsIncluidos.toLocaleString('pt-PT')} km`
-                : 'Ilimitados'}
-            </span>
-          </div>
+          {!isSlot && (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-foreground">Grupo</p>
+                <p className="text-xs font-semibold text-foreground">Kms Permitidos</p>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                {grupo ? (
+                  <span className="flex items-center gap-1">
+                    <Check className="h-3 w-3 text-emerald-500" />
+                    {grupo}
+                  </span>
+                ) : (
+                  <span className="text-amber-600 dark:text-amber-400 italic flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" /> Grupo?
+                  </span>
+                )}
+                <span className="text-muted-foreground">
+                  {kmsIncluidos && kmsIncluidos > 0
+                    ? `${kmsIncluidos.toLocaleString('pt-PT')} km`
+                    : 'Ilimitados'}
+                </span>
+              </div>
+            </>
+          )}
+          {isSlot && (
+            <p className="text-xs text-muted-foreground italic">
+              Carro próprio do motorista (slot) — sem grupo nem estações.
+            </p>
+          )}
           {viatura && (
             <p className="text-xs text-muted-foreground">
               Viatura: <span className="font-mono">{viatura.matricula}</span>
@@ -229,31 +250,44 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
             Preço
           </div>
           <div className="px-4 py-2.5 border-t space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm text-muted-foreground shrink-0">Preço/dia (IVA inc.)</span>
-              <Input
-                type="text"
-                inputMode="decimal"
-                value={precoUnitInput}
-                onChange={(e) => handlePrecoUnitarioChange(e.target.value)}
-                onFocus={() => {
-                  inputFocused.current = true;
-                }}
-                onBlur={handlePrecoBlur}
-                disabled={!dias}
-                placeholder="0,00"
-                className="h-8 w-24 text-right tabular-nums text-sm"
-                title={!dias ? 'Define primeiro as datas' : 'Preço por dia (IVA incluído)'}
-              />
-            </div>
-            {dias ? (
-              <p className="text-xs text-muted-foreground text-right">
-                × {dias} dia{dias === 1 ? '' : 's'}
-              </p>
+            {isSlot ? (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm text-muted-foreground shrink-0">
+                  Valor mensal (IVA inc.)
+                </span>
+                <span className="text-sm font-medium tabular-nums">{formatEur(total)}</span>
+              </div>
             ) : (
-              <p className="text-xs text-amber-600 dark:text-amber-400 text-right flex items-center justify-end gap-1">
-                <AlertTriangle className="h-3 w-3" /> Define as datas primeiro
-              </p>
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-muted-foreground shrink-0">
+                    Preço/dia (IVA inc.)
+                  </span>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={precoUnitInput}
+                    onChange={(e) => handlePrecoUnitarioChange(e.target.value)}
+                    onFocus={() => {
+                      inputFocused.current = true;
+                    }}
+                    onBlur={handlePrecoBlur}
+                    disabled={!dias}
+                    placeholder="0,00"
+                    className="h-8 w-24 text-right tabular-nums text-sm"
+                    title={!dias ? 'Define primeiro as datas' : 'Preço por dia (IVA incluído)'}
+                  />
+                </div>
+                {dias ? (
+                  <p className="text-xs text-muted-foreground text-right">
+                    × {dias} dia{dias === 1 ? '' : 's'}
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 text-right flex items-center justify-end gap-1">
+                    <AlertTriangle className="h-3 w-3" /> Define as datas primeiro
+                  </p>
+                )}
+              </>
             )}
           </div>
           <div className="px-4 py-1.5 grid grid-cols-2 text-sm border-t">
