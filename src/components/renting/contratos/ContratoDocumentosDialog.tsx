@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, FileText, Loader2, Printer } from 'lucide-react';
 
 import {
@@ -79,24 +79,42 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
   );
   // A Folha de Danos (anexo_danos) gera-se só no fluxo de check-in/out
   // (entrega/recolha), nunca por este diálogo do contrato.
-  const templates = todosTemplates.filter((t) => t.tipo !== 'anexo_danos');
+  // useMemo estabiliza a referência: sem ele, `.filter()` devolvia array novo
+  // a cada render e a pré-selecção (effect abaixo) corria sempre, esmagando
+  // a escolha do utilizador a cada clique.
+  const templates = useMemo(
+    () => todosTemplates.filter((t) => t.tipo !== 'anexo_danos'),
+    [todosTemplates]
+  );
+
+  // Guarda a chave (open+empresa) já pré-seleccionada, para o effect correr
+  // só na transição loading→loaded e não repetir a cada render.
+  const preSelectKey = useRef<string | null>(null);
 
   // Ao abrir, repõe a empresa por defeito. Ao fechar, limpa a selecção.
   useEffect(() => {
     if (open) setEmpresaId(empresaPorDefeito);
-    else setSelected(new Set());
+    else {
+      setSelected(new Set());
+      preSelectKey.current = null;
+    }
   }, [open, empresaPorDefeito]);
 
-  // Pré-selecciona por regime quando os templates (da empresa actual) chegam.
+  // Pré-selecciona por regime UMA vez quando os templates da empresa actual
+  // chegam. A chave (empresaId) garante que muda de empresa volta a pré-seleccionar.
   useEffect(() => {
-    if (!open) return;
+    if (!open || loading) return;
+    const key = `${empresaId}`;
+    if (preSelectKey.current === key) return;
+    preSelectKey.current = key;
+
     const pre = new Set<string>();
     templates.forEach((t) => {
       if (t.tipo === 'contrato_aluguer') pre.add(t.id);
       if (t.tipo === 'contrato_prestacao' && contrato.regime !== 'rent_a_car') pre.add(t.id);
     });
     setSelected(pre);
-  }, [open, templates, contrato.regime]);
+  }, [open, loading, empresaId, templates, contrato.regime]);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
