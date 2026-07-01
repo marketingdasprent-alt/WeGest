@@ -28,6 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SectionCard } from '@/components/ui/section-card';
 import { MotoristaFullModal } from '@/components/motoristas/MotoristaFullModal';
+import { MotoristaCartoesFrota } from '@/components/motoristas/MotoristaCartoesFrota';
 import { MotoristaTabDocumentos } from '@/components/motoristas/tabs/MotoristaTabDocumentos';
 import { MotoristaTabFinanceiro } from '@/components/motoristas/tabs/MotoristaTabFinanceiro';
 import { MotoristaTabRecibos } from '@/components/motoristas/tabs/MotoristaTabRecibos';
@@ -549,11 +550,7 @@ export default function MotoristaDetalhe() {
               headerClassName="bg-orange-50 dark:bg-orange-950/30"
               className="h-full"
             >
-              <div className="space-y-1">
-                <InfoItem label="BP" value={motorista.cartao_bp || '-'} />
-                <InfoItem label="REPSOL" value={motorista.cartao_repsol || '-'} />
-                <InfoItem label="EDP" value={motorista.cartao_edp || '-'} />
-              </div>
+              <MotoristaCartoesFrota motorista={motorista} onChanged={loadMotorista} />
             </SectionCard>
 
             <SectionCard
