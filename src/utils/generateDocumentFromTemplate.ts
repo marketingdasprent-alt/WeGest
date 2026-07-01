@@ -183,6 +183,29 @@ const replaceDynamicFields = (
     result = result.replace(/\{\{assinatura_colaborador\}\}/g, replacement);
   }
 
+  // Assinatura do motorista — a sentinela {{assinatura_motorista}} segue o
+  // mesmo padrão que assinatura_colaborador. Resolve para uma <img> com classe
+  // marcadora que o parseTable reconhece e desenha na célula. Sem assinatura,
+  // resolve para vazio → a célula fica com o traço padrão.
+  {
+    const assinatura = documentData['assinatura_motorista'];
+    const replacement =
+      typeof assinatura === 'string' && assinatura.startsWith('data:image')
+        ? `<img class="sig-motorista" src="${assinatura.replace(/"/g, '&quot;')}">`
+        : '';
+    result = result.replace(/\{\{assinatura_motorista\}\}/g, replacement);
+  }
+
+  // Assinatura do responsável (quem entregou/recolheu) — mesmo padrão.
+  {
+    const assinatura = documentData['assinatura_responsavel'];
+    const replacement =
+      typeof assinatura === 'string' && assinatura.startsWith('data:image')
+        ? `<img class="sig-responsavel" src="${assinatura.replace(/"/g, '&quot;')}">`
+        : '';
+    result = result.replace(/\{\{assinatura_responsavel\}\}/g, replacement);
+  }
+
   // Mapear campos do motorista para o formato usado nos templates: {{motorista_CAMPO}}
   const motoristaFieldMap: Record<string, string> = {
     motorista_nome: 'nome',
@@ -366,6 +389,8 @@ const replaceDynamicFields = (
     'combustivel_entrada',
     'momento_folha',
     'observacoes_momento',
+    'responsavel_nome',
+    'momento_responsavel',
   ];
   contratoFields.forEach((field) => {
     const regex = new RegExp(`\\{\\{${field}\\}\\}`, 'g');
@@ -528,7 +553,7 @@ const parseTable = (tableEl: HTMLElement): { rows: TableCellData[][]; bordered: 
       const fw = el.style.fontWeight;
       const headerBold = tag === 'th' || fw === 'bold' || Number(fw) >= 600;
       // Assinatura embebida na célula (marcador inserido por replaceDynamicFields).
-      const sigImg = el.querySelector('img.sig-colaborador') as HTMLImageElement | null;
+      const sigImg = el.querySelector('img[class^="sig-"]') as HTMLImageElement | null;
       cells.push({
         lines: cellToLines(el, headerBold),
         align: el.style.textAlign || 'left',
@@ -639,8 +664,15 @@ function renderTable(
       // linha como uma assinatura real. Não altera a altura da célula.
       const sigImg = cl.cell.signatureSrc ? ctx.signatures?.get(cl.cell.signatureSrc) : undefined;
       if (sigImg && sigImg.width > 0 && sigImg.height > 0) {
+        // A assinatura assenta SOBRE o traço (1ª linha da célula). A base da
+        // imagem alinha com a baseline do traço e a imagem cresce para cima,
+        // sem nunca sair do topo da célula (clamp). Altura pequena para não
+        // tapar o nome (2ª linha).
+        const firstLineH = cl.wrapped[0]?.h ?? 4;
+        const traçoBaselineY = y + pad + firstLineH * 0.82;
         const maxSigW = Math.min(cl.cw - pad * 2, 38); // mm
-        const maxSigH = 14; // mm — fica sobre o traço sem invadir o nome
+        // Altura máxima = espaço entre o topo da célula e a baseline do traço.
+        const maxSigH = Math.max(6, Math.min(12, traçoBaselineY - (y + 0.5)));
         const aspect = sigImg.width / sigImg.height;
         let sw = maxSigW;
         let sh = sw / aspect;
@@ -648,11 +680,8 @@ function renderTable(
           sh = maxSigH;
           sw = sh * aspect;
         }
-        // Assenta a base da imagem ligeiramente acima do traço (1ª linha de texto).
-        const firstLineH = cl.wrapped[0]?.h ?? 4;
-        const baseLineY = y + pad + firstLineH * 0.82;
         const sx = cl.cx + pad;
-        const sy = Math.max(y + 0.5, baseLineY - sh);
+        const sy = traçoBaselineY - sh; // base no traço, cresce para cima
         try {
           pdf.addImage(sigImg, 'PNG', sx, sy, sw, sh);
         } catch (err) {

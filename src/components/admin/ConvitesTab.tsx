@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { InviteGenerationForm } from '@/components/admin/InviteGenerationForm';
 import { GeneratedInviteDisplay } from '@/components/admin/GeneratedInviteDisplay';
 import { MotoristaInviteLink } from '@/components/admin/MotoristaInviteLink';
+import { QuadroTvSection } from '@/components/admin/QuadroTvSection';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 
@@ -35,6 +36,7 @@ export const ConvitesTab = () => {
 
       <div className="space-y-6">
         <MotoristaInviteLink />
+        <QuadroTvSection />
       </div>
     </div>
   );

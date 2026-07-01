@@ -364,6 +364,45 @@ export type Database = {
           },
         ]
       }
+      assinaturas_handover: {
+        Row: {
+          id: string;
+          org_id: string;
+          calendario_evento_id: string | null;
+          contrato_id: string | null;
+          papel: string;
+          signatario_nome: string;
+          signatario_id: string | null;
+          storage_path: string;
+          assinado_em: string;
+          assinado_por_id: string;
+        };
+        Insert: {
+          id?: string;
+          org_id?: string;
+          calendario_evento_id?: string | null;
+          contrato_id?: string | null;
+          papel: string;
+          signatario_nome: string;
+          signatario_id?: string | null;
+          storage_path: string;
+          assinado_em?: string;
+          assinado_por_id: string;
+        };
+        Update: {
+          id?: string;
+          org_id?: string;
+          calendario_evento_id?: string | null;
+          contrato_id?: string | null;
+          papel?: string;
+          signatario_nome?: string;
+          signatario_id?: string | null;
+          storage_path?: string;
+          assinado_em?: string;
+          assinado_por_id?: string;
+        };
+        Relationships: [];
+      }
       bolt_drivers: {
         Row: {
           created_at: string | null
@@ -5716,6 +5755,38 @@ export type Database = {
           },
           {
             foreignKeyName: "profiles_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quadro_tokens: {
+        Row: {
+          id: string
+          org_id: string
+          token: string
+          ativo: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id?: string
+          token?: string
+          ativo?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          token?: string
+          ativo?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quadro_tokens_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"

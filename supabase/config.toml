@@ -112,3 +112,8 @@ verify_jwt = false
 # autenticado → exige JWT válido (usa get_current_org_id + RLS no invoices).
 [functions.faturacao-emitir]
 verify_jwt = true
+
+# Quadro TV público. Aberto por TV sem sessão → tem de aceitar anon.
+# Segurança: resolve org só via token; devolve apenas campos não-sensíveis.
+[functions.quadro-live]
+verify_jwt = false
