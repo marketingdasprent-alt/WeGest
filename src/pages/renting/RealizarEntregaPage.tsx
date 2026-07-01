@@ -28,6 +28,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useConsumirTokenRealizacao, useRealizarFromToken } from '@/hooks/useRealizacaoToken';
 import { formatMatricula } from '@/components/calendario/calendarioUtils';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
+import {
+  AssinaturasHandoverSection,
+  type AssinaturasHandoverHandle,
+} from '@/components/assinatura/AssinaturasHandoverSection';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface FilePreview {
   id: string;
@@ -102,6 +107,10 @@ const RealizarEntregaPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const restauradoRef = useRef(false);
+  const assinaturasRef = useRef<AssinaturasHandoverHandle>(null);
+  const { user } = useAuth();
+  const responsavelNome =
+    (user?.user_metadata?.nome as string | undefined) ?? user?.email ?? 'Responsável';
 
   // Contexto da folha: viatura (danos), empresa emissora (cabeçalho) e condutor
   // principal (assinatura). Resolvido uma vez e lido pelo preview/confirmar.
@@ -147,12 +156,14 @@ const RealizarEntregaPage = () => {
         }
       }
 
-      // Condutor principal (contrato_condutores) → {{motorista_nome}}. Nunca o
-      // locatário/empresa. Sem condutor, fica vazio para assinatura à mão.
+      // Condutor principal (contrato_condutores) → {{motorista_nome}}. O
+      // condutor é um cliente-tipo-condutor (cliente_id) OU um motorista
+      // parceiro TVDE (motorista_id) — XOR na tabela. Resolver do lado certo.
+      // Nunca o locatário/empresa. Sem condutor, fica vazio para assinar à mão.
       let condutorNome = '';
       const { data: cond } = await supabase
         .from('contrato_condutores')
-        .select('cliente_id, is_principal')
+        .select('cliente_id, motorista_id, is_principal')
         .eq('contrato_id', contratoId!)
         .order('is_principal', { ascending: false })
         .limit(1)
@@ -164,6 +175,13 @@ const RealizarEntregaPage = () => {
           .eq('id', cond.cliente_id)
           .maybeSingle();
         if (cli) condutorNome = cli.nome || cli.nome_comercial || '';
+      } else if (cond?.motorista_id) {
+        const { data: mot } = await supabase
+          .from('motoristas_ativos')
+          .select('nome')
+          .eq('id', cond.motorista_id)
+          .maybeSingle();
+        if (mot?.nome) condutorNome = mot.nome;
       }
       // Sem condutor no contrato → o motorista atribuído à viatura (TVDE).
       if (!condutorNome && data.viatura_id) {
@@ -319,6 +337,10 @@ const RealizarEntregaPage = () => {
               }))
           : undefined;
       const hoje = new Date().toISOString().slice(0, 10);
+      const sigs = assinaturasRef.current?.getAssinaturas() ?? {
+        motorista: null,
+        responsavel: null,
+      };
       const pdf = await generateDocumentFromTemplate({
         templateId: tmpl.id,
         motoristaData: { nome: contexto?.condutorNome ?? '' },
@@ -327,6 +349,10 @@ const RealizarEntregaPage = () => {
           data_assinatura: hoje,
           cidade_assinatura: info.cidade ?? '',
           clienteData: { nome: contexto?.clienteNome ?? '' },
+          assinatura_motorista: sigs.motorista ?? '',
+          assinatura_responsavel: sigs.responsavel ?? '',
+          responsavel_nome: responsavelNome,
+          momento_responsavel: info.tipo === 'entrega' ? 'Entregue por' : 'Recolhido por',
           ...(contexto?.empresaData ? { empresaData: contexto.empresaData } : {}),
         },
         viaturaId: contexto?.viaturaId ?? undefined,
@@ -592,7 +618,7 @@ const RealizarEntregaPage = () => {
               <Label>
                 Combustível <span className="text-red-500">*</span>
               </Label>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
                 {['Reserva', '1/4', '1/2', '3/4', 'Cheio'].map((nivel) => (
                   <button
                     key={nivel}
@@ -711,13 +737,24 @@ const RealizarEntregaPage = () => {
                         placeholder="Descrição do dano"
                         value={f.descricao}
                         onChange={(e) => updateFoto(f.id, 'descricao', e.target.value)}
-                        className="col-span-2 h-9"
+                        className="col-span-2 h-9 min-w-0"
                       />
                     </div>
                   </div>
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Assinaturas — motorista assina digitalmente; sai na folha de danos */}
+        <Card>
+          <CardContent className="p-4">
+            <AssinaturasHandoverSection
+              ref={assinaturasRef}
+              motoristaNome={contexto?.condutorNome ?? ''}
+              responsavelNome={responsavelNome}
+            />
           </CardContent>
         </Card>
 

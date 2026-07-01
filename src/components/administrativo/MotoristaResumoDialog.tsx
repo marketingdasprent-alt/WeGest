@@ -395,12 +395,10 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       )
       .join('');
 
-    const ajusteRow =
-      !motorista.recibo_verde && !isImportado
-        ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
-            <span>Ajuste (÷ 1.06)</span><span style="color:#ea580c">-${fmtEur(totalAReceber - liquido)}</span>
-          </div>`
-        : '';
+    // A linha "Ajuste (÷ 1.06)" é ocultada a pedido — o cálculo do líquido
+    // mantém-se (liquido = totalReceitas / 1.06 quando aplicável), só não se
+    // mostra a linha do ajuste no resumo/PDF.
+    const ajusteRow = '';
 
     const slotHtml =
       slotPeriodos.length > 0
@@ -849,20 +847,28 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                     RECEITAS
                   </h2>
                 </div>
-                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-green-50 print:bg-green-50">
-                  <Row label="Bolt" value={fmt(receitas.bolt)} colored="text-green-700" />
-                  <Row label="Uber" value={fmt(receitas.uber)} colored="text-green-700" />
+                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-green-50 dark:bg-green-950/20 print:bg-green-50">
+                  <Row
+                    label="Bolt"
+                    value={fmt(receitas.bolt)}
+                    colored="text-green-700 dark:text-green-300"
+                  />
+                  <Row
+                    label="Uber"
+                    value={fmt(receitas.uber)}
+                    colored="text-green-700 dark:text-green-300"
+                  />
                   <Row
                     label="Outras Receitas"
                     value={fmt(receitas.outras_receitas)}
-                    colored="text-green-700"
+                    colored="text-green-700 dark:text-green-300"
                   />
-                  <Separator className="bg-green-200" />
+                  <Separator className="bg-green-200 dark:bg-green-800" />
                   <Row
                     label="TOTAL RECEITAS"
                     value={fmt(totalReceitas)}
                     bold
-                    colored="text-green-700"
+                    colored="text-green-700 dark:text-green-300"
                   />
                 </div>
               </div>
@@ -881,28 +887,48 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                     DESPESAS
                   </h2>
                 </div>
-                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-red-50 print:bg-red-50">
-                  <Row label="Aluguer" value={fmt(despesas.aluguer)} colored="text-red-700" />
+                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-red-50 dark:bg-red-950/20 print:bg-red-50">
+                  <Row
+                    label="Aluguer"
+                    value={fmt(despesas.aluguer)}
+                    colored="text-red-700 dark:text-red-300"
+                  />
                   <Row
                     label="Combustível"
                     value={fmt(despesas.combustivel)}
-                    colored="text-red-700"
+                    colored="text-red-700 dark:text-red-300"
                   />
-                  <Row label="Portagens" value={fmt(despesas.portagens)} colored="text-red-700" />
+                  <Row
+                    label="Portagens"
+                    value={fmt(despesas.portagens)}
+                    colored="text-red-700 dark:text-red-300"
+                  />
                   <Row
                     label="Outros Custos"
                     value={fmt(despesas.outros_custos)}
-                    colored="text-red-700"
+                    colored="text-red-700 dark:text-red-300"
                   />
-                  <Row label="Caução" value={fmt(despesas.caucao)} colored="text-red-700" />
-                  <Row label="Seguros" value={fmt(despesas.seguros)} colored="text-red-700" />
-                  <Row label="Reparações" value={fmt(despesas.reparacoes)} colored="text-red-700" />
-                  <Separator className="bg-red-200" />
+                  <Row
+                    label="Caução"
+                    value={fmt(despesas.caucao)}
+                    colored="text-red-700 dark:text-red-300"
+                  />
+                  <Row
+                    label="Seguros"
+                    value={fmt(despesas.seguros)}
+                    colored="text-red-700 dark:text-red-300"
+                  />
+                  <Row
+                    label="Reparações"
+                    value={fmt(despesas.reparacoes)}
+                    colored="text-red-700 dark:text-red-300"
+                  />
+                  <Separator className="bg-red-200 dark:bg-red-800" />
                   <Row
                     label="TOTAL DESPESAS"
                     value={fmt(totalDespesas)}
                     bold
-                    colored="text-red-700"
+                    colored="text-red-700 dark:text-red-300"
                   />
                 </div>
               </div>
@@ -922,23 +948,23 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                     ALUGUER — DETALHE
                   </h2>
                 </div>
-                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-amber-50 print:bg-amber-50">
+                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-amber-50 dark:bg-amber-950/20 print:bg-amber-50">
                   {slotPeriodos.map((p, i) => (
                     <Row
                       key={i}
                       label={`${p.matricula} (${p.dataInicioStr}–${p.dataFimStr}): ${p.dias} dias × ${fmt(p.taxaDiaria)}/dia`}
                       value={fmt(p.custo)}
-                      colored="text-amber-700"
+                      colored="text-amber-700 dark:text-amber-300"
                     />
                   ))}
                   {slotPeriodos.length > 1 && (
                     <>
-                      <Separator className="bg-amber-200" />
+                      <Separator className="bg-amber-200 dark:bg-amber-800" />
                       <Row
                         label="TOTAL ALUGUER"
                         value={fmt(totalSlot)}
                         bold
-                        colored="text-amber-700"
+                        colored="text-amber-700 dark:text-amber-300"
                       />
                     </>
                   )}
@@ -962,26 +988,23 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                   RESUMO FINAL
                 </h2>
               </div>
-              <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-blue-50 print:bg-blue-50">
+              <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-blue-50 dark:bg-blue-950/20 print:bg-blue-50">
                 <Row
                   label="Valores a Transportar (Semana Anterior)"
                   value={fmt(valoresSemanaAnterior)}
-                  colored="text-blue-700"
+                  colored="text-blue-700 dark:text-blue-300"
                 />
-                <Separator className="bg-blue-200" />
+                <Separator className="bg-blue-200 dark:bg-blue-800" />
                 <Row
                   label="Total a Receber"
                   value={fmt(totalAReceber)}
-                  colored={totalAReceber >= 0 ? 'text-green-700' : 'text-red-700'}
+                  colored={
+                    totalAReceber >= 0
+                      ? 'text-green-700 dark:text-green-300'
+                      : 'text-red-700 dark:text-red-300'
+                  }
                 />
-                {!motorista.recibo_verde && !isImportado && (
-                  <Row
-                    label="Ajuste (÷ 1.06)"
-                    value={`-${fmt(totalAReceber - liquido)}`}
-                    colored="text-orange-600"
-                  />
-                )}
-                <Separator className="my-2 print:my-1 bg-blue-200" />
+                <Separator className="my-2 print:my-1 bg-blue-200 dark:bg-blue-800" />
                 <div
                   className="flex justify-between items-center -mx-4 px-4 py-3 print:py-2 print:-mx-3 print:px-3"
                   style={{ backgroundColor: '#2563eb' }}

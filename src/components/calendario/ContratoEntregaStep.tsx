@@ -39,6 +39,13 @@ import {
   gerarFolhaDanos,
 } from './CheckinDadosSection';
 import type { CheckinDadosState } from './CheckinDadosSection';
+import {
+  AssinaturasHandoverSection,
+  type AssinaturasHandoverHandle,
+} from '@/components/assinatura/AssinaturasHandoverSection';
+import { papeisEmFalta } from '@/utils/assinaturasHandover';
+import { useGuardarAssinaturasHandover } from '@/hooks/useAssinaturasHandover';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface ContratoEntregaStepProps {
   eventoData: PendingEventoData;
@@ -74,6 +81,11 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
 
   const queryClient = useQueryClient();
   const orgId = useOrgId();
+  const { user } = useAuth();
+  const guardarAssinaturas = useGuardarAssinaturasHandover();
+  const assinaturasRef = useRef<AssinaturasHandoverHandle>(null);
+  const responsavelNome =
+    (user?.user_metadata?.nome as string | undefined) ?? user?.email ?? 'Responsável';
   const { empresas } = useClientesEmpresas();
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
   const [dataInicio, setDataInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -206,6 +218,14 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
   };
 
   const handleConfirm = async () => {
+    const sigs = assinaturasRef.current?.getAssinaturas() ?? { motorista: null, responsavel: null };
+    const falta = papeisEmFalta(sigs);
+    if (falta.length > 0) {
+      const labels = falta.map((p) => (p === 'motorista' ? 'do motorista' : 'do responsável'));
+      const ok = window.confirm(`Falta a assinatura ${labels.join(' e ')}. Concluir mesmo assim?`);
+      if (!ok) return;
+    }
+
     if (!fazerDepois) {
       if (files.length === 0 && checkinDados.novosDanos.length === 0) {
         toast.error('Adicione pelo menos uma foto/vídeo ou registe um dano com foto');
@@ -333,6 +353,26 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
           motoristaId,
         });
 
+        // 6b. Guardar assinaturas (falha não reverte a entrega)
+        try {
+          await guardarAssinaturas.mutateAsync({
+            eventoId,
+            contratoId,
+            orgId,
+            assinadoPorId: userId,
+            motoristaNome: motoristaNome ?? '',
+            motoristaId,
+            responsavelNome,
+            sigMotorista: sigs.motorista,
+            sigResponsavel: sigs.responsavel,
+          });
+        } catch (sigErr: unknown) {
+          const message = sigErr instanceof Error ? sigErr.message : 'Erro inesperado';
+          toast.error('Entrega concluída, mas falha ao guardar assinatura — repita.', {
+            description: message,
+          });
+        }
+
         // 7. Upload checkout media
         const mediaRecords: any[] = [];
         for (const { file } of files) {
@@ -435,7 +475,11 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
               await generateDocumentFromTemplate({
                 templateId: tmpl.id,
                 motoristaData: motoristaFull ?? { nome: motoristaNome },
-                documentData: { ...docData, viatura_matricula: viatura.matricula },
+                documentData: {
+                  ...docData,
+                  viatura_matricula: viatura.matricula,
+                  assinatura_motorista: sigs.motorista ?? '',
+                },
                 viaturaId: viatura.id,
                 km_saida: checkinDados.km,
                 combustivel_saida: checkinDados.combustivel,
@@ -462,6 +506,8 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
                 dataEvento: dataInicio,
                 contratoNumero: ct.numero_contrato,
                 existingPdf: targetPdf,
+                assinaturaMotoristaPng: sigs.motorista,
+                assinaturaResponsavelPng: sigs.responsavel,
               });
               if (targetPdf) successCount++;
             }
@@ -718,6 +764,12 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
             <strong className="text-foreground mx-1">12 meses</strong>. O dashboard irá alertar
             quando estiver próximo de renovar.
           </div>
+
+          <AssinaturasHandoverSection
+            ref={assinaturasRef}
+            motoristaNome={motoristaNome ?? ''}
+            responsavelNome={responsavelNome}
+          />
         </div>
       </div>
     </div>

@@ -132,6 +132,7 @@ const RECURSO_LABELS: Record<string, string> = {
   assistencia_tickets: 'Gestão completa de assistência',
   // Administração
   admin_utilizadores: 'Gerir utilizadores e contas',
+  admin_convites: 'Gerir Convites',
   admin_grupos: 'Gerir grupos e permissões',
   admin_documentos: 'Gerir templates de documentos',
   admin_documentos_preview: 'Pré-visualizar templates de documentos',
