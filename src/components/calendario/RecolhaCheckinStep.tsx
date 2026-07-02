@@ -25,6 +25,7 @@ import {
   saveCheckinDados,
 } from './CheckinDadosSection';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
+import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
 import type { CheckinDadosState } from './CheckinDadosSection';
 import { useOrgId } from '@/contexts/TenantContext';
 import {
@@ -338,7 +339,7 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
               .limit(1);
             const tmpl = tmplRows?.[0];
             if (tmpl) {
-              await generateDocumentFromTemplate({
+              const pdf = await generateDocumentFromTemplate({
                 templateId: tmpl.id,
                 motoristaData: { nome: motoristaNome ?? '' },
                 documentData: {
@@ -354,6 +355,20 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
                 momentoFolha: isDevolucao ? 'DEVOLUÇÃO' : 'RECOLHA',
                 action: 'print',
               });
+              if (pdf && motoristaId) {
+                const { data: mot } = await supabase
+                  .from('motoristas_ativos')
+                  .select('email')
+                  .eq('id', motoristaId)
+                  .maybeSingle();
+                void emailFolhaDanos({
+                  pdf,
+                  to: mot?.email,
+                  toNome: motoristaNome,
+                  matricula: viatura?.matricula ?? '',
+                  momento: 'RECOLHA',
+                });
+              }
             }
           } catch {
             /* não bloqueia o fluxo principal */

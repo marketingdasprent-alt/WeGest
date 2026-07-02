@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { printPdf } from '@/lib/printPdf';
+import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
 import { format } from 'date-fns';
 import { formatMatricula } from './calendarioUtils';
 import type { PendingEventoData } from './NovoEventoPage';
@@ -472,7 +473,7 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
             const tmpl = tmplRows?.[0];
             if (tmpl) {
               const targetPdf = isMultiple && combinedPdf ? combinedPdf : undefined;
-              await generateDocumentFromTemplate({
+              const danosPdf = await generateDocumentFromTemplate({
                 templateId: tmpl.id,
                 motoristaData: motoristaFull ?? { nome: motoristaNome },
                 documentData: {
@@ -489,6 +490,16 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
                 existingPdf: targetPdf,
               });
               if (targetPdf) successCount++;
+              // Documento único (sem combinar) — já é a folha pronta a enviar.
+              if (!isMultiple && danosPdf) {
+                void emailFolhaDanos({
+                  pdf: danosPdf,
+                  to: motoristaFull?.email,
+                  toNome: motoristaNome,
+                  matricula: viatura.matricula,
+                  momento: 'ENTREGA',
+                });
+              }
             } else {
               // Fallback para o gerador básico se o template não existir
               const targetPdf = isMultiple && combinedPdf ? combinedPdf : undefined;
@@ -521,6 +532,13 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
           combinedPdf.deletePage(1);
           const fileName = `Documentos_CT-${String(ct.numero_contrato ?? 0).padStart(4, '0')}.pdf`;
           printPdf(combinedPdf, fileName);
+          void emailFolhaDanos({
+            pdf: combinedPdf,
+            to: motoristaFull?.email,
+            toNome: motoristaNome,
+            matricula: viatura.matricula,
+            momento: 'ENTREGA',
+          });
         }
       }
 

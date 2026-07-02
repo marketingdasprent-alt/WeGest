@@ -3,6 +3,9 @@ project_id = "hkqzzxgeedsmjnhyquke"
 [functions.send-brevo-email]
 verify_jwt = false
 
+[functions.send-folha-danos-email]
+verify_jwt = false
+
 [functions.delete-user]
 verify_jwt = false
 
