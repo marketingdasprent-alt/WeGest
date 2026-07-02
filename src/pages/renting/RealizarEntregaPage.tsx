@@ -28,6 +28,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useConsumirTokenRealizacao, useRealizarFromToken } from '@/hooks/useRealizacaoToken';
 import { formatMatricula } from '@/components/calendario/calendarioUtils';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
+import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
 import {
   AssinaturasHandoverSection,
   type AssinaturasHandoverHandle,
@@ -121,7 +122,7 @@ const RealizarEntregaPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('contratos_renting')
-        .select('viatura_id, emissor_id, cliente_id')
+        .select('viatura_id, emissor_id, cliente_id, km_saida, combustivel_saida')
         .eq('id', contratoId!)
         .maybeSingle();
       const empty = {
@@ -129,7 +130,10 @@ const RealizarEntregaPage = () => {
         emissorId: null as string | null,
         empresaData: null as Record<string, string> | null,
         condutorNome: '',
+        condutorEmail: '',
         clienteNome: '',
+        kmSaida: null as number | null,
+        combustivelSaida: null as string | null,
       };
       if (!data) return empty;
 
@@ -161,6 +165,7 @@ const RealizarEntregaPage = () => {
       // parceiro TVDE (motorista_id) — XOR na tabela. Resolver do lado certo.
       // Nunca o locatário/empresa. Sem condutor, fica vazio para assinar à mão.
       let condutorNome = '';
+      let condutorEmail = '';
       const { data: cond } = await supabase
         .from('contrato_condutores')
         .select('cliente_id, motorista_id, is_principal')
@@ -171,17 +176,21 @@ const RealizarEntregaPage = () => {
       if (cond?.cliente_id) {
         const { data: cli } = await supabase
           .from('clientes')
-          .select('nome, nome_comercial')
+          .select('nome, nome_comercial, email')
           .eq('id', cond.cliente_id)
           .maybeSingle();
-        if (cli) condutorNome = cli.nome || cli.nome_comercial || '';
+        if (cli) {
+          condutorNome = cli.nome || cli.nome_comercial || '';
+          condutorEmail = cli.email || '';
+        }
       } else if (cond?.motorista_id) {
         const { data: mot } = await supabase
           .from('motoristas_ativos')
-          .select('nome')
+          .select('nome, email')
           .eq('id', cond.motorista_id)
           .maybeSingle();
         if (mot?.nome) condutorNome = mot.nome;
+        condutorEmail = mot?.email || '';
       }
       // Sem condutor no contrato → o motorista atribuído à viatura (TVDE).
       if (!condutorNome && data.viatura_id) {
@@ -194,10 +203,11 @@ const RealizarEntregaPage = () => {
         if (mv?.motorista_id) {
           const { data: mot } = await supabase
             .from('motoristas_ativos')
-            .select('nome')
+            .select('nome, email')
             .eq('id', mv.motorista_id)
             .maybeSingle();
           if (mot?.nome) condutorNome = mot.nome;
+          condutorEmail = mot?.email || '';
         }
       }
 
@@ -217,7 +227,10 @@ const RealizarEntregaPage = () => {
         emissorId: (data.emissor_id as string | undefined) ?? null,
         empresaData,
         condutorNome,
+        condutorEmail,
         clienteNome,
+        kmSaida: (data.km_saida as number | null) ?? null,
+        combustivelSaida: (data.combustivel_saida as string | null) ?? null,
       };
     },
   });
@@ -360,7 +373,12 @@ const RealizarEntregaPage = () => {
         observacoesMomento: observacoes,
         ...(isEntrega
           ? { km_saida: km, combustivel_saida: combustivel }
-          : { km_entrada: km, combustivel_entrada: combustivel }),
+          : {
+              km_entrada: km,
+              combustivel_entrada: combustivel,
+              km_saida: contexto?.kmSaida?.toString() ?? '',
+              combustivel_saida: contexto?.combustivelSaida ?? '',
+            }),
         ...(fotosMomento ? { fotosMomento } : {}),
         ...(danosMomento?.length ? { danosMomento } : {}),
         action: modo === 'print' ? 'print' : 'download',
@@ -368,6 +386,15 @@ const RealizarEntregaPage = () => {
       });
       if (modo === 'preview' && pdf) {
         window.open(pdf.output('bloburl'), '_blank');
+      }
+      if (modo === 'print' && pdf) {
+        void emailFolhaDanos({
+          pdf,
+          to: contexto?.condutorEmail,
+          toNome: contexto?.condutorNome,
+          matricula: info.matricula,
+          momento: isEntrega ? 'ENTREGA' : 'RECOLHA',
+        });
       }
     } catch (err) {
       toast({
@@ -420,7 +447,22 @@ const RealizarEntregaPage = () => {
     // Paths já enviados ao storage — para limpar em caso de falha e não
     // deixar ficheiros órfãos (upload a meio falhou ou o insert rebentou).
     const uploadedPaths: string[] = [];
+    const isEntrega = info.tipo === 'entrega';
     try {
+      // Gravar km/combustível no contrato — sem isto a Recolha nunca teria
+      // como saber o km/combustível de Saída registados na Entrega (ver
+      // migration 20260702102439).
+      const kmNum = Number(km);
+      const { error: kmErr } = await supabase
+        .from('contratos_renting')
+        .update(
+          isEntrega
+            ? { km_saida: kmNum, combustivel_saida: combustivel }
+            : { km_entrada: kmNum, combustivel_entrada: combustivel }
+        )
+        .eq('id', info.contrato_id);
+      if (kmErr) throw kmErr;
+
       if (files.length > 0) {
         const { data: auth } = await supabase.auth.getUser();
         const userId = auth.user?.id ?? null;
@@ -436,8 +478,6 @@ const RealizarEntregaPage = () => {
           vId = (cr?.viatura_id as string | undefined) ?? null;
         }
         if (!vId) throw new Error('Viatura do contrato não encontrada.');
-
-        const isEntrega = info.tipo === 'entrega';
         // Cada foto vira um registo de dano com a localização/descrição/valor
         // que o gestor escreveu, ligado ao contrato → aparece na tabela da
         // folha e na página do veículo. As observações gerais vão no campo
