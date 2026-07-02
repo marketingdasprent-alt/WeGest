@@ -2791,6 +2791,8 @@ export type Database = {
           cobertura_nome: string | null
           cobertura_preco_dia: number | null
           codigo: number
+          combustivel_entrada: string | null
+          combustivel_saida: string | null
           comentarios_entrega: string | null
           comentarios_recolha: string | null
           contrato_anterior_id: string | null
@@ -2815,6 +2817,8 @@ export type Database = {
           id: string
           is_longa_duracao: boolean
           km_adicional_valor: number | null
+          km_entrada: number | null
+          km_saida: number | null
           kms_incluidos: number | null
           local_entrega: string | null
           local_recolha: string | null
@@ -2858,6 +2862,8 @@ export type Database = {
           cobertura_nome?: string | null
           cobertura_preco_dia?: number | null
           codigo?: number
+          combustivel_entrada?: string | null
+          combustivel_saida?: string | null
           comentarios_entrega?: string | null
           comentarios_recolha?: string | null
           contrato_anterior_id?: string | null
@@ -2882,6 +2888,8 @@ export type Database = {
           id?: string
           is_longa_duracao?: boolean
           km_adicional_valor?: number | null
+          km_entrada?: number | null
+          km_saida?: number | null
           kms_incluidos?: number | null
           local_entrega?: string | null
           local_recolha?: string | null
@@ -2925,6 +2933,8 @@ export type Database = {
           cobertura_nome?: string | null
           cobertura_preco_dia?: number | null
           codigo?: number
+          combustivel_entrada?: string | null
+          combustivel_saida?: string | null
           comentarios_entrega?: string | null
           comentarios_recolha?: string | null
           contrato_anterior_id?: string | null
@@ -2949,6 +2959,8 @@ export type Database = {
           id?: string
           is_longa_duracao?: boolean
           km_adicional_valor?: number | null
+          km_entrada?: number | null
+          km_saida?: number | null
           kms_incluidos?: number | null
           local_entrega?: string | null
           local_recolha?: string | null

@@ -75,8 +75,10 @@ const CRM = () => {
     loading,
     isConnected,
     lastActivity,
-    updateLead: updateLeadHook,
-    deleteLead: deleteLeadHook,
+    persistLeadUpdate,
+    persistLeadStatusChange,
+    persistLeadDelete,
+    assignGestorsFromHistory: assignGestorsFromHistoryHook,
     refetchLeads,
   } = useRealTimeLeads(handleRealtimeEvent, {
     from: filters.customStartDate ? new Date(filters.customStartDate) : undefined,
@@ -221,41 +223,7 @@ const CRM = () => {
 
   const updateLeadStatus = async (leadId: string, newStatus: string) => {
     try {
-      // Buscar o lead atual para verificar se tem gestor
-      const currentLead = leads.find((lead) => lead.id === leadId);
-
-      const updateData: any = {
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-      };
-
-      // Se o lead não tem gestor responsável, atribuir o usuário atual
-      if (currentLead && !currentLead.gestor_responsavel) {
-        try {
-          const {
-            data: { user },
-            error: userError,
-          } = await supabase.auth.getUser();
-          if (!userError && user) {
-            const { data: profile, error: profileError } = await supabase
-              .from('profiles')
-              .select('nome')
-              .eq('id', user.id)
-              .single();
-
-            if (!profileError && profile?.nome) {
-              updateData.gestor_responsavel = profile.nome;
-            }
-          }
-        } catch (error) {
-          console.error('Erro ao atribuir gestor:', error);
-          // Continuar sem atribuir gestor se houver erro
-        }
-      }
-
-      const { error } = await supabase.from('leads_dasprent').update(updateData).eq('id', leadId);
-
-      updateLeadHook({ id: leadId, ...updateData });
+      await persistLeadStatusChange(leadId, newStatus);
 
       toast({
         title: 'Sucesso',
@@ -273,15 +241,10 @@ const CRM = () => {
 
   const updateLead = async (updatedLead: Partial<Lead> & { id: string }) => {
     try {
-      const { error } = await supabase
-        .from('leads_dasprent')
-        .update({
-          ...updatedLead,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', updatedLead.id);
-
-      updateLeadHook(updatedLead);
+      await persistLeadUpdate(updatedLead.id, {
+        ...updatedLead,
+        updated_at: new Date().toISOString(),
+      });
 
       toast({
         title: 'Sucesso',
@@ -299,11 +262,7 @@ const CRM = () => {
 
   const assignGestorsFromHistory = async () => {
     try {
-      const { data, error } = await supabase.rpc('execute_gestor_assignment');
-
-      if (error) throw error;
-
-      const updatedCount = data || 0;
+      const updatedCount = await assignGestorsFromHistoryHook();
 
       if (updatedCount > 0) {
         // Recarregar a lista de leads
@@ -331,9 +290,7 @@ const CRM = () => {
 
   const deleteLead = async (leadId: string) => {
     try {
-      const { error } = await supabase.from('leads_dasprent').delete().eq('id', leadId);
-
-      deleteLeadHook(leadId);
+      await persistLeadDelete(leadId);
 
       toast({
         title: 'Sucesso',
