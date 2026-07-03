@@ -62,6 +62,8 @@ export const getStatusBadgeClass = (status?: string | null) => {
       return 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20';
     case 'em_tvde':
       return 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20';
+    case 'em_slot':
+      return 'bg-purple-500/10 text-purple-600 border-purple-500/20';
     case 'manutencao':
     case 'manutenção':
       return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
@@ -110,6 +112,8 @@ export const getStatusLabel = (status?: string | null) => {
       return 'Em movimentação';
     case 'em_tvde':
       return 'Em TVDE';
+    case 'em_slot':
+      return 'Em slot';
     case 'manutencao':
     case 'manutenção':
       return 'Manutenção';
@@ -137,11 +141,12 @@ export const ESTADOS_EM_USO = [
   'em_contrato',
   'em_movimentacao',
   'em_tvde',
+  'em_slot',
   'em_uso',
 ] as const;
 
 export const deriveViaturaEstado = (
-  v: { status?: string | null; is_vendida?: boolean | null },
+  v: { status?: string | null; is_vendida?: boolean | null; is_slot?: boolean | null },
   fontes?: Set<string> | null
 ): string => {
   if (v.is_vendida) return 'vendida';
@@ -152,12 +157,14 @@ export const deriveViaturaEstado = (
   if (fontes?.has('movimento')) return 'em_movimentacao';
   if (fontes?.has('contrato')) return 'em_contrato';
   if (fontes?.has('reserva')) return 'em_reserva';
-  // TVDE/slot é a ocupação base (carro com motorista). Só ganha se não houver
-  // um estado de renting mais específico acima.
-  if (fontes?.has('tvde')) return 'em_tvde';
+  // Carro com motorista (fonte 'tvde'): se for carro slot (externo do
+  // motorista) o estado é 'em_slot'; caso contrário é a ocupação TVDE normal.
+  if (fontes?.has('tvde')) return v.is_slot ? 'em_slot' : 'em_tvde';
   // Rede de segurança: campo legado `status='em_uso'` — é o que o main conta
   // como ocupada. Mantém-se até as atribuições reais (motorista_viaturas)
   // estarem todas criadas; depois pode ser removido.
-  if (base === 'em_uso' || base === 'em uso') return 'em_uso';
+  // Carros slot NÃO usam esta rede: sem motorista ligado real, um slot está
+  // disponível. Sem isto, mostravam "Em Uso" genérico de forma incoerente.
+  if (!v.is_slot && (base === 'em_uso' || base === 'em uso')) return 'em_uso';
   return 'disponivel';
 };

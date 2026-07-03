@@ -17,6 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useOrgId } from '@/contexts/TenantContext';
 
 interface ImportViaturasDialogProps {
   onImportComplete: () => void;
@@ -34,6 +35,7 @@ interface ImportSummary {
 }
 
 export function ImportViaturasDialog({ onImportComplete }: ImportViaturasDialogProps) {
+  const orgId = useOrgId();
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [rows, setRows] = useState<Record<string, unknown>[] | null>(null);
@@ -103,6 +105,7 @@ export function ImportViaturasDialog({ onImportComplete }: ImportViaturasDialogP
         body: {
           rows: parsedRows,
           dryRun: true,
+          org_id: orgId,
         },
       });
 
@@ -127,6 +130,7 @@ export function ImportViaturasDialog({ onImportComplete }: ImportViaturasDialogP
         body: {
           rows: parsedRows,
           dryRun: false,
+          org_id: orgId,
         },
       });
 

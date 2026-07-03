@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrgId } from '@/contexts/TenantContext';
 import {
   Loader2,
   Pencil,
@@ -105,6 +106,7 @@ export const UsersTab = () => {
 
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
+  const orgId = useOrgId();
 
   useEffect(() => {
     fetchProfiles();
@@ -282,6 +284,7 @@ export const UsersTab = () => {
           email: newUser.email.trim(),
           password: newUser.password,
           cargo_id: newUser.cargo_id || null,
+          org_id: orgId,
         },
       });
 
@@ -329,20 +332,26 @@ export const UsersTab = () => {
     try {
       const cargoNome = grupos.find((g) => g.id === editingProfile.cargo_id)?.nome || null;
       // O nome do grupo define se é administrador (alinhado com a edge function create-user).
-      // Assim, escolher o grupo "Administrador" liga a flag is_admin que as rotas /admin e o RLS exigem.
       const isAdminCargo = (cargoNome || '').toLowerCase().includes('admin');
 
-      const { error } = await supabase
+      // Papel (cargo/admin) é PER-ORG: escrever no membership da org ativa,
+      // não em profiles (legado single-org). O trigger trg_uorg_sync_is_admin
+      // re-deriva is_admin do cargo, mas setamos explicitamente por robustez.
+      const { error: roleError } = await supabase
+        .from('user_organizacoes')
+        .update({ cargo_id: editingProfile.cargo_id, is_admin: isAdminCargo })
+        .eq('user_id', editingProfile.id)
+        .eq('org_id', orgId);
+
+      if (roleError) throw roleError;
+
+      // Nome é identidade global (org-neutra) — fica em profiles.
+      const { error: nomeError } = await supabase
         .from('profiles')
-        .update({
-          nome: editingProfile.nome,
-          cargo_id: editingProfile.cargo_id,
-          cargo: cargoNome,
-          is_admin: isAdminCargo,
-        })
+        .update({ nome: editingProfile.nome })
         .eq('id', editingProfile.id);
 
-      if (error) throw error;
+      if (nomeError) throw nomeError;
 
       toast({
         title: 'Utilizador atualizado',
@@ -368,7 +377,7 @@ export const UsersTab = () => {
     setIsDeleting(true);
     try {
       const { data, error } = await supabase.functions.invoke('delete-user', {
-        body: { userId: profileToDelete.id },
+        body: { userId: profileToDelete.id, org_id: orgId },
       });
 
       if (error) throw error;
@@ -383,8 +392,10 @@ export const UsersTab = () => {
       }
 
       toast({
-        title: 'Utilizador eliminado',
-        description: 'O utilizador foi eliminado com sucesso.',
+        title: data?.accountDeleted ? 'Utilizador eliminado' : 'Utilizador removido',
+        description: data?.accountDeleted
+          ? 'A conta foi eliminada (era a última organização do utilizador).'
+          : 'O utilizador foi removido desta organização.',
       });
 
       setDeleteConfirmOpen(false);
@@ -436,6 +447,7 @@ export const UsersTab = () => {
         body: {
           userId: resetPasswordProfile.id,
           newPassword: newPassword,
+          org_id: orgId,
         },
       });
 
@@ -877,7 +889,8 @@ export const UsersTab = () => {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-foreground">Tem a certeza?</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
-              Esta ação não pode ser revertida. O utilizador será eliminado permanentemente.
+              O utilizador será removido desta organização. Se não pertencer a mais nenhuma
+              organização, a conta será eliminada permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

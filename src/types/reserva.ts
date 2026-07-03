@@ -25,6 +25,22 @@ export const ESTADO_LABELS: Record<ReservaEstado, string> = {
   expirada: 'Expirada',
 };
 
+/** Estados que o gestor pode escolher manualmente no regime SLOT.
+ *  'cancelada' é apresentado como "Fechada". */
+export const SLOT_ESTADOS_PERMITIDOS = [
+  'pendente',
+  'em_curso',
+  'concluida',
+  'cancelada',
+] as const satisfies readonly ReservaEstado[];
+
+export const SLOT_ESTADO_LABELS: Record<(typeof SLOT_ESTADOS_PERMITIDOS)[number], string> = {
+  pendente: 'Pendente',
+  em_curso: 'Em Contrato',
+  concluida: 'Concluída',
+  cancelada: 'Fechada',
+};
+
 export const RENOVACAO_OPCOES = [
   'primeiro_dia_mes',
   'mesmo_dia_cada_mes',

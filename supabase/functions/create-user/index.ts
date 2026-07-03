@@ -50,26 +50,27 @@ serve(async (req) => {
     // Obter dados do body
     const { nome, email, password, cargo_id, org_id } = await req.json();
 
-    // Verificar se é admin da org
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .select("is_admin, org_id")
-      .eq("id", currentUser.id)
-      .single();
-
-    if (profileError || !profile?.is_admin) {
-      return new Response(
-        JSON.stringify({ error: "Apenas administradores podem criar utilizadores" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Usar org_id do request ou do admin que está a criar
-    const targetOrgId = org_id || profile.org_id;
+    // A org-alvo é obrigatória (org ativa do caller).
+    const targetOrgId = org_id;
     if (!targetOrgId) {
       return new Response(
         JSON.stringify({ error: "org_id é obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verificar que o caller é admin DESTA org (papel per-org em user_organizacoes).
+    const { data: callerMembership, error: callerError } = await supabaseAdmin
+      .from("user_organizacoes")
+      .select("is_admin")
+      .eq("user_id", currentUser.id)
+      .eq("org_id", targetOrgId)
+      .single();
+
+    if (callerError || !callerMembership?.is_admin) {
+      return new Response(
+        JSON.stringify({ error: "Apenas administradores podem criar utilizadores" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

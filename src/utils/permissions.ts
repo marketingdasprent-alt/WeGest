@@ -42,6 +42,7 @@ export const RECURSOS = {
 
   // Administração
   ADMIN_UTILIZADORES: 'admin_utilizadores',
+  ADMIN_CONVITES: 'admin_convites',
   ADMIN_GRUPOS: 'admin_grupos',
   ADMIN_DOCUMENTOS: 'admin_documentos',
   ADMIN_CAMPOS_DINAMICOS: 'admin_campos_dinamicos',

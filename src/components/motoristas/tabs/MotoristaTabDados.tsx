@@ -338,8 +338,13 @@ export function MotoristaTabDados({
 
   useEffect(() => {
     if (!onDraftChange) return;
-    const subscription = form.watch((values) => {
-      if (form.formState.isDirty) {
+    const subscription = form.watch((values, { name }) => {
+      // `name` definido = mudança real do utilizador (input ou form.setValue,
+      // ex.: Gestor e cartões de combustível). O `form.reset` de hidratação
+      // emite `name: undefined` — ignorado para não re-gravar o draft.
+      // Substitui o gate antigo por `isDirty`, que ficava `false` em campos
+      // alterados via setValue e fazia perder esses valores ao trocar de aba.
+      if (name) {
         onDraftChange(values as Record<string, unknown>);
       }
     });

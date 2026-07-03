@@ -38,6 +38,7 @@ const AdminDocumentos = lazy(() => import('@/pages/AdminDocumentos'));
 const RentingContratos = lazy(() => import('@/pages/renting/RentingContratos'));
 const ContratoForm = lazy(() => import('@/pages/renting/ContratoForm'));
 const RealizarEntregaPage = lazy(() => import('@/pages/renting/RealizarEntregaPage'));
+const DanosPublicosPage = lazy(() => import('@/pages/DanosPublicosPage'));
 const RentingReservas = lazy(() => import('@/pages/renting/RentingReservas'));
 const RentingReservaForm = lazy(() => import('@/pages/renting/RentingReservaForm'));
 const RentingMovimentacoes = lazy(() => import('@/pages/renting/RentingMovimentacoes'));
@@ -277,7 +278,7 @@ const NativeAppRoutes = () => {
         <Route
           path="/admin/invites"
           element={
-            <ProtectedRoute requireAdmin={true} requiredResource={RECURSOS.ADMIN_UTILIZADORES}>
+            <ProtectedRoute requireAdmin={true} requiredResource={RECURSOS.ADMIN_CONVITES}>
               <DashboardLayout>
                 <AdminInvites />
               </DashboardLayout>
@@ -326,6 +327,8 @@ const NativeAppRoutes = () => {
             </ProtectedRoute>
           }
         />
+        {/* Galeria pública de danos (QR da folha de danos) — sem login */}
+        <Route path="/danos/:token" element={<DanosPublicosPage />} />
         {/* Deep link via QR — usado pelo modal de "Realizar agora" */}
         <Route
           path="/realizar/:token"

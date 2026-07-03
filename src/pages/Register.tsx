@@ -62,21 +62,11 @@ const Register = () => {
 
       // CASO 2: Token presente - validar convite
       if (token) {
-        // Buscar convite COM join para pegar nome do cargo
-        const { data: convite, error } = await supabase
-          .from('convites')
-          .select(
-            `
-            *,
-            cargos:cargo_id (
-              id,
-              nome
-            )
-          `
-          )
-          .eq('token', token)
-          .eq('usado', false)
-          .maybeSingle();
+        // RPC devolve só a linha do token pedido (não usado, não expirado) —
+        // convites já não tem SELECT aberto a anon.
+        const { data: convites, error } = await (supabase as any).rpc('validar_convite_token', {
+          p_token: token,
+        });
 
         if (error) {
           console.error('Erro na busca do convite:', error);
@@ -85,17 +75,9 @@ const Register = () => {
           return;
         }
 
+        const convite = convites?.[0];
+
         if (!convite) {
-          setTokenValid(false);
-          setValidatingToken(false);
-          return;
-        }
-
-        // Verificar expiração
-        const expira = new Date(convite.expires_at);
-        const agora = new Date();
-
-        if (expira < agora) {
           setTokenValid(false);
           setValidatingToken(false);
           return;
@@ -103,7 +85,7 @@ const Register = () => {
 
         setEmail(convite.email);
         setCargoId(convite.cargo_id);
-        setCargoNome((convite.cargos as any)?.nome || null);
+        setCargoNome(convite.cargo_nome || null);
         setIsFirstUser(false);
         setTokenValid(true);
         setValidatingToken(false);
@@ -163,7 +145,7 @@ const Register = () => {
 
       // Marcar convite como usado se tem token
       if (token) {
-        await supabase.from('convites').update({ usado: true }).eq('token', token);
+        await (supabase as any).rpc('marcar_convite_usado', { p_token: token });
       }
 
       toast({

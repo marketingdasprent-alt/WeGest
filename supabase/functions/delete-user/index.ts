@@ -56,28 +56,36 @@ serve(async (req) => {
       );
     }
 
-    // Check if current user is admin
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('is_admin, org_id')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError || !profile?.is_admin) {
-      console.log('User is not admin:', user.id);
-      return new Response(
-        JSON.stringify({ error: 'Apenas administradores podem eliminar utilizadores' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Get userId from request body
-    const { userId } = await req.json();
+    // Get payload: which user to remove, and from WHICH org (org ativa do caller).
+    const { userId, org_id: orgId } = await req.json();
     if (!userId) {
       console.log('No userId provided');
       return new Response(
         JSON.stringify({ error: 'ID do utilizador não fornecido' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (!orgId) {
+      console.log('No org_id provided');
+      return new Response(
+        JSON.stringify({ error: 'org_id é obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify caller is admin OF THIS ORG (papel per-org vive em user_organizacoes).
+    const { data: callerMembership, error: callerError } = await supabaseAdmin
+      .from('user_organizacoes')
+      .select('is_admin')
+      .eq('user_id', user.id)
+      .eq('org_id', orgId)
+      .single();
+
+    if (callerError || !callerMembership?.is_admin) {
+      console.log('Caller is not admin of org:', user.id, orgId);
+      return new Response(
+        JSON.stringify({ error: 'Apenas administradores podem eliminar utilizadores' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -90,38 +98,79 @@ serve(async (req) => {
       );
     }
 
-    // Verify target user belongs to same org (prevent cross-org deletion)
-    const { data: targetProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('org_id')
-      .eq('id', userId)
+    // Verify target actually belongs to THIS org (a remoção é sempre org-scoped).
+    const { data: targetMembership, error: targetError } = await supabaseAdmin
+      .from('user_organizacoes')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('org_id', orgId)
       .single();
 
-    if (!targetProfile || targetProfile.org_id !== profile.org_id) {
-      console.log('Cross-org deletion attempt:', userId);
+    if (targetError || !targetMembership) {
+      console.log('Target user not a member of this org:', userId, orgId);
       return new Response(
         JSON.stringify({ error: 'Não pode eliminar utilizadores de outra organização' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Deleting user:', userId);
+    // Remover apenas o membership desta org.
+    const { error: removeError } = await supabaseAdmin
+      .from('user_organizacoes')
+      .delete()
+      .eq('user_id', userId)
+      .eq('org_id', orgId);
 
-    // Delete user from Supabase Auth (profile will be deleted via ON DELETE CASCADE)
-    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-
-    if (deleteError) {
-      console.error('Error deleting user:', deleteError.message);
+    if (removeError) {
+      console.error('Error removing membership:', removeError.message);
       return new Response(
-        JSON.stringify({ error: `Erro ao eliminar utilizador: ${deleteError.message}` }),
+        JSON.stringify({ error: `Erro ao remover utilizador da organização: ${removeError.message}` }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('User deleted successfully:', userId);
+    // Se a org removida era a org ativa do user, limpar para não apontar para nada.
+    await supabaseAdmin
+      .from('user_org_ativa')
+      .delete()
+      .eq('user_id', userId)
+      .eq('org_id', orgId);
 
+    // Contar orgs restantes: só apagar a conta auth se esta era a última org.
+    const { count: remainingOrgs, error: countError } = await supabaseAdmin
+      .from('user_organizacoes')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (countError) {
+      console.error('Error counting remaining orgs:', countError.message);
+      // Membership já removido — não bloquear; reportar sucesso parcial.
+      return new Response(
+        JSON.stringify({ success: true, removedFromOrg: true, accountDeleted: false }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if ((remainingOrgs ?? 0) === 0) {
+      // Última org — apagar conta auth (profiles cai via ON DELETE CASCADE).
+      console.log('Last org removed, deleting auth account:', userId);
+      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (deleteError) {
+        console.error('Error deleting user:', deleteError.message);
+        return new Response(
+          JSON.stringify({ error: `Erro ao eliminar utilizador: ${deleteError.message}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response(
+        JSON.stringify({ success: true, removedFromOrg: true, accountDeleted: true }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('User removed from org, account kept (other orgs remain):', userId);
     return new Response(
-      JSON.stringify({ success: true, message: 'Utilizador eliminado com sucesso' }),
+      JSON.stringify({ success: true, removedFromOrg: true, accountDeleted: false }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

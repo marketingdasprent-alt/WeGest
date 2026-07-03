@@ -137,6 +137,31 @@ export const reservaDialogSchema = z
           message: 'Seleciona a viatura (carro do motorista)',
         });
       }
+      // Ao avançar (Em Contrato / Concluída) o slot exige motorista e valor mensal.
+      if (d.estado === 'em_curso' || d.estado === 'concluida') {
+        const temMotorista = (d.condutores ?? []).some((c) => c.motorista_id !== null);
+        if (!temMotorista) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['condutores'],
+            message: 'Indica o motorista do slot antes de avançar o estado',
+          });
+        }
+        if (d.slot_valor_mensal == null || d.slot_valor_mensal <= 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['slot_valor_mensal'],
+            message: 'Define o valor mensal antes de avançar o estado',
+          });
+        }
+        if (!d.emissor_id) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['emissor_id'],
+            message: 'Empresa emissora obrigatória para avançar o slot',
+          });
+        }
+      }
       return;
     }
 

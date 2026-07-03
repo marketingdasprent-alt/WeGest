@@ -5,6 +5,7 @@ import { AdminAccessDenied } from '@/components/admin/AdminAccessDenied';
 import { AdminLoadingState } from '@/components/admin/AdminLoadingState';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UsersTab } from '@/components/admin/UsersTab';
+import { ConvitesTab } from '@/components/admin/ConvitesTab';
 import { GruposTab } from '@/components/admin/GruposTab';
 import { DocumentosTab } from '@/components/admin/DocumentosTab';
 import { CamposTab } from '@/components/admin/CamposTab';
@@ -18,6 +19,7 @@ import { FiscalTab } from '@/components/admin/FiscalTab';
 import { PrivacidadeTab } from '@/components/admin/PrivacidadeTab';
 import { OrganizacoesTab } from '@/components/admin/OrganizacoesTab';
 import { ImportExcelDialog } from '@/components/admin/ImportExcelDialog';
+import { RECURSOS } from '@/utils/permissions';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Settings2, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -25,10 +27,11 @@ import { Button } from '@/components/ui/button';
 const DECADA_OUSADA_ORG_ID = '11111111-1111-1111-1111-111111111111';
 
 const AdminSettings = () => {
-  const { isAdmin, loading } = usePermissions();
+  const { isAdmin, loading, hasAccessToResource } = usePermissions();
   const { orgId } = useTenant();
   const [importOpen, setImportOpen] = useState(false);
   const isDecadaOusada = orgId === DECADA_OUSADA_ORG_ID;
+  const canConvites = hasAccessToResource(RECURSOS.ADMIN_CONVITES);
 
   if (loading) {
     return <AdminLoadingState message="Verificando permissões..." />;
@@ -61,6 +64,14 @@ const AdminSettings = () => {
         >
           Utilizadores
         </TabsTrigger>
+        {canConvites && (
+          <TabsTrigger
+            value="convites"
+            className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto text-xs"
+          >
+            Convites
+          </TabsTrigger>
+        )}
         <TabsTrigger
           value="grupos"
           className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto text-xs"
@@ -141,6 +152,12 @@ const AdminSettings = () => {
         <TabsContent value="users" className="mt-0">
           <UsersTab />
         </TabsContent>
+
+        {canConvites && (
+          <TabsContent value="convites" className="mt-0">
+            <ConvitesTab />
+          </TabsContent>
+        )}
 
         <TabsContent value="grupos" className="mt-0">
           <GruposTab />

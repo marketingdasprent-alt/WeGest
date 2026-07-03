@@ -364,6 +364,45 @@ export type Database = {
           },
         ]
       }
+      assinaturas_handover: {
+        Row: {
+          id: string;
+          org_id: string;
+          calendario_evento_id: string | null;
+          contrato_id: string | null;
+          papel: string;
+          signatario_nome: string;
+          signatario_id: string | null;
+          storage_path: string;
+          assinado_em: string;
+          assinado_por_id: string;
+        };
+        Insert: {
+          id?: string;
+          org_id?: string;
+          calendario_evento_id?: string | null;
+          contrato_id?: string | null;
+          papel: string;
+          signatario_nome: string;
+          signatario_id?: string | null;
+          storage_path: string;
+          assinado_em?: string;
+          assinado_por_id: string;
+        };
+        Update: {
+          id?: string;
+          org_id?: string;
+          calendario_evento_id?: string | null;
+          contrato_id?: string | null;
+          papel?: string;
+          signatario_nome?: string;
+          signatario_id?: string | null;
+          storage_path?: string;
+          assinado_em?: string;
+          assinado_por_id?: string;
+        };
+        Relationships: [];
+      }
       bolt_drivers: {
         Row: {
           created_at: string | null
@@ -1142,6 +1181,9 @@ export type Database = {
           id: string
           lembrete_enviado_dia: boolean
           lembrete_enviado_vespera: boolean
+          lista_marca: string | null
+          lista_modelo: string | null
+          lista_notificada_em: string | null
           matricula_devolver: string | null
           motorista_id: string | null
           org_id: string | null
@@ -1164,6 +1206,9 @@ export type Database = {
           id?: string
           lembrete_enviado_dia?: boolean
           lembrete_enviado_vespera?: boolean
+          lista_marca?: string | null
+          lista_modelo?: string | null
+          lista_notificada_em?: string | null
           matricula_devolver?: string | null
           motorista_id?: string | null
           org_id?: string | null
@@ -1186,6 +1231,9 @@ export type Database = {
           id?: string
           lembrete_enviado_dia?: boolean
           lembrete_enviado_vespera?: boolean
+          lista_marca?: string | null
+          lista_modelo?: string | null
+          lista_notificada_em?: string | null
           matricula_devolver?: string | null
           motorista_id?: string | null
           org_id?: string | null
@@ -2743,6 +2791,8 @@ export type Database = {
           cobertura_nome: string | null
           cobertura_preco_dia: number | null
           codigo: number
+          combustivel_entrada: string | null
+          combustivel_saida: string | null
           comentarios_entrega: string | null
           comentarios_recolha: string | null
           contrato_anterior_id: string | null
@@ -2767,6 +2817,8 @@ export type Database = {
           id: string
           is_longa_duracao: boolean
           km_adicional_valor: number | null
+          km_entrada: number | null
+          km_saida: number | null
           kms_incluidos: number | null
           local_entrega: string | null
           local_recolha: string | null
@@ -2810,6 +2862,8 @@ export type Database = {
           cobertura_nome?: string | null
           cobertura_preco_dia?: number | null
           codigo?: number
+          combustivel_entrada?: string | null
+          combustivel_saida?: string | null
           comentarios_entrega?: string | null
           comentarios_recolha?: string | null
           contrato_anterior_id?: string | null
@@ -2834,6 +2888,8 @@ export type Database = {
           id?: string
           is_longa_duracao?: boolean
           km_adicional_valor?: number | null
+          km_entrada?: number | null
+          km_saida?: number | null
           kms_incluidos?: number | null
           local_entrega?: string | null
           local_recolha?: string | null
@@ -2877,6 +2933,8 @@ export type Database = {
           cobertura_nome?: string | null
           cobertura_preco_dia?: number | null
           codigo?: number
+          combustivel_entrada?: string | null
+          combustivel_saida?: string | null
           comentarios_entrega?: string | null
           comentarios_recolha?: string | null
           contrato_anterior_id?: string | null
@@ -2901,6 +2959,8 @@ export type Database = {
           id?: string
           is_longa_duracao?: boolean
           km_adicional_valor?: number | null
+          km_entrada?: number | null
+          km_saida?: number | null
           kms_incluidos?: number | null
           local_entrega?: string | null
           local_recolha?: string | null
@@ -5221,6 +5281,7 @@ export type Database = {
         Row: {
           candidatura_id: string | null
           created_at: string
+          destinatario_id: string | null
           id: string
           mensagem: string | null
           org_id: string | null
@@ -5231,10 +5292,12 @@ export type Database = {
           severidade: string
           tipo: string
           titulo: string
+          viatura_id: string | null
         }
         Insert: {
           candidatura_id?: string | null
           created_at?: string
+          destinatario_id?: string | null
           id?: string
           mensagem?: string | null
           org_id?: string | null
@@ -5245,10 +5308,12 @@ export type Database = {
           severidade?: string
           tipo: string
           titulo: string
+          viatura_id?: string | null
         }
         Update: {
           candidatura_id?: string | null
           created_at?: string
+          destinatario_id?: string | null
           id?: string
           mensagem?: string | null
           org_id?: string | null
@@ -5259,6 +5324,7 @@ export type Database = {
           severidade?: string
           tipo?: string
           titulo?: string
+          viatura_id?: string | null
         }
         Relationships: [
           {
@@ -5701,6 +5767,38 @@ export type Database = {
           },
           {
             foreignKeyName: "profiles_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quadro_tokens: {
+        Row: {
+          id: string
+          org_id: string
+          token: string
+          ativo: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id?: string
+          token?: string
+          ativo?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          token?: string
+          ativo?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quadro_tokens_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
@@ -8463,6 +8561,7 @@ export type Database = {
           observacoes: string | null
           org_id: string | null
           registado_por: string | null
+          registo_fotografico: boolean
           ticket_id: string | null
           updated_at: string | null
           valor: number | null
@@ -8486,6 +8585,7 @@ export type Database = {
           observacoes?: string | null
           org_id?: string | null
           registado_por?: string | null
+          registo_fotografico?: boolean
           ticket_id?: string | null
           updated_at?: string | null
           valor?: number | null
@@ -8509,6 +8609,7 @@ export type Database = {
           observacoes?: string | null
           org_id?: string | null
           registado_por?: string | null
+          registo_fotografico?: boolean
           ticket_id?: string | null
           updated_at?: string | null
           valor?: number | null
@@ -9466,6 +9567,10 @@ export type Database = {
           numero_contrato: number
           status: string
         }[]
+      }
+      gerar_token_danos: {
+        Args: { p_viatura_id: string; p_contrato_renting_id?: string | null }
+        Returns: string
       }
       gerar_token_realizacao: { Args: { p_evento_id: string }; Returns: string }
       get_cartao_historico_consumo: {

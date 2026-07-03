@@ -224,7 +224,10 @@ export const GenerateDocumentsDialog = ({
   };
 
   const filteredTemplates = templates.filter(
-    (t) => !selectedEmpresa || t.cliente_empresa_id === selectedEmpresa
+    // A Folha de Danos (anexo_danos) só se gera no fluxo de check-in/out
+    // (entrega/recolha), nunca por este diálogo de documentos do contrato.
+    (t) =>
+      t.tipo !== 'anexo_danos' && (!selectedEmpresa || t.cliente_empresa_id === selectedEmpresa)
   );
 
   // Contador de templates visíveis e selecionados
@@ -403,6 +406,12 @@ export const GenerateDocumentsDialog = ({
       for (const template of otherTemplates) {
         setCurrentGenerating(template.id);
         try {
+          if (template.tipo === 'anexo_danos' && !viaturaId) {
+            toast.warning(`"${template.nome}" requer contexto de viatura — ignorado`);
+            setCurrentGenerating(null);
+            continue;
+          }
+
           addSeparatorPage();
           await generateDocumentFromTemplate({
             templateId: template.id,
@@ -411,6 +420,7 @@ export const GenerateDocumentsDialog = ({
             action,
             skipOutput: isMultiple,
             existingPdf: combinedPdf || undefined,
+            ...(template.tipo === 'anexo_danos' && viaturaId ? { viaturaId } : {}),
           });
 
           setGeneratedTemplates((prev) => new Set(prev).add(template.id));
