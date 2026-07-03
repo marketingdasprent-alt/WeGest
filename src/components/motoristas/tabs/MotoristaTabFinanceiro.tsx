@@ -64,9 +64,15 @@ const CATEGORIAS = [
   { value: 'desconto', label: 'Desconto' },
   { value: 'multa', label: 'Multa' },
   { value: 'caucao', label: 'Caução' },
+  { value: 'dev_caucao', label: 'Devolução de Caução' },
   { value: 'seguros', label: 'Seguros' },
+  { value: 'rnvat', label: 'RNVAT' },
+  { value: 'acordo', label: 'Acordo' },
   { value: 'renda_viatura', label: 'Renda Viatura' },
   { value: 'reparacao', label: 'Reparação' },
+  { value: 'negativo_anterior', label: 'Negativo Anterior' },
+  { value: 'ajuda_custo', label: 'Ajuda de Custo' },
+  { value: 'outras_devolucoes', label: 'Outras Devoluções' },
   { value: 'outro', label: 'Outro' },
 ];
 
