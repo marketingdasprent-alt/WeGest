@@ -47,6 +47,9 @@ interface Motorista {
   morada: string | null;
   email: string | null;
   telefone: string | null;
+  cartao_bp?: string | null;
+  cartao_repsol?: string | null;
+  cartao_edp?: string | null;
   data_contratacao?: string | null;
   cidade?: string | null;
   cidade_assinatura?: string | null;
@@ -260,6 +263,9 @@ export const GenerateDocumentsDialog = ({
         morada: activeMotorista.morada || '',
         email: activeMotorista.email || '',
         telefone: activeMotorista.telefone || '',
+        cartao_bp: activeMotorista.cartao_bp || '',
+        cartao_repsol: activeMotorista.cartao_repsol || '',
+        cartao_edp: activeMotorista.cartao_edp || '',
       };
 
       const empresa = getById(selectedEmpresa);

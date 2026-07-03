@@ -560,19 +560,20 @@ export function CartoesFlotaTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartoes, search, tipoFilter, statusSel, sortField, sortDir, consumoMap]);
 
+  // KPIs sobre a VISTA FILTRADA (respondem a tipo/estado/pesquisa).
   const kpis = useMemo(() => {
-    const emUso = cartoes.filter((c) => c.status === 'em_uso').length;
-    const disp = cartoes.filter((c) => c.status === 'disponivel').length;
-    const canc = cartoes.filter((c) => c.status === 'cancelado').length;
-    const plafondAtivo = cartoes
+    const emUso = filtered.filter((c) => c.status === 'em_uso').length;
+    const disp = filtered.filter((c) => c.status === 'disponivel').length;
+    const canc = filtered.filter((c) => c.status === 'cancelado').length;
+    const plafondAtivo = filtered
       .filter((c) => c.status === 'em_uso')
       .reduce((s, c) => s + (c.limite || 0), 0);
-    const consumoMes = cartoes.reduce(
+    const consumoMes = filtered.reduce(
       (s, c) => s + (consumoMap[`${c.tipo}|${c.numero}`]?.total ?? 0),
       0
     );
-    return { total: cartoes.length, emUso, disp, canc, plafondAtivo, consumoMes };
-  }, [cartoes, consumoMap]);
+    return { total: filtered.length, emUso, disp, canc, plafondAtivo, consumoMes };
+  }, [filtered, consumoMap]);
 
   const statusCounts = useMemo(() => {
     const m: Record<string, number> = {};
@@ -826,10 +827,22 @@ export function CartoesFlotaTab() {
       logoUrl = '/Logo.png';
     }
     const date = fmtDT(new Date().toISOString());
-    // Impressão = inventário completo (todos os cartões) → bate certo com os KPIs.
-    const dados = [...cartoes].sort(
+    // Impressão = vista atual (filtros aplicados) → bate certo com os KPIs.
+    const dados = [...filtered].sort(
       (a, b) => a.tipo.localeCompare(b.tipo) || (Number(a.numero) || 0) - (Number(b.numero) || 0)
     );
+    const filtroDesc =
+      [
+        tipoFilter !== 'todos' ? `Tipo: ${TIPO_INFO[tipoFilter].label}` : null,
+        statusSel === 'ativos'
+          ? 'Estado: ativos (sem cancelados)'
+          : statusSel === 'todos'
+            ? null
+            : `Estado: ${STATUS_INFO[statusSel as StatusCartao]?.label ?? statusSel}`,
+        search ? `Pesquisa: "${search}"` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || 'Todos os cartões';
     const rows = dados
       .map((c) => {
         const t = titularLabel(c);
@@ -890,10 +903,10 @@ export function CartoesFlotaTab() {
           <img src="${logoUrl}" alt="WeGest" class="header-logo" />
           <div class="header-title">
             <h1>Cartões Frota</h1>
-            <p>Gestão de cartões de combustível e eletricidade</p>
+            <p>${filtroDesc}</p>
           </div>
         </div>
-        <div class="header-right"><div>Exportado em ${date}</div><div>${cartoes.length} cartão(ões) — inventário completo</div></div>
+        <div class="header-right"><div>Exportado em ${date}</div><div>${filtered.length} cartão(ões) — vista atual</div></div>
       </div>
       <div class="stats">
         <div class="stat"><div class="lbl">Total</div><div class="val">${kpis.total}</div></div>
@@ -1089,7 +1102,11 @@ export function CartoesFlotaTab() {
                 const Icon = info.Icon;
                 const titular = titularLabel(c);
                 return (
-                  <TableRow key={c.id} className={c.status === 'cancelado' ? 'opacity-55' : ''}>
+                  <TableRow
+                    key={c.id}
+                    onClick={() => openEdit(c)}
+                    className={`cursor-pointer hover:bg-muted/50 ${c.status === 'cancelado' ? 'opacity-55' : ''}`}
+                  >
                     <TableCell>
                       <span
                         className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${info.badgeCls}`}
@@ -1181,7 +1198,7 @@ export function CartoesFlotaTab() {
                         {STATUS_INFO[c.status]?.label ?? c.status}
                       </span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         {c.status !== 'cancelado' &&
                           (c.status === 'em_uso' ? (

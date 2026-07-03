@@ -386,6 +386,23 @@ const replaceDynamicFields = (
     }
   });
 
+  // Cartão de frota: {{cartao_frota_marca}} / {{cartao_frota_numero}}.
+  // Vem da FICHA do motorista (campos cartao_bp/repsol/edp, sincronizados ao
+  // associar um cartão). documentData pode fazer override (geração a partir de
+  // um cartão específico). Prioridade EDP > Repsol > BP quando há vários.
+  {
+    const marcaLabel: Record<string, string> = { bp: 'BP', repsol: 'Repsol', edp: 'EDP' };
+    const cards: Array<{ marca: string; num: string }> = [];
+    (['edp', 'repsol', 'bp'] as const).forEach((t) => {
+      const num = motoristaData[`cartao_${t}`];
+      if (num && String(num).trim()) cards.push({ marca: marcaLabel[t], num: String(num).trim() });
+    });
+    const marca = documentData['cartao_frota_marca'] || cards[0]?.marca || '';
+    const numero = documentData['cartao_frota_numero'] || cards[0]?.num || '';
+    result = result.replace(/\{\{cartao_frota_marca\}\}/g, marca);
+    result = result.replace(/\{\{cartao_frota_numero\}\}/g, numero);
+  }
+
   // Formatar datas especiais (ambos formatos)
   const today = new Date();
   result = result.replace(/\{\{data_atual\}\}/g, formatDate(today));
