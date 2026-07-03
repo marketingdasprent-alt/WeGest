@@ -347,6 +347,7 @@ const RealizarEntregaPage = () => {
                 estado: 'existente',
                 data: format(new Date(), 'dd/MM/yyyy'),
                 valor: f.valor.trim() ? `${Number(f.valor).toFixed(2)} €` : undefined,
+                origem: 'Nesta recolha/entrega',
               }))
           : undefined;
       const hoje = new Date().toISOString().slice(0, 10);
@@ -369,6 +370,7 @@ const RealizarEntregaPage = () => {
           ...(contexto?.empresaData ? { empresaData: contexto.empresaData } : {}),
         },
         viaturaId: contexto?.viaturaId ?? undefined,
+        contratoId: info.contrato_id,
         momentoFolha: isEntrega ? 'ENTREGA' : 'RECOLHA',
         observacoesMomento: observacoes,
         ...(isEntrega

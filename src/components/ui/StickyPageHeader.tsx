@@ -3,7 +3,7 @@ import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface StickyPageHeaderProps {
-  title: string;
+  title: React.ReactNode;
   description?: string;
   icon?: LucideIcon;
   children?: React.ReactNode;

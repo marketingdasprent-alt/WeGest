@@ -473,9 +473,20 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
       const totalRows = data.total_rows ?? data.total ?? imp;
 
       if (imp === 0) {
+        const totalRows = data.total ?? data.total_rows ?? 0;
+        const skipped = data.skipped ?? 0;
+        const headers: string[] = data.debug_headers ?? [];
+        const desc =
+          totalRows === 0
+            ? 'Ficheiro não reconhecido — 0 linhas lidas. Verifica o formato.'
+            : skipped > 0
+              ? `${skipped} de ${totalRows} linha(s) ignoradas. Colunas: ${headers.slice(0, 8).join(', ')}${headers.length > 8 ? '…' : ''}`
+              : errs > 0
+                ? `${errs} erro(s) durante o processamento.`
+                : undefined;
         toast.warning(
           `Importação concluída mas 0 registos gravados. Verifica o ficheiro ou a integração escolhida.`,
-          { description: errs > 0 ? `${errs} erro(s) durante o processamento.` : undefined }
+          { description: desc }
         );
       } else {
         toast.success(`${imp} registo(s) ${plataforma.toUpperCase()} importado(s).`, {
@@ -873,7 +884,7 @@ const PassoSemana: React.FC<{
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="center">
+            <PopoverContent className="w-auto p-0 z-[200]" align="center">
               <div className="border-b p-3">
                 <div className="flex flex-wrap gap-1.5">
                   {atalhos.map((a) => (
