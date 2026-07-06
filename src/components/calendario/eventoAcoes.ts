@@ -1,7 +1,7 @@
 export type EventoAcao = 'realizar-renting' | 'checkin-legacy' | 'nenhuma';
 
 interface EventoAcaoInput {
-  origem_tipo: string | null;
+  origem_tipo?: string | null;
   tipo: string;
   realizado_em: string | null;
 }

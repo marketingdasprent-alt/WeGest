@@ -243,7 +243,8 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
 
       // 2. Close motorista_viaturas association (RPC — evita falha silenciosa
       // para quem só tem 'calendario_recolhas' e não 'motoristas_gestao')
-      await supabase.rpc('fn_checkin_fechar_motorista_viatura', {
+      // Cast porque types.ts ainda não foi regenerado após nova RPC.
+      await (supabase as any).rpc('fn_checkin_fechar_motorista_viatura', {
         p_motorista_id: motoristaId || null,
         p_viatura_id: viaturaId,
         p_data_fim: data,

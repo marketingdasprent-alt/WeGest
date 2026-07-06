@@ -288,7 +288,8 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
 
       // 2. Associar viatura ao motorista (RPC — evita falha silenciosa para
       // quem só tem 'calendario_recolhas' e não 'motoristas_gestao')
-      const { error: mvErr } = await supabase.rpc('fn_checkin_abrir_motorista_viatura', {
+      // Cast porque types.ts ainda não foi regenerado após nova RPC.
+      const { error: mvErr } = await (supabase as any).rpc('fn_checkin_abrir_motorista_viatura', {
         p_motorista_id: motoristaId,
         p_viatura_id: viaturaId,
         p_data_inicio: data,
