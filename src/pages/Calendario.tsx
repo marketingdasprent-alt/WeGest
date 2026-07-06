@@ -48,6 +48,8 @@ export interface CalendarioEvento {
   profiles: { nome: string } | null;
   /** Nome de quem realizou (lookup em profiles via realizado_por_id). */
   realizador?: { nome: string } | null;
+  /** Entidade que gerou o evento: contrato_renting | movimento | contrato | manual. */
+  origem_tipo?: string | null;
 }
 
 const Calendario: React.FC = () => {
@@ -64,6 +66,9 @@ const Calendario: React.FC = () => {
   const [editingEvento, setEditingEvento] = useState<CalendarioEvento | null>(null);
   const [detailsEvento, setDetailsEvento] = useState<CalendarioEvento | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  // Deep-link: evento de recolha/devolução legacy clicado no calendário —
+  // pré-seleciona no RecolhasPendentesDrawer ao abrir.
+  const [checkinDeepLinkEventoId, setCheckinDeepLinkEventoId] = useState<string | null>(null);
 
   // Realtime subscription - actualiza automaticamente quando qualquer gestor cria/edita/elimina eventos
   useEffect(() => {
@@ -306,6 +311,13 @@ const Calendario: React.FC = () => {
     setHistoricoOpen(true);
   };
 
+  // Deep-link a partir do card do evento: recolha/devolução/troca legacy
+  // (origem_tipo='contrato') abre directo no passo de check-in.
+  const handleAbrirCheckin = (evento: CalendarioEvento) => {
+    setCheckinDeepLinkEventoId(evento.id);
+    setRecolhasPendentesOpen(true);
+  };
+
   return (
     <>
       <ListaEsperaDrawer
@@ -315,8 +327,12 @@ const Calendario: React.FC = () => {
       />
       <RecolhasPendentesDrawer
         open={recolhasPendentesOpen}
-        onOpenChange={setRecolhasPendentesOpen}
+        onOpenChange={(v) => {
+          setRecolhasPendentesOpen(v);
+          if (!v) setCheckinDeepLinkEventoId(null);
+        }}
         userId={user?.id || ''}
+        initialEventoId={checkinDeepLinkEventoId}
       />
       <CheckOutPendentesDrawer
         open={checkoutPendentesOpen}
@@ -366,7 +382,7 @@ const Calendario: React.FC = () => {
                   className="relative gap-2"
                 >
                   <PackageCheck className="h-4 w-4" />
-                  <span className="hidden sm:inline">Devolução</span>
+                  <span className="hidden sm:inline">Recolha/Devolução</span>
                   {recolhasPendentesCount + rentingRecolhaPendentesCount > 0 && (
                     <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1 flex items-center justify-center text-[10px] bg-orange-500 text-white border-0">
                       {recolhasPendentesCount + rentingRecolhaPendentesCount}
@@ -427,6 +443,7 @@ const Calendario: React.FC = () => {
             }
             onDeleteEvent={isAdmin ? (id) => deleteMutation.mutate(id) : undefined}
             onEventDetails={handleDetails}
+            onAbrirCheckin={handleAbrirCheckin}
             isLoading={isLoading}
             currentUserId={user?.id}
             canEditAll={hasPermission('calendario_gerir_todos')}

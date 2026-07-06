@@ -56,6 +56,7 @@ async function fetchOcupacao(admin: any, orgId: string): Promise<Map<string, Set
     admin.from('reservas').select('viatura_id').eq('org_id', orgId).is('deleted_at', null)
       .not('viatura_id', 'is', null).in('estado', ['pendente', 'confirmada', 'em_curso']),
     admin.from('contratos_renting').select('viatura_id').eq('org_id', orgId).is('deleted_at', null)
+      .is('substituido_em', null)
       .not('viatura_id', 'is', null).in('estado_operacional', ['agendado', 'em_curso']),
     admin.from('movimentos').select('viatura_id').eq('org_id', orgId)
       .not('viatura_id', 'is', null).in('estado', ['planeado', 'a_decorrer']),

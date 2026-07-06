@@ -13,6 +13,7 @@ import { TicketSubstitutaModal } from '@/components/assistencia/ticket/TicketSub
 import { TicketLegendaDialog } from '@/components/assistencia/ticket/TicketLegendaDialog';
 import { TicketHeader } from '@/components/assistencia/ticket/TicketHeader';
 import { TicketChat } from '@/components/assistencia/ticket/TicketChat';
+import { type ViaturaComGrupo } from '@/components/assistencia/ticket/agruparViaturasPorGrupo';
 import { useTicket } from '@/hooks/useTicket';
 import { useTicketMessages } from '@/hooks/useTicketMessages';
 import { useTicketClosure } from '@/hooks/useTicketClosure';
@@ -163,9 +164,10 @@ const TicketDetails = () => {
   // Substituta
   const [viaturaSubstituta, setViaturaSubstituta] = useState<Viatura | null>(null);
   const [showSubstituteModal, setShowSubstituteModal] = useState(false);
-  const [viaturasDisponiveis, setViaturasDisponiveis] = useState<Viatura[]>([]);
+  const [viaturasDisponiveis, setViaturasDisponiveis] = useState<ViaturaComGrupo[]>([]);
   const [substituteSearch, setSubstituteSearch] = useState('');
   const [assigningSubstitute, setAssigningSubstitute] = useState(false);
+  const [viaturaAvariadaGrupoId, setViaturaAvariadaGrupoId] = useState<string | null>(null);
 
   // Decisões de fecho
   const [closureDecisao, setClosureDecisao] = useState<'motorista' | 'empresa' | 'aberto' | null>(
@@ -180,6 +182,19 @@ const TicketDetails = () => {
   useEffect(() => {
     if (id) accessPanelRef.current?.fetchAcessos(id);
   }, [id]);
+
+  useEffect(() => {
+    if (!ticket?.viatura_substituta_id) {
+      setViaturaSubstituta(null);
+      return;
+    }
+    supabase
+      .from('viaturas')
+      .select('id, matricula, marca, modelo')
+      .eq('id', ticket.viatura_substituta_id)
+      .maybeSingle()
+      .then(({ data }) => setViaturaSubstituta(data));
+  }, [ticket?.viatura_substituta_id]);
 
   const handleSendMessage = async () => {
     const ok = await sendMessage({ text: novaMensagem, files: selectedFiles, ticket });
@@ -236,7 +251,7 @@ const TicketDetails = () => {
       console.error('Erro ao atualizar estado:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível atualizar o estado.',
+        description: error.message || 'Não foi possível atualizar o estado.',
         variant: 'destructive',
       });
     }
@@ -245,19 +260,26 @@ const TicketDetails = () => {
   const handleAceitarTicket = async () => {
     if (!ticket || !viatura) return;
     try {
-      await supabase
+      const { error: statusError } = await supabase
         .from('assistencia_tickets')
         .update({ status: 'em_andamento' })
         .eq('id', ticket.id);
+      if (statusError) throw statusError;
 
-      await supabase.from('viaturas').update({ status: 'manutencao' }).eq('id', viatura.id);
+      const { error: viaturaError } = await supabase
+        .from('viaturas')
+        .update({ status: 'manutencao' })
+        .eq('id', viatura.id);
+      if (viaturaError) throw viaturaError;
 
-      await supabase.from('assistencia_mensagens').insert({
+      const { error: mensagemError } = await supabase.from('assistencia_mensagens').insert({
         ticket_id: ticket.id,
         autor_id: user?.id,
         mensagem: 'Ticket aceite. Viatura colocada em manutenção.',
         tipo: 'status_change',
       });
+      if (mensagemError) throw mensagemError;
+
       toast({ title: 'Ticket aceite', description: 'Viatura colocada em manutenção.' });
       refreshAll();
     } catch (error: any) {
@@ -265,37 +287,138 @@ const TicketDetails = () => {
     }
   };
 
+  const handleAbrirSubstitutaModal = async () => {
+    setShowSubstituteModal(true);
+    await fetchViaturasDisponiveis();
+  };
+
   const fetchViaturasDisponiveis = async () => {
     const { data } = await supabase
       .from('viaturas')
-      .select('id, matricula, marca, modelo, km_atual')
+      .select('id, matricula, marca, modelo, km_atual, grupo_id, renting_grupos(nome)')
       .eq('status', 'disponivel')
       .order('matricula');
-    setViaturasDisponiveis(data || []);
+    setViaturasDisponiveis(
+      (data || []).map((v) => ({
+        id: v.id,
+        matricula: v.matricula,
+        marca: v.marca,
+        modelo: v.modelo,
+        grupoId: v.grupo_id,
+        grupoNome: (v.renting_grupos as { nome: string } | null)?.nome ?? null,
+      }))
+    );
+
+    const { grupoIdAvariada } = await buscarContratoActivoEGrupo();
+    setViaturaAvariadaGrupoId(grupoIdAvariada);
+  };
+
+  const buscarContratoActivoEGrupo = async () => {
+    if (!ticket || !motorista) return { contratoId: null, grupoIdAvariada: null };
+
+    const { data: viaturaAvariada } = await supabase
+      .from('viaturas')
+      .select('grupo_id')
+      .eq('id', ticket.viatura_id)
+      .maybeSingle();
+
+    const { data: motoristaAtivo } = await supabase
+      .from('motoristas_ativos')
+      .select('cliente_id')
+      .eq('id', motorista.id)
+      .maybeSingle();
+
+    let contratoId: string | null = null;
+
+    if (motoristaAtivo?.cliente_id) {
+      const { data: contrato } = await supabase
+        .from('contratos_renting')
+        .select('id')
+        .eq('cliente_id', motoristaAtivo.cliente_id)
+        .is('deleted_at', null)
+        .is('substituido_em', null)
+        .in('estado_operacional', ['agendado', 'em_curso'])
+        .limit(1)
+        .maybeSingle();
+      contratoId = contrato?.id ?? null;
+    }
+
+    // Fallback: contrato cujo titular é outra entidade (ex. empresa-frota)
+    // mas o motorista é o condutor real via contrato_condutores.motorista_id.
+    if (!contratoId) {
+      const { data: condutorRows } = await supabase
+        .from('contrato_condutores')
+        .select('contrato_id')
+        .eq('motorista_id', motorista.id);
+
+      const contratoIds = (condutorRows || []).map((r) => r.contrato_id);
+      if (contratoIds.length > 0) {
+        const { data: contrato } = await supabase
+          .from('contratos_renting')
+          .select('id')
+          .in('id', contratoIds)
+          .is('deleted_at', null)
+          .is('substituido_em', null)
+          .in('estado_operacional', ['agendado', 'em_curso'])
+          .limit(1)
+          .maybeSingle();
+        contratoId = contrato?.id ?? null;
+      }
+    }
+
+    return { contratoId, grupoIdAvariada: viaturaAvariada?.grupo_id ?? null };
   };
 
   const handleAtribuirSubstituta = async (viaturaId: string) => {
     if (!ticket || !motorista) return;
     try {
       setAssigningSubstitute(true);
-      await supabase.from('motorista_viaturas').insert({
-        motorista_id: motorista.id,
-        viatura_id: viaturaId,
-        data_inicio: new Date().toISOString().split('T')[0],
-        status: 'ativo',
-        tipo: 'substituta',
-      });
-      await supabase.from('viaturas').update({ status: 'em_uso' }).eq('id', viaturaId);
-      await supabase
+
+      const { contratoId } = await buscarContratoActivoEGrupo();
+
+      if (contratoId) {
+        // Motorista tem contrato de aluguer/TVDE activo — versiona o
+        // contrato para a viatura substituta. A cascata já existente trata
+        // sozinha de motorista_viaturas, calendário e disponibilidade.
+        // Cast porque types.ts ainda não foi regenerado após nova RPC.
+        const { error: rpcError } = await (supabase as any).rpc('fn_trocar_viatura_avaria', {
+          p_contrato_id: contratoId,
+          p_viatura_nova_id: viaturaId,
+          p_motivo: `Avaria — ticket #${ticket.numero}`,
+        });
+        if (rpcError) throw rpcError;
+      } else {
+        // Sem contrato para versionar — mantém o comportamento anterior.
+        const { error: mvError } = await supabase.from('motorista_viaturas').insert({
+          motorista_id: motorista.id,
+          viatura_id: viaturaId,
+          data_inicio: new Date().toISOString().split('T')[0],
+          status: 'ativo',
+          tipo: 'substituta',
+        });
+        if (mvError) throw mvError;
+
+        const { error: viaturaError } = await supabase
+          .from('viaturas')
+          .update({ status: 'em_uso' })
+          .eq('id', viaturaId);
+        if (viaturaError) throw viaturaError;
+      }
+
+      const { error: ticketError } = await supabase
         .from('assistencia_tickets')
         .update({ viatura_substituta_id: viaturaId })
         .eq('id', ticket.id);
-      await supabase.from('assistencia_mensagens').insert({
+      if (ticketError) throw ticketError;
+
+      const { error: mensagemError } = await supabase.from('assistencia_mensagens').insert({
         ticket_id: ticket.id,
         autor_id: user?.id,
         mensagem: `Viatura substituta atribuída ao motorista durante a reparação.`,
         tipo: 'status_change',
       });
+      if (mensagemError) throw mensagemError;
+
       setShowSubstituteModal(false);
       toast({ title: 'Viatura substituta atribuída.' });
       refreshAll();
@@ -394,6 +517,11 @@ const TicketDetails = () => {
           viatura={viatura}
           motorista={motorista}
           criador={criador}
+          viaturaSubstituta={viaturaSubstituta}
+          canAtribuirSubstituta={
+            canChangeStatus && !['resolvido', 'fechado'].includes(ticket.status)
+          }
+          onAtribuirSubstituta={handleAbrirSubstitutaModal}
           onOpenGallery={() => setShowGalleryDialog(true)}
         />
       </div>
@@ -411,6 +539,7 @@ const TicketDetails = () => {
         open={showSubstituteModal}
         onOpenChange={setShowSubstituteModal}
         viaturasDisponiveis={viaturasDisponiveis}
+        grupoIdAvariada={viaturaAvariadaGrupoId}
         search={substituteSearch}
         onSearchChange={setSubstituteSearch}
         assigning={assigningSubstitute}

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -46,7 +46,14 @@ interface RecolhaPendente {
   contratoNumero: number | null;
   motoristaId: string | null;
   eventoId: string;
+  tipoEvento: 'recolha' | 'devolucao' | 'troca';
 }
+
+const TIPO_EVENTO_LABEL: Record<RecolhaPendente['tipoEvento'], string> = {
+  recolha: 'Recolha',
+  devolucao: 'Devolução',
+  troca: 'Troca',
+};
 
 interface SelectedFile {
   id: string;
@@ -64,6 +71,8 @@ interface RecolhasPendentesDrawerProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   userId: string;
+  /** Quando definido, ao abrir a lista pré-seleciona este evento (deep-link a partir do calendário). */
+  initialEventoId?: string | null;
 }
 
 function norm(s: string) {
@@ -74,6 +83,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
   open,
   onOpenChange,
   userId,
+  initialEventoId,
 }) => {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<RecolhaPendente | null>(null);
@@ -102,7 +112,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
       // Step 1: eventos pendentes (recolha/devolucao/troca com origem contrato)
       const { data: eventos, error: evErr } = await supabase
         .from('calendario_eventos')
-        .select('id, data_inicio, origem_id')
+        .select('id, tipo, data_inicio, origem_id, matricula_devolver')
         .in('tipo', ['recolha', 'devolucao', 'troca'])
         .eq('origem_tipo', 'contrato')
         .is('realizado_em', null)
@@ -126,13 +136,36 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
 
       const contratoMap = new Map((contratos ?? []).map((ct) => [ct.id, ct]));
 
+      // Numa troca, contratos.viatura_id é a viatura NOVA (já em uso) — a
+      // viatura a devolver fisicamente é a antiga, em matricula_devolver.
+      // Resolve essas matrículas à parte para não devolver a viatura errada.
+      const matriculasTroca = [
+        ...new Set(
+          (eventos ?? [])
+            .filter((e) => e.tipo === 'troca' && e.matricula_devolver)
+            .map((e) => e.matricula_devolver as string)
+        ),
+      ];
+      const viaturaPorMatricula = new Map<string, ViaturaEmRecolha>();
+      if (matriculasTroca.length > 0) {
+        const { data: viaturasTroca, error: vErr } = await supabase
+          .from('viaturas')
+          .select('id, matricula, marca, modelo, categoria, km_atual, combustivel')
+          .in('matricula', matriculasTroca);
+        if (vErr) throw vErr;
+        for (const v of viaturasTroca ?? []) viaturaPorMatricula.set(v.matricula, v);
+      }
+
       // Dedup por viatura — evento mais recente ganha (query já está DESC)
       const seen = new Set<string>();
       const result: RecolhaPendente[] = [];
       for (const ev of eventos ?? []) {
         if (!ev.origem_id) continue;
         const ct = contratoMap.get(ev.origem_id);
-        const viatura = (ct as any)?.viaturas as ViaturaEmRecolha | null | undefined;
+        const viatura: ViaturaEmRecolha | null | undefined =
+          ev.tipo === 'troca' && ev.matricula_devolver
+            ? viaturaPorMatricula.get(ev.matricula_devolver)
+            : ((ct as any)?.viaturas as ViaturaEmRecolha | null | undefined);
         if (!viatura?.id || seen.has(viatura.id)) continue;
         seen.add(viatura.id);
         result.push({
@@ -141,12 +174,21 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
           contratoNumero: (ct as any).numero_contrato,
           motoristaId: (ct as any).motorista_id,
           eventoId: ev.id,
+          tipoEvento: ev.tipo as RecolhaPendente['tipoEvento'],
         });
       }
       return result;
     },
     enabled: open,
   });
+
+  // Deep-link a partir do calendário: assim que a lista resolve, abre
+  // directamente o passo de check-in do evento pedido.
+  useEffect(() => {
+    if (!open || !initialEventoId || selected) return;
+    const alvo = pendentes.find((p) => p.eventoId === initialEventoId);
+    if (alvo) setSelected(alvo);
+  }, [open, initialEventoId, pendentes, selected]);
 
   const { data: estacoes = [] } = useQuery({
     queryKey: ['estacoes-calendario'],
@@ -246,7 +288,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
 
   const handleConfirm = async () => {
     if (!selected) return;
-    const { viatura, contratoId, eventoId } = selected;
+    const { viatura, contratoId, eventoId, tipoEvento } = selected;
     if (!estacaoId) {
       toast.error('Estação de chegada é obrigatória');
       return;
@@ -272,8 +314,13 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
         .update({ status: 'disponivel', estacao_id: estacaoId })
         .eq('id', viatura.id);
 
-      // 2. Encerrar contrato (idempotente — troca já o encerrou)
-      await supabase.from('contratos').update({ status: 'encerrado' }).eq('id', contratoId);
+      // 2. Encerrar contrato — só para recolha/devolução. Numa troca,
+      //    contratoId é o contrato NOVO (já ativo com a viatura nova); o
+      //    contrato antigo (dono da viatura devolvida aqui) já foi encerrado
+      //    no momento da troca — não mexer para não fechar o contrato errado.
+      if (tipoEvento !== 'troca') {
+        await supabase.from('contratos').update({ status: 'encerrado' }).eq('id', contratoId);
+      }
 
       // 3. KM, combustivel, danos
       await saveCheckinDados({
@@ -339,12 +386,13 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
 
   // ── Full-page check-in step ───────────────────────────────────────────────
   if (selected && open) {
-    const { viatura } = selected;
+    const { viatura, tipoEvento } = selected;
+    const tipoLabel = TIPO_EVENTO_LABEL[tipoEvento];
     if (done) {
       return (
         <div className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center gap-4">
           <CheckCircle className="h-16 w-16 text-green-500" />
-          <p className="text-xl font-semibold">Check-in confirmado!</p>
+          <p className="text-xl font-semibold">{tipoLabel} confirmada!</p>
         </div>
       );
     }
@@ -357,7 +405,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-base font-semibold leading-tight">Check-in na Estação</h1>
+            <h1 className="text-base font-semibold leading-tight">{tipoLabel} na Estação</h1>
             <p className="text-xs text-muted-foreground truncate">
               {formatMatricula(viatura.matricula)} — {viatura.marca} {viatura.modelo}
             </p>
@@ -377,7 +425,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
             <div className="rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30 p-4 text-sm text-green-700 dark:text-green-300">
-              <p className="font-medium">Viatura chegou à estação.</p>
+              <p className="font-medium">Viatura chegou à estação ({tipoLabel.toLowerCase()}).</p>
               <p className="mt-0.5 opacity-80 text-xs">
                 Selecione a estação, preencha a condição da viatura e confirme.
               </p>
@@ -527,7 +575,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
       <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0 gap-0">
         <SheetHeader className="px-4 py-3 border-b border-border shrink-0">
           <SheetTitle className="flex items-center gap-2 text-base">
-            Recolhas Pendentes de Check-in
+            Recolhas / Devoluções Pendentes
             {pendentes.length + rentingRecolhasPendentes.length > 0 && (
               <Badge className="bg-orange-500 text-white">
                 {pendentes.length + rentingRecolhasPendentes.length}
@@ -568,6 +616,9 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
                     {p.viatura.categoria && (
                       <p className="text-xs text-muted-foreground/70">{p.viatura.categoria}</p>
                     )}
+                    <p className="text-[11px] text-orange-600 dark:text-orange-400 font-medium">
+                      {TIPO_EVENTO_LABEL[p.tipoEvento]}
+                    </p>
                   </div>
                   <Button
                     size="sm"
@@ -575,7 +626,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
                     className="shrink-0 text-xs border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400"
                     onClick={() => setSelected(p)}
                   >
-                    Check-in
+                    {TIPO_EVENTO_LABEL[p.tipoEvento]}
                   </Button>
                 </div>
               ))}

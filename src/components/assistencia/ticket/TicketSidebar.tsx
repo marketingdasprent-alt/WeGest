@@ -15,6 +15,7 @@ import {
   Image,
   PlayCircle,
   Eye,
+  RefreshCw,
 } from 'lucide-react';
 import type { Ticket, Anexo, Viatura, Motorista } from './types';
 
@@ -24,6 +25,9 @@ interface Props {
   viatura: Viatura | null;
   motorista: Motorista | null;
   criador: { nome: string } | null;
+  viaturaSubstituta: Viatura | null;
+  canAtribuirSubstituta: boolean;
+  onAtribuirSubstituta: () => void;
   onOpenGallery: () => void;
 }
 
@@ -33,6 +37,9 @@ export const TicketSidebar: React.FC<Props> = ({
   viatura,
   motorista,
   criador,
+  viaturaSubstituta,
+  canAtribuirSubstituta,
+  onAtribuirSubstituta,
   onOpenGallery,
 }) => (
   <div className="space-y-6 lg:h-full lg:overflow-y-auto pr-1 custom-scrollbar">
@@ -109,6 +116,33 @@ export const TicketSidebar: React.FC<Props> = ({
               <User className="h-4 w-4 text-green-500" />
               <span className="text-sm font-medium">{motorista.nome}</span>
             </div>
+          </div>
+        )}
+        {motorista && (
+          <div>
+            <Label className="text-[10px] uppercase text-muted-foreground font-bold">
+              Viatura Substituta
+            </Label>
+            {viaturaSubstituta ? (
+              <div className="flex items-center gap-2 mt-1">
+                <Car className="h-4 w-4 text-purple-500" />
+                <span className="font-mono font-bold text-sm">{viaturaSubstituta.matricula}</span>
+                <span className="text-xs text-muted-foreground">
+                  {viaturaSubstituta.marca} {viaturaSubstituta.modelo}
+                </span>
+              </div>
+            ) : canAtribuirSubstituta ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full h-8 text-xs font-bold gap-2 mt-1"
+                onClick={onAtribuirSubstituta}
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Atribuir Substituta
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1">Nenhuma atribuída.</p>
+            )}
           </div>
         )}
         <Separator />

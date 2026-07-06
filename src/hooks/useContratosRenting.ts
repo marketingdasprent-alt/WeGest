@@ -322,6 +322,7 @@ export interface FecharContratoTVDEArgs {
   contratoId: string;
   contratoCodigo: number;
   tipoEvento: 'recolhido' | 'devolvido';
+  estacaoId: string;
   dataEvento: string;
   motivo?: string;
   valorDivida?: number;
@@ -340,6 +341,7 @@ export function useFecharContratoTVDE() {
       contratoId,
       contratoCodigo,
       tipoEvento,
+      estacaoId,
       dataEvento,
       motivo,
       valorDivida,
@@ -348,9 +350,17 @@ export function useFecharContratoTVDE() {
       viaturaId,
       recolha,
     }: FecharContratoTVDEArgs): Promise<void> => {
+      const { data: estacao, error: errEstacao } = await supabase
+        .from('estacoes')
+        .select('nome, cidade')
+        .eq('id', estacaoId)
+        .single();
+      if (errEstacao) throw errEstacao;
+      const cidadeEvento = estacao.cidade?.trim() || estacao.nome;
+
       const { error: errUpdate } = await supabase
         .from('contratos_renting')
-        .update({ estado_operacional: 'cancelado' })
+        .update({ estado_operacional: 'cancelado', estacao_recolha_id: estacaoId })
         .eq('id', contratoId);
       if (errUpdate) throw errUpdate;
 
@@ -373,6 +383,7 @@ export function useFecharContratoTVDE() {
         tipo: tipoCalendario,
         titulo: matriculaNorm ?? '?',
         descricao: descricaoEvento,
+        cidade: cidadeEvento,
         data_inicio: dataEvento,
         data_fim: dataEvento,
         dia_todo: false,
