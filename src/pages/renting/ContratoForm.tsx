@@ -1114,6 +1114,12 @@ const ContratoForm = () => {
                       form={form}
                       clientes={clientes}
                       viaturas={viaturasParaSelecao}
+                      grupos={grupos}
+                      grupoIdAtual={
+                        contrato
+                          ? (viaturas.find((v) => v.id === contrato.viatura_id)?.grupo_id ?? null)
+                          : null
+                      }
                       estacoes={estacoes}
                       viaturaLocked={viaturaLocked}
                       reservaCodigo={reservaAssociada?.codigo ?? null}

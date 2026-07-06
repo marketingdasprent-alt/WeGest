@@ -36,8 +36,19 @@ export const ContratoNovaVersaoDialog: React.FC<ContratoNovaVersaoDialogProps> =
   onConfirmar,
 }) => {
   const [motivo, setMotivo] = useState('');
+  const [tentouSemMotivo, setTentouSemMotivo] = useState(false);
+
+  // Troca de viatura precisa sempre de motivo explícito (avaria, pedido do
+  // cliente, etc.) — outras alterações (preço, desconto...) continuam com
+  // motivo opcional, com fallback automático para o resumo das alterações.
+  const motivoObrigatorio = alteracoes.some((a) => a.label === 'Viatura');
+  const motivoInvalido = motivoObrigatorio && motivo.trim().length === 0;
 
   const handleConfirmar = () => {
+    if (motivoInvalido) {
+      setTentouSemMotivo(true);
+      return;
+    }
     onConfirmar(motivo.trim());
   };
 
@@ -49,7 +60,10 @@ export const ContratoNovaVersaoDialog: React.FC<ContratoNovaVersaoDialogProps> =
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) setMotivo('');
+        if (!o) {
+          setMotivo('');
+          setTentouSemMotivo(false);
+        }
         onOpenChange(o);
       }}
     >
@@ -78,17 +92,31 @@ export const ContratoNovaVersaoDialog: React.FC<ContratoNovaVersaoDialogProps> =
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="motivo">Motivo (opcional)</Label>
+            <Label htmlFor="motivo">
+              Motivo {motivoObrigatorio ? <span className="text-red-500">*</span> : '(opcional)'}
+            </Label>
             <Textarea
               id="motivo"
-              placeholder={motivoSugerido}
+              placeholder={motivoObrigatorio ? 'Ex: avaria, pedido do cliente...' : motivoSugerido}
               value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
+              onChange={(e) => {
+                setMotivo(e.target.value);
+                if (tentouSemMotivo) setTentouSemMotivo(false);
+              }}
               rows={2}
+              className={tentouSemMotivo ? 'border-red-500' : undefined}
             />
-            <p className="text-xs text-muted-foreground">
-              Se deixares em branco, é guardado o resumo das alterações.
-            </p>
+            {motivoObrigatorio ? (
+              tentouSemMotivo && (
+                <p className="text-xs text-red-500">
+                  Indica o motivo da troca de viatura antes de continuar.
+                </p>
+              )
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Se deixares em branco, é guardado o resumo das alterações.
+              </p>
+            )}
           </div>
         </div>
 

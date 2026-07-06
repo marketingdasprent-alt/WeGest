@@ -13,19 +13,20 @@ interface AgrupamentoResultado {
 }
 
 /**
- * Separa viaturas disponíveis em "mesmo grupo da avariada" e "outros grupos".
- * Nunca filtra/remove — é orientação de UI, não regra de negócio bloqueante.
- * Grupo null (avariada ou candidata) nunca conta como correspondência.
+ * Separa viaturas em "mesmo grupo da viatura actual do contrato" e "outros
+ * grupos". Nunca filtra/remove — é orientação de UI, não regra de negócio
+ * bloqueante. Grupo null (actual ou candidata) nunca conta como
+ * correspondência.
  */
 export function agruparViaturasPorGrupo(
   viaturas: ViaturaComGrupo[],
-  grupoIdAvariada: string | null
+  grupoIdAtual: string | null
 ): AgrupamentoResultado {
   const mesmoGrupo: ViaturaComGrupo[] = [];
   const outrosGrupos: ViaturaComGrupo[] = [];
 
   for (const v of viaturas) {
-    if (grupoIdAvariada && v.grupoId === grupoIdAvariada) {
+    if (grupoIdAtual && v.grupoId === grupoIdAtual) {
       mesmoGrupo.push(v);
     } else {
       outrosGrupos.push(v);
