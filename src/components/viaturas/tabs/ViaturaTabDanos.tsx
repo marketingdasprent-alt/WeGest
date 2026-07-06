@@ -37,7 +37,6 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { DanoFotosGallery } from '../DanoFotosGallery';
-import { GenerateDocumentsDialog } from '@/components/motoristas/GenerateDocumentsDialog';
 
 interface Dano {
   id: string;
@@ -114,7 +113,6 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
   const [motoristas, setMotoristas] = useState<MotoristaOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [folhaDanosOpen, setFolhaDanosOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Form state
@@ -453,10 +451,6 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
           Registo de Danos
         </CardTitle>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => setFolhaDanosOpen(true)}>
-            <FileText className="h-4 w-4 mr-2" />
-            Gerar Folha de Danos
-          </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button size="sm">
@@ -786,13 +780,6 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
           </div>
         )}
       </CardContent>
-      {viaturaId && (
-        <GenerateDocumentsDialog
-          open={folhaDanosOpen}
-          onOpenChange={setFolhaDanosOpen}
-          viaturaId={viaturaId}
-        />
-      )}
     </Card>
   );
 }

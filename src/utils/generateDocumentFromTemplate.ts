@@ -29,14 +29,24 @@ export interface AnexoDanoItem {
   estado: string;
   data: string;
   valor?: string;
+  /** De onde vem o registo — distingue danos já existentes na viatura (e a
+   *  sua origem) dos que estão a ser adicionados agora nesta recolha/entrega. */
+  origem?: string;
+}
+
+/** Foto da grelha de danos — com legenda de origem (de onde veio). */
+export interface AnexoFotoItem {
+  url: string;
+  /** Legenda por baixo da foto — mesma origem usada na tabela de danos. */
+  origem?: string;
 }
 
 /** Anexo de danos da viatura: lista + fotos (máx 6) + QR code. */
 export interface AnexoDanos {
   titulo: string;
   danos: AnexoDanoItem[];
-  /** URLs já assinadas (máx 6) para a grelha de fotos. */
-  fotos: string[];
+  /** URLs já assinadas (máx 6) para a grelha de fotos, com legenda de origem. */
+  fotos: AnexoFotoItem[];
   /** URL da página de danos da viatura (texto + QR). */
   linkUrl: string;
   /** data:image/png;base64 do QR code. */
@@ -63,7 +73,10 @@ interface GenerateDocumentParams {
   anexoDanos?: AnexoDanos;
   /** ID da viatura. Obrigatório para templates do tipo `anexo_danos`. */
   viaturaId?: string;
-  /** Filtra danos da viatura por contrato (modo recolha). Sem este param mostra todos os danos activos. */
+  /** ID do contrato de renting actual (recolha/entrega em curso). Não filtra
+   *  a lista — continua a mostrar todos os danos activos da viatura — mas
+   *  identifica, por linha, quais vêm deste contrato ("Nesta recolha/entrega")
+   *  vs. já existentes (contrato anterior/registo manual). */
   contratoId?: string;
   /** KMs e combustível para preencher as variáveis {{km_saida}}, {{km_entrada}}, etc. */
   km_saida?: string;
@@ -436,6 +449,23 @@ const replaceDynamicFields = (
       result = result.replace(regex, value?.toString() || '');
     }
   });
+
+  // Cartão de frota: {{cartao_frota_marca}} / {{cartao_frota_numero}}.
+  // Vem da FICHA do motorista (campos cartao_bp/repsol/edp, sincronizados ao
+  // associar um cartão). documentData pode fazer override (geração a partir de
+  // um cartão específico). Prioridade EDP > Repsol > BP quando há vários.
+  {
+    const marcaLabel: Record<string, string> = { bp: 'BP', repsol: 'Repsol', edp: 'EDP' };
+    const cards: Array<{ marca: string; num: string }> = [];
+    (['edp', 'repsol', 'bp'] as const).forEach((t) => {
+      const num = motoristaData[`cartao_${t}`];
+      if (num && String(num).trim()) cards.push({ marca: marcaLabel[t], num: String(num).trim() });
+    });
+    const marca = documentData['cartao_frota_marca'] || cards[0]?.marca || '';
+    const numero = documentData['cartao_frota_numero'] || cards[0]?.num || '';
+    result = result.replace(/\{\{cartao_frota_marca\}\}/g, marca);
+    result = result.replace(/\{\{cartao_frota_numero\}\}/g, numero);
+  }
 
   // Formatar datas especiais (ambos formatos)
   const today = new Date();
@@ -1339,9 +1369,13 @@ export const generateDocumentFromTemplate = async (
 
     // Pré-visualização: juntar fotos e danos locais (ainda não gravados) aos da BD.
     if (efectivoAnexoDanos && params.fotosMomento?.length) {
+      const fotosMomentoItems = params.fotosMomento.map((url) => ({
+        url,
+        origem: 'Nesta recolha/entrega',
+      }));
       efectivoAnexoDanos = {
         ...efectivoAnexoDanos,
-        fotos: [...params.fotosMomento, ...efectivoAnexoDanos.fotos].slice(0, 6),
+        fotos: [...fotosMomentoItems, ...efectivoAnexoDanos.fotos].slice(0, 6),
       };
     }
     if (efectivoAnexoDanos && params.danosMomento?.length) {
@@ -1405,7 +1439,10 @@ export const generateDocumentFromTemplate = async (
         const photoRows = Math.ceil(Math.min(ad.fotos.length, 6) / photoCols);
         const photoGap = 4;
         const photoW = (maxWidth - photoGap) / photoCols;
-        const photoH = 38;
+        // + faixa de legenda em baixo com a origem da foto (de onde veio).
+        const captionH = 5;
+        const photoH = 38 + captionH;
+        const imgAreaH = photoH - captionH;
 
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(8);
@@ -1420,12 +1457,12 @@ export const generateDocumentFromTemplate = async (
         ty += 5;
 
         // Pré-carregar fotos em paralelo
-        const fotoUrls = ad.fotos.slice(0, 6);
+        const fotoItems = ad.fotos.slice(0, 6);
         const fotoImagens = new Map<string, HTMLImageElement>();
         await Promise.all(
-          fotoUrls.map(async (url) => {
+          fotoItems.map(async (item) => {
             try {
-              fotoImagens.set(url, await loadImage(url));
+              fotoImagens.set(item.url, await loadImage(item.url));
             } catch {
               // célula fica só com moldura
             }
@@ -1435,23 +1472,36 @@ export const generateDocumentFromTemplate = async (
         pdf.setDrawColor(...borderColor);
         pdf.setLineWidth(0.2);
         pdf.setTextColor(0, 0, 0);
-        for (let fi = 0; fi < fotoUrls.length; fi++) {
+        for (let fi = 0; fi < fotoItems.length; fi++) {
           const fc = fi % photoCols;
           const fr = Math.floor(fi / photoCols);
           const fx = leftMargin + fc * (photoW + photoGap);
           const fy = ty + fr * (photoH + photoGap);
           pdf.rect(fx, fy, photoW, photoH, 'S');
-          const img = fotoImagens.get(fotoUrls[fi]);
+          pdf.line(fx, fy + imgAreaH, fx + photoW, fy + imgAreaH);
+          const img = fotoImagens.get(fotoItems[fi].url);
           if (img) {
             const ratio = img.width && img.height ? img.width / img.height : 1.5;
             let w = photoW - 2;
             let h = w / ratio;
-            if (h > photoH - 2) {
-              h = photoH - 2;
+            if (h > imgAreaH - 2) {
+              h = imgAreaH - 2;
               w = h * ratio;
             }
-            pdf.addImage(img, 'JPEG', fx + (photoW - w) / 2, fy + (photoH - h) / 2, w, h);
+            pdf.addImage(img, 'JPEG', fx + (photoW - w) / 2, fy + (imgAreaH - h) / 2, w, h);
           }
+          // Legenda: de onde veio esta foto (recolha actual, outro contrato,
+          // ticket de assistência, registo manual) — explícito por foto, não
+          // só na tabela, porque nem toda foto tem uma linha correspondente.
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(6.5);
+          pdf.setTextColor(...gray);
+          const origemTexto = fotoItems[fi].origem ?? '—';
+          const captionFit = pdf.splitTextToSize(origemTexto, photoW - 3)[0] ?? origemTexto;
+          pdf.text(captionFit, fx + photoW / 2, fy + imgAreaH + captionH / 2 + 1.5, {
+            align: 'center',
+          });
+          pdf.setTextColor(0, 0, 0);
         }
         ty += photoRows * (photoH + photoGap) + 6;
       }
@@ -1464,8 +1514,8 @@ export const generateDocumentFromTemplate = async (
         pdf.text('Nenhum dano activo registado.', leftMargin, ty + 4);
         ty += 12;
       } else {
-        const colW = [32, 72, 28, 22, 22];
-        const headers = ['Localização', 'Descrição', 'Estado', 'Data', 'Valor'];
+        const colW = [26, 52, 20, 18, 18, 30];
+        const headers = ['Localização', 'Descrição', 'Estado', 'Data', 'Valor', 'Origem'];
         const rowH = 7;
         const headerH = 8;
 
@@ -1515,6 +1565,7 @@ export const generateDocumentFromTemplate = async (
             ESTADO_LABELS[dano.estado] ?? dano.estado,
             dano.data,
             dano.valor ?? '—',
+            dano.origem ?? '—',
           ];
           cx = leftMargin;
           pdf.setDrawColor(...borderColor);

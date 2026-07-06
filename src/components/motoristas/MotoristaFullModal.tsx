@@ -137,12 +137,7 @@ export function MotoristaFullModal({
       case 'viaturas':
         return <MotoristaTabViaturas motorista={motoristaAtivo} />;
       case 'contratos':
-        return (
-          <MotoristaTabContratos
-            motorista={motoristaAtivo}
-            onMotoristaUpdated={onMotoristaUpdated}
-          />
-        );
+        return <MotoristaTabContratos motorista={motoristaAtivo} />;
       case 'danos':
         return <MotoristaTabDanos motorista={motoristaAtivo} />;
       default:

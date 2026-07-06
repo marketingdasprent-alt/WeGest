@@ -98,6 +98,8 @@ export const CAMPOS_CATALOGO: CampoDinamico[] = [
   { chave: 'carta_validade', label: 'Validade da carta', categoria: 'motorista' },
   { chave: 'cmtvde_numero', label: 'Nº licença TVDE', categoria: 'motorista' },
   { chave: 'cmtvde_validade', label: 'Validade licença TVDE', categoria: 'motorista' },
+  { chave: 'cartao_frota_marca', label: 'Marca do cartão frota', categoria: 'motorista' },
+  { chave: 'cartao_frota_numero', label: 'Nº do cartão frota', categoria: 'motorista' },
 
   // ── Cliente (renting) ──────────────────────────────────────
   { chave: 'cliente_nome', label: 'Nome', categoria: 'cliente' },
