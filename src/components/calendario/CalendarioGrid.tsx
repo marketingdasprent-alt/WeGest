@@ -28,6 +28,7 @@ interface Props {
   onEventClick: (e: CalendarioEvento) => void;
   onDeleteEvent: (id: string) => void;
   onEventDetails: (e: CalendarioEvento) => void;
+  onAbrirCheckin?: (e: CalendarioEvento) => void;
   onDaySelect?: (d: Date) => void;
   isLoading: boolean;
   currentUserId?: string;
@@ -43,6 +44,7 @@ export const CalendarioGrid: React.FC<Props> = ({
   onEventClick,
   onDeleteEvent,
   onEventDetails,
+  onAbrirCheckin,
   onDaySelect,
   isLoading,
   currentUserId,
@@ -276,6 +278,7 @@ export const CalendarioGrid: React.FC<Props> = ({
                 onEdit={onEventClick}
                 onDelete={onDeleteEvent}
                 onDetails={onEventDetails}
+                onAbrirCheckin={onAbrirCheckin}
                 canEdit={canEditAll || currentUserId === ev.criado_por}
               />
             ))

@@ -25,10 +25,18 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { COMBUSTIVEL_NIVEL_OPTS } from '@/utils/combustivel';
 import { useFecharContratoTVDE } from '@/hooks/useContratosRenting';
+import { useEstacoes } from '@/hooks/useEstacoes';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
@@ -43,6 +51,7 @@ const schema = z.object({
   tipoEvento: z.enum(['recolhido', 'devolvido'], {
     required_error: 'Selecciona o que foi feito com a viatura.',
   }),
+  estacaoId: z.string({ required_error: 'Selecciona a estação.' }).min(1, 'Selecciona a estação.'),
   dataEvento: z.string().min(1, 'A data é obrigatória'),
   motivo: z.string().optional(),
   valorDivida: z
@@ -81,13 +90,20 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   viaturaId,
 }) => {
   const fecharMutation = useFecharContratoTVDE();
+  const { data: estacoes = [] } = useEstacoes();
   const { user } = useAuth();
   const responsavelNome =
     (user?.user_metadata?.nome as string | undefined) ?? user?.email ?? 'Responsável';
 
   const form = useForm<FormInput>({
     resolver: zodResolver(schema),
-    defaultValues: { tipoEvento: undefined, dataEvento: '', motivo: '', valorDivida: '' },
+    defaultValues: {
+      tipoEvento: undefined,
+      estacaoId: undefined,
+      dataEvento: '',
+      motivo: '',
+      valorDivida: '',
+    },
   });
 
   // Registar a recolha (km/combustível/fotos) já no fecho — evita ter de ir
@@ -373,6 +389,7 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
       matricula,
       viaturaId,
       tipoEvento: values.tipoEvento,
+      estacaoId: values.estacaoId,
       dataEvento: new Date(values.dataEvento).toISOString(),
       motivo: values.motivo,
       valorDivida: values.valorDivida,
@@ -460,6 +477,33 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
                   {form.formState.errors.tipoEvento && (
                     <p className="text-sm text-destructive">
                       {form.formState.errors.tipoEvento.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="estacaoId">Estação *</Label>
+                  <Select
+                    value={form.watch('estacaoId')}
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      form.setValue('estacaoId', v, { shouldValidate: true });
+                    }}
+                  >
+                    <SelectTrigger id="estacaoId" className="bg-background">
+                      <SelectValue placeholder="Selecciona a estação" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {estacoes.map((e) => (
+                        <SelectItem key={e.id} value={e.id}>
+                          {e.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {form.formState.errors.estacaoId && (
+                    <p className="text-sm text-destructive">
+                      {form.formState.errors.estacaoId.message}
                     </p>
                   )}
                 </div>

@@ -182,7 +182,10 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
             uploaded_by: user?.id,
             tipo_inspecao: 'checkout',
           }));
-          await supabase.from('assistencia_anexos').insert(anexosSaida);
+          const { error: anexosSaidaError } = await supabase
+            .from('assistencia_anexos')
+            .insert(anexosSaida);
+          if (anexosSaidaError) throw anexosSaidaError;
 
           const { data: novoDano, error: danoError } = await supabase
             .from('viatura_danos')
@@ -221,7 +224,10 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
             }
 
             if (fotosDano.length > 0) {
-              await supabase.from('viatura_dano_fotos').insert(fotosDano);
+              const { error: fotosDanoError } = await supabase
+                .from('viatura_dano_fotos')
+                .insert(fotosDano);
+              if (fotosDanoError) throw fotosDanoError;
             }
           }
         }
@@ -303,10 +309,11 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
         // 6 + 7 + 8. Viatura, reassociação e log (apenas se não for edit)
         if (!isEditMode) {
           const viaturaOriginalStatus = motorista?.id ? 'em_uso' : 'disponivel';
-          await supabase
+          const { error: viaturaUpdateError } = await supabase
             .from('viaturas')
             .update({ status: viaturaOriginalStatus, km_atual: kmFim })
             .eq('id', viatura.id);
+          if (viaturaUpdateError) throw viaturaUpdateError;
 
           // 7a. Reassociar motorista
           if (motorista?.id) {
@@ -320,20 +327,21 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
               .maybeSingle();
 
             if (!existingAssoc) {
-              await supabase.from('motorista_viaturas').insert({
+              const { error: reassocError } = await supabase.from('motorista_viaturas').insert({
                 motorista_id: motorista.id,
                 viatura_id: viatura.id,
                 data_inicio: new Date().toISOString().split('T')[0],
                 status: 'ativo',
                 tipo: 'normal',
               });
+              if (reassocError) throw reassocError;
             }
           }
 
           // 7b. Tratar viatura substituta
           if (ticket.viatura_substituta_id && motorista?.id) {
             if (substDecisao === 'devolver') {
-              await supabase
+              const { error: encerraSubstitutaError } = await supabase
                 .from('motorista_viaturas')
                 .update({
                   data_fim: new Date().toISOString().split('T')[0],
@@ -343,18 +351,22 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
                 .eq('motorista_id', motorista.id)
                 .eq('tipo', 'substituta')
                 .is('data_fim', null);
-              await supabase
+              if (encerraSubstitutaError) throw encerraSubstitutaError;
+
+              const { error: liberaSubstitutaError } = await supabase
                 .from('viaturas')
                 .update({ status: 'disponivel' })
                 .eq('id', ticket.viatura_substituta_id);
+              if (liberaSubstitutaError) throw liberaSubstitutaError;
             } else if (substDecisao === 'definitivo') {
-              await supabase
+              const { error: definitivoError } = await supabase
                 .from('motorista_viaturas')
                 .update({ tipo: 'normal' })
                 .eq('viatura_id', ticket.viatura_substituta_id)
                 .eq('motorista_id', motorista.id)
                 .eq('tipo', 'substituta')
                 .is('data_fim', null);
+              if (definitivoError) throw definitivoError;
             }
           }
 
@@ -369,12 +381,13 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
               ? ` - Descrição: ${closureData.descricao_reparacao}`
               : '');
 
-          await supabase.from('assistencia_mensagens').insert({
+          const { error: mensagemError } = await supabase.from('assistencia_mensagens').insert({
             ticket_id: ticketId,
             autor_id: user?.id,
             mensagem: checkoutMessage,
             tipo: 'status_change',
           });
+          if (mensagemError) throw mensagemError;
         }
 
         toast({

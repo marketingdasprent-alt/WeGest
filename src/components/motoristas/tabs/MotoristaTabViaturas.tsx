@@ -199,13 +199,20 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       setViaturasDisponiveis(disponiveis);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      toast.error('Erro ao carregar dados de viaturas');
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error(
+        'Erro ao carregar dados de viaturas',
+        message ? { description: message } : undefined
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const viaturaAtual = associacoes.find((a) => a.status === 'ativo');
+  const associacoesAtivas = associacoes.filter((a) => a.status === 'ativo');
+  // Mais recente primeiro (associacoes já vem ordenado por data_inicio desc).
+  const viaturaAtual = associacoesAtivas[0];
+  const outrasAtivas = associacoesAtivas.slice(1);
   const historico = associacoes.filter((a) => a.status !== 'ativo');
 
   const getValidityStatus = (date: string | null | undefined) => {
@@ -287,7 +294,8 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       loadData();
     } catch (error) {
       console.error('Erro ao associar viatura:', error);
-      toast.error('Erro ao associar viatura');
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error('Erro ao associar viatura', message ? { description: message } : undefined);
     } finally {
       setIsSubmitting(false);
     }
@@ -320,7 +328,8 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       loadData();
     } catch (error) {
       console.error('Erro ao atualizar:', error);
-      toast.error('Erro ao atualizar dados');
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error('Erro ao atualizar dados', message ? { description: message } : undefined);
     } finally {
       setIsSubmitting(false);
     }
@@ -354,7 +363,8 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       loadData();
     } catch (error) {
       console.error('Erro ao desassociar viatura:', error);
-      toast.error('Erro ao desassociar viatura');
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error('Erro ao desassociar viatura', message ? { description: message } : undefined);
     } finally {
       setIsSubmitting(false);
     }
@@ -385,6 +395,22 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
 
   return (
     <div className="space-y-6">
+      {outrasAtivas.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-3 text-sm">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-amber-800 dark:text-amber-300">
+            <p className="font-medium">
+              Motorista com {associacoesAtivas.length} viaturas associadas em simultâneo
+            </p>
+            <p className="text-xs mt-0.5">
+              Só a mais recente ({viaturaAtual?.viatura.matricula}) aparece como "Viatura Atual".
+              Também activas: {outrasAtivas.map((a) => a.viatura.matricula).join(', ')}. Confirma se
+              as associações antigas devem ser encerradas manualmente.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Viatura Atual */}
       <SectionCard
         icon={<Car className="h-4 w-4" />}
