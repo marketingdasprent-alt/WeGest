@@ -107,11 +107,11 @@ const RentingGrupoForm = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { orgId } = useTenant();
-  const { hasPermission } = usePermissions();
+  const { canEdit } = usePermissions();
 
-  // Gerir grupos partilha a permissão de gerir viaturas (config de frota).
-  const podeGuardar = hasPermission(isNew ? 'viaturas_criar' : 'viaturas_editar');
-  const podeEliminar = hasPermission('viaturas_eliminar');
+  // Recurso dedicado "Grupos de viaturas" (nível Editar). Admins passam sempre.
+  const podeGuardar = canEdit('viaturas_grupos');
+  const podeEliminar = podeGuardar;
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);

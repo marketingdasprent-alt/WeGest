@@ -45,14 +45,14 @@ const RentingGrupos = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { orgId } = useTenant();
-  const { hasPermission } = usePermissions();
+  const { canEdit } = usePermissions();
   const navigate = useNavigate();
 
-  // Gerir grupos partilha a permissão de gerir viaturas (config de frota).
-  // Admins passam sempre; gestores precisam do recurso correspondente.
-  const podeCriar = hasPermission('viaturas_criar');
-  const podeEditar = hasPermission('viaturas_editar');
-  const podeEliminar = hasPermission('viaturas_eliminar');
+  // Recurso dedicado "Grupos de viaturas" (nível Editar). Admins passam sempre.
+  const podeGerir = canEdit('viaturas_grupos');
+  const podeCriar = podeGerir;
+  const podeEditar = podeGerir;
+  const podeEliminar = podeGerir;
 
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<RentingGrupo | null>(null);
