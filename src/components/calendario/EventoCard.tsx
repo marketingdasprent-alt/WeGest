@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import type { CalendarioEvento } from '@/pages/Calendario';
 import { useGerarTokenRealizacao } from '@/hooks/useRealizacaoToken';
 import { getEventoAcao } from './eventoAcoes';
+import { TIPO_LABELS, TIPO_BORDER_COLORS } from './eventoTipoConfig';
 
 interface Props {
   evento: CalendarioEvento;
@@ -16,28 +17,6 @@ interface Props {
   onAbrirCheckin?: (e: CalendarioEvento) => void;
   canEdit: boolean;
 }
-
-const TIPO_LABELS: Record<string, string> = {
-  entrega: 'Entrega',
-  recolha: 'Recolha',
-  devolucao: 'Devolução',
-  troca: 'Troca',
-  upgrade: 'Upgrade',
-  lista_espera: 'Lista de Espera',
-  transferencia: 'Transferência',
-  slot: 'Slot',
-};
-
-const TIPO_COLORS: Record<string, string> = {
-  entrega: 'border-l-green-500',
-  recolha: 'border-l-blue-500',
-  devolucao: 'border-l-orange-500',
-  troca: 'border-l-purple-500',
-  upgrade: 'border-l-yellow-500',
-  lista_espera: 'border-l-pink-500',
-  transferencia: 'border-l-cyan-500',
-  slot: 'border-l-amber-500',
-};
 
 export function formatMatricula(val: string): string {
   const clean = val.replace(/[-\s]/g, '').toUpperCase();
@@ -75,7 +54,7 @@ export const EventoCard: React.FC<Props> = ({
     <div
       className={cn(
         'border border-l-4 rounded-lg p-3 bg-card cursor-pointer hover:bg-muted/50 transition-colors',
-        TIPO_COLORS[evento.tipo] || TIPO_COLORS.entrega
+        TIPO_BORDER_COLORS[evento.tipo] || TIPO_BORDER_COLORS.entrega
       )}
       onClick={() => onDetails(evento)}
     >
