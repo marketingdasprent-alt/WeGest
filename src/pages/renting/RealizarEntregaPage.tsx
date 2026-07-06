@@ -78,6 +78,9 @@ interface RascunhoCache {
 
 const cacheKey = (token: string) => `realizar-rascunho-${token}`;
 
+const tipoLabel = (tipo: 'entrega' | 'recolha' | 'troca' | undefined): string =>
+  tipo === 'entrega' ? 'Entrega' : tipo === 'troca' ? 'Troca' : 'Recolha';
+
 const fileToDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -339,7 +342,10 @@ const RealizarEntregaPage = () => {
         return;
       }
       const tmpl = { id: tmplId };
-      const isEntrega = info.tipo === 'entrega';
+      // Troca trata-se como entrega para efeitos de folha/km/combustível — é
+      // a viatura nova que fica com o motorista, dados dela é que interessa
+      // registar (a antiga já teve a sua própria entrega no passado).
+      const isEntrega = info.tipo === 'entrega' || info.tipo === 'troca';
       // Na pré-visualização, as fotos ainda não estão na BD — passa-as como
       // data URLs para aparecerem na folha. No print (após confirmar) já estão
       // gravadas como dano, por isso não as duplicamos aqui.
@@ -377,7 +383,7 @@ const RealizarEntregaPage = () => {
           assinatura_motorista: sigs.motorista ?? '',
           assinatura_responsavel: sigs.responsavel ?? '',
           responsavel_nome: responsavelNome,
-          momento_responsavel: info.tipo === 'entrega' ? 'Entregue por' : 'Recolhido por',
+          momento_responsavel: isEntrega ? 'Entregue por' : 'Recolhido por',
           ...(contexto?.empresaData ? { empresaData: contexto.empresaData } : {}),
         },
         viaturaId: contexto?.viaturaId ?? undefined,
@@ -460,7 +466,7 @@ const RealizarEntregaPage = () => {
     // Paths já enviados ao storage — para limpar em caso de falha e não
     // deixar ficheiros órfãos (upload a meio falhou ou o insert rebentou).
     const uploadedPaths: string[] = [];
-    const isEntrega = info.tipo === 'entrega';
+    const isEntrega = info.tipo === 'entrega' || info.tipo === 'troca';
     try {
       // Gravar km/combustível no contrato — sem isto a Recolha nunca teria
       // como saber o km/combustível de Saída registados na Entrega (ver
@@ -587,9 +593,7 @@ const RealizarEntregaPage = () => {
         <Card className="border-emerald-500/40 bg-emerald-500/5">
           <CardContent className="p-6 text-center space-y-3">
             <CheckCircle2 className="h-12 w-12 mx-auto text-emerald-600" />
-            <h2 className="font-semibold text-lg">
-              {info?.tipo === 'entrega' ? 'Entrega' : 'Recolha'} confirmada
-            </h2>
+            <h2 className="font-semibold text-lg">{tipoLabel(info?.tipo)} confirmada</h2>
             <p className="text-sm text-muted-foreground">
               O evento ficou marcado como realizado. Já podes fechar esta janela.
             </p>
@@ -631,13 +635,14 @@ const RealizarEntregaPage = () => {
   }
 
   const matricula = formatMatricula(info.matricula);
+  const matriculaDevolver = info.matricula_devolver ? formatMatricula(info.matricula_devolver) : null;
   const isPending = uploading || realizar.isPending;
 
   return (
     <div className="max-w-2xl mx-auto px-4 pt-4">
       <StickyPageHeader
-        title={info.tipo === 'entrega' ? 'Realizar Entrega' : 'Realizar Recolha'}
-        description={`${matricula}${info.cidade ? ` · ${info.cidade}` : ''} · ${format(
+        title={`Realizar ${tipoLabel(info.tipo)}`}
+        description={`${info.tipo === 'troca' && matriculaDevolver ? `${matriculaDevolver} ↔ ${matricula}` : matricula}${info.cidade ? ` · ${info.cidade}` : ''} · ${format(
           new Date(info.data_inicio),
           "dd/MM 'às' HH:mm",
           { locale: pt }
@@ -651,6 +656,16 @@ const RealizarEntregaPage = () => {
       </StickyPageHeader>
 
       <div className="space-y-4 pb-4">
+        {info.tipo === 'troca' && matriculaDevolver && (
+          <Card className="border-amber-500/40 bg-amber-500/5">
+            <CardContent className="p-4 text-sm">
+              <span className="font-medium">Troca de viatura:</span> devolver{' '}
+              <span className="font-semibold">{matriculaDevolver}</span> e entregar{' '}
+              <span className="font-semibold">{matricula}</span>. Os dados abaixo (km,
+              combustível, danos) referem-se à viatura entregue ({matricula}).
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardContent className="p-4 space-y-4">
             <div className="space-y-2">
@@ -817,7 +832,7 @@ const RealizarEntregaPage = () => {
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
               <Label className="m-0">
-                Folha de Danos ({info.tipo === 'entrega' ? 'Entrega' : 'Recolha'})
+                Folha de Danos ({tipoLabel(info.tipo)})
               </Label>
             </div>
             <p className="text-sm text-muted-foreground">

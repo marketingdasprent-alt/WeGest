@@ -42,7 +42,8 @@ interface SectionViaturaProps {
   onViaturaChange?: (viaturaId: string) => void;
 }
 
-const viaturaLabel = (v: ViaturaBasic | ViaturaComGrupo) => `${v.matricula} — ${v.marca} ${v.modelo}`;
+const viaturaLabel = (v: ViaturaBasic | ViaturaComGrupo) =>
+  `${v.matricula} — ${v.marca} ${v.modelo}`;
 
 export const SectionViatura: React.FC<SectionViaturaProps> = ({
   form,
@@ -135,7 +136,10 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
                       align="start"
                     >
                       <Command>
-                        <CommandInput placeholder="Pesquisar matrícula, marca, modelo..." className="h-9" />
+                        <CommandInput
+                          placeholder="Pesquisar matrícula, marca, modelo..."
+                          className="h-9"
+                        />
                         <CommandList>
                           <CommandEmpty>Nenhuma viatura encontrada.</CommandEmpty>
                           {semAgrupamento ? (
