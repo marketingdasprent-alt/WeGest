@@ -202,7 +202,10 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
     }
   };
 
-  const viaturaAtual = associacoes.find((a) => a.status === 'ativo');
+  const associacoesAtivas = associacoes.filter((a) => a.status === 'ativo');
+  // Mais recente primeiro (associacoes já vem ordenado por data_inicio desc).
+  const viaturaAtual = associacoesAtivas[0];
+  const outrasAtivas = associacoesAtivas.slice(1);
   const historico = associacoes.filter((a) => a.status !== 'ativo');
 
   const getValidityStatus = (date: string | null | undefined) => {
@@ -382,6 +385,22 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
 
   return (
     <div className="space-y-6">
+      {outrasAtivas.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-3 text-sm">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-amber-800 dark:text-amber-300">
+            <p className="font-medium">
+              Motorista com {associacoesAtivas.length} viaturas associadas em simultâneo
+            </p>
+            <p className="text-xs mt-0.5">
+              Só a mais recente ({viaturaAtual?.viatura.matricula}) aparece como "Viatura Atual".
+              Também activas: {outrasAtivas.map((a) => a.viatura.matricula).join(', ')}. Confirma se
+              as associações antigas devem ser encerradas manualmente.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Viatura Atual */}
       <SectionCard
         icon={<Car className="h-4 w-4" />}

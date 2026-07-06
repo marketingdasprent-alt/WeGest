@@ -16,12 +16,15 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFecharContratoTVDE } from '@/hooks/useContratosRenting';
+import { useEstacoes } from '@/hooks/useEstacoes';
 
 const schema = z.object({
   tipoEvento: z.enum(['recolhido', 'devolvido'], {
     required_error: 'Selecciona o que foi feito com a viatura.',
   }),
+  estacaoId: z.string({ required_error: 'Selecciona a estação.' }).min(1, 'Selecciona a estação.'),
   dataEvento: z.string().min(1, 'A data é obrigatória'),
   motivo: z.string().optional(),
   valorDivida: z
@@ -51,10 +54,17 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   matricula,
 }) => {
   const fecharMutation = useFecharContratoTVDE();
+  const { data: estacoes = [] } = useEstacoes();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { tipoEvento: undefined, dataEvento: '', motivo: '', valorDivida: '' },
+    defaultValues: {
+      tipoEvento: undefined,
+      estacaoId: undefined,
+      dataEvento: '',
+      motivo: '',
+      valorDivida: '',
+    },
   });
 
   const onSubmit = async (values: FormValues) => {
@@ -65,6 +75,7 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
       motoristaId,
       matricula,
       tipoEvento: parsed.tipoEvento,
+      estacaoId: parsed.estacaoId,
       dataEvento: new Date(parsed.dataEvento).toISOString(),
       motivo: parsed.motivo,
       valorDivida: parsed.valorDivida,
@@ -115,6 +126,32 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
             </RadioGroup>
             {form.formState.errors.tipoEvento && (
               <p className="text-sm text-destructive">{form.formState.errors.tipoEvento.message}</p>
+            )}
+          </div>
+
+          {/* Estação onde a viatura fica */}
+          <div className="space-y-2">
+            <Label htmlFor="estacaoId">Estação *</Label>
+            <Select
+              value={form.watch('estacaoId')}
+              onValueChange={(v) => {
+                if (!v) return;
+                form.setValue('estacaoId', v, { shouldValidate: true });
+              }}
+            >
+              <SelectTrigger id="estacaoId" className="bg-background">
+                <SelectValue placeholder="Selecciona a estação" />
+              </SelectTrigger>
+              <SelectContent>
+                {estacoes.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {form.formState.errors.estacaoId && (
+              <p className="text-sm text-destructive">{form.formState.errors.estacaoId.message}</p>
             )}
           </div>
 

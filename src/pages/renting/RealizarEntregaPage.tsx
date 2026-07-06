@@ -28,6 +28,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useConsumirTokenRealizacao, useRealizarFromToken } from '@/hooks/useRealizacaoToken';
 import { formatMatricula } from '@/components/calendario/calendarioUtils';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
+import { resolverCondutor } from './resolverCondutor';
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
 import {
   AssinaturasHandoverSection,
@@ -164,8 +165,6 @@ const RealizarEntregaPage = () => {
       // condutor é um cliente-tipo-condutor (cliente_id) OU um motorista
       // parceiro TVDE (motorista_id) — XOR na tabela. Resolver do lado certo.
       // Nunca o locatário/empresa. Sem condutor, fica vazio para assinar à mão.
-      let condutorNome = '';
-      let condutorEmail = '';
       const { data: cond } = await supabase
         .from('contrato_condutores')
         .select('cliente_id, motorista_id, is_principal')
@@ -173,31 +172,36 @@ const RealizarEntregaPage = () => {
         .order('is_principal', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      let clienteCondutor: { nome: string; email: string | null } | null = null;
+      let motoristaCondutor: { nome: string; email: string | null } | null = null;
       if (cond?.cliente_id) {
         const { data: cli } = await supabase
           .from('clientes')
           .select('nome, nome_comercial, email')
           .eq('id', cond.cliente_id)
           .maybeSingle();
-        if (cli) {
-          condutorNome = cli.nome || cli.nome_comercial || '';
-          condutorEmail = cli.email || '';
-        }
+        if (cli) clienteCondutor = { nome: cli.nome || cli.nome_comercial || '', email: cli.email };
       } else if (cond?.motorista_id) {
         const { data: mot } = await supabase
           .from('motoristas_ativos')
           .select('nome, email')
           .eq('id', cond.motorista_id)
           .maybeSingle();
-        if (mot?.nome) condutorNome = mot.nome;
-        condutorEmail = mot?.email || '';
+        if (mot?.nome) motoristaCondutor = { nome: mot.nome, email: mot.email };
       }
+
       // Sem condutor no contrato → o motorista atribuído à viatura (TVDE).
-      if (!condutorNome && data.viatura_id) {
+      // Só a associação ATIVA — senão qualquer motorista histórico daquela
+      // viatura (status='encerrado') podia ser apanhado por engano.
+      let motoristaViaturaAtivo: { nome: string; email: string | null } | null = null;
+      if (!clienteCondutor && !motoristaCondutor && data.viatura_id) {
         const { data: mv } = await supabase
           .from('motorista_viaturas')
           .select('motorista_id')
           .eq('viatura_id', data.viatura_id)
+          .eq('status', 'ativo')
+          .order('data_inicio', { ascending: false })
           .limit(1)
           .maybeSingle();
         if (mv?.motorista_id) {
@@ -206,10 +210,17 @@ const RealizarEntregaPage = () => {
             .select('nome, email')
             .eq('id', mv.motorista_id)
             .maybeSingle();
-          if (mot?.nome) condutorNome = mot.nome;
-          condutorEmail = mot?.email || '';
+          if (mot?.nome) motoristaViaturaAtivo = { nome: mot.nome, email: mot.email };
         }
       }
+
+      const { nome: condutorNome, email: condutorEmail } = resolverCondutor({
+        condutorContrato:
+          clienteCondutor || motoristaCondutor
+            ? { cliente: clienteCondutor, motorista: motoristaCondutor }
+            : null,
+        motoristaViaturaAtivo,
+      });
 
       // Cliente/locatário → {{cliente_nome}}.
       let clienteNome = '';
@@ -621,7 +632,7 @@ const RealizarEntregaPage = () => {
   const isPending = uploading || realizar.isPending;
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto px-4 pt-4">
       <StickyPageHeader
         title={info.tipo === 'entrega' ? 'Realizar Entrega' : 'Realizar Recolha'}
         description={`${matricula}${info.cidade ? ` · ${info.cidade}` : ''} · ${format(
@@ -637,7 +648,7 @@ const RealizarEntregaPage = () => {
         </Button>
       </StickyPageHeader>
 
-      <div className="p-4 space-y-4">
+      <div className="space-y-4 pb-4">
         <Card>
           <CardContent className="p-4 space-y-4">
             <div className="space-y-2">

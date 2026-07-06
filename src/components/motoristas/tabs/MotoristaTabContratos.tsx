@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SectionCard } from '@/components/ui/section-card';
+import { Car } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useEmpresas } from '@/hooks/useEmpresas';
@@ -65,6 +66,22 @@ interface Contrato {
   viatura_id: string | null;
   viaturas: { matricula: string; marca: string; modelo: string } | null;
 }
+
+interface ContratoRentingResumo {
+  id: string;
+  codigo: number | null;
+  data_inicio: string;
+  data_fim: string | null;
+  estado_operacional: string;
+  viaturas: { matricula: string; marca: string; modelo: string } | null;
+}
+
+const ESTADO_RENTING_LABEL: Record<string, string> = {
+  agendado: 'Agendado',
+  em_curso: 'Em curso',
+  devolvido: 'Devolvido',
+  cancelado: 'Cancelado',
+};
 
 interface MotoristaTabContratosProps {
   motorista: Motorista;
@@ -96,6 +113,8 @@ export function MotoristaTabContratos({
     { id: string; tipo: string; url: string; nome_ficheiro: string; created_at: string }[]
   >([]);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const [contratosRenting, setContratosRenting] = useState<ContratoRentingResumo[]>([]);
+  const [loadingRenting, setLoadingRenting] = useState(true);
 
   const loadMedia = async (contratoId: string) => {
     setMediaLoading(true);
@@ -115,6 +134,7 @@ export function MotoristaTabContratos({
 
   useEffect(() => {
     loadContratos();
+    loadContratosRenting();
   }, [motorista.id]);
 
   // Sincronizar inputs quando os dados do motorista mudarem (ex: após um save)
@@ -139,6 +159,39 @@ export function MotoristaTabContratos({
       toast.error('Erro ao carregar contratos');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadContratosRenting = async () => {
+    try {
+      setLoadingRenting(true);
+      const { data: motoristaAtivo, error: errMot } = await supabase
+        .from('motoristas_ativos')
+        .select('cliente_id')
+        .eq('id', motorista.id)
+        .maybeSingle();
+      if (errMot) throw errMot;
+
+      if (!motoristaAtivo?.cliente_id) {
+        setContratosRenting([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('contratos_renting')
+        .select(
+          'id, codigo, data_inicio, data_fim, estado_operacional, viaturas:viatura_id(matricula, marca, modelo)'
+        )
+        .eq('cliente_id', motoristaAtivo.cliente_id)
+        .is('deleted_at', null)
+        .order('data_inicio', { ascending: false });
+
+      if (error) throw error;
+      setContratosRenting((data || []) as ContratoRentingResumo[]);
+    } catch (error) {
+      console.error('Erro ao carregar contratos de aluguer:', error);
+    } finally {
+      setLoadingRenting(false);
     }
   };
 
@@ -846,6 +899,72 @@ export function MotoristaTabContratos({
           </TableBody>
         </Table>
       </SectionCard>
+
+      {/* Contratos de Aluguer (contratos_renting) */}
+      {(loadingRenting || contratosRenting.length > 0) && (
+        <SectionCard
+          icon={<Car className="h-4 w-4" />}
+          title="Contratos de Aluguer"
+          headerClassName="bg-sky-50 dark:bg-sky-950/30"
+        >
+          {loadingRenting ? (
+            <div className="text-sm text-muted-foreground py-4 text-center">A carregar...</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-28">Nº</TableHead>
+                  <TableHead>Viatura</TableHead>
+                  <TableHead>Início</TableHead>
+                  <TableHead>Fim</TableHead>
+                  <TableHead>Estado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {contratosRenting.map((contrato) => (
+                  <TableRow
+                    key={contrato.id}
+                    className={
+                      contrato.estado_operacional === 'devolvido' ||
+                      contrato.estado_operacional === 'cancelado'
+                        ? 'opacity-60'
+                        : ''
+                    }
+                  >
+                    <TableCell>
+                      {contrato.codigo != null ? (
+                        <Badge variant="outline" className="font-mono text-xs">
+                          CR-{String(contrato.codigo).padStart(4, '0')}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {contrato.viaturas ? (
+                        <div className="text-sm">
+                          {contrato.viaturas.matricula} — {contrato.viaturas.marca}{' '}
+                          {contrato.viaturas.modelo}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">{formatDate(contrato.data_inicio)}</TableCell>
+                    <TableCell className="text-sm">{formatDate(contrato.data_fim)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {ESTADO_RENTING_LABEL[contrato.estado_operacional] ||
+                          contrato.estado_operacional}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </SectionCard>
+      )}
 
       {/* Dialog de renovação */}
       <Dialog

@@ -286,13 +286,13 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
       }
       const eventoId = evResult.data.id;
 
-      // 2. Associar viatura ao motorista
-      const { error: mvErr } = await supabase.from('motorista_viaturas').insert({
-        motorista_id: motoristaId,
-        viatura_id: viaturaId,
-        data_inicio: data,
-        status: 'ativo',
-        observacoes: observacoes.trim() || null,
+      // 2. Associar viatura ao motorista (RPC — evita falha silenciosa para
+      // quem só tem 'calendario_recolhas' e não 'motoristas_gestao')
+      const { error: mvErr } = await supabase.rpc('fn_checkin_abrir_motorista_viatura', {
+        p_motorista_id: motoristaId,
+        p_viatura_id: viaturaId,
+        p_data_inicio: data,
+        p_observacoes: observacoes.trim() || null,
       });
       if (mvErr) throw mvErr;
 

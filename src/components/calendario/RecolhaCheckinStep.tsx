@@ -241,22 +241,13 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
       }
       const eventoId = evResult.data.id;
 
-      // 2. Close motorista_viaturas association
-      if (motoristaId) {
-        await supabase
-          .from('motorista_viaturas')
-          .update({ status: 'encerrado', data_fim: data })
-          .eq('motorista_id', motoristaId)
-          .eq('viatura_id', viaturaId)
-          .eq('status', 'ativo');
-      } else {
-        // devolucao sem motorista identificado — fechar por viatura_id
-        await supabase
-          .from('motorista_viaturas')
-          .update({ status: 'encerrado', data_fim: data })
-          .eq('viatura_id', viaturaId)
-          .eq('status', 'ativo');
-      }
+      // 2. Close motorista_viaturas association (RPC — evita falha silenciosa
+      // para quem só tem 'calendario_recolhas' e não 'motoristas_gestao')
+      await supabase.rpc('fn_checkin_fechar_motorista_viatura', {
+        p_motorista_id: motoristaId || null,
+        p_viatura_id: viaturaId,
+        p_data_fim: data,
+      });
 
       // 3. Viatura status
       await supabase

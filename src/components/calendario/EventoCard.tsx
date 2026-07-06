@@ -1,15 +1,19 @@
 import React from 'react';
-import { CheckCircle2, Pencil, Trash2, Clock, User, MessageSquareText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { CheckCircle2, Pencil, Trash2, Clock, MessageSquareText, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import type { CalendarioEvento } from '@/pages/Calendario';
+import { useGerarTokenRealizacao } from '@/hooks/useRealizacaoToken';
+import { getEventoAcao } from './eventoAcoes';
 
 interface Props {
   evento: CalendarioEvento;
   onEdit: (e: CalendarioEvento) => void;
   onDelete: (id: string) => void;
   onDetails: (e: CalendarioEvento) => void;
+  onAbrirCheckin?: (e: CalendarioEvento) => void;
   canEdit: boolean;
 }
 
@@ -40,7 +44,33 @@ export function formatMatricula(val: string): string {
   return clean.match(/.{1,2}/g)?.join('-') || clean;
 }
 
-export const EventoCard: React.FC<Props> = ({ evento, onEdit, onDelete, onDetails, canEdit }) => {
+export const EventoCard: React.FC<Props> = ({
+  evento,
+  onEdit,
+  onDelete,
+  onDetails,
+  onAbrirCheckin,
+  canEdit,
+}) => {
+  const navigate = useNavigate();
+  const gerarToken = useGerarTokenRealizacao();
+
+  const acao = getEventoAcao(evento);
+  const podeRealizarRenting = acao === 'realizar-renting';
+  const podeAbrirCheckin = !!onAbrirCheckin && acao === 'checkin-legacy';
+
+  const handleAbrirRenting = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    gerarToken.mutate(evento.id, {
+      onSuccess: (token) => navigate(`/realizar/${token}`),
+    });
+  };
+
+  const handleAbrirCheckinClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAbrirCheckin?.(evento);
+  };
+
   return (
     <div
       className={cn(
@@ -96,12 +126,6 @@ export const EventoCard: React.FC<Props> = ({ evento, onEdit, onDelete, onDetail
               <span className="truncate">{evento.descricao}</span>
             </div>
           )}
-          {evento.profiles?.nome && (
-            <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-              <User className="h-3 w-3" />
-              <span>{evento.profiles.nome}</span>
-            </div>
-          )}
           {evento.realizador?.nome && evento.realizado_em && (
             <div className="flex items-center gap-1 mt-1 text-xs text-emerald-700 dark:text-emerald-300">
               <CheckCircle2 className="h-3 w-3" />
@@ -110,6 +134,18 @@ export const EventoCard: React.FC<Props> = ({ evento, onEdit, onDelete, onDetail
                 {format(new Date(evento.realizado_em), "dd/MM 'às' HH:mm")}
               </span>
             </div>
+          )}
+          {(podeRealizarRenting || podeAbrirCheckin) && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-2 h-7 gap-1.5 text-xs"
+              disabled={gerarToken.isPending}
+              onClick={podeRealizarRenting ? handleAbrirRenting : handleAbrirCheckinClick}
+            >
+              <ExternalLink className="h-3 w-3" />
+              {evento.tipo === 'entrega' ? 'Ir para Entrega' : 'Ir para Check-in'}
+            </Button>
           )}
         </div>
         {canEdit && (
