@@ -196,7 +196,8 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       setViaturasDisponiveis(disponiveis);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      toast.error('Erro ao carregar dados de viaturas');
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error('Erro ao carregar dados de viaturas', message ? { description: message } : undefined);
     } finally {
       setLoading(false);
     }
@@ -287,7 +288,8 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       loadData();
     } catch (error) {
       console.error('Erro ao associar viatura:', error);
-      toast.error('Erro ao associar viatura');
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error('Erro ao associar viatura', message ? { description: message } : undefined);
     } finally {
       setIsSubmitting(false);
     }
@@ -320,7 +322,8 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       loadData();
     } catch (error) {
       console.error('Erro ao atualizar:', error);
-      toast.error('Erro ao atualizar dados');
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error('Erro ao atualizar dados', message ? { description: message } : undefined);
     } finally {
       setIsSubmitting(false);
     }
@@ -354,7 +357,8 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       loadData();
     } catch (error) {
       console.error('Erro ao desassociar viatura:', error);
-      toast.error('Erro ao desassociar viatura');
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error('Erro ao desassociar viatura', message ? { description: message } : undefined);
     } finally {
       setIsSubmitting(false);
     }
