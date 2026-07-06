@@ -70,6 +70,7 @@ export function useContratosRenting(options: UseContratosRentingOptions = {}) {
         .from('contratos_renting')
         .select(SELECT_COLUMNS)
         .is('deleted_at', null)
+        .is('substituido_em', null)
         .order('data_inicio', { ascending: false })
         .limit(limit);
 
@@ -220,7 +221,7 @@ export function useContratoRenting(id: string | null | undefined) {
  *  último é um objecto plain (tem .message, mas NÃO é instanceof Error),
  *  por isso um check `error instanceof Error` sozinho falha sempre para
  *  erros do Supabase e mascara a causa real atrás de "Erro inesperado". */
-function errorMessage(error: unknown): string {
+export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (error && typeof error === 'object' && 'message' in error) {
     const msg = (error as { message?: unknown }).message;
@@ -229,7 +230,7 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
-function isConflictError(error: unknown): boolean {
+export function isConflictError(error: unknown): boolean {
   if (!error) return false;
   const code = (error as { code?: string }).code;
   if (code === '23P01') return true; // exclusion_violation
@@ -240,7 +241,7 @@ function isConflictError(error: unknown): boolean {
   );
 }
 
-function contratoErrorMessage(error: unknown): { title: string; description: string } {
+export function contratoErrorMessage(error: unknown): { title: string; description: string } {
   if (isConflictError(error)) {
     return {
       title: 'Conflito de disponibilidade',

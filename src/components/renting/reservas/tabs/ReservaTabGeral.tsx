@@ -58,6 +58,7 @@ import { AlertTriangle } from 'lucide-react';
 import { SLOT_ESTADOS_PERMITIDOS, SLOT_ESTADO_LABELS } from '@/types/reserva';
 import type { ReservaFormValues } from '../reservaDialog.schema';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
+import { gruposComViatura, filtrarViaturasPorGrupo } from '../filtrarViaturasPorGrupo';
 import type { Estacao } from '@/hooks/useEstacoes';
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Motorista } from '@/types/motorista';
@@ -201,19 +202,13 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
     [viaturas, isSlot]
   );
 
-  const gruposComViatura = useMemo(() => {
-    const idsComViatura = new Set(
-      viaturasDoRegime.map((v) => v.grupo_id).filter((id): id is string => !!id)
-    );
-    return grupos.filter((g) => idsComViatura.has(g.id));
-  }, [viaturasDoRegime, grupos]);
+  const gruposDisponiveisNoFiltro = useMemo(
+    () => gruposComViatura(viaturasDoRegime, grupos),
+    [viaturasDoRegime, grupos]
+  );
 
   const viaturasFiltradas = useMemo(
-    () =>
-      viaturasDoRegime.filter((v) => {
-        if (gruposFiltro.size > 0 && (!v.grupo_id || !gruposFiltro.has(v.grupo_id))) return false;
-        return true;
-      }),
+    () => filtrarViaturasPorGrupo(viaturasDoRegime, gruposFiltro),
     [viaturasDoRegime, gruposFiltro]
   );
 
@@ -718,12 +713,12 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                         className="w-[var(--radix-popover-trigger-width)] p-0"
                         align="start"
                       >
-                        {gruposComViatura.length > 1 && (
+                        {gruposDisponiveisNoFiltro.length > 1 && (
                           <div className="border-b p-2 space-y-1.5 max-h-32 overflow-y-auto">
                             <p className="text-[11px] font-semibold uppercase text-muted-foreground px-1">
                               Filtrar por grupo
                             </p>
-                            {gruposComViatura.map((g) => (
+                            {gruposDisponiveisNoFiltro.map((g) => (
                               <label
                                 key={g.id}
                                 className="flex items-center gap-2 px-1 py-0.5 text-sm cursor-pointer hover:bg-muted/50 rounded-sm"
