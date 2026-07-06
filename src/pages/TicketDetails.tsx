@@ -167,6 +167,7 @@ const TicketDetails = () => {
   const [viaturasDisponiveis, setViaturasDisponiveis] = useState<ViaturaComGrupo[]>([]);
   const [substituteSearch, setSubstituteSearch] = useState('');
   const [assigningSubstitute, setAssigningSubstitute] = useState(false);
+  const [viaturaAvariadaGrupoId, setViaturaAvariadaGrupoId] = useState<string | null>(null);
 
   // Decisões de fecho
   const [closureDecisao, setClosureDecisao] = useState<'motorista' | 'empresa' | 'aberto' | null>(
@@ -282,6 +283,9 @@ const TicketDetails = () => {
         grupoNome: (v.renting_grupos as { nome: string } | null)?.nome ?? null,
       }))
     );
+
+    const { grupoIdAvariada } = await buscarContratoActivoEGrupo();
+    setViaturaAvariadaGrupoId(grupoIdAvariada);
   };
 
   const buscarContratoActivoEGrupo = async () => {
@@ -471,6 +475,7 @@ const TicketDetails = () => {
         open={showSubstituteModal}
         onOpenChange={setShowSubstituteModal}
         viaturasDisponiveis={viaturasDisponiveis}
+        grupoIdAvariada={viaturaAvariadaGrupoId}
         search={substituteSearch}
         onSearchChange={setSubstituteSearch}
         assigning={assigningSubstitute}
