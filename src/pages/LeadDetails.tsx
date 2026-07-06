@@ -600,9 +600,7 @@ const LeadDetails: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="text-sm text-muted-foreground mb-1 block">
-                      Licença TVDE
-                    </label>
+                    <label className="text-sm text-muted-foreground mb-1 block">Licença TVDE</label>
                     <div className="flex items-center gap-2">
                       {lead.tem_formacao_tvde === null ? (
                         <Badge
@@ -652,9 +650,7 @@ const LeadDetails: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="text-sm text-muted-foreground mb-1 block">
-                      Status Atual
-                    </label>
+                    <label className="text-sm text-muted-foreground mb-1 block">Status Atual</label>
                     <Badge
                       className={`
                       ${lead.status === 'novo' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30' : ''}
@@ -708,9 +704,7 @@ const LeadDetails: React.FC = () => {
                     {loadingNotes ? (
                       <div className="flex items-center justify-center py-8">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                        <span className="ml-2 text-muted-foreground">
-                          Carregando anotações...
-                        </span>
+                        <span className="ml-2 text-muted-foreground">Carregando anotações...</span>
                       </div>
                     ) : notes.length === 0 ? (
                       <div className="text-center py-8">
@@ -765,9 +759,7 @@ const LeadDetails: React.FC = () => {
                   </Button>
                   <div className="text-center py-8">
                     <Mail className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">
-                      Histórico de e-mails em desenvolvimento
-                    </p>
+                    <p className="text-muted-foreground">Histórico de e-mails em desenvolvimento</p>
                   </div>
                 </div>
               </TabsContent>
