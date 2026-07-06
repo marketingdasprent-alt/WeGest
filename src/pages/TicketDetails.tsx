@@ -13,6 +13,7 @@ import { TicketSubstitutaModal } from '@/components/assistencia/ticket/TicketSub
 import { TicketLegendaDialog } from '@/components/assistencia/ticket/TicketLegendaDialog';
 import { TicketHeader } from '@/components/assistencia/ticket/TicketHeader';
 import { TicketChat } from '@/components/assistencia/ticket/TicketChat';
+import { type ViaturaComGrupo } from '@/components/assistencia/ticket/agruparViaturasPorGrupo';
 import { useTicket } from '@/hooks/useTicket';
 import { useTicketMessages } from '@/hooks/useTicketMessages';
 import { useTicketClosure } from '@/hooks/useTicketClosure';
@@ -163,7 +164,7 @@ const TicketDetails = () => {
   // Substituta
   const [viaturaSubstituta, setViaturaSubstituta] = useState<Viatura | null>(null);
   const [showSubstituteModal, setShowSubstituteModal] = useState(false);
-  const [viaturasDisponiveis, setViaturasDisponiveis] = useState<Viatura[]>([]);
+  const [viaturasDisponiveis, setViaturasDisponiveis] = useState<ViaturaComGrupo[]>([]);
   const [substituteSearch, setSubstituteSearch] = useState('');
   const [assigningSubstitute, setAssigningSubstitute] = useState(false);
 
@@ -268,24 +269,83 @@ const TicketDetails = () => {
   const fetchViaturasDisponiveis = async () => {
     const { data } = await supabase
       .from('viaturas')
-      .select('id, matricula, marca, modelo, km_atual')
+      .select('id, matricula, marca, modelo, km_atual, grupo_id, renting_grupos(nome)')
       .eq('status', 'disponivel')
       .order('matricula');
-    setViaturasDisponiveis(data || []);
+    setViaturasDisponiveis(
+      (data || []).map((v) => ({
+        id: v.id,
+        matricula: v.matricula,
+        marca: v.marca,
+        modelo: v.modelo,
+        grupoId: v.grupo_id,
+        grupoNome: (v.renting_grupos as { nome: string } | null)?.nome ?? null,
+      }))
+    );
+  };
+
+  const buscarContratoActivoEGrupo = async () => {
+    if (!ticket || !motorista) return { contratoId: null, grupoIdAvariada: null };
+
+    const { data: viaturaAvariada } = await supabase
+      .from('viaturas')
+      .select('grupo_id')
+      .eq('id', ticket.viatura_id)
+      .maybeSingle();
+
+    const { data: motoristaAtivo } = await supabase
+      .from('motoristas_ativos')
+      .select('cliente_id')
+      .eq('id', motorista.id)
+      .maybeSingle();
+
+    let contratoId: string | null = null;
+    if (motoristaAtivo?.cliente_id) {
+      const { data: contrato } = await supabase
+        .from('contratos_renting')
+        .select('id')
+        .eq('cliente_id', motoristaAtivo.cliente_id)
+        .is('deleted_at', null)
+        .is('substituido_em', null)
+        .in('estado_operacional', ['agendado', 'em_curso'])
+        .limit(1)
+        .maybeSingle();
+      contratoId = contrato?.id ?? null;
+    }
+
+    return { contratoId, grupoIdAvariada: viaturaAvariada?.grupo_id ?? null };
   };
 
   const handleAtribuirSubstituta = async (viaturaId: string) => {
     if (!ticket || !motorista) return;
     try {
       setAssigningSubstitute(true);
-      await supabase.from('motorista_viaturas').insert({
-        motorista_id: motorista.id,
-        viatura_id: viaturaId,
-        data_inicio: new Date().toISOString().split('T')[0],
-        status: 'ativo',
-        tipo: 'substituta',
-      });
-      await supabase.from('viaturas').update({ status: 'em_uso' }).eq('id', viaturaId);
+
+      const { contratoId } = await buscarContratoActivoEGrupo();
+
+      if (contratoId) {
+        // Motorista tem contrato de aluguer/TVDE activo — versiona o
+        // contrato para a viatura substituta. A cascata já existente trata
+        // sozinha de motorista_viaturas, calendário e disponibilidade.
+        // Cast porque types.ts ainda não foi regenerado após nova RPC.
+        const { error: rpcError } = await (supabase as any).rpc('fn_trocar_viatura_avaria', {
+          p_contrato_id: contratoId,
+          p_viatura_nova_id: viaturaId,
+          p_motivo: `Avaria — ticket #${ticket.numero}`,
+        });
+        if (rpcError) throw rpcError;
+      } else {
+        // Sem contrato para versionar — mantém o comportamento anterior.
+        await supabase.from('motorista_viaturas').insert({
+          motorista_id: motorista.id,
+          viatura_id: viaturaId,
+          data_inicio: new Date().toISOString().split('T')[0],
+          status: 'ativo',
+          tipo: 'substituta',
+        });
+        await supabase.from('viaturas').update({ status: 'em_uso' }).eq('id', viaturaId);
+      }
+
       await supabase
         .from('assistencia_tickets')
         .update({ viatura_substituta_id: viaturaId })
