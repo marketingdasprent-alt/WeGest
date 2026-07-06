@@ -6,8 +6,10 @@ import { useToast } from '@/hooks/use-toast';
 export interface TokenRealizacaoInfo {
   evento_id: string;
   contrato_id: string;
-  tipo: 'entrega' | 'recolha';
+  tipo: 'entrega' | 'recolha' | 'troca';
   matricula: string;
+  /** Matrícula a devolver — só relevante em tipo='troca' (a viatura antiga). */
+  matricula_devolver: string | null;
   cidade: string | null;
   data_inicio: string;
 }
@@ -104,7 +106,7 @@ interface RealizarFromTokenArgs {
   token: string;
   eventoId: string;
   contratoId: string;
-  tipo: 'entrega' | 'recolha';
+  tipo: 'entrega' | 'recolha' | 'troca';
 }
 
 /**
@@ -134,7 +136,12 @@ export function useRealizarFromToken() {
       // contrato a box continuava a aparecer apesar de já estar realizado.
       qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
       toast({
-        title: vars.tipo === 'entrega' ? 'Entrega confirmada' : 'Recolha confirmada',
+        title:
+          vars.tipo === 'entrega'
+            ? 'Entrega confirmada'
+            : vars.tipo === 'troca'
+              ? 'Troca confirmada'
+              : 'Recolha confirmada',
         description: 'O evento ficou marcado como realizado.',
       });
     },

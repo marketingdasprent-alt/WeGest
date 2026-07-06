@@ -3,13 +3,10 @@ import { describe, it, expect } from 'vitest';
 import { getEventoAcao } from './eventoAcoes';
 
 /**
- * Regressão: evento tipo='troca' criado pela cascata de versionamento (upgrade/
- * downgrade) não tinha nenhum botão de ação no calendário — nem o caminho
- * renting (que só aceita entrega/recolha) nem o legacy (que exige
- * origem_tipo='contrato'/'movimento'). A troca gerava um card morto, sem
- * forma de confirmar fisicamente a operação. Fix: a cascata SQL deixou de
- * criar eventos tipo='troca' e passou a gerar recolha+entrega reais — este
- * teste fixa que ambos os tipos continuam acionáveis pelo caminho renting.
+ * Troca de viatura no mesmo grupo tarifário gera um único evento tipo='troca'
+ * em contrato_renting (2026-07-06) — accionável via token de deep-link, tal
+ * como entrega/recolha. Upgrade/downgrade (grupo diferente) continua a gerar
+ * recolha+entrega separados.
  */
 describe('getEventoAcao', () => {
   it('permite realizar entrega de contrato_renting não realizada', () => {
@@ -39,13 +36,13 @@ describe('getEventoAcao', () => {
     expect(acao).toBe('nenhuma');
   });
 
-  it('evento tipo=troca de contrato_renting não tem ação (sem caminho de realização)', () => {
+  it('permite realizar troca de contrato_renting não realizada', () => {
     const acao = getEventoAcao({
       origem_tipo: 'contrato_renting',
       tipo: 'troca',
       realizado_em: null,
     });
-    expect(acao).toBe('nenhuma');
+    expect(acao).toBe('realizar-renting');
   });
 
   it('permite abrir check-in legacy para recolha/devolução/troca de contrato', () => {

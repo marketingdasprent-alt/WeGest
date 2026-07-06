@@ -70,6 +70,7 @@ export function useContratosRenting(options: UseContratosRentingOptions = {}) {
         .from('contratos_renting')
         .select(SELECT_COLUMNS)
         .is('deleted_at', null)
+        .is('substituido_em', null)
         .order('data_inicio', { ascending: false })
         .limit(limit);
 
@@ -216,18 +217,31 @@ export function useContratoRenting(id: string | null | undefined) {
 // Tratamento de erros (overbooking + conflito com reserva)
 // ────────────────────────────────────────────────────────────
 
-function isConflictError(error: unknown): boolean {
+/** Extrai a mensagem de erro tanto de Error quanto de PostgrestError — este
+ *  último é um objecto plain (tem .message, mas NÃO é instanceof Error),
+ *  por isso um check `error instanceof Error` sozinho falha sempre para
+ *  erros do Supabase e mascara a causa real atrás de "Erro inesperado". */
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const msg = (error as { message?: unknown }).message;
+    if (typeof msg === 'string' && msg) return msg;
+  }
+  return String(error);
+}
+
+export function isConflictError(error: unknown): boolean {
   if (!error) return false;
   const code = (error as { code?: string }).code;
   if (code === '23P01') return true; // exclusion_violation
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   return (
     message.includes('contratos_no_overbooking') ||
     message.includes('Conflito: viatura já tem reserva')
   );
 }
 
-function contratoErrorMessage(error: unknown): { title: string; description: string } {
+export function contratoErrorMessage(error: unknown): { title: string; description: string } {
   if (isConflictError(error)) {
     return {
       title: 'Conflito de disponibilidade',
@@ -235,7 +249,7 @@ function contratoErrorMessage(error: unknown): { title: string; description: str
     };
   }
   const code = (error as { code?: string }).code;
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   if (code === '23505' && message.includes('uq_contratos_renting_reserva_id_active')) {
     return {
       title: 'Reserva já tem contrato',
@@ -243,8 +257,7 @@ function contratoErrorMessage(error: unknown): { title: string; description: str
         'Esta reserva já deu origem a um contrato. Abre o contrato existente em vez de criar outro.',
     };
   }
-  const description = error instanceof Error ? error.message : 'Erro inesperado';
-  return { title: 'Erro', description };
+  return { title: 'Erro', description: message };
 }
 
 // ────────────────────────────────────────────────────────────

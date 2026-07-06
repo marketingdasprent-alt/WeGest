@@ -123,7 +123,11 @@ export const EventoCard: React.FC<Props> = ({
               onClick={podeRealizarRenting ? handleAbrirRenting : handleAbrirCheckinClick}
             >
               <ExternalLink className="h-3 w-3" />
-              {evento.tipo === 'entrega' ? 'Ir para Entrega' : 'Ir para Check-in'}
+              {evento.tipo === 'entrega'
+                ? 'Ir para Entrega'
+                : evento.tipo === 'troca'
+                  ? 'Ir para Troca'
+                  : 'Ir para Check-in'}
             </Button>
           )}
         </div>
