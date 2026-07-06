@@ -34,6 +34,12 @@ BEGIN
     RAISE EXCEPTION 'p_viatura_nova_id é obrigatório.';
   END IF;
 
+  IF p_viatura_nova_id = (
+    SELECT viatura_id FROM public.contratos_renting WHERE id = p_contrato_id
+  ) THEN
+    RAISE EXCEPTION 'A viatura substituta é a mesma já associada ao contrato — nada a trocar.';
+  END IF;
+
   v_nova_versao_id := public.criar_versao_contrato_renting(p_contrato_id, p_motivo);
 
   UPDATE public.contratos_renting
