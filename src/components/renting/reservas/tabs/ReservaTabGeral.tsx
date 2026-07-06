@@ -39,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 
 import { ALDFields } from '@/components/renting/shared/ALDFields';
@@ -131,6 +132,8 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   const [clientePopoverOpen, setClientePopoverOpen] = useState(false);
   const [novaViaturaOpen, setNovaViaturaOpen] = useState(false);
   const [viaturaSearchTerm, setViaturaSearchTerm] = useState('');
+  /** Vazio = sem filtro (mostra todos os grupos). */
+  const [gruposFiltro, setGruposFiltro] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const { has } = useModules();
 
@@ -190,9 +193,28 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   // Lista de viaturas filtrada por regime: slot mostra só carros slot
   // (do motorista); restantes regimes escondem carros slot. habilitada_tvde é
   // apenas informativo/administrativo — não restringe o seletor.
-  const viaturasFiltradas = useMemo(
+  // Viaturas do regime actual, antes do filtro de grupo — usado para saber
+  // que grupos mostrar no filtro (não faz sentido oferecer um checkbox de
+  // grupo sem nenhuma viatura disponível nesse regime).
+  const viaturasDoRegime = useMemo(
     () => viaturas.filter((v) => (isSlot ? v.is_slot === true : v.is_slot !== true)),
     [viaturas, isSlot]
+  );
+
+  const gruposComViatura = useMemo(() => {
+    const idsComViatura = new Set(
+      viaturasDoRegime.map((v) => v.grupo_id).filter((id): id is string => !!id)
+    );
+    return grupos.filter((g) => idsComViatura.has(g.id));
+  }, [viaturasDoRegime, grupos]);
+
+  const viaturasFiltradas = useMemo(
+    () =>
+      viaturasDoRegime.filter((v) => {
+        if (gruposFiltro.size > 0 && (!v.grupo_id || !gruposFiltro.has(v.grupo_id))) return false;
+        return true;
+      }),
+    [viaturasDoRegime, gruposFiltro]
   );
 
   // Modo mensal (TVDE ou ALD): data_fim calculada conforme a opção de renovação.
@@ -696,6 +718,32 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                         className="w-[var(--radix-popover-trigger-width)] p-0"
                         align="start"
                       >
+                        {gruposComViatura.length > 1 && (
+                          <div className="border-b p-2 space-y-1.5 max-h-32 overflow-y-auto">
+                            <p className="text-[11px] font-semibold uppercase text-muted-foreground px-1">
+                              Filtrar por grupo
+                            </p>
+                            {gruposComViatura.map((g) => (
+                              <label
+                                key={g.id}
+                                className="flex items-center gap-2 px-1 py-0.5 text-sm cursor-pointer hover:bg-muted/50 rounded-sm"
+                              >
+                                <Checkbox
+                                  checked={gruposFiltro.has(g.id)}
+                                  onCheckedChange={(checked) => {
+                                    setGruposFiltro((prev) => {
+                                      const next = new Set(prev);
+                                      if (checked) next.add(g.id);
+                                      else next.delete(g.id);
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                {g.nome}
+                              </label>
+                            ))}
+                          </div>
+                        )}
                         <Command
                           filter={(value, search) => {
                             const v = normalizeForSearch(value);
