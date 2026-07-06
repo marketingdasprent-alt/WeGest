@@ -1,22 +1,25 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { ChevronDown, Lock } from 'lucide-react';
+import { Check, ChevronsUpDown, Lock } from 'lucide-react';
 import type { UseFormReturn } from 'react-hook-form';
 
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { cn } from '@/lib/utils';
 
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import type { RentingGrupoMin } from '@/hooks/useRentingGruposTarifas';
 import type { ContratoFormValues } from './contratoForm.schema';
 import { SectionTitle } from './SectionTitle';
-import { SENTINEL_NONE } from './contratoFormConstants';
 import { agruparViaturasPorGrupo, type ViaturaComGrupo } from './agruparViaturasPorGrupo';
 
 interface SectionViaturaProps {
@@ -39,6 +42,8 @@ interface SectionViaturaProps {
   onViaturaChange?: (viaturaId: string) => void;
 }
 
+const viaturaLabel = (v: ViaturaBasic | ViaturaComGrupo) => `${v.matricula} — ${v.marca} ${v.modelo}`;
+
 export const SectionViatura: React.FC<SectionViaturaProps> = ({
   form,
   viaturas,
@@ -48,12 +53,9 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
   reservaCodigo,
   onViaturaChange,
 }) => {
-  const [mostrarOutrosGrupos, setMostrarOutrosGrupos] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
-  const nomePorGrupoId = useMemo(
-    () => new Map(grupos.map((g) => [g.id, g.nome])),
-    [grupos]
-  );
+  const nomePorGrupoId = useMemo(() => new Map(grupos.map((g) => [g.id, g.nome])), [grupos]);
 
   const viaturasComGrupo: ViaturaComGrupo[] = useMemo(
     () =>
@@ -74,8 +76,16 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
   );
 
   // Sem grupo actual para comparar (ex: criação de contrato novo) — mostra
-  // tudo junto, sem separação (agrupar só faz sentido ao editar/trocar).
+  // tudo numa lista só (agrupar só faz sentido ao editar/trocar viatura).
   const semAgrupamento = !grupoIdAtual;
+
+  const selecionarViatura = (viaturaId: string, onChange: (id: string) => void) => {
+    onChange(viaturaId);
+    const via = viaturas.find((x) => x.id === viaturaId);
+    if (via) form.setValue('matricula', via.matricula);
+    onViaturaChange?.(viaturaId);
+    setPopoverOpen(false);
+  };
 
   return (
     <div>
@@ -97,88 +107,109 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
                     <div className="flex h-10 w-full cursor-not-allowed items-center gap-2 rounded-md border border-input bg-muted/50 px-3 py-2 text-sm opacity-80">
                       <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       {viaturaSelected ? (
-                        <span className="truncate">
-                          {viaturaSelected.matricula} — {viaturaSelected.marca}{' '}
-                          {viaturaSelected.modelo}
-                        </span>
+                        <span className="truncate">{viaturaLabel(viaturaSelected)}</span>
                       ) : (
                         <span className="text-muted-foreground">A carregar…</span>
                       )}
                     </div>
                   </FormControl>
                 ) : (
-                  <Select
-                    value={field.value || SENTINEL_NONE}
-                    onValueChange={(v) => {
-                      // Radix dispara onValueChange('') ao montar com um valor que
-                      // ainda não resolve para um item — ignorar para não apagar o
-                      // viatura_id hidratado (senão "Viatura inválida" em edição).
-                      if (!v) return;
-                      const newId = v === SENTINEL_NONE ? '' : v;
-                      field.onChange(newId);
-                      const via = viaturas.find((x) => x.id === newId);
-                      if (via) form.setValue('matricula', via.matricula);
-                      if (newId) onViaturaChange?.(newId);
-                    }}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="bg-background">
-                        <SelectValue placeholder="Seleccione viatura" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={SENTINEL_NONE} disabled>
-                        — Seleccione —
-                      </SelectItem>
-                      {semAgrupamento ? (
-                        viaturasComGrupo.map((v) => (
-                          <SelectItem key={v.id} value={v.id}>
-                            {v.matricula} — {v.marca} {v.modelo}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <>
-                          {mesmoGrupo.length > 0 && (
-                            <>
-                              <div className="px-2 py-1 text-[11px] font-semibold uppercase text-muted-foreground">
-                                Mesmo grupo
-                              </div>
-                              {mesmoGrupo.map((v) => (
-                                <SelectItem key={v.id} value={v.id}>
-                                  {v.matricula} — {v.marca} {v.modelo}
-                                </SelectItem>
+                  <Popover open={popoverOpen} onOpenChange={setPopoverOpen} modal={true}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={popoverOpen}
+                          className="w-full justify-between font-normal bg-background"
+                        >
+                          <span className="truncate">
+                            {viaturaSelected ? viaturaLabel(viaturaSelected) : 'Seleccione viatura'}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-[var(--radix-popover-trigger-width)] p-0 z-[200]"
+                      align="start"
+                    >
+                      <Command>
+                        <CommandInput placeholder="Pesquisar matrícula, marca, modelo..." className="h-9" />
+                        <CommandList>
+                          <CommandEmpty>Nenhuma viatura encontrada.</CommandEmpty>
+                          {semAgrupamento ? (
+                            <CommandGroup>
+                              {viaturasComGrupo.map((v) => (
+                                <CommandItem
+                                  key={v.id}
+                                  value={`${v.matricula} ${v.marca} ${v.modelo}`}
+                                  onSelect={() => selecionarViatura(v.id, field.onChange)}
+                                  className="cursor-pointer"
+                                >
+                                  <Check
+                                    className={cn(
+                                      'mr-2 h-4 w-4',
+                                      field.value === v.id ? 'opacity-100' : 'opacity-0'
+                                    )}
+                                  />
+                                  {viaturaLabel(v)}
+                                </CommandItem>
                               ))}
-                            </>
-                          )}
-                          {outrosGrupos.length > 0 && (
+                            </CommandGroup>
+                          ) : (
                             <>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setMostrarOutrosGrupos((s) => !s);
-                                }}
-                                className="w-full flex items-center justify-between px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted/50 rounded-sm"
-                              >
-                                <span>Mostrar viaturas de outros grupos ({outrosGrupos.length})</span>
-                                <ChevronDown
-                                  className={`h-3.5 w-3.5 transition-transform ${mostrarOutrosGrupos ? 'rotate-180' : ''}`}
-                                />
-                              </button>
-                              {mostrarOutrosGrupos &&
-                                outrosGrupos.map((v) => (
-                                  <SelectItem key={v.id} value={v.id}>
-                                    {v.matricula} — {v.marca} {v.modelo}
-                                    {v.grupoNome ? ` (${v.grupoNome})` : ''}
-                                  </SelectItem>
-                                ))}
+                              {mesmoGrupo.length > 0 && (
+                                <CommandGroup heading="Mesmo grupo">
+                                  {mesmoGrupo.map((v) => (
+                                    <CommandItem
+                                      key={v.id}
+                                      value={`${v.matricula} ${v.marca} ${v.modelo}`}
+                                      onSelect={() => selecionarViatura(v.id, field.onChange)}
+                                      className="cursor-pointer"
+                                    >
+                                      <Check
+                                        className={cn(
+                                          'mr-2 h-4 w-4',
+                                          field.value === v.id ? 'opacity-100' : 'opacity-0'
+                                        )}
+                                      />
+                                      {viaturaLabel(v)}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              )}
+                              {outrosGrupos.length > 0 && (
+                                <CommandGroup heading="Outros grupos">
+                                  {outrosGrupos.map((v) => (
+                                    <CommandItem
+                                      key={v.id}
+                                      value={`${v.matricula} ${v.marca} ${v.modelo}`}
+                                      onSelect={() => selecionarViatura(v.id, field.onChange)}
+                                      className="cursor-pointer"
+                                    >
+                                      <Check
+                                        className={cn(
+                                          'mr-2 h-4 w-4',
+                                          field.value === v.id ? 'opacity-100' : 'opacity-0'
+                                        )}
+                                      />
+                                      {viaturaLabel(v)}
+                                      {v.grupoNome ? (
+                                        <span className="ml-1.5 text-xs text-muted-foreground">
+                                          ({v.grupoNome})
+                                        </span>
+                                      ) : null}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              )}
                             </>
                           )}
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 )}
                 {viaturaLocked && (
                   <p className="text-xs text-muted-foreground">
