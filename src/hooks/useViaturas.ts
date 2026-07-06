@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 export interface ViaturaBasic {
   id: string;
   matricula: string;
+  /** Data da primeira matrícula (yyyy-mm-dd) — usada nos documentos. */
+  data_matricula: string | null;
   marca: string;
   modelo: string;
   status: string;
@@ -42,7 +44,7 @@ export function useViaturas(options: UseViaturasOptions = {}) {
       let q = supabase
         .from('viaturas')
         .select(
-          'id, matricula, marca, modelo, status, categoria, km_atual, combustivel, combustivel_id, is_vendida, is_slot, grupo_id, habilitada_tvde'
+          'id, matricula, data_matricula, marca, modelo, status, categoria, km_atual, combustivel, combustivel_id, is_vendida, is_slot, grupo_id, habilitada_tvde'
         )
         .order('matricula');
 

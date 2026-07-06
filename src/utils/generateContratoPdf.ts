@@ -300,6 +300,7 @@ export const generateContratoPdf = async ({
     assinatura_colaborador: colaboradorAssinatura,
     // Viatura
     viatura_matricula: contrato.matricula ?? viatura?.matricula ?? '—',
+    viatura_data_matricula: viatura?.data_matricula ?? '',
     viatura_marca_modelo: viatura ? `${viatura.marca} ${viatura.modelo}`.trim() : '—',
     viatura_grupo: contrato.grupo ?? '—',
     viatura_kms: num(viatura?.km_atual),

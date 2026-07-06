@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { format, differenceInMonths, differenceInDays, addMonths } from 'date-fns';
 import {
   Car,
@@ -12,6 +13,7 @@ import {
   Pencil,
   Check,
   ChevronsUpDown,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -87,6 +89,7 @@ interface MotoristaTabViaturasProps {
 }
 
 export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
+  const navigate = useNavigate();
   const [associacoes, setAssociacoes] = useState<MotoristaViatura[]>([]);
   const [viaturasDisponiveis, setViaturasDisponiveis] = useState<Viatura[]>([]);
   const [loading, setLoading] = useState(true);
@@ -510,10 +513,21 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
                 </div>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setDesassociarDialogOpen(true)}>
-              <X className="h-4 w-4 mr-2" />
-              Desassociar
-            </Button>
+            <div className="flex shrink-0 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/viaturas/${viaturaAtual.viatura_id}`)}
+                title="Abrir a ficha completa da viatura"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                Ver detalhes
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setDesassociarDialogOpen(true)}>
+                <X className="h-4 w-4 mr-2" />
+                Desassociar
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="text-center text-muted-foreground py-4">
