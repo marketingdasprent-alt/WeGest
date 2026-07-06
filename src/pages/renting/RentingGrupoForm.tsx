@@ -39,6 +39,7 @@ import type { TablesInsert } from '@/integrations/supabase/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { getStatusLabel, getStatusBadgeClass } from '@/lib/viaturas';
 import { AdicionarViaturaGrupo } from '@/components/renting/AdicionarViaturaGrupo';
 import { useAssociarViaturaGrupo } from '@/hooks/useAssociarViaturaGrupo';
@@ -106,6 +107,11 @@ const RentingGrupoForm = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { orgId } = useTenant();
+  const { hasPermission } = usePermissions();
+
+  // Gerir grupos partilha a permissão de gerir viaturas (config de frota).
+  const podeGuardar = hasPermission(isNew ? 'viaturas_criar' : 'viaturas_editar');
+  const podeEliminar = hasPermission('viaturas_eliminar');
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -262,7 +268,7 @@ const RentingGrupoForm = () => {
           <p className="text-sm text-muted-foreground">Renting / Tarifas / Grupos</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {!isNew && (
+          {!isNew && podeEliminar && (
             <Button
               variant="outline"
               size="sm"
@@ -591,15 +597,19 @@ const RentingGrupoForm = () => {
 
       {/* Footer actions */}
       <div className="flex items-center gap-3 mt-8 pt-6 border-t">
-        <Button onClick={() => handleSave(false)} disabled={saving}>
-          <Save className="h-4 w-4 mr-2" />
-          {saving ? 'A guardar...' : 'Guardar'}
-        </Button>
-        <Button variant="outline" onClick={() => handleSave(true)} disabled={saving}>
-          Guardar e fechar
-        </Button>
+        {podeGuardar && (
+          <>
+            <Button onClick={() => handleSave(false)} disabled={saving}>
+              <Save className="h-4 w-4 mr-2" />
+              {saving ? 'A guardar...' : 'Guardar'}
+            </Button>
+            <Button variant="outline" onClick={() => handleSave(true)} disabled={saving}>
+              Guardar e fechar
+            </Button>
+          </>
+        )}
         <Button variant="ghost" onClick={() => navigate('/viaturas/grupos')}>
-          Cancelar
+          {podeGuardar ? 'Cancelar' : 'Voltar'}
         </Button>
       </div>
 
