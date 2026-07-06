@@ -183,6 +183,19 @@ const TicketDetails = () => {
     if (id) accessPanelRef.current?.fetchAcessos(id);
   }, [id]);
 
+  useEffect(() => {
+    if (!ticket?.viatura_substituta_id) {
+      setViaturaSubstituta(null);
+      return;
+    }
+    supabase
+      .from('viaturas')
+      .select('id, matricula, marca, modelo')
+      .eq('id', ticket.viatura_substituta_id)
+      .maybeSingle()
+      .then(({ data }) => setViaturaSubstituta(data));
+  }, [ticket?.viatura_substituta_id]);
+
   const handleSendMessage = async () => {
     const ok = await sendMessage({ text: novaMensagem, files: selectedFiles, ticket });
     if (ok) {
@@ -265,6 +278,11 @@ const TicketDetails = () => {
     } catch (error: any) {
       toast({ title: 'Erro', description: error.message, variant: 'destructive' });
     }
+  };
+
+  const handleAbrirSubstitutaModal = async () => {
+    setShowSubstituteModal(true);
+    await fetchViaturasDisponiveis();
   };
 
   const fetchViaturasDisponiveis = async () => {
@@ -458,6 +476,9 @@ const TicketDetails = () => {
           viatura={viatura}
           motorista={motorista}
           criador={criador}
+          viaturaSubstituta={viaturaSubstituta}
+          canAtribuirSubstituta={canChangeStatus && !['resolvido', 'fechado'].includes(ticket.status)}
+          onAtribuirSubstituta={handleAbrirSubstitutaModal}
           onOpenGallery={() => setShowGalleryDialog(true)}
         />
       </div>
