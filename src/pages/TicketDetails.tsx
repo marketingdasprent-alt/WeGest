@@ -322,6 +322,7 @@ const TicketDetails = () => {
       .maybeSingle();
 
     let contratoId: string | null = null;
+
     if (motoristaAtivo?.cliente_id) {
       const { data: contrato } = await supabase
         .from('contratos_renting')
@@ -333,6 +334,29 @@ const TicketDetails = () => {
         .limit(1)
         .maybeSingle();
       contratoId = contrato?.id ?? null;
+    }
+
+    // Fallback: contrato cujo titular é outra entidade (ex. empresa-frota)
+    // mas o motorista é o condutor real via contrato_condutores.motorista_id.
+    if (!contratoId) {
+      const { data: condutorRows } = await supabase
+        .from('contrato_condutores')
+        .select('contrato_id')
+        .eq('motorista_id', motorista.id);
+
+      const contratoIds = (condutorRows || []).map((r) => r.contrato_id);
+      if (contratoIds.length > 0) {
+        const { data: contrato } = await supabase
+          .from('contratos_renting')
+          .select('id')
+          .in('id', contratoIds)
+          .is('deleted_at', null)
+          .is('substituido_em', null)
+          .in('estado_operacional', ['agendado', 'em_curso'])
+          .limit(1)
+          .maybeSingle();
+        contratoId = contrato?.id ?? null;
+      }
     }
 
     return { contratoId, grupoIdAvariada: viaturaAvariada?.grupo_id ?? null };
