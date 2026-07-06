@@ -518,7 +518,9 @@ const TicketDetails = () => {
           motorista={motorista}
           criador={criador}
           viaturaSubstituta={viaturaSubstituta}
-          canAtribuirSubstituta={canChangeStatus && !['resolvido', 'fechado'].includes(ticket.status)}
+          canAtribuirSubstituta={
+            canChangeStatus && !['resolvido', 'fechado'].includes(ticket.status)
+          }
           onAtribuirSubstituta={handleAbrirSubstitutaModal}
           onOpenGallery={() => setShowGalleryDialog(true)}
         />

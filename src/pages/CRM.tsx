@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useCampaignTags } from '@/hooks/useCampaignTags';
@@ -54,6 +55,7 @@ const statusColumns = [
 ];
 
 const CRM = () => {
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [realtimePayload, setRealtimePayload] = useState<any>(null);
   const [filters, setFilters] = useState<FilterState>({
@@ -967,6 +969,7 @@ const CRM = () => {
                 })),
               }))}
               onTaskMove={handleTaskMove}
+              onTaskClick={(task) => navigate(`/crm/lead/${task.id}`)}
             />
           )}
         </div>

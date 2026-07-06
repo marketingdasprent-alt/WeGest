@@ -197,7 +197,10 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       const message = error instanceof Error ? error.message : undefined;
-      toast.error('Erro ao carregar dados de viaturas', message ? { description: message } : undefined);
+      toast.error(
+        'Erro ao carregar dados de viaturas',
+        message ? { description: message } : undefined
+      );
     } finally {
       setLoading(false);
     }

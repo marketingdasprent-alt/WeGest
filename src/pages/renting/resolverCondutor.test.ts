@@ -23,7 +23,10 @@ describe('resolverCondutor', () => {
 
   it('usa o motorista do contrato quando não há cliente', () => {
     const r = resolverCondutor({
-      condutorContrato: { cliente: null, motorista: { nome: 'Motorista Contrato', email: 'mc@x.pt' } },
+      condutorContrato: {
+        cliente: null,
+        motorista: { nome: 'Motorista Contrato', email: 'mc@x.pt' },
+      },
       motoristaViaturaAtivo: { nome: 'Outro Motorista', email: 'outro@x.pt' },
     });
     expect(r).toEqual({ nome: 'Motorista Contrato', email: 'mc@x.pt' });

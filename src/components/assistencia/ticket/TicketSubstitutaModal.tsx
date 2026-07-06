@@ -65,7 +65,9 @@ export const TicketSubstitutaModal: React.FC<Props> = ({
       onClick={() => handleClickViatura(v)}
       disabled={assigning}
       className={`w-full flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors text-left ${
-        destacaSelecionada && selecionada?.id === v.id ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/20' : ''
+        destacaSelecionada && selecionada?.id === v.id
+          ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/20'
+          : ''
       }`}
     >
       <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
