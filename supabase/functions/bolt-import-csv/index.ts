@@ -180,7 +180,7 @@ Deno.serve(async (req) => {
     const bearerToken = authHeader.replace(/^Bearer\s+/i, '');
     const isRobotCall = bearerToken === SERVICE_ROLE_KEY;
 
-    let callerOrgId: string | null = null;
+    let callerUserId: string | null = null;
     if (!isRobotCall) {
       if (!bearerToken) return jsonError('Não autenticado.', 401);
       const anonClient = createClient(SUPABASE_URL, ANON_KEY, {
@@ -191,13 +191,11 @@ Deno.serve(async (req) => {
         error: authErr,
       } = await anonClient.auth.getUser();
       if (authErr || !user) return jsonError('Sessão inválida.', 401);
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('is_admin, org_id')
-        .eq('id', user.id)
-        .single();
-      if (!profile?.is_admin) return jsonError('Sem permissão de administrador.', 403);
-      callerOrgId = profile.org_id;
+      // O papel de admin é POR-ORG (user_organizacoes) — o flag global
+      // profiles.is_admin e o legado profiles.org_id dão 403 errado a
+      // utilizadores multi-org. A permissão é validada mais abaixo, contra
+      // a org dona da integração.
+      callerUserId = user.id;
     }
 
     const body = await req.json();
@@ -226,8 +224,16 @@ Deno.serve(async (req) => {
       .eq('id', integracao_id)
       .single();
     if (!intConfig) return jsonError('Integração não encontrada.', 404);
-    if (callerOrgId && intConfig.org_id !== callerOrgId) {
-      return jsonError('Sem acesso a esta integração.', 403);
+    if (callerUserId) {
+      const { data: membership } = await supabase
+        .from('user_organizacoes')
+        .select('is_admin')
+        .eq('user_id', callerUserId)
+        .eq('org_id', intConfig.org_id)
+        .maybeSingle();
+      if (!membership?.is_admin) {
+        return jsonError('Sem permissão de administrador nesta organização.', 403);
+      }
     }
     const orgId = intConfig.org_id;
 

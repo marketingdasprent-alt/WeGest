@@ -193,7 +193,9 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '');
         if (s === 'vendida' || s === 'inativo' || s === 'em_reparacao') return false;
-        if (s === 'em_uso' && activeViaturaIds.has(v.id)) return false;
+        // J\u00e1 est\u00e1 com um motorista (independente do status \u2014 carros slot
+        // ficam 'disponivel' mesmo associados): n\u00e3o pode ser re-associada.
+        if (activeViaturaIds.has(v.id)) return false;
         return true;
       });
       setViaturasDisponiveis(disponiveis);
@@ -267,14 +269,20 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
 
       if (insertError) throw insertError;
 
-      const { error: updateError } = await supabase
-        .from('viaturas')
-        .update({
-          status: 'em_uso',
-        })
-        .eq('id', formData.viatura_id);
+      // Motorista slot: o carro é do próprio motorista — a associação não
+      // ocupa a viatura. Fica 'disponivel'; o estado só muda por
+      // reserva/contrato. Nos restantes regimes mantém-se o comportamento.
+      const motoristaSlot = motorista.is_slot === true || (motorista.slot_valor_semanal ?? 0) > 0;
+      if (!motoristaSlot) {
+        const { error: updateError } = await supabase
+          .from('viaturas')
+          .update({
+            status: 'em_uso',
+          })
+          .eq('id', formData.viatura_id);
 
-      if (updateError) throw updateError;
+        if (updateError) throw updateError;
+      }
 
       toast.success('Viatura associada com sucesso!');
       setDialogOpen(false);

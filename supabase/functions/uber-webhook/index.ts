@@ -2019,40 +2019,58 @@ Deno.serve(async (req) => {
   // ─── CSV Import from Apify Bot or Admin Upload ───
   const csvBruto = parsedBody.dados_csv_brutos;
   if (typeof csvBruto === "string" && csvBruto.length > 0) {
-    // Validate auth: accept SERVICE_ROLE_KEY or authenticated admin user
+    // Validate auth: accept SERVICE_ROLE_KEY or authenticated user (a
+    // permissão de admin é validada POR-ORG mais abaixo, contra a org dona
+    // da integração — o flag global profiles.is_admin dava 403/401 errado a
+    // utilizadores multi-org).
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-    let csvAuthValid = bearerToken === serviceRoleKey;
+    const isRobotCall = bearerToken === serviceRoleKey;
+    let csvCallerUserId: string | null = null;
 
-    if (!csvAuthValid && bearerToken) {
-      // Try to validate as an authenticated admin user
+    if (!isRobotCall && bearerToken) {
       try {
         const authClient = createClient(supabaseUrl, anonKey, {
           global: { headers: { Authorization: authHeader } },
         });
         const { data: userData } = await authClient.auth.getUser();
-        if (userData?.user?.id) {
-          const { data: isAdmin } = await supabase.rpc("is_current_user_admin");
-          // Use service_role client to check admin status directly
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("is_admin")
-            .eq("id", userData.user.id)
-            .single();
-          csvAuthValid = profileData?.is_admin === true;
-        }
+        if (userData?.user?.id) csvCallerUserId = userData.user.id;
       } catch {
-        // Auth validation failed, csvAuthValid stays false
+        // Auth validation failed — csvCallerUserId stays null
       }
     }
 
-    if (!csvAuthValid) {
+    if (!isRobotCall && !csvCallerUserId) {
       return jsonResponse({ success: false, error: "Autenticação inválida para importação CSV" }, 401);
     }
 
     const csvIntegracaoId = requestUrl.searchParams.get("integracao_id") ?? asTrimmedString(parsedBody.integracao_id);
     if (!csvIntegracaoId) {
       return jsonResponse({ success: false, error: "integracao_id é obrigatório para importação CSV" }, 400);
+    }
+
+    // Utilizador autenticado: tem de ser admin da org dona da integração.
+    if (csvCallerUserId) {
+      const { data: csvIntCfg } = await supabase
+        .from("plataformas_configuracao")
+        .select("org_id")
+        .eq("id", csvIntegracaoId)
+        .single();
+      if (!csvIntCfg) {
+        return jsonResponse({ success: false, error: "Integração Uber não encontrada" }, 404);
+      }
+      const { data: csvMembership } = await supabase
+        .from("user_organizacoes")
+        .select("is_admin")
+        .eq("user_id", csvCallerUserId)
+        .eq("org_id", csvIntCfg.org_id)
+        .maybeSingle();
+      if (!csvMembership?.is_admin) {
+        return jsonResponse(
+          { success: false, error: "Sem permissão de administrador nesta organização" },
+          403,
+        );
+      }
     }
 
     // Verify integration exists
