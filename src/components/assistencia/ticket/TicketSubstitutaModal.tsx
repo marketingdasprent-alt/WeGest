@@ -52,7 +52,7 @@ export const TicketSubstitutaModal: React.FC<Props> = ({
   );
 
   const handleClickViatura = (v: ViaturaComGrupo) => {
-    if (v.grupoId === grupoIdAvariada) {
+    if (grupoIdAvariada && v.grupoId === grupoIdAvariada) {
       onSelect(v.id);
       return;
     }
