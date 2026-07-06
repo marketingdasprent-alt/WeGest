@@ -635,7 +635,9 @@ const RealizarEntregaPage = () => {
   }
 
   const matricula = formatMatricula(info.matricula);
-  const matriculaDevolver = info.matricula_devolver ? formatMatricula(info.matricula_devolver) : null;
+  const matriculaDevolver = info.matricula_devolver
+    ? formatMatricula(info.matricula_devolver)
+    : null;
   const isPending = uploading || realizar.isPending;
 
   return (
@@ -661,8 +663,8 @@ const RealizarEntregaPage = () => {
             <CardContent className="p-4 text-sm">
               <span className="font-medium">Troca de viatura:</span> devolver{' '}
               <span className="font-semibold">{matriculaDevolver}</span> e entregar{' '}
-              <span className="font-semibold">{matricula}</span>. Os dados abaixo (km,
-              combustível, danos) referem-se à viatura entregue ({matricula}).
+              <span className="font-semibold">{matricula}</span>. Os dados abaixo (km, combustível,
+              danos) referem-se à viatura entregue ({matricula}).
             </CardContent>
           </Card>
         )}
@@ -831,9 +833,7 @@ const RealizarEntregaPage = () => {
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <Label className="m-0">
-                Folha de Danos ({tipoLabel(info.tipo)})
-              </Label>
+              <Label className="m-0">Folha de Danos ({tipoLabel(info.tipo)})</Label>
             </div>
             <p className="text-sm text-muted-foreground">
               Guarda o rascunho e pré-visualiza a folha. Se algo estiver errado, ajusta e
