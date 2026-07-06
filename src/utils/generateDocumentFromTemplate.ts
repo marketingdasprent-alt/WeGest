@@ -379,6 +379,7 @@ const replaceDynamicFields = (
     'duracao_meses',
     'numero_contrato',
     'viatura_matricula',
+    'viatura_data_matricula',
     'viatura_marca_modelo',
     'viatura_grupo',
     'viatura_kms',

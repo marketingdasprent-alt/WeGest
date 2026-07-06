@@ -105,22 +105,9 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
         });
         return false;
       }
-      if (!closureData.numero_fatura || !closureData.numero_fatura.trim()) {
-        toast({
-          title: 'Erro',
-          description: 'Informe o número de fatura.',
-          variant: 'destructive',
-        });
-        return false;
-      }
-      if (!faturaFile) {
-        toast({
-          title: 'Erro',
-          description: 'Anexe o ficheiro da fatura (PDF ou imagem).',
-          variant: 'destructive',
-        });
-        return false;
-      }
+      // Nº de fatura e o ficheiro anexado são opcionais — nem sempre a fatura
+      // está disponível no momento do fecho. Ver passo 9: se ficar sem
+      // fatura, os gestores são notificados para o fazer depois.
 
       try {
         setIsClosing(true);

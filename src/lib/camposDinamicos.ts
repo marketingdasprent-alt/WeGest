@@ -131,6 +131,7 @@ export const CAMPOS_CATALOGO: CampoDinamico[] = [
 
   // ── Viatura ────────────────────────────────────────────────
   { chave: 'viatura_matricula', label: 'Matrícula', categoria: 'viatura' },
+  { chave: 'viatura_data_matricula', label: 'Data da matrícula', categoria: 'viatura' },
   { chave: 'viatura_marca_modelo', label: 'Marca e modelo', categoria: 'viatura' },
   { chave: 'viatura_grupo', label: 'Grupo', categoria: 'viatura' },
   { chave: 'viatura_kms', label: 'Kms', categoria: 'viatura' },

@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { subdomainCodigo } from '@/lib/subdomain';
 
 interface Organizacao {
   id: string;
@@ -69,20 +68,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         .eq('user_id', user.id)
         .single();
 
-      // Se estamos num subdomínio, auto-selecionar a org correspondente
-      if (subdomainCodigo) {
-        const subdomainOrg = orgsList.find((o) => o.codigo === subdomainCodigo);
-        if (subdomainOrg) {
-          setOrgId(subdomainOrg.id);
-          await supabase
-            .from('user_org_ativa')
-            .upsert({ user_id: user.id, org_id: subdomainOrg.id }, { onConflict: 'user_id' });
-        } else {
-          // User não pertence a esta org — limpar seleção
-          console.warn(`[TenantContext] User não pertence à org do subdomínio: ${subdomainCodigo}`);
-          setOrgId(null);
-        }
-      } else if (orgAtiva?.org_id && orgsList.some((o) => o.id === orgAtiva.org_id)) {
+      if (orgAtiva?.org_id && orgsList.some((o) => o.id === orgAtiva.org_id)) {
         setOrgId(orgAtiva.org_id);
       } else if (orgsList.length === 1) {
         // Auto-selecionar se só tem uma org
@@ -128,18 +114,6 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       setOrgId(newOrgId);
-
-      // Redirecionar para o domínio correto da nova org
-      const newOrg = orgs.find((o) => o.id === newOrgId);
-      if (newOrg) {
-        // Década usa wegest.pt diretamente, outras orgs usam subdomínio
-        const targetHost = newOrg.codigo === 'decada' ? 'wegest.pt' : `${newOrg.codigo}.wegest.pt`;
-        const currentHost = window.location.hostname;
-        if (currentHost !== targetHost) {
-          window.location.href = `https://${targetHost}${window.location.pathname}`;
-          return;
-        }
-      }
 
       // Forçar reload para limpar caches de dados
       window.location.reload();
