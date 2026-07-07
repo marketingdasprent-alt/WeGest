@@ -497,19 +497,49 @@ const RealizarEntregaPage = () => {
           vId = (cr?.viatura_id as string | undefined) ?? null;
         }
         if (!vId) throw new Error('Viatura do contrato não encontrada.');
-        // Cada foto vira um registo de dano com a localização/descrição/valor
-        // que o gestor escreveu, ligado ao contrato → aparece na tabela da
-        // folha e na página do veículo. As observações gerais vão no campo
-        // observacoes de cada registo.
-        for (const fp of files) {
+        // Fotos que o gestor descreveu individualmente (localização, descrição
+        // ou valor) viram cada uma o seu registo de dano. As fotos genéricas —
+        // sem qualquer detalhe — juntam-se todas num único registo "Registo
+        // entrega/recolha", para aparecerem como uma galeria de fotos em vez de
+        // um cartão por foto. Ligado ao contrato → tabela da folha e página do
+        // veículo. As observações gerais vão no campo observacoes.
+        const temDetalhe = (fp: (typeof files)[number]) =>
+          !!(fp.localizacao || fp.descricao.trim() || fp.valor.trim());
+        const detalhados = files.filter(temDetalhe);
+        const genericos = files.filter((fp) => !temDetalhe(fp));
+
+        // Cada grupo de fotos partilha um único registo de dano.
+        const grupos: Array<{
+          localizacao: string | null;
+          descricao: string;
+          valor: number | null;
+          fotos: (typeof files)[number][];
+        }> = detalhados.map((fp) => {
           const valorNum = fp.valor.trim() ? Number(fp.valor) : null;
+          return {
+            localizacao: fp.localizacao || null,
+            descricao: fp.descricao.trim() || `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
+            valor: valorNum != null && !Number.isNaN(valorNum) ? valorNum : null,
+            fotos: [fp],
+          };
+        });
+        if (genericos.length > 0) {
+          grupos.push({
+            localizacao: null,
+            descricao: `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
+            valor: null,
+            fotos: genericos,
+          });
+        }
+
+        for (const grupo of grupos) {
           const { data: dano, error: dErr } = await supabase
             .from('viatura_danos')
             .insert({
               viatura_id: vId,
-              localizacao: fp.localizacao || null,
-              descricao: fp.descricao.trim() || `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
-              valor: valorNum != null && !Number.isNaN(valorNum) ? valorNum : null,
+              localizacao: grupo.localizacao,
+              descricao: grupo.descricao,
+              valor: grupo.valor,
               observacoes: observacoes.trim() || null,
               estado: 'existente',
               contrato_renting_id: info.contrato_id,
@@ -519,20 +549,22 @@ const RealizarEntregaPage = () => {
             .single();
           if (dErr) throw dErr;
 
-          const ext = fp.file.name.split('.').pop() || 'bin';
-          const path = `${dano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-          const { error: upErr } = await supabase.storage
-            .from('viatura-danos')
-            .upload(path, fp.file, { contentType: fp.file.type });
-          if (upErr) throw upErr;
-          uploadedPaths.push(path);
-          const { error: fErr } = await supabase.from('viatura_dano_fotos').insert({
-            dano_id: dano.id,
-            ficheiro_url: path,
-            nome_ficheiro: fp.file.name,
-            uploaded_by: userId,
-          });
-          if (fErr) throw fErr;
+          for (const fp of grupo.fotos) {
+            const ext = fp.file.name.split('.').pop() || 'bin';
+            const path = `${dano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+            const { error: upErr } = await supabase.storage
+              .from('viatura-danos')
+              .upload(path, fp.file, { contentType: fp.file.type });
+            if (upErr) throw upErr;
+            uploadedPaths.push(path);
+            const { error: fErr } = await supabase.from('viatura_dano_fotos').insert({
+              dano_id: dano.id,
+              ficheiro_url: path,
+              nome_ficheiro: fp.file.name,
+              uploaded_by: userId,
+            });
+            if (fErr) throw fErr;
+          }
         }
       }
 
