@@ -104,11 +104,8 @@ const RentingMovimentacoes = () => {
     [estacaoNomeById]
   );
 
-  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
-    filtered,
-    50,
-    `${matriculaSearch}|${JSON.stringify(filtros)}`
-  );
+  const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
+    usePagination(filtered, 50, `${matriculaSearch}|${JSON.stringify(filtros)}`);
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
@@ -232,6 +229,8 @@ const RentingMovimentacoes = () => {
             end={end}
             onPageChange={setPage}
             noun={['movimento', 'movimentos']}
+            pageSizeStr={pageSizeStr}
+            onPageSizeChange={setPageSizeStr}
           />
         </CardContent>
       </Card>

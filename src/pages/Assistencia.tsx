@@ -32,6 +32,8 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { matchesSearch } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 import type { TicketEnriched as Ticket, TicketCategoria as Categoria } from '@/types/ticket';
 import { statusConfig, prioridadeConfig } from '@/lib/ticketsConfig';
@@ -257,6 +259,13 @@ const Assistencia = () => {
     );
   });
 
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      filteredTickets,
+      25,
+      `${searchTerm}|${statusFilter}|${prioridadeFilter}|${categoriaFilter}|${criadorFilter}|${atribuidoFilter}`
+    );
+
   const stats = {
     porResolver: tickets.filter((t) =>
       ['pendente', 'aberto', 'em_andamento', 'aguardando'].includes(t.status)
@@ -451,7 +460,7 @@ const Assistencia = () => {
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredTickets.map((ticket) => (
+          {pageItems.map((ticket) => (
             <Card
               key={ticket.id}
               className="hover:bg-accent/50 transition-colors cursor-pointer"
@@ -546,6 +555,20 @@ const Assistencia = () => {
               </CardContent>
             </Card>
           ))}
+
+          {total > 0 && (
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              start={start}
+              end={end}
+              onPageChange={setPage}
+              noun={['ticket', 'tickets']}
+              pageSizeStr={pageSizeStr}
+              onPageSizeChange={setPageSizeStr}
+            />
+          )}
         </div>
       )}
     </div>

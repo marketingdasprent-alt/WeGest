@@ -13,14 +13,21 @@ import { Camera, Upload, Loader2, Eye, Trash2, ImageIcon, Wrench } from 'lucide-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+type DanoBucket = 'viatura-documentos' | 'assistencia-anexos' | 'viatura-danos';
+
 /**
- * Detecta qual bucket usar baseado no path/URL
+ * Detecta qual bucket usar baseado no path/URL. As fotos guardadas em
+ * viatura_dano_fotos vêm de origens diferentes:
+ *  - check-in/recolha/entrega → path nu no bucket viatura-danos
+ *  - ViaturaTabDanos (upload manual) → URL http completo do viatura-documentos
+ *  - anexos de assistência → bucket assistencia-anexos
  */
-function detectBucket(urlOrPath: string): 'viatura-documentos' | 'assistencia-anexos' {
-  // Detecta pelo prefixo do path
-  if (urlOrPath.startsWith('assistencia/')) return 'assistencia-anexos';
-  // Detecta pela URL completa
-  if (urlOrPath.includes('assistencia-anexos')) return 'assistencia-anexos';
+function detectBucket(urlOrPath: string): DanoBucket {
+  if (urlOrPath.startsWith('assistencia/') || urlOrPath.includes('assistencia-anexos'))
+    return 'assistencia-anexos';
+  if (urlOrPath.includes('viatura-danos')) return 'viatura-danos';
+  // Path nu (sem http) é sempre do bucket viatura-danos (check-in/recolha).
+  if (!urlOrPath.startsWith('http')) return 'viatura-danos';
   return 'viatura-documentos';
 }
 
@@ -32,7 +39,7 @@ function detectBucket(urlOrPath: string): 'viatura-documentos' | 'assistencia-an
 function extractStoragePath(urlOrPath: string): string {
   if (!urlOrPath.startsWith('http')) return urlOrPath;
   const match = urlOrPath.match(
-    /\/storage\/v1\/object\/(?:public|sign)\/(?:viatura-documentos|assistencia-anexos)\/([^?]+)/
+    /\/storage\/v1\/object\/(?:public|sign)\/(?:viatura-documentos|assistencia-anexos|viatura-danos)\/([^?]+)/
   );
   return match ? decodeURIComponent(match[1]) : urlOrPath;
 }

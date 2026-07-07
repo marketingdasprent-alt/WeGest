@@ -1309,11 +1309,12 @@ export function ContasResumoTab() {
 
   // Paginação (render): só corta as linhas mostradas — totais, select-all e
   // export continuam a usar filteredResumos completo.
-  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
-    filteredResumos,
-    50,
-    `${searchTerm}|${filterRecibo}|${filterSaldo}|${filterGestor}|${weekStart?.getTime?.() ?? ''}`
-  );
+  const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      filteredResumos,
+      50,
+      `${searchTerm}|${filterRecibo}|${filterSaldo}|${filterGestor}|${weekStart?.getTime?.() ?? ''}`
+    );
 
   // Totais gerais
   const totais = useMemo(() => {
@@ -2112,6 +2113,8 @@ export function ContasResumoTab() {
           end={end}
           onPageChange={setPage}
           noun={['motorista', 'motoristas']}
+          pageSizeStr={pageSizeStr}
+          onPageSizeChange={setPageSizeStr}
         />
       )}
 

@@ -22,6 +22,8 @@ import { Car, Calendar, MapPin, User, Phone, Mail, FileText } from 'lucide-react
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { DasprentNavigation } from '@/components/DasprentNavigation';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 interface Lead {
   id: string;
@@ -116,6 +118,11 @@ const DasprentLeads = () => {
 
   const filteredLeads =
     filterStatus === 'all' ? leads : leads.filter((lead) => lead.status === filterStatus);
+
+  // Paginação client-side (com seletor de tamanho). Volta à 1ª página ao trocar
+  // de filtro de status.
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(filteredLeads, 25, filterStatus);
 
   const stats = {
     total: leads.length,
@@ -253,7 +260,7 @@ const DasprentLeads = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredLeads.map((lead) => (
+                    {pageItems.map((lead) => (
                       <TableRow key={lead.id}>
                         <TableCell className="text-white font-medium">{lead.nome}</TableCell>
                         <TableCell className="text-gray-300">
@@ -321,6 +328,19 @@ const DasprentLeads = () => {
                   </TableBody>
                 </Table>
               </div>
+              {total > 0 && (
+                <TablePagination
+                  page={page}
+                  totalPages={totalPages}
+                  total={total}
+                  start={start}
+                  end={end}
+                  onPageChange={setPage}
+                  noun={['lead', 'leads']}
+                  pageSizeStr={pageSizeStr}
+                  onPageSizeChange={setPageSizeStr}
+                />
+              )}
             </CardContent>
           </Card>
         </div>

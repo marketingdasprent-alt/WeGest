@@ -8,7 +8,11 @@ import { cn } from '@/lib/utils';
 import { AlertTriangle, Bell, Eye, X } from 'lucide-react';
 
 // Destino do botão "Ver" por tipo de notificação.
+// `link` genérico tem prioridade (ex.: avisos de lista de espera); depois
+// resolve-se por tipo (viatura disponível → detalhe da viatura) e, por fim,
+// cai nas candidaturas.
 const notificacaoLink = (n: Notificacao): string => {
+  if (n.link) return n.link;
   if (n.tipo === 'viatura_disponivel' && n.viatura_id) return `/viaturas/${n.viatura_id}`;
   return n.candidatura_id
     ? `/motoristas/candidaturas?candidatura=${n.candidatura_id}`
@@ -21,9 +25,11 @@ export const NotificacoesPopup = () => {
   const { tipoUtilizador, loading } = usePermissions();
   const navigate = useNavigate();
 
-  // Ativa para qualquer não-motorista: a RLS já limita o que cada um vê
-  // (cargos para candidaturas; destinatário para avisos de lista de espera).
-  // O popup só renderiza se houver notificações, por isso é inócuo.
+  // Habilita para qualquer utilizador interno (não-motorista). A RLS da tabela
+  // `notificacoes` é a guarda real do que CADA um vê: por cargo (motorista
+  // pendente/escalonamento) OU por destinatário direto (ex.: aviso de viatura
+  // disponível dirigido ao gestor que criou a lista de espera). Restringir aqui
+  // por cargo escondia avisos dirigidos a gestores de outros cargos.
   const enabled = !loading && tipoUtilizador !== 'motorista';
 
   const { notificacoes, resolver } = useNotificacoes(enabled);

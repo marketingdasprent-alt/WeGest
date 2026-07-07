@@ -15,6 +15,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ReciboPreviewDialog } from './ReciboPreviewDialog';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 interface Recibo {
   id: string;
@@ -43,6 +45,11 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
   const isMobile = useIsMobile();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [previewRecibo, setPreviewRecibo] = useState<Recibo | null>(null);
+
+  // Assinatura estável da lista (1.º id + tamanho) para voltar à 1ª página
+  // quando o pai troca de filtro — mesmo que a contagem se mantenha igual.
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(recibos, 25, `${recibos.length}|${recibos[0]?.id ?? ''}`);
 
   const formatCurrency = (value: number | null) =>
     value
@@ -126,7 +133,7 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
               </CardContent>
             </Card>
           ) : (
-            recibos.map((recibo) => (
+            pageItems.map((recibo) => (
               <Card key={recibo.id} className="overflow-hidden">
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between">
@@ -203,6 +210,20 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
           )}
         </div>
 
+        {total > 0 && (
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            start={start}
+            end={end}
+            onPageChange={setPage}
+            noun={['recibo', 'recibos']}
+            pageSizeStr={pageSizeStr}
+            onPageSizeChange={setPageSizeStr}
+          />
+        )}
+
         <ReciboPreviewDialog
           open={!!previewRecibo}
           onOpenChange={(open) => !open && setPreviewRecibo(null)}
@@ -243,7 +264,7 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
                 </TableCell>
               </TableRow>
             ) : (
-              recibos.map((recibo) => (
+              pageItems.map((recibo) => (
                 <TableRow key={recibo.id}>
                   <TableCell className="font-mono">
                     #{String(recibo.codigo).padStart(4, '0')}
@@ -315,6 +336,20 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
             )}
           </TableBody>
         </Table>
+
+        {total > 0 && (
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            start={start}
+            end={end}
+            onPageChange={setPage}
+            noun={['recibo', 'recibos']}
+            pageSizeStr={pageSizeStr}
+            onPageSizeChange={setPageSizeStr}
+          />
+        )}
       </div>
 
       <ReciboPreviewDialog
