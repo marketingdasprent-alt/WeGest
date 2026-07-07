@@ -25,8 +25,16 @@ import {
   saveCheckinDados,
 } from './CheckinDadosSection';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
+import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
 import type { CheckinDadosState } from './CheckinDadosSection';
 import { useOrgId } from '@/contexts/TenantContext';
+import {
+  AssinaturasHandoverSection,
+  type AssinaturasHandoverHandle,
+} from '@/components/assinatura/AssinaturasHandoverSection';
+import { papeisEmFalta } from '@/utils/assinaturasHandover';
+import { useGuardarAssinaturasHandover } from '@/hooks/useAssinaturasHandover';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface RecolhaCheckinStepProps {
   eventoData: PendingEventoData;
@@ -60,6 +68,11 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
   } = eventoData;
   const fazerDepois = eventoData.fazerDepois ?? false;
   const orgId = useOrgId();
+  const { user } = useAuth();
+  const guardarAssinaturas = useGuardarAssinaturasHandover();
+  const assinaturasRef = useRef<AssinaturasHandoverHandle>(null);
+  const responsavelNome =
+    (user?.user_metadata?.nome as string | undefined) ?? user?.email ?? 'Responsável';
 
   const queryClient = useQueryClient();
   const [files, setFiles] = useState<SelectedFile[]>([]);
@@ -157,6 +170,20 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
   };
 
   const handleConfirm = async () => {
+    const sigs = assinaturasRef.current?.getAssinaturas() ?? {
+      motorista: null,
+      responsavel: null,
+    };
+    if (!fazerDepois) {
+      const falta = papeisEmFalta(sigs);
+      if (falta.length > 0) {
+        const labels = falta.map((p) => (p === 'motorista' ? 'do motorista' : 'do responsável'));
+        const ok = window.confirm(
+          `Falta a assinatura ${labels.join(' e ')}. Concluir mesmo assim?`
+        );
+        if (!ok) return;
+      }
+    }
     if (!fazerDepois) {
       if (files.length === 0 && checkinDados.novosDanos.length === 0) {
         toast.error('Adicione pelo menos uma foto/vídeo ou registe um dano com foto');
@@ -214,22 +241,14 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
       }
       const eventoId = evResult.data.id;
 
-      // 2. Close motorista_viaturas association
-      if (motoristaId) {
-        await supabase
-          .from('motorista_viaturas')
-          .update({ status: 'encerrado', data_fim: data })
-          .eq('motorista_id', motoristaId)
-          .eq('viatura_id', viaturaId)
-          .eq('status', 'ativo');
-      } else {
-        // devolucao sem motorista identificado — fechar por viatura_id
-        await supabase
-          .from('motorista_viaturas')
-          .update({ status: 'encerrado', data_fim: data })
-          .eq('viatura_id', viaturaId)
-          .eq('status', 'ativo');
-      }
+      // 2. Close motorista_viaturas association (RPC — evita falha silenciosa
+      // para quem só tem 'calendario_recolhas' e não 'motoristas_gestao')
+      // Cast porque types.ts ainda não foi regenerado após nova RPC.
+      await (supabase as any).rpc('fn_checkin_fechar_motorista_viatura', {
+        p_motorista_id: motoristaId || null,
+        p_viatura_id: viaturaId,
+        p_data_fim: data,
+      });
 
       // 3. Viatura status
       await supabase
@@ -279,6 +298,26 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
             tipo: 'checkin',
             motoristaId,
           });
+
+          // 6a. Assinaturas — falha não reverte o handover
+          try {
+            await guardarAssinaturas.mutateAsync({
+              eventoId,
+              contratoId: contrato.id,
+              orgId,
+              assinadoPorId: userId,
+              motoristaNome: motoristaNome ?? '',
+              motoristaId,
+              responsavelNome,
+              sigMotorista: sigs.motorista,
+              sigResponsavel: sigs.responsavel,
+            });
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Erro inesperado';
+            toast.error('Recolha concluída, mas falha ao guardar assinatura — repita.', {
+              description: message,
+            });
+          }
         }
 
         // 6b. Folha de danos (template) — danos ligados a este contrato + KMs
@@ -292,10 +331,13 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
               .limit(1);
             const tmpl = tmplRows?.[0];
             if (tmpl) {
-              await generateDocumentFromTemplate({
+              const pdf = await generateDocumentFromTemplate({
                 templateId: tmpl.id,
                 motoristaData: { nome: motoristaNome ?? '' },
-                documentData: { viatura_matricula: viatura?.matricula ?? '' },
+                documentData: {
+                  viatura_matricula: viatura?.matricula ?? '',
+                  assinatura_motorista: sigs.motorista ?? '',
+                },
                 viaturaId,
                 contratoId: contrato.id,
                 km_saida: contrato.km_checkout?.toString() ?? '',
@@ -305,6 +347,20 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
                 momentoFolha: isDevolucao ? 'DEVOLUÇÃO' : 'RECOLHA',
                 action: 'print',
               });
+              if (pdf && motoristaId) {
+                const { data: mot } = await supabase
+                  .from('motoristas_ativos')
+                  .select('email')
+                  .eq('id', motoristaId)
+                  .maybeSingle();
+                void emailFolhaDanos({
+                  pdf,
+                  to: mot?.email,
+                  toNome: motoristaNome,
+                  matricula: viatura?.matricula ?? '',
+                  momento: 'RECOLHA',
+                });
+              }
             }
           } catch {
             /* não bloqueia o fluxo principal */
@@ -467,6 +523,12 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
                     ? 'border-orange-200 dark:border-orange-800'
                     : 'border-blue-200 dark:border-blue-800'
                 }
+              />
+
+              <AssinaturasHandoverSection
+                ref={assinaturasRef}
+                motoristaNome={motoristaNome ?? ''}
+                responsavelNome={responsavelNome}
               />
 
               <div className="space-y-3">

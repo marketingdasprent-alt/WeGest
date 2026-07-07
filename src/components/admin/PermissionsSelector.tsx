@@ -102,6 +102,7 @@ const RECURSO_LABELS: Record<string, string> = {
   viaturas_eliminar: 'Eliminar viaturas',
   viaturas_financeiro: 'Ver dados financeiros das viaturas',
   viaturas_marcas_modelos: 'Criar/editar marcas, modelos e versões',
+  viaturas_grupos: 'Criar/editar grupos, tarifas, coberturas, extras e taxas (renting)',
   // Contratos
   contratos_ver: 'Ver contratos',
   contratos_criar: 'Criar novos contratos',
@@ -132,6 +133,7 @@ const RECURSO_LABELS: Record<string, string> = {
   assistencia_tickets: 'Gestão completa de assistência',
   // Administração
   admin_utilizadores: 'Gerir utilizadores e contas',
+  admin_convites: 'Gerir Convites',
   admin_grupos: 'Gerir grupos e permissões',
   admin_documentos: 'Gerir templates de documentos',
   admin_documentos_preview: 'Pré-visualizar templates de documentos',

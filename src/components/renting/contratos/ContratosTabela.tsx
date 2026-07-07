@@ -143,7 +143,19 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
                 className="border-border hover:bg-muted/30 cursor-pointer"
                 onClick={() => onRowClick(c)}
               >
-                <TableCell className="font-medium text-foreground">{c.codigo}</TableCell>
+                <TableCell className="font-medium text-foreground">
+                  <div className="flex items-center gap-1.5">
+                    {c.codigo}
+                    {c.versao > 1 && (
+                      <span
+                        className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                        title={`${c.versao} versões (histórico de alterações)`}
+                      >
+                        v{c.versao}
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="text-foreground">{c.matricula ?? '—'}</TableCell>
                 <TableCell className="text-muted-foreground">{c.grupo ?? '—'}</TableCell>
                 <TableCell className="text-muted-foreground">

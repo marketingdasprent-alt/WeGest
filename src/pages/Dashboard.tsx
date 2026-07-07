@@ -197,21 +197,30 @@ const Dashboard = () => {
       const [{ data: viaturas }, ocupacao] = await Promise.all([
         supabase
           .from('viaturas')
-          .select('id, status, matricula, valor_aluguer')
+          .select('id, status, is_slot, is_vendida, matricula, valor_aluguer')
           .neq('status', 'vendida'),
         fetchViaturasOcupacao(),
       ]);
 
-      const estadosFrota = (viaturas ?? []).map((v) =>
-        deriveViaturaEstado({ status: v.status }, ocupacao.get(v.id))
-      );
+      // Estado derivado com is_slot/is_vendida (necessários ao derivador).
+      // "Disponíveis" exclui viaturas slot — os slots são uma categoria à parte
+      // (têm o seu próprio card na Frota) e nunca entram na contagem geral de
+      // disponíveis, tenham ou não motorista vinculado.
+      const estadosFrota = (viaturas ?? []).map((v) => ({
+        estado: deriveViaturaEstado(
+          { status: v.status, is_slot: v.is_slot, is_vendida: v.is_vendida },
+          ocupacao.get(v.id)
+        ),
+        isSlot: !!v.is_slot,
+      }));
 
       const fleetCounts: FleetCounts = {
         total: viaturas?.length || 0,
-        disponiveis: estadosFrota.filter((e) => e === 'disponivel').length,
-        ocupadas: estadosFrota.filter((e) => (ESTADOS_EM_USO as readonly string[]).includes(e))
-          .length,
-        manutencao: estadosFrota.filter((e) => e === 'manutencao').length,
+        disponiveis: estadosFrota.filter((e) => e.estado === 'disponivel' && !e.isSlot).length,
+        ocupadas: estadosFrota.filter((e) =>
+          (ESTADOS_EM_USO as readonly string[]).includes(e.estado)
+        ).length,
+        manutencao: estadosFrota.filter((e) => e.estado === 'manutencao').length,
       };
       setFleet(fleetCounts);
 

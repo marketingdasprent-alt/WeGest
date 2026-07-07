@@ -278,7 +278,7 @@ const NativeAppRoutes = () => {
         <Route
           path="/admin/invites"
           element={
-            <ProtectedRoute requireAdmin={true} requiredResource={RECURSOS.ADMIN_UTILIZADORES}>
+            <ProtectedRoute requireAdmin={true} requiredResource={RECURSOS.ADMIN_CONVITES}>
               <DashboardLayout>
                 <AdminInvites />
               </DashboardLayout>

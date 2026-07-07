@@ -181,6 +181,19 @@ const TicketDetails = () => {
     if (id) accessPanelRef.current?.fetchAcessos(id);
   }, [id]);
 
+  useEffect(() => {
+    if (!ticket?.viatura_substituta_id) {
+      setViaturaSubstituta(null);
+      return;
+    }
+    supabase
+      .from('viaturas')
+      .select('id, matricula, marca, modelo')
+      .eq('id', ticket.viatura_substituta_id)
+      .maybeSingle()
+      .then(({ data }) => setViaturaSubstituta(data));
+  }, [ticket?.viatura_substituta_id]);
+
   const handleSendMessage = async () => {
     const ok = await sendMessage({ text: novaMensagem, files: selectedFiles, ticket });
     if (ok) {
@@ -236,7 +249,7 @@ const TicketDetails = () => {
       console.error('Erro ao atualizar estado:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível atualizar o estado.',
+        description: error.message || 'Não foi possível atualizar o estado.',
         variant: 'destructive',
       });
     }
@@ -245,24 +258,36 @@ const TicketDetails = () => {
   const handleAceitarTicket = async () => {
     if (!ticket || !viatura) return;
     try {
-      await supabase
+      const { error: statusError } = await supabase
         .from('assistencia_tickets')
         .update({ status: 'em_andamento' })
         .eq('id', ticket.id);
+      if (statusError) throw statusError;
 
-      await supabase.from('viaturas').update({ status: 'manutencao' }).eq('id', viatura.id);
+      const { error: viaturaError } = await supabase
+        .from('viaturas')
+        .update({ status: 'manutencao' })
+        .eq('id', viatura.id);
+      if (viaturaError) throw viaturaError;
 
-      await supabase.from('assistencia_mensagens').insert({
+      const { error: mensagemError } = await supabase.from('assistencia_mensagens').insert({
         ticket_id: ticket.id,
         autor_id: user?.id,
         mensagem: 'Ticket aceite. Viatura colocada em manutenção.',
         tipo: 'status_change',
       });
+      if (mensagemError) throw mensagemError;
+
       toast({ title: 'Ticket aceite', description: 'Viatura colocada em manutenção.' });
       refreshAll();
     } catch (error: any) {
       toast({ title: 'Erro', description: error.message, variant: 'destructive' });
     }
+  };
+
+  const handleAbrirSubstitutaModal = async () => {
+    setShowSubstituteModal(true);
+    await fetchViaturasDisponiveis();
   };
 
   const fetchViaturasDisponiveis = async () => {
@@ -278,24 +303,36 @@ const TicketDetails = () => {
     if (!ticket || !motorista) return;
     try {
       setAssigningSubstitute(true);
-      await supabase.from('motorista_viaturas').insert({
+
+      const { error: mvError } = await supabase.from('motorista_viaturas').insert({
         motorista_id: motorista.id,
         viatura_id: viaturaId,
         data_inicio: new Date().toISOString().split('T')[0],
         status: 'ativo',
         tipo: 'substituta',
       });
-      await supabase.from('viaturas').update({ status: 'em_uso' }).eq('id', viaturaId);
-      await supabase
+      if (mvError) throw mvError;
+
+      const { error: viaturaError } = await supabase
+        .from('viaturas')
+        .update({ status: 'em_uso' })
+        .eq('id', viaturaId);
+      if (viaturaError) throw viaturaError;
+
+      const { error: ticketError } = await supabase
         .from('assistencia_tickets')
         .update({ viatura_substituta_id: viaturaId })
         .eq('id', ticket.id);
-      await supabase.from('assistencia_mensagens').insert({
+      if (ticketError) throw ticketError;
+
+      const { error: mensagemError } = await supabase.from('assistencia_mensagens').insert({
         ticket_id: ticket.id,
         autor_id: user?.id,
         mensagem: `Viatura substituta atribuída ao motorista durante a reparação.`,
         tipo: 'status_change',
       });
+      if (mensagemError) throw mensagemError;
+
       setShowSubstituteModal(false);
       toast({ title: 'Viatura substituta atribuída.' });
       refreshAll();
@@ -394,6 +431,11 @@ const TicketDetails = () => {
           viatura={viatura}
           motorista={motorista}
           criador={criador}
+          viaturaSubstituta={viaturaSubstituta}
+          canAtribuirSubstituta={
+            canChangeStatus && !['resolvido', 'fechado'].includes(ticket.status)
+          }
+          onAtribuirSubstituta={handleAbrirSubstitutaModal}
           onOpenGallery={() => setShowGalleryDialog(true)}
         />
       </div>

@@ -440,7 +440,7 @@ export const SidebarMenu: React.FC = () => {
             return <NavItem key={item.label} item={item} />;
           })}
           {hasAdminAccess && (
-            <NavItem item={{ label: 'Administração', url: '/admin/settings', icon: Settings }} />
+            <NavItem item={{ label: 'Definições', url: '/admin/settings', icon: Settings }} />
           )}
         </div>
       </ScrollArea>

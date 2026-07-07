@@ -5,6 +5,7 @@ import { InviteGenerationForm } from '@/components/admin/InviteGenerationForm';
 import { GeneratedInviteDisplay } from '@/components/admin/GeneratedInviteDisplay';
 import { AdminLoadingState } from '@/components/admin/AdminLoadingState';
 import { AdminAccessDenied } from '@/components/admin/AdminAccessDenied';
+import { MotoristaInviteLink } from '@/components/admin/MotoristaInviteLink';
 
 const AdminInvites = () => {
   const [generatedLink, setGeneratedLink] = useState('');
@@ -35,6 +36,8 @@ const AdminInvites = () => {
           <InviteGenerationForm onInviteGenerated={handleInviteGenerated} />
 
           {generatedLink && <GeneratedInviteDisplay inviteLink={generatedLink} />}
+
+          <MotoristaInviteLink />
         </div>
       </div>
     </div>

@@ -107,6 +107,7 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
         contratoCodigo={contrato.codigo}
         motoristaId={motoristaId}
         matricula={contrato.matricula}
+        viaturaId={contrato.viatura_id}
       />
 
       {/* Rent-a-car / outros: AlertDialog simples */}

@@ -28,6 +28,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useConsumirTokenRealizacao, useRealizarFromToken } from '@/hooks/useRealizacaoToken';
 import { formatMatricula } from '@/components/calendario/calendarioUtils';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
+import { resolverCondutor } from './resolverCondutor';
+import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
+import {
+  AssinaturasHandoverSection,
+  type AssinaturasHandoverHandle,
+} from '@/components/assinatura/AssinaturasHandoverSection';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface FilePreview {
   id: string;
@@ -71,6 +78,9 @@ interface RascunhoCache {
 
 const cacheKey = (token: string) => `realizar-rascunho-${token}`;
 
+const tipoLabel = (tipo: 'entrega' | 'recolha' | 'troca' | undefined): string =>
+  tipo === 'entrega' ? 'Entrega' : tipo === 'troca' ? 'Troca' : 'Recolha';
+
 const fileToDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -102,6 +112,10 @@ const RealizarEntregaPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const restauradoRef = useRef(false);
+  const assinaturasRef = useRef<AssinaturasHandoverHandle>(null);
+  const { user } = useAuth();
+  const responsavelNome =
+    (user?.user_metadata?.nome as string | undefined) ?? user?.email ?? 'Responsável';
 
   // Contexto da folha: viatura (danos), empresa emissora (cabeçalho) e condutor
   // principal (assinatura). Resolvido uma vez e lido pelo preview/confirmar.
@@ -112,7 +126,7 @@ const RealizarEntregaPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('contratos_renting')
-        .select('viatura_id, emissor_id, cliente_id')
+        .select('viatura_id, emissor_id, cliente_id, km_saida, combustivel_saida')
         .eq('id', contratoId!)
         .maybeSingle();
       const empty = {
@@ -120,7 +134,10 @@ const RealizarEntregaPage = () => {
         emissorId: null as string | null,
         empresaData: null as Record<string, string> | null,
         condutorNome: '',
+        condutorEmail: '',
         clienteNome: '',
+        kmSaida: null as number | null,
+        combustivelSaida: null as string | null,
       };
       if (!data) return empty;
 
@@ -147,41 +164,66 @@ const RealizarEntregaPage = () => {
         }
       }
 
-      // Condutor principal (contrato_condutores) → {{motorista_nome}}. Nunca o
-      // locatário/empresa. Sem condutor, fica vazio para assinatura à mão.
-      let condutorNome = '';
+      // Condutor principal (contrato_condutores) → {{motorista_nome}}. O
+      // condutor é um cliente-tipo-condutor (cliente_id) OU um motorista
+      // parceiro TVDE (motorista_id) — XOR na tabela. Resolver do lado certo.
+      // Nunca o locatário/empresa. Sem condutor, fica vazio para assinar à mão.
       const { data: cond } = await supabase
         .from('contrato_condutores')
-        .select('cliente_id, is_principal')
+        .select('cliente_id, motorista_id, is_principal')
         .eq('contrato_id', contratoId!)
         .order('is_principal', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      let clienteCondutor: { nome: string; email: string | null } | null = null;
+      let motoristaCondutor: { nome: string; email: string | null } | null = null;
       if (cond?.cliente_id) {
         const { data: cli } = await supabase
           .from('clientes')
-          .select('nome, nome_comercial')
+          .select('nome, nome_comercial, email')
           .eq('id', cond.cliente_id)
           .maybeSingle();
-        if (cli) condutorNome = cli.nome || cli.nome_comercial || '';
+        if (cli) clienteCondutor = { nome: cli.nome || cli.nome_comercial || '', email: cli.email };
+      } else if (cond?.motorista_id) {
+        const { data: mot } = await supabase
+          .from('motoristas_ativos')
+          .select('nome, email')
+          .eq('id', cond.motorista_id)
+          .maybeSingle();
+        if (mot?.nome) motoristaCondutor = { nome: mot.nome, email: mot.email };
       }
+
       // Sem condutor no contrato → o motorista atribuído à viatura (TVDE).
-      if (!condutorNome && data.viatura_id) {
+      // Só a associação ATIVA — senão qualquer motorista histórico daquela
+      // viatura (status='encerrado') podia ser apanhado por engano.
+      let motoristaViaturaAtivo: { nome: string; email: string | null } | null = null;
+      if (!clienteCondutor && !motoristaCondutor && data.viatura_id) {
         const { data: mv } = await supabase
           .from('motorista_viaturas')
           .select('motorista_id')
           .eq('viatura_id', data.viatura_id)
+          .eq('status', 'ativo')
+          .order('data_inicio', { ascending: false })
           .limit(1)
           .maybeSingle();
         if (mv?.motorista_id) {
           const { data: mot } = await supabase
             .from('motoristas_ativos')
-            .select('nome')
+            .select('nome, email')
             .eq('id', mv.motorista_id)
             .maybeSingle();
-          if (mot?.nome) condutorNome = mot.nome;
+          if (mot?.nome) motoristaViaturaAtivo = { nome: mot.nome, email: mot.email };
         }
       }
+
+      const { nome: condutorNome, email: condutorEmail } = resolverCondutor({
+        condutorContrato:
+          clienteCondutor || motoristaCondutor
+            ? { cliente: clienteCondutor, motorista: motoristaCondutor }
+            : null,
+        motoristaViaturaAtivo,
+      });
 
       // Cliente/locatário → {{cliente_nome}}.
       let clienteNome = '';
@@ -199,7 +241,10 @@ const RealizarEntregaPage = () => {
         emissorId: (data.emissor_id as string | undefined) ?? null,
         empresaData,
         condutorNome,
+        condutorEmail,
         clienteNome,
+        kmSaida: (data.km_saida as number | null) ?? null,
+        combustivelSaida: (data.combustivel_saida as string | null) ?? null,
       };
     },
   });
@@ -297,7 +342,10 @@ const RealizarEntregaPage = () => {
         return;
       }
       const tmpl = { id: tmplId };
-      const isEntrega = info.tipo === 'entrega';
+      // Troca trata-se como entrega para efeitos de folha/km/combustível — é
+      // a viatura nova que fica com o motorista, dados dela é que interessa
+      // registar (a antiga já teve a sua própria entrega no passado).
+      const isEntrega = info.tipo === 'entrega' || info.tipo === 'troca';
       // Na pré-visualização, as fotos ainda não estão na BD — passa-as como
       // data URLs para aparecerem na folha. No print (após confirmar) já estão
       // gravadas como dano, por isso não as duplicamos aqui.
@@ -316,9 +364,14 @@ const RealizarEntregaPage = () => {
                 estado: 'existente',
                 data: format(new Date(), 'dd/MM/yyyy'),
                 valor: f.valor.trim() ? `${Number(f.valor).toFixed(2)} €` : undefined,
+                origem: 'Nesta recolha/entrega',
               }))
           : undefined;
       const hoje = new Date().toISOString().slice(0, 10);
+      const sigs = assinaturasRef.current?.getAssinaturas() ?? {
+        motorista: null,
+        responsavel: null,
+      };
       const pdf = await generateDocumentFromTemplate({
         templateId: tmpl.id,
         motoristaData: { nome: contexto?.condutorNome ?? '' },
@@ -327,14 +380,24 @@ const RealizarEntregaPage = () => {
           data_assinatura: hoje,
           cidade_assinatura: info.cidade ?? '',
           clienteData: { nome: contexto?.clienteNome ?? '' },
+          assinatura_motorista: sigs.motorista ?? '',
+          assinatura_responsavel: sigs.responsavel ?? '',
+          responsavel_nome: responsavelNome,
+          momento_responsavel: isEntrega ? 'Entregue por' : 'Recolhido por',
           ...(contexto?.empresaData ? { empresaData: contexto.empresaData } : {}),
         },
         viaturaId: contexto?.viaturaId ?? undefined,
+        contratoId: info.contrato_id,
         momentoFolha: isEntrega ? 'ENTREGA' : 'RECOLHA',
         observacoesMomento: observacoes,
         ...(isEntrega
           ? { km_saida: km, combustivel_saida: combustivel }
-          : { km_entrada: km, combustivel_entrada: combustivel }),
+          : {
+              km_entrada: km,
+              combustivel_entrada: combustivel,
+              km_saida: contexto?.kmSaida?.toString() ?? '',
+              combustivel_saida: contexto?.combustivelSaida ?? '',
+            }),
         ...(fotosMomento ? { fotosMomento } : {}),
         ...(danosMomento?.length ? { danosMomento } : {}),
         action: modo === 'print' ? 'print' : 'download',
@@ -342,6 +405,15 @@ const RealizarEntregaPage = () => {
       });
       if (modo === 'preview' && pdf) {
         window.open(pdf.output('bloburl'), '_blank');
+      }
+      if (modo === 'print' && pdf) {
+        void emailFolhaDanos({
+          pdf,
+          to: contexto?.condutorEmail,
+          toNome: contexto?.condutorNome,
+          matricula: info.matricula,
+          momento: isEntrega ? 'ENTREGA' : 'RECOLHA',
+        });
       }
     } catch (err) {
       toast({
@@ -394,7 +466,22 @@ const RealizarEntregaPage = () => {
     // Paths já enviados ao storage — para limpar em caso de falha e não
     // deixar ficheiros órfãos (upload a meio falhou ou o insert rebentou).
     const uploadedPaths: string[] = [];
+    const isEntrega = info.tipo === 'entrega' || info.tipo === 'troca';
     try {
+      // Gravar km/combustível no contrato — sem isto a Recolha nunca teria
+      // como saber o km/combustível de Saída registados na Entrega (ver
+      // migration 20260702102439).
+      const kmNum = Number(km);
+      const { error: kmErr } = await supabase
+        .from('contratos_renting')
+        .update(
+          isEntrega
+            ? { km_saida: kmNum, combustivel_saida: combustivel }
+            : { km_entrada: kmNum, combustivel_entrada: combustivel }
+        )
+        .eq('id', info.contrato_id);
+      if (kmErr) throw kmErr;
+
       if (files.length > 0) {
         const { data: auth } = await supabase.auth.getUser();
         const userId = auth.user?.id ?? null;
@@ -410,8 +497,6 @@ const RealizarEntregaPage = () => {
           vId = (cr?.viatura_id as string | undefined) ?? null;
         }
         if (!vId) throw new Error('Viatura do contrato não encontrada.');
-
-        const isEntrega = info.tipo === 'entrega';
         // Cada foto vira um registo de dano com a localização/descrição/valor
         // que o gestor escreveu, ligado ao contrato → aparece na tabela da
         // folha e na página do veículo. As observações gerais vão no campo
@@ -508,9 +593,7 @@ const RealizarEntregaPage = () => {
         <Card className="border-emerald-500/40 bg-emerald-500/5">
           <CardContent className="p-6 text-center space-y-3">
             <CheckCircle2 className="h-12 w-12 mx-auto text-emerald-600" />
-            <h2 className="font-semibold text-lg">
-              {info?.tipo === 'entrega' ? 'Entrega' : 'Recolha'} confirmada
-            </h2>
+            <h2 className="font-semibold text-lg">{tipoLabel(info?.tipo)} confirmada</h2>
             <p className="text-sm text-muted-foreground">
               O evento ficou marcado como realizado. Já podes fechar esta janela.
             </p>
@@ -552,13 +635,16 @@ const RealizarEntregaPage = () => {
   }
 
   const matricula = formatMatricula(info.matricula);
+  const matriculaDevolver = info.matricula_devolver
+    ? formatMatricula(info.matricula_devolver)
+    : null;
   const isPending = uploading || realizar.isPending;
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto px-4 pt-4">
       <StickyPageHeader
-        title={info.tipo === 'entrega' ? 'Realizar Entrega' : 'Realizar Recolha'}
-        description={`${matricula}${info.cidade ? ` · ${info.cidade}` : ''} · ${format(
+        title={`Realizar ${tipoLabel(info.tipo)}`}
+        description={`${info.tipo === 'troca' && matriculaDevolver ? `${matriculaDevolver} ↔ ${matricula}` : matricula}${info.cidade ? ` · ${info.cidade}` : ''} · ${format(
           new Date(info.data_inicio),
           "dd/MM 'às' HH:mm",
           { locale: pt }
@@ -571,7 +657,17 @@ const RealizarEntregaPage = () => {
         </Button>
       </StickyPageHeader>
 
-      <div className="p-4 space-y-4">
+      <div className="space-y-4 pb-4">
+        {info.tipo === 'troca' && matriculaDevolver && (
+          <Card className="border-amber-500/40 bg-amber-500/5">
+            <CardContent className="p-4 text-sm">
+              <span className="font-medium">Troca de viatura:</span> devolver{' '}
+              <span className="font-semibold">{matriculaDevolver}</span> e entregar{' '}
+              <span className="font-semibold">{matricula}</span>. Os dados abaixo (km, combustível,
+              danos) referem-se à viatura entregue ({matricula}).
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardContent className="p-4 space-y-4">
             <div className="space-y-2">
@@ -592,7 +688,7 @@ const RealizarEntregaPage = () => {
               <Label>
                 Combustível <span className="text-red-500">*</span>
               </Label>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
                 {['Reserva', '1/4', '1/2', '3/4', 'Cheio'].map((nivel) => (
                   <button
                     key={nivel}
@@ -711,7 +807,7 @@ const RealizarEntregaPage = () => {
                         placeholder="Descrição do dano"
                         value={f.descricao}
                         onChange={(e) => updateFoto(f.id, 'descricao', e.target.value)}
-                        className="col-span-2 h-9"
+                        className="col-span-2 h-9 min-w-0"
                       />
                     </div>
                   </div>
@@ -721,14 +817,23 @@ const RealizarEntregaPage = () => {
           </CardContent>
         </Card>
 
+        {/* Assinaturas — motorista assina digitalmente; sai na folha de danos */}
+        <Card>
+          <CardContent className="p-4">
+            <AssinaturasHandoverSection
+              ref={assinaturasRef}
+              motoristaNome={contexto?.condutorNome ?? ''}
+              responsavelNome={responsavelNome}
+            />
+          </CardContent>
+        </Card>
+
         {/* Folha de Danos — guardar rascunho + pré-visualizar antes de confirmar */}
         <Card>
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <Label className="m-0">
-                Folha de Danos ({info.tipo === 'entrega' ? 'Entrega' : 'Recolha'})
-              </Label>
+              <Label className="m-0">Folha de Danos ({tipoLabel(info.tipo)})</Label>
             </div>
             <p className="text-sm text-muted-foreground">
               Guarda o rascunho e pré-visualiza a folha. Se algo estiver errado, ajusta e

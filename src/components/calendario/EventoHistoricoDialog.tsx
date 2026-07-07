@@ -7,6 +7,7 @@ import { pt } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Clock, User, History } from 'lucide-react';
 import { formatMatricula } from './EventoCard';
+import { TIPO_LABELS, TIPO_ACCENT_COLORS, TIPO_TITLE_COLORS } from './eventoTipoConfig';
 import type { CalendarioEvento } from '@/pages/Calendario';
 
 interface Props {
@@ -24,12 +25,6 @@ const CAMPO_LABELS: Record<string, string> = {
   dia_todo: 'Dia inteiro',
   descricao: 'Observações',
   matricula_devolver: 'Mat. a Devolver',
-};
-
-const TIPO_LABELS: Record<string, string> = {
-  entrega: 'Entrega',
-  recolha: 'Recolha',
-  devolucao: 'Devolução',
 };
 
 function formatValue(campo: string, valor: string | null): string {
@@ -82,18 +77,21 @@ export const EventoHistoricoDialog: React.FC<Props> = ({ open, onOpenChange, eve
 
   if (!evento) return null;
 
+  const tituloColor = TIPO_TITLE_COLORS[evento.tipo] || TIPO_TITLE_COLORS.entrega;
+  const accentColor = TIPO_ACCENT_COLORS[evento.tipo] || TIPO_ACCENT_COLORS.entrega;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className={`flex items-center gap-2 ${tituloColor}`}>
             <History className="h-5 w-5" />
             Detalhes do Evento
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3 text-sm">
-          <div className="border rounded-lg p-3 bg-muted/30 space-y-1">
+          <div className={`border-2 rounded-lg p-3 space-y-1 ${accentColor}`}>
             <p>
               <span className="font-medium">
                 {evento.tipo === 'troca' ? 'Mat. a Entregar:' : 'Matrícula:'}

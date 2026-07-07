@@ -4,6 +4,7 @@ import type { UseFormReturn } from 'react-hook-form';
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Estacao } from '@/hooks/useEstacoes';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
+import type { RentingGrupoMin } from '@/hooks/useRentingGruposTarifas';
 import { ALDFields } from '@/components/renting/shared/ALDFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
 import type { ContratoFormValues } from './contratoForm.schema';
@@ -17,6 +18,9 @@ interface ContratoFormSecoesProps {
   form: UseFormReturn<ContratoFormValues>;
   clientes: ClienteComDocumentos[];
   viaturas: ViaturaBasic[];
+  grupos: RentingGrupoMin[];
+  /** Grupo tarifário da viatura actual do contrato (edição) — orienta o agrupamento do selector. */
+  grupoIdAtual?: string | null;
   estacoes: Estacao[];
   /** Trava o campo viatura — usado quando o contrato vem de reserva. */
   viaturaLocked?: boolean;
@@ -33,6 +37,8 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   form,
   clientes,
   viaturas,
+  grupos,
+  grupoIdAtual,
   estacoes,
   viaturaLocked,
   reservaCodigo,
@@ -45,6 +51,8 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
     <SectionViatura
       form={form}
       viaturas={viaturas}
+      grupos={grupos}
+      grupoIdAtual={grupoIdAtual ?? null}
       viaturaLocked={viaturaLocked}
       reservaCodigo={reservaCodigo}
       onViaturaChange={onViaturaChange}

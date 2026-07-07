@@ -8,6 +8,8 @@ import {
   AlertTriangle,
   ArrowLeft,
   CalendarClock,
+  ChevronLeft,
+  ChevronRight,
   FileText,
   Loader2,
   Printer,
@@ -15,6 +17,16 @@ import {
 } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Form } from '@/components/ui/form';
@@ -33,9 +45,11 @@ import { useContratoCondutores, useSyncContratoCondutores } from '@/hooks/useCon
 import {
   useContratoConflito,
   useContratoRenting,
+  useContratoVizinhos,
   useCreateContratoRenting,
   useCriarVersaoContrato,
   useDeleteContratoRenting,
+  useMarcarRealizacaoDireta,
   useUpdateContratoRenting,
 } from '@/hooks/useContratosRenting';
 import { useEstacoes } from '@/hooks/useEstacoes';
@@ -95,7 +109,7 @@ import type { CondutorFormItem } from '@/types/reserva';
 
 const ContratoForm = () => {
   const { id } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const isEdit = !!id;
@@ -114,6 +128,7 @@ const ContratoForm = () => {
   const { data: tarifas = [] } = useRentingTarifasMin();
   const { data: orgDefinicoes } = useOrgDefinicoes();
   const { data: contrato, isLoading: loadingContrato } = useContratoRenting(id ?? null);
+  const { data: vizinhos } = useContratoVizinhos(contrato?.codigo ?? null);
 
   // Garante que a hidratação reserva→contrato (form.reset) só corre UMA vez —
   // senão um refetch da reserva volta a fazer reset e apaga edições/condutores.
@@ -138,6 +153,7 @@ const ContratoForm = () => {
   const updateMutation = useUpdateContratoRenting();
   const deleteMutation = useDeleteContratoRenting();
   const criarVersaoMutation = useCriarVersaoContrato();
+  const marcarRealizacaoDireta = useMarcarRealizacaoDireta();
   const syncCondutoresMutation = useSyncContratoCondutores();
   const syncCoberturasMutation = useSyncContratoCoberturas();
   const syncExtrasMutation = useSyncContratoExtras();
@@ -168,6 +184,9 @@ const ContratoForm = () => {
     eventoId: string;
     tipo: 'entrega' | 'recolha';
   } | null>(null);
+  /** Confirmação do atalho "marcar como já realizada" (sem fotos/km) —
+   *  para contratos antigos/legado sem informação de check-in. */
+  const [confirmarRealizacaoDireta, setConfirmarRealizacaoDireta] = useState(false);
   /** Dialog "Gerar Documentos" (checklist de templates → 1 PDF combinado). */
   const [docsDialogOpen, setDocsDialogOpen] = useState(false);
 
@@ -534,14 +553,35 @@ const ContratoForm = () => {
     staleTime: 0,
   });
 
-  // A realização (entrega/recolha) NÃO abre modal automaticamente — seria uma
-  // modal bloqueante a cada abertura do contrato (um contrato fica em_curso
-  // dias/semanas à espera da devolução). Mostramos um banner não-bloqueante
-  // (ver abaixo) com um botão que abre o dialog só quando o user quer.
+  // A realização (entrega/recolha) NÃO abre modal automaticamente em toda
+  // abertura do contrato — seria bloqueante enquanto o contrato fica
+  // em_curso dias/semanas à espera da devolução. Mostramos um banner
+  // não-bloqueante (ver abaixo) com um botão que abre o dialog quando o
+  // user quer. EXCEÇÃO: mesmo assim que o contrato é criado (?criado=1 na
+  // URL), abrimos o dialog uma única vez — é o momento natural de já
+  // entregar a viatura, sem ter de voltar a abrir o contrato ou ir ao
+  // Calendário para isso.
   const realizacaoPendente =
     !fetchingEventoPendente && !!eventoPendente && !contrato?.substituido_em
       ? eventoPendente
       : null;
+
+  const abriuEntregaAoCriarRef = useRef(false);
+  useEffect(() => {
+    if (abriuEntregaAoCriarRef.current) return;
+    if (searchParams.get('criado') !== '1') return;
+    if (!realizacaoPendente || realizacaoPendente.tipo !== 'entrega') return;
+    abriuEntregaAoCriarRef.current = true;
+    setRealizarDialog({ eventoId: realizacaoPendente.id, tipo: 'entrega' });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('criado');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [realizacaoPendente, searchParams, setSearchParams]);
 
   const conflitoArgs = useMemo(() => {
     const di = dataInicio ? new Date(dataInicio) : null;
@@ -731,7 +771,10 @@ const ContratoForm = () => {
       createMutation.mutate(payload, {
         onSuccess: async (created) => {
           await syncRelacoes(created.id);
-          navigate(`/renting/contratos/${created.id}`);
+          // ?criado=1 dispara a proposta automática de "Realizar entrega"
+          // (ver useEffect abriuEntregaAoCriarRef) — só nesta primeira
+          // navegação, não em reaberturas normais do contrato.
+          navigate(`/renting/contratos/${created.id}?criado=1`);
         },
       });
     }
@@ -865,7 +908,52 @@ const ContratoForm = () => {
   return (
     <div className="w-full">
       <StickyPageHeader
-        title={isEdit ? `Contrato #${contrato?.codigo}` : 'Novo Contrato'}
+        title={
+          isEdit ? (
+            <span className="flex items-center gap-1">
+              {/* Setas em lugar fixo junto ao título — nunca deslocam com a
+                  fila de ações (que muda de tamanho consoante o estado do
+                  contrato, ex.: "Fechar contrato" só aparece se ainda aberto). */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 -ml-1"
+                disabled={!vizinhos?.anterior}
+                title={
+                  vizinhos?.anterior
+                    ? `Contrato anterior — #${vizinhos.anterior.codigo}`
+                    : undefined
+                }
+                onClick={() =>
+                  vizinhos?.anterior && navigate(`/renting/contratos/${vizinhos.anterior.id}`)
+                }
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {`Contrato #${contrato?.codigo}`}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                disabled={!vizinhos?.seguinte}
+                title={
+                  vizinhos?.seguinte
+                    ? `Contrato seguinte — #${vizinhos.seguinte.codigo}`
+                    : undefined
+                }
+                onClick={() =>
+                  vizinhos?.seguinte && navigate(`/renting/contratos/${vizinhos.seguinte.id}`)
+                }
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </span>
+          ) : (
+            'Novo Contrato'
+          )
+        }
         description={isEdit ? 'Editar dados do contrato existente' : 'Novo contrato de renting'}
         icon={FileText}
       >
@@ -962,22 +1050,70 @@ const ContratoForm = () => {
               (fotos, km e confirmação) quando estiver pronta.
             </p>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() =>
-              setRealizarDialog({
-                eventoId: realizacaoPendente.id,
-                tipo: realizacaoPendente.tipo,
-              })
-            }
-            className="shrink-0 gap-2"
-          >
-            <FileText className="h-4 w-4" />
-            Realizar {realizacaoPendente.tipo === 'entrega' ? 'entrega' : 'recolha'}
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() =>
+                setRealizarDialog({
+                  eventoId: realizacaoPendente.id,
+                  tipo: realizacaoPendente.tipo,
+                })
+              }
+              className="gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Realizar {realizacaoPendente.tipo === 'entrega' ? 'entrega' : 'recolha'}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setConfirmarRealizacaoDireta(true)}
+              disabled={marcarRealizacaoDireta.isPending}
+              title="Marca como realizada sem passar pelo check (fotos/km) — para contratos já existentes no Any Rent."
+            >
+              {marcarRealizacaoDireta.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                'Any Rent'
+              )}
+            </Button>
+          </div>
         </div>
       )}
+
+      {/* Confirmação do atalho "marcar como já realizada" (sem check) */}
+      <AlertDialog open={confirmarRealizacaoDireta} onOpenChange={setConfirmarRealizacaoDireta}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Marcar {realizacaoPendente?.tipo === 'entrega' ? 'entrega' : 'recolha'} como já
+              realizada?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              O contrato passa para o estado seguinte sem registar fotos, km ou confirmação no
+              terreno. Usa isto só para contratos já existentes no <strong>Any Rent</strong> — essa
+              informação nunca existiu porque foram migrados de outro sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!contrato || !realizacaoPendente) return;
+                marcarRealizacaoDireta.mutate({
+                  contratoId: contrato.id,
+                  tipo: realizacaoPendente.tipo,
+                });
+                setConfirmarRealizacaoDireta(false);
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
         <Card className="bg-card border-border">
@@ -991,6 +1127,12 @@ const ContratoForm = () => {
                       form={form}
                       clientes={clientes}
                       viaturas={viaturasParaSelecao}
+                      grupos={grupos}
+                      grupoIdAtual={
+                        contrato
+                          ? (viaturas.find((v) => v.id === contrato.viatura_id)?.grupo_id ?? null)
+                          : null
+                      }
                       estacoes={estacoes}
                       viaturaLocked={viaturaLocked}
                       reservaCodigo={reservaAssociada?.codigo ?? null}

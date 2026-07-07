@@ -47,6 +47,9 @@ interface Motorista {
   morada: string | null;
   email: string | null;
   telefone: string | null;
+  cartao_bp?: string | null;
+  cartao_repsol?: string | null;
+  cartao_edp?: string | null;
   data_contratacao?: string | null;
   cidade?: string | null;
   cidade_assinatura?: string | null;
@@ -98,6 +101,7 @@ export const GenerateDocumentsDialog = ({
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
   const [cidadeAssinatura, setCidadeAssinatura] = useState('Leiria');
+  const [dataAssinatura, setDataAssinatura] = useState('');
   const [selectedEmpresa, setSelectedEmpresa] = useState(defaultEmpresaId);
   const [isGenerating, setIsGenerating] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -106,6 +110,15 @@ export const GenerateDocumentsDialog = ({
 
   // Motorista ativo: das props OU selecionado internamente
   const activeMotorista = motorista || selectedMotorista;
+
+  // Data de assinatura editável no modal — default: data de contratação do
+  // motorista (se existir) ou hoje. Recalculada ao abrir/trocar de motorista.
+  useEffect(() => {
+    if (!open) return;
+    const hoje = new Date().toISOString().split('T')[0];
+    setDataAssinatura(activeMotorista?.data_contratacao?.slice(0, 10) || hoje);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, activeMotorista?.id]);
 
   useEffect(() => {
     if (open) {
@@ -263,9 +276,49 @@ export const GenerateDocumentsDialog = ({
         morada: activeMotorista.morada || '',
         email: activeMotorista.email || '',
         telefone: activeMotorista.telefone || '',
+        cartao_bp: activeMotorista.cartao_bp || '',
+        cartao_repsol: activeMotorista.cartao_repsol || '',
+        cartao_edp: activeMotorista.cartao_edp || '',
       };
 
       const empresa = getById(selectedEmpresa);
+
+      // Viatura para os placeholders {{viatura_*}}: a passada por prop
+      // (contexto de calendário/reserva) ou, na ficha do motorista, a
+      // viatura ativa associada em motorista_viaturas. Sem viatura, os
+      // placeholders ficam vazios — nunca bloqueia a geração.
+      let viaturaIdEfetivo: string | null = viaturaId ?? null;
+      let viaturaDoc: {
+        matricula: string;
+        data_matricula: string | null;
+        marca: string;
+        modelo: string;
+        km_atual: number | null;
+      } | null = null;
+      try {
+        if (!viaturaIdEfetivo) {
+          const { data: mv } = await supabase
+            .from('motorista_viaturas')
+            .select('viatura_id')
+            .eq('motorista_id', activeMotorista.id)
+            .eq('status', 'ativo')
+            .is('data_fim', null)
+            .order('data_inicio', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          viaturaIdEfetivo = mv?.viatura_id ?? null;
+        }
+        if (viaturaIdEfetivo) {
+          const { data: v } = await supabase
+            .from('viaturas')
+            .select('matricula, data_matricula, marca, modelo, km_atual')
+            .eq('id', viaturaIdEfetivo)
+            .maybeSingle();
+          if (v) viaturaDoc = v;
+        }
+      } catch {
+        /* sem viatura — segue sem os campos */
+      }
 
       // Separar templates por tipo
       const contratoTemplates = templatesToGenerate.filter(
@@ -296,11 +349,20 @@ export const GenerateDocumentsDialog = ({
         }
       };
 
+      const dataAssinaturaEfetiva = dataAssinatura || activeMotorista.data_contratacao || today;
       const docParams = {
-        data_inicio: activeMotorista.data_contratacao || today,
-        data_assinatura: activeMotorista.data_contratacao || today,
+        data_inicio: dataAssinaturaEfetiva,
+        data_assinatura: dataAssinaturaEfetiva,
         cidade_assinatura: cidadeAssinatura,
         duracao_meses: 12,
+        ...(viaturaDoc
+          ? {
+              viatura_matricula: viaturaDoc.matricula,
+              viatura_data_matricula: viaturaDoc.data_matricula ?? '',
+              viatura_marca_modelo: `${viaturaDoc.marca} ${viaturaDoc.modelo}`.trim(),
+              viatura_kms: viaturaDoc.km_atual != null ? String(viaturaDoc.km_atual) : '',
+            }
+          : {}),
         empresaData: empresa
           ? {
               nomeCompleto: empresa.nomeCompleto,
@@ -329,8 +391,8 @@ export const GenerateDocumentsDialog = ({
             motoristaDocumentoTipo: activeMotorista.documento_tipo,
             motoristaDocumentoNumero: activeMotorista.documento_numero,
             cidadeAssinatura,
-            dataAssinatura: activeMotorista.data_contratacao || today,
-            dataInicio: activeMotorista.data_contratacao || today,
+            dataAssinatura: dataAssinaturaEfetiva,
+            dataInicio: dataAssinaturaEfetiva,
             duracaoMeses: 12,
             criadoPor: user?.user?.id ?? null,
             forceNewVersion,
@@ -400,7 +462,7 @@ export const GenerateDocumentsDialog = ({
       for (const template of otherTemplates) {
         setCurrentGenerating(template.id);
         try {
-          if (template.tipo === 'anexo_danos' && !viaturaId) {
+          if (template.tipo === 'anexo_danos' && !viaturaIdEfetivo) {
             toast.warning(`"${template.nome}" requer contexto de viatura — ignorado`);
             setCurrentGenerating(null);
             continue;
@@ -414,7 +476,9 @@ export const GenerateDocumentsDialog = ({
             action,
             skipOutput: isMultiple,
             existingPdf: combinedPdf || undefined,
-            ...(template.tipo === 'anexo_danos' && viaturaId ? { viaturaId } : {}),
+            ...(template.tipo === 'anexo_danos' && viaturaIdEfetivo
+              ? { viaturaId: viaturaIdEfetivo }
+              : {}),
           });
 
           setGeneratedTemplates((prev) => new Set(prev).add(template.id));
@@ -555,8 +619,17 @@ export const GenerateDocumentsDialog = ({
             {/* Mostrar campos apenas quando há um motorista ativo */}
             {activeMotorista && (
               <>
-                {/* Cidade de Assinatura e Empresa */}
+                {/* Data/Cidade de Assinatura e Empresa */}
                 <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="dataAssinatura">Data de Assinatura</Label>
+                    <Input
+                      id="dataAssinatura"
+                      type="date"
+                      value={dataAssinatura}
+                      onChange={(e) => setDataAssinatura(e.target.value)}
+                    />
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="cidadeAssinatura">Cidade de Assinatura</Label>
                     <Input
@@ -566,7 +639,7 @@ export const GenerateDocumentsDialog = ({
                       placeholder="Ex: Lisboa"
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 col-span-2">
                     <Label htmlFor="empresa">Empresa</Label>
                     <Select value={selectedEmpresa} onValueChange={setSelectedEmpresa}>
                       <SelectTrigger>

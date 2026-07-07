@@ -5,6 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const jsonError = (error: string, status: number) =>
+  new Response(JSON.stringify({ success: false, error }), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+
 // CSV column name → DB column name mapping
 const COLUMN_MAP: Record<string, string> = {
   'Motorista': 'motorista_nome',
@@ -161,14 +167,35 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    const authHeader = req.headers.get('authorization') || '';
-    const token = authHeader.replace('Bearer ', '');
-    if (token !== SERVICE_ROLE_KEY) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Não autorizado' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
+    // ── Auth: aceita 2 chamadores ──
+    // 1) Automação Apify (robot) — envia a service-role key directamente.
+    //    Sem sessão de utilizador; a org é determinada só pelo integracao_id.
+    // 2) Utilizador autenticado (upload manual via UI) — precisa de ser
+    //    admin da org dona da integração (service-role bypassa RLS →
+    //    validar à mão, mesmo padrão que bp/edp/viaverde/repsol-import-csv).
+    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
+    const bearerToken = authHeader.replace(/^Bearer\s+/i, '');
+    const isRobotCall = bearerToken === SERVICE_ROLE_KEY;
+
+    let callerUserId: string | null = null;
+    if (!isRobotCall) {
+      if (!bearerToken) return jsonError('Não autenticado.', 401);
+      const anonClient = createClient(SUPABASE_URL, ANON_KEY, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const {
+        data: { user },
+        error: authErr,
+      } = await anonClient.auth.getUser();
+      if (authErr || !user) return jsonError('Sessão inválida.', 401);
+      // O papel de admin é POR-ORG (user_organizacoes) — o flag global
+      // profiles.is_admin e o legado profiles.org_id dão 403 errado a
+      // utilizadores multi-org. A permissão é validada mais abaixo, contra
+      // a org dona da integração.
+      callerUserId = user.id;
     }
 
     const body = await req.json();
@@ -188,7 +215,27 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    // A integração determina a org. Chamada de utilizador TEM de pertencer à
+    // mesma org (chamada de robot confia no integracao_id, já que quem tem a
+    // service-role key já tem acesso total à BD de qualquer forma).
+    const { data: intConfig } = await supabase
+      .from('plataformas_configuracao')
+      .select('org_id')
+      .eq('id', integracao_id)
+      .single();
+    if (!intConfig) return jsonError('Integração não encontrada.', 404);
+    if (callerUserId) {
+      const { data: membership } = await supabase
+        .from('user_organizacoes')
+        .select('is_admin')
+        .eq('user_id', callerUserId)
+        .eq('org_id', intConfig.org_id)
+        .maybeSingle();
+      if (!membership?.is_admin) {
+        return jsonError('Sem permissão de administrador nesta organização.', 403);
+      }
+    }
+    const orgId = intConfig.org_id;
 
     // Parse CSV
     const rows = parseCSV(dados_csv_bolt);
@@ -248,10 +295,12 @@ Deno.serve(async (req) => {
 
     console.log(`bolt-import-csv: periodo=${periodoValue}, inicio=${periodoInicioValue}, fim=${periodoFimValue}`);
 
-    // Fetch motoristas for name matching
+    // Fetch motoristas for name matching (só da org da integração — evita
+    // fazer match cruzado com motoristas de outras orgs)
     const { data: motoristas } = await supabase
       .from('motoristas_ativos')
-      .select('id, nome, telefone, email');
+      .select('id, nome, telefone, email')
+      .eq('org_id', orgId);
 
     const normalizeStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -319,6 +368,7 @@ Deno.serve(async (req) => {
       try {
         const record: Record<string, any> = {
           integracao_id,
+          org_id: orgId,
           periodo: periodoValue,
           raw_data: row,
           ...(periodoInicioValue && { periodo_inicio: periodoInicioValue }),
@@ -385,6 +435,7 @@ Deno.serve(async (req) => {
     // Success log entry
     if (imported > 0) {
       await supabase.from('bolt_sync_logs').insert({
+        org_id: orgId,
         tipo: 'csv_import',
         status: 'success',
         mensagem: `Importação Apify/Robot: ${imported} registos processados para ${periodoValue}`,

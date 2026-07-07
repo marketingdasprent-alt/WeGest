@@ -31,13 +31,26 @@ import {
   CheckCircle2,
   MapPin,
   Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { matchesSearch } from '@/lib/utils';
-import { format, subDays } from 'date-fns';
+import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
+
+// Semana: Segunda (1) a Domingo (0) — igual ao resumo
+const WEEK_STARTS_ON = 1;
+
+// Atalhos rápidos para seleção de semanas
+const getWeekShortcuts = () => [
+  { label: 'Esta semana', date: new Date() },
+  { label: 'Semana passada', date: subWeeks(new Date(), 1) },
+  { label: 'Há 2 semanas', date: subWeeks(new Date(), 2) },
+  { label: 'Há 3 semanas', date: subWeeks(new Date(), 3) },
+];
 
 interface BpTransacao {
   id: string;
@@ -72,10 +85,23 @@ export const BPDataTab: React.FC = () => {
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIntegracao, setSelectedIntegracao] = useState('all');
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
+  // Estado: data dentro da semana selecionada (default: semana passada)
+  const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
+
+  // Semana selecionada: Segunda a Domingo
+  const weekStart = startOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
+  const isCurrentWeek = isThisWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
+  const weekShortcuts = getWeekShortcuts();
+  const goToPreviousWeek = () => setSelectedWeek((d) => subWeeks(d, 1));
+  const goToNextWeek = () => setSelectedWeek((d) => addWeeks(d, 1));
+  const handleDayClick = (day: Date | undefined) => {
+    if (day) setSelectedWeek(day);
+  };
+  const getWeekLabel = () => {
+    const label = `${format(weekStart, 'dd/MM', { locale: pt })} - ${format(weekEnd, 'dd/MM/yyyy', { locale: pt })}`;
+    return isCurrentWeek ? `${label} (Semana Actual)` : label;
+  };
 
   useEffect(() => {
     fetchIntegracoes();
@@ -83,7 +109,7 @@ export const BPDataTab: React.FC = () => {
 
   useEffect(() => {
     fetchTransacoes();
-  }, [selectedIntegracao, dateRange]);
+  }, [selectedIntegracao, selectedWeek]);
 
   const fetchIntegracoes = async () => {
     try {
@@ -113,16 +139,10 @@ export const BPDataTab: React.FC = () => {
         )
         .order('transaction_date', { ascending: false });
 
-      if (dateRange?.from) {
-        const fromISO = new Date(dateRange.from);
-        fromISO.setHours(0, 0, 0, 0);
-        query = query.gte('transaction_date', fromISO.toISOString());
-      }
-      if (dateRange?.to) {
-        const toISO = new Date(dateRange.to);
-        toISO.setHours(23, 59, 59, 999);
-        query = query.lte('transaction_date', toISO.toISOString());
-      }
+      // Fronteira de semana por data UTC (igual ao resumo) para o bucket ficar correto
+      const weekStartUtc = `${format(weekStart, 'yyyy-MM-dd')}T00:00:00Z`;
+      const weekEndUtc = `${format(weekEnd, 'yyyy-MM-dd')}T23:59:59Z`;
+      query = query.gte('transaction_date', weekStartUtc).lte('transaction_date', weekEndUtc);
       if (selectedIntegracao !== 'all') {
         query = query.eq('integracao_id', selectedIntegracao);
       }
@@ -169,7 +189,7 @@ export const BPDataTab: React.FC = () => {
   const handleClearFilters = () => {
     setSearchTerm('');
     setSelectedIntegracao('all');
-    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
+    setSelectedWeek(subWeeks(new Date(), 1));
   };
 
   return (
@@ -177,35 +197,66 @@ export const BPDataTab: React.FC = () => {
       {/* Filters */}
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="w-[280px] justify-start text-left font-normal">
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {dateRange?.from ? (
-                  dateRange.to ? (
-                    <>
-                      {format(dateRange.from, 'dd/MM/yyyy')} - {format(dateRange.to, 'dd/MM/yyyy')}
-                    </>
-                  ) : (
-                    format(dateRange.from, 'dd/MM/yyyy')
-                  )
-                ) : (
-                  <span>Selecionar período</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                initialFocus
-                mode="range"
-                defaultMonth={dateRange?.from}
-                selected={dateRange}
-                onSelect={setDateRange}
-                numberOfMonths={2}
-                locale={pt}
-              />
-            </PopoverContent>
-          </Popover>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={goToPreviousWeek}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="justify-center text-center font-normal min-w-[260px]"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {getWeekLabel()}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+                <div className="p-3 border-b">
+                  <div className="flex flex-wrap gap-1.5">
+                    {weekShortcuts.map((shortcut) => (
+                      <Button
+                        key={shortcut.label}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={() => setSelectedWeek(shortcut.date)}
+                      >
+                        {shortcut.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <Calendar
+                  initialFocus
+                  mode="single"
+                  defaultMonth={selectedWeek}
+                  selected={selectedWeek}
+                  onSelect={handleDayClick}
+                  numberOfMonths={2}
+                  locale={pt}
+                  weekStartsOn={WEEK_STARTS_ON}
+                  className="pointer-events-auto"
+                  modifiers={{
+                    selected: { from: weekStart, to: weekEnd },
+                  }}
+                  modifiersStyles={{
+                    selected: {
+                      backgroundColor: 'hsl(var(--primary))',
+                      color: 'hsl(var(--primary-foreground))',
+                      borderRadius: 0,
+                    },
+                  }}
+                />
+                <div className="p-2 text-center text-xs text-muted-foreground border-t bg-muted/50">
+                  Clique num dia para selecionar a semana inteira (Seg-Dom)
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Button variant="outline" size="icon" onClick={goToNextWeek} disabled={isCurrentWeek}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
 
           <Select value={selectedIntegracao} onValueChange={setSelectedIntegracao}>
             <SelectTrigger className="w-[180px]">

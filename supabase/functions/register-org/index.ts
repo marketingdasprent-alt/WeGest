@@ -152,18 +152,31 @@ serve(async (req) => {
     console.log(`[register-org] User criado: ${userId}`);
 
     // ========== CONFIGURAR CARGO ADMIN ==========
-    // Criar cargo "Administrador" para a nova org
-    const { data: cargo, error: cargoError } = await supabase
+    // O trigger ensure_base_cargos já criou os cargos base ("Administrador",
+    // "Gestor TVDE", "Supervisor de Gestor TVDE") ao inserir a org.
+    // Reutilizamos o "Administrador" existente — evita duplicar o cargo.
+    let { data: cargo, error: cargoError } = await supabase
       .from("cargos")
-      .insert({
-        nome: "Administrador",
-        org_id: org.id,
-      })
       .select("id")
-      .single();
+      .eq("org_id", org.id)
+      .ilike("nome", "administrador")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    // Fallback defensivo: se o trigger não correr, cria o cargo.
+    if (!cargo?.id) {
+      const ins = await supabase
+        .from("cargos")
+        .insert({ nome: "Administrador", org_id: org.id })
+        .select("id")
+        .single();
+      cargo = ins.data;
+      cargoError = ins.error;
+    }
 
     if (cargoError || !cargo?.id) {
-      console.error("[register-org] Erro ao criar cargo:", cargoError);
+      console.error("[register-org] Erro ao obter cargo admin:", cargoError);
       return jsonResponse({ error: "Erro ao criar cargo de administrador" }, 500);
     }
 
@@ -255,7 +268,7 @@ serve(async (req) => {
 
       const { error: permissoesError } = await supabase
         .from("cargo_permissoes")
-        .insert(permissoes);
+        .upsert(permissoes, { onConflict: "cargo_id,recurso_id" });
 
       if (permissoesError) {
         console.error("[register-org] Erro ao atribuir permissões:", permissoesError);

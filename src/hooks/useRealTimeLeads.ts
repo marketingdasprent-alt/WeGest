@@ -17,6 +17,7 @@ interface Lead {
   formulario_id?: string;
   gestor_responsavel?: string;
   valor_negocio?: string;
+  updated_at?: string;
 }
 
 interface DateFilter {
@@ -154,6 +155,65 @@ export const useRealTimeLeads = (
     setLeads((current) => current.filter((l) => l.id !== leadId));
   }, []);
 
+  const persistLeadUpdate = useCallback(
+    async (leadId: string, data: Partial<Lead>) => {
+      const { error } = await supabase.from('leads_dasprent').update(data).eq('id', leadId);
+      if (error) throw error;
+      updateLead({ id: leadId, ...data });
+    },
+    [updateLead]
+  );
+
+  const persistLeadStatusChange = useCallback(
+    async (leadId: string, newStatus: string) => {
+      const currentLead = leads.find((l) => l.id === leadId);
+      const updateData: Partial<Lead> & { status: string; updated_at: string } = {
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Se o lead não tem gestor responsável, atribuir o utilizador atual
+      if (currentLead && !currentLead.gestor_responsavel) {
+        try {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('nome')
+              .eq('id', user.id)
+              .single();
+            if (profile?.nome) updateData.gestor_responsavel = profile.nome;
+          }
+        } catch (error) {
+          console.error('Erro ao atribuir gestor:', error);
+          // Continuar sem atribuir gestor se houver erro
+        }
+      }
+
+      const { error } = await supabase.from('leads_dasprent').update(updateData).eq('id', leadId);
+      if (error) throw error;
+      updateLead({ id: leadId, ...updateData });
+    },
+    [leads, updateLead]
+  );
+
+  const persistLeadDelete = useCallback(
+    async (leadId: string) => {
+      const { error } = await supabase.from('leads_dasprent').delete().eq('id', leadId);
+      if (error) throw error;
+      deleteLead(leadId);
+    },
+    [deleteLead]
+  );
+
+  const assignGestorsFromHistory = useCallback(async (): Promise<number> => {
+    const { data, error } = await supabase.rpc('execute_gestor_assignment');
+    if (error) throw error;
+    return (data as number) || 0;
+  }, []);
+
   return {
     leads,
     loading,
@@ -161,6 +221,10 @@ export const useRealTimeLeads = (
     lastActivity,
     updateLead,
     deleteLead,
+    persistLeadUpdate,
+    persistLeadStatusChange,
+    persistLeadDelete,
+    assignGestorsFromHistory,
     refetchLeads: fetchLeads,
   };
 };
