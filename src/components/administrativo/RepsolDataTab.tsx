@@ -39,7 +39,6 @@ import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek } from '
 import { pt } from 'date-fns/locale';
 import { cn, matchesSearch } from '@/lib/utils';
 import { ImportRobotCsvDialog } from '@/components/admin/ImportRobotCsvDialog';
-import { DateRange } from 'react-day-picker';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 
@@ -169,7 +168,7 @@ export const RepsolDataTab: React.FC = () => {
     usePagination(
       filtered,
       25,
-      `${searchTerm}|${selectedIntegracao}|${dateRange?.from?.toISOString() ?? ''}|${dateRange?.to?.toISOString() ?? ''}`
+      `${searchTerm}|${selectedIntegracao}|${weekStart.toISOString()}|${weekEnd.toISOString()}`
     );
 
   return (

@@ -37,7 +37,6 @@ import {
 import { matchesSearch } from '@/lib/utils';
 import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { DateRange } from 'react-day-picker';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 
@@ -176,7 +175,7 @@ export const BPDataTab: React.FC = () => {
     usePagination(
       filteredTransacoes,
       25,
-      `${searchTerm}|${selectedIntegracao}|${dateRange?.from?.toISOString() ?? ''}|${dateRange?.to?.toISOString() ?? ''}`
+      `${searchTerm}|${selectedIntegracao}|${weekStart.toISOString()}|${weekEnd.toISOString()}`
     );
 
   const stats = useMemo(() => {
