@@ -22,6 +22,7 @@ import {
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -94,6 +95,22 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   const { user } = useAuth();
   const responsavelNome =
     (user?.user_metadata?.nome as string | undefined) ?? user?.email ?? 'Responsável';
+
+  // A viatura tem DUA registado? Na devolução exige-se confirmar que veio com a
+  // viatura (documento DUA frente/verso/único em viatura_documentos).
+  const { data: viaturaTemDua = false } = useQuery({
+    queryKey: ['viatura-tem-dua', viaturaId],
+    enabled: open && !!viaturaId,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('viatura_documentos')
+        .select('id', { count: 'exact', head: true })
+        .eq('viatura_id', viaturaId!)
+        .in('tipo_documento', ['dua_frente', 'dua_verso', 'dua']);
+      return (count ?? 0) > 0;
+    },
+  });
+  const [duaDevolvido, setDuaDevolvido] = useState(false);
 
   const form = useForm<FormInput>({
     resolver: zodResolver(schema),
@@ -261,6 +278,7 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
     setRegistarAgora(false);
     setKm('');
     setCombustivel('');
+    setDuaDevolvido(false);
     files.forEach((f) => f.preview && URL.revokeObjectURL(f.preview));
     setFiles([]);
   };
@@ -366,6 +384,12 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   // rebentava, porque o passo z.string() inicial já não batia certo com um number.
   const onSubmit = async (raw: FormInput) => {
     const values = raw as unknown as FormOutput;
+
+    // Devolução de viatura com DUA: exige confirmar a devolução do documento.
+    if (values.tipoEvento === 'devolvido' && viaturaTemDua && !duaDevolvido) {
+      toast.error('Esta viatura tem DUA. Confirma que o DUA foi devolvido antes de fechar.');
+      return;
+    }
 
     if (registarAgora) {
       if (!km.trim() || Number.isNaN(Number(km))) {
@@ -480,6 +504,26 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
                     </p>
                   )}
                 </div>
+
+                {tipoEvento === 'devolvido' && viaturaTemDua && (
+                  <label className="flex items-start gap-3 rounded-md border border-amber-500/50 bg-amber-500/5 p-3 cursor-pointer">
+                    <Checkbox
+                      checked={duaDevolvido}
+                      onCheckedChange={(c) => setDuaDevolvido(!!c)}
+                      className="mt-0.5"
+                    />
+                    <span className="text-sm">
+                      <span className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+                        <FileText className="h-4 w-4" />
+                        DUA devolvido
+                      </span>
+                      <span className="text-muted-foreground">
+                        Esta viatura tem DUA associado. Confirma que o documento foi devolvido com a
+                        viatura.
+                      </span>
+                    </span>
+                  </label>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="estacaoId">Estação *</Label>
@@ -798,7 +842,7 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
           <Button
             type="button"
             variant="destructive"
-            disabled={isPending}
+            disabled={isPending || (tipoEvento === 'devolvido' && viaturaTemDua && !duaDevolvido)}
             onClick={form.handleSubmit(onSubmit)}
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}

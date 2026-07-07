@@ -9,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -226,8 +225,8 @@ export function NotaCreditoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-4 pb-4 border-b bg-card shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <FileMinus className="h-5 w-5 text-fuchsia-600 dark:text-fuchsia-400" />
             Emitir Nota de Crédito
@@ -238,7 +237,7 @@ export function NotaCreditoDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {/* Resumo da cobrança */}
           <div className="rounded-md border divide-y text-sm">
             <Linha label="Documento" value={docOriginal} />
@@ -296,7 +295,7 @@ export function NotaCreditoDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <div className="px-6 py-4 border-t bg-card flex items-center justify-end gap-3 shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancelar
           </Button>
@@ -308,7 +307,7 @@ export function NotaCreditoDialog({
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Emitir nota de crédito
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

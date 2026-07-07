@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, FileDown } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2, FileDown, ArrowDownAZ, GripVertical } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 
@@ -86,6 +87,30 @@ export function RelatorioPagamentoDialog({
   const [financeiroMap, setFinanceiroMap] = useState<
     Record<string, Partial<Record<ColunaFinanceira, number>>>
   >({});
+  // Motoristas marcados como "já pago" (só visual, ajuda a acompanhar os
+  // pagamentos durante a sessão — risca a linha; não persiste).
+  const [pagos, setPagos] = useState<Set<string>>(new Set());
+  // Ordem manual (array de motorista_id). Vazio = ordem alfabética.
+  // Arrastar uma linha preenche esta ordem e passa a sobrepor a alfabética.
+  const [ordemManual, setOrdemManual] = useState<string[]>([]);
+  const [dragId, setDragId] = useState<string | null>(null);
+
+  // Reset ao reabrir o diálogo (nova semana / nova sessão de pagamentos).
+  useEffect(() => {
+    if (!open) {
+      setPagos(new Set());
+      setOrdemManual([]);
+      setDragId(null);
+    }
+  }, [open]);
+
+  const togglePago = (id: string) =>
+    setPagos((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const comMotoristaId = useMemo(
     () => resumos.filter((r): r is ResumoBase & { motorista_id: string } => !!r.motorista_id),
@@ -168,6 +193,34 @@ export function RelatorioPagamentoDialog({
     [comMotoristaId, financeiroMap, ibanMap]
   );
 
+  // Ordenação: alfabética por nome por defeito; se houver ordem manual
+  // (utilizador arrastou linhas), essa sobrepõe-se. Motoristas não presentes
+  // na ordem manual (ex.: dados carregaram depois) vão para o fim, alfabéticos.
+  const linhasOrdenadas = useMemo(() => {
+    const alfabetica = [...linhas].sort((a, b) =>
+      a.nome.localeCompare(b.nome, 'pt', { sensitivity: 'base' })
+    );
+    if (ordemManual.length === 0) return alfabetica;
+    const pos = new Map(ordemManual.map((id, i) => [id, i]));
+    return alfabetica.sort((a, b) => {
+      const pa = pos.has(a.motorista_id) ? pos.get(a.motorista_id)! : Number.MAX_SAFE_INTEGER;
+      const pb = pos.has(b.motorista_id) ? pos.get(b.motorista_id)! : Number.MAX_SAFE_INTEGER;
+      return pa - pb;
+    });
+  }, [linhas, ordemManual]);
+
+  // Drag-n-drop (HTML5 nativo — mesmo padrão do kanban-board do projeto).
+  const handleDrop = (targetId: string) => {
+    if (!dragId || dragId === targetId) return;
+    const base = linhasOrdenadas.map((l) => l.motorista_id);
+    const from = base.indexOf(dragId);
+    const to = base.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+    base.splice(to, 0, base.splice(from, 1)[0]);
+    setOrdemManual(base);
+    setDragId(null);
+  };
+
   const totais = useMemo(() => {
     const t = {
       liquido: 0,
@@ -185,7 +238,7 @@ export function RelatorioPagamentoDialog({
       ajudaCusto: 0,
       outrasDevolucoes: 0,
     };
-    linhas.forEach((l) => {
+    linhasOrdenadas.forEach((l) => {
       t.liquido += l.liquido;
       t.viatura += l.viatura;
       t.combustivel += l.combustivel;
@@ -202,13 +255,14 @@ export function RelatorioPagamentoDialog({
       t.outrasDevolucoes += l.outrasDevolucoes;
     });
     return t;
-  }, [linhas]);
+  }, [linhasOrdenadas]);
 
   const handleExport = () => {
-    const rows = linhas.map((l) => ({
+    const rows = linhasOrdenadas.map((l) => ({
       Nome: l.nome,
       IBAN: l.iban,
       Semana: weekLabel,
+      Pago: pagos.has(l.motorista_id) ? 'Sim' : '',
       'Valor a Pagar (€)': l.liquido,
       Negativos: l.liquido < 0 ? l.liquido : '',
       'Viatura (€)': l.viatura,
@@ -248,16 +302,18 @@ export function RelatorioPagamentoDialog({
         <DialogHeader className="px-6 py-4 pr-14 border-b bg-muted/30 shrink-0">
           <div className="flex items-center justify-between gap-4">
             <DialogTitle>Relatório de Pagamento — {weekLabel}</DialogTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mr-2"
-              onClick={handleExport}
-              disabled={loading}
-            >
-              <FileDown className="h-4 w-4 mr-2" />
-              Exportar Excel
-            </Button>
+            <div className="flex items-center gap-2 mr-2">
+              {ordemManual.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => setOrdemManual([])}>
+                  <ArrowDownAZ className="h-4 w-4 mr-2" />
+                  Ordem alfabética
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={handleExport} disabled={loading}>
+                <FileDown className="h-4 w-4 mr-2" />
+                Exportar Excel
+              </Button>
+            </div>
           </div>
         </DialogHeader>
 
@@ -275,7 +331,11 @@ export function RelatorioPagamentoDialog({
               <thead className="sticky top-0 z-10">
                 <tr className="bg-primary text-primary-foreground">
                   <th className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap sticky left-0 bg-primary z-20">
-                    Nome
+                    <span className="inline-flex items-center gap-1.5">
+                      <span title="Marcar como pago">Pago</span>
+                      <span className="opacity-60">·</span>
+                      Nome
+                    </span>
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap">
                     IBAN
@@ -331,17 +391,42 @@ export function RelatorioPagamentoDialog({
                 </tr>
               </thead>
               <tbody>
-                {linhas.map((l, idx) => {
+                {linhasOrdenadas.map((l, idx) => {
                   const negativo = l.liquido < 0;
+                  const pago = pagos.has(l.motorista_id);
                   return (
                     <tr
                       key={l.motorista_id}
+                      onDragOver={(e) => dragId && e.preventDefault()}
+                      onDrop={() => handleDrop(l.motorista_id)}
                       className={`border-b ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'} ${
                         negativo ? 'ring-1 ring-inset ring-red-300 dark:ring-red-900' : ''
+                      } ${dragId === l.motorista_id ? 'opacity-50' : ''} ${
+                        pago ? 'opacity-60' : ''
                       }`}
                     >
                       <td className="px-3 py-2 text-xs font-medium whitespace-nowrap sticky left-0 bg-inherit">
-                        {l.nome}
+                        <div className="flex items-center gap-2">
+                          {/* Só o grip inicia o arrasto — não interfere com o clique
+                              na checkbox nem na seleção do nome. */}
+                          <span
+                            draggable
+                            onDragStart={() => setDragId(l.motorista_id)}
+                            onDragEnd={() => setDragId(null)}
+                            className="cursor-grab shrink-0 text-muted-foreground/40"
+                            aria-label={`Arrastar ${l.nome} para reordenar`}
+                          >
+                            <GripVertical className="h-3.5 w-3.5" />
+                          </span>
+                          <Checkbox
+                            checked={pago}
+                            onCheckedChange={() => togglePago(l.motorista_id)}
+                            aria-label={`Marcar ${l.nome} como pago`}
+                          />
+                          <span className={pago ? 'line-through text-muted-foreground' : ''}>
+                            {l.nome}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
                         {l.iban || (

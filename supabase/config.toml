@@ -6,6 +6,10 @@ verify_jwt = false
 [functions.send-folha-danos-email]
 verify_jwt = false
 
+# Aviso de recibo anulado. Chamada pelo trigger SQL via pg_net com service key.
+[functions.send-recibo-anulado-email]
+verify_jwt = false
+
 [functions.delete-user]
 verify_jwt = false
 

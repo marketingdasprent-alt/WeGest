@@ -84,6 +84,7 @@ const TicketDetails = () => {
     if (!ticket) return;
     setClosureData({
       km_fim: ticket.km_fim?.toString() || '',
+      km_fim_indisponivel: (ticket as any).km_fim_indisponivel ?? false,
       combustivel_fim: ticket.combustivel_fim || 'meio',
       adblue_fim: 'Cheio',
       limpeza_fim: 'Limpa',
@@ -146,6 +147,7 @@ const TicketDetails = () => {
   const [showClosureForm, setShowClosureForm] = useState(false);
   const [closureData, setClosureData] = useState({
     km_fim: '',
+    km_fim_indisponivel: false,
     combustivel_fim: 'meio',
     adblue_fim: 'Cheio',
     limpeza_fim: 'Limpa',
@@ -218,6 +220,7 @@ const TicketDetails = () => {
       setClosureData((prev) => ({
         ...prev,
         km_fim: viatura?.km_atual?.toString() || '',
+        km_fim_indisponivel: false,
         cobrar_motorista: !!motorista,
       }));
       setShowClosureForm(true);

@@ -7,6 +7,7 @@ import type { Viatura, Motorista } from '@/components/assistencia/ticket/types';
 
 export interface ClosureFormData {
   km_fim: string;
+  km_fim_indisponivel: boolean;
   combustivel_fim: string;
   adblue_fim: string;
   limpeza_fim: string;
@@ -73,15 +74,22 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
       if (!ticket || !viatura) return false;
 
       // Validações
-      if (!closureData.km_fim) {
+      // O KM só é obrigatório quando está disponível. Se o gestor marcou
+      // "KM não disponível" (ex.: viatura não liga), o campo fica opcional e
+      // km_fim vai a NULL — sem atualizar o km_atual da viatura.
+      if (!closureData.km_fim_indisponivel && !closureData.km_fim) {
         toast({
           title: 'Erro',
-          description: 'Informe a quilometragem final.',
+          description: 'Informe a quilometragem final (ou marque "KM não disponível").',
           variant: 'destructive',
         });
         return false;
       }
-      if (ticket.km_inicio != null && parseInt(closureData.km_fim) < ticket.km_inicio) {
+      if (
+        !closureData.km_fim_indisponivel &&
+        ticket.km_inicio != null &&
+        parseInt(closureData.km_fim) < ticket.km_inicio
+      ) {
         toast({
           title: 'Erro',
           description: `A KM final (${closureData.km_fim}) não pode ser inferior à KM inicial (${ticket.km_inicio}).`,
@@ -112,7 +120,7 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
       try {
         setIsClosing(true);
         const valor = closureData.valor_reparacao ? parseFloat(closureData.valor_reparacao) : 0;
-        const kmFim = parseInt(closureData.km_fim);
+        const kmFim = closureData.km_fim_indisponivel ? null : parseInt(closureData.km_fim);
         const ticketId = ticket.id;
 
         let reparacaoId = (ticket as any).reparacao_id;
@@ -288,6 +296,7 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
         // 5. Actualizar ticket
         const ticketUpdates: any = {
           km_fim: kmFim,
+          km_fim_indisponivel: closureData.km_fim_indisponivel,
           combustivel_fim: closureData.combustivel_fim,
           valor_reparacao: valor,
           cobrar_motorista: decisao === 'motorista',
@@ -309,9 +318,15 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
         // 6 + 7 + 8. Viatura, reassociação e log (apenas se não for edit)
         if (!isEditMode) {
           const viaturaOriginalStatus = motorista?.id ? 'em_uso' : 'disponivel';
+          // Só atualiza o km_atual da viatura se o KM foi mesmo lido; se ficou
+          // indisponível (kmFim null), preserva o valor anterior.
+          const viaturaUpdate: { status: string; km_atual?: number } = {
+            status: viaturaOriginalStatus,
+          };
+          if (kmFim != null) viaturaUpdate.km_atual = kmFim;
           const { error: viaturaUpdateError } = await supabase
             .from('viaturas')
-            .update({ status: viaturaOriginalStatus, km_atual: kmFim })
+            .update(viaturaUpdate)
             .eq('id', viatura.id);
           if (viaturaUpdateError) throw viaturaUpdateError;
 
@@ -373,7 +388,7 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
           // 8. Mensagem de status_change
           const checkoutMessage =
             `Viatura reparada com check-out completo - ` +
-            `KM Final: ${kmFim} - ` +
+            `KM Final: ${kmFim != null ? kmFim : 'não disponível'} - ` +
             `Combustível: ${closureData.combustivel_fim} - ` +
             `Valor Total: ${valor}€ - ` +
             `Responsabilidade: ${decisao === 'motorista' ? 'Motorista' : 'Empresa'}` +

@@ -238,7 +238,9 @@ export type Database = {
           gpl_qtd: number | null
           id: string
           km_fim: number | null
+          km_fim_indisponivel: boolean
           km_inicio: number | null
+          km_inicio_indisponivel: boolean
           motorista_id: string | null
           numero: number
           numero_fatura: string | null
@@ -271,7 +273,9 @@ export type Database = {
           gpl_qtd?: number | null
           id?: string
           km_fim?: number | null
+          km_fim_indisponivel?: boolean
           km_inicio?: number | null
+          km_inicio_indisponivel?: boolean
           motorista_id?: string | null
           numero?: number
           numero_fatura?: string | null
@@ -304,7 +308,9 @@ export type Database = {
           gpl_qtd?: number | null
           id?: string
           km_fim?: number | null
+          km_fim_indisponivel?: boolean
           km_inicio?: number | null
+          km_inicio_indisponivel?: boolean
           motorista_id?: string | null
           numero?: number
           numero_fatura?: string | null
@@ -4851,6 +4857,7 @@ export type Database = {
           perfil_rascunho: boolean
           recibo_verde: boolean | null
           registo_criminal_url: string | null
+          seguro_valor_semanal: number | null
           slot_valor_semanal: number | null
           status_ativo: boolean | null
           telefone: string | null
@@ -4900,6 +4907,7 @@ export type Database = {
           perfil_rascunho?: boolean
           recibo_verde?: boolean | null
           registo_criminal_url?: string | null
+          seguro_valor_semanal?: number | null
           slot_valor_semanal?: number | null
           status_ativo?: boolean | null
           telefone?: string | null
@@ -4949,6 +4957,7 @@ export type Database = {
           perfil_rascunho?: boolean
           recibo_verde?: boolean | null
           registo_criminal_url?: string | null
+          seguro_valor_semanal?: number | null
           slot_valor_semanal?: number | null
           status_ativo?: boolean | null
           telefone?: string | null

@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Card, CardContent } from '@/components/ui/card';
@@ -249,6 +250,28 @@ const RealizarEntregaPage = () => {
     },
   });
 
+  // Devolução = recolha (entrega/troca dão saída da viatura; recolha traz a
+  // viatura de volta). Só na devolução se confirma a entrega do DUA.
+  const isDevolucao = info?.tipo === 'recolha';
+
+  // A viatura devolvida "tem DUA dentro"? — existe pelo menos um documento DUA
+  // (frente/verso/único) registado. Se sim, exige-se confirmar a sua devolução.
+  const viaturaIdContexto = contexto?.viaturaId ?? null;
+  const { data: viaturaTemDua = false } = useQuery({
+    queryKey: ['viatura-tem-dua', viaturaIdContexto],
+    enabled: isDevolucao && !!viaturaIdContexto,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('viatura_documentos')
+        .select('id', { count: 'exact', head: true })
+        .eq('viatura_id', viaturaIdContexto!)
+        .in('tipo_documento', ['dua_frente', 'dua_verso', 'dua']);
+      return (count ?? 0) > 0;
+    },
+  });
+  const [duaDevolvido, setDuaDevolvido] = useState(false);
+  const exigeDua = isDevolucao && viaturaTemDua;
+
   // Restaurar rascunho do cache uma vez, quando o token resolve.
   useEffect(() => {
     if (!token || restauradoRef.current) return;
@@ -457,6 +480,15 @@ const RealizarEntregaPage = () => {
       toast({
         title: 'Campos obrigatórios',
         description: 'Preenche o km e o nível de combustível.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    // A viatura tem DUA registado — na devolução tem de vir com o DUA.
+    if (exigeDua && !duaDevolvido) {
+      toast({
+        title: 'DUA em falta',
+        description: 'Esta viatura tem DUA. Confirma que o DUA foi devolvido antes de continuar.',
         variant: 'destructive',
       });
       return;
@@ -683,7 +715,12 @@ const RealizarEntregaPage = () => {
         )}`}
         icon={CheckCircle2}
       >
-        <Button type="button" onClick={handleConfirmar} disabled={isPending} className="gap-2">
+        <Button
+          type="button"
+          onClick={handleConfirmar}
+          disabled={isPending || (exigeDua && !duaDevolvido)}
+          className="gap-2"
+        >
           {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
           Confirmar
         </Button>
@@ -750,6 +787,30 @@ const RealizarEntregaPage = () => {
             </div>
           </CardContent>
         </Card>
+
+        {exigeDua && (
+          <Card className="border-amber-500/50 bg-amber-500/5">
+            <CardContent className="p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Checkbox
+                  checked={duaDevolvido}
+                  onCheckedChange={(c) => setDuaDevolvido(!!c)}
+                  className="mt-0.5"
+                />
+                <span className="text-sm">
+                  <span className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+                    <FileText className="h-4 w-4" />
+                    DUA devolvido
+                  </span>
+                  <span className="text-muted-foreground">
+                    Esta viatura tem DUA associado. Confirma que o documento foi devolvido com a
+                    viatura.
+                  </span>
+                </span>
+              </label>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent className="p-4 space-y-3">
