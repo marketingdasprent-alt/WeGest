@@ -109,7 +109,8 @@ export type ContratoRenting = {
   data_inicio: string;
 
   estacao_recolha_id: string | null;
-  data_fim: string;
+  /** NULL em contratos TVDE — sem data de fim, renovação automática. */
+  data_fim: string | null;
 
   estacao_origem_viatura_id: string | null;
 

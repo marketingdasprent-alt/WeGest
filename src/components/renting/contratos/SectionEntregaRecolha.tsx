@@ -20,11 +20,16 @@ export const SectionEntregaRecolha: React.FC<SectionEntregaRecolhaProps> = ({ fo
   const isTvde = regime === 'tvde';
 
   // Em TVDE não sabemos onde a viatura será recolhida (contratos
-  // de 2-3 anos). Limpa o valor automaticamente para não enviar
-  // dado órfão se o user mudou de rent_a_car → tvde mid-form.
+  // de 2-3 anos) nem há data de fim (contrato aberto, renovação automática).
+  // Limpa os valores automaticamente para não enviar dado órfão se o user
+  // mudou de rent_a_car → tvde mid-form.
   useEffect(() => {
-    if (isTvde && form.getValues('estacao_recolha_id')) {
+    if (!isTvde) return;
+    if (form.getValues('estacao_recolha_id')) {
       form.setValue('estacao_recolha_id', null, { shouldDirty: true });
+    }
+    if (form.getValues('data_fim')) {
+      form.setValue('data_fim', null, { shouldDirty: true });
     }
   }, [isTvde, form]);
 
@@ -90,26 +95,33 @@ export const SectionEntregaRecolha: React.FC<SectionEntregaRecolhaProps> = ({ fo
               )}
             />
           )}
-          <FormField
-            control={form.control}
-            name="data_fim"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>
-                  Data Fim <span className="text-red-500">*</span>
-                </FormLabel>
-                <FormControl>
-                  <Input
-                    type="datetime-local"
-                    className="bg-background"
-                    {...field}
-                    value={field.value ?? ''}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {isTvde ? (
+            <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 p-3 text-xs text-muted-foreground">
+              Contratos TVDE não têm data de fim — são abertos, com renovação automática (ver
+              Duração/Renovação abaixo).
+            </div>
+          ) : (
+            <FormField
+              control={form.control}
+              name="data_fim"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    Data Fim <span className="text-red-500">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type="datetime-local"
+                      className="bg-background"
+                      {...field}
+                      value={field.value ?? ''}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
         </div>
       </div>
     </div>

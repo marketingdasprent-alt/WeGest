@@ -91,7 +91,6 @@ import { ContratoTabsPlaceholder } from '@/components/renting/contratos/Contrato
 import { ContratoTabFaturar } from '@/components/renting/contratos/ContratoTabFaturar';
 import { ResumoContrato } from '@/components/renting/contratos/ResumoContrato';
 import { HistoricoEdicoesContrato } from '@/components/renting/contratos/HistoricoEdicoesContrato';
-import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import {
   DEFAULT_CONTRATO_VALUES,
   contratoFormSchema,
@@ -339,7 +338,10 @@ const ContratoForm = () => {
         estacao_entrega_id: reservaFromQuery.estacao_entrega_id,
         estacao_recolha_id: reservaFromQuery.estacao_recolha_id,
         data_inicio: isoToLocalInput(reservaFromQuery.data_inicio),
-        data_fim: isoToLocalInput(reservaFromQuery.data_fim),
+        // TVDE não tem data de fim no contrato (aberto, renovação automática) —
+        // mesmo que a reserva tenha uma data de fim inicial, o contrato não a herda.
+        data_fim:
+          reservaFromQuery.regime === 'tvde' ? '' : isoToLocalInput(reservaFromQuery.data_fim),
         origem: 'sistema',
         regime: reservaFromQuery.regime,
         // Orçamento da reserva → override do total no contrato
@@ -703,7 +705,7 @@ const ContratoForm = () => {
       estacao_entrega_id: values.estacao_entrega_id || null,
       data_inicio: localInputToIso(values.data_inicio),
       estacao_recolha_id: values.estacao_recolha_id || null,
-      data_fim: localInputToIso(values.data_fim),
+      data_fim: values.regime === 'tvde' ? null : localInputToIso(values.data_fim ?? ''),
       estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
       estado_operacional: values.estado_operacional,
       estado_financeiro: values.estado_financeiro,
@@ -728,13 +730,18 @@ const ContratoForm = () => {
     };
 
     // Nº de dias do contrato — necessário para o total dos extras 'dia'.
+    // TVDE não tem data_fim (contrato aberto) — usa o intervalo de renovação
+    // (normalmente 30 dias) como base de cálculo dos extras periódicos.
     const msDia = 86400000;
-    const diasContrato = Math.max(
-      1,
-      Math.ceil(
-        (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) / msDia
-      )
-    );
+    const diasContrato =
+      values.regime === 'tvde' || !values.data_fim
+        ? Math.max(1, values.renovacao_intervalo_dias ?? 30)
+        : Math.max(
+            1,
+            Math.ceil(
+              (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) / msDia
+            )
+          );
 
     // Subtotal do contrato — base de cálculo das taxas percentuais.
     // Espelha o cálculo do ResumoContrato: aluguer + coberturas + extras, com desconto.
@@ -820,12 +827,16 @@ const ContratoForm = () => {
           const viatura = viaturas.find((v) => v.id === values.viatura_id);
           const matriculaFinal = values.matricula || viatura?.matricula || null;
           const msDia = 86400000;
-          const dias = Math.max(
-            1,
-            Math.ceil(
-              (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) / msDia
-            )
-          );
+          const dias =
+            values.regime === 'tvde' || !values.data_fim
+              ? Math.max(1, values.renovacao_intervalo_dias ?? 30)
+              : Math.max(
+                  1,
+                  Math.ceil(
+                    (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) /
+                      msDia
+                  )
+                );
           const baseAluguer =
             values.valor_total_manual != null && values.valor_total_manual > 0
               ? values.valor_total_manual
@@ -854,7 +865,7 @@ const ContratoForm = () => {
               estacao_entrega_id: values.estacao_entrega_id || null,
               data_inicio: localInputToIso(values.data_inicio),
               estacao_recolha_id: values.estacao_recolha_id || null,
-              data_fim: localInputToIso(values.data_fim),
+              data_fim: values.regime === 'tvde' ? null : localInputToIso(values.data_fim ?? ''),
               estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
               estado_operacional: values.estado_operacional,
               estado_financeiro: values.estado_financeiro,
@@ -1151,11 +1162,11 @@ const ContratoForm = () => {
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
                 <ContratoTabsPlaceholder
-                  regime={regime}
                   geralContent={
                     <ContratoFormSecoes
                       form={form}
                       clientes={clientes}
+                      motoristas={motoristas}
                       viaturas={viaturasParaSelecao}
                       grupos={grupos}
                       grupoIdAtual={
@@ -1168,14 +1179,6 @@ const ContratoForm = () => {
                       reservaCodigo={reservaAssociada?.codigo ?? null}
                       onViaturaChange={aplicarDadosViatura}
                       contratoId={contrato?.id ?? null}
-                    />
-                  }
-                  condutoresContent={
-                    <CondutoresFields
-                      regime={regime}
-                      clientes={clientes}
-                      motoristas={motoristas}
-                      clientePrincipalLabel="Cliente do contrato também conduz"
                       onCriarNovoCliente={() => setClienteDialogOpen(true)}
                       onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
                     />

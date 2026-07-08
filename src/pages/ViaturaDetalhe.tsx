@@ -215,6 +215,7 @@ export default function ViaturaDetalhe() {
         if (error) throw error;
         toast.success('Viatura criada com sucesso!');
         navigate(`/viaturas/${newViatura.id}`);
+        return true;
       } else if (viatura) {
         const { data: updated, error } = await supabase
           .from('viaturas')
@@ -227,7 +228,9 @@ export default function ViaturaDetalhe() {
         if (!updated) throw new Error('Nenhuma viatura foi atualizada');
         toast.success('Viatura atualizada com sucesso!');
         loadViatura(false);
+        return true;
       }
+      return false;
     } catch (error: any) {
       console.error('Erro ao guardar viatura:', error);
       if (error.code === '23505') {
@@ -235,6 +238,7 @@ export default function ViaturaDetalhe() {
       } else {
         toast.error('Erro ao guardar viatura');
       }
+      return false;
     } finally {
       setSaving(false);
     }

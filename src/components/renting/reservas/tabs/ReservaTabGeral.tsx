@@ -43,6 +43,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 
 import { ALDFields } from '@/components/renting/shared/ALDFields';
+import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
 import { EmissorSelect } from '@/components/renting/EmissorSelect';
 import { GestorSelect } from '@/components/renting/GestorSelect';
@@ -80,6 +81,9 @@ interface ReservaTabGeralProps {
   /** Slot: motoristas para o seletor + callback de criar motorista. */
   motoristas?: Motorista[];
   onCriarMotorista?: () => void;
+  /** Condutores/Motoristas (secção "Condutor/Motorista", antes das OBS). */
+  onCriarNovoCliente?: () => void;
+  onCriarCondutorProvisorio?: () => void;
 }
 
 function diferencaDias(inicio: string, fim: string): number | null {
@@ -128,6 +132,8 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   clientes,
   motoristas = [],
   onCriarMotorista,
+  onCriarNovoCliente,
+  onCriarCondutorProvisorio,
 }) => {
   const [viaturaPopoverOpen, setViaturaPopoverOpen] = useState(false);
   const [clientePopoverOpen, setClientePopoverOpen] = useState(false);
@@ -1047,6 +1053,17 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
           />
         </div>
       )}
+
+      {/* === Condutor/Motorista === */}
+      <CondutoresFields
+        regime={regime}
+        clientes={clientes}
+        motoristas={motoristas}
+        clientePrincipalLabel="Cliente da Reserva também conduz"
+        onCriarNovoCliente={onCriarNovoCliente}
+        onCriarNovoMotorista={onCriarMotorista}
+        onCriarCondutorProvisorio={onCriarCondutorProvisorio}
+      />
 
       {/* === Observações === */}
       <div className="space-y-4">
