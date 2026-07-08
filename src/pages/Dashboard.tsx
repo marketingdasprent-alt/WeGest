@@ -49,6 +49,7 @@ import {
 import { pt } from 'date-fns/locale';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useOrgId } from '@/contexts/TenantContext';
 import { CheckinCheckoutHistoricoCard } from '@/components/dashboard/CheckinCheckoutHistoricoCard';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { fetchViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
@@ -118,6 +119,7 @@ const Dashboard = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { hasPermission, isAdmin } = usePermissions();
+  const orgId = useOrgId();
   const canSeeCheckinHistorico = hasPermission('dashboard_checkin_historico') || isAdmin;
 
   const [preset, setPreset] = useState<PeriodPreset>('mes');
@@ -148,21 +150,29 @@ const Dashboard = () => {
   // ── Load gestores ────────────────────────────────────────────────────────
 
   useEffect(() => {
+    if (!orgId) return;
+    // Gestores TVDE da ORG ATIVA via user_organizacoes (per-org). Filtra por NOME
+    // do cargo (não UUID) porque cargos são por-org com ids distintos.
     supabase
-      .from('profiles')
-      .select('id, nome')
-      .in('cargo_id', [
-        'fd39a12b-86c9-43c0-8ae3-d7b4e090e0a2', // Gestor TVDE
-        '0cf27801-80ff-4480-857e-e90bfb75d5a6', // Supervisor Gestor TVDE
-      ])
-      .order('nome', { ascending: true })
+      .from('user_organizacoes')
+      .select('user_id, cargos(nome), profiles(id, nome)')
+      .eq('org_id', orgId)
       .then(
         ({ data }) => {
-          if (data) setGestores(data.filter((p) => p.nome));
+          if (!data) return;
+          const lista = (data as any[])
+            .filter((m) => {
+              const c = (m.cargos?.nome || '').toLowerCase();
+              return c.includes('gestor') && c.includes('tvde');
+            })
+            .map((m) => ({ id: m.profiles?.id as string, nome: m.profiles?.nome as string }))
+            .filter((p) => p.id && p.nome)
+            .sort((a, b) => a.nome.localeCompare(b.nome));
+          setGestores(lista);
         },
         (err) => console.error('Erro ao carregar gestores:', err)
       );
-  }, []);
+  }, [orgId]);
 
   // ── Period change ────────────────────────────────────────────────────────
 
@@ -187,21 +197,30 @@ const Dashboard = () => {
       const [{ data: viaturas }, ocupacao] = await Promise.all([
         supabase
           .from('viaturas')
-          .select('id, status, matricula, valor_aluguer')
+          .select('id, status, is_slot, is_vendida, matricula, valor_aluguer')
           .neq('status', 'vendida'),
         fetchViaturasOcupacao(),
       ]);
 
-      const estadosFrota = (viaturas ?? []).map((v) =>
-        deriveViaturaEstado({ status: v.status }, ocupacao.get(v.id))
-      );
+      // Estado derivado com is_slot/is_vendida (necessários ao derivador).
+      // "Disponíveis" exclui viaturas slot — os slots são uma categoria à parte
+      // (têm o seu próprio card na Frota) e nunca entram na contagem geral de
+      // disponíveis, tenham ou não motorista vinculado.
+      const estadosFrota = (viaturas ?? []).map((v) => ({
+        estado: deriveViaturaEstado(
+          { status: v.status, is_slot: v.is_slot, is_vendida: v.is_vendida },
+          ocupacao.get(v.id)
+        ),
+        isSlot: !!v.is_slot,
+      }));
 
       const fleetCounts: FleetCounts = {
         total: viaturas?.length || 0,
-        disponiveis: estadosFrota.filter((e) => e === 'disponivel').length,
-        ocupadas: estadosFrota.filter((e) => (ESTADOS_EM_USO as readonly string[]).includes(e))
-          .length,
-        manutencao: estadosFrota.filter((e) => e === 'manutencao').length,
+        disponiveis: estadosFrota.filter((e) => e.estado === 'disponivel' && !e.isSlot).length,
+        ocupadas: estadosFrota.filter((e) =>
+          (ESTADOS_EM_USO as readonly string[]).includes(e.estado)
+        ).length,
+        manutencao: estadosFrota.filter((e) => e.estado === 'manutencao').length,
       };
       setFleet(fleetCounts);
 

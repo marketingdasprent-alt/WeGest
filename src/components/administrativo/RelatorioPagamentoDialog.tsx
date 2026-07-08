@@ -1,0 +1,425 @@
+import { useEffect, useMemo, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Loader2, FileDown } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { format } from 'date-fns';
+
+interface ResumoBase {
+  motorista_id?: string;
+  driver_name: string;
+  liquido: number;
+  aluguer: number;
+  combustivel: number;
+  portagens: number;
+  reparacoes: number;
+}
+
+interface RelatorioPagamentoDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  resumos: ResumoBase[];
+  weekStart: Date;
+  weekEnd: Date;
+  weekLabel: string;
+}
+
+interface LinhaRelatorio {
+  motorista_id: string;
+  nome: string;
+  iban: string;
+  liquido: number;
+  viatura: number;
+  combustivel: number;
+  portagens: number;
+  rnvat: number;
+  seguros: number;
+  acordos: number;
+  danos: number;
+  caucao: number;
+  negativoAnterior: number;
+  devCaucao: number;
+  bonificacao: number;
+  ajudaCusto: number;
+  outrasDevolucoes: number;
+}
+
+type ColunaFinanceira =
+  | 'rnvat'
+  | 'seguros'
+  | 'acordos'
+  | 'caucao'
+  | 'negativoAnterior'
+  | 'devCaucao'
+  | 'bonificacao'
+  | 'ajudaCusto'
+  | 'outrasDevolucoes';
+
+// Categorias de motorista_financeiro que alimentam colunas deste relatório
+// (somadas por valor absoluto, independentemente de crédito/débito).
+const CAT_MAP: Record<string, ColunaFinanceira> = {
+  rnvat: 'rnvat',
+  seguros: 'seguros',
+  acordo: 'acordos',
+  caucao: 'caucao',
+  negativo_anterior: 'negativoAnterior',
+  dev_caucao: 'devCaucao',
+  bonus: 'bonificacao',
+  ajuda_custo: 'ajudaCusto',
+  outras_devolucoes: 'outrasDevolucoes',
+};
+
+const fmtEur = (v: number) =>
+  new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v || 0);
+
+export function RelatorioPagamentoDialog({
+  open,
+  onOpenChange,
+  resumos,
+  weekStart,
+  weekEnd,
+  weekLabel,
+}: RelatorioPagamentoDialogProps) {
+  const [loading, setLoading] = useState(false);
+  const [ibanMap, setIbanMap] = useState<Record<string, string>>({});
+  const [financeiroMap, setFinanceiroMap] = useState<
+    Record<string, Partial<Record<ColunaFinanceira, number>>>
+  >({});
+
+  const comMotoristaId = useMemo(
+    () => resumos.filter((r): r is ResumoBase & { motorista_id: string } => !!r.motorista_id),
+    [resumos]
+  );
+
+  useEffect(() => {
+    if (!open || comMotoristaId.length === 0) return;
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      try {
+        const ids = comMotoristaId.map((r) => r.motorista_id);
+        const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+        const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+
+        const [ibanResult, financeiroResult] = await Promise.all([
+          supabase.from('motoristas_ativos').select('id, iban').in('id', ids),
+          supabase
+            .from('motorista_financeiro')
+            .select('motorista_id, valor, categoria')
+            .gte('data_movimento', weekStartStr)
+            .lte('data_movimento', weekEndStr)
+            .eq('status', 'pendente')
+            .in('motorista_id', ids),
+        ]);
+
+        if (cancelled) return;
+
+        const ibans: Record<string, string> = {};
+        (ibanResult.data || []).forEach((m: any) => {
+          if (m.iban) ibans[m.id] = m.iban;
+        });
+        setIbanMap(ibans);
+
+        const fin: Record<string, Partial<Record<ColunaFinanceira, number>>> = {};
+        (financeiroResult.data || []).forEach((m: any) => {
+          const col = m.categoria ? CAT_MAP[m.categoria] : undefined;
+          if (!col || !m.motorista_id) return;
+          const val = Math.abs(Number(m.valor) || 0);
+          if (!fin[m.motorista_id]) fin[m.motorista_id] = {};
+          fin[m.motorista_id][col] = (fin[m.motorista_id][col] || 0) + val;
+        });
+        setFinanceiroMap(fin);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, comMotoristaId, weekStart, weekEnd]);
+
+  const linhas: LinhaRelatorio[] = useMemo(
+    () =>
+      comMotoristaId.map((r) => {
+        const fin = financeiroMap[r.motorista_id] || {};
+        return {
+          motorista_id: r.motorista_id,
+          nome: r.driver_name,
+          iban: ibanMap[r.motorista_id] || '',
+          liquido: r.liquido,
+          viatura: r.aluguer,
+          combustivel: r.combustivel,
+          portagens: r.portagens,
+          rnvat: fin.rnvat || 0,
+          seguros: fin.seguros || 0,
+          acordos: fin.acordos || 0,
+          danos: r.reparacoes,
+          caucao: fin.caucao || 0,
+          negativoAnterior: fin.negativoAnterior || 0,
+          devCaucao: fin.devCaucao || 0,
+          bonificacao: fin.bonificacao || 0,
+          ajudaCusto: fin.ajudaCusto || 0,
+          outrasDevolucoes: fin.outrasDevolucoes || 0,
+        };
+      }),
+    [comMotoristaId, financeiroMap, ibanMap]
+  );
+
+  const totais = useMemo(() => {
+    const t = {
+      liquido: 0,
+      viatura: 0,
+      combustivel: 0,
+      portagens: 0,
+      rnvat: 0,
+      seguros: 0,
+      acordos: 0,
+      danos: 0,
+      caucao: 0,
+      negativoAnterior: 0,
+      devCaucao: 0,
+      bonificacao: 0,
+      ajudaCusto: 0,
+      outrasDevolucoes: 0,
+    };
+    linhas.forEach((l) => {
+      t.liquido += l.liquido;
+      t.viatura += l.viatura;
+      t.combustivel += l.combustivel;
+      t.portagens += l.portagens;
+      t.rnvat += l.rnvat;
+      t.seguros += l.seguros;
+      t.acordos += l.acordos;
+      t.danos += l.danos;
+      t.caucao += l.caucao;
+      t.negativoAnterior += l.negativoAnterior;
+      t.devCaucao += l.devCaucao;
+      t.bonificacao += l.bonificacao;
+      t.ajudaCusto += l.ajudaCusto;
+      t.outrasDevolucoes += l.outrasDevolucoes;
+    });
+    return t;
+  }, [linhas]);
+
+  const handleExport = () => {
+    const rows = linhas.map((l) => ({
+      Nome: l.nome,
+      IBAN: l.iban,
+      Semana: weekLabel,
+      'Valor a Pagar (€)': l.liquido,
+      Negativos: l.liquido < 0 ? l.liquido : '',
+      'Viatura (€)': l.viatura,
+      'Combustível (€)': l.combustivel,
+      'Portagens (€)': l.portagens,
+      'RNVAT (€)': l.rnvat,
+      'Seguros (€)': l.seguros,
+      'Acordos (€)': l.acordos,
+      'Danos (€)': l.danos,
+      'Caução (€)': l.caucao,
+      'Negativo Anterior (€)': l.negativoAnterior,
+      'Dev. Caução (€)': l.devCaucao,
+      'Bonificação Motorista (€)': l.bonificacao,
+      'Ajuda Custo (€)': l.ajudaCusto,
+      'Outras Devoluções (€)': l.outrasDevolucoes,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Relatório Pagamento');
+    XLSX.writeFile(wb, `relatorio_pagamento_${format(weekStart, 'yyyyMMdd')}.xlsx`);
+  };
+
+  // Colunas custo (tons vermelhos) vs colunas crédito/devolução (tons verdes)
+  const custoCls = 'bg-red-50/60 dark:bg-red-950/20 text-red-700 dark:text-red-400';
+  const creditoCls =
+    'bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400';
+
+  const Cell = ({ value, cls }: { value: number; cls?: string }) => (
+    <td className={`px-3 py-2 text-right text-xs whitespace-nowrap ${cls || ''}`}>
+      {value ? fmtEur(value) : <span className="text-muted-foreground/50">—</span>}
+    </td>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[96vw] w-full h-[90vh] p-0 gap-0 flex flex-col overflow-hidden">
+        <DialogHeader className="px-6 py-4 pr-14 border-b bg-muted/30 shrink-0">
+          <div className="flex items-center justify-between gap-4">
+            <DialogTitle>Relatório de Pagamento — {weekLabel}</DialogTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mr-2"
+              onClick={handleExport}
+              disabled={loading}
+            >
+              <FileDown className="h-4 w-4 mr-2" />
+              Exportar Excel
+            </Button>
+          </div>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-auto">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : linhas.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+              Sem motoristas com resumo nesta semana.
+            </div>
+          ) : (
+            <table className="w-full border-collapse">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-primary text-primary-foreground">
+                  <th className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap sticky left-0 bg-primary z-20">
+                    Nome
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap">
+                    IBAN
+                  </th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold whitespace-nowrap">
+                    Semana
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Valor a Pagar
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Negativos
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Viatura
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Combustível
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Portagens
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    RNVAT
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Seguros
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Acordos
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Danos
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Caução
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Neg. Anterior
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Dev. Caução
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Bonificação
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Ajuda Custo
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                    Outras Devol.
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {linhas.map((l, idx) => {
+                  const negativo = l.liquido < 0;
+                  return (
+                    <tr
+                      key={l.motorista_id}
+                      className={`border-b ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'} ${
+                        negativo ? 'ring-1 ring-inset ring-red-300 dark:ring-red-900' : ''
+                      }`}
+                    >
+                      <td className="px-3 py-2 text-xs font-medium whitespace-nowrap sticky left-0 bg-inherit">
+                        {l.nome}
+                      </td>
+                      <td className="px-3 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
+                        {l.iban || (
+                          <span className="italic text-muted-foreground/50">sem IBAN</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-center text-muted-foreground whitespace-nowrap">
+                        {weekLabel}
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${
+                          negativo
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-emerald-600 dark:text-emerald-400'
+                        }`}
+                      >
+                        {fmtEur(l.liquido)}
+                      </td>
+                      <td className="px-3 py-2 text-right text-xs font-bold whitespace-nowrap">
+                        {negativo ? (
+                          <span className="text-red-600 dark:text-red-400">
+                            {fmtEur(l.liquido)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/50">—</span>
+                        )}
+                      </td>
+                      <Cell value={l.viatura} cls={custoCls} />
+                      <Cell value={l.combustivel} cls={custoCls} />
+                      <Cell value={l.portagens} cls={custoCls} />
+                      <Cell value={l.rnvat} cls={custoCls} />
+                      <Cell value={l.seguros} cls={custoCls} />
+                      <Cell value={l.acordos} cls={custoCls} />
+                      <Cell value={l.danos} cls={custoCls} />
+                      <Cell value={l.caucao} cls={custoCls} />
+                      <Cell value={l.negativoAnterior} cls={custoCls} />
+                      <Cell value={l.devCaucao} cls={creditoCls} />
+                      <Cell value={l.bonificacao} cls={creditoCls} />
+                      <Cell value={l.ajudaCusto} cls={creditoCls} />
+                      <Cell value={l.outrasDevolucoes} cls={creditoCls} />
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-primary/40 bg-muted/40 font-semibold">
+                  <td className="px-3 py-2 text-xs bg-muted/40">Total</td>
+                  <td className="px-3 py-2" />
+                  <td className="px-3 py-2" />
+                  <td
+                    className={`px-3 py-2 text-right text-xs ${
+                      totais.liquido < 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-emerald-600 dark:text-emerald-400'
+                    }`}
+                  >
+                    {fmtEur(totais.liquido)}
+                  </td>
+                  <td className="px-3 py-2" />
+                  <Cell value={totais.viatura} />
+                  <Cell value={totais.combustivel} />
+                  <Cell value={totais.portagens} />
+                  <Cell value={totais.rnvat} />
+                  <Cell value={totais.seguros} />
+                  <Cell value={totais.acordos} />
+                  <Cell value={totais.danos} />
+                  <Cell value={totais.caucao} />
+                  <Cell value={totais.negativoAnterior} />
+                  <Cell value={totais.devCaucao} />
+                  <Cell value={totais.bonificacao} />
+                  <Cell value={totais.ajudaCusto} />
+                  <Cell value={totais.outrasDevolucoes} />
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

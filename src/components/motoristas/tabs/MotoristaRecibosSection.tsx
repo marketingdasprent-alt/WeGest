@@ -315,9 +315,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       // 5b. Aluguer semanal = preco_semana da tarifa do grupo da viatura ativa
       const { data: viaturaContratos } = await supabase
         .from('motorista_viaturas')
-        .select(
-          'viaturas(grupo_id, renting_grupos(renting_tarifas(preco_semana, ativa)))'
-        )
+        .select('viaturas(grupo_id, renting_grupos(renting_tarifas(preco_semana, ativa)))')
         .eq('motorista_id', motoristaId)
         .eq('status', 'ativo');
 

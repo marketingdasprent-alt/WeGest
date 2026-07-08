@@ -1,6 +1,7 @@
 // Calendario module
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -9,7 +10,6 @@ import { EventoDialog } from '@/components/calendario/EventoDialog';
 import { EventoHistoricoDialog } from '@/components/calendario/EventoHistoricoDialog';
 import { CalendarioConfig } from '@/components/calendario/CalendarioConfig';
 import { RelatorioDialog } from '@/components/calendario/RelatorioDialog';
-import { NovaMovimentacaoInternaDialog } from '@/components/calendario/NovaMovimentacaoInternaDialog';
 import { RecolhasPendentesDrawer } from '@/components/calendario/RecolhasPendentesDrawer';
 import { CheckOutPendentesDrawer } from '@/components/calendario/CheckOutPendentesDrawer';
 import { ListaEsperaDrawer } from '@/components/calendario/ListaEsperaDrawer';
@@ -48,13 +48,15 @@ export interface CalendarioEvento {
   profiles: { nome: string } | null;
   /** Nome de quem realizou (lookup em profiles via realizado_por_id). */
   realizador?: { nome: string } | null;
+  /** Entidade que gerou o evento: contrato_renting | movimento | contrato | manual. */
+  origem_tipo?: string | null;
 }
 
 const Calendario: React.FC = () => {
   const { user } = useAuth();
   const { hasPermission, isAdmin, cargo } = usePermissions();
   const queryClient = useQueryClient();
-  const [novaMovimentacaoOpen, setNovaMovimentacaoOpen] = useState(false);
+  const navigate = useNavigate();
   const [configOpen, setConfigOpen] = useState(false);
   const [historicoOpen, setHistoricoOpen] = useState(false);
   const [relatorioOpen, setRelatorioOpen] = useState(false);
@@ -64,6 +66,9 @@ const Calendario: React.FC = () => {
   const [editingEvento, setEditingEvento] = useState<CalendarioEvento | null>(null);
   const [detailsEvento, setDetailsEvento] = useState<CalendarioEvento | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  // Deep-link: evento de recolha/devolução legacy clicado no calendário —
+  // pré-seleciona no RecolhasPendentesDrawer ao abrir.
+  const [checkinDeepLinkEventoId, setCheckinDeepLinkEventoId] = useState<string | null>(null);
 
   // Realtime subscription - actualiza automaticamente quando qualquer gestor cria/edita/elimina eventos
   useEffect(() => {
@@ -306,6 +311,13 @@ const Calendario: React.FC = () => {
     setHistoricoOpen(true);
   };
 
+  // Deep-link a partir do card do evento: recolha/devolução/troca legacy
+  // (origem_tipo='contrato') abre directo no passo de check-in.
+  const handleAbrirCheckin = (evento: CalendarioEvento) => {
+    setCheckinDeepLinkEventoId(evento.id);
+    setRecolhasPendentesOpen(true);
+  };
+
   return (
     <>
       <ListaEsperaDrawer
@@ -315,8 +327,12 @@ const Calendario: React.FC = () => {
       />
       <RecolhasPendentesDrawer
         open={recolhasPendentesOpen}
-        onOpenChange={setRecolhasPendentesOpen}
+        onOpenChange={(v) => {
+          setRecolhasPendentesOpen(v);
+          if (!v) setCheckinDeepLinkEventoId(null);
+        }}
         userId={user?.id || ''}
+        initialEventoId={checkinDeepLinkEventoId}
       />
       <CheckOutPendentesDrawer
         open={checkoutPendentesOpen}
@@ -353,7 +369,7 @@ const Calendario: React.FC = () => {
                   className="relative gap-2"
                 >
                   <LogOut className="h-4 w-4" />
-                  <span className="hidden sm:inline">Check Out</span>
+                  <span className="hidden sm:inline">Entrega</span>
                   {checkoutPendentesCount + rentingEntregaPendentesCount > 0 && (
                     <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1 flex items-center justify-center text-[10px] bg-green-600 text-white border-0">
                       {checkoutPendentesCount + rentingEntregaPendentesCount}
@@ -366,7 +382,7 @@ const Calendario: React.FC = () => {
                   className="relative gap-2"
                 >
                   <PackageCheck className="h-4 w-4" />
-                  <span className="hidden sm:inline">Check In</span>
+                  <span className="hidden sm:inline">Recolha/Devolução</span>
                   {recolhasPendentesCount + rentingRecolhaPendentesCount > 0 && (
                     <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1 flex items-center justify-center text-[10px] bg-orange-500 text-white border-0">
                       {recolhasPendentesCount + rentingRecolhaPendentesCount}
@@ -391,11 +407,11 @@ const Calendario: React.FC = () => {
             {hasPermission('renting_movimentacoes') && (
               <Button
                 variant="outline"
-                onClick={() => setNovaMovimentacaoOpen(true)}
+                onClick={() => navigate('/renting/movimentacoes')}
                 className="gap-2"
               >
                 <ArrowRightLeft className="h-4 w-4" />
-                <span className="hidden sm:inline">Nova Movimentação Interna</span>
+                <span className="hidden sm:inline">Movimentação Interna</span>
               </Button>
             )}
           </div>
@@ -427,6 +443,7 @@ const Calendario: React.FC = () => {
             }
             onDeleteEvent={isAdmin ? (id) => deleteMutation.mutate(id) : undefined}
             onEventDetails={handleDetails}
+            onAbrirCheckin={handleAbrirCheckin}
             isLoading={isLoading}
             currentUserId={user?.id}
             canEditAll={hasPermission('calendario_gerir_todos')}
@@ -445,11 +462,6 @@ const Calendario: React.FC = () => {
           open={relatorioOpen}
           onOpenChange={setRelatorioOpen}
           currentMonth={currentMonth}
-        />
-
-        <NovaMovimentacaoInternaDialog
-          open={novaMovimentacaoOpen}
-          onOpenChange={setNovaMovimentacaoOpen}
         />
       </div>
     </>

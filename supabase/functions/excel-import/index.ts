@@ -110,22 +110,30 @@ Deno.serve(async (req) => {
       status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-  const { data: profile } = await supabase.from('profiles').select('is_admin, org_id').eq('id', user.id).single();
-  if (!profile?.is_admin) {
-    return new Response(JSON.stringify({ error: 'Sem permissão de administrador' }), {
-      status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-  const callerOrgId = profile.org_id;
-
   let rows: ExcelRow[];
+  let callerOrgId: string;
   try {
     const body = await req.json();
     rows = body.rows;
+    callerOrgId = body.org_id;
     if (!Array.isArray(rows) || rows.length === 0) throw new Error('rows vazio');
+    if (!callerOrgId) throw new Error('org_id em falta');
   } catch {
-    return new Response(JSON.stringify({ error: 'Payload inválido. Envie { rows: [...] }' }), {
+    return new Response(JSON.stringify({ error: 'Payload inválido. Envie { rows: [...], org_id }' }), {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Admin DESTA org (papel per-org em user_organizacoes, não profiles legado).
+  const { data: callerMembership } = await supabase
+    .from('user_organizacoes')
+    .select('is_admin')
+    .eq('user_id', user.id)
+    .eq('org_id', callerOrgId)
+    .single();
+  if (!callerMembership?.is_admin) {
+    return new Response(JSON.stringify({ error: 'Sem permissão de administrador' }), {
+      status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 

@@ -20,6 +20,7 @@ import {
 } from './CheckinDadosSection';
 import type { CheckinDadosState } from './CheckinDadosSection';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import { useOrgId } from '@/contexts/TenantContext';
 
 interface SelectedFile {
   id: string;
@@ -49,6 +50,7 @@ export const TrocaCheckinStep: React.FC<{
   } = trocaData;
 
   const queryClient = useQueryClient();
+  const orgId = useOrgId();
   const { empresas } = useClientesEmpresas();
 
   const [filesCheckin, setFilesCheckin] = useState<SelectedFile[]>([]);
@@ -217,20 +219,21 @@ export const TrocaCheckinStep: React.FC<{
       }
       const eventoId = evResult.data.id;
 
-      // 2. Fechar associação antiga
-      await supabase
-        .from('motorista_viaturas')
-        .update({ data_fim: data, status: 'encerrado' })
-        .eq('viatura_id', viaturaAtual.id)
-        .eq('status', 'ativo');
+      // 2. Fechar associação antiga (RPC — evita falha silenciosa para quem
+      // só tem 'calendario_recolhas' e não 'motoristas_gestao')
+      // Cast porque types.ts ainda não foi regenerado após nova RPC.
+      await (supabase as any).rpc('fn_checkin_fechar_motorista_viatura', {
+        p_motorista_id: motoristaId || null,
+        p_viatura_id: viaturaAtual.id,
+        p_data_fim: data,
+      });
 
       // 3. Criar nova associação
-      await supabase.from('motorista_viaturas').insert({
-        motorista_id: motoristaId,
-        viatura_id: novaViatura.id,
-        data_inicio: data,
-        status: 'ativo',
-        observacoes: observacoes.trim() || null,
+      await (supabase as any).rpc('fn_checkin_abrir_motorista_viatura', {
+        p_motorista_id: motoristaId,
+        p_viatura_id: novaViatura.id,
+        p_data_inicio: data,
+        p_observacoes: observacoes.trim() || null,
       });
 
       // 4. Atualizar status das viaturas
@@ -306,6 +309,7 @@ export const TrocaCheckinStep: React.FC<{
             tipo,
             data_inicio: dataISO,
             dia_todo: diaTodo,
+            org_id: orgId,
           },
         });
       } catch {

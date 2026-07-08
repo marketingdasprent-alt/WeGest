@@ -34,12 +34,26 @@ import {
   Clock,
   Car,
   CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
-import { format, subDays } from 'date-fns';
+import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { cn, matchesSearch } from '@/lib/utils';
 import { ImportRobotCsvDialog } from '@/components/admin/ImportRobotCsvDialog';
-import { DateRange } from 'react-day-picker';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
+
+// Semana: Segunda (1) a Domingo (0) — igual ao resumo
+const WEEK_STARTS_ON = 1;
+
+// Atalhos rápidos para seleção de semanas
+const getWeekShortcuts = () => [
+  { label: 'Esta semana', date: new Date() },
+  { label: 'Semana passada', date: subWeeks(new Date(), 1) },
+  { label: 'Há 2 semanas', date: subWeeks(new Date(), 2) },
+  { label: 'Há 3 semanas', date: subWeeks(new Date(), 3) },
+];
 
 interface Integracao {
   id: string;
@@ -82,11 +96,23 @@ export const BoltDataTab: React.FC = () => {
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIntegracao, setSelectedIntegracao] = useState('all');
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  });
-  const [rangeClickCount, setRangeClickCount] = useState(0);
+  // Estado: data dentro da semana selecionada (default: semana passada)
+  const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
+
+  // Semana selecionada: Segunda a Domingo
+  const weekStart = startOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
+  const isCurrentWeek = isThisWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
+  const weekShortcuts = getWeekShortcuts();
+  const goToPreviousWeek = () => setSelectedWeek((d) => subWeeks(d, 1));
+  const goToNextWeek = () => setSelectedWeek((d) => addWeeks(d, 1));
+  const handleDayClick = (day: Date | undefined) => {
+    if (day) setSelectedWeek(day);
+  };
+  const getWeekLabel = () => {
+    const label = `${format(weekStart, 'dd/MM', { locale: pt })} - ${format(weekEnd, 'dd/MM/yyyy', { locale: pt })}`;
+    return isCurrentWeek ? `${label} (Semana Actual)` : label;
+  };
 
   useEffect(() => {
     fetchIntegracoes();
@@ -95,7 +121,7 @@ export const BoltDataTab: React.FC = () => {
 
   useEffect(() => {
     fetchResumos();
-  }, [selectedIntegracao, dateRange]);
+  }, [selectedIntegracao, selectedWeek]);
 
   const fetchIntegracoes = async () => {
     try {
@@ -146,15 +172,10 @@ export const BoltDataTab: React.FC = () => {
         )
         .order('motorista_nome');
 
-      const fromDate = dateRange?.from;
-      const toDate = dateRange?.to || dateRange?.from;
-      if (fromDate) {
-        // Show records whose week overlaps with the selected range
-        query = query.lte('periodo_inicio', formatDateForQuery(toDate!));
-      }
-      if (toDate) {
-        query = query.gte('periodo_fim', formatDateForQuery(fromDate!));
-      }
+      // Sobreposição com a semana selecionada (igual ao resumo)
+      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+      const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+      query = query.lte('periodo_inicio', weekEndStr).gte('periodo_fim', weekStartStr);
       if (selectedIntegracao !== 'all') {
         query = query.eq('integracao_id', selectedIntegracao);
       }
@@ -190,6 +211,14 @@ export const BoltDataTab: React.FC = () => {
     );
   }, [resumos, searchTerm]);
 
+  // Pagination (apresentação) sobre a lista já filtrada/ordenada
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      filteredResumos,
+      25,
+      `${searchTerm}|${selectedIntegracao}|${weekStart.toISOString()}|${weekEnd.toISOString()}`
+    );
+
   // Stats
   const stats = useMemo(() => {
     const total = filteredResumos.length;
@@ -199,27 +228,13 @@ export const BoltDataTab: React.FC = () => {
     return { total, totalViagens, totalBruto, totalLiquido };
   }, [filteredResumos]);
 
-  const handleDateRangeSelect = (range: DateRange | undefined) => {
-    if (rangeClickCount === 0) {
-      // First click: start fresh with just this date
-      setDateRange({ from: range?.from, to: undefined });
-      setRangeClickCount(1);
-    } else {
-      // Second click: complete the range
-      setDateRange(range);
-      setRangeClickCount(0);
-    }
-  };
-
   const handleClearFilters = () => {
     setSearchTerm('');
     setSelectedIntegracao('all');
-    setDateRange({ from: subDays(new Date(), 30), to: new Date() });
-    setRangeClickCount(0);
+    setSelectedWeek(subWeeks(new Date(), 1));
   };
 
-  const hasActiveFilters =
-    searchTerm || selectedIntegracao !== 'all' || !dateRange?.from || !dateRange?.to;
+  const hasActiveFilters = searchTerm || selectedIntegracao !== 'all';
 
   const firstActiveIntegracao = integracoes.find((i) => i.ativo);
 
@@ -229,13 +244,6 @@ export const BoltDataTab: React.FC = () => {
     const m = Math.round(min % 60);
     return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
   };
-
-  const dateLabel =
-    dateRange?.from && dateRange?.to
-      ? `${format(dateRange.from, 'dd/MM/yyyy', { locale: pt })} - ${format(dateRange.to, 'dd/MM/yyyy', { locale: pt })}`
-      : dateRange?.from
-        ? format(dateRange.from, 'dd/MM/yyyy', { locale: pt })
-        : 'Selecionar datas';
 
   const handleFetchFromApify = async () => {
     setLoading(true);
@@ -309,31 +317,67 @@ export const BoltDataTab: React.FC = () => {
       {/* Filters */}
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Date Range Filter */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  'w-[280px] justify-start text-left font-normal',
-                  !dateRange?.from && 'text-muted-foreground'
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {dateLabel}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="range"
-                selected={dateRange}
-                onSelect={handleDateRangeSelect}
-                numberOfMonths={2}
-                className={cn('p-3 pointer-events-auto')}
-                locale={pt}
-              />
-            </PopoverContent>
-          </Popover>
+          {/* Date Week Filter */}
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={goToPreviousWeek}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="justify-center text-center font-normal min-w-[260px]"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {getWeekLabel()}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+                <div className="p-3 border-b">
+                  <div className="flex flex-wrap gap-1.5">
+                    {weekShortcuts.map((shortcut) => (
+                      <Button
+                        key={shortcut.label}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={() => setSelectedWeek(shortcut.date)}
+                      >
+                        {shortcut.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <Calendar
+                  initialFocus
+                  mode="single"
+                  defaultMonth={selectedWeek}
+                  selected={selectedWeek}
+                  onSelect={handleDayClick}
+                  numberOfMonths={2}
+                  locale={pt}
+                  weekStartsOn={WEEK_STARTS_ON}
+                  className="pointer-events-auto"
+                  modifiers={{
+                    selected: { from: weekStart, to: weekEnd },
+                  }}
+                  modifiersStyles={{
+                    selected: {
+                      backgroundColor: 'hsl(var(--primary))',
+                      color: 'hsl(var(--primary-foreground))',
+                      borderRadius: 0,
+                    },
+                  }}
+                />
+                <div className="p-2 text-center text-xs text-muted-foreground border-t bg-muted/50">
+                  Clique num dia para selecionar a semana inteira (Seg-Dom)
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Button variant="outline" size="icon" onClick={goToNextWeek} disabled={isCurrentWeek}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
 
           {/* Integration Filter */}
           <Select value={selectedIntegracao} onValueChange={setSelectedIntegracao}>
@@ -494,7 +538,7 @@ export const BoltDataTab: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredResumos.map((resumo) => (
+              {pageItems.map((resumo) => (
                 <TableRow key={resumo.id}>
                   <TableCell>
                     <Badge variant="outline" className="gap-1">
@@ -553,6 +597,19 @@ export const BoltDataTab: React.FC = () => {
               ))}
             </TableBody>
           </Table>
+          {total > 0 && (
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              start={start}
+              end={end}
+              onPageChange={setPage}
+              noun={['resumo', 'resumos']}
+              pageSizeStr={pageSizeStr}
+              onPageSizeChange={setPageSizeStr}
+            />
+          )}
         </div>
       )}
     </div>

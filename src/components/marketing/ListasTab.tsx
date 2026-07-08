@@ -17,6 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useMarketingListaContagem } from '@/hooks/useMarketingListaContagem';
 
 export const ListasTab = () => {
   const queryClient = useQueryClient();
@@ -59,6 +60,12 @@ export const ListasTab = () => {
     );
   }
 
+  const listasOrdenadas = [...(listas ?? [])].sort((a: any, b: any) => {
+    const aSys = a.origem === 'motoristas_ativos' ? 0 : 1;
+    const bSys = b.origem === 'motoristas_ativos' ? 0 : 1;
+    return aSys - bSys; // sistema primeiro; mantém ordem relativa do resto
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -74,15 +81,26 @@ export const ListasTab = () => {
         </Button>
       </div>
 
-      {!listas?.length ? (
+      {!listasOrdenadas.length ? (
         <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Nenhuma lista criada. Crie uma lista para adicionar contactos.
+          <CardContent className="py-12 flex flex-col items-center gap-3 text-center">
+            <Users className="h-10 w-10 text-muted-foreground/40" />
+            <p className="text-muted-foreground">Ainda não há listas.</p>
+            <Button
+              onClick={() => {
+                setEditingLista(null);
+                setDialogOpen(true);
+              }}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" /> Criar primeira lista
+            </Button>
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {listas.map((l: any) => {
+          {listasOrdenadas.map((l: any) => {
+            const isSistema = l.origem === 'motoristas_ativos';
             const count = l.marketing_contactos?.[0]?.count || 0;
             return (
               <Card
@@ -92,17 +110,28 @@ export const ListasTab = () => {
               >
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center justify-between">
-                    <span>{l.nome}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteId(l.id);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <span className="flex items-center gap-2">
+                      {l.nome}
+                      {isSistema && (
+                        <span className="text-[10px] font-medium uppercase tracking-wide rounded bg-primary/10 text-primary px-1.5 py-0.5">
+                          Automática
+                        </span>
+                      )}
+                    </span>
+                    {!isSistema && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Eliminar lista"
+                        aria-label="Eliminar lista"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteId(l.id);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -111,9 +140,13 @@ export const ListasTab = () => {
                   )}
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
                     <Users className="h-4 w-4" />
-                    <span>
-                      {count} contacto{count !== 1 ? 's' : ''}
-                    </span>
+                    {isSistema ? (
+                      <ContagemSistema listaId={l.id} />
+                    ) : (
+                      <span>
+                        {count} contacto{count !== 1 ? 's' : ''}
+                      </span>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -151,3 +184,13 @@ export const ListasTab = () => {
     </div>
   );
 };
+
+function ContagemSistema({ listaId }: { listaId: string }) {
+  const { data: total, isLoading } = useMarketingListaContagem(listaId);
+  return (
+    <span>
+      {isLoading ? '…' : (total ?? 0)} motorista{(total ?? 0) !== 1 ? 's' : ''} ativo
+      {(total ?? 0) !== 1 ? 's' : ''}
+    </span>
+  );
+}

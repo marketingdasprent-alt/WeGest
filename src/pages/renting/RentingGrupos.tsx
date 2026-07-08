@@ -28,6 +28,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { matchesSearch } from '@/lib/utils';
 
 interface RentingGrupo {
@@ -44,7 +45,14 @@ const RentingGrupos = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { orgId } = useTenant();
+  const { canEdit } = usePermissions();
   const navigate = useNavigate();
+
+  // Recurso dedicado "Grupos de viaturas" (nível Editar). Admins passam sempre.
+  const podeGerir = canEdit('viaturas_grupos');
+  const podeCriar = podeGerir;
+  const podeEditar = podeGerir;
+  const podeEliminar = podeGerir;
 
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<RentingGrupo | null>(null);
@@ -87,10 +95,12 @@ const RentingGrupos = () => {
         }
         icon={Layers}
       >
-        <Button onClick={() => navigate('/viaturas/grupos/novo')} size="sm">
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Grupo
-        </Button>
+        {podeCriar && (
+          <Button onClick={() => navigate('/viaturas/grupos/novo')} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Grupo
+          </Button>
+        )}
       </StickyPageHeader>
 
       <div className="relative mb-4">
@@ -120,7 +130,7 @@ const RentingGrupos = () => {
           <p className="text-sm text-muted-foreground">
             {search ? 'Nenhum grupo encontrado' : 'Ainda não há grupos criados'}
           </p>
-          {!search && (
+          {!search && podeCriar && (
             <Button onClick={() => navigate('/viaturas/grupos/novo')} variant="outline" size="sm">
               <Plus className="h-4 w-4 mr-2" />
               Criar primeiro grupo
@@ -163,17 +173,20 @@ const RentingGrupos = () => {
                         size="icon"
                         className="h-8 w-8"
                         onClick={() => navigate(`/viaturas/grupos/${g.id}`)}
+                        title={podeEditar ? 'Editar grupo' : 'Ver grupo'}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget(g)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {podeEliminar && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget(g)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

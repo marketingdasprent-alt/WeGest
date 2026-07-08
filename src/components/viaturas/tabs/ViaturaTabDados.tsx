@@ -962,7 +962,10 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                     if (tarifas.length === 0) return null;
                     const fmt = (v: number | null) =>
                       v != null
-                        ? new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v)
+                        ? new Intl.NumberFormat('pt-PT', {
+                            style: 'currency',
+                            currency: 'EUR',
+                          }).format(v)
                         : '—';
                     return (
                       <div className="md:col-span-3 rounded-lg border bg-muted/20 p-4">
@@ -974,16 +977,27 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                             <div key={t.nome} className="space-y-1">
                               <p className="text-xs text-muted-foreground">{t.nome}</p>
                               {t.preco_dia != null && (
-                                <p className="text-sm font-medium">{fmt(t.preco_dia)} <span className="text-xs text-muted-foreground">/dia</span></p>
+                                <p className="text-sm font-medium">
+                                  {fmt(t.preco_dia)}{' '}
+                                  <span className="text-xs text-muted-foreground">/dia</span>
+                                </p>
                               )}
                               {t.preco_semana != null && (
-                                <p className="text-sm font-semibold text-primary">{fmt(t.preco_semana)} <span className="text-xs text-muted-foreground">/semana</span></p>
+                                <p className="text-sm font-semibold text-primary">
+                                  {fmt(t.preco_semana)}{' '}
+                                  <span className="text-xs text-muted-foreground">/semana</span>
+                                </p>
                               )}
                               {t.preco_mes != null && (
-                                <p className="text-sm font-medium">{fmt(t.preco_mes)} <span className="text-xs text-muted-foreground">/mês</span></p>
+                                <p className="text-sm font-medium">
+                                  {fmt(t.preco_mes)}{' '}
+                                  <span className="text-xs text-muted-foreground">/mês</span>
+                                </p>
                               )}
                               {t.kms_incluidos != null && (
-                                <p className="text-xs text-muted-foreground">{t.kms_incluidos} km incl.</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {t.kms_incluidos} km incl.
+                                </p>
                               )}
                             </div>
                           ))}

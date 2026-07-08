@@ -90,6 +90,7 @@ export const generateContratoPrestacaoPdf = async ({
     cidade_assinatura: empresa.sede || (motoristaData.cidade as string) || 'Leiria',
     numero_contrato: numeroContrato != null ? String(numeroContrato) : '',
     viatura_matricula: viatura?.matricula ?? '—',
+    viatura_data_matricula: viatura?.data_matricula ?? '',
     viatura_marca_modelo: viatura ? `${viatura.marca} ${viatura.modelo}`.trim() : '—',
     valor_semanal: eur(valorSemanal),
     empresaData: empresaDocData(empresa),

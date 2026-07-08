@@ -46,6 +46,7 @@ export async function fetchViaturasOcupacao(): Promise<Map<string, Set<string>>>
       .from('contratos_renting')
       .select('viatura_id')
       .is('deleted_at', null)
+      .is('substituido_em', null)
       .not('viatura_id', 'is', null)
       .in('estado_operacional', ['agendado', 'em_curso']),
     supabase

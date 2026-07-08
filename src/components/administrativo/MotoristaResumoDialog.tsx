@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { generateFinanceiroPDF } from '@/utils/generateFinanceiroPDF';
 import { Separator } from '@/components/ui/separator';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
+import { SlotMensalidadeCard } from './SlotMensalidadeCard';
 
 interface MotoristaResumoProps {
   driver_name: string;
@@ -43,6 +44,8 @@ interface MotoristaResumoProps {
   viagens_uber: number;
   recibo_verde: boolean;
   liquido: number;
+  /** Gorjetas Bolt + Uber da semana — somam ao líquido sem ajuste de IVA. */
+  gorjeta?: number;
   combustivel: number;
   portagens: number;
   reparacoes: number;
@@ -201,7 +204,8 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             .select('categoria, valor, tipo')
             .eq('motorista_id', resolvedMotoristaId)
             .gte('data_movimento', format(dateRange.from, 'yyyy-MM-dd'))
-            .lte('data_movimento', format(dateRange.to, 'yyyy-MM-dd')),
+            .lte('data_movimento', format(dateRange.to, 'yyyy-MM-dd'))
+            .neq('status', 'cancelado'),
           // Períodos de viatura na semana — com tarifa do grupo para detalhe de aluguer
           supabase
             .from('motorista_viaturas')
@@ -351,9 +355,12 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     : motorista.recibo_verde
       ? totalReceitas
       : totalReceitas / 1.06;
+  // Gorjeta (Bolt + Uber): soma ao líquido SEM passar pelo ajuste de IVA —
+  // mesma regra da lista do Resumo (antes o modal esquecia-a e divergia).
+  const gorjeta = isImportado ? 0 : motorista.gorjeta || 0;
   const totalAReceber = isImportado
     ? motorista.liquido
-    : receitaAjustada - totalDespesas + valoresSemanaAnterior;
+    : receitaAjustada - totalDespesas + gorjeta + valoresSemanaAnterior;
   const liquido = isImportado ? motorista.liquido : totalAReceber;
 
   const fmt = (value: number) =>
@@ -394,12 +401,10 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       )
       .join('');
 
-    const ajusteRow =
-      !motorista.recibo_verde && !isImportado
-        ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
-            <span>Ajuste (÷ 1.06)</span><span style="color:#ea580c">-${fmtEur(totalAReceber - liquido)}</span>
-          </div>`
-        : '';
+    // A linha "Ajuste (÷ 1.06)" é ocultada a pedido — o cálculo do líquido
+    // mantém-se (liquido = totalReceitas / 1.06 quando aplicável), só não se
+    // mostra a linha do ajuste no resumo/PDF.
+    const ajusteRow = '';
 
     const slotHtml =
       slotPeriodos.length > 0
@@ -451,7 +456,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
         <div style="background:#22c55e;border-radius:10px;padding:14px;text-align:center;color:#fff">
           <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;opacity:.85;margin-bottom:4px">Total Receitas</div>
-          <div style="font-size:20px;font-weight:700">${fmtEur(totalReceitas)}</div>
+          <div style="font-size:20px;font-weight:700">${fmtEur(totalReceitas + gorjeta)}</div>
         </div>
         <div style="background:#ef4444;border-radius:10px;padding:14px;text-align:center;color:#fff">
           <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;opacity:.85;margin-bottom:4px">Total Despesas</div>
@@ -479,8 +484,9 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Bolt</span><span style="color:#15803d">${fmtEur(receitas.bolt)}</span></div>
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Uber</span><span style="color:#15803d">${fmtEur(receitas.uber)}</span></div>
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Outras Receitas</span><span style="color:#15803d">${fmtEur(receitas.outras_receitas)}</span></div>
+            ${gorjeta > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Gorjetas (sem IVA)</span><span style="color:#15803d">${fmtEur(gorjeta)}</span></div>` : ''}
             <div style="border-top:1px solid #86efac;margin:6px 0"></div>
-            <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:3px 0"><span>TOTAL RECEITAS</span><span style="color:#15803d">${fmtEur(totalReceitas)}</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:3px 0"><span>TOTAL RECEITAS</span><span style="color:#15803d">${fmtEur(totalReceitas + gorjeta)}</span></div>
           </div>
         </div>
         <!-- Despesas -->
@@ -551,7 +557,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
         : '';
     const body =
       `Olá ${motorista.driver_name},\n\nSegue o resumo financeiro do período ${format(dateRange.from, 'dd/MM/yyyy')} a ${format(dateRange.to, 'dd/MM/yyyy')}:\n\n` +
-      `Receitas: ${fmt(totalReceitas)}\nDespesas: ${fmt(totalDespesas)}\n${slotEmailDetalhe}Líquido a Receber: ${fmt(liquido)}\n\nCumprimentos,\nEquipa WeGest`;
+      `Receitas: ${fmt(totalReceitas + gorjeta)}\nDespesas: ${fmt(totalDespesas)}\n${slotEmailDetalhe}Líquido a Receber: ${fmt(liquido)}\n\nCumprimentos,\nEquipa WeGest`;
     const cc = emailCC.trim() ? `&cc=${encodeURIComponent(emailCC.trim())}` : '';
     window.open(
       `mailto:${encodeURIComponent(emailTo)}?subject=${encodeURIComponent(subject)}${cc}&body=${encodeURIComponent(body)}`
@@ -574,7 +580,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     const message =
       `*RESUMO FINANCEIRO - WeGest*\n\nOlá *${motorista.driver_name}*,\n` +
       `Período: ${format(dateRange.from, 'dd/MM/yyyy')} a ${format(dateRange.to, 'dd/MM/yyyy')}\n\n` +
-      `💰 *Receitas:* ${fmt(totalReceitas)}\n💸 *Despesas:* ${fmt(totalDespesas)}${slotDetalhe}\n🏁 *Líquido Final:* ${fmt(liquido)}\n\nSe tiver alguma dúvida, por favor contacte-nos.`;
+      `💰 *Receitas:* ${fmt(totalReceitas + gorjeta)}\n💸 *Despesas:* ${fmt(totalDespesas)}${slotDetalhe}\n🏁 *Líquido Final:* ${fmt(liquido)}\n\nSe tiver alguma dúvida, por favor contacte-nos.`;
     const phone = motoristaTelefone?.replace(/\s/g, '') || '';
     window.open(
       `https://wa.me/${phone.startsWith('+') ? phone : '+351' + phone}?text=${encodeURIComponent(message)}`,
@@ -780,7 +786,9 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                 >
                   Total Receitas
                 </p>
-                <p className="text-2xl print:text-lg font-bold mt-1">{fmt(totalReceitas)}</p>
+                <p className="text-2xl print:text-lg font-bold mt-1">
+                  {fmt(totalReceitas + gorjeta)}
+                </p>
               </div>
               <div
                 className="rounded-xl p-4 print:p-3 print:rounded-lg text-center"
@@ -848,20 +856,35 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                     RECEITAS
                   </h2>
                 </div>
-                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-green-50 print:bg-green-50">
-                  <Row label="Bolt" value={fmt(receitas.bolt)} colored="text-green-700" />
-                  <Row label="Uber" value={fmt(receitas.uber)} colored="text-green-700" />
+                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-green-50 dark:bg-green-950/20 print:bg-green-50">
+                  <Row
+                    label="Bolt"
+                    value={fmt(receitas.bolt)}
+                    colored="text-green-700 dark:text-green-300"
+                  />
+                  <Row
+                    label="Uber"
+                    value={fmt(receitas.uber)}
+                    colored="text-green-700 dark:text-green-300"
+                  />
                   <Row
                     label="Outras Receitas"
                     value={fmt(receitas.outras_receitas)}
-                    colored="text-green-700"
+                    colored="text-green-700 dark:text-green-300"
                   />
-                  <Separator className="bg-green-200" />
+                  {gorjeta > 0 && (
+                    <Row
+                      label="Gorjetas (sem IVA)"
+                      value={fmt(gorjeta)}
+                      colored="text-green-700 dark:text-green-300"
+                    />
+                  )}
+                  <Separator className="bg-green-200 dark:bg-green-800" />
                   <Row
                     label="TOTAL RECEITAS"
-                    value={fmt(totalReceitas)}
+                    value={fmt(totalReceitas + gorjeta)}
                     bold
-                    colored="text-green-700"
+                    colored="text-green-700 dark:text-green-300"
                   />
                 </div>
               </div>
@@ -880,28 +903,48 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                     DESPESAS
                   </h2>
                 </div>
-                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-red-50 print:bg-red-50">
-                  <Row label="Aluguer" value={fmt(despesas.aluguer)} colored="text-red-700" />
+                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-red-50 dark:bg-red-950/20 print:bg-red-50">
+                  <Row
+                    label="Aluguer"
+                    value={fmt(despesas.aluguer)}
+                    colored="text-red-700 dark:text-red-300"
+                  />
                   <Row
                     label="Combustível"
                     value={fmt(despesas.combustivel)}
-                    colored="text-red-700"
+                    colored="text-red-700 dark:text-red-300"
                   />
-                  <Row label="Portagens" value={fmt(despesas.portagens)} colored="text-red-700" />
+                  <Row
+                    label="Portagens"
+                    value={fmt(despesas.portagens)}
+                    colored="text-red-700 dark:text-red-300"
+                  />
                   <Row
                     label="Outros Custos"
                     value={fmt(despesas.outros_custos)}
-                    colored="text-red-700"
+                    colored="text-red-700 dark:text-red-300"
                   />
-                  <Row label="Caução" value={fmt(despesas.caucao)} colored="text-red-700" />
-                  <Row label="Seguros" value={fmt(despesas.seguros)} colored="text-red-700" />
-                  <Row label="Reparações" value={fmt(despesas.reparacoes)} colored="text-red-700" />
-                  <Separator className="bg-red-200" />
+                  <Row
+                    label="Caução"
+                    value={fmt(despesas.caucao)}
+                    colored="text-red-700 dark:text-red-300"
+                  />
+                  <Row
+                    label="Seguros"
+                    value={fmt(despesas.seguros)}
+                    colored="text-red-700 dark:text-red-300"
+                  />
+                  <Row
+                    label="Reparações"
+                    value={fmt(despesas.reparacoes)}
+                    colored="text-red-700 dark:text-red-300"
+                  />
+                  <Separator className="bg-red-200 dark:bg-red-800" />
                   <Row
                     label="TOTAL DESPESAS"
                     value={fmt(totalDespesas)}
                     bold
-                    colored="text-red-700"
+                    colored="text-red-700 dark:text-red-300"
                   />
                 </div>
               </div>
@@ -921,29 +964,31 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                     ALUGUER — DETALHE
                   </h2>
                 </div>
-                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-amber-50 print:bg-amber-50">
+                <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-amber-50 dark:bg-amber-950/20 print:bg-amber-50">
                   {slotPeriodos.map((p, i) => (
                     <Row
                       key={i}
                       label={`${p.matricula} (${p.dataInicioStr}–${p.dataFimStr}): ${p.dias} dias × ${fmt(p.taxaDiaria)}/dia`}
                       value={fmt(p.custo)}
-                      colored="text-amber-700"
+                      colored="text-amber-700 dark:text-amber-300"
                     />
                   ))}
                   {slotPeriodos.length > 1 && (
                     <>
-                      <Separator className="bg-amber-200" />
+                      <Separator className="bg-amber-200 dark:bg-amber-800" />
                       <Row
                         label="TOTAL ALUGUER"
                         value={fmt(totalSlot)}
                         bold
-                        colored="text-amber-700"
+                        colored="text-amber-700 dark:text-amber-300"
                       />
                     </>
                   )}
                 </div>
               </div>
             )}
+
+            <SlotMensalidadeCard motoristaId={motorista.motorista_id} />
 
             {/* Resumo Final */}
             <div className="rounded-lg overflow-hidden border border-blue-200 print:border-blue-300">
@@ -959,26 +1004,23 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                   RESUMO FINAL
                 </h2>
               </div>
-              <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-blue-50 print:bg-blue-50">
+              <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-blue-50 dark:bg-blue-950/20 print:bg-blue-50">
                 <Row
                   label="Valores a Transportar (Semana Anterior)"
                   value={fmt(valoresSemanaAnterior)}
-                  colored="text-blue-700"
+                  colored="text-blue-700 dark:text-blue-300"
                 />
-                <Separator className="bg-blue-200" />
+                <Separator className="bg-blue-200 dark:bg-blue-800" />
                 <Row
                   label="Total a Receber"
                   value={fmt(totalAReceber)}
-                  colored={totalAReceber >= 0 ? 'text-green-700' : 'text-red-700'}
+                  colored={
+                    totalAReceber >= 0
+                      ? 'text-green-700 dark:text-green-300'
+                      : 'text-red-700 dark:text-red-300'
+                  }
                 />
-                {!motorista.recibo_verde && !isImportado && (
-                  <Row
-                    label="Ajuste (÷ 1.06)"
-                    value={`-${fmt(totalAReceber - liquido)}`}
-                    colored="text-orange-600"
-                  />
-                )}
-                <Separator className="my-2 print:my-1 bg-blue-200" />
+                <Separator className="my-2 print:my-1 bg-blue-200 dark:bg-blue-800" />
                 <div
                   className="flex justify-between items-center -mx-4 px-4 py-3 print:py-2 print:-mx-3 print:px-3"
                   style={{ backgroundColor: '#2563eb' }}

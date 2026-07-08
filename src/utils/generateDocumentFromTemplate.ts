@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { printPdf } from '@/lib/printPdf';
+import { fetchAnexoDanos } from './fetchAnexoDanos';
 
 interface DocumentTemplate {
   id: string;
@@ -28,14 +29,24 @@ export interface AnexoDanoItem {
   estado: string;
   data: string;
   valor?: string;
+  /** De onde vem o registo — distingue danos já existentes na viatura (e a
+   *  sua origem) dos que estão a ser adicionados agora nesta recolha/entrega. */
+  origem?: string;
+}
+
+/** Foto da grelha de danos — com legenda de origem (de onde veio). */
+export interface AnexoFotoItem {
+  url: string;
+  /** Legenda por baixo da foto — mesma origem usada na tabela de danos. */
+  origem?: string;
 }
 
 /** Anexo de danos da viatura: lista + fotos (máx 6) + QR code. */
 export interface AnexoDanos {
   titulo: string;
   danos: AnexoDanoItem[];
-  /** URLs já assinadas (máx 6) para a grelha de fotos. */
-  fotos: string[];
+  /** URLs já assinadas (máx 6) para a grelha de fotos, com legenda de origem. */
+  fotos: AnexoFotoItem[];
   /** URL da página de danos da viatura (texto + QR). */
   linkUrl: string;
   /** data:image/png;base64 do QR code. */
@@ -60,6 +71,28 @@ interface GenerateDocumentParams {
   anexoFotos?: Array<{ titulo: string; urls: string[] }>;
   /** Danos da viatura a anexar numa folha extra: lista + fotos (máx 6) + QR. */
   anexoDanos?: AnexoDanos;
+  /** ID da viatura. Obrigatório para templates do tipo `anexo_danos`. */
+  viaturaId?: string;
+  /** ID do contrato de renting actual (recolha/entrega em curso). Não filtra
+   *  a lista — continua a mostrar todos os danos activos da viatura — mas
+   *  identifica, por linha, quais vêm deste contrato ("Nesta recolha/entrega")
+   *  vs. já existentes (contrato anterior/registo manual). */
+  contratoId?: string;
+  /** KMs e combustível para preencher as variáveis {{km_saida}}, {{km_entrada}}, etc. */
+  km_saida?: string;
+  km_entrada?: string;
+  combustivel_saida?: string;
+  combustivel_entrada?: string;
+  /** Momento da folha de danos: 'ENTREGA' | 'RECOLHA' | 'DEVOLUÇÃO'. Preenche {{momento_folha}}. */
+  momentoFolha?: string;
+  /** Fotos locais (data URLs) a juntar à grelha de danos — usado na pré-visualização
+   *  antes de as fotos serem gravadas na BD. Máx 6 no total (com as da BD). */
+  fotosMomento?: string[];
+  /** Danos locais (ainda não gravados) a juntar à tabela — usado na
+   *  pré-visualização dos danos registados no momento. */
+  danosMomento?: AnexoDanoItem[];
+  /** Observações do gestor no momento — preenche {{observacoes_momento}}. */
+  observacoesMomento?: string;
 }
 
 interface UploadDocumentParams extends GenerateDocumentParams {
@@ -161,6 +194,29 @@ const replaceDynamicFields = (
         ? `<img class="sig-colaborador" src="${assinatura.replace(/"/g, '&quot;')}">`
         : '';
     result = result.replace(/\{\{assinatura_colaborador\}\}/g, replacement);
+  }
+
+  // Assinatura do motorista — a sentinela {{assinatura_motorista}} segue o
+  // mesmo padrão que assinatura_colaborador. Resolve para uma <img> com classe
+  // marcadora que o parseTable reconhece e desenha na célula. Sem assinatura,
+  // resolve para vazio → a célula fica com o traço padrão.
+  {
+    const assinatura = documentData['assinatura_motorista'];
+    const replacement =
+      typeof assinatura === 'string' && assinatura.startsWith('data:image')
+        ? `<img class="sig-motorista" src="${assinatura.replace(/"/g, '&quot;')}">`
+        : '';
+    result = result.replace(/\{\{assinatura_motorista\}\}/g, replacement);
+  }
+
+  // Assinatura do responsável (quem entregou/recolheu) — mesmo padrão.
+  {
+    const assinatura = documentData['assinatura_responsavel'];
+    const replacement =
+      typeof assinatura === 'string' && assinatura.startsWith('data:image')
+        ? `<img class="sig-responsavel" src="${assinatura.replace(/"/g, '&quot;')}">`
+        : '';
+    result = result.replace(/\{\{assinatura_responsavel\}\}/g, replacement);
   }
 
   // Mapear campos do motorista para o formato usado nos templates: {{motorista_CAMPO}}
@@ -323,6 +379,7 @@ const replaceDynamicFields = (
     'duracao_meses',
     'numero_contrato',
     'viatura_matricula',
+    'viatura_data_matricula',
     'viatura_marca_modelo',
     'viatura_grupo',
     'viatura_kms',
@@ -340,6 +397,14 @@ const replaceDynamicFields = (
     'total',
     'observacoes',
     'colaborador_nome',
+    'km_saida',
+    'km_entrada',
+    'combustivel_saida',
+    'combustivel_entrada',
+    'momento_folha',
+    'observacoes_momento',
+    'responsavel_nome',
+    'momento_responsavel',
   ];
   contratoFields.forEach((field) => {
     const regex = new RegExp(`\\{\\{${field}\\}\\}`, 'g');
@@ -385,6 +450,23 @@ const replaceDynamicFields = (
       result = result.replace(regex, value?.toString() || '');
     }
   });
+
+  // Cartão de frota: {{cartao_frota_marca}} / {{cartao_frota_numero}}.
+  // Vem da FICHA do motorista (campos cartao_bp/repsol/edp, sincronizados ao
+  // associar um cartão). documentData pode fazer override (geração a partir de
+  // um cartão específico). Prioridade EDP > Repsol > BP quando há vários.
+  {
+    const marcaLabel: Record<string, string> = { bp: 'BP', repsol: 'Repsol', edp: 'EDP' };
+    const cards: Array<{ marca: string; num: string }> = [];
+    (['edp', 'repsol', 'bp'] as const).forEach((t) => {
+      const num = motoristaData[`cartao_${t}`];
+      if (num && String(num).trim()) cards.push({ marca: marcaLabel[t], num: String(num).trim() });
+    });
+    const marca = documentData['cartao_frota_marca'] || cards[0]?.marca || '';
+    const numero = documentData['cartao_frota_numero'] || cards[0]?.num || '';
+    result = result.replace(/\{\{cartao_frota_marca\}\}/g, marca);
+    result = result.replace(/\{\{cartao_frota_numero\}\}/g, numero);
+  }
 
   // Formatar datas especiais (ambos formatos)
   const today = new Date();
@@ -502,7 +584,7 @@ const parseTable = (tableEl: HTMLElement): { rows: TableCellData[][]; bordered: 
       const fw = el.style.fontWeight;
       const headerBold = tag === 'th' || fw === 'bold' || Number(fw) >= 600;
       // Assinatura embebida na célula (marcador inserido por replaceDynamicFields).
-      const sigImg = el.querySelector('img.sig-colaborador') as HTMLImageElement | null;
+      const sigImg = el.querySelector('img[class^="sig-"]') as HTMLImageElement | null;
       cells.push({
         lines: cellToLines(el, headerBold),
         align: el.style.textAlign || 'left',
@@ -613,8 +695,15 @@ function renderTable(
       // linha como uma assinatura real. Não altera a altura da célula.
       const sigImg = cl.cell.signatureSrc ? ctx.signatures?.get(cl.cell.signatureSrc) : undefined;
       if (sigImg && sigImg.width > 0 && sigImg.height > 0) {
+        // A assinatura assenta SOBRE o traço (1ª linha da célula). A base da
+        // imagem alinha com a baseline do traço e a imagem cresce para cima,
+        // sem nunca sair do topo da célula (clamp). Altura pequena para não
+        // tapar o nome (2ª linha).
+        const firstLineH = cl.wrapped[0]?.h ?? 4;
+        const traçoBaselineY = y + pad + firstLineH * 0.82;
         const maxSigW = Math.min(cl.cw - pad * 2, 38); // mm
-        const maxSigH = 14; // mm — fica sobre o traço sem invadir o nome
+        // Altura máxima = espaço entre o topo da célula e a baseline do traço.
+        const maxSigH = Math.max(6, Math.min(12, traçoBaselineY - (y + 0.5)));
         const aspect = sigImg.width / sigImg.height;
         let sw = maxSigW;
         let sh = sw / aspect;
@@ -622,11 +711,8 @@ function renderTable(
           sh = maxSigH;
           sw = sh * aspect;
         }
-        // Assenta a base da imagem ligeiramente acima do traço (1ª linha de texto).
-        const firstLineH = cl.wrapped[0]?.h ?? 4;
-        const baseLineY = y + pad + firstLineH * 0.82;
         const sx = cl.cx + pad;
-        const sy = Math.max(y + 0.5, baseLineY - sh);
+        const sy = traçoBaselineY - sh; // base no traço, cresce para cima
         try {
           pdf.addImage(sigImg, 'PNG', sx, sy, sw, sh);
         } catch (err) {
@@ -815,7 +901,37 @@ export const generateDocumentFromTemplate = async (
     }
 
     // Substituir campos dinâmicos no conteúdo
-    const processedContent = replaceDynamicFields(conteudo, motoristaData, documentData);
+    const enrichedDocumentData = {
+      ...documentData,
+      ...(params.km_saida != null ? { km_saida: params.km_saida } : {}),
+      ...(params.km_entrada != null ? { km_entrada: params.km_entrada } : {}),
+      ...(params.combustivel_saida != null ? { combustivel_saida: params.combustivel_saida } : {}),
+      ...(params.combustivel_entrada != null
+        ? { combustivel_entrada: params.combustivel_entrada }
+        : {}),
+      ...(params.momentoFolha != null ? { momento_folha: params.momentoFolha } : {}),
+      ...(params.observacoesMomento != null
+        ? { observacoes_momento: params.observacoesMomento }
+        : {}),
+    };
+    const processedContent = replaceDynamicFields(conteudo, motoristaData, enrichedDocumentData);
+
+    // Suporte ao placeholder {{secao_danos}}: dividir em antes/depois.
+    // O bloco de danos (tabela+fotos+QR) é renderizado inline no ponto do placeholder.
+    // TipTap envolve o placeholder em <p>...</p> — removemos esses tags residuais.
+    const DANOS_PLACEHOLDER = '{{secao_danos}}';
+    const hasDanosPlaceholder = processedContent.includes(DANOS_PLACEHOLDER);
+    let htmlPart1 = processedContent;
+    let htmlPart2 = '';
+    if (hasDanosPlaceholder) {
+      const idx = processedContent.indexOf(DANOS_PLACEHOLDER);
+      let before = processedContent.slice(0, idx);
+      let after = processedContent.slice(idx + DANOS_PLACEHOLDER.length);
+      before = before.replace(/<p>\s*$/, '');
+      after = after.replace(/^\s*<\/p>/, '');
+      htmlPart1 = before;
+      htmlPart2 = after;
+    }
 
     // Criar PDF ou usar existente
     const pdf =
@@ -892,285 +1008,292 @@ export const generateDocumentFromTemplate = async (
     const lineFactor = hasLetterhead ? 1.24 : 1.5;
 
     // Processar HTML e renderizar no PDF diretamente
-    const contentElements = htmlToText(processedContent);
+    // Renderiza um bloco de HTML (texto, imagens, tabelas, hr) a partir de yPos,
+    // tratando agrupamento, assinaturas e quebras de página. Usado para o
+    // conteúdo antes (htmlPart1) e depois (htmlPart2) de {{secao_danos}}.
+    const renderHtmlBlock = async (html: string) => {
+      const contentElements = htmlToText(html);
 
-    // Pré-carregar imagens de assinatura embebidas em células de tabela.
-    // renderTable é síncrono, por isso resolvemos as imagens (data URLs) aqui
-    // e passamo-las já carregadas no contexto da tabela.
-    const signatures = new Map<string, HTMLImageElement>();
-    const sigSrcs = new Set<string>();
-    for (const el of contentElements) {
-      if (el.type === 'table' && el.rows) {
-        for (const row of el.rows) {
-          for (const cell of row) {
-            if (cell.signatureSrc) sigSrcs.add(cell.signatureSrc);
+      // Pré-carregar imagens de assinatura embebidas em células de tabela.
+      // renderTable é síncrono, por isso resolvemos as imagens (data URLs) aqui
+      // e passamo-las já carregadas no contexto da tabela.
+      const signatures = new Map<string, HTMLImageElement>();
+      const sigSrcs = new Set<string>();
+      for (const el of contentElements) {
+        if (el.type === 'table' && el.rows) {
+          for (const row of el.rows) {
+            for (const cell of row) {
+              if (cell.signatureSrc) sigSrcs.add(cell.signatureSrc);
+            }
           }
         }
       }
-    }
-    for (const src of sigSrcs) {
-      try {
-        signatures.set(src, await loadImage(src));
-      } catch (err) {
-        console.warn('Falha a carregar a imagem da assinatura:', err);
-      }
-    }
-
-    // Agrupar elementos consecutivos com mesmo alinhamento em "linhas lógicas"
-    const groupedElements: Array<{
-      align: string;
-      segments: Array<{
-        text: string;
-        style: any;
-        isImage?: boolean;
-        isTable?: boolean;
-        isHr?: boolean;
-      }>;
-    }> = [];
-
-    let currentGroup: {
-      align: string;
-      segments: Array<{
-        text: string;
-        style: any;
-        isImage?: boolean;
-        isTable?: boolean;
-        isHr?: boolean;
-      }>;
-    } | null = null;
-
-    for (const element of contentElements) {
-      if (element.type === 'image' || element.type === 'table' || element.type === 'hr') {
-        // Imagens, tabelas e divisórias criam sempre o seu próprio grupo.
-        if (currentGroup && currentGroup.segments.length > 0) {
-          groupedElements.push(currentGroup);
-          currentGroup = null;
-        }
-        groupedElements.push({
-          align: element.style?.align || 'left',
-          segments: [
-            {
-              text: '',
-              style: element,
-              isImage: element.type === 'image',
-              isTable: element.type === 'table',
-              isHr: element.type === 'hr',
-            },
-          ],
-        });
-        continue;
-      }
-
-      const { text, style } = element;
-      // Preservar alinhamento do contexto anterior para quebras de linha
-      const align = text === '\n' ? currentGroup?.align || 'left' : style.align || 'left';
-
-      // Se for quebra de linha explícita, fechar grupo atual
-      if (text === '\n') {
-        if (currentGroup && currentGroup.segments.length > 0) {
-          groupedElements.push(currentGroup);
-        }
-        groupedElements.push({ align: 'left', segments: [{ text: '\n', style: {} }] });
-        currentGroup = null;
-        continue;
-      }
-
-      // Se não há grupo atual OU o alinhamento mudou, criar novo grupo
-      if (!currentGroup || currentGroup.align !== align) {
-        if (currentGroup && currentGroup.segments.length > 0) {
-          groupedElements.push(currentGroup);
-        }
-        currentGroup = { align, segments: [] };
-      }
-
-      // Adicionar texto ao grupo atual
-      currentGroup.segments.push({ text, style });
-    }
-
-    // Adicionar último grupo se existir
-    if (currentGroup && currentGroup.segments.length > 0) {
-      groupedElements.push(currentGroup);
-    }
-
-    // Renderizar conteúdo agrupado
-    for (const group of groupedElements) {
-      // Se for quebra de linha
-      if (group.segments.length === 1 && group.segments[0].text === '\n') {
-        // Adicionar espaçamento equivalente a uma linha (usa fontSize padrão 10)
-        yPos += 10 * 0.352777778 * lineFactor; // espaçador de parágrafo (entrelinha)
-        continue;
-      }
-
-      // Se for imagem
-      if (group.segments[0].isImage) {
-        const imgElement = group.segments[0].style;
+      for (const src of sigSrcs) {
         try {
-          const img = await loadImage(imgElement.src);
+          signatures.set(src, await loadImage(src));
+        } catch (err) {
+          console.warn('Falha a carregar a imagem da assinatura:', err);
+        }
+      }
 
-          // Calcular dimensões mantendo aspect ratio
-          const maxImgWidth = maxWidth;
-          const maxImgHeight = 80;
-          const imgAspect = img.width / img.height;
+      // Agrupar elementos consecutivos com mesmo alinhamento em "linhas lógicas"
+      const groupedElements: Array<{
+        align: string;
+        segments: Array<{
+          text: string;
+          style: any;
+          isImage?: boolean;
+          isTable?: boolean;
+          isHr?: boolean;
+        }>;
+      }> = [];
 
-          let imgWidth = maxImgWidth;
-          let imgHeight = imgWidth / imgAspect;
+      let currentGroup: {
+        align: string;
+        segments: Array<{
+          text: string;
+          style: any;
+          isImage?: boolean;
+          isTable?: boolean;
+          isHr?: boolean;
+        }>;
+      } | null = null;
 
-          if (imgHeight > maxImgHeight) {
-            imgHeight = maxImgHeight;
-            imgWidth = imgHeight * imgAspect;
+      for (const element of contentElements) {
+        if (element.type === 'image' || element.type === 'table' || element.type === 'hr') {
+          // Imagens, tabelas e divisórias criam sempre o seu próprio grupo.
+          if (currentGroup && currentGroup.segments.length > 0) {
+            groupedElements.push(currentGroup);
+            currentGroup = null;
           }
+          groupedElements.push({
+            align: element.style?.align || 'left',
+            segments: [
+              {
+                text: '',
+                style: element,
+                isImage: element.type === 'image',
+                isTable: element.type === 'table',
+                isHr: element.type === 'hr',
+              },
+            ],
+          });
+          continue;
+        }
 
-          // Verificar se cabe na página
-          if (yPos + imgHeight > pageHeight - bottomMargin) {
-            pdf.addPage();
-            if (bg) pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
-            yPos = topMargin;
+        const { text, style } = element;
+        // Preservar alinhamento do contexto anterior para quebras de linha
+        const align = text === '\n' ? currentGroup?.align || 'left' : style.align || 'left';
+
+        // Se for quebra de linha explícita, fechar grupo atual
+        if (text === '\n') {
+          if (currentGroup && currentGroup.segments.length > 0) {
+            groupedElements.push(currentGroup);
           }
+          groupedElements.push({ align: 'left', segments: [{ text: '\n', style: {} }] });
+          currentGroup = null;
+          continue;
+        }
+
+        // Se não há grupo atual OU o alinhamento mudou, criar novo grupo
+        if (!currentGroup || currentGroup.align !== align) {
+          if (currentGroup && currentGroup.segments.length > 0) {
+            groupedElements.push(currentGroup);
+          }
+          currentGroup = { align, segments: [] };
+        }
+
+        // Adicionar texto ao grupo atual
+        currentGroup.segments.push({ text, style });
+      }
+
+      // Adicionar último grupo se existir
+      if (currentGroup && currentGroup.segments.length > 0) {
+        groupedElements.push(currentGroup);
+      }
+
+      // Renderizar conteúdo agrupado
+      for (const group of groupedElements) {
+        // Se for quebra de linha
+        if (group.segments.length === 1 && group.segments[0].text === '\n') {
+          // Adicionar espaçamento equivalente a uma linha (usa fontSize padrão 10)
+          yPos += 10 * 0.352777778 * lineFactor; // espaçador de parágrafo (entrelinha)
+          continue;
+        }
+
+        // Se for imagem
+        if (group.segments[0].isImage) {
+          const imgElement = group.segments[0].style;
+          try {
+            const img = await loadImage(imgElement.src);
+
+            // Calcular dimensões mantendo aspect ratio
+            const maxImgWidth = maxWidth;
+            const maxImgHeight = 80;
+            const imgAspect = img.width / img.height;
+
+            let imgWidth = maxImgWidth;
+            let imgHeight = imgWidth / imgAspect;
+
+            if (imgHeight > maxImgHeight) {
+              imgHeight = maxImgHeight;
+              imgWidth = imgHeight * imgAspect;
+            }
+
+            // Verificar se cabe na página
+            if (yPos + imgHeight > pageHeight - bottomMargin) {
+              pdf.addPage();
+              if (bg) pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
+              yPos = topMargin;
+            }
+
+            let xPos = leftMargin;
+            if (group.align === 'center') {
+              xPos = (pageWidth - imgWidth) / 2;
+            } else if (group.align === 'right') {
+              xPos = pageWidth - rightMargin - imgWidth;
+            }
+
+            pdf.addImage(img, 'JPEG', xPos, yPos, imgWidth, imgHeight);
+            yPos += imgHeight + 5;
+          } catch (error) {
+            console.warn('Erro ao carregar imagem:', imgElement.src, error);
+          }
+          continue;
+        }
+
+        // Se for tabela (layout 2D próprio)
+        if (group.segments[0].isTable) {
+          const tableEl = group.segments[0].style as DocEl;
+          if (tableEl.rows && tableEl.rows.length > 0) {
+            yPos = renderTable(pdf, tableEl.rows, leftMargin, yPos, maxWidth, !!tableEl.bordered, {
+              pageHeight,
+              bottomMargin,
+              topMargin,
+              compact: hasLetterhead,
+              bg,
+              signatures,
+            });
+          }
+          continue;
+        }
+
+        // Se for divisória (<hr>)
+        if (group.segments[0].isHr) {
+          yPos += 1;
+          pdf.setDrawColor(224, 226, 232);
+          pdf.setLineWidth(0.3);
+          pdf.line(leftMargin, yPos, pageWidth - rightMargin, yPos);
+          yPos += 3;
+          continue;
+        }
+
+        // Renderizar grupo de texto com quebra automática
+        const align = group.align;
+        const maxFontSize = Math.max(...group.segments.map((seg) => seg.style.fontSize || 10));
+
+        // Função auxiliar para renderizar uma linha
+        const renderLine = (
+          segments: Array<{ text: string; style: any; width: number }>,
+          lineAlign: string,
+          y: number
+        ) => {
+          const totalWidth = segments.reduce((sum, seg) => sum + seg.width, 0);
 
           let xPos = leftMargin;
-          if (group.align === 'center') {
-            xPos = (pageWidth - imgWidth) / 2;
-          } else if (group.align === 'right') {
-            xPos = pageWidth - rightMargin - imgWidth;
+          if (lineAlign === 'center') {
+            xPos = (pageWidth - totalWidth) / 2;
+          } else if (lineAlign === 'right') {
+            xPos = pageWidth - rightMargin - totalWidth;
           }
 
-          pdf.addImage(img, 'JPEG', xPos, yPos, imgWidth, imgHeight);
-          yPos += imgHeight + 5;
-        } catch (error) {
-          console.warn('Erro ao carregar imagem:', imgElement.src, error);
-        }
-        continue;
-      }
+          for (const seg of segments) {
+            const fontSize = seg.style.fontSize || 10;
+            const fontStyle = seg.style.bold ? 'bold' : seg.style.italic ? 'italic' : 'normal';
 
-      // Se for tabela (layout 2D próprio)
-      if (group.segments[0].isTable) {
-        const tableEl = group.segments[0].style as DocEl;
-        if (tableEl.rows && tableEl.rows.length > 0) {
-          yPos = renderTable(pdf, tableEl.rows, leftMargin, yPos, maxWidth, !!tableEl.bordered, {
-            pageHeight,
-            bottomMargin,
-            topMargin,
-            compact: hasLetterhead,
-            bg,
-            signatures,
-          });
-        }
-        continue;
-      }
+            pdf.setFontSize(fontSize);
+            pdf.setFont('helvetica', fontStyle);
+            const c = seg.style.color as RGB | undefined;
+            pdf.setTextColor(c ? c[0] : 0, c ? c[1] : 0, c ? c[2] : 0);
+            pdf.text(seg.text, xPos, y);
 
-      // Se for divisória (<hr>)
-      if (group.segments[0].isHr) {
-        yPos += 1;
-        pdf.setDrawColor(224, 226, 232);
-        pdf.setLineWidth(0.3);
-        pdf.line(leftMargin, yPos, pageWidth - rightMargin, yPos);
-        yPos += 3;
-        continue;
-      }
+            xPos += seg.width;
+          }
+          pdf.setTextColor(0, 0, 0);
+        };
 
-      // Renderizar grupo de texto com quebra automática
-      const align = group.align;
-      const maxFontSize = Math.max(...group.segments.map((seg) => seg.style.fontSize || 10));
+        // Combinar todos os segmentos do grupo em linhas com quebra automática
+        let currentLineSegments: Array<{ text: string; style: any; width: number }> = [];
+        let currentLineWidth = 0;
 
-      // Função auxiliar para renderizar uma linha
-      const renderLine = (
-        segments: Array<{ text: string; style: any; width: number }>,
-        lineAlign: string,
-        y: number
-      ) => {
-        const totalWidth = segments.reduce((sum, seg) => sum + seg.width, 0);
-
-        let xPos = leftMargin;
-        if (lineAlign === 'center') {
-          xPos = (pageWidth - totalWidth) / 2;
-        } else if (lineAlign === 'right') {
-          xPos = pageWidth - rightMargin - totalWidth;
-        }
-
-        for (const seg of segments) {
-          const fontSize = seg.style.fontSize || 10;
-          const fontStyle = seg.style.bold ? 'bold' : seg.style.italic ? 'italic' : 'normal';
+        for (let i = 0; i < group.segments.length; i++) {
+          const segment = group.segments[i];
+          const nextSegment = group.segments[i + 1];
+          const { text, style } = segment;
+          const fontSize = style.fontSize || 10;
+          const fontStyle = style.bold ? 'bold' : style.italic ? 'italic' : 'normal';
 
           pdf.setFontSize(fontSize);
           pdf.setFont('helvetica', fontStyle);
-          const c = seg.style.color as RGB | undefined;
-          pdf.setTextColor(c ? c[0] : 0, c ? c[1] : 0, c ? c[2] : 0);
-          pdf.text(seg.text, xPos, y);
 
-          xPos += seg.width;
-        }
-        pdf.setTextColor(0, 0, 0);
-      };
+          // Quebrar o texto preservando espaços originais
+          const words = text.match(/\S+\s*/g) || (text.trim() ? [text] : []);
 
-      // Combinar todos os segmentos do grupo em linhas com quebra automática
-      let currentLineSegments: Array<{ text: string; style: any; width: number }> = [];
-      let currentLineWidth = 0;
+          for (let j = 0; j < words.length; j++) {
+            const word = words[j];
 
-      for (let i = 0; i < group.segments.length; i++) {
-        const segment = group.segments[i];
-        const nextSegment = group.segments[i + 1];
-        const { text, style } = segment;
-        const fontSize = style.fontSize || 10;
-        const fontStyle = style.bold ? 'bold' : style.italic ? 'italic' : 'normal';
+            // Se é a última palavra deste segmento E não tem espaço trailing
+            // E o próximo segmento começa com espaço, adicionar o espaço aqui
+            const isLastWordInSegment = j === words.length - 1;
+            let wordToRender = word;
 
-        pdf.setFontSize(fontSize);
-        pdf.setFont('helvetica', fontStyle);
+            if (isLastWordInSegment && nextSegment) {
+              const currentEndsWithSpace = /\s$/.test(word);
+              const nextStartsWithSpace = /^\s/.test(nextSegment.text);
 
-        // Quebrar o texto preservando espaços originais
-        const words = text.match(/\S+\s*/g) || (text.trim() ? [text] : []);
-
-        for (let j = 0; j < words.length; j++) {
-          const word = words[j];
-
-          // Se é a última palavra deste segmento E não tem espaço trailing
-          // E o próximo segmento começa com espaço, adicionar o espaço aqui
-          const isLastWordInSegment = j === words.length - 1;
-          let wordToRender = word;
-
-          if (isLastWordInSegment && nextSegment) {
-            const currentEndsWithSpace = /\s$/.test(word);
-            const nextStartsWithSpace = /^\s/.test(nextSegment.text);
-
-            // Se atual não termina com espaço MAS próximo começa com espaço,
-            // adicionar espaço ao final desta palavra
-            if (!currentEndsWithSpace && nextStartsWithSpace) {
-              wordToRender = word + ' ';
+              // Se atual não termina com espaço MAS próximo começa com espaço,
+              // adicionar espaço ao final desta palavra
+              if (!currentEndsWithSpace && nextStartsWithSpace) {
+                wordToRender = word + ' ';
+              }
             }
-          }
 
-          const wordWidth = pdf.getTextWidth(wordToRender);
+            const wordWidth = pdf.getTextWidth(wordToRender);
 
-          // Se a palavra cabe na linha atual
-          if (currentLineWidth + wordWidth <= maxWidth) {
-            currentLineSegments.push({ text: wordToRender, style, width: wordWidth });
-            currentLineWidth += wordWidth;
-          } else {
-            // Renderizar linha atual
-            if (currentLineSegments.length > 0) {
-              const lineHeight = maxFontSize * 0.352777778 * lineFactor;
-              if (yPos + lineHeight > pageHeight - bottomMargin) {
-                pdf.addPage();
-                if (bg) pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
-                yPos = topMargin;
+            // Se a palavra cabe na linha atual
+            if (currentLineWidth + wordWidth <= maxWidth) {
+              currentLineSegments.push({ text: wordToRender, style, width: wordWidth });
+              currentLineWidth += wordWidth;
+            } else {
+              // Renderizar linha atual
+              if (currentLineSegments.length > 0) {
+                const lineHeight = maxFontSize * 0.352777778 * lineFactor;
+                if (yPos + lineHeight > pageHeight - bottomMargin) {
+                  pdf.addPage();
+                  if (bg) pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
+                  yPos = topMargin;
+                }
+
+                renderLine(currentLineSegments, align, yPos);
+                yPos += lineHeight;
               }
 
-              renderLine(currentLineSegments, align, yPos);
-              yPos += lineHeight;
+              // Iniciar nova linha com a palavra atual
+              currentLineSegments = [{ text: wordToRender, style, width: wordWidth }];
+              currentLineWidth = wordWidth;
             }
-
-            // Iniciar nova linha com a palavra atual
-            currentLineSegments = [{ text: wordToRender, style, width: wordWidth }];
-            currentLineWidth = wordWidth;
           }
         }
-      }
 
-      // Renderizar última linha do grupo
-      if (currentLineSegments.length > 0) {
-        renderLine(currentLineSegments, align, yPos);
-        // NÃO adicionar espaço aqui - o próximo elemento (texto ou \n) controlará o espaçamento
+        // Renderizar última linha do grupo
+        if (currentLineSegments.length > 0) {
+          renderLine(currentLineSegments, align, yPos);
+          // NÃO adicionar espaço aqui - o próximo elemento (texto ou \n) controlará o espaçamento
+        }
       }
-    }
+    }; // fim renderHtmlBlock
+
+    await renderHtmlBlock(htmlPart1);
 
     // Anexar fotos (check-in/check-out) em folhas próprias, grelha 2×3.
     if (params.anexoFotos?.length) {
@@ -1235,25 +1358,53 @@ export const generateDocumentFromTemplate = async (
       }
     }
 
+    // Para templates do tipo anexo_danos, buscar danos automaticamente se não fornecidos.
+    let efectivoAnexoDanos = params.anexoDanos;
+    if (templateData.tipo === 'anexo_danos' && params.viaturaId && !efectivoAnexoDanos) {
+      const matricula = (documentData?.viatura_matricula as string | undefined) ?? '';
+      efectivoAnexoDanos = await fetchAnexoDanos(params.viaturaId, matricula, params.contratoId);
+      if (!efectivoAnexoDanos) {
+        console.warn('Template anexo_danos: viatura sem danos activos ou erro ao buscar');
+      }
+    }
+
+    // Pré-visualização: juntar fotos e danos locais (ainda não gravados) aos da BD.
+    if (efectivoAnexoDanos && params.fotosMomento?.length) {
+      const fotosMomentoItems = params.fotosMomento.map((url) => ({
+        url,
+        origem: 'Nesta recolha/entrega',
+      }));
+      efectivoAnexoDanos = {
+        ...efectivoAnexoDanos,
+        fotos: [...fotosMomentoItems, ...efectivoAnexoDanos.fotos].slice(0, 6),
+      };
+    }
+    if (efectivoAnexoDanos && params.danosMomento?.length) {
+      efectivoAnexoDanos = {
+        ...efectivoAnexoDanos,
+        danos: [...params.danosMomento, ...efectivoAnexoDanos.danos],
+      };
+    }
+
     // Anexar folha de danos da viatura (lista + fotos máx 6 + QR code).
-    if (params.anexoDanos) {
-      const ad = params.anexoDanos;
+    if (efectivoAnexoDanos) {
+      const ad = efectivoAnexoDanos;
       const blue: [number, number, number] = [43, 58, 107];
       const gray: [number, number, number] = [90, 90, 100];
       const borderColor: [number, number, number] = [200, 202, 210];
 
-      // Páginas do anexo de danos não usam o papel timbrado — são folhas
-      // funcionais; o fundo decorativo sobrepõe-se ao conteúdo e ao QR code.
+      // Se o template usa {{secao_danos}}, renderizar inline (sem nova página).
+      // Caso contrário (append clássico), forçar nova página sem papel timbrado.
+      const danosInline = hasDanosPlaceholder;
       const adPage = () => {
         pdf.addPage();
-        // Linha fina azul no topo como separador visual de secção
         pdf.setDrawColor(...blue);
         pdf.setLineWidth(0.5);
         pdf.line(leftMargin, 8, pageWidth - rightMargin, 8);
         pdf.setLineWidth(0.2);
       };
 
-      adPage();
+      if (!danosInline) adPage();
 
       const LOCALIZACAO_LABELS: Record<string, string> = {
         frente: 'Frente',
@@ -1274,13 +1425,14 @@ export const generateDocumentFromTemplate = async (
       };
 
       // — Título do anexo —
+      const danosStartY = danosInline ? yPos + 6 : topMargin;
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(11);
       pdf.setTextColor(...blue);
-      pdf.text(ad.titulo, leftMargin, topMargin + 4);
+      pdf.text(ad.titulo, leftMargin, danosStartY + 4);
       pdf.setTextColor(0, 0, 0);
 
-      let ty = topMargin + 12;
+      let ty = danosStartY + 12;
 
       // — Fotos (grelha 2×3, máx 6) — vêm ANTES da tabela —
       if (ad.fotos.length > 0) {
@@ -1288,7 +1440,10 @@ export const generateDocumentFromTemplate = async (
         const photoRows = Math.ceil(Math.min(ad.fotos.length, 6) / photoCols);
         const photoGap = 4;
         const photoW = (maxWidth - photoGap) / photoCols;
-        const photoH = 38;
+        // + faixa de legenda em baixo com a origem da foto (de onde veio).
+        const captionH = 5;
+        const photoH = 38 + captionH;
+        const imgAreaH = photoH - captionH;
 
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(8);
@@ -1303,12 +1458,12 @@ export const generateDocumentFromTemplate = async (
         ty += 5;
 
         // Pré-carregar fotos em paralelo
-        const fotoUrls = ad.fotos.slice(0, 6);
+        const fotoItems = ad.fotos.slice(0, 6);
         const fotoImagens = new Map<string, HTMLImageElement>();
         await Promise.all(
-          fotoUrls.map(async (url) => {
+          fotoItems.map(async (item) => {
             try {
-              fotoImagens.set(url, await loadImage(url));
+              fotoImagens.set(item.url, await loadImage(item.url));
             } catch {
               // célula fica só com moldura
             }
@@ -1318,89 +1473,113 @@ export const generateDocumentFromTemplate = async (
         pdf.setDrawColor(...borderColor);
         pdf.setLineWidth(0.2);
         pdf.setTextColor(0, 0, 0);
-        for (let fi = 0; fi < fotoUrls.length; fi++) {
+        for (let fi = 0; fi < fotoItems.length; fi++) {
           const fc = fi % photoCols;
           const fr = Math.floor(fi / photoCols);
           const fx = leftMargin + fc * (photoW + photoGap);
           const fy = ty + fr * (photoH + photoGap);
           pdf.rect(fx, fy, photoW, photoH, 'S');
-          const img = fotoImagens.get(fotoUrls[fi]);
+          pdf.line(fx, fy + imgAreaH, fx + photoW, fy + imgAreaH);
+          const img = fotoImagens.get(fotoItems[fi].url);
           if (img) {
             const ratio = img.width && img.height ? img.width / img.height : 1.5;
             let w = photoW - 2;
             let h = w / ratio;
-            if (h > photoH - 2) {
-              h = photoH - 2;
+            if (h > imgAreaH - 2) {
+              h = imgAreaH - 2;
               w = h * ratio;
             }
-            pdf.addImage(img, 'JPEG', fx + (photoW - w) / 2, fy + (photoH - h) / 2, w, h);
+            pdf.addImage(img, 'JPEG', fx + (photoW - w) / 2, fy + (imgAreaH - h) / 2, w, h);
           }
+          // Legenda: de onde veio esta foto (recolha actual, outro contrato,
+          // ticket de assistência, registo manual) — explícito por foto, não
+          // só na tabela, porque nem toda foto tem uma linha correspondente.
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(6.5);
+          pdf.setTextColor(...gray);
+          const origemTexto = fotoItems[fi].origem ?? '—';
+          const captionFit = pdf.splitTextToSize(origemTexto, photoW - 3)[0] ?? origemTexto;
+          pdf.text(captionFit, fx + photoW / 2, fy + imgAreaH + captionH / 2 + 1.5, {
+            align: 'center',
+          });
+          pdf.setTextColor(0, 0, 0);
         }
         ty += photoRows * (photoH + photoGap) + 6;
       }
 
       // — Tabela de danos —
-      const colW = [32, 72, 28, 22, 22];
-      const headers = ['Localização', 'Descrição', 'Estado', 'Data', 'Valor'];
-      const rowH = 7;
-      const headerH = 8;
+      if (ad.danos.length === 0) {
+        pdf.setFont('helvetica', 'italic');
+        pdf.setFontSize(9);
+        pdf.setTextColor(...gray);
+        pdf.text('Nenhum dano activo registado.', leftMargin, ty + 4);
+        ty += 12;
+      } else {
+        const colW = [26, 52, 20, 18, 18, 30];
+        const headers = ['Localização', 'Descrição', 'Estado', 'Data', 'Valor', 'Origem'];
+        const rowH = 7;
+        const headerH = 8;
 
-      // Nova página se não couber tabela + QR (mínimo 3 linhas + QR = ~60mm)
-      if (ty + headerH + rowH + 44 > pageHeight - bottomMargin) {
-        adPage();
-        ty = topMargin + 8;
-      }
-
-      pdf.setDrawColor(...borderColor);
-      pdf.setLineWidth(0.2);
-      pdf.setFillColor(240, 242, 248);
-
-      // Header row
-      pdf.rect(
-        leftMargin,
-        ty,
-        colW.reduce((a, b) => a + b, 0),
-        headerH,
-        'FD'
-      );
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8);
-      pdf.setTextColor(...blue);
-      let cx = leftMargin;
-      for (let ci = 0; ci < headers.length; ci++) {
-        pdf.text(headers[ci], cx + 2, ty + headerH - 2.5);
-        cx += colW[ci];
-      }
-      ty += headerH;
-
-      // Data rows
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(30, 30, 40);
-      for (const dano of ad.danos) {
-        if (ty + rowH > pageHeight - bottomMargin - 44) {
+        // Para não partir a tabela: se a tabela INTEIRA (header + todas as
+        // linhas) + QR não couber no espaço restante, começa numa nova página.
+        // (Só parte se exceder uma página inteira — caso raro de muitos danos.)
+        const alturaTabelaQR = headerH + ad.danos.length * rowH + 6 + 44;
+        if (ty + alturaTabelaQR > pageHeight - bottomMargin) {
           adPage();
           ty = topMargin + 8;
         }
-        const rowData = [
-          LOCALIZACAO_LABELS[dano.localizacao] ?? dano.localizacao,
-          dano.descricao,
-          ESTADO_LABELS[dano.estado] ?? dano.estado,
-          dano.data,
-          dano.valor ?? '—',
-        ];
-        cx = leftMargin;
+
         pdf.setDrawColor(...borderColor);
-        for (let ci = 0; ci < rowData.length; ci++) {
-          pdf.rect(cx, ty, colW[ci], rowH, 'S');
-          const cellText = pdf.splitTextToSize(rowData[ci], colW[ci] - 3);
-          pdf.text(cellText[0] ?? '', cx + 2, ty + rowH - 2);
+        pdf.setLineWidth(0.2);
+        pdf.setFillColor(240, 242, 248);
+
+        // Header row
+        pdf.rect(
+          leftMargin,
+          ty,
+          colW.reduce((a, b) => a + b, 0),
+          headerH,
+          'FD'
+        );
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(...blue);
+        let cx = leftMargin;
+        for (let ci = 0; ci < headers.length; ci++) {
+          pdf.text(headers[ci], cx + 2, ty + headerH - 2.5);
           cx += colW[ci];
         }
-        ty += rowH;
-      }
+        ty += headerH;
 
-      ty += 6;
+        // Data rows
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(30, 30, 40);
+        for (const dano of ad.danos) {
+          if (ty + rowH > pageHeight - bottomMargin - 44) {
+            adPage();
+            ty = topMargin + 8;
+          }
+          const rowData = [
+            LOCALIZACAO_LABELS[dano.localizacao] ?? dano.localizacao,
+            dano.descricao,
+            ESTADO_LABELS[dano.estado] ?? dano.estado,
+            dano.data,
+            dano.valor ?? '—',
+            dano.origem ?? '—',
+          ];
+          cx = leftMargin;
+          pdf.setDrawColor(...borderColor);
+          for (let ci = 0; ci < rowData.length; ci++) {
+            pdf.rect(cx, ty, colW[ci], rowH, 'S');
+            const cellText = pdf.splitTextToSize(rowData[ci], colW[ci] - 3);
+            pdf.text(cellText[0] ?? '', cx + 2, ty + rowH - 2);
+            cx += colW[ci];
+          }
+          ty += rowH;
+        }
+        ty += 6;
+      } // end else (danos.length > 0)
 
       // — QR code + link —
       if (ty + 44 > pageHeight - bottomMargin) {
@@ -1418,6 +1597,14 @@ export const generateDocumentFromTemplate = async (
       pdf.setTextColor(...blue);
       pdf.text(ad.linkUrl, leftMargin + qrSize + 4, ty + 17);
       pdf.setTextColor(0, 0, 0);
+
+      // Actualizar yPos para conteúdo após a secção de danos (htmlPart2).
+      if (danosInline) yPos = ty + qrSize + 8;
+    }
+
+    // Renderizar conteúdo após {{secao_danos}} (texto, tabelas de assinatura, etc.).
+    if (hasDanosPlaceholder && htmlPart2.trim()) {
+      await renderHtmlBlock(htmlPart2);
     }
 
     // Adicionar numeração de páginas (apenas deste documento, não de PDFs anteriores)
@@ -1481,6 +1668,8 @@ export type DocumentoCombinado = Pick<
   | 'footerText'
   | 'anexoFotos'
   | 'anexoDanos'
+  | 'viaturaId'
+  | 'contratoId'
 >;
 
 /**

@@ -10,14 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, Loader2, ShieldCheck, Building2 } from 'lucide-react';
 import { getEmailRedirectUrl, getResetPasswordRedirectUrl } from '@/lib/native';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
-import { subdomainCodigo } from '@/lib/subdomain';
 
 const ORG_KEY = 'wegest_last_org';
 
 const Login = () => {
-  const [codigoOrg, setCodigoOrg] = useState(
-    subdomainCodigo || localStorage.getItem(ORG_KEY) || ''
-  );
+  const [codigoOrg, setCodigoOrg] = useState(localStorage.getItem(ORG_KEY) || '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -50,8 +47,8 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // 1. Validar código da organização (subdomínio tem prioridade)
-      const orgCode = (subdomainCodigo || codigoOrg.trim()).toLowerCase();
+      // 1. Validar código da organização
+      const orgCode = codigoOrg.trim().toLowerCase();
       if (!orgCode) {
         toast({
           title: 'Código da empresa obrigatório',
@@ -269,24 +266,22 @@ const Login = () => {
       ) : (
         <>
           <form onSubmit={handleLogin} className="space-y-5">
-            {!subdomainCodigo && (
-              <div className="space-y-2">
-                <Label htmlFor="codigoOrg">Código da Empresa</Label>
-                <div className="relative">
-                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="codigoOrg"
-                    type="text"
-                    value={codigoOrg}
-                    onChange={(e) => setCodigoOrg(e.target.value)}
-                    required
-                    className="auth-input pl-10"
-                    placeholder="Ex: decada"
-                    autoComplete="organization"
-                  />
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="codigoOrg">Código da Empresa</Label>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="codigoOrg"
+                  type="text"
+                  value={codigoOrg}
+                  onChange={(e) => setCodigoOrg(e.target.value)}
+                  required
+                  className="auth-input pl-10"
+                  placeholder="Ex: decada"
+                  autoComplete="organization"
+                />
               </div>
-            )}
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

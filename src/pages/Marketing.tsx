@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Mail, Users, Upload, PenTool, BarChart3 } from 'lucide-react';
 import { CampanhasTab } from '@/components/marketing/CampanhasTab';
@@ -9,9 +10,19 @@ import { EstatisticasTab } from '@/components/marketing/EstatisticasTab';
 
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Megaphone } from 'lucide-react';
+import { useEnsureListaMotoristas } from '@/hooks/useEnsureListaMotoristas';
 
 const Marketing = () => {
   const [activeTab, setActiveTab] = useState('campanhas');
+  const queryClient = useQueryClient();
+  const { isSuccess: listaPronta } = useEnsureListaMotoristas();
+
+  useEffect(() => {
+    if (listaPronta) {
+      queryClient.invalidateQueries({ queryKey: ['marketing-listas-with-count'] });
+      queryClient.invalidateQueries({ queryKey: ['marketing-listas-envio'] });
+    }
+  }, [listaPronta, queryClient]);
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

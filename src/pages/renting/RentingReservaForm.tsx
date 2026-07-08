@@ -27,12 +27,13 @@ import { useReservaCondutores, useSyncReservaCondutores } from '@/hooks/useReser
 import { useContratoIdByReserva } from '@/hooks/useContratosRenting';
 import { uploadReservaAnexoSync } from '@/hooks/useReservaAnexos';
 import { useViaturas } from '@/hooks/useViaturas';
+import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
 
 import { ClienteDialog } from '@/components/renting/ClienteDialog';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
 import { CondutorProvisiorioDialog } from '@/components/motoristas/CondutorProvisiorioDialog';
 import { ReservaDeleteConfirm } from '@/components/renting/reservas/ReservaDeleteConfirm';
-import { ContratoPrestacaoDialog } from '@/components/renting/reservas/ContratoPrestacaoDialog';
+import { GenerateDocumentsDialog } from '@/components/motoristas/GenerateDocumentsDialog';
 import { ReservaResumoSidebar } from '@/components/renting/reservas/ReservaResumoSidebar';
 import {
   ReservaTabAnexos,
@@ -72,6 +73,7 @@ const DEFAULT_VALUES: ReservaFormValues = {
   kms_incluidos: null,
   km_adicional_valor: null,
   slot_valor_semanal: null,
+  slot_valor_mensal: null,
   is_longa_duracao: false,
   renovacao_opcao: null,
   renovacao_intervalo_dias: null,
@@ -109,7 +111,7 @@ const RentingReservaForm = () => {
   const [clienteDialogOpen, setClienteDialogOpen] = useState(false);
   const [motoristaDialogOpen, setMotoristaDialogOpen] = useState(false);
   const [condutorProvisorioOpen, setCondutorProvisorioOpen] = useState(false);
-  const [prestacaoDialogOpen, setPrestacaoDialogOpen] = useState(false);
+  const [documentosDialogOpen, setDocumentosDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -238,6 +240,7 @@ const RentingReservaForm = () => {
       estado: reserva.estado,
       regime: reserva.regime,
       slot_valor_semanal: reserva.slot_valor_semanal,
+      slot_valor_mensal: reserva.slot_valor_mensal,
       valor_total: reserva.valor_total,
       franquia_valor: reserva.franquia_valor,
       caucao_valor: reserva.caucao_valor,
@@ -333,9 +336,23 @@ const RentingReservaForm = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regimeWatched]);
 
+  // Viaturas ocupadas (reserva/contrato sobreposto) no período escolhido — para
+  // não as oferecer a outro cliente nas mesmas datas. Em edição, ignora a própria
+  // reserva (e o contrato que dela derive) para não se auto-excluir.
+  const { data: viaturasOcupadas } = useViaturasOcupadasPeriodo({
+    dataInicio,
+    dataFim,
+    excluirReservaId: isEdit ? id : null,
+    excluirContratoId: contratoExistente?.id ?? null,
+  });
+
   // Qualquer viatura pode ser alugada em rent-a-car ou TVDE.
   // O campo habilitada_tvde é apenas informativo/administrativo, não restringe.
-  const viaturasParaSelecao = viaturas;
+  // Excluímos as ocupadas no período, MAS mantemos sempre a já selecionada
+  // (senão desaparecia da lista ao abrir a reserva existente).
+  const viaturasParaSelecao = !viaturasOcupadas
+    ? viaturas
+    : viaturas.filter((v) => v.id === viaturaId || !viaturasOcupadas.has(v.id));
 
   // Faturação da reserva: só em edição, com reserva guardada e fora do regime slot
   // (slot fatura via Contrato de Prestação).
@@ -378,6 +395,7 @@ const RentingReservaForm = () => {
         regime: values.regime,
         // Valor semanal só no regime slot (cobrado por carro).
         slot_valor_semanal: values.regime === 'slot' ? (values.slot_valor_semanal ?? null) : null,
+        slot_valor_mensal: values.regime === 'slot' ? (values.slot_valor_mensal ?? null) : null,
         valor_total: values.valor_total,
         franquia_valor: values.franquia_valor,
         caucao_valor: values.caucao_valor,
@@ -555,16 +573,23 @@ const RentingReservaForm = () => {
           )}
           {isEdit &&
             reserva &&
-            // Slot não gera contrato_renting — gera contrato de prestação de serviços.
+            // Slot não gera contrato_renting — gera os documentos do motorista
+            // (checklist de templates, incl. contrato de prestação).
             (reserva.regime === 'slot' ? (
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setPrestacaoDialogOpen(true)}
+                onClick={() => setDocumentosDialogOpen(true)}
+                disabled={!reserva.condutor_id}
+                title={
+                  reserva.condutor_id
+                    ? undefined
+                    : 'Define o motorista na aba Motoristas antes de gerar documentos.'
+                }
                 className="gap-2"
               >
                 <FileText className="h-4 w-4" />
-                Gerar Contrato de Prestação
+                Gerar Documentos
               </Button>
             ) : contratoExistente ? (
               <Button
@@ -725,12 +750,11 @@ const RentingReservaForm = () => {
       />
 
       {reserva && (
-        <ContratoPrestacaoDialog
-          open={prestacaoDialogOpen}
-          onOpenChange={setPrestacaoDialogOpen}
-          reserva={reserva}
-          motoristas={motoristas}
-          viaturas={viaturas}
+        <GenerateDocumentsDialog
+          open={documentosDialogOpen}
+          onOpenChange={setDocumentosDialogOpen}
+          motorista={motoristas.find((m) => m.id === reserva.condutor_id) ?? null}
+          viaturaId={reserva.viatura_id}
         />
       )}
     </>

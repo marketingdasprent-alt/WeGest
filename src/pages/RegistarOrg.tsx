@@ -29,7 +29,7 @@ const RegistarOrg = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [codigoDisponivel, setCodigoDisponivel] = useState<boolean | null>(null);
   const [checkingCodigo, setCheckingCodigo] = useState(false);
-  const [resultData, setResultData] = useState<{ subdomain: string } | null>(null);
+  const [resultData, setResultData] = useState<{ codigo: string } | null>(null);
 
   // Campos empresa
   const [nomeEmpresa, setNomeEmpresa] = useState('');
@@ -126,8 +126,8 @@ const RegistarOrg = () => {
       });
 
       if (signInError) {
-        // Fallback: mostrar ecrã de sucesso com o link do subdomínio.
-        setResultData({ subdomain: data.org.subdomain });
+        // Fallback: mostrar ecrã de sucesso com o código da empresa.
+        setResultData({ codigo: data.org.codigo });
         setStep('success');
         setLoading(false);
         return;
@@ -167,23 +167,16 @@ const RegistarOrg = () => {
 
               {resultData && (
                 <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
-                  <p className="text-sm text-muted-foreground mb-1">O seu endereço:</p>
-                  <p className="text-lg font-semibold text-primary">{resultData.subdomain}</p>
+                  <p className="text-sm text-muted-foreground mb-1">Código da empresa:</p>
+                  <p className="text-lg font-semibold text-primary">{resultData.codigo}</p>
                   <p className="text-xs text-muted-foreground mt-2">
-                    O subdomínio está a ser configurado. Pode demorar alguns minutos.
+                    Use este código no ecrã de login, junto com o seu email e palavra-passe.
                   </p>
                 </div>
               )}
 
               <div className="space-y-3">
-                <Button
-                  onClick={() => {
-                    if (resultData) {
-                      window.location.href = `https://${resultData.subdomain}/equipa`;
-                    }
-                  }}
-                  className="w-full"
-                >
+                <Button onClick={() => navigate('/equipa')} className="w-full">
                   Aceder ao sistema
                 </Button>
                 <Button variant="outline" onClick={() => navigate('/')} className="w-full">

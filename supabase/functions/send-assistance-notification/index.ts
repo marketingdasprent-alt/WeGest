@@ -18,25 +18,44 @@ serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // 1. Buscar detalhes do ticket
+    // 1. Buscar detalhes do ticket (org_id deriva daqui — scope dos recipientes)
     const { data: ticket, error: tError } = await supabase
       .from('assistencia_tickets')
-      .select('numero, titulo, viatura:viaturas(matricula)')
+      .select('numero, titulo, org_id, viatura:viaturas(matricula)')
       .eq('id', ticket_id)
       .single();
 
     if (tError) throw tError;
 
-    // 2. Buscar emails dos Gestores de Assistência (Cargo ou Admin)
-    const { data: gestores, error: gError } = await supabase
-      .from('profiles')
-      .select('email, nome')
-      .not('email', 'is', null)
-      .or(`cargo.ilike.%Gestor de Assistência%,cargo.ilike.%Admin%`);
+    const orgId = ticket.org_id;
+
+    // 2. Recipientes = membros DESTA org que são admin ou Gestor de Assistência
+    //    (papel per-org em user_organizacoes, não o cargo legado de profiles).
+    const { data: orgMembers, error: gError } = await supabase
+      .from('user_organizacoes')
+      .select('user_id, is_admin, cargos(nome)')
+      .eq('org_id', orgId);
 
     if (gError) throw gError;
 
-    const emails = gestores?.map(g => g.email).filter((e): e is string => !!e && e.includes('@')) || [];
+    const recipientIds = (orgMembers || [])
+      .filter((m: any) => {
+        const cargoNome = (m.cargos?.nome || '').toLowerCase();
+        return m.is_admin || cargoNome.includes('gestor de assistência') || cargoNome.includes('gestor de assistencia');
+      })
+      .map((m: any) => m.user_id);
+
+    let emails: string[] = [];
+    if (recipientIds.length > 0) {
+      const { data: gestores } = await supabase
+        .from('profiles')
+        .select('email')
+        .in('id', recipientIds)
+        .not('email', 'is', null);
+      emails = (gestores || [])
+        .map((g: any) => g.email)
+        .filter((e: string): e is string => !!e && e.includes('@'));
+    }
 
     if (emails.length === 0) {
       console.log('Nenhum gestor com email encontrado');

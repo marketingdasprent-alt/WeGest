@@ -181,6 +181,14 @@ interface MotoristaTabDadosProps {
   onSave: () => void;
   draft?: Record<string, unknown> | null;
   onDraftChange?: (draft: Record<string, unknown> | null) => void;
+  /**
+   * Modo criação: quando `true`, o submit faz INSERT (em vez de UPDATE) e
+   * chama `onCreated` com o motorista recém-criado. Determinado pela ausência
+   * de `motorista.id` (ficha-rascunho passada pelo modal em modo "Adicionar").
+   */
+  isCreating?: boolean;
+  /** Notifica o pai com o motorista recém-criado (só em modo criação). */
+  onCreated?: (motorista: Motorista) => void;
 }
 
 // SectionCard imported from @/components/ui/section-card
@@ -190,6 +198,8 @@ export function MotoristaTabDados({
   onSave,
   draft,
   onDraftChange,
+  isCreating = false,
+  onCreated,
 }: MotoristaTabDadosProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [gestores, setGestores] = useState<{ nome: string }[]>([]);
@@ -328,8 +338,13 @@ export function MotoristaTabDados({
 
   useEffect(() => {
     if (!onDraftChange) return;
-    const subscription = form.watch((values) => {
-      if (form.formState.isDirty) {
+    const subscription = form.watch((values, { name }) => {
+      // `name` definido = mudança real do utilizador (input ou form.setValue,
+      // ex.: Gestor e cartões de combustível). O `form.reset` de hidratação
+      // emite `name: undefined` — ignorado para não re-gravar o draft.
+      // Substitui o gate antigo por `isDirty`, que ficava `false` em campos
+      // alterados via setValue e fazia perder esses valores ao trocar de aba.
+      if (name) {
         onDraftChange(values as Record<string, unknown>);
       }
     });
@@ -339,10 +354,29 @@ export function MotoristaTabDados({
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
     try {
+      // Normalização: NIF sem espaços (reutilizado no check de duplicado e no save).
+      const nifNormalizado = data.nif ? data.nif.replace(/\s/g, '') : null;
+
+      // Em modo criação, impedir duplicados por NIF (mesma regra do MotoristaDialog).
+      if (isCreating && nifNormalizado) {
+        const { data: existing } = await supabase
+          .from('motoristas_ativos')
+          .select('id, nome, codigo')
+          .eq('nif', nifNormalizado)
+          .maybeSingle();
+
+        if (existing) {
+          toast.error(
+            `Já existe um motorista com este NIF: ${existing.nome} (Cód. ${existing.codigo})`
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const updateData = {
         nome: data.nome,
-        // Normalização: NIF sem espaços; IBAN sem espaços e em maiúsculas.
-        nif: data.nif ? data.nif.replace(/\s/g, '') : null,
+        nif: nifNormalizado,
         email: data.email || null,
         telefone: data.telefone || null,
         morada: data.morada || null,
@@ -381,18 +415,34 @@ export function MotoristaTabDados({
         comprovativo_iban_url: data.comprovativo_iban_url || null,
       };
 
-      const { error } = await supabase
-        .from('motoristas_ativos')
-        .update(updateData)
-        .eq('id', motorista.id);
+      if (isCreating) {
+        // Criação: INSERT (codigo e org_id são preenchidos por DEFAULT na BD).
+        // .select().single() devolve a linha completa já com id/codigo reais.
+        const { data: novo, error } = await supabase
+          .from('motoristas_ativos')
+          .insert(updateData)
+          .select()
+          .single();
 
-      if (error) throw error;
+        if (error) throw error;
 
-      toast.success('Motorista atualizado com sucesso!');
-      onSave();
+        toast.success('Motorista criado com sucesso!');
+        onCreated?.(novo as Motorista);
+      } else {
+        // Edição: UPDATE da ficha existente.
+        const { error } = await supabase
+          .from('motoristas_ativos')
+          .update(updateData)
+          .eq('id', motorista.id);
+
+        if (error) throw error;
+
+        toast.success('Motorista atualizado com sucesso!');
+        onSave();
+      }
     } catch (error) {
-      console.error('Erro ao atualizar motorista:', error);
-      toast.error('Erro ao atualizar motorista');
+      console.error('Erro ao guardar motorista:', error);
+      toast.error(isCreating ? 'Erro ao criar motorista' : 'Erro ao atualizar motorista');
     } finally {
       setIsSubmitting(false);
     }
@@ -1138,13 +1188,13 @@ export function MotoristaTabDados({
                         name="slot_valor_semanal"
                         render={({ field: valorField }) => (
                           <FormItem>
-                            <FormLabel>Valor Semanal (€)</FormLabel>
+                            <FormLabel>Valor Mensal (€)</FormLabel>
                             <FormControl>
                               <Input
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                placeholder="Ex: 150.00"
+                                placeholder="Ex: 400.00"
                                 value={valorField.value ?? ''}
                                 onChange={(e) =>
                                   valorField.onChange(
@@ -1253,7 +1303,7 @@ export function MotoristaTabDados({
         {/* Botão de salvar */}
         <div className="flex justify-end pt-4 border-t">
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'A guardar...' : 'Guardar Alterações'}
+            {isSubmitting ? 'A guardar...' : isCreating ? 'Criar Motorista' : 'Guardar Alterações'}
           </Button>
         </div>
       </form>

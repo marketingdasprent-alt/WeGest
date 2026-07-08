@@ -376,7 +376,9 @@ export default function ViaturaDetalhe() {
               {tarifasGrupo.map((t) => {
                 const fmt = (v: number | null) =>
                   v != null
-                    ? new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v)
+                    ? new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(
+                        v
+                      )
                     : null;
                 return (
                   <div key={t.nome} className="rounded-lg border bg-muted/20 p-3 space-y-1">

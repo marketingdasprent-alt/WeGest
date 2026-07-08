@@ -13,6 +13,8 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 
 interface Lead {
   id: string;
@@ -185,6 +187,15 @@ export const CRMListView: React.FC<CRMListViewProps> = ({
     });
   }, [leads, sortColumn, sortDirection]);
 
+  // Paginação client-side (com seletor de tamanho). O resetKey volta à 1ª página
+  // quando o pai filtra (muda a contagem/1.º lead) ou quando se reordena a tabela.
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      sortedLeads,
+      25,
+      `${leads.length}|${leads[0]?.id ?? ''}|${sortColumn}|${sortDirection}`
+    );
+
   const handleRowClick = (lead: Lead) => {
     navigate(`/crm/lead/${lead.id}`);
   };
@@ -225,14 +236,14 @@ export const CRMListView: React.FC<CRMListViewProps> = ({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sortedLeads.length === 0 ? (
+          {total === 0 ? (
             <TableRow>
               <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                 Nenhum lead encontrado com os filtros aplicados
               </TableCell>
             </TableRow>
           ) : (
-            sortedLeads.map((lead) => {
+            pageItems.map((lead) => {
               const tipoViaturaKey = lead.tipo_viatura?.toLowerCase().replace(' ', '-') || '';
 
               return (
@@ -355,6 +366,19 @@ export const CRMListView: React.FC<CRMListViewProps> = ({
           )}
         </TableBody>
       </Table>
+      {total > 0 && (
+        <TablePagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          start={start}
+          end={end}
+          onPageChange={setPage}
+          noun={['lead', 'leads']}
+          pageSizeStr={pageSizeStr}
+          onPageSizeChange={setPageSizeStr}
+        />
+      )}
     </div>
   );
 };

@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/select';
 import { MotoristaResumoDialog } from './MotoristaResumoDialog';
 import { ImportarDadosWizard } from './ImportarDadosWizard';
+import { RelatorioPagamentoDialog } from './RelatorioPagamentoDialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
@@ -52,6 +53,7 @@ import {
   ArrowUp,
   ArrowDown,
   Settings,
+  HandCoins,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -120,6 +122,7 @@ export function ContasResumoTab() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkSending, setIsBulkSending] = useState(false);
   const [importarWizardOpen, setImportarWizardOpen] = useState(false);
+  const [relatorioPagamentoOpen, setRelatorioPagamentoOpen] = useState(false);
   const [motoristasList, setMotoristasList] = useState<Array<{ id: string; nome: string }>>([]);
   const [rendaAluguerSemana, setRendaAluguerSemana] = useState(0);
   const logoSrc = useThemedLogo();
@@ -685,13 +688,16 @@ export function ContasResumoTab() {
         .select('grupo_id, preco_semana')
         .eq('ativa', true);
 
-      // 4f. Buscar movimentos financeiros unificados para a semana
+      // 4f. Buscar movimentos financeiros unificados para a semana.
+      // Contam TODOS os movimentos da semana excepto cancelados — um débito
+      // marcado "pago" continua a ser despesa desta semana (alinhado com o
+      // Resumo Financeiro do motorista, que fazia esta conta e divergia).
       const financeiroQuery = supabase
         .from('motorista_financeiro')
         .select('motorista_id, valor, categoria, tipo')
         .gte('data_movimento', weekStartStr)
         .lte('data_movimento', weekEndStr)
-        .eq('status', 'pendente');
+        .neq('status', 'cancelado');
 
       const boltResumosQuery = supabase
         .from('bolt_resumos_semanais')
@@ -1303,11 +1309,12 @@ export function ContasResumoTab() {
 
   // Paginação (render): só corta as linhas mostradas — totais, select-all e
   // export continuam a usar filteredResumos completo.
-  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
-    filteredResumos,
-    50,
-    `${searchTerm}|${filterRecibo}|${filterSaldo}|${filterGestor}|${weekStart?.getTime?.() ?? ''}`
-  );
+  const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      filteredResumos,
+      50,
+      `${searchTerm}|${filterRecibo}|${filterSaldo}|${filterGestor}|${weekStart?.getTime?.() ?? ''}`
+    );
 
   // Totais gerais
   const totais = useMemo(() => {
@@ -1624,19 +1631,35 @@ export function ContasResumoTab() {
                 </div>
               )}
             </div>
-            <Button variant="outline" size="sm" onClick={handleExportAll}>
-              <FileDown className="h-4 w-4 mr-2" />
-              Exportar Excel
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Dados
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportAll}>
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Exportar Excel
+                </DropdownMenuItem>
+                {canImportar && (
+                  <DropdownMenuItem onClick={() => setImportarWizardOpen(true)}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Importar Dados
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              className="gap-2 bg-gradient-to-r from-primary to-primary/80 text-white hover:opacity-90"
+              size="sm"
+              onClick={() => setRelatorioPagamentoOpen(true)}
+            >
+              <HandCoins className="h-4 w-4" />
+              Relatório de Pagamento
             </Button>
-            {canImportar && (
-              <Button
-                className="gap-2 bg-gradient-to-r from-primary to-primary/80 text-white hover:opacity-90"
-                onClick={() => setImportarWizardOpen(true)}
-              >
-                <Upload className="h-4 w-4" />
-                Importar Dados
-              </Button>
-            )}
           </div>
         </div>
 
@@ -2090,6 +2113,8 @@ export function ContasResumoTab() {
           end={end}
           onPageChange={setPage}
           noun={['motorista', 'motoristas']}
+          pageSizeStr={pageSizeStr}
+          onPageSizeChange={setPageSizeStr}
         />
       )}
 
@@ -2175,6 +2200,16 @@ export function ContasResumoTab() {
         open={importarWizardOpen}
         onOpenChange={setImportarWizardOpen}
         onImportComplete={() => loadResumos()}
+      />
+
+      {/* Relatório de Pagamento */}
+      <RelatorioPagamentoDialog
+        open={relatorioPagamentoOpen}
+        onOpenChange={setRelatorioPagamentoOpen}
+        resumos={filteredResumos}
+        weekStart={weekStart}
+        weekEnd={weekEnd}
+        weekLabel={getWeekLabel()}
       />
     </div>
   );

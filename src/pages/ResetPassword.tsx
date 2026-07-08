@@ -21,6 +21,12 @@ const ResetPassword = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    const url = new URL(window.location.href);
+    const hasRecoveryToken =
+      url.searchParams.has('code') ||
+      url.hash.includes('access_token') ||
+      url.hash.includes('type=recovery');
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
@@ -33,12 +39,24 @@ const ResetPassword = () => {
     supabase.auth
       .getSession()
       .then(({ data: { session } }) => {
-        setHasSession(!!session);
-        setChecking(false);
+        // Com token de recuperação na URL, aguardar o evento PASSWORD_RECOVERY
+        // (detectSessionInUrl troca o token de forma assíncrona) para não
+        // mostrar "link inválido" antes de a sessão ser criada.
+        if (session || !hasRecoveryToken) {
+          setHasSession(!!session);
+          setChecking(false);
+        }
       })
       .catch(() => setChecking(false));
 
-    return () => subscription.unsubscribe();
+    // Fallback: se o token nunca for trocado por sessão, sair do estado de
+    // validação para apresentar a mensagem de link inválido.
+    const timeout = window.setTimeout(() => setChecking(false), 5000);
+
+    return () => {
+      subscription.unsubscribe();
+      window.clearTimeout(timeout);
+    };
   }, []);
 
   const handleResetPassword = async (e: React.FormEvent) => {

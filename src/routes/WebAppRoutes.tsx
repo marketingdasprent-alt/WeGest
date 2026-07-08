@@ -24,6 +24,8 @@ const ViaturaDetalhe = lazy(() => import('@/pages/ViaturaDetalhe'));
 const Contratos = lazy(() => import('@/pages/Contratos'));
 const Formularios = lazy(() => import('@/pages/Formularios'));
 const FormularioPublico = lazy(() => import('@/pages/FormularioPublico'));
+const DanosPublicosPage = lazy(() => import('@/pages/DanosPublicosPage'));
+const QuadroLive = lazy(() => import('@/pages/QuadroLive'));
 const DasprentLeads = lazy(() => import('@/pages/DasprentLeads'));
 const DasprentFuncionarios = lazy(() => import('@/pages/DasprentFuncionarios'));
 const AdminInvites = lazy(() => import('@/pages/AdminInvites'));
@@ -104,6 +106,10 @@ const WebAppRoutes = () => {
           <Route path="/privacidade" element={<Privacidade />} />
           <Route path="/eliminar-conta" element={<EliminarConta />} />
           <Route path="/formulario/:id" element={<FormularioPublico />} />
+          {/* Galeria pública de danos (QR da folha de danos) — sem login */}
+          <Route path="/danos/:token" element={<DanosPublicosPage />} />
+          {/* Quadro TV público — sem login, acesso por token */}
+          <Route path="/quadro/:token" element={<QuadroLive />} />
           <Route path="/login" element={<LoginMotorista />} />
           <Route path="/equipa" element={<Login />} />
           <Route path="/selecionar-org" element={<SelecionarOrg />} />
@@ -245,7 +251,7 @@ const WebAppRoutes = () => {
           <Route
             path="/admin/invites"
             element={
-              <ProtectedRoute requireAdmin={true} requiredResource={RECURSOS.ADMIN_UTILIZADORES}>
+              <ProtectedRoute requireAdmin={true} requiredResource={RECURSOS.ADMIN_CONVITES}>
                 <DashboardLayout>
                   <AdminInvites />
                 </DashboardLayout>

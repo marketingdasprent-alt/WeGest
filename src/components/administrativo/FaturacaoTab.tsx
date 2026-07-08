@@ -2,13 +2,24 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, format } from 'date-fns';
+import {
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  subDays,
+  subWeeks,
+  addWeeks,
+  isThisWeek,
+  format,
+} from 'date-fns';
 import { pt } from 'date-fns/locale';
-import type { DateRange } from 'react-day-picker';
 import {
   Building2,
   CreditCard,
   Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
   RefreshCw,
   FileSpreadsheet,
   Printer,
@@ -83,6 +94,14 @@ const capitalize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : 
 
 const emptyKpi = (dateLabel = ''): FaturacaoKpi => ({ valor: 0, count: 0, dateLabel });
 
+// Atalhos rápidos para seleção de semanas — igual ao resumo
+const getWeekShortcuts = () => [
+  { label: 'Esta semana', date: new Date() },
+  { label: 'Semana passada', date: subWeeks(new Date(), 1) },
+  { label: 'Há 2 semanas', date: subWeeks(new Date(), 2) },
+  { label: 'Há 3 semanas', date: subWeeks(new Date(), 3) },
+];
+
 /** Documentos fiscais de uma cobrança, por grupo de tipo. */
 type InvoiceDocs = { ft?: InvoiceMetadata; nc?: InvoiceMetadata; rc?: InvoiceMetadata };
 
@@ -97,9 +116,38 @@ export function FaturacaoTab() {
   // ── filtros ──
   const [estacaoId, setEstacaoId] = useState<string>(TODAS);
   const [metodo, setMetodo] = useState<string>(TODOS);
-  const [range, setRange] = useState<DateRange | undefined>(undefined);
+  // Estado: data dentro da semana selecionada (default: semana passada)
+  const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
   const [page, setPage] = useState(1);
   const [reloadToken, setReloadToken] = useState(0);
+
+  // Semana selecionada: Segunda a Domingo (igual ao resumo)
+  const weekStart = startOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
+  const isCurrentWeek = isThisWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
+  const weekShortcuts = getWeekShortcuts();
+  const goToPreviousWeek = () => {
+    setSelectedWeek((d) => subWeeks(d, 1));
+    setPage(1);
+  };
+  const goToNextWeek = () => {
+    setSelectedWeek((d) => addWeeks(d, 1));
+    setPage(1);
+  };
+  const handleWeekDayClick = (day: Date | undefined) => {
+    if (day) {
+      setSelectedWeek(day);
+      setPage(1);
+    }
+  };
+  const selectWeekShortcut = (d: Date) => {
+    setSelectedWeek(d);
+    setPage(1);
+  };
+  const getWeekLabel = () => {
+    const label = `${format(weekStart, 'dd/MM', { locale: pt })} - ${format(weekEnd, 'dd/MM/yyyy', { locale: pt })}`;
+    return isCurrentWeek ? `${label} (Semana Actual)` : label;
+  };
 
   // ── dados ──
   const [rawMovimentos, setRawMovimentos] = useState<MovimentoRaw[]>([]);
@@ -297,8 +345,9 @@ export function FaturacaoTab() {
 
   const stationSel = estacaoId !== TODAS;
   const metodoSel = metodo !== TODOS;
-  const dateFrom = range?.from ? fmtDay(range.from) : null;
-  const dateTo = range?.to ? fmtDay(range.to) : range?.from ? fmtDay(range.from) : null;
+  // A listagem e a repartição por estação filtram pela semana selecionada.
+  const dateFrom = fmtDay(weekStart);
+  const dateTo = fmtDay(weekEnd);
 
   // Resolve nomes de utilizadores (created_by → profiles.nome), em cache via ref.
   const resolveProfiles = useCallback(async (ids: Array<string | null>) => {
@@ -524,19 +573,14 @@ export function FaturacaoTab() {
     if (p >= 1 && p <= totalPages) setPage(p);
   };
 
-  const hasFilters = stationSel || metodoSel || !!range?.from;
+  const hasFilters = stationSel || metodoSel;
   const limparFiltros = () => {
     setEstacaoId(TODAS);
     setMetodo(TODOS);
-    setRange(undefined);
     setPage(1);
   };
 
-  const dateLabel = range?.from
-    ? range.to
-      ? `${format(range.from, 'dd/MM/yy')} – ${format(range.to, 'dd/MM/yy')}`
-      : format(range.from, 'dd/MM/yy')
-    : 'Qualquer';
+  const dateLabel = `${format(weekStart, 'dd/MM/yy')} – ${format(weekEnd, 'dd/MM/yy')}`;
 
   // ── Buscar todas as linhas filtradas (export / impressão) ──
   const fetchAllRows = useCallback(async (): Promise<FaturacaoRow[]> => {
@@ -792,26 +836,73 @@ export function FaturacaoTab() {
           </Select>
         </div>
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 gap-2">
-              <CalendarIcon className="h-4 w-4" />
-              {dateLabel}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="range"
-              selected={range}
-              onSelect={(r) => {
-                setRange(r);
-                setPage(1);
-              }}
-              numberOfMonths={2}
-              locale={pt}
-            />
-          </PopoverContent>
-        </Popover>
+        <div className="flex items-center gap-1.5">
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={goToPreviousWeek}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-2 min-w-[210px] justify-center"
+              >
+                <CalendarIcon className="h-4 w-4" />
+                {getWeekLabel()}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+              <div className="p-3 border-b">
+                <div className="flex flex-wrap gap-1.5">
+                  {weekShortcuts.map((shortcut) => (
+                    <Button
+                      key={shortcut.label}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-7"
+                      onClick={() => selectWeekShortcut(shortcut.date)}
+                    >
+                      {shortcut.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <Calendar
+                initialFocus
+                mode="single"
+                defaultMonth={selectedWeek}
+                selected={selectedWeek}
+                onSelect={handleWeekDayClick}
+                numberOfMonths={2}
+                locale={pt}
+                weekStartsOn={WEEK_STARTS_ON}
+                className="pointer-events-auto"
+                modifiers={{
+                  selected: { from: weekStart, to: weekEnd },
+                }}
+                modifiersStyles={{
+                  selected: {
+                    backgroundColor: 'hsl(var(--primary))',
+                    color: 'hsl(var(--primary-foreground))',
+                    borderRadius: 0,
+                  },
+                }}
+              />
+              <div className="p-2 text-center text-xs text-muted-foreground border-t bg-muted/50">
+                Clique num dia para selecionar a semana inteira (Seg-Dom)
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            onClick={goToNextWeek}
+            disabled={isCurrentWeek}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
 
         {hasFilters && (
           <Button variant="ghost" size="sm" className="h-9 gap-1" onClick={limparFiltros}>

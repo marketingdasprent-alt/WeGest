@@ -422,10 +422,10 @@ const LeadDetails: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-yellow-500 mx-auto"></div>
-          <p className="text-white mt-4">Carregando dados do lead...</p>
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground mt-4">Carregando dados do lead...</p>
         </div>
       </div>
     );
@@ -433,9 +433,9 @@ const LeadDetails: React.FC = () => {
 
   if (!lead) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">Lead não encontrado</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-4">Lead não encontrado</h1>
           <Button onClick={() => navigate('/crm')} variant="outline">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Voltar ao CRM
@@ -448,50 +448,45 @@ const LeadDetails: React.FC = () => {
   const displayData = getLeadDisplayData(lead);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-6">
+    <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700/50 p-6 mb-6">
+        <div className="bg-card rounded-lg border p-6 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button
-                onClick={() => navigate('/crm')}
-                variant="ghost"
-                size="sm"
-                className="text-gray-400 hover:text-white"
-              >
+              <Button onClick={() => navigate('/crm')} variant="ghost" size="sm">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Voltar
               </Button>
               <div>
-                <h1 className="text-2xl font-bold text-white">{displayData.nome}</h1>
-                <p className="text-gray-400">Lead #{lead.id.slice(0, 8)}</p>
+                <h1 className="text-2xl font-bold text-foreground">{displayData.nome}</h1>
+                <p className="text-muted-foreground">Lead #{lead.id.slice(0, 8)}</p>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-gray-300">
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <User className="h-4 w-4" />
                 <span>{user?.email}</span>
               </div>
               <div className="flex gap-2">
                 <Button
                   onClick={() => updateLeadStatus('contactado')}
-                  className="bg-yellow-600 hover:bg-yellow-700"
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white"
                 >
                   <Phone className="h-4 w-4 mr-2" />
                   Contactado
                 </Button>
                 <Button
                   onClick={() => updateLeadStatus('interessado')}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   <User className="h-4 w-4 mr-2" />
                   Interessado
                 </Button>
                 <Button
                   onClick={() => updateLeadStatus('convertido')}
-                  className="bg-purple-600 hover:bg-purple-700"
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
                 >
                   <CheckCircle className="h-4 w-4 mr-2" />
                   Ganho
@@ -509,9 +504,9 @@ const LeadDetails: React.FC = () => {
           {/* Coluna Principal */}
           <div className="lg:col-span-2 space-y-6">
             {/* Resumo */}
-            <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2">
                   <Building className="h-5 w-5" />
                   Resumo do Negócio
                 </CardTitle>
@@ -519,7 +514,9 @@ const LeadDetails: React.FC = () => {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-sm text-gray-400 mb-1 block">Valor do Negócio</label>
+                    <label className="text-sm text-muted-foreground mb-1 block">
+                      Valor do Negócio
+                    </label>
                     {editingField === 'valor_negocio' ? (
                       <div className="flex gap-2">
                         <Input
@@ -528,7 +525,6 @@ const LeadDetails: React.FC = () => {
                             setFormData({ ...formData, valor_negocio: e.target.value })
                           }
                           placeholder="Ex: €1500"
-                          className="bg-gray-700 border-gray-600 text-white"
                         />
                         <Button
                           size="sm"
@@ -539,9 +535,7 @@ const LeadDetails: React.FC = () => {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <span className="text-white">
-                          {formData.valor_negocio || 'Não definido'}
-                        </span>
+                        <span>{formData.valor_negocio || 'Não definido'}</span>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -554,7 +548,9 @@ const LeadDetails: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-400 mb-1 block">Gestor Responsável</label>
+                    <label className="text-sm text-muted-foreground mb-1 block">
+                      Gestor Responsável
+                    </label>
                     {editingField === 'gestor_responsavel' ? (
                       <div className="flex gap-2">
                         <Select
@@ -563,19 +559,13 @@ const LeadDetails: React.FC = () => {
                             setFormData({ ...formData, gestor_responsavel: value })
                           }
                         >
-                          <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                          <SelectTrigger>
                             <SelectValue placeholder="Selecionar gestor" />
                           </SelectTrigger>
-                          <SelectContent className="bg-gray-800 border-gray-600 z-50">
-                            <SelectItem value="none" className="text-gray-400">
-                              Não atribuído
-                            </SelectItem>
+                          <SelectContent>
+                            <SelectItem value="none">Não atribuído</SelectItem>
                             {gestores.map((gestor) => (
-                              <SelectItem
-                                key={gestor.nome}
-                                value={gestor.nome}
-                                className="text-white hover:bg-gray-700"
-                              >
+                              <SelectItem key={gestor.nome} value={gestor.nome}>
                                 {formatarNome(gestor.nome)}
                               </SelectItem>
                             ))}
@@ -597,9 +587,7 @@ const LeadDetails: React.FC = () => {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <span className="text-white">
-                          {formData.gestor_responsavel || 'Não atribuído'}
-                        </span>
+                        <span>{formData.gestor_responsavel || 'Não atribuído'}</span>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -612,26 +600,26 @@ const LeadDetails: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-400 mb-1 block">Licença TVDE</label>
+                    <label className="text-sm text-muted-foreground mb-1 block">Licença TVDE</label>
                     <div className="flex items-center gap-2">
                       {lead.tem_formacao_tvde === null ? (
                         <Badge
                           variant="outline"
-                          className="bg-gray-500/20 text-gray-400 border-gray-500/30"
+                          className="bg-muted text-muted-foreground border-muted-foreground/30"
                         >
                           Não informado
                         </Badge>
                       ) : lead.tem_formacao_tvde === false ? (
                         <Badge
                           variant="outline"
-                          className="bg-red-500/20 text-red-400 border-red-500/30"
+                          className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30"
                         >
                           Não possui
                         </Badge>
                       ) : (
                         <Badge
                           variant="outline"
-                          className="bg-green-500/20 text-green-400 border-green-500/30"
+                          className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30"
                         >
                           Possui
                         </Badge>
@@ -641,33 +629,38 @@ const LeadDetails: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-sm text-gray-400 mb-1 block">Etiquetas de Campanha</label>
+                  <label className="text-sm text-muted-foreground mb-1 block">
+                    Etiquetas de Campanha
+                  </label>
                   <CampaignTagsManager
                     tags={lead.campaign_tags || []}
                     onTagsChange={(tags) => updateField('campaign_tags', tags)}
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-700">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
                   <div>
-                    <label className="text-sm text-gray-400 mb-1 block">Data de Entrada</label>
-                    <div className="flex items-center gap-2 text-white">
-                      <Calendar className="h-4 w-4 text-gray-400" />
+                    <label className="text-sm text-muted-foreground mb-1 block">
+                      Data de Entrada
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
                       {format(new Date(lead.created_at), 'dd/MM/yyyy HH:mm', { locale: pt })}
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-sm text-gray-400 mb-1 block">Status Atual</label>
+                    <label className="text-sm text-muted-foreground mb-1 block">Status Atual</label>
                     <Badge
                       className={`
-                      ${lead.status === 'novo' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : ''}
-                      ${lead.status === 'contactado' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' : ''}
-                      ${lead.status === 'reuniao_agendada' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : ''}
-                      ${lead.status === 'proposta_enviada' ? 'bg-orange-500/20 text-orange-300 border-orange-500/30' : ''}
-                      ${lead.status === 'ganho' ? 'bg-green-500/20 text-green-300 border-green-500/30' : ''}
-                      ${lead.status === 'perdido' ? 'bg-red-500/20 text-red-300 border-red-500/30' : ''}
+                      ${lead.status === 'novo' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30' : ''}
+                      ${lead.status === 'contactado' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/30' : ''}
+                      ${lead.status === 'reuniao_agendada' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30' : ''}
+                      ${lead.status === 'proposta_enviada' ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30' : ''}
+                      ${lead.status === 'ganho' ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30' : ''}
+                      ${lead.status === 'perdido' ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30' : ''}
                     `}
+                      variant="outline"
                     >
                       {lead.status}
                     </Badge>
@@ -677,11 +670,8 @@ const LeadDetails: React.FC = () => {
             </Card>
 
             {/* Tabs com funcionalidades */}
-            <Tabs
-              defaultValue="notes"
-              className="bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700/50"
-            >
-              <TabsList className="grid w-full grid-cols-4 bg-gray-700/50">
+            <Tabs defaultValue="notes" className="bg-card rounded-lg border">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="notes">Anotações</TabsTrigger>
                 <TabsTrigger value="meetings">Reuniões</TabsTrigger>
                 <TabsTrigger value="emails">E-mails</TabsTrigger>
@@ -691,13 +681,13 @@ const LeadDetails: React.FC = () => {
               <TabsContent value="notes" className="p-6">
                 <div className="space-y-6">
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-4">Nova Anotação</h3>
+                    <h3 className="text-lg font-semibold mb-4">Nova Anotação</h3>
                     <div className="space-y-2">
                       <Textarea
                         value={formData.newNote}
                         onChange={(e) => setFormData({ ...formData, newNote: e.target.value })}
                         placeholder="Escreva sua anotação sobre este lead..."
-                        className="bg-gray-700 border-gray-600 text-white min-h-[120px]"
+                        className="min-h-[120px]"
                       />
                       <Button
                         onClick={saveNote}
@@ -710,31 +700,28 @@ const LeadDetails: React.FC = () => {
                   </div>
 
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-4">Anotações Anteriores</h3>
+                    <h3 className="text-lg font-semibold mb-4">Anotações Anteriores</h3>
                     {loadingNotes ? (
                       <div className="flex items-center justify-center py-8">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-yellow-500"></div>
-                        <span className="ml-2 text-gray-400">Carregando anotações...</span>
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                        <span className="ml-2 text-muted-foreground">Carregando anotações...</span>
                       </div>
                     ) : notes.length === 0 ? (
                       <div className="text-center py-8">
-                        <p className="text-gray-400">Nenhuma anotação encontrada.</p>
+                        <p className="text-muted-foreground">Nenhuma anotação encontrada.</p>
                       </div>
                     ) : (
                       <div className="space-y-4 max-h-96 overflow-y-auto">
                         {notes.map((note) => (
-                          <div
-                            key={note.id}
-                            className="bg-gray-700/50 rounded-lg p-4 border border-gray-600/50"
-                          >
+                          <div key={note.id} className="bg-muted/30 rounded-lg p-4 border">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2 text-sm text-gray-400">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <User className="h-4 w-4" />
                                 <span>
                                   {note.profiles?.nome || note.profiles?.email || 'Sistema'}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
                                 <span>
                                   {format(new Date(note.alterado_em), 'dd/MM/yyyy HH:mm', {
@@ -743,9 +730,7 @@ const LeadDetails: React.FC = () => {
                                 </span>
                               </div>
                             </div>
-                            <p className="text-gray-300 text-sm leading-relaxed">
-                              {note.observacoes}
-                            </p>
+                            <p className="text-sm leading-relaxed">{note.observacoes}</p>
                           </div>
                         ))}
                       </div>
@@ -756,8 +741,10 @@ const LeadDetails: React.FC = () => {
 
               <TabsContent value="meetings" className="p-6">
                 <div className="text-center py-8">
-                  <Calendar className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-                  <p className="text-gray-400">Funcionalidade de agendamento em desenvolvimento</p>
+                  <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">
+                    Funcionalidade de agendamento em desenvolvimento
+                  </p>
                 </div>
               </TabsContent>
 
@@ -771,8 +758,8 @@ const LeadDetails: React.FC = () => {
                     Enviar E-mail para {displayData.email}
                   </Button>
                   <div className="text-center py-8">
-                    <Mail className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-                    <p className="text-gray-400">Histórico de e-mails em desenvolvimento</p>
+                    <Mail className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Histórico de e-mails em desenvolvimento</p>
                   </div>
                 </div>
               </TabsContent>
@@ -784,17 +771,17 @@ const LeadDetails: React.FC = () => {
                     Anexar Documento
                   </Button>
                   <div className="text-center py-8">
-                    <FileText className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-                    <p className="text-gray-400">Nenhum arquivo anexado</p>
+                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Nenhum arquivo anexado</p>
                   </div>
                 </div>
               </TabsContent>
             </Tabs>
 
             {/* Histórico do Lead */}
-            <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2">
                   <History className="h-5 w-5" />
                   Histórico do Lead
                 </CardTitle>
@@ -808,25 +795,25 @@ const LeadDetails: React.FC = () => {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Informações de Contato */}
-            <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2">
                   <User className="h-5 w-5" />
                   Informações de Contato
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <label className="text-sm text-gray-400">Nome</label>
-                  <p className="text-white font-medium">{displayData.nome}</p>
+                  <label className="text-sm text-muted-foreground">Nome</label>
+                  <p className="font-medium">{displayData.nome}</p>
                 </div>
 
-                <Separator className="bg-gray-700" />
+                <Separator />
 
                 <div>
-                  <label className="text-sm text-gray-400">E-mail</label>
+                  <label className="text-sm text-muted-foreground">E-mail</label>
                   <div className="flex items-center gap-2">
-                    <p className="text-white">{displayData.email}</p>
+                    <p>{displayData.email}</p>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -837,12 +824,12 @@ const LeadDetails: React.FC = () => {
                   </div>
                 </div>
 
-                <Separator className="bg-gray-700" />
+                <Separator />
 
                 <div>
-                  <label className="text-sm text-gray-400">Telefone</label>
+                  <label className="text-sm text-muted-foreground">Telefone</label>
                   <div className="flex items-center gap-2">
-                    <p className="text-white">{displayData.telefone || 'Não informado'}</p>
+                    <p>{displayData.telefone || 'Não informado'}</p>
                     {displayData.telefone && (
                       <Button
                         size="sm"
@@ -859,12 +846,12 @@ const LeadDetails: React.FC = () => {
 
                 {lead.zona && (
                   <>
-                    <Separator className="bg-gray-700" />
+                    <Separator />
                     <div>
-                      <label className="text-sm text-gray-400">Zona</label>
+                      <label className="text-sm text-muted-foreground">Zona</label>
                       <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-gray-400" />
-                        <p className="text-white">{lead.zona}</p>
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <p>{lead.zona}</p>
                       </div>
                     </div>
                   </>
@@ -873,9 +860,9 @@ const LeadDetails: React.FC = () => {
             </Card>
 
             {/* Viatura de Interesse */}
-            <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-white">Viatura de Interesse</CardTitle>
+                <CardTitle>Viatura de Interesse</CardTitle>
               </CardHeader>
               <CardContent>
                 {editingField === 'tipo_viatura' ? (
@@ -884,7 +871,6 @@ const LeadDetails: React.FC = () => {
                       value={formData.tipo_viatura}
                       onChange={(e) => setFormData({ ...formData, tipo_viatura: e.target.value })}
                       placeholder="Ex: BMW Série 3, Mercedes Classe A..."
-                      className="bg-gray-700 border-gray-600 text-white"
                     />
                     <div className="flex gap-2">
                       <Button
@@ -900,7 +886,7 @@ const LeadDetails: React.FC = () => {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <p className="text-white">{lead.tipo_viatura || 'Não especificado'}</p>
+                    <p>{lead.tipo_viatura || 'Não especificado'}</p>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -915,16 +901,16 @@ const LeadDetails: React.FC = () => {
 
             {/* Dados do Formulário */}
             {Object.keys(formFieldsData).length > 0 && (
-              <Card className="bg-gray-800/50 backdrop-blur-sm border-gray-700/50">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2">
                     <FileText className="h-5 w-5" />
                     Dados do Formulário
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {Object.entries(formFieldsData)
-                    .filter(([key, fieldData]) => {
+                    .filter(([, fieldData]) => {
                       const labelLower = fieldData.label.toLowerCase();
                       // Não mostrar campos básicos já exibidos
                       if (labelLower.includes('nome') && !labelLower.includes('sobre'))
@@ -940,11 +926,11 @@ const LeadDetails: React.FC = () => {
                       return String(fieldData.value || '').trim().length > 0;
                     })
                     .map(([key, fieldData]) => (
-                      <div key={key} className="bg-gray-700/30 rounded-lg p-3">
-                        <label className="text-sm text-gray-400 block mb-1">
+                      <div key={key} className="bg-muted/30 rounded-lg p-3">
+                        <label className="text-sm text-muted-foreground block mb-1">
                           {fieldData.label}
                         </label>
-                        <p className="text-white">
+                        <p>
                           {Array.isArray(fieldData.value)
                             ? fieldData.value.join(', ')
                             : String(fieldData.value)}

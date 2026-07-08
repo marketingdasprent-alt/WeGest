@@ -13,7 +13,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Users } from 'lucide-react';
+import { useMarketingListaContagem } from '@/hooks/useMarketingListaContagem';
+import { useMarketingListas } from '@/hooks/useMarketingListas';
 // Editor TipTap (~350KB) carregado só quando o diálogo abre (lazy).
 const MarketingEmailEditor = lazy(() => import('./MarketingEmailEditor'));
 
@@ -29,6 +31,7 @@ export const NovaCampanhaDialog = ({ open, onOpenChange, campanha }: Props) => {
   const [assunto, setAssunto] = useState('');
   const [conteudoHtml, setConteudoHtml] = useState('');
   const [assinaturaId, setAssinaturaId] = useState<string>('');
+  const [listaId, setListaId] = useState<string>('');
 
   const { data: assinaturas } = useQuery({
     queryKey: ['marketing-assinaturas'],
@@ -43,17 +46,23 @@ export const NovaCampanhaDialog = ({ open, onOpenChange, campanha }: Props) => {
     enabled: open,
   });
 
+  const { data: listas } = useMarketingListas(open);
+
+  const { data: totalDestinatarios } = useMarketingListaContagem(listaId || undefined);
+
   useEffect(() => {
     if (campanha) {
       setNome(campanha.nome || '');
       setAssunto(campanha.assunto || '');
       setConteudoHtml(campanha.conteudo_html || '');
       setAssinaturaId(campanha.assinatura_id || '');
+      setListaId(campanha.lista_id || '');
     } else {
       setNome('');
       setAssunto('');
       setConteudoHtml('');
       setAssinaturaId('');
+      setListaId('');
     }
   }, [campanha, open]);
 
@@ -66,6 +75,7 @@ export const NovaCampanhaDialog = ({ open, onOpenChange, campanha }: Props) => {
         assunto,
         conteudo_html: conteudoHtml,
         assinatura_id: assinaturaId || null,
+        lista_id: listaId || null,
       };
 
       if (campanha?.id) {
@@ -129,6 +139,35 @@ export const NovaCampanhaDialog = ({ open, onOpenChange, campanha }: Props) => {
             >
               <MarketingEmailEditor content={conteudoHtml} onChange={setConteudoHtml} />
             </Suspense>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Lista de transmissão</Label>
+            <Select
+              value={listaId || 'none'}
+              onValueChange={(v) => setListaId(v === 'none' ? '' : v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Escolher mais tarde" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Escolher mais tarde</SelectItem>
+                {listas?.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.nome}
+                    {l.origem === 'motoristas_ativos' ? ' (automática)' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {listaId && totalDestinatarios !== undefined && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-md p-2">
+                <Users className="h-4 w-4" />
+                <span>
+                  {totalDestinatarios} destinatário{totalDestinatarios !== 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

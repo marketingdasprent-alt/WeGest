@@ -218,20 +218,34 @@ serve(async (req) => {
 
     const currentUser = authData.user;
 
-    const [{ data: profile }, { data: canCreate }, { data: canEdit }] = await Promise.all([
-      supabaseAdmin.from('profiles').select('is_admin').eq('id', currentUser.id).maybeSingle(),
+    const body = (await req.json()) as ImportRequest;
+
+    const orgId = (body as ImportRequest & { org_id?: string }).org_id;
+    if (!orgId) {
+      return new Response(JSON.stringify({ error: 'org_id é obrigatório' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Admin DESTA org (user_organizacoes), OU permissão per-org (has_permission já é org-scoped).
+    const [{ data: membership }, { data: canCreate }, { data: canEdit }] = await Promise.all([
+      supabaseAdmin
+        .from('user_organizacoes')
+        .select('is_admin')
+        .eq('user_id', currentUser.id)
+        .eq('org_id', orgId)
+        .maybeSingle(),
       supabaseAdmin.rpc('has_permission', { _user_id: currentUser.id, _recurso: 'viaturas_criar' }),
       supabaseAdmin.rpc('has_permission', { _user_id: currentUser.id, _recurso: 'viaturas_editar' }),
     ]);
 
-    if (!profile?.is_admin && !(canCreate && canEdit)) {
+    if (!membership?.is_admin && !(canCreate && canEdit)) {
       return new Response(JSON.stringify({ error: 'Sem permissão para importar viaturas.' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const body = (await req.json()) as ImportRequest;
 
     let rawRows = body.rows || [];
     if (!rawRows.length && body.rawMarkdown) {

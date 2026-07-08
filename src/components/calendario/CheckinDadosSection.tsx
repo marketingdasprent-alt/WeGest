@@ -20,6 +20,14 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
+import {
+  precisaCombustivel,
+  precisaEletrico,
+  precisaGpl,
+  ELETRICO_OPTS,
+  GPL_OPTS,
+  COMBUSTIVEL_NIVEL_OPTS as COMBUSTIVEL_OPTS,
+} from '@/utils/combustivel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -40,18 +48,6 @@ export interface CheckinDadosState {
 
 export function emptyCheckinDados(): CheckinDadosState {
   return { km: '', combustivel: '', nivelEletrico: '', nivelGpl: '', novosDanos: [] };
-}
-
-// ── Fuel type helpers ─────────────────────────────────────────────────────────
-
-function precisaCombustivel(tc: string) {
-  return !tc || ['gasolina', 'diesel', 'hibrido', 'gasolina_gpl', 'diesel_gpl'].includes(tc);
-}
-function precisaEletrico(tc: string) {
-  return ['eletrico', 'hibrido'].includes(tc);
-}
-function precisaGpl(tc: string) {
-  return ['gpl', 'gasolina_gpl', 'diesel_gpl'].includes(tc);
 }
 
 export function validateCheckinDados(
@@ -172,6 +168,8 @@ interface FolhaDanosParams {
   novosDanos: NovoDanoState[];
   dataEvento: string;
   contratoNumero?: number | null;
+  assinaturaMotoristaPng?: string | null;
+  assinaturaResponsavelPng?: string | null;
   existingPdf?: jsPDF;
 }
 
@@ -361,6 +359,22 @@ export function gerarFolhaDanos(p: FolhaDanosParams) {
     doc.addPage();
     y = 20;
   }
+  // Slots de assinatura: 14-90 (motorista) e 120-196 (responsável).
+  // Cada assinatura é desenhada acima da linha-base quando fornecida; senão
+  // mantém-se a linha em branco para assinatura manuscrita (comportamento legacy).
+  const sigBaseY = y;
+  const drawSig = (png: string | null | undefined, x: number) => {
+    if (!png) return;
+    try {
+      // Caixa 76mm de largura, 18mm de altura, assente sobre a linha.
+      doc.addImage(png, 'PNG', x, sigBaseY - 18, 76, 18, undefined, 'FAST');
+    } catch {
+      /* PNG inválido — fica a linha em branco */
+    }
+  };
+  drawSig(p.assinaturaMotoristaPng, 14);
+  drawSig(p.assinaturaResponsavelPng, 120);
+
   doc.setDrawColor(0);
   line(14, y, 90, y);
   line(120, y, 196, y);
@@ -377,10 +391,6 @@ export function gerarFolhaDanos(p: FolhaDanosParams) {
 }
 
 // ── UI Component ──────────────────────────────────────────────────────────────
-
-const COMBUSTIVEL_OPTS = ['Vazio', '1/4', '1/2', '3/4', 'Cheio'] as const;
-const ELETRICO_OPTS = ['0%', '25%', '50%', '75%', '100%'] as const;
-const GPL_OPTS = ['Vazio', '1/4', '1/2', '3/4', 'Cheio'] as const;
 
 interface CheckinDadosSectionProps {
   viaturaId: string;

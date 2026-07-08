@@ -42,6 +42,7 @@ import {
   type ToolbarCobranca,
 } from '@/components/faturacao/FaturacaoActionsToolbar';
 import { ReservaFaturarDialog } from '@/components/faturacao/ReservaFaturarDialog';
+import { NovaFaturaDialog } from '@/components/faturacao/NovaFaturaDialog';
 import type { Reserva } from '@/types/reserva';
 
 const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
@@ -75,6 +76,7 @@ interface Props {
 export function ReservaTabFaturar({ reserva }: Props) {
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [novaFaturaOpen, setNovaFaturaOpen] = useState(false);
   const [reemitindoId, setReemitindoId] = useState<string | null>(null);
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
   const [anularOpen, setAnularOpen] = useState(false);
@@ -357,6 +359,7 @@ export function ReservaTabFaturar({ reserva }: Props) {
             emitente={emitente}
             onFaturar={jaFaturada ? undefined : () => setDialogOpen(true)}
             faturarLabel="Faturar reserva"
+            onNovaFatura={reserva.cliente_id ? () => setNovaFaturaOpen(true) : undefined}
             cobrancas={toolbarCobrancas}
             onChanged={refetchAll}
           />
@@ -484,6 +487,22 @@ export function ReservaTabFaturar({ reserva }: Props) {
         emitente={emitente}
         onFaturado={refetchAll}
       />
+
+      {reserva.cliente_id && (
+        <NovaFaturaDialog
+          open={novaFaturaOpen}
+          onOpenChange={setNovaFaturaOpen}
+          alvo={{
+            tipo: 'reserva',
+            id: reserva.id,
+            orgId: reserva.org_id,
+            codigoLabel: `Reserva #${reserva.codigo}`,
+          }}
+          destinatario={{ id: reserva.cliente_id, nome: reserva.cliente_nome ?? 'Cliente' }}
+          emitente={emitente}
+          onCriada={refetchAll}
+        />
+      )}
 
       <AlertDialog
         open={anularOpen}

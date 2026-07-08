@@ -25,9 +25,10 @@ import {
 import { Building2, Plus, Pencil, Trash2, Loader2, RefreshCw } from 'lucide-react';
 import { validarNIF } from '@/lib/pt-validators';
 
-// Empresa = cliente de tipo='empresa'. O sistema (emissor de reservas/
-// contratos, document_templates, fatura\u00e7\u00e3o) usa clientes.id (UUID) como
-// eixo \u00fanico \u2014 esta aba \u00e9 s\u00f3 uma vista filtrada por tipo_cliente='empresa'.
+// Empresa EMISSORA = cliente de tipo='empresa' com is_emissora=true (as empresas
+// do grupo que emitem reservas/contratos/documentos). O sistema usa clientes.id
+// (UUID) como eixo \u00fanico; esta aba \u00e9 a vista filtrada por is_emissora=true e os
+// clientes que por acaso s\u00e3o empresas ficam s\u00f3 na lista de Clientes.
 interface Empresa {
   id: string;
   nome: string;
@@ -70,7 +71,7 @@ export const EmpresasTab: React.FC = () => {
       .select(
         'id, nome, nome_comercial, nif, sede, licenca_tvde, licenca_validade, representante, cargo_representante, papel_timbrado'
       )
-      .eq('tipo_cliente', 'empresa')
+      .eq('is_emissora', true)
       .is('deleted_at', null)
       .order('nome');
     if (error) {
@@ -143,6 +144,7 @@ export const EmpresasTab: React.FC = () => {
           ...dados,
           tipo_cliente: 'empresa',
           is_empresa: true,
+          is_emissora: true,
           org_id: orgId,
         });
         if (error) throw error;
@@ -193,7 +195,8 @@ export const EmpresasTab: React.FC = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Gerir as empresas disponíveis para geração de contratos e documentos.
+          Empresas emissoras do grupo — as que emitem contratos e documentos. Os clientes que são
+          empresas ficam na lista de Clientes.
         </p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -215,7 +218,7 @@ export const EmpresasTab: React.FC = () => {
         <Card>
           <CardContent className="py-12 text-center">
             <Building2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <p className="text-muted-foreground">Nenhuma empresa cadastrada.</p>
+            <p className="text-muted-foreground">Nenhuma empresa emissora registada.</p>
             <Button className="mt-4" onClick={openNew}>
               <Plus className="h-4 w-4 mr-2" />
               Adicionar Primeira Empresa

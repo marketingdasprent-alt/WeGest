@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
@@ -16,7 +16,7 @@ import { startOfWeek, format as formatDate } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
+import { MotoristaFullModal } from '@/components/motoristas/MotoristaFullModal';
 import { MotoristasPlataformaNaoAssociados } from '@/components/motoristas/MotoristasPlataformaNaoAssociados';
 import { CartoesNaoReconhecidos } from '@/components/motoristas/CartoesNaoReconhecidos';
 import { PortagensNaoAssociadas } from '@/components/motoristas/PortagensNaoAssociadas';
@@ -39,13 +39,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { MotoristaDetailsDrawer } from '@/components/motoristas/MotoristaDetailsDrawer';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { cn, normalizeString } from '@/lib/utils';
+import { useMotoristas } from '@/hooks/useMotoristas';
+import {
+  useCartoesNaoAssociadosCount,
+  useBpNaoAssociadasCount,
+  usePortagensNaoAssociadasCount,
+} from '@/hooks/useMotoristasNaoAssociadosCounts';
+import {
+  useMotoristasPlataformaNaoAssociadosCount,
+  useUnmappedBoltDrivers,
+  useMapearMotoristaBolt,
+  useSincronizarMotoristasPlataformaIds,
+} from '@/hooks/useMotoristasPlataformaSync';
 
 import type { Motorista } from '@/types/motorista';
 export type { Motorista };
@@ -61,8 +72,8 @@ type SortColumn =
   | 'uber_uuid';
 
 export default function Motoristas() {
-  const [motoristas, setMotoristas] = useState<Motorista[]>([]);
-  const [loading, setLoading] = useState(true);
+  const motoristasQuery = useMotoristas();
+  const motoristas = useMemo(() => motoristasQuery.data ?? [], [motoristasQuery.data]);
 
   // 1. O URL é o ÚNICO dono da verdade
   const [searchParams, setSearchParams] = useSearchParams();
@@ -101,160 +112,30 @@ export default function Motoristas() {
   const isMobile = useIsMobile();
   const [isMappingDialogOpen, setIsMappingDialogOpen] = useState(false);
   const [mappingTarget, setMappingTarget] = useState<Motorista | null>(null);
-  const [unmappedBoltDrivers, setUnmappedBoltDrivers] = useState<{ name: string; id: string }[]>(
-    []
-  );
-  const [isMappingLoading, setIsMappingLoading] = useState(false);
+  const unmappedBoltDriversQuery = useUnmappedBoltDrivers(isMappingDialogOpen);
+  const unmappedBoltDrivers = unmappedBoltDriversQuery.data ?? [];
+  const isMappingLoading = unmappedBoltDriversQuery.isLoading;
+  const mapearMotoristaBolt = useMapearMotoristaBolt();
+  const sincronizarIds = useSincronizarMotoristasPlataformaIds();
   const [naoAssociadosOpen, setNaoAssociadosOpen] = useState(false);
-  const [naoAssociadosCount, setNaoAssociadosCount] = useState<number>(0);
+  const naoAssociadosCountQuery = useMotoristasPlataformaNaoAssociadosCount();
+  const naoAssociadosCount = naoAssociadosCountQuery.data ?? 0;
   const [cartoesOpen, setCartoesOpen] = useState(false);
-  const [cartoesCount, setCartoesCount] = useState<number>(0);
+  const cartoesCountQuery = useCartoesNaoAssociadosCount();
+  const cartoesCount = cartoesCountQuery.data ?? 0;
   const [portagensOpen, setPortagensOpen] = useState(false);
-  const [portagensCount, setPortagensCount] = useState<number>(0);
+  const portagensCountQuery = usePortagensNaoAssociadasCount();
+  const portagensCount = portagensCountQuery.data ?? 0;
   const [bpNaoAssociadasOpen, setBpNaoAssociadasOpen] = useState(false);
-  const [bpNaoAssociadasCount, setBpNaoAssociadasCount] = useState<number>(0);
+  const bpNaoAssociadasCountQuery = useBpNaoAssociadasCount();
+  const bpNaoAssociadasCount = bpNaoAssociadasCountQuery.data ?? 0;
   const [novaFichaPrefill, setNovaFichaPrefill] = useState<{
     nome?: string;
     bolt_id?: string;
     uber_uuid?: string;
   } | null>(null);
 
-  useEffect(() => {
-    loadMotoristas();
-    loadNaoAssociadosCount();
-    loadCartoesCount();
-    loadPortagensCount();
-    loadBpNaoAssociadasCount();
-  }, []);
-
-  const loadCartoesCount = async () => {
-    try {
-      const desde = formatDate(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      const { data } = await (supabase as any).rpc('get_cartoes_combustivel_nao_associados', {
-        p_desde: desde,
-      });
-      setCartoesCount((data as any[] | null)?.length ?? 0);
-    } catch {
-      /* silencioso */
-    }
-  };
-
-  const loadBpNaoAssociadasCount = async () => {
-    try {
-      // Uma só query (antes havia uma com count:'exact' descartada — o valor
-      // usado é o tamanho do Set de card_number distintos).
-      const { data } = await supabase
-        .from('bp_transacoes')
-        .select('card_number')
-        .is('motorista_id', null);
-      const unique = new Set<string>(
-        (data || []).map((r: any) => r.card_number || '__sem_cartao__')
-      );
-      setBpNaoAssociadasCount(unique.size);
-    } catch {
-      /* silencioso */
-    }
-  };
-
-  const loadPortagensCount = async () => {
-    try {
-      // Sem count:'exact' (não era usado) — evita o COUNT(*) extra no servidor.
-      const { data } = await (supabase as any)
-        .from('via_verde_transacoes')
-        .select('matricula')
-        .is('motorista_id', null)
-        .not('matricula', 'is', null);
-      const unique = new Set<string>(((data as any[]) || []).map((r: any) => r.matricula));
-      setPortagensCount(unique.size);
-    } catch {
-      /* silencioso */
-    }
-  };
-
-  const loadNaoAssociadosCount = async () => {
-    try {
-      const desde = new Date();
-      desde.setDate(desde.getDate() - 56);
-      const desdeDate = desde.toISOString().slice(0, 10);
-
-      // IDs de plataforma já "ligados" — via ficha OU via motorista_id em qualquer registo.
-      const { data: crm } = await supabase.from('motoristas_ativos').select('uber_uuid, bolt_id');
-      const uberLigados = new Set<string>(
-        (crm || []).map((m: any) => m.uber_uuid).filter((x: any) => !!x)
-      );
-      const boltLigados = new Set<string>(
-        (crm || []).map((m: any) => m.bolt_id).filter((x: any) => !!x)
-      );
-
-      const [uberDrv, boltRows, uberLigDb, boltLigDb] = await Promise.all([
-        supabase.from('uber_drivers').select('uber_driver_id, full_name').is('motorista_id', null),
-        supabase
-          .from('bolt_resumos_semanais')
-          .select('identificador_motorista, motorista_nome')
-          .is('motorista_id', null)
-          .gte('periodo_inicio', desdeDate)
-          .not('identificador_motorista', 'is', null),
-        supabase
-          .from('uber_transactions')
-          .select('uber_driver_id')
-          .not('motorista_id', 'is', null)
-          .not('uber_driver_id', 'is', null),
-        supabase
-          .from('bolt_resumos_semanais')
-          .select('identificador_motorista')
-          .not('motorista_id', 'is', null)
-          .not('identificador_motorista', 'is', null),
-      ]);
-      (uberLigDb.data || []).forEach((r: any) => uberLigados.add(r.uber_driver_id));
-      (boltLigDb.data || []).forEach((r: any) => boltLigados.add(r.identificador_motorista));
-
-      // Contar PESSOAS (nome normalizado distinto), não registos — alinha com a lista unificada.
-      const norm = (s: string) =>
-        (s || '')
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[̀-ͯ]/g, '')
-          .replace(/[^a-z0-9 ]/g, ' ')
-          .trim()
-          .replace(/\s+/g, ' ');
-      const nomes = new Set<string>();
-      (uberDrv.data || []).forEach((d: any) => {
-        if (d.uber_driver_id && !uberLigados.has(d.uber_driver_id)) {
-          nomes.add(norm(d.full_name) || d.uber_driver_id);
-        }
-      });
-      (boltRows.data || []).forEach((r: any) => {
-        if (r.identificador_motorista && !boltLigados.has(r.identificador_motorista)) {
-          nomes.add(norm(r.motorista_nome) || r.identificador_motorista);
-        }
-      });
-      setNaoAssociadosCount(nomes.size);
-    } catch {
-      /* silencioso */
-    }
-  };
-
-  const loadMotoristas = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('motoristas_ativos')
-        .select('*')
-        .order('codigo', { ascending: true });
-
-      if (error) throw error;
-      setMotoristas(data || []);
-    } catch (error: any) {
-      console.error('Erro ao carregar motoristas:', error);
-      toast({
-        title: 'Erro ao carregar motoristas',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loading = motoristasQuery.isLoading || sincronizarIds.isPending;
 
   // Get unique cities for filter
   const availableCities = useMemo(() => {
@@ -366,11 +247,12 @@ export default function Motoristas() {
     return result;
   }, [motoristas, searchTerm, statusFilter, cidadeFilter, gestorFilter, sortColumn, sortDirection]);
 
-  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
-    filteredMotoristas,
-    50,
-    `${searchTerm}|${statusFilter}|${cidadeFilter}|${gestorFilter}`
-  );
+  const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      filteredMotoristas,
+      50,
+      `${searchTerm}|${statusFilter}|${cidadeFilter}|${gestorFilter}`
+    );
 
   const handleRowClick = (motorista: Motorista) => {
     navigate(`/motoristas/${motorista.id}`, {
@@ -379,7 +261,7 @@ export default function Motoristas() {
   };
 
   const handleMotoristaUpdated = () => {
-    loadMotoristas();
+    motoristasQuery.refetch();
   };
 
   const handleAddMotorista = () => {
@@ -393,8 +275,8 @@ export default function Motoristas() {
       setIsDialogOpen(false);
       setMotoristaToEdit(null);
       setNovaFichaPrefill(null);
-      loadMotoristas();
-      loadNaoAssociadosCount();
+      motoristasQuery.refetch();
+      naoAssociadosCountQuery.refetch();
     }
   };
 
@@ -409,211 +291,39 @@ export default function Motoristas() {
       .replace(/\s+/g, ' '); // Normaliza espaços
   };
 
-  const handleOpenMapping = async (motorista: Motorista) => {
+  const handleOpenMapping = (motorista: Motorista) => {
     setMappingTarget(motorista);
     setIsMappingDialogOpen(true);
-    setIsMappingLoading(true);
-    try {
-      // Buscar todos os nomes únicos da Bolt que não estão mapeados
-      const { data, error } = await supabase
-        .from('bolt_resumos_semanais')
-        .select('motorista_nome, identificador_motorista')
-        .is('motorista_id', null)
-        .not('identificador_motorista', 'is', null);
-
-      if (error) throw error;
-
-      // Deduplicar por identificador
-      const unique = data.reduce((acc: any[], current) => {
-        if (!acc.find((i) => i.id === current.identificador_motorista)) {
-          acc.push({ name: current.motorista_nome, id: current.identificador_motorista });
-        }
-        return acc;
-      }, []);
-
-      setUnmappedBoltDrivers(unique);
-    } catch (error) {
-      console.error('Erro ao carregar motoristas Bolt:', error);
-    } finally {
-      setIsMappingLoading(false);
-    }
   };
 
-  const handleConfirmMapping = async (boltId: string) => {
+  const handleConfirmMapping = (boltId: string) => {
     if (!mappingTarget) return;
-    try {
-      setLoading(true);
-      const { error } = await supabase
-        .from('motoristas_ativos')
-        .update({ bolt_id: boltId })
-        .eq('id', mappingTarget.id);
-
-      if (error) throw error;
-
-      toast({
-        title: 'Sucesso',
-        description: 'Motorista mapeado com sucesso!',
-      });
-      setIsMappingDialogOpen(false);
-      loadMotoristas();
-    } catch (error: any) {
-      toast({
-        title: 'Erro',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
+    mapearMotoristaBolt.mutate(
+      { motoristaId: mappingTarget.id, boltId },
+      { onSuccess: () => setIsMappingDialogOpen(false) }
+    );
   };
 
-  const handleSyncIDs = async () => {
-    try {
-      setLoading(true);
-      toast({
-        title: 'A iniciar sincronização v2.0',
-        description: 'A aplicar lógica de comparação avançada...',
-      });
-
-      // 1. Buscar todos os motoristas
-      const { data: currentMotoristas, error: motError } = await supabase
-        .from('motoristas_ativos')
-        .select('id, nome, email, telefone, bolt_id, uber_uuid');
-
-      if (motError) throw motError;
-
-      // 2. Buscar resumos Bolt com IDs
-      const { data: resumos, error: resError } = await supabase
-        .from('bolt_resumos_semanais')
-        .select('motorista_nome, identificador_motorista, telefone, email, motorista_id')
-        .not('identificador_motorista', 'is', null);
-
-      if (resError) throw resError;
-
-      // 3. Buscar Uber Drivers mapeados
-      const { data: uberDrivers, error: uberError } = await supabase
-        .from('uber_drivers')
-        .select('full_name, uber_driver_id, motorista_id')
-        .not('uber_driver_id', 'is', null);
-
-      if (uberError) throw uberError;
-
-      let totalMapped = 0;
-      const updates = [];
-      const particles = ['de', 'da', 'do', 'das', 'dos', 'e'];
-
-      for (const m of currentMotoristas) {
-        if (m.bolt_id && m.uber_uuid) continue;
-
-        const mClean = normalizeStr(m.nome);
-        const mWords = mClean.split(' ').filter((w) => w.length > 2 && !particles.includes(w));
-        const mPhone = m.telefone ? m.telefone.replace(/\D/g, '').slice(-9) : null;
-        const mEmail = m.email?.toLowerCase().trim();
-
-        const updatedData: any = {};
-        let needsUpdate = false;
-
-        // Tentar encontrar na Bolt
-        if (!m.bolt_id || !m.email || !m.telefone) {
-          const match = resumos.find((r) => {
-            const rClean = normalizeStr(r.motorista_nome || '');
-            const rWords = rClean.split(' ').filter((w) => w.length > 2 && !particles.includes(w));
-            const rPhone = r.telefone ? r.telefone.replace(/\D/g, '').slice(-9) : null;
-            const rEmail = r.email?.toLowerCase().trim();
-
-            // Prioridade 1: Match por Telefone ou Email (Confiança Total)
-            if (mEmail && rEmail && mEmail === rEmail) return true;
-            if (mPhone && rPhone && mPhone === rPhone) return true;
-
-            // Prioridade 2: Match por Nome
-            if (rClean === mClean) return true;
-            if (mWords.length >= 2 && rWords.length >= 2) {
-              const mFirstLast = `${mWords[0]} ${mWords[mWords.length - 1]}`;
-              const rFirstLast = `${rWords[0]} ${rWords[rWords.length - 1]}`;
-              if (mFirstLast === rFirstLast) return true;
-
-              const intersection = mWords.filter((w) => rWords.includes(w));
-              const score = intersection.length / Math.min(mWords.length, rWords.length);
-              if (score >= 0.8) return true; // Confiança alta para enriquecer dados
-            }
-
-            return false;
-          });
-
-          if (match) {
-            if (!m.bolt_id) {
-              updatedData.bolt_id = match.identificador_motorista;
-              needsUpdate = true;
-            }
-            // Enriquecer email se estiver vazio
-            if (!m.email && match.email) {
-              updatedData.email = match.email.toLowerCase().trim();
-              needsUpdate = true;
-            }
-            // Enriquecer telefone se estiver vazio
-            if (!m.telefone && match.telefone) {
-              updatedData.telefone = match.telefone.trim();
-              needsUpdate = true;
-            }
-          }
-        }
-
-        // Tentar encontrar na Uber
-        if (!m.uber_uuid) {
-          const matchUber = uberDrivers.find((u) => {
-            const uClean = normalizeStr(u.full_name || '');
-            const uWords = uClean.split(' ').filter((w) => w.length > 2 && !particles.includes(w));
-
-            if (uClean === mClean) return true;
-
-            if (mWords.length >= 2 && uWords.length >= 2) {
-              const intersection = mWords.filter((w) => uWords.includes(w));
-              const score = intersection.length / Math.min(mWords.length, uWords.length);
-              if (score >= 0.8) return true;
-            }
-            return false;
-          });
-
-          if (matchUber) {
-            updatedData.uber_uuid = matchUber.uber_driver_id;
-            needsUpdate = true;
-          }
-        }
-
-        if (needsUpdate) {
-          updates.push(supabase.from('motoristas_ativos').update(updatedData).eq('id', m.id));
-          totalMapped++;
-        }
-      }
-
-      if (updates.length > 0) {
-        // Executar em grupos de 10 para evitar timeouts
-        for (let i = 0; i < updates.length; i += 10) {
-          await Promise.all(updates.slice(i, i + 10));
-        }
-      }
-
-      toast({
-        title: 'Sincronização concluída',
-        description: `${totalMapped} motoristas mapeados com sucesso!`,
-      });
-      loadMotoristas();
-    } catch (error: any) {
-      console.error('Erro ao sincronizar IDs:', error);
-      toast({
-        title: 'Erro na sincronização',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
+  const handleSyncIDs = () => {
+    toast({
+      title: 'A iniciar sincronização v2.0',
+      description: 'A aplicar lógica de comparação avançada...',
+    });
+    sincronizarIds.mutate();
   };
 
   const handleMotoristaCreated = (motorista: Motorista) => {
+    // Fechar primeiro o modal de criação (evita dois modais sobrepostos), depois
+    // abrir o de gerar documentos já apontado ao motorista recém-criado.
+    setIsDialogOpen(false);
+    setMotoristaToEdit(null);
+    setNovaFichaPrefill(null);
     setNewMotoristaForContract(motorista);
     setContractDialogOpen(true);
-    loadMotoristas();
+    motoristasQuery.refetch();
+    // Se foi criado a partir do fluxo "criar ficha" (prefill de bolt_id/uber_uuid),
+    // o badge "X sem ficha" tem de refletir que esta pessoa deixou de estar pendente.
+    naoAssociadosCountQuery.refetch();
   };
 
   return (
@@ -883,14 +593,17 @@ export default function Motoristas() {
           end={end}
           onPageChange={setPage}
           noun={['motorista', 'motoristas']}
+          pageSizeStr={pageSizeStr}
+          onPageSizeChange={setPageSizeStr}
         />
       )}
 
-      {/* Dialog para Adicionar Motorista */}
-      <MotoristaDialog
+      {/* Modal grande para Adicionar Motorista (mesmo modal da edição, em modo criação) */}
+      <MotoristaFullModal
         open={isDialogOpen}
         onOpenChange={handleDialogClose}
         motorista={motoristaToEdit}
+        isCreating
         prefill={novaFichaPrefill || undefined}
         onMotoristaCreated={handleMotoristaCreated}
       />
@@ -900,8 +613,8 @@ export default function Motoristas() {
         open={naoAssociadosOpen}
         onOpenChange={setNaoAssociadosOpen}
         onChanged={() => {
-          loadMotoristas();
-          loadNaoAssociadosCount();
+          motoristasQuery.refetch();
+          naoAssociadosCountQuery.refetch();
         }}
         onCriarFicha={({ nome, uberId, boltId }) => {
           setNaoAssociadosOpen(false);
@@ -916,7 +629,7 @@ export default function Motoristas() {
         open={cartoesOpen}
         onOpenChange={setCartoesOpen}
         onChanged={() => {
-          loadCartoesCount();
+          cartoesCountQuery.refetch();
         }}
       />
 
@@ -925,7 +638,7 @@ export default function Motoristas() {
         open={portagensOpen}
         onOpenChange={setPortagensOpen}
         onChanged={() => {
-          loadPortagensCount();
+          portagensCountQuery.refetch();
         }}
       />
 
@@ -934,7 +647,7 @@ export default function Motoristas() {
         open={bpNaoAssociadasOpen}
         onOpenChange={setBpNaoAssociadasOpen}
         onChanged={() => {
-          loadBpNaoAssociadasCount();
+          bpNaoAssociadasCountQuery.refetch();
         }}
       />
 

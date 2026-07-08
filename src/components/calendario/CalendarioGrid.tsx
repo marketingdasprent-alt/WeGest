@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight, X, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { EventoCard, formatMatricula } from './EventoCard';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
 import type { CalendarioEvento } from '@/pages/Calendario';
 import {
   format,
@@ -26,6 +28,7 @@ interface Props {
   onEventClick: (e: CalendarioEvento) => void;
   onDeleteEvent: (id: string) => void;
   onEventDetails: (e: CalendarioEvento) => void;
+  onAbrirCheckin?: (e: CalendarioEvento) => void;
   onDaySelect?: (d: Date) => void;
   isLoading: boolean;
   currentUserId?: string;
@@ -41,6 +44,7 @@ export const CalendarioGrid: React.FC<Props> = ({
   onEventClick,
   onDeleteEvent,
   onEventDetails,
+  onAbrirCheckin,
   onDaySelect,
   isLoading,
   currentUserId,
@@ -48,6 +52,7 @@ export const CalendarioGrid: React.FC<Props> = ({
 }) => {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [panelWidth, setPanelWidth] = useState(280);
+  const isMobile = useIsMobile();
   const isResizing = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
@@ -273,6 +278,7 @@ export const CalendarioGrid: React.FC<Props> = ({
                 onEdit={onEventClick}
                 onDelete={onDeleteEvent}
                 onDetails={onEventDetails}
+                onAbrirCheckin={onAbrirCheckin}
                 canEdit={canEditAll || currentUserId === ev.criado_por}
               />
             ))
@@ -286,6 +292,39 @@ export const CalendarioGrid: React.FC<Props> = ({
     <div className="flex h-full min-h-0 gap-3">
       <div className="flex-1 min-w-0 min-h-0">{calendarPane}</div>
       {sidePanel}
+
+      {/* Mobile/tablet: side panel is hidden below lg, so show the day's
+          events in a bottom sheet instead (reuses dayEvents + EventoCard). */}
+      <Sheet
+        open={isMobile && !!selectedDay}
+        onOpenChange={(open) => {
+          if (!open) setSelectedDay(null);
+        }}
+      >
+        <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto p-4">
+          <SheetHeader className="text-left">
+            <SheetTitle className="text-base capitalize">
+              {selectedDay ? format(selectedDay, "d 'de' MMMM", { locale: pt }) : ''}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="mt-3 space-y-2">
+            {dayEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sem eventos neste dia.</p>
+            ) : (
+              dayEvents.map((ev) => (
+                <EventoCard
+                  key={ev.id}
+                  evento={ev}
+                  onEdit={onEventClick}
+                  onDelete={onDeleteEvent}
+                  onDetails={onEventDetails}
+                  canEdit={canEditAll || currentUserId === ev.criado_por}
+                />
+              ))
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

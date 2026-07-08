@@ -50,26 +50,27 @@ serve(async (req) => {
     // Obter dados do body
     const { nome, email, password, cargo_id, org_id } = await req.json();
 
-    // Verificar se é admin da org
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .select("is_admin, org_id")
-      .eq("id", currentUser.id)
-      .single();
-
-    if (profileError || !profile?.is_admin) {
-      return new Response(
-        JSON.stringify({ error: "Apenas administradores podem criar utilizadores" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Usar org_id do request ou do admin que está a criar
-    const targetOrgId = org_id || profile.org_id;
+    // A org-alvo é obrigatória (org ativa do caller).
+    const targetOrgId = org_id;
     if (!targetOrgId) {
       return new Response(
         JSON.stringify({ error: "org_id é obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verificar que o caller é admin DESTA org (papel per-org em user_organizacoes).
+    const { data: callerMembership, error: callerError } = await supabaseAdmin
+      .from("user_organizacoes")
+      .select("is_admin")
+      .eq("user_id", currentUser.id)
+      .eq("org_id", targetOrgId)
+      .single();
+
+    if (callerError || !callerMembership?.is_admin) {
+      return new Response(
+        JSON.stringify({ error: "Apenas administradores podem criar utilizadores" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -115,10 +116,57 @@ serve(async (req) => {
     });
 
     if (createError) {
-      console.error("Erro ao criar utilizador:", createError);
+      // Email já existe → adicionar à org em vez de criar novo utilizador
+      const alreadyExists =
+        createError.message.includes("already been registered") ||
+        createError.message.includes("already registered");
+
+      if (!alreadyExists) {
+        console.error("Erro ao criar utilizador:", createError);
+        return new Response(
+          JSON.stringify({ error: createError.message }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Encontrar user existente pelo email (profiles.id = auth.users.id)
+      const { data: existingProfile, error: lookupError } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .single();
+
+      if (lookupError || !existingProfile) {
+        return new Response(
+          JSON.stringify({ error: "Utilizador já existe mas não foi encontrado no sistema." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const existingUserId = existingProfile.id;
+
+      // Upsert membership na org com cargo + is_admin
+      await supabaseAdmin.from("user_organizacoes").upsert({
+        user_id: existingUserId,
+        org_id: targetOrgId,
+        role: "member",
+        cargo_id: cargo_id || null,
+        is_admin: isCargoAdmin,
+      }, { onConflict: "user_id,org_id" });
+
+      // Org ativa apenas se ainda não tiver
+      await supabaseAdmin.from("user_org_ativa").upsert({
+        user_id: existingUserId,
+        org_id: targetOrgId,
+      }, { onConflict: "user_id" });
+
       return new Response(
-        JSON.stringify({ error: createError.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          success: true,
+          existing: true,
+          user: { id: existingUserId, email },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -136,16 +184,17 @@ serve(async (req) => {
 
     if (updateError) {
       console.error("Erro ao actualizar profile:", updateError);
-      // Não falhar completamente, o utilizador foi criado
     }
 
-    // Associar o novo user à org
+    // Associar o novo user à org com cargo + is_admin
     const { error: orgError } = await supabaseAdmin
       .from("user_organizacoes")
       .insert({
         user_id: newUser.user.id,
         org_id: targetOrgId,
-        role: "member"
+        role: "member",
+        cargo_id: cargo_id || null,
+        is_admin: isCargoAdmin,
       });
 
     if (orgError) {
@@ -165,12 +214,12 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        user: { 
-          id: newUser.user.id, 
-          email: newUser.user.email 
-        } 
+      JSON.stringify({
+        success: true,
+        user: {
+          id: newUser.user.id,
+          email: newUser.user.email
+        }
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

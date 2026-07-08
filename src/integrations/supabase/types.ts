@@ -364,6 +364,45 @@ export type Database = {
           },
         ]
       }
+      assinaturas_handover: {
+        Row: {
+          id: string;
+          org_id: string;
+          calendario_evento_id: string | null;
+          contrato_id: string | null;
+          papel: string;
+          signatario_nome: string;
+          signatario_id: string | null;
+          storage_path: string;
+          assinado_em: string;
+          assinado_por_id: string;
+        };
+        Insert: {
+          id?: string;
+          org_id?: string;
+          calendario_evento_id?: string | null;
+          contrato_id?: string | null;
+          papel: string;
+          signatario_nome: string;
+          signatario_id?: string | null;
+          storage_path: string;
+          assinado_em?: string;
+          assinado_por_id: string;
+        };
+        Update: {
+          id?: string;
+          org_id?: string;
+          calendario_evento_id?: string | null;
+          contrato_id?: string | null;
+          papel?: string;
+          signatario_nome?: string;
+          signatario_id?: string | null;
+          storage_path?: string;
+          assinado_em?: string;
+          assinado_por_id?: string;
+        };
+        Relationships: [];
+      }
       bolt_drivers: {
         Row: {
           created_at: string | null
@@ -1142,6 +1181,9 @@ export type Database = {
           id: string
           lembrete_enviado_dia: boolean
           lembrete_enviado_vespera: boolean
+          lista_marca: string | null
+          lista_modelo: string | null
+          lista_notificada_em: string | null
           matricula_devolver: string | null
           motorista_id: string | null
           org_id: string | null
@@ -1164,6 +1206,9 @@ export type Database = {
           id?: string
           lembrete_enviado_dia?: boolean
           lembrete_enviado_vespera?: boolean
+          lista_marca?: string | null
+          lista_modelo?: string | null
+          lista_notificada_em?: string | null
           matricula_devolver?: string | null
           motorista_id?: string | null
           org_id?: string | null
@@ -1186,6 +1231,9 @@ export type Database = {
           id?: string
           lembrete_enviado_dia?: boolean
           lembrete_enviado_vespera?: boolean
+          lista_marca?: string | null
+          lista_modelo?: string | null
+          lista_notificada_em?: string | null
           matricula_devolver?: string | null
           motorista_id?: string | null
           org_id?: string | null
@@ -1628,6 +1676,7 @@ export type Database = {
           genero: Database["public"]["Enums"]["genero_enum"] | null
           iban: string | null
           id: string
+          is_emissora: boolean
           is_empresa: boolean
           licenca_tvde: string | null
           licenca_validade: string | null
@@ -1662,6 +1711,7 @@ export type Database = {
           genero?: Database["public"]["Enums"]["genero_enum"] | null
           iban?: string | null
           id?: string
+          is_emissora?: boolean
           is_empresa?: boolean
           licenca_tvde?: string | null
           licenca_validade?: string | null
@@ -1696,6 +1746,7 @@ export type Database = {
           genero?: Database["public"]["Enums"]["genero_enum"] | null
           iban?: string | null
           id?: string
+          is_emissora?: boolean
           is_empresa?: boolean
           licenca_tvde?: string | null
           licenca_validade?: string | null
@@ -1978,6 +2029,7 @@ export type Database = {
           emitida_em: string | null
           estado: Database["public"]["Enums"]["cobranca_estado_enum"]
           id: string
+          manual: boolean
           org_id: string
           pago_em: string | null
           periodo_ate: string
@@ -1986,6 +2038,7 @@ export type Database = {
           tarifa_id: string | null
           tarifa_nome: string | null
           taxa_iva: number
+          tipo_cobranca: string
           updated_at: string
           valor_iva: number | null
           valor_sem_iva: number
@@ -2005,6 +2058,7 @@ export type Database = {
           emitida_em?: string | null
           estado?: Database["public"]["Enums"]["cobranca_estado_enum"]
           id?: string
+          manual?: boolean
           org_id: string
           pago_em?: string | null
           periodo_ate: string
@@ -2013,6 +2067,7 @@ export type Database = {
           tarifa_id?: string | null
           tarifa_nome?: string | null
           taxa_iva?: number
+          tipo_cobranca?: string
           updated_at?: string
           valor_iva?: number | null
           valor_sem_iva: number
@@ -2032,6 +2087,7 @@ export type Database = {
           emitida_em?: string | null
           estado?: Database["public"]["Enums"]["cobranca_estado_enum"]
           id?: string
+          manual?: boolean
           org_id?: string
           pago_em?: string | null
           periodo_ate?: string
@@ -2040,6 +2096,7 @@ export type Database = {
           tarifa_id?: string | null
           tarifa_nome?: string | null
           taxa_iva?: number
+          tipo_cobranca?: string
           updated_at?: string
           valor_iva?: number | null
           valor_sem_iva?: number
@@ -2734,6 +2791,8 @@ export type Database = {
           cobertura_nome: string | null
           cobertura_preco_dia: number | null
           codigo: number
+          combustivel_entrada: string | null
+          combustivel_saida: string | null
           comentarios_entrega: string | null
           comentarios_recolha: string | null
           contrato_anterior_id: string | null
@@ -2758,6 +2817,8 @@ export type Database = {
           id: string
           is_longa_duracao: boolean
           km_adicional_valor: number | null
+          km_entrada: number | null
+          km_saida: number | null
           kms_incluidos: number | null
           local_entrega: string | null
           local_recolha: string | null
@@ -2801,6 +2862,8 @@ export type Database = {
           cobertura_nome?: string | null
           cobertura_preco_dia?: number | null
           codigo?: number
+          combustivel_entrada?: string | null
+          combustivel_saida?: string | null
           comentarios_entrega?: string | null
           comentarios_recolha?: string | null
           contrato_anterior_id?: string | null
@@ -2825,6 +2888,8 @@ export type Database = {
           id?: string
           is_longa_duracao?: boolean
           km_adicional_valor?: number | null
+          km_entrada?: number | null
+          km_saida?: number | null
           kms_incluidos?: number | null
           local_entrega?: string | null
           local_recolha?: string | null
@@ -2868,6 +2933,8 @@ export type Database = {
           cobertura_nome?: string | null
           cobertura_preco_dia?: number | null
           codigo?: number
+          combustivel_entrada?: string | null
+          combustivel_saida?: string | null
           comentarios_entrega?: string | null
           comentarios_recolha?: string | null
           contrato_anterior_id?: string | null
@@ -2892,6 +2959,8 @@ export type Database = {
           id?: string
           is_longa_duracao?: boolean
           km_adicional_valor?: number | null
+          km_entrada?: number | null
+          km_saida?: number | null
           kms_incluidos?: number | null
           local_entrega?: string | null
           local_recolha?: string | null
@@ -4143,6 +4212,7 @@ export type Database = {
           id: string
           nome: string
           org_id: string | null
+          origem: string
         }
         Insert: {
           atualizado_em?: string
@@ -4152,6 +4222,7 @@ export type Database = {
           id?: string
           nome: string
           org_id?: string | null
+          origem?: string
         }
         Update: {
           atualizado_em?: string
@@ -4161,6 +4232,7 @@ export type Database = {
           id?: string
           nome?: string
           org_id?: string | null
+          origem?: string
         }
         Relationships: [
           {
@@ -4750,6 +4822,7 @@ export type Database = {
           cartao_repsol: string | null
           cidade: string | null
           cidade_assinatura: string | null
+          cliente_id: string | null
           codigo: number
           codigo_postal: string | null
           comprovativo_iban_url: string | null
@@ -4798,6 +4871,7 @@ export type Database = {
           cartao_repsol?: string | null
           cidade?: string | null
           cidade_assinatura?: string | null
+          cliente_id?: string | null
           codigo?: number
           codigo_postal?: string | null
           comprovativo_iban_url?: string | null
@@ -4846,6 +4920,7 @@ export type Database = {
           cartao_repsol?: string | null
           cidade?: string | null
           cidade_assinatura?: string | null
+          cliente_id?: string | null
           codigo?: number
           codigo_postal?: string | null
           comprovativo_iban_url?: string | null
@@ -4961,9 +5036,13 @@ export type Database = {
           custo_final: number | null
           data_chegada: string | null
           data_partida: string | null
+          eletricidade_final: string | null
+          eletricidade_inicial: string | null
           estacao_destino_id: string | null
           estacao_origem_id: string | null
           estado: string
+          gpl_final: string | null
+          gpl_inicial: string | null
           id: string
           info: string | null
           km_final: number | null
@@ -4990,9 +5069,13 @@ export type Database = {
           custo_final?: number | null
           data_chegada?: string | null
           data_partida?: string | null
+          eletricidade_final?: string | null
+          eletricidade_inicial?: string | null
           estacao_destino_id?: string | null
           estacao_origem_id?: string | null
           estado?: string
+          gpl_final?: string | null
+          gpl_inicial?: string | null
           id?: string
           info?: string | null
           km_final?: number | null
@@ -5019,9 +5102,13 @@ export type Database = {
           custo_final?: number | null
           data_chegada?: string | null
           data_partida?: string | null
+          eletricidade_final?: string | null
+          eletricidade_inicial?: string | null
           estacao_destino_id?: string | null
           estacao_origem_id?: string | null
           estado?: string
+          gpl_final?: string | null
+          gpl_inicial?: string | null
           id?: string
           info?: string | null
           km_final?: number | null
@@ -5194,6 +5281,7 @@ export type Database = {
         Row: {
           candidatura_id: string | null
           created_at: string
+          destinatario_id: string | null
           id: string
           mensagem: string | null
           org_id: string | null
@@ -5204,10 +5292,12 @@ export type Database = {
           severidade: string
           tipo: string
           titulo: string
+          viatura_id: string | null
         }
         Insert: {
           candidatura_id?: string | null
           created_at?: string
+          destinatario_id?: string | null
           id?: string
           mensagem?: string | null
           org_id?: string | null
@@ -5218,10 +5308,12 @@ export type Database = {
           severidade?: string
           tipo: string
           titulo: string
+          viatura_id?: string | null
         }
         Update: {
           candidatura_id?: string | null
           created_at?: string
+          destinatario_id?: string | null
           id?: string
           mensagem?: string | null
           org_id?: string | null
@@ -5232,6 +5324,7 @@ export type Database = {
           severidade?: string
           tipo?: string
           titulo?: string
+          viatura_id?: string | null
         }
         Relationships: [
           {
@@ -5674,6 +5767,38 @@ export type Database = {
           },
           {
             foreignKeyName: "profiles_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quadro_tokens: {
+        Row: {
+          id: string
+          org_id: string
+          token: string
+          ativo: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id?: string
+          token?: string
+          ativo?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          token?: string
+          ativo?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quadro_tokens_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
@@ -6795,6 +6920,7 @@ export type Database = {
           regime: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias: number | null
           renovacao_opcao: string | null
+          slot_valor_mensal: number | null
           slot_valor_semanal: number | null
           tarifa_id: string | null
           tarifa_nome: string | null
@@ -6843,6 +6969,7 @@ export type Database = {
           regime?: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias?: number | null
           renovacao_opcao?: string | null
+          slot_valor_mensal?: number | null
           slot_valor_semanal?: number | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
@@ -6891,6 +7018,7 @@ export type Database = {
           regime?: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias?: number | null
           renovacao_opcao?: string | null
+          slot_valor_mensal?: number | null
           slot_valor_semanal?: number | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
@@ -8092,22 +8220,28 @@ export type Database = {
       }
       user_organizacoes: {
         Row: {
+          cargo_id: string | null
           created_at: string
           id: string
+          is_admin: boolean
           org_id: string
           role: string
           user_id: string
         }
         Insert: {
+          cargo_id?: string | null
           created_at?: string
           id?: string
+          is_admin?: boolean
           org_id: string
           role?: string
           user_id: string
         }
         Update: {
+          cargo_id?: string | null
           created_at?: string
           id?: string
+          is_admin?: boolean
           org_id?: string
           role?: string
           user_id?: string
@@ -8427,6 +8561,7 @@ export type Database = {
           observacoes: string | null
           org_id: string | null
           registado_por: string | null
+          registo_fotografico: boolean
           ticket_id: string | null
           updated_at: string | null
           valor: number | null
@@ -8450,6 +8585,7 @@ export type Database = {
           observacoes?: string | null
           org_id?: string | null
           registado_por?: string | null
+          registo_fotografico?: boolean
           ticket_id?: string | null
           updated_at?: string | null
           valor?: number | null
@@ -8473,6 +8609,7 @@ export type Database = {
           observacoes?: string | null
           org_id?: string | null
           registado_por?: string | null
+          registo_fotografico?: boolean
           ticket_id?: string | null
           updated_at?: string | null
           valor?: number | null
@@ -9377,6 +9514,10 @@ export type Database = {
         Returns: string
       }
       current_user_cargo: { Args: never; Returns: string }
+      ensure_lista_motoristas: {
+        Args: never
+        Returns: Database["public"]["Tables"]["marketing_listas"]["Row"]
+      }
       execute_gestor_assignment: { Args: never; Returns: number }
       fn_contrato_dias: {
         Args: { p_data_fim: string; p_data_inicio: string }
@@ -9426,6 +9567,10 @@ export type Database = {
           numero_contrato: number
           status: string
         }[]
+      }
+      gerar_token_danos: {
+        Args: { p_viatura_id: string; p_contrato_renting_id?: string | null }
+        Returns: string
       }
       gerar_token_realizacao: { Args: { p_evento_id: string }; Returns: string }
       get_cartao_historico_consumo: {
@@ -9548,6 +9693,10 @@ export type Database = {
           p_job_name: string
         }
         Returns: Json
+      }
+      marketing_lista_contagem: {
+        Args: { p_lista_id: string }
+        Returns: number
       }
       merge_motoristas: {
         Args: { p_principal: string; p_secundaria: string }

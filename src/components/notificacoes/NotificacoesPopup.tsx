@@ -1,28 +1,36 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useNotificacoes } from '@/hooks/useNotificacoes';
+import { useNotificacoes, type Notificacao } from '@/hooks/useNotificacoes';
 import { armNotificationSound } from '@/lib/notificationSound';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, Bell, Eye, X } from 'lucide-react';
 
-const CARGOS_NOTIFICAVEIS = ['Gestor TVDE', 'Administrador', 'Supervisor Gestor TVDE'];
-
-// Abre a lista de candidaturas; com candidatura_id, abre logo o detalhe.
-const candidaturaLink = (candidaturaId: string | null) =>
-  candidaturaId
-    ? `/motoristas/candidaturas?candidatura=${candidaturaId}`
+// Destino do botão "Ver" por tipo de notificação.
+// `link` genérico tem prioridade (ex.: avisos de lista de espera); depois
+// resolve-se por tipo (viatura disponível → detalhe da viatura) e, por fim,
+// cai nas candidaturas.
+const notificacaoLink = (n: Notificacao): string => {
+  if (n.link) return n.link;
+  if (n.tipo === 'viatura_disponivel' && n.viatura_id) return `/viaturas/${n.viatura_id}`;
+  return n.candidatura_id
+    ? `/motoristas/candidaturas?candidatura=${n.candidatura_id}`
     : '/motoristas/candidaturas';
+};
+const notificacaoLabel = (n: Notificacao): string =>
+  n.tipo === 'viatura_disponivel' ? 'Ver viatura' : 'Ver candidatura';
 
 export const NotificacoesPopup = () => {
-  const { cargo, isAdmin, tipoUtilizador, loading } = usePermissions();
+  const { tipoUtilizador, loading } = usePermissions();
   const navigate = useNavigate();
 
-  const enabled =
-    !loading &&
-    tipoUtilizador !== 'motorista' &&
-    (isAdmin || (cargo != null && CARGOS_NOTIFICAVEIS.includes(cargo)));
+  // Habilita para qualquer utilizador interno (não-motorista). A RLS da tabela
+  // `notificacoes` é a guarda real do que CADA um vê: por cargo (motorista
+  // pendente/escalonamento) OU por destinatário direto (ex.: aviso de viatura
+  // disponível dirigido ao gestor que criou a lista de espera). Restringir aqui
+  // por cargo escondia avisos dirigidos a gestores de outros cargos.
+  const enabled = !loading && tipoUtilizador !== 'motorista';
 
   const { notificacoes, resolver } = useNotificacoes(enabled);
 
@@ -78,10 +86,10 @@ export const NotificacoesPopup = () => {
                     size="sm"
                     variant={urgente ? 'destructive' : 'default'}
                     className="h-8"
-                    onClick={() => navigate(candidaturaLink(n.candidatura_id))}
+                    onClick={() => navigate(notificacaoLink(n))}
                   >
                     <Eye className="mr-1.5 h-3.5 w-3.5" />
-                    Ver candidatura
+                    {notificacaoLabel(n)}
                   </Button>
                   <Button size="sm" variant="ghost" className="h-8" onClick={() => resolver(n.id)}>
                     Fechar

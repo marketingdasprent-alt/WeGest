@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { format, differenceInMonths, differenceInDays, addMonths } from 'date-fns';
 import {
   Car,
@@ -12,6 +13,7 @@ import {
   Pencil,
   Check,
   ChevronsUpDown,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -87,6 +89,7 @@ interface MotoristaTabViaturasProps {
 }
 
 export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
+  const navigate = useNavigate();
   const [associacoes, setAssociacoes] = useState<MotoristaViatura[]>([]);
   const [viaturasDisponiveis, setViaturasDisponiveis] = useState<Viatura[]>([]);
   const [loading, setLoading] = useState(true);
@@ -190,19 +193,28 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '');
         if (s === 'vendida' || s === 'inativo' || s === 'em_reparacao') return false;
-        if (s === 'em_uso' && activeViaturaIds.has(v.id)) return false;
+        // J\u00e1 est\u00e1 com um motorista (independente do status \u2014 carros slot
+        // ficam 'disponivel' mesmo associados): n\u00e3o pode ser re-associada.
+        if (activeViaturaIds.has(v.id)) return false;
         return true;
       });
       setViaturasDisponiveis(disponiveis);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      toast.error('Erro ao carregar dados de viaturas');
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error(
+        'Erro ao carregar dados de viaturas',
+        message ? { description: message } : undefined
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const viaturaAtual = associacoes.find((a) => a.status === 'ativo');
+  const associacoesAtivas = associacoes.filter((a) => a.status === 'ativo');
+  // Mais recente primeiro (associacoes já vem ordenado por data_inicio desc).
+  const viaturaAtual = associacoesAtivas[0];
+  const outrasAtivas = associacoesAtivas.slice(1);
   const historico = associacoes.filter((a) => a.status !== 'ativo');
 
   const getValidityStatus = (date: string | null | undefined) => {
@@ -264,14 +276,20 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
 
       if (insertError) throw insertError;
 
-      const { error: updateError } = await supabase
-        .from('viaturas')
-        .update({
-          status: 'em_uso',
-        })
-        .eq('id', formData.viatura_id);
+      // Motorista slot: o carro é do próprio motorista — a associação não
+      // ocupa a viatura. Fica 'disponivel'; o estado só muda por
+      // reserva/contrato. Nos restantes regimes mantém-se o comportamento.
+      const motoristaSlot = motorista.is_slot === true || (motorista.slot_valor_semanal ?? 0) > 0;
+      if (!motoristaSlot) {
+        const { error: updateError } = await supabase
+          .from('viaturas')
+          .update({
+            status: 'em_uso',
+          })
+          .eq('id', formData.viatura_id);
 
-      if (updateError) throw updateError;
+        if (updateError) throw updateError;
+      }
 
       toast.success('Viatura associada com sucesso!');
       setDialogOpen(false);
@@ -284,7 +302,8 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       loadData();
     } catch (error) {
       console.error('Erro ao associar viatura:', error);
-      toast.error('Erro ao associar viatura');
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error('Erro ao associar viatura', message ? { description: message } : undefined);
     } finally {
       setIsSubmitting(false);
     }
@@ -317,7 +336,8 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       loadData();
     } catch (error) {
       console.error('Erro ao atualizar:', error);
-      toast.error('Erro ao atualizar dados');
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error('Erro ao atualizar dados', message ? { description: message } : undefined);
     } finally {
       setIsSubmitting(false);
     }
@@ -351,7 +371,8 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       loadData();
     } catch (error) {
       console.error('Erro ao desassociar viatura:', error);
-      toast.error('Erro ao desassociar viatura');
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error('Erro ao desassociar viatura', message ? { description: message } : undefined);
     } finally {
       setIsSubmitting(false);
     }
@@ -382,6 +403,22 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
 
   return (
     <div className="space-y-6">
+      {outrasAtivas.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-3 text-sm">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-amber-800 dark:text-amber-300">
+            <p className="font-medium">
+              Motorista com {associacoesAtivas.length} viaturas associadas em simultâneo
+            </p>
+            <p className="text-xs mt-0.5">
+              Só a mais recente ({viaturaAtual?.viatura.matricula}) aparece como "Viatura Atual".
+              Também activas: {outrasAtivas.map((a) => a.viatura.matricula).join(', ')}. Confirma se
+              as associações antigas devem ser encerradas manualmente.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Viatura Atual */}
       <SectionCard
         icon={<Car className="h-4 w-4" />}
@@ -510,10 +547,21 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
                 </div>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setDesassociarDialogOpen(true)}>
-              <X className="h-4 w-4 mr-2" />
-              Desassociar
-            </Button>
+            <div className="flex shrink-0 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/viaturas/${viaturaAtual.viatura_id}`)}
+                title="Abrir a ficha completa da viatura"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                Ver detalhes
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setDesassociarDialogOpen(true)}>
+                <X className="h-4 w-4 mr-2" />
+                Desassociar
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="text-center text-muted-foreground py-4">

@@ -18,6 +18,7 @@ const SELECT_COLUMNS = `
   data_partida, data_chegada,
   colaborador_id, colaborador_nome,
   km_inicial, km_final, combustivel_inicial, combustivel_final,
+  eletricidade_inicial, eletricidade_final, gpl_inicial, gpl_final,
   motivo, prestador, custo_estimado, custo_final,
   info, observacoes, observacoes_internas,
   created_by, created_at, updated_at

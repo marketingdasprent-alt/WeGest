@@ -4,12 +4,16 @@ import { supabase } from '@/integrations/supabase/client';
 export interface ViaturaBasic {
   id: string;
   matricula: string;
+  /** Data da primeira matrícula (yyyy-mm-dd) — usada nos documentos. */
+  data_matricula: string | null;
   marca: string;
   modelo: string;
   status: string;
   categoria: string | null;
   km_atual: number | null;
+  /** Nome do tipo de combustível, resolvido do catálogo (combustivel_id) com o texto legado como fallback. */
   combustivel: string | null;
+  combustivel_id: string | null;
   is_vendida: boolean | null;
   is_slot: boolean | null;
   grupo_id: string | null;
@@ -40,7 +44,7 @@ export function useViaturas(options: UseViaturasOptions = {}) {
       let q = supabase
         .from('viaturas')
         .select(
-          'id, matricula, marca, modelo, status, categoria, km_atual, combustivel, is_vendida, is_slot, grupo_id, habilitada_tvde'
+          'id, matricula, data_matricula, marca, modelo, status, categoria, km_atual, combustivel, combustivel_id, is_vendida, is_slot, grupo_id, habilitada_tvde'
         )
         .order('matricula');
 
@@ -53,7 +57,18 @@ export function useViaturas(options: UseViaturasOptions = {}) {
 
       const { data, error } = await q;
       if (error) throw error;
-      return data as ViaturaBasic[];
+
+      // O tipo de combustível costuma estar no catálogo (combustivel_id) e o
+      // campo de texto `combustivel` vir vazio. Resolver o nome a partir do
+      // catálogo, com o texto legado como fallback.
+      const { data: catalogo } = await supabase.from('viatura_combustiveis').select('id, nome');
+      const nomePorId = new Map((catalogo ?? []).map((c) => [c.id, c.nome as string]));
+
+      return (data ?? []).map((v) => ({
+        ...v,
+        combustivel:
+          (v.combustivel_id ? nomePorId.get(v.combustivel_id) : null) ?? v.combustivel ?? null,
+      })) as ViaturaBasic[];
     },
     enabled,
   });

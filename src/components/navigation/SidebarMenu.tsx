@@ -16,7 +16,6 @@ import {
   Mail,
   KeyRound,
   CalendarCheck,
-  ArrowRightLeft,
   Users,
   Layers,
   Tag,
@@ -63,6 +62,8 @@ interface MenuItem {
   url?: string;
   icon: React.ComponentType<{ className?: string }>;
   recurso?: string;
+  /** Mostra o item se o utilizador tiver QUALQUER um destes recursos. */
+  recursosAny?: string[];
   requireAdmin?: boolean;
   subItems?: SubMenuItem[];
 }
@@ -84,12 +85,6 @@ const MENU_ITEMS: MenuItem[] = [
         url: '/renting/reservas',
         icon: CalendarCheck,
         recurso: 'renting_reservas',
-      },
-      {
-        label: 'Movimentações',
-        url: '/renting/movimentacoes',
-        icon: ArrowRightLeft,
-        recurso: 'renting_movimentacoes',
       },
       {
         label: 'Clientes',
@@ -152,12 +147,40 @@ const MENU_ITEMS: MenuItem[] = [
   {
     label: 'Administrativo',
     icon: Wallet,
-    recurso: 'financeiro_recibos',
+    // Mostra com QUALQUER permissão do módulo Administrativo (igual ao AppSidebar).
+    recursosAny: [
+      'financeiro_recibos',
+      'recibos_verdes_adicionar',
+      'administrativo_resumos',
+      'administrativo_importar',
+      'administrativo_plataformas',
+      'administrativo_cartoes',
+    ],
     subItems: [
-      { label: 'Resumos', url: '/administrativo', icon: Calculator },
-      { label: 'Faturação', url: '/administrativo/faturacao', icon: Banknote },
-      { label: 'Cartões Frota', url: '/administrativo/cartoes', icon: CreditCard },
-      { label: 'Dispositivos OBE', url: '/administrativo/obe', icon: Wifi },
+      {
+        label: 'Resumos',
+        url: '/administrativo',
+        icon: Calculator,
+        recurso: 'administrativo_resumos',
+      },
+      {
+        label: 'Faturação',
+        url: '/administrativo/faturacao',
+        icon: Banknote,
+        recurso: 'financeiro_recibos',
+      },
+      {
+        label: 'Cartões Frota',
+        url: '/administrativo/cartoes',
+        icon: CreditCard,
+        recurso: 'administrativo_cartoes',
+      },
+      {
+        label: 'Dispositivos OBE',
+        url: '/administrativo/obe',
+        icon: Wifi,
+        recurso: 'administrativo_cartoes',
+      },
     ],
   },
   { label: 'Assistência', url: '/assistencia', icon: Wrench, recurso: 'assistencia_tickets' },
@@ -195,6 +218,12 @@ export const SidebarMenu: React.FC = () => {
   }).filter((item) => {
     if (loading) return true;
     if (item.recurso && !hasAccessToResource(item.recurso)) return false;
+    if (
+      item.recursosAny &&
+      item.recursosAny.length > 0 &&
+      !item.recursosAny.some((r) => hasAccessToResource(r))
+    )
+      return false;
     if (item.subItems && item.subItems.length === 0) return false;
     return true;
   });
@@ -411,7 +440,7 @@ export const SidebarMenu: React.FC = () => {
             return <NavItem key={item.label} item={item} />;
           })}
           {hasAdminAccess && (
-            <NavItem item={{ label: 'Administração', url: '/admin/settings', icon: Settings }} />
+            <NavItem item={{ label: 'Definições', url: '/admin/settings', icon: Settings }} />
           )}
         </div>
       </ScrollArea>

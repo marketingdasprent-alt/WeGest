@@ -38,6 +38,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { matchesSearch } from '@/lib/utils';
 
 interface RentingTaxa {
@@ -64,6 +65,9 @@ const RentingTaxas = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { orgId } = useTenant();
+  const { canEdit } = usePermissions();
+  // Catálogo de renting partilha a permissão "Grupos de viaturas" (nível Editar).
+  const podeGerir = canEdit('viaturas_grupos');
 
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -162,10 +166,12 @@ const RentingTaxas = () => {
         }
         icon={Percent}
       >
-        <Button onClick={openNew} size="sm">
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Taxa
-        </Button>
+        {podeGerir && (
+          <Button onClick={openNew} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Taxa
+          </Button>
+        )}
       </StickyPageHeader>
 
       <div className="relative mb-4">
@@ -194,7 +200,7 @@ const RentingTaxas = () => {
           <p className="text-sm text-muted-foreground">
             {search ? 'Nenhuma taxa encontrada' : 'Ainda não há taxas criadas'}
           </p>
-          {!search && (
+          {!search && podeGerir && (
             <Button onClick={openNew} variant="outline" size="sm">
               <Plus className="h-4 w-4 mr-2" />
               Criar primeira taxa
@@ -246,24 +252,26 @@ const RentingTaxas = () => {
                     </Badge>
                   </TableCell>
                   <TableCell className="py-2">
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => openEdit(t)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget(t)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    {podeGerir && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => openEdit(t)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget(t)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
