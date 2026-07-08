@@ -19,11 +19,11 @@ interface ContratoTabsPlaceholderProps {
   faturarContent?: React.ReactNode;
   /** Conteúdo da tab "Histórico" — só renderizado em modo edit. */
   historicoContent?: React.ReactNode;
+  /** Conteúdo da tab "Danos" — danos/fotos da entrega/recolha deste contrato. */
+  danosContent?: React.ReactNode;
   /** Conteúdo da tab "Anexos" — passado pela página pai. */
   anexosContent: React.ReactNode;
 }
-
-const PLACEHOLDER_TABS = [{ value: 'outros', label: 'Outros' }] as const;
 
 export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = ({
   regime,
@@ -34,6 +34,7 @@ export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = (
   taxasContent,
   faturarContent,
   historicoContent,
+  danosContent,
   anexosContent,
 }) => {
   const [active, setActive] = useState<string>('geral');
@@ -48,11 +49,7 @@ export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = (
         <TabsTrigger value="extras">Extras</TabsTrigger>
         <TabsTrigger value="taxas">Taxas</TabsTrigger>
         {faturarContent && <TabsTrigger value="faturar">Faturar</TabsTrigger>}
-        {PLACEHOLDER_TABS.map((t) => (
-          <TabsTrigger key={t.value} value={t.value}>
-            {t.label}
-          </TabsTrigger>
-        ))}
+        <TabsTrigger value="danos">Danos</TabsTrigger>
         {historicoContent && <TabsTrigger value="historico">Histórico</TabsTrigger>}
         <TabsTrigger value="anexos">Anexos</TabsTrigger>
       </TabsList>
@@ -77,18 +74,9 @@ export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = (
         {taxasContent}
       </TabsContent>
 
-      {PLACEHOLDER_TABS.map((t) => (
-        <TabsContent key={t.value} value={t.value} className="mt-4">
-          <div className="rounded-md border border-dashed border-border/60 bg-muted/30 p-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              <strong>{t.label}</strong> em desenvolvimento.
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Disponível em fases futuras (ver roadmap).
-            </p>
-          </div>
-        </TabsContent>
-      ))}
+      <TabsContent value="danos" className="mt-4">
+        {danosContent}
+      </TabsContent>
 
       {faturarContent && (
         <TabsContent value="faturar" className="mt-4">

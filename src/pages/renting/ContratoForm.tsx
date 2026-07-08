@@ -83,6 +83,7 @@ import {
 import { ContratoTabHistorico } from '@/components/renting/contratos/ContratoTabHistorico';
 import { RealizarEntregaDialog } from '@/components/renting/contratos/RealizarEntregaDialog';
 import { ContratoTabAnexos } from '@/components/renting/contratos/ContratoTabAnexos';
+import { ContratoTabDanos } from '@/components/renting/contratos/ContratoTabDanos';
 import { ContratoTabCobertura } from '@/components/renting/contratos/ContratoTabCobertura';
 import { ContratoTabExtras } from '@/components/renting/contratos/ContratoTabExtras';
 import { ContratoTabTaxas } from '@/components/renting/contratos/ContratoTabTaxas';
@@ -1163,6 +1164,7 @@ const ContratoForm = () => {
                       />
                     ) : undefined
                   }
+                  danosContent={<ContratoTabDanos contratoId={contrato?.id ?? null} />}
                   anexosContent={<ContratoTabAnexos contratoId={contrato?.id ?? null} />}
                 />
 
