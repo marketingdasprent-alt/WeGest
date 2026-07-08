@@ -136,10 +136,7 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
                       align="start"
                     >
                       <Command>
-                        <CommandInput
-                          placeholder="Pesquisar por matrícula..."
-                          className="h-9"
-                        />
+                        <CommandInput placeholder="Pesquisar por matrícula..." className="h-9" />
                         <CommandList>
                           <CommandEmpty>Nenhuma viatura encontrada.</CommandEmpty>
                           {semAgrupamento ? (

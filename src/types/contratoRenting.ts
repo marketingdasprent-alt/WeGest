@@ -122,6 +122,8 @@ export type ContratoRenting = {
 
   // Tarifário simples (MVP)
   tarifa_diaria: number | null;
+  /** FK para renting_tarifas — usada em TVDE para associar a tarifa por modelo. */
+  tarifa_id: string | null;
   desconto_percentagem: number | null;
   /** Taxa de IVA aplicada — derivada da modalidade + config da org. */
   taxa_iva: number;

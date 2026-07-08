@@ -520,8 +520,10 @@ const ContratoForm = () => {
     form.setValue('kms_incluidos', tarifa.kms_incluidos, { shouldDirty: true });
     form.setValue('km_adicional_valor', tarifa.km_adicional_valor, { shouldDirty: true });
 
-    // Recalcula o valor de tabela do novo grupo (mensal p/ ALD, diário p/
+    // Recalcula o valor de tabela do novo grupo (mensal p/ TVDE/ALD, diário p/
     // rent-a-car) e grava em valor_total_manual — a base que o ResumoContrato usa.
+    const ms = new Date(dataFim).getTime() - new Date(dataInicio).getTime();
+    const dias = Number.isFinite(ms) && ms > 0 ? Math.max(1, Math.ceil(ms / 86400000)) : null;
     const fat = calcularFaturacaoRenting(regime, isLongaDuracao, dias, tarifa);
     if (fat) form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
   };
@@ -780,9 +782,9 @@ const ContratoForm = () => {
       valorTotalManual: values.valor_total_manual,
       precoModeloSemana:
         values.regime === 'tvde' && values.viatura_id && values.tarifa_id
-          ? precosModeloTvde.find(
+          ? (precosModeloTvde.find(
               (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viatura?.modelo_id
-            )?.preco_semana ?? null
+            )?.preco_semana ?? null)
           : null,
     });
     const custoCoberturas =

@@ -401,16 +401,24 @@ const RentingReservaForm = () => {
       const baseAluguer = calcularBaseAluguerRenting({
         regime: values.regime,
         isLongaDuracao: values.is_longa_duracao,
-        dias: values.data_fim && values.data_inicio
-          ? Math.max(1, Math.ceil((new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) / 86400000))
-          : null,
+        dias:
+          values.data_fim && values.data_inicio
+            ? Math.max(
+                1,
+                Math.ceil(
+                  (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) /
+                    86400000
+                )
+              )
+            : null,
         tarifa: null,
         valorTotalManual: values.valor_total,
         precoModeloSemana:
           values.regime === 'tvde' && values.tarifa_id && viaturaSelecionada?.modelo_id
-            ? precosModeloTvde.find(
-                (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaSelecionada.modelo_id
-              )?.preco_semana ?? null
+            ? (precosModeloTvde.find(
+                (p) =>
+                  p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaSelecionada.modelo_id
+              )?.preco_semana ?? null)
             : null,
       });
 

@@ -1,7 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getTarifaFormValidationError } from './tarifaFormValidation';
-import { Tag, Save, Trash2, ChevronRight, Calendar, Gauge, Clock, ShieldCheck, Car } from 'lucide-react';
+import {
+  Tag,
+  Save,
+  Trash2,
+  ChevronRight,
+  Calendar,
+  Gauge,
+  Clock,
+  ShieldCheck,
+  Car,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -205,7 +215,7 @@ const RentingTarifaForm = () => {
   const minSel = (v: string) => (v && v !== 'none' ? parseInt(v) : null);
 
   const buildPayload = () => ({
-    grupo_id: form.para_tvde ? null : (form.grupo_id || null),
+    grupo_id: form.para_tvde ? null : form.grupo_id || null,
     nome: form.nome.trim(),
     preco_dia: form.para_tvde ? null : parseFloat(form.preco_dia || '0'),
     preco_fim_semana: n(form.preco_fim_semana),
@@ -815,7 +825,8 @@ const RentingTarifaForm = () => {
                         (v) => v.trim() !== '' && !Number.isNaN(parseFloat(v))
                       ).length
                     }{' '}
-                    modelo(s) com preço definido. Modelos sem preço ficam indisponíveis nesta tarifa.
+                    modelo(s) com preço definido. Modelos sem preço ficam indisponíveis nesta
+                    tarifa.
                   </p>
                 </TabsContent>
               )}
@@ -906,7 +917,7 @@ const RentingTarifaForm = () => {
                       setForm((p) => ({
                         ...p,
                         para_tvde: !!v,
-                        grupo_id: !!v ? '' : p.grupo_id,
+                        grupo_id: v ? '' : p.grupo_id,
                       }));
                     }}
                     className="mt-0.5"
@@ -916,8 +927,8 @@ const RentingTarifaForm = () => {
                       Tarifa para TVDE
                     </Label>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Só disponível em contratos/reservas TVDE. Usa preços semanais por modelo e
-                      não exige grupo nem preço por dia.
+                      Só disponível em contratos/reservas TVDE. Usa preços semanais por modelo e não
+                      exige grupo nem preço por dia.
                     </p>
                   </div>
                 </div>
