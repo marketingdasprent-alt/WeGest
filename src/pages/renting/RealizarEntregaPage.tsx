@@ -456,8 +456,7 @@ const RealizarEntregaPage = () => {
                 const valorNum = fp.valor.trim() ? Number(fp.valor) : null;
                 return {
                   localizacao: fp.localizacao || null,
-                  descricao:
-                    fp.descricao.trim() || `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
+                  descricao: fp.descricao.trim() || `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
                   valor: valorNum != null && !Number.isNaN(valorNum) ? valorNum : null,
                   fotos: [fp],
                 };

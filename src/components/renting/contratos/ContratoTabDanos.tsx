@@ -125,7 +125,7 @@ export const ContratoTabDanos: React.FC<ContratoTabDanosProps> = ({ contratoId }
 
       {danos.map((dano) => {
         const locLabel = dano.localizacao
-          ? LOCALIZACAO_LABEL[dano.localizacao] ?? dano.localizacao
+          ? (LOCALIZACAO_LABEL[dano.localizacao] ?? dano.localizacao)
           : null;
         const dataDisplay = dano.data_ocorrencia || dano.created_at;
         return (
@@ -146,7 +146,10 @@ export const ContratoTabDanos: React.FC<ContratoTabDanosProps> = ({ contratoId }
                 </div>
               </div>
               {dano.valor ? (
-                <Badge variant="outline" className="shrink-0 text-destructive border-destructive/30">
+                <Badge
+                  variant="outline"
+                  className="shrink-0 text-destructive border-destructive/30"
+                >
                   {fmtEur(dano.valor)}
                 </Badge>
               ) : null}
