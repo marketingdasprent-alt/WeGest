@@ -29,7 +29,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useConsumirTokenRealizacao, useRealizarFromToken } from '@/hooks/useRealizacaoToken';
 import { formatMatricula } from '@/components/calendario/calendarioUtils';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
-import { resolverCondutor } from './resolverCondutor';
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
 import {
   AssinaturasHandoverSection,
@@ -118,18 +117,14 @@ const RealizarEntregaPage = () => {
   const responsavelNome =
     (user?.user_metadata?.nome as string | undefined) ?? user?.email ?? 'Responsável';
 
-  // Contexto da folha: viatura (danos), empresa emissora (cabeçalho) e condutor
-  // principal (assinatura). Resolvido uma vez e lido pelo preview/confirmar.
-  const contratoId = info?.contrato_id;
+  // Contexto da folha (viatura, condutor, empresa emissora, cliente, km/comb.
+  // de saída) resolvido no servidor a partir do token, via RPC SECURITY
+  // DEFINER. Assim NÃO depende de o utilizador ter permissão de renting/
+  // contratos — quem faz o check no terreno normalmente não a tem.
   const { data: contexto } = useQuery({
-    queryKey: ['folha-danos-contexto', contratoId],
-    enabled: !!contratoId,
+    queryKey: ['folha-danos-contexto', token],
+    enabled: !!token,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('contratos_renting')
-        .select('viatura_id, emissor_id, cliente_id, km_saida, combustivel_saida')
-        .eq('id', contratoId!)
-        .maybeSingle();
       const empty = {
         viaturaId: null as string | null,
         emissorId: null as string | null,
@@ -140,112 +135,32 @@ const RealizarEntregaPage = () => {
         kmSaida: null as number | null,
         combustivelSaida: null as string | null,
       };
-      if (!data) return empty;
-
-      // Empresa emissora → {{empresa_*}}.
-      let empresaData: Record<string, string> | null = null;
-      if (data.emissor_id) {
-        const { data: emp } = await supabase
-          .from('clientes')
-          .select(
-            'nome, nome_comercial, nif, sede, representante, cargo_representante, licenca_tvde, licenca_validade'
-          )
-          .eq('id', data.emissor_id)
-          .maybeSingle();
-        if (emp) {
-          empresaData = {
-            nomeCompleto: emp.nome_comercial || emp.nome || '',
-            nif: emp.nif ?? '',
-            sede: emp.sede ?? '',
-            licencaTVDE: emp.licenca_tvde ?? '',
-            licencaValidade: emp.licenca_validade ?? '',
-            representante: emp.representante ?? '',
-            cargoRepresentante: emp.cargo_representante ?? '',
-          };
-        }
-      }
-
-      // Condutor principal (contrato_condutores) → {{motorista_nome}}. O
-      // condutor é um cliente-tipo-condutor (cliente_id) OU um motorista
-      // parceiro TVDE (motorista_id) — XOR na tabela. Resolver do lado certo.
-      // Nunca o locatário/empresa. Sem condutor, fica vazio para assinar à mão.
-      const { data: cond } = await supabase
-        .from('contrato_condutores')
-        .select('cliente_id, motorista_id, is_principal')
-        .eq('contrato_id', contratoId!)
-        .order('is_principal', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      let clienteCondutor: { nome: string; email: string | null } | null = null;
-      let motoristaCondutor: { nome: string; email: string | null } | null = null;
-      if (cond?.cliente_id) {
-        const { data: cli } = await supabase
-          .from('clientes')
-          .select('nome, nome_comercial, email')
-          .eq('id', cond.cliente_id)
-          .maybeSingle();
-        if (cli) clienteCondutor = { nome: cli.nome || cli.nome_comercial || '', email: cli.email };
-      } else if (cond?.motorista_id) {
-        const { data: mot } = await supabase
-          .from('motoristas_ativos')
-          .select('nome, email')
-          .eq('id', cond.motorista_id)
-          .maybeSingle();
-        if (mot?.nome) motoristaCondutor = { nome: mot.nome, email: mot.email };
-      }
-
-      // Sem condutor no contrato → o motorista atribuído à viatura (TVDE).
-      // Só a associação ATIVA — senão qualquer motorista histórico daquela
-      // viatura (status='encerrado') podia ser apanhado por engano.
-      let motoristaViaturaAtivo: { nome: string; email: string | null } | null = null;
-      if (!clienteCondutor && !motoristaCondutor && data.viatura_id) {
-        const { data: mv } = await supabase
-          .from('motorista_viaturas')
-          .select('motorista_id')
-          .eq('viatura_id', data.viatura_id)
-          .eq('status', 'ativo')
-          .order('data_inicio', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (mv?.motorista_id) {
-          const { data: mot } = await supabase
-            .from('motoristas_ativos')
-            .select('nome, email')
-            .eq('id', mv.motorista_id)
-            .maybeSingle();
-          if (mot?.nome) motoristaViaturaAtivo = { nome: mot.nome, email: mot.email };
-        }
-      }
-
-      const { nome: condutorNome, email: condutorEmail } = resolverCondutor({
-        condutorContrato:
-          clienteCondutor || motoristaCondutor
-            ? { cliente: clienteCondutor, motorista: motoristaCondutor }
-            : null,
-        motoristaViaturaAtivo,
+      if (!token) return empty;
+      const { data, error } = await supabase.rpc('contexto_folha_por_token', {
+        p_token: token,
       });
-
-      // Cliente/locatário → {{cliente_nome}}.
-      let clienteNome = '';
-      if (data.cliente_id) {
-        const { data: cli } = await supabase
-          .from('clientes')
-          .select('nome, nome_comercial')
-          .eq('id', data.cliente_id)
-          .maybeSingle();
-        if (cli) clienteNome = cli.nome_comercial || cli.nome || '';
-      }
-
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return empty;
       return {
-        viaturaId: (data.viatura_id as string | undefined) ?? null,
-        emissorId: (data.emissor_id as string | undefined) ?? null,
-        empresaData,
-        condutorNome,
-        condutorEmail,
-        clienteNome,
-        kmSaida: (data.km_saida as number | null) ?? null,
-        combustivelSaida: (data.combustivel_saida as string | null) ?? null,
+        viaturaId: row.viatura_id ?? null,
+        emissorId: row.emissor_id ?? null,
+        empresaData: row.emissor_id
+          ? {
+              nomeCompleto: row.empresa_nome ?? '',
+              nif: row.empresa_nif ?? '',
+              sede: row.empresa_sede ?? '',
+              licencaTVDE: row.empresa_licenca_tvde ?? '',
+              licencaValidade: row.empresa_licenca_validade ?? '',
+              representante: row.empresa_representante ?? '',
+              cargoRepresentante: row.empresa_cargo_representante ?? '',
+            }
+          : null,
+        condutorNome: row.condutor_nome ?? '',
+        condutorEmail: row.condutor_email ?? '',
+        clienteNome: row.cliente_nome ?? '',
+        kmSaida: (row.km_saida as number | null) ?? null,
+        combustivelSaida: (row.combustivel_saida as string | null) ?? null,
       };
     },
   });
@@ -500,34 +415,18 @@ const RealizarEntregaPage = () => {
     const uploadedPaths: string[] = [];
     const isEntrega = info.tipo === 'entrega' || info.tipo === 'troca';
     try {
-      // Gravar km/combustível no contrato — sem isto a Recolha nunca teria
-      // como saber o km/combustível de Saída registados na Entrega (ver
-      // migration 20260702102439).
-      const kmNum = Number(km);
-      const { error: kmErr } = await supabase
-        .from('contratos_renting')
-        .update(
-          isEntrega
-            ? { km_saida: kmNum, combustivel_saida: combustivel }
-            : { km_entrada: kmNum, combustivel_entrada: combustivel }
-        )
-        .eq('id', info.contrato_id);
-      if (kmErr) throw kmErr;
+      // km/combustível NÃO são gravados aqui: a query direta ao contrato exigia
+      // permissão de renting (que o operador de terreno não tem). O RPC
+      // realizar_token_realizacao grava-os no contrato de forma atómica,
+      // autorizado pelo token (ver p_km/p_combustivel abaixo).
 
       if (files.length > 0) {
         const { data: auth } = await supabase.auth.getUser();
         const userId = auth.user?.id ?? null;
 
-        // Garantir a viatura (o contexto pode não ter resolvido ainda).
-        let vId = contexto?.viaturaId ?? null;
-        if (!vId) {
-          const { data: cr } = await supabase
-            .from('contratos_renting')
-            .select('viatura_id')
-            .eq('id', info.contrato_id)
-            .maybeSingle();
-          vId = (cr?.viatura_id as string | undefined) ?? null;
-        }
+        // Viatura resolvida pelo contexto (RPC do token, SECURITY DEFINER) —
+        // sem ela não há onde pendurar os danos.
+        const vId = contexto?.viaturaId ?? null;
         if (!vId) throw new Error('Viatura do contrato não encontrada.');
         // Fotos que o gestor descreveu individualmente (localização, descrição
         // ou valor) viram cada uma o seu registo de dano. As fotos genéricas —
@@ -606,6 +505,8 @@ const RealizarEntregaPage = () => {
           eventoId: info.evento_id,
           contratoId: info.contrato_id,
           tipo: info.tipo,
+          km: Number(km),
+          combustivel,
         },
         {
           onSuccess: () => {
