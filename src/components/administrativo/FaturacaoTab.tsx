@@ -1024,8 +1024,8 @@ export function FaturacaoTab() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {anularRow?.docTipo === 'recibo'
-                ? 'Anula o recibo e lança um anulamento na conta-corrente. Um recibo anula-se internamente — não é emitido documento fiscal. O motorista é avisado por email com o motivo indicado.'
-                : 'Anula a nota de crédito e lança um anulamento na conta-corrente. A reversão fiscal de uma NC seria uma Nota de Débito, que não é emitida aqui.'}
+                ? 'Anula o recibo e lança um anulamento na conta-corrente. Um recibo anula-se internamente — não é emitido documento fiscal.'
+                : 'Anula a nota de crédito e lança um anulamento na conta-corrente. A reversão fiscal de uma NC seria uma Nota de Débito, que não é emitida aqui. Esta anulação não gera aviso ao motorista.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {anularRow?.docTipo === 'recibo' && (
@@ -1042,6 +1042,9 @@ export function FaturacaoTab() {
                 disabled={anularBusy}
                 autoFocus
               />
+              <p className="text-xs text-muted-foreground">
+                Este texto é enviado ao motorista por email — escreve algo que ele perceba.
+              </p>
             </div>
           )}
           <AlertDialogFooter>
@@ -1053,6 +1056,11 @@ export function FaturacaoTab() {
               }}
               disabled={
                 anularBusy || (anularRow?.docTipo === 'recibo' && !anularMotivo.trim())
+              }
+              title={
+                anularRow?.docTipo === 'recibo' && !anularMotivo.trim()
+                  ? 'Indica o motivo para continuar'
+                  : undefined
               }
               className="bg-rose-600 hover:bg-rose-700"
             >

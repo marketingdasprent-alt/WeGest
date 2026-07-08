@@ -523,11 +523,13 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
                     <span className="text-sm">
                       <span className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
                         <FileText className="h-4 w-4" />
-                        DUA devolvido
+                        {/* Declaração na 1ª pessoa — clique consciente, não só para desbloquear */}
+                        {tipoEvento === 'recolhido'
+                          ? 'Confirmo que recolhi o DUA físico com a viatura'
+                          : 'Confirmo que recebi o DUA físico do motorista'}
                       </span>
                       <span className="text-muted-foreground">
-                        Esta viatura tem DUA associado. Confirma que o documento foi devolvido com a
-                        viatura.
+                        Esta viatura tem DUA associado — obrigatório para poder fechar o contrato.
                       </span>
                     </span>
                   </label>
@@ -838,7 +840,15 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
         </form>
 
         {/* Footer */}
-        <DialogFooter className="px-6 py-4 border-t bg-muted/30 shrink-0">
+        <DialogFooter className="px-6 py-4 border-t bg-muted/30 shrink-0 flex-col sm:flex-row sm:items-center">
+          {/* Dica visível quando o fecho está bloqueado pela confirmação do DUA —
+              um botão desativado sem explicação parece "partido". */}
+          {exigeDua && (
+            <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 mr-auto">
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              Confirma primeiro que o DUA foi devolvido (acima) para poder fechar.
+            </p>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -851,6 +861,7 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
             type="button"
             variant="destructive"
             disabled={isPending || exigeDua}
+            title={exigeDua ? 'Confirma primeiro que o DUA foi devolvido' : undefined}
             onClick={form.handleSubmit(onSubmit)}
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
