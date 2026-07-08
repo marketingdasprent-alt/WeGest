@@ -1,10 +1,21 @@
 import type React from 'react';
+import { useMemo, useState } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
+import { ClipboardList } from 'lucide-react';
 
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Estacao } from '@/hooks/useEstacoes';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import type { RentingGrupoMin } from '@/hooks/useRentingGruposTarifas';
+import { useRentingTarifasMin } from '@/hooks/useRentingGruposTarifas';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ALDFields } from '@/components/renting/shared/ALDFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
 import type { ContratoFormValues } from './contratoForm.schema';
@@ -13,6 +24,7 @@ import { SectionInfoAdicional } from './SectionInfoAdicional';
 import { SectionGeral } from './SectionGeral';
 import { SectionRegime } from './SectionRegime';
 import { SectionViatura } from './SectionViatura';
+import { SectionTitle } from './SectionTitle';
 
 interface ContratoFormSecoesProps {
   form: UseFormReturn<ContratoFormValues>;
@@ -43,22 +55,70 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   viaturaLocked,
   reservaCodigo,
   onViaturaChange,
-}) => (
-  <div className="space-y-6">
-    <SectionRegime form={form} />
-    <SectionEntregaRecolha form={form} estacoes={estacoes} />
-    <ALDFields idPrefix="contrato" />
-    <SectionViatura
-      form={form}
-      viaturas={viaturas}
-      grupos={grupos}
-      grupoIdAtual={grupoIdAtual ?? null}
-      viaturaLocked={viaturaLocked}
-      reservaCodigo={reservaCodigo}
-      onViaturaChange={onViaturaChange}
-    />
-    <SectionGeral form={form} clientes={clientes} />
-    <FranquiaKmsFields />
-    <SectionInfoAdicional form={form} />
-  </div>
-);
+}) => {
+  const viaturaId = form.watch('viatura_id');
+  const { data: tarifas = [] } = useRentingTarifasMin();
+  
+  const viaturaSelected = useMemo(
+    () => viaturas.find((v) => v.id === viaturaId) ?? null,
+    [viaturaId, viaturas]
+  );
+
+  return (
+    <div className="space-y-6">
+      <SectionRegime form={form} />
+      <SectionEntregaRecolha form={form} estacoes={estacoes} />
+      <ALDFields idPrefix="contrato" />
+      <SectionViatura
+        form={form}
+        viaturas={viaturas}
+        grupos={grupos}
+        grupoIdAtual={grupoIdAtual ?? null}
+        viaturaLocked={viaturaLocked}
+        reservaCodigo={reservaCodigo}
+        onViaturaChange={onViaturaChange}
+      />
+
+      {/* Seleção de Tarifa */}
+      {viaturaSelected && viaturaSelected.grupo_id && (
+        <div className="space-y-4">
+          <SectionTitle>Tarifa</SectionTitle>
+          <FormField
+            control={form.control}
+            name="tarifa_id"
+            render={({ field }) => {
+              const tarifasDoGrupo = tarifas.filter((t) => t.grupo_id === viaturaSelected.grupo_id);
+              
+              return (
+                <FormItem className="max-w-xs">
+                  <FormLabel>Tarifa para {grupos.find(g => g.id === viaturaSelected.grupo_id)?.nome || 'o grupo'}</FormLabel>
+                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma tarifa..." />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {tarifasDoGrupo.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.nome}
+                          {t.tipo === 'tvde' && ' (TVDE)'}
+                          {t.tipo !== 'tvde' && ` (${t.preco_dia ?? 0}€/dia)`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
+          />
+        </div>
+      )}
+
+      <SectionGeral form={form} clientes={clientes} />
+      <FranquiaKmsFields />
+      <SectionInfoAdicional form={form} />
+    </div>
+  );
+};
