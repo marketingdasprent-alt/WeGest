@@ -83,13 +83,14 @@ interface MotoristaResumo {
   total_faturado: number;
   faturado_bolt: number;
   faturado_uber: number;
+  /** Gorjeta Bolt/Uber já somada (fora da divisão de recibo verde) no líquido. */
+  gorjeta_bolt: number;
+  gorjeta_uber: number;
   total_viagens: number;
   viagens_bolt: number;
   viagens_uber: number;
   recibo_verde: boolean;
   liquido: number;
-  /** Soma de gorjetas (Bolt + Uber) no período. Entra no líquido SEM IVA. */
-  gorjeta: number;
   combustivel: number;
   portagens: number;
   reparacoes: number;
@@ -156,7 +157,6 @@ export function ContasResumoTab() {
   type SortField =
     | 'driver_name'
     | 'total_faturado'
-    | 'gorjeta'
     | 'liquido'
     | 'aluguer'
     | 'combustivel'
@@ -1193,26 +1193,26 @@ export function ContasResumoTab() {
         const totalViagens = m.viagens_bolt + m.viagens_uber;
         const passaReciboVerde = m.motorista_id ? (reciboVerdeMap[m.motorista_id] ?? true) : true;
 
+        // Gorjeta (Bolt + Uber) nunca passa pela divisão de recibo verde
+        // (÷1.06) — soma-se por PLATAFORMA, depois de cada uma já ter sido
+        // ajustada: bolt_final = bolt/1.06 + gorjeta_bolt (idem uber), só
+        // depois soma-se as duas. Sem coluna própria na tabela (a gorjeta
+        // já fica embutida no líquido).
+        const gorjetaBolt = m.motorista_id ? gorjetaBoltById[m.motorista_id] || 0 : 0;
+        const gorjetaUber = m.gorjeta || 0;
         const receita = passaReciboVerde
-          ? totalFaturado
-          : (m.faturado_bolt + m.faturado_uber) / 1.06 + extrasValor;
+          ? totalFaturado + gorjetaBolt + gorjetaUber
+          : m.faturado_bolt / 1.06 +
+            gorjetaBolt +
+            (m.faturado_uber / 1.06 + gorjetaUber) +
+            extrasValor;
         const combustivelValor = m.motorista_id ? combustivelByMotorista[m.motorista_id] || 0 : 0;
         const portagensValor = m.motorista_id ? portagensByMotorista[m.motorista_id] || 0 : 0;
         const aluguerValor = m.motorista_id ? aluguerByMotorista[m.motorista_id] || 0 : 0;
         const reparacoesValor = m.motorista_id ? reparacoesByMotorista[m.motorista_id] || 0 : 0;
         const adhocValor = m.motorista_id ? adhocByMotorista[m.motorista_id] || 0 : 0;
-        // Gorjeta (Bolt + Uber): entra no líquido SEM IVA (não passa pela receita ÷1.06).
-        // Uber vem agregado em m.gorjeta; Bolt vem do resumo semanal por motorista.
-        const gorjetaBolt = m.motorista_id ? gorjetaBoltById[m.motorista_id] || 0 : 0;
-        const gorjetaValor = (m.gorjeta || 0) + gorjetaBolt;
         const liquido =
-          receita -
-          combustivelValor -
-          portagensValor -
-          aluguerValor -
-          reparacoesValor -
-          adhocValor +
-          gorjetaValor;
+          receita - combustivelValor - portagensValor - aluguerValor - reparacoesValor - adhocValor;
 
         return {
           driver_name: displayNameFinal,
@@ -1221,12 +1221,13 @@ export function ContasResumoTab() {
           total_faturado: totalFaturado,
           faturado_bolt: m.faturado_bolt,
           faturado_uber: m.faturado_uber,
+          gorjeta_bolt: gorjetaBolt,
+          gorjeta_uber: gorjetaUber,
           total_viagens: totalViagens,
           viagens_bolt: m.viagens_bolt,
           viagens_uber: m.viagens_uber,
           recibo_verde: passaReciboVerde,
           liquido,
-          gorjeta: gorjetaValor,
           combustivel: combustivelValor,
           portagens: portagensValor,
           reparacoes: reparacoesValor,
@@ -1840,9 +1841,6 @@ export function ContasResumoTab() {
                   <SortTh field="total_faturado" right>
                     Faturado
                   </SortTh>
-                  <SortTh field="gorjeta" right>
-                    Gorjeta
-                  </SortTh>
                   <SortTh field="liquido" right>
                     Líquido
                   </SortTh>
@@ -1866,7 +1864,7 @@ export function ContasResumoTab() {
               <TableBody>
                 {filteredResumos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       Nenhum dado encontrado para o período selecionado
                     </TableCell>
                   </TableRow>
@@ -1905,15 +1903,6 @@ export function ContasResumoTab() {
                               B: {formatCurrency(resumo.faturado_bolt)} | U:{' '}
                               {formatCurrency(resumo.faturado_uber)}
                             </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right" onClick={() => handleRowClick(resumo)}>
-                          {resumo.gorjeta > 0 ? (
-                            <span className="font-medium text-emerald-600">
-                              {formatCurrency(resumo.gorjeta)}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">€0,00</span>
                           )}
                         </TableCell>
                         <TableCell

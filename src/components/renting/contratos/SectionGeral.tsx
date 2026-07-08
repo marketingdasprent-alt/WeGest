@@ -21,9 +21,16 @@ import {
 
 interface SectionGeralProps {
   form: UseFormReturn<ContratoFormValues>;
+  tarifaReadOnly?: boolean;
+  /** Slot para acção extra junto ao campo — ex.: botão "Pedir alteração de tarifa". */
+  tarifaAction?: React.ReactNode;
 }
 
-export const SectionGeral: React.FC<SectionGeralProps> = ({ form }) => {
+export const SectionGeral: React.FC<SectionGeralProps> = ({
+  form,
+  tarifaReadOnly = false,
+  tarifaAction,
+}) => {
   return (
     <div>
       <SectionTitle>Tarifa & Faturação</SectionTitle>
@@ -89,13 +96,15 @@ export const SectionGeral: React.FC<SectionGeralProps> = ({ form }) => {
                   type="number"
                   step="0.01"
                   min="0"
-                  className="bg-background"
+                  readOnly={tarifaReadOnly}
+                  className={tarifaReadOnly ? 'bg-muted' : 'bg-background'}
                   value={field.value ?? ''}
                   onChange={(e) =>
                     field.onChange(e.target.value === '' ? null : Number(e.target.value))
                   }
                 />
               </FormControl>
+              {tarifaAction && <div className="pt-1">{tarifaAction}</div>}
               <FormMessage />
             </FormItem>
           )}

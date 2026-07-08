@@ -39,6 +39,9 @@ interface MotoristaResumoProps {
   total_faturado: number;
   faturado_bolt: number;
   faturado_uber: number;
+  /** Gorjeta Bolt/Uber — soma-se depois da divisão de recibo verde de cada plataforma. */
+  gorjeta_bolt?: number;
+  gorjeta_uber?: number;
   total_viagens: number;
   viagens_bolt: number;
   viagens_uber: number;
@@ -320,6 +323,9 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
 
   const isImportado = motorista.tem_recibo_importado === true;
 
+  const gorjetaBolt = isImportado ? 0 : motorista.gorjeta_bolt || 0;
+  const gorjetaUber = isImportado ? 0 : motorista.gorjeta_uber || 0;
+  const gorjeta = gorjetaBolt + gorjetaUber;
   const receitas = {
     bolt: motorista.faturado_bolt,
     uber: motorista.faturado_uber,
@@ -350,14 +356,17 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
   // totalSlot é apenas informacional (detalhe do contrato) — o valor já está em despesas.aluguer
   const totalDespesas = Object.values(despesas).reduce((a, b) => a + b, 0);
   const valoresSemanaAnterior = 0;
+  // Recibo verde: bolt/uber inteiros. Sem recibo verde: cada plataforma
+  // divide por 1.06 e SÓ DEPOIS soma a gorjeta dela — bolt_final =
+  // bolt/1.06 + gorjeta_bolt (idem uber). A gorjeta nunca é dividida.
   const receitaAjustada = isImportado
     ? totalReceitas
     : motorista.recibo_verde
-      ? totalReceitas
-      : totalReceitas / 1.06;
-  // Gorjeta (Bolt + Uber): soma ao líquido SEM passar pelo ajuste de IVA —
-  // mesma regra da lista do Resumo (antes o modal esquecia-a e divergia).
-  const gorjeta = isImportado ? 0 : motorista.gorjeta || 0;
+      ? totalReceitas + gorjeta
+      : receitas.bolt / 1.06 +
+        gorjetaBolt +
+        (receitas.uber / 1.06 + gorjetaUber) +
+        receitas.outras_receitas;
   const totalAReceber = isImportado
     ? motorista.liquido
     : receitaAjustada - totalDespesas + gorjeta + valoresSemanaAnterior;
@@ -456,7 +465,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
         <div style="background:#22c55e;border-radius:10px;padding:14px;text-align:center;color:#fff">
           <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;opacity:.85;margin-bottom:4px">Total Receitas</div>
-          <div style="font-size:20px;font-weight:700">${fmtEur(totalReceitas + gorjeta)}</div>
+          <div style="font-size:20px;font-weight:700">${fmtEur(isImportado ? totalReceitas : receitaAjustada)}</div>
         </div>
         <div style="background:#ef4444;border-radius:10px;padding:14px;text-align:center;color:#fff">
           <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;opacity:.85;margin-bottom:4px">Total Despesas</div>
@@ -486,7 +495,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Outras Receitas</span><span style="color:#15803d">${fmtEur(receitas.outras_receitas)}</span></div>
             ${gorjeta > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Gorjetas (sem IVA)</span><span style="color:#15803d">${fmtEur(gorjeta)}</span></div>` : ''}
             <div style="border-top:1px solid #86efac;margin:6px 0"></div>
-            <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:3px 0"><span>TOTAL RECEITAS</span><span style="color:#15803d">${fmtEur(totalReceitas + gorjeta)}</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:3px 0"><span>TOTAL RECEITAS</span><span style="color:#15803d">${fmtEur(isImportado ? totalReceitas : receitaAjustada)}</span></div>
           </div>
         </div>
         <!-- Despesas -->
@@ -557,7 +566,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
         : '';
     const body =
       `Olá ${motorista.driver_name},\n\nSegue o resumo financeiro do período ${format(dateRange.from, 'dd/MM/yyyy')} a ${format(dateRange.to, 'dd/MM/yyyy')}:\n\n` +
-      `Receitas: ${fmt(totalReceitas + gorjeta)}\nDespesas: ${fmt(totalDespesas)}\n${slotEmailDetalhe}Líquido a Receber: ${fmt(liquido)}\n\nCumprimentos,\nEquipa WeGest`;
+      `Receitas: ${fmt(isImportado ? totalReceitas : receitaAjustada)}\nDespesas: ${fmt(totalDespesas)}\n${slotEmailDetalhe}Líquido a Receber: ${fmt(liquido)}\n\nCumprimentos,\nEquipa WeGest`;
     const cc = emailCC.trim() ? `&cc=${encodeURIComponent(emailCC.trim())}` : '';
     window.open(
       `mailto:${encodeURIComponent(emailTo)}?subject=${encodeURIComponent(subject)}${cc}&body=${encodeURIComponent(body)}`
@@ -580,7 +589,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     const message =
       `*RESUMO FINANCEIRO - WeGest*\n\nOlá *${motorista.driver_name}*,\n` +
       `Período: ${format(dateRange.from, 'dd/MM/yyyy')} a ${format(dateRange.to, 'dd/MM/yyyy')}\n\n` +
-      `💰 *Receitas:* ${fmt(totalReceitas + gorjeta)}\n💸 *Despesas:* ${fmt(totalDespesas)}${slotDetalhe}\n🏁 *Líquido Final:* ${fmt(liquido)}\n\nSe tiver alguma dúvida, por favor contacte-nos.`;
+      `💰 *Receitas:* ${fmt(isImportado ? totalReceitas : receitaAjustada)}\n💸 *Despesas:* ${fmt(totalDespesas)}${slotDetalhe}\n🏁 *Líquido Final:* ${fmt(liquido)}\n\nSe tiver alguma dúvida, por favor contacte-nos.`;
     const phone = motoristaTelefone?.replace(/\s/g, '') || '';
     window.open(
       `https://wa.me/${phone.startsWith('+') ? phone : '+351' + phone}?text=${encodeURIComponent(message)}`,
@@ -605,7 +614,8 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
           bolt: receitas.bolt,
           uber: receitas.uber,
           outras_receitas: receitas.outras_receitas,
-          total: totalReceitas,
+          gorjeta,
+          total: isImportado ? totalReceitas : receitaAjustada,
         },
         despesas: {
           aluguer: despesas.aluguer,
@@ -787,7 +797,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                   Total Receitas
                 </p>
                 <p className="text-2xl print:text-lg font-bold mt-1">
-                  {fmt(totalReceitas + gorjeta)}
+                  {fmt(isImportado ? totalReceitas : receitaAjustada)}
                 </p>
               </div>
               <div
@@ -882,7 +892,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                   <Separator className="bg-green-200 dark:bg-green-800" />
                   <Row
                     label="TOTAL RECEITAS"
-                    value={fmt(totalReceitas + gorjeta)}
+                    value={fmt(isImportado ? totalReceitas : receitaAjustada)}
                     bold
                     colored="text-green-700 dark:text-green-300"
                   />
