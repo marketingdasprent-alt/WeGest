@@ -107,26 +107,53 @@ interface RealizarFromTokenArgs {
   eventoId: string;
   contratoId: string;
   tipo: 'entrega' | 'recolha' | 'troca';
-  /** KM lido no momento — gravado no contrato pelo RPC (saída/entrada). */
-  km?: number | null;
-  /** Nível de combustível lido no momento — gravado no contrato pelo RPC. */
-  combustivel?: string | null;
+  /** Entrega/recolha simples — grava km_saida/km_entrada no contrato dentro da RPC (SECURITY DEFINER, não exige permissão renting_contratos a quem confirma o token). */
+  km?: number;
+  combustivel?: string;
+  /** Só para tipo='troca' — dados físicos das duas viaturas envolvidas. */
+  troca?: {
+    viaturaAntigaId: string | null;
+    kmAntiga: number | null;
+    combustivelAntiga: string | null;
+    viaturaNovaId: string | null;
+    kmNova: number | null;
+    combustivelNova: string | null;
+  };
 }
 
 /**
  * Confirma a realização no telemóvel: muda o estado_operacional do
  * contrato (trigger marca o evento como realizado) + marca o token
- * como usado.
+ * como usado. Para troca, usa a RPC dedicada que grava os dados físicos
+ * das duas viaturas antes de marcar o evento.
  */
 export function useRealizarFromToken() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ token, km, combustivel }: RealizarFromTokenArgs): Promise<void> => {
-      // RPC atómico (SECURITY DEFINER): grava km/combustível no contrato, muda
-      // o estado (dispara a cascata que marca o evento realizado) e marca o
-      // token usado, na mesma transação — sem exigir permissão de renting.
+    mutationFn: async ({
+      token,
+      tipo,
+      km,
+      combustivel,
+      troca,
+    }: RealizarFromTokenArgs): Promise<void> => {
+      if (tipo === 'troca') {
+        const { error } = await supabase.rpc('realizar_token_troca', {
+          p_token: token,
+          p_viatura_antiga_id: troca?.viaturaAntigaId ?? null,
+          p_km_antiga: troca?.kmAntiga ?? null,
+          p_combustivel_antiga: troca?.combustivelAntiga ?? null,
+          p_viatura_nova_id: troca?.viaturaNovaId ?? null,
+          p_km_nova: troca?.kmNova ?? null,
+          p_combustivel_nova: troca?.combustivelNova ?? null,
+        });
+        if (error) throw error;
+        return;
+      }
+      // RPC atómico: muda o estado do contrato (dispara a cascata que marca
+      // o evento realizado), grava km/combustível e marca o token como usado.
       const { error } = await supabase.rpc('realizar_token_realizacao', {
         p_token: token,
         p_km: km ?? null,

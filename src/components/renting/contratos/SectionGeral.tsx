@@ -39,12 +39,20 @@ import {
 interface SectionGeralProps {
   form: UseFormReturn<ContratoFormValues>;
   clientes: ClienteComDocumentos[];
+  tarifaReadOnly?: boolean;
+  /** Slot para acção extra junto ao campo — ex.: botão "Pedir alteração de tarifa". */
+  tarifaAction?: React.ReactNode;
 }
 
 const normalizeForSearch = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[-\s]/g, '');
 
-export const SectionGeral: React.FC<SectionGeralProps> = ({ form, clientes }) => {
+export const SectionGeral: React.FC<SectionGeralProps> = ({
+  form,
+  clientes,
+  tarifaReadOnly = false,
+  tarifaAction,
+}) => {
   const [clientePopoverOpen, setClientePopoverOpen] = useState(false);
   const { podeVerTodosRenting } = usePermissions();
   const clienteLabel = 'Cliente';
@@ -224,13 +232,15 @@ export const SectionGeral: React.FC<SectionGeralProps> = ({ form, clientes }) =>
                   type="number"
                   step="0.01"
                   min="0"
-                  className="bg-background"
+                  readOnly={tarifaReadOnly}
+                  className={tarifaReadOnly ? 'bg-muted' : 'bg-background'}
                   value={field.value ?? ''}
                   onChange={(e) =>
                     field.onChange(e.target.value === '' ? null : Number(e.target.value))
                   }
                 />
               </FormControl>
+              {tarifaAction && <div className="pt-1">{tarifaAction}</div>}
               <FormMessage />
             </FormItem>
           )}

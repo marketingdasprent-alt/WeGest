@@ -21,7 +21,14 @@ interface FranquiaKmsFieldsShape extends FieldValues {
   km_adicional_valor: number | null;
 }
 
-export const FranquiaKmsFields: React.FC<{ kmsReadOnly?: boolean }> = ({ kmsReadOnly = false }) => {
+export const FranquiaKmsFields: React.FC<{
+  kmsReadOnly?: boolean;
+  franquiaReadOnly?: boolean;
+  /** Slot para acção extra junto ao título — ex.: botão "Pedir alteração de kms". */
+  kmsAction?: React.ReactNode;
+  /** Slot para acção extra junto ao título — ex.: botão "Pedir alteração de franquia". */
+  franquiaAction?: React.ReactNode;
+}> = ({ kmsReadOnly = false, franquiaReadOnly = false, kmsAction, franquiaAction }) => {
   const form = useFormContext<FranquiaKmsFieldsShape>();
 
   return (
@@ -48,7 +55,8 @@ export const FranquiaKmsFields: React.FC<{ kmsReadOnly?: boolean }> = ({ kmsRead
                     min={0}
                     step="0.01"
                     placeholder="0,00"
-                    className="bg-background pr-8"
+                    readOnly={franquiaReadOnly}
+                    className={franquiaReadOnly ? 'bg-muted pr-8' : 'bg-background pr-8'}
                     value={(field.value as number | null) ?? ''}
                     onChange={(e) =>
                       field.onChange(e.target.value === '' ? null : Number(e.target.value))
@@ -59,6 +67,7 @@ export const FranquiaKmsFields: React.FC<{ kmsReadOnly?: boolean }> = ({ kmsRead
                   €
                 </span>
               </div>
+              {franquiaAction && <div className="pt-1">{franquiaAction}</div>}
               <FormMessage />
             </FormItem>
           )}
@@ -123,6 +132,7 @@ export const FranquiaKmsFields: React.FC<{ kmsReadOnly?: boolean }> = ({ kmsRead
                   km
                 </span>
               </div>
+              {kmsAction && <div className="pt-1">{kmsAction}</div>}
               <FormMessage />
             </FormItem>
           )}

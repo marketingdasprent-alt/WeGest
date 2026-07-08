@@ -499,6 +499,12 @@ const ContratoForm = () => {
     const grupo = via.grupo_id ? grupos.find((g) => g.id === via.grupo_id) : null;
     form.setValue('grupo', grupo?.nome ?? '', { shouldDirty: true });
 
+    // Sugestão de empresa emissora a partir da viatura — só quando o campo
+    // ainda estiver vazio, nunca sobrescreve uma escolha manual do gestor.
+    if (via.emissor_id && !form.getValues('emissor_id')) {
+      form.setValue('emissor_id', via.emissor_id, { shouldDirty: true });
+    }
+
     const tarifa = via.grupo_id ? (tarifas.find((t) => t.grupo_id === via.grupo_id) ?? null) : null;
     if (!tarifa) return;
 
@@ -647,6 +653,17 @@ const ContratoForm = () => {
     return result;
   };
 
+  // Sem isto, uma falha de validação Zod (ex.: campo obrigatório ainda vazio
+  // porque os dados da reserva não acabaram de carregar) não dava nenhum
+  // aviso — parecia que o botão "Guardar" não fazia nada na 1ª tentativa.
+  const onInvalid = () => {
+    toast({
+      title: 'Verifica os campos obrigatórios',
+      description: 'Há campos por preencher ou inválidos — pode estar noutra aba do formulário.',
+      variant: 'destructive',
+    });
+  };
+
   const onSubmit = (values: ContratoFormValues) => {
     // Em criação, a viatura do contrato tem de coincidir com a da reserva
     // (preserva o snapshot inicial e o EXCLUDE anti-overbooking).
@@ -679,6 +696,7 @@ const ContratoForm = () => {
       reserva_id: values.reserva_id,
       cliente_id: values.cliente_id,
       emissor_id: values.emissor_id,
+      gestor_id: values.gestor_id ?? null,
       viatura_id: values.viatura_id,
       matricula: matriculaFinal,
       grupo: values.grupo || null,
@@ -1005,8 +1023,19 @@ const ContratoForm = () => {
         )}
         <Button
           type="button"
-          onClick={form.handleSubmit(onSubmit)}
-          disabled={isPending || contrato?.substituido_em != null || condutoresRascunho.length > 0}
+          onClick={form.handleSubmit(onSubmit, onInvalid)}
+          disabled={
+            isPending ||
+            contrato?.substituido_em != null ||
+            condutoresRascunho.length > 0 ||
+            // Criação a partir de reserva: espera a reserva (e os condutores
+            // dela) terminarem de carregar antes de liberar o submit — sem
+            // isto, um clique prematuro falhava a validação Zod em silêncio
+            // (campos ainda vazios) e parecia que "não fazia nada".
+            (!isEdit &&
+              !!reservaIdFromQuery &&
+              (!reservaFromQuery || condutoresDaReserva === undefined))
+          }
           className="gap-2"
         >
           {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -1120,7 +1149,7 @@ const ContratoForm = () => {
         <Card className="bg-card border-border">
           <CardContent className="p-4 sm:p-6">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
                 <ContratoTabsPlaceholder
                   regime={regime}
                   geralContent={
@@ -1138,6 +1167,7 @@ const ContratoForm = () => {
                       viaturaLocked={viaturaLocked}
                       reservaCodigo={reservaAssociada?.codigo ?? null}
                       onViaturaChange={aplicarDadosViatura}
+                      contratoId={contrato?.id ?? null}
                     />
                   }
                   condutoresContent={
