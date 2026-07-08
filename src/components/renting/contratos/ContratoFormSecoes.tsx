@@ -1,7 +1,6 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
-import { ClipboardList } from 'lucide-react';
 
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Estacao } from '@/hooks/useEstacoes';
@@ -88,26 +87,38 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
             name="tarifa_id"
             render={({ field }) => {
               const tarifasDoGrupo = tarifas.filter((t) => t.grupo_id === viaturaSelected.grupo_id);
+              const grupoNome = grupos.find(g => g.id === viaturaSelected.grupo_id)?.nome || 'o grupo';
+              
+              // Auto-select primeira tarifa se houver e nada selecionado
+              if (tarifasDoGrupo.length > 0 && !field.value) {
+                setTimeout(() => field.onChange(tarifasDoGrupo[0].id), 0);
+              }
               
               return (
                 <FormItem className="max-w-xs">
-                  <FormLabel>Tarifa para {grupos.find(g => g.id === viaturaSelected.grupo_id)?.nome || 'o grupo'}</FormLabel>
-                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma tarifa..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {tarifasDoGrupo.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.nome}
-                          {t.tipo === 'tvde' && ' (TVDE)'}
-                          {t.tipo !== 'tvde' && ` (${t.preco_dia ?? 0}€/dia)`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormLabel>Tarifa para {grupoNome}</FormLabel>
+                  {tarifasDoGrupo.length === 0 ? (
+                    <div className="text-sm text-muted-foreground p-2 border rounded">
+                      Nenhuma tarifa disponível para {grupoNome}. Cria uma em Renting → Tarifas.
+                    </div>
+                  ) : (
+                    <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || null)}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione uma tarifa..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {tarifasDoGrupo.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.nome}
+                            {t.tipo === 'tvde' && ' (TVDE)'}
+                            {t.tipo !== 'tvde' && ` (${t.preco_dia ?? 0}€/dia)`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <FormMessage />
                 </FormItem>
               );
