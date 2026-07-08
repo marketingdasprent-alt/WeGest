@@ -71,6 +71,7 @@ export interface Categoria {
 
 export interface ClosureData {
   km_fim: string;
+  km_fim_indisponivel: boolean;
   combustivel_fim: string;
   adblue_fim: string;
   limpeza_fim: string;

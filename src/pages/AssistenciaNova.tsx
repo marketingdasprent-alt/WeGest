@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
@@ -98,6 +99,7 @@ export default function AssistenciaNova() {
     descricao: '',
     prioridade: 'media',
     km_inicio: '',
+    km_inicio_indisponivel: false,
     combustivel_inicio: 'meio',
     adblue_nivel: 'cheio',
     gpl_qtd: '',
@@ -200,10 +202,10 @@ export default function AssistenciaNova() {
       return;
     }
 
-    if (!formData.km_inicio) {
+    if (!formData.km_inicio_indisponivel && !formData.km_inicio) {
       toast({
         title: 'Erro',
-        description: 'Quilometragem é obrigatória.',
+        description: 'Quilometragem é obrigatória (ou marque "KM não disponível").',
         variant: 'destructive',
       });
       return;
@@ -223,7 +225,8 @@ export default function AssistenciaNova() {
           descricao: formData.descricao.trim(),
           prioridade: formData.prioridade,
           status: 'pendente',
-          km_inicio: parseInt(formData.km_inicio) || null,
+          km_inicio: formData.km_inicio_indisponivel ? null : parseInt(formData.km_inicio) || null,
+          km_inicio_indisponivel: formData.km_inicio_indisponivel,
           combustivel_inicio: formData.combustivel_inicio,
           adblue_nivel: formData.adblue_nivel,
           gpl_qtd: formData.gpl_qtd ? parseFloat(formData.gpl_qtd) : null,
@@ -321,7 +324,7 @@ export default function AssistenciaNova() {
         autor_id: user?.id,
         mensagem: `Ticket criado com check-in completo: 
          - Orçamento Estimado: ${formData.valor_orcamento ? formData.valor_orcamento + '€' : 'Não definido'}
-         - KM Inicial: ${formData.km_inicio}
+         - KM Inicial: ${formData.km_inicio_indisponivel ? 'não disponível' : formData.km_inicio}
          - Combustível: ${formData.combustivel_inicio}
          - AdBlue: ${formData.adblue_nivel}
          - Limpeza: ${formData.estado_limpeza}
@@ -589,17 +592,34 @@ export default function AssistenciaNova() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="km_inicio" className="flex items-center gap-2">
-                    <Gauge className="h-4 w-4" /> Quilometragem (Obrigatório)
+                    <Gauge className="h-4 w-4" /> Quilometragem
+                    {!formData.km_inicio_indisponivel && ' (Obrigatório)'}
                   </Label>
                   <Input
                     id="km_inicio"
                     type="number"
                     placeholder="KM à entrada"
-                    value={formData.km_inicio}
+                    value={formData.km_inicio_indisponivel ? '' : formData.km_inicio}
+                    disabled={formData.km_inicio_indisponivel}
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, km_inicio: e.target.value }))
                     }
                   />
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="km_inicio_indisponivel"
+                      checked={formData.km_inicio_indisponivel}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => ({ ...prev, km_inicio_indisponivel: !!checked }))
+                      }
+                    />
+                    <Label
+                      htmlFor="km_inicio_indisponivel"
+                      className="text-xs font-normal text-muted-foreground cursor-pointer"
+                    >
+                      KM não disponível (ex.: viatura não liga)
+                    </Label>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -720,10 +740,10 @@ export default function AssistenciaNova() {
             </Button>
             <Button
               onClick={() => {
-                if (!formData.km_inicio) {
+                if (!formData.km_inicio_indisponivel && !formData.km_inicio) {
                   toast({
                     title: 'Campo Obrigatório',
-                    description: 'Por favor insira a quilometragem.',
+                    description: 'Insira a quilometragem ou marque "KM não disponível".',
                     variant: 'destructive',
                   });
                   return;

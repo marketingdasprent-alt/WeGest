@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   AlertTriangle,
   ArrowLeft,
+  Banknote,
   CalendarCheck,
   Loader2,
   Paperclip,
@@ -36,6 +37,7 @@ import {
 } from '@/hooks/useClientes';
 
 import { ClienteAnexosTab } from '@/components/renting/ClienteAnexosTab';
+import { ClienteContaCorrenteTab } from '@/components/renting/ClienteContaCorrenteTab';
 import { ClienteReservasContratosTab } from '@/components/renting/ClienteReservasContratosTab';
 import { RequiredMark } from '@/components/renting/ValidatedTextField';
 import {
@@ -68,7 +70,9 @@ const RentingClienteForm = () => {
   const updateMutation = useUpdateCliente();
   const deleteMutation = useDeleteCliente();
 
-  const [activeTab, setActiveTab] = useState<'dados' | 'reservas_contratos' | 'anexos'>('dados');
+  const [activeTab, setActiveTab] = useState<
+    'dados' | 'reservas_contratos' | 'conta_corrente' | 'anexos'
+  >('dados');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -264,7 +268,9 @@ const RentingClienteForm = () => {
           <CardContent className="p-4 sm:p-6">
             <Tabs
               value={activeTab}
-              onValueChange={(v) => setActiveTab(v as 'dados' | 'reservas_contratos' | 'anexos')}
+              onValueChange={(v) =>
+                setActiveTab(v as 'dados' | 'reservas_contratos' | 'conta_corrente' | 'anexos')
+              }
               className="w-full"
             >
               <TabsList className="bg-transparent p-0 h-auto gap-4 border-b w-full justify-start rounded-none">
@@ -282,6 +288,19 @@ const RentingClienteForm = () => {
                 >
                   <CalendarCheck className="h-4 w-4" />
                   Reserva/Contrato
+                  {!cliente && (
+                    <span className="text-[10px] text-muted-foreground font-normal">
+                      (após guardar)
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="conta_corrente"
+                  disabled={!cliente}
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary data-[state=active]:border-primary border-b-2 border-transparent rounded-none px-1 pb-2 font-medium gap-2"
+                >
+                  <Banknote className="h-4 w-4" />
+                  Conta Corrente
                   {!cliente && (
                     <span className="text-[10px] text-muted-foreground font-normal">
                       (após guardar)
@@ -325,6 +344,10 @@ const RentingClienteForm = () => {
 
               <TabsContent value="reservas_contratos" className="pt-4">
                 <ClienteReservasContratosTab clienteId={cliente?.id ?? null} />
+              </TabsContent>
+
+              <TabsContent value="conta_corrente" className="pt-4">
+                <ClienteContaCorrenteTab clienteId={cliente?.id ?? null} />
               </TabsContent>
 
               <TabsContent value="anexos" className="pt-4">

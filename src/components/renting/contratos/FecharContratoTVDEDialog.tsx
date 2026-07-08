@@ -22,6 +22,7 @@ import {
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -94,6 +95,22 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   const { user } = useAuth();
   const responsavelNome =
     (user?.user_metadata?.nome as string | undefined) ?? user?.email ?? 'Responsável';
+
+  // A viatura tem DUA registado? Na devolução exige-se confirmar que veio com a
+  // viatura (documento DUA frente/verso/único em viatura_documentos).
+  const { data: viaturaTemDua = false } = useQuery({
+    queryKey: ['viatura-tem-dua', viaturaId],
+    enabled: open && !!viaturaId,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('viatura_documentos')
+        .select('id', { count: 'exact', head: true })
+        .eq('viatura_id', viaturaId!)
+        .in('tipo_documento', ['dua_frente', 'dua_verso', 'dua']);
+      return (count ?? 0) > 0;
+    },
+  });
+  const [duaDevolvido, setDuaDevolvido] = useState(false);
 
   const form = useForm<FormInput>({
     resolver: zodResolver(schema),
@@ -261,6 +278,7 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
     setRegistarAgora(false);
     setKm('');
     setCombustivel('');
+    setDuaDevolvido(false);
     files.forEach((f) => f.preview && URL.revokeObjectURL(f.preview));
     setFiles([]);
   };
@@ -367,6 +385,15 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   const onSubmit = async (raw: FormInput) => {
     const values = raw as unknown as FormOutput;
 
+    // Retorno de viatura com DUA (recolhida ou devolvida): exige confirmar a
+    // devolução do documento antes de fechar.
+    const eventoDeRetornoSubmit =
+      values.tipoEvento === 'recolhido' || values.tipoEvento === 'devolvido';
+    if (eventoDeRetornoSubmit && viaturaTemDua && !duaDevolvido) {
+      toast.error('Esta viatura tem DUA. Confirma que o DUA foi devolvido antes de fechar.');
+      return;
+    }
+
     if (registarAgora) {
       if (!km.trim() || Number.isNaN(Number(km))) {
         toast.error('Indica o KM actual para registar a recolha.');
@@ -406,6 +433,11 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   const isPending = fecharMutation.isPending || gerandoFolha;
   const temMotorista = !!motoristaId;
   const tipoEvento = form.watch('tipoEvento');
+  // Qualquer fecho traz a viatura de volta à empresa (recolhida pela empresa ou
+  // devolvida pelo motorista) — em ambos o DUA físico regressa e tem de ser
+  // confirmado. Só exigimos quando a viatura tem DUA e já se escolheu o evento.
+  const eventoDeRetorno = tipoEvento === 'recolhido' || tipoEvento === 'devolvido';
+  const exigeDua = eventoDeRetorno && viaturaTemDua && !duaDevolvido;
 
   return (
     <Dialog
@@ -480,6 +512,28 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
                     </p>
                   )}
                 </div>
+
+                {eventoDeRetorno && viaturaTemDua && (
+                  <label className="flex items-start gap-3 rounded-md border border-amber-500/50 bg-amber-500/5 p-3 cursor-pointer">
+                    <Checkbox
+                      checked={duaDevolvido}
+                      onCheckedChange={(c) => setDuaDevolvido(!!c)}
+                      className="mt-0.5"
+                    />
+                    <span className="text-sm">
+                      <span className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+                        <FileText className="h-4 w-4" />
+                        {/* Declaração na 1ª pessoa — clique consciente, não só para desbloquear */}
+                        {tipoEvento === 'recolhido'
+                          ? 'Confirmo que recolhi o DUA físico com a viatura'
+                          : 'Confirmo que recebi o DUA físico do motorista'}
+                      </span>
+                      <span className="text-muted-foreground">
+                        Esta viatura tem DUA associado — obrigatório para poder fechar o contrato.
+                      </span>
+                    </span>
+                  </label>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="estacaoId">Estação *</Label>
@@ -786,7 +840,15 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
         </form>
 
         {/* Footer */}
-        <DialogFooter className="px-6 py-4 border-t bg-muted/30 shrink-0">
+        <DialogFooter className="px-6 py-4 border-t bg-muted/30 shrink-0 flex-col sm:flex-row sm:items-center">
+          {/* Dica visível quando o fecho está bloqueado pela confirmação do DUA —
+              um botão desativado sem explicação parece "partido". */}
+          {exigeDua && (
+            <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 mr-auto">
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              Confirma primeiro que o DUA foi devolvido (acima) para poder fechar.
+            </p>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -798,7 +860,8 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
           <Button
             type="button"
             variant="destructive"
-            disabled={isPending}
+            disabled={isPending || exigeDua}
+            title={exigeDua ? 'Confirma primeiro que o DUA foi devolvido' : undefined}
             onClick={form.handleSubmit(onSubmit)}
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
