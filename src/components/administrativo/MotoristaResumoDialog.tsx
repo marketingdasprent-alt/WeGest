@@ -47,6 +47,8 @@ interface MotoristaResumoProps {
   viagens_uber: number;
   recibo_verde: boolean;
   liquido: number;
+  /** Gorjetas Bolt + Uber da semana — somam ao líquido sem ajuste de IVA. */
+  gorjeta?: number;
   combustivel: number;
   portagens: number;
   reparacoes: number;
@@ -205,7 +207,8 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             .select('categoria, valor, tipo')
             .eq('motorista_id', resolvedMotoristaId)
             .gte('data_movimento', format(dateRange.from, 'yyyy-MM-dd'))
-            .lte('data_movimento', format(dateRange.to, 'yyyy-MM-dd')),
+            .lte('data_movimento', format(dateRange.to, 'yyyy-MM-dd'))
+            .neq('status', 'cancelado'),
           // Períodos de viatura na semana — com tarifa do grupo para detalhe de aluguer
           supabase
             .from('motorista_viaturas')
@@ -366,7 +369,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
         receitas.outras_receitas;
   const totalAReceber = isImportado
     ? motorista.liquido
-    : receitaAjustada - totalDespesas + valoresSemanaAnterior;
+    : receitaAjustada - totalDespesas + gorjeta + valoresSemanaAnterior;
   const liquido = isImportado ? motorista.liquido : totalAReceber;
 
   const fmt = (value: number) =>
@@ -490,6 +493,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Bolt</span><span style="color:#15803d">${fmtEur(receitas.bolt)}</span></div>
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Uber</span><span style="color:#15803d">${fmtEur(receitas.uber)}</span></div>
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Outras Receitas</span><span style="color:#15803d">${fmtEur(receitas.outras_receitas)}</span></div>
+            ${gorjeta > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Gorjetas (sem IVA)</span><span style="color:#15803d">${fmtEur(gorjeta)}</span></div>` : ''}
             <div style="border-top:1px solid #86efac;margin:6px 0"></div>
             <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:3px 0"><span>TOTAL RECEITAS</span><span style="color:#15803d">${fmtEur(isImportado ? totalReceitas : receitaAjustada)}</span></div>
           </div>
@@ -878,6 +882,13 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
                     value={fmt(receitas.outras_receitas)}
                     colored="text-green-700 dark:text-green-300"
                   />
+                  {gorjeta > 0 && (
+                    <Row
+                      label="Gorjetas (sem IVA)"
+                      value={fmt(gorjeta)}
+                      colored="text-green-700 dark:text-green-300"
+                    />
+                  )}
                   <Separator className="bg-green-200 dark:bg-green-800" />
                   <Row
                     label="TOTAL RECEITAS"

@@ -69,6 +69,7 @@ const CATEGORIAS = [
   { value: 'rnvat', label: 'RNVAT' },
   { value: 'acordo', label: 'Acordo' },
   { value: 'renda_viatura', label: 'Renda Viatura' },
+  { value: 'slot_mensal', label: 'Mensalidade Slot' },
   { value: 'reparacao', label: 'Reparação' },
   { value: 'negativo_anterior', label: 'Negativo Anterior' },
   { value: 'ajuda_custo', label: 'Ajuda de Custo' },

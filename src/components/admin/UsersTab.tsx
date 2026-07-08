@@ -306,8 +306,9 @@ export const UsersTab = () => {
       toast({
         title: data?.existing ? 'Utilizador adicionado' : 'Utilizador criado',
         description: data?.existing
-          ? 'O utilizador já tinha conta e foi adicionado a esta organização.'
+          ? 'Este email já tinha conta — foi adicionado a esta organização. A password NÃO foi alterada: continua a ser a que a pessoa já usava (é a mesma em todas as organizações).'
           : 'O utilizador foi criado com sucesso.',
+        duration: 10000,
       });
 
       setIsCreateDialogOpen(false);

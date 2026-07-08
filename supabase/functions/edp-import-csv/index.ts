@@ -126,28 +126,29 @@ Deno.serve(async (req) => {
       error: authErr,
     } = await anonClient.auth.getUser();
     if (authErr || !user) return jsonError('Sessão inválida.', 401);
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin, org_id')
-      .eq('id', user.id)
-      .single();
-    if (!profile?.is_admin) return jsonError('Sem permissão de administrador.', 403);
-    const callerOrgId = profile.org_id;
 
     const body = await req.json();
     const { integracao_id, combustivel_csv } = body;
 
-    // A integração TEM de pertencer à org do caller — org vem do profile,
-    // NUNCA do row apontado pelo integracao_id do pedido.
+    // O caller TEM de ser admin da org dona da integração — papel POR-ORG
+    // (user_organizacoes). O flag global profiles.is_admin e o legado
+    // profiles.org_id dão 403 errado a utilizadores multi-org.
     const { data: intConfig } = await supabase
       .from('plataformas_configuracao')
       .select('org_id')
       .eq('id', integracao_id)
       .single();
-    if (!intConfig || intConfig.org_id !== callerOrgId) {
-      return jsonError('Integração não encontrada ou sem acesso.', 403);
+    if (!intConfig) return jsonError('Integração não encontrada.', 404);
+    const { data: membership } = await supabase
+      .from('user_organizacoes')
+      .select('is_admin')
+      .eq('user_id', user.id)
+      .eq('org_id', intConfig.org_id)
+      .maybeSingle();
+    if (!membership?.is_admin) {
+      return jsonError('Sem permissão de administrador nesta organização.', 403);
     }
-    const orgId = callerOrgId;
+    const orgId = intConfig.org_id;
 
     const rows = parseCsv(combustivel_csv);
     const { data: motoristas } = await supabase

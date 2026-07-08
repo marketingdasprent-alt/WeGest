@@ -157,9 +157,11 @@ export const deriveViaturaEstado = (
   if (fontes?.has('movimento')) return 'em_movimentacao';
   if (fontes?.has('contrato')) return 'em_contrato';
   if (fontes?.has('reserva')) return 'em_reserva';
-  // Carro com motorista (fonte 'tvde'): se for carro slot (externo do
-  // motorista) o estado é 'em_slot'; caso contrário é a ocupação TVDE normal.
-  if (fontes?.has('tvde')) return v.is_slot ? 'em_slot' : 'em_tvde';
+  // Carro com motorista (fonte 'tvde'): ocupação TVDE normal — excepto os
+  // carros slot: são do próprio motorista, e a mera associação NÃO os ocupa.
+  // Um carro slot associado fica 'disponivel'; o estado só muda quando entra
+  // uma reserva/contrato (fontes acima).
+  if (fontes?.has('tvde') && !v.is_slot) return 'em_tvde';
   // Rede de segurança: campo legado `status='em_uso'` — é o que o main conta
   // como ocupada. Mantém-se até as atribuições reais (motorista_viaturas)
   // estarem todas criadas; depois pode ser removido.

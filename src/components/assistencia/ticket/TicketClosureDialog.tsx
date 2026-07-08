@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -113,14 +114,31 @@ export const TicketClosureDialog: React.FC<Props> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>
-                KM Final <span className="text-red-500">*</span>
+                KM Final{' '}
+                {!closureData.km_fim_indisponivel && <span className="text-red-500">*</span>}
               </Label>
               <Input
                 type="number"
                 placeholder="Quilometragem atual"
-                value={closureData.km_fim}
+                value={closureData.km_fim_indisponivel ? '' : closureData.km_fim}
+                disabled={closureData.km_fim_indisponivel}
                 onChange={(e) => onClosureDataChange({ km_fim: e.target.value })}
               />
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="km_fim_indisponivel"
+                  checked={closureData.km_fim_indisponivel}
+                  onCheckedChange={(checked) =>
+                    onClosureDataChange({ km_fim_indisponivel: !!checked })
+                  }
+                />
+                <Label
+                  htmlFor="km_fim_indisponivel"
+                  className="text-xs font-normal text-muted-foreground cursor-pointer"
+                >
+                  KM não disponível (ex.: viatura não liga)
+                </Label>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Combustível Final</Label>

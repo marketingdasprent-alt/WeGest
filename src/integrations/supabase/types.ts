@@ -238,7 +238,9 @@ export type Database = {
           gpl_qtd: number | null
           id: string
           km_fim: number | null
+          km_fim_indisponivel: boolean
           km_inicio: number | null
+          km_inicio_indisponivel: boolean
           motorista_id: string | null
           numero: number
           numero_fatura: string | null
@@ -271,7 +273,9 @@ export type Database = {
           gpl_qtd?: number | null
           id?: string
           km_fim?: number | null
+          km_fim_indisponivel?: boolean
           km_inicio?: number | null
+          km_inicio_indisponivel?: boolean
           motorista_id?: string | null
           numero?: number
           numero_fatura?: string | null
@@ -304,7 +308,9 @@ export type Database = {
           gpl_qtd?: number | null
           id?: string
           km_fim?: number | null
+          km_fim_indisponivel?: boolean
           km_inicio?: number | null
+          km_inicio_indisponivel?: boolean
           motorista_id?: string | null
           numero?: number
           numero_fatura?: string | null
@@ -4851,6 +4857,7 @@ export type Database = {
           perfil_rascunho: boolean
           recibo_verde: boolean | null
           registo_criminal_url: string | null
+          seguro_valor_semanal: number | null
           slot_valor_semanal: number | null
           status_ativo: boolean | null
           telefone: string | null
@@ -4900,6 +4907,7 @@ export type Database = {
           perfil_rascunho?: boolean
           recibo_verde?: boolean | null
           registo_criminal_url?: string | null
+          seguro_valor_semanal?: number | null
           slot_valor_semanal?: number | null
           status_ativo?: boolean | null
           telefone?: string | null
@@ -4949,6 +4957,7 @@ export type Database = {
           perfil_rascunho?: boolean
           recibo_verde?: boolean | null
           registo_criminal_url?: string | null
+          seguro_valor_semanal?: number | null
           slot_valor_semanal?: number | null
           status_ativo?: boolean | null
           telefone?: string | null
@@ -6082,6 +6091,48 @@ export type Database = {
           nome?: string
         }
         Relationships: []
+      }
+      relatorio_pagamento_pagos: {
+        Row: {
+          id: string
+          marcado_em: string
+          marcado_por: string | null
+          motorista_id: string
+          org_id: string
+          semana_inicio: string
+        }
+        Insert: {
+          id?: string
+          marcado_em?: string
+          marcado_por?: string | null
+          motorista_id: string
+          org_id?: string
+          semana_inicio: string
+        }
+        Update: {
+          id?: string
+          marcado_em?: string
+          marcado_por?: string | null
+          motorista_id?: string
+          org_id?: string
+          semana_inicio?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "relatorio_pagamento_pagos_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "relatorio_pagamento_pagos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       renting_coberturas: {
         Row: {
@@ -9489,6 +9540,25 @@ export type Database = {
         }[]
       }
       conta_corrente_saldo: { Args: { p_entidade_id: string }; Returns: number }
+      contexto_folha_por_token: {
+        Args: { p_token: string }
+        Returns: {
+          viatura_id: string
+          emissor_id: string
+          empresa_nome: string
+          empresa_nif: string
+          empresa_sede: string
+          empresa_licenca_tvde: string
+          empresa_licenca_validade: string
+          empresa_representante: string
+          empresa_cargo_representante: string
+          condutor_nome: string
+          condutor_email: string
+          cliente_nome: string
+          km_saida: number
+          combustivel_saida: string
+        }[]
+      }
       contrato_historico_resumo: {
         Args: { p_contrato_id: string }
         Returns: {
@@ -9710,7 +9780,7 @@ export type Database = {
       notificacao_dispensada: { Args: { p_id: string }; Returns: boolean }
       org_privacidade_por_gestor: { Args: never; Returns: boolean }
       realizar_token_realizacao: {
-        Args: { p_token: string }
+        Args: { p_token: string; p_km?: number; p_combustivel?: string }
         Returns: undefined
       }
       recalcular_disponibilidade_viatura: {

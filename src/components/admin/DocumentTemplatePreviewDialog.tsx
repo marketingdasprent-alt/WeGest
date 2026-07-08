@@ -79,6 +79,7 @@ export const DocumentTemplatePreviewDialog: React.FC<Props> = ({
       duracao_meses: '1',
       numero_contrato: 'RNT-2025-001',
       viatura_matricula: 'AA-00-BB',
+      viatura_data_matricula: '2022-03-15',
       viatura_marca_modelo: 'Toyota Corolla',
       viatura_grupo: 'Grupo B',
       viatura_kms: '15.000',

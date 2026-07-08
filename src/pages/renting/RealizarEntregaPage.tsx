@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Card, CardContent } from '@/components/ui/card';
@@ -28,7 +29,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useConsumirTokenRealizacao, useRealizarFromToken } from '@/hooks/useRealizacaoToken';
 import { formatMatricula } from '@/components/calendario/calendarioUtils';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
-import { resolverCondutor } from './resolverCondutor';
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
 import {
   AssinaturasHandoverSection,
@@ -296,14 +296,9 @@ const RealizarEntregaPage = () => {
   // principal (assinatura). Resolvido uma vez e lido pelo preview/confirmar.
   const contratoId = info?.contrato_id;
   const { data: contexto } = useQuery({
-    queryKey: ['folha-danos-contexto', contratoId],
-    enabled: !!contratoId,
+    queryKey: ['folha-danos-contexto', token],
+    enabled: !!token,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('contratos_renting')
-        .select('viatura_id, emissor_id, cliente_id, km_saida, combustivel_saida')
-        .eq('id', contratoId!)
-        .maybeSingle();
       const empty = {
         viaturaId: null as string | null,
         emissorId: null as string | null,
@@ -314,112 +309,32 @@ const RealizarEntregaPage = () => {
         kmSaida: null as number | null,
         combustivelSaida: null as string | null,
       };
-      if (!data) return empty;
-
-      // Empresa emissora → {{empresa_*}}.
-      let empresaData: Record<string, string> | null = null;
-      if (data.emissor_id) {
-        const { data: emp } = await supabase
-          .from('clientes')
-          .select(
-            'nome, nome_comercial, nif, sede, representante, cargo_representante, licenca_tvde, licenca_validade'
-          )
-          .eq('id', data.emissor_id)
-          .maybeSingle();
-        if (emp) {
-          empresaData = {
-            nomeCompleto: emp.nome_comercial || emp.nome || '',
-            nif: emp.nif ?? '',
-            sede: emp.sede ?? '',
-            licencaTVDE: emp.licenca_tvde ?? '',
-            licencaValidade: emp.licenca_validade ?? '',
-            representante: emp.representante ?? '',
-            cargoRepresentante: emp.cargo_representante ?? '',
-          };
-        }
-      }
-
-      // Condutor principal (contrato_condutores) → {{motorista_nome}}. O
-      // condutor é um cliente-tipo-condutor (cliente_id) OU um motorista
-      // parceiro TVDE (motorista_id) — XOR na tabela. Resolver do lado certo.
-      // Nunca o locatário/empresa. Sem condutor, fica vazio para assinar à mão.
-      const { data: cond } = await supabase
-        .from('contrato_condutores')
-        .select('cliente_id, motorista_id, is_principal')
-        .eq('contrato_id', contratoId!)
-        .order('is_principal', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      let clienteCondutor: { nome: string; email: string | null } | null = null;
-      let motoristaCondutor: { nome: string; email: string | null } | null = null;
-      if (cond?.cliente_id) {
-        const { data: cli } = await supabase
-          .from('clientes')
-          .select('nome, nome_comercial, email')
-          .eq('id', cond.cliente_id)
-          .maybeSingle();
-        if (cli) clienteCondutor = { nome: cli.nome || cli.nome_comercial || '', email: cli.email };
-      } else if (cond?.motorista_id) {
-        const { data: mot } = await supabase
-          .from('motoristas_ativos')
-          .select('nome, email')
-          .eq('id', cond.motorista_id)
-          .maybeSingle();
-        if (mot?.nome) motoristaCondutor = { nome: mot.nome, email: mot.email };
-      }
-
-      // Sem condutor no contrato → o motorista atribuído à viatura (TVDE).
-      // Só a associação ATIVA — senão qualquer motorista histórico daquela
-      // viatura (status='encerrado') podia ser apanhado por engano.
-      let motoristaViaturaAtivo: { nome: string; email: string | null } | null = null;
-      if (!clienteCondutor && !motoristaCondutor && data.viatura_id) {
-        const { data: mv } = await supabase
-          .from('motorista_viaturas')
-          .select('motorista_id')
-          .eq('viatura_id', data.viatura_id)
-          .eq('status', 'ativo')
-          .order('data_inicio', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (mv?.motorista_id) {
-          const { data: mot } = await supabase
-            .from('motoristas_ativos')
-            .select('nome, email')
-            .eq('id', mv.motorista_id)
-            .maybeSingle();
-          if (mot?.nome) motoristaViaturaAtivo = { nome: mot.nome, email: mot.email };
-        }
-      }
-
-      const { nome: condutorNome, email: condutorEmail } = resolverCondutor({
-        condutorContrato:
-          clienteCondutor || motoristaCondutor
-            ? { cliente: clienteCondutor, motorista: motoristaCondutor }
-            : null,
-        motoristaViaturaAtivo,
+      if (!token) return empty;
+      const { data, error } = await supabase.rpc('contexto_folha_por_token', {
+        p_token: token,
       });
-
-      // Cliente/locatário → {{cliente_nome}}.
-      let clienteNome = '';
-      if (data.cliente_id) {
-        const { data: cli } = await supabase
-          .from('clientes')
-          .select('nome, nome_comercial')
-          .eq('id', data.cliente_id)
-          .maybeSingle();
-        if (cli) clienteNome = cli.nome_comercial || cli.nome || '';
-      }
-
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return empty;
       return {
-        viaturaId: (data.viatura_id as string | undefined) ?? null,
-        emissorId: (data.emissor_id as string | undefined) ?? null,
-        empresaData,
-        condutorNome,
-        condutorEmail,
-        clienteNome,
-        kmSaida: (data.km_saida as number | null) ?? null,
-        combustivelSaida: (data.combustivel_saida as string | null) ?? null,
+        viaturaId: row.viatura_id ?? null,
+        emissorId: row.emissor_id ?? null,
+        empresaData: row.emissor_id
+          ? {
+              nomeCompleto: row.empresa_nome ?? '',
+              nif: row.empresa_nif ?? '',
+              sede: row.empresa_sede ?? '',
+              licencaTVDE: row.empresa_licenca_tvde ?? '',
+              licencaValidade: row.empresa_licenca_validade ?? '',
+              representante: row.empresa_representante ?? '',
+              cargoRepresentante: row.empresa_cargo_representante ?? '',
+            }
+          : null,
+        condutorNome: row.condutor_nome ?? '',
+        condutorEmail: row.condutor_email ?? '',
+        clienteNome: row.cliente_nome ?? '',
+        kmSaida: (row.km_saida as number | null) ?? null,
+        combustivelSaida: (row.combustivel_saida as string | null) ?? null,
       };
     },
   });
@@ -880,6 +795,15 @@ const RealizarEntregaPage = () => {
       });
       return;
     }
+    // A viatura tem DUA registado — na devolução tem de vir com o DUA.
+    if (exigeDua && !duaDevolvido) {
+      toast({
+        title: 'DUA em falta',
+        description: 'Esta viatura tem DUA. Confirma que o DUA foi devolvido antes de continuar.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setUploading(true);
     // Paths já enviados ao storage — para limpar em caso de falha e não
@@ -887,42 +811,88 @@ const RealizarEntregaPage = () => {
     const uploadedPaths: string[] = [];
     const isEntrega = info.tipo === 'entrega';
     try {
-      // Gravar km/combustível no contrato — sem isto a Recolha nunca teria
-      // como saber o km/combustível de Saída registados na Entrega (ver
-      // migration 20260702102439).
-      const kmNum = Number(km);
-      const { error: kmErr } = await supabase
-        .from('contratos_renting')
-        .update(
-          isEntrega
-            ? { km_saida: kmNum, combustivel_saida: combustivel }
-            : { km_entrada: kmNum, combustivel_entrada: combustivel }
-        )
-        .eq('id', info.contrato_id);
-      if (kmErr) throw kmErr;
+      // km/combustível NÃO são gravados aqui: a query direta ao contrato exigia
+      // permissão de renting (que o operador de terreno não tem). O RPC
+      // realizar_token_realizacao grava-os no contrato de forma atómica,
+      // autorizado pelo token (ver p_km/p_combustivel abaixo).
 
       if (files.length > 0) {
         const { data: auth } = await supabase.auth.getUser();
         const userId = auth.user?.id ?? null;
 
-        // Garantir a viatura (o contexto pode não ter resolvido ainda).
-        let vId = contexto?.viaturaId ?? null;
-        if (!vId) {
-          const { data: cr } = await supabase
-            .from('contratos_renting')
-            .select('viatura_id')
-            .eq('id', info.contrato_id)
-            .maybeSingle();
-          vId = (cr?.viatura_id as string | undefined) ?? null;
-        }
+        // Viatura resolvida pelo contexto (RPC do token, SECURITY DEFINER) —
+        // sem ela não há onde pendurar os danos.
+        const vId = contexto?.viaturaId ?? null;
         if (!vId) throw new Error('Viatura do contrato não encontrada.');
-        // Cada foto vira um registo de dano com a localização/descrição/valor
-        // que o gestor escreveu, ligado ao contrato → aparece na tabela da
-        // folha e na página do veículo. As observações gerais vão no campo
-        // observacoes de cada registo.
-        uploadedPaths.push(
-          ...(await uploadFotosBloco(files, vId, isEntrega ? 'entrega' : 'recolha', userId))
-        );
+        // Fotos que o gestor descreveu individualmente (localização, descrição
+        // ou valor) viram cada uma o seu registo de dano. As fotos genéricas —
+        // sem qualquer detalhe — juntam-se todas num único registo "Registo
+        // entrega/recolha", para aparecerem como uma galeria de fotos em vez de
+        // um cartão por foto. Ligado ao contrato → tabela da folha e página do
+        // veículo. As observações gerais vão no campo observacoes.
+        const temDetalhe = (fp: (typeof files)[number]) =>
+          !!(fp.localizacao || fp.descricao.trim() || fp.valor.trim());
+        const detalhados = files.filter(temDetalhe);
+        const genericos = files.filter((fp) => !temDetalhe(fp));
+
+        // Cada grupo de fotos partilha um único registo de dano.
+        const grupos: Array<{
+          localizacao: string | null;
+          descricao: string;
+          valor: number | null;
+          fotos: (typeof files)[number][];
+        }> = detalhados.map((fp) => {
+          const valorNum = fp.valor.trim() ? Number(fp.valor) : null;
+          return {
+            localizacao: fp.localizacao || null,
+            descricao: fp.descricao.trim() || `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
+            valor: valorNum != null && !Number.isNaN(valorNum) ? valorNum : null,
+            fotos: [fp],
+          };
+        });
+        if (genericos.length > 0) {
+          grupos.push({
+            localizacao: null,
+            descricao: `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
+            valor: null,
+            fotos: genericos,
+          });
+        }
+
+        for (const grupo of grupos) {
+          const { data: dano, error: dErr } = await supabase
+            .from('viatura_danos')
+            .insert({
+              viatura_id: vId,
+              localizacao: grupo.localizacao,
+              descricao: grupo.descricao,
+              valor: grupo.valor,
+              observacoes: observacoes.trim() || null,
+              estado: 'existente',
+              contrato_renting_id: info.contrato_id,
+              registado_por: userId,
+            })
+            .select('id')
+            .single();
+          if (dErr) throw dErr;
+
+          for (const fp of grupo.fotos) {
+            const ext = fp.file.name.split('.').pop() || 'bin';
+            const path = `${dano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+            const { error: upErr } = await supabase.storage
+              .from('viatura-danos')
+              .upload(path, fp.file, { contentType: fp.file.type });
+            if (upErr) throw upErr;
+            uploadedPaths.push(path);
+            const { error: fErr } = await supabase.from('viatura_dano_fotos').insert({
+              dano_id: dano.id,
+              ficheiro_url: path,
+              nome_ficheiro: fp.file.name,
+              uploaded_by: userId,
+            });
+            if (fErr) throw fErr;
+          }
+        }
       }
 
       realizar.mutate(
@@ -931,6 +901,8 @@ const RealizarEntregaPage = () => {
           eventoId: info.evento_id,
           contratoId: info.contrato_id,
           tipo: info.tipo,
+          km: Number(km),
+          combustivel,
         },
         {
           onSuccess: () => {
@@ -1040,7 +1012,12 @@ const RealizarEntregaPage = () => {
         )}`}
         icon={CheckCircle2}
       >
-        <Button type="button" onClick={handleConfirmar} disabled={isPending} className="gap-2">
+        <Button
+          type="button"
+          onClick={handleConfirmar}
+          disabled={isPending || (exigeDua && !duaDevolvido)}
+          className="gap-2"
+        >
           {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
           Confirmar
         </Button>
@@ -1086,6 +1063,30 @@ const RealizarEntregaPage = () => {
           cameraInputRef={cameraInputRef}
           fileInputRef={fileInputRef}
         />
+
+        {exigeDua && (
+          <Card className="border-amber-500/50 bg-amber-500/5">
+            <CardContent className="p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Checkbox
+                  checked={duaDevolvido}
+                  onCheckedChange={(c) => setDuaDevolvido(!!c)}
+                  className="mt-0.5"
+                />
+                <span className="text-sm">
+                  <span className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+                    <FileText className="h-4 w-4" />
+                    DUA devolvido
+                  </span>
+                  <span className="text-muted-foreground">
+                    Esta viatura tem DUA associado. Confirma que o documento foi devolvido com a
+                    viatura.
+                  </span>
+                </span>
+              </label>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent className="p-4 space-y-2">

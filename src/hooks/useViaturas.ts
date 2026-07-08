@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 export interface ViaturaBasic {
   id: string;
   matricula: string;
+  /** Data da primeira matrícula (yyyy-mm-dd) — usada nos documentos. */
+  data_matricula: string | null;
   marca: string;
   modelo: string;
   status: string;

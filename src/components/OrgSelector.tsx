@@ -8,7 +8,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { subdomainCodigo } from '@/lib/subdomain';
 
 interface OrgSelectorProps {
   className?: string;
@@ -41,15 +40,7 @@ export const OrgSelector: React.FC<OrgSelectorProps> = ({ className }) => {
           <DropdownMenuItem
             key={org.id}
             onClick={() => {
-              // Década usa wegest.pt diretamente (sem subdomínio)
-              if (org.codigo === 'decada') {
-                window.location.href = `https://wegest.pt${window.location.pathname}`;
-              } else if (subdomainCodigo || org.codigo !== subdomainCodigo) {
-                // Redirecionar para o subdomínio da org cliente
-                window.location.href = `https://${org.codigo}.wegest.pt${window.location.pathname}`;
-              } else {
-                switchOrg(org.id);
-              }
+              if (org.id !== orgId) void switchOrg(org.id);
             }}
             className={cn(
               'flex items-center gap-2 cursor-pointer',

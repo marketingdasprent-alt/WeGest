@@ -446,23 +446,25 @@ export function useFecharContratoTVDE() {
 
         // Fotos gravadas como viatura_danos/viatura_dano_fotos — mesmo modelo
         // que RealizarEntregaPage usa — para a Folha de Danos as apanhar
-        // automaticamente (fetchAnexoDanos lê desta tabela).
+        // automaticamente (fetchAnexoDanos lê desta tabela). Todas as fotos
+        // desta recolha ficam num único registo "Registo recolha" (uma
+        // galeria), em vez de um registo por foto.
         if (recolha.fotos.length > 0 && viaturaId) {
-          for (const file of recolha.fotos) {
-            const { data: dano, error: dErr } = await supabase
-              .from('viatura_danos')
-              .insert({
-                viatura_id: viaturaId,
-                descricao: 'Registo recolha',
-                observacoes: motivo?.trim() || null,
-                estado: 'existente',
-                contrato_renting_id: contratoId,
-                registado_por: userId,
-              })
-              .select('id')
-              .single();
-            if (dErr) throw dErr;
+          const { data: dano, error: dErr } = await supabase
+            .from('viatura_danos')
+            .insert({
+              viatura_id: viaturaId,
+              descricao: 'Registo recolha',
+              observacoes: motivo?.trim() || null,
+              estado: 'existente',
+              contrato_renting_id: contratoId,
+              registado_por: userId,
+            })
+            .select('id')
+            .single();
+          if (dErr) throw dErr;
 
+          for (const file of recolha.fotos) {
             const ext = file.name.split('.').pop() || 'bin';
             const path = `${dano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
             const { error: upErr } = await supabase.storage

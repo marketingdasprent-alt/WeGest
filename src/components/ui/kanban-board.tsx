@@ -4,7 +4,23 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Calendar, GripVertical, Plus } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Calendar,
+  GripVertical,
+  Plus,
+  ChevronDown,
+  ChevronsDownUp,
+  MoreVertical,
+} from 'lucide-react';
+
+/** Nº de cartões mostrados por coluna antes de aparecer o botão "Mostrar mais". */
+const KANBAN_PAGE_SIZE = 25;
 
 export interface Task {
   id: string;
@@ -48,6 +64,23 @@ export function KanbanBoard({
 }: KanbanBoardProps) {
   const [columns, setColumns] = useState<Column[]>(initialColumns);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  // Quantos cartões mostrar por coluna (paginação "Mostrar mais", independente
+  // por coluna). Sem entrada no mapa → mostra os primeiros KANBAN_PAGE_SIZE.
+  const [visibleByCol, setVisibleByCol] = useState<Record<string, number>>({});
+
+  const limiteVisivel = (columnId: string) => visibleByCol[columnId] ?? KANBAN_PAGE_SIZE;
+
+  const mostrarMais = (columnId: string, totalNaColuna: number) =>
+    setVisibleByCol((prev) => ({
+      ...prev,
+      [columnId]: Math.min((prev[columnId] ?? KANBAN_PAGE_SIZE) + KANBAN_PAGE_SIZE, totalNaColuna),
+    }));
+
+  const mostrarTodos = (columnId: string, totalNaColuna: number) =>
+    setVisibleByCol((prev) => ({ ...prev, [columnId]: totalNaColuna }));
+
+  const recolher = (columnId: string) =>
+    setVisibleByCol((prev) => ({ ...prev, [columnId]: KANBAN_PAGE_SIZE }));
 
   const handleDragStart = (e: React.DragEvent, task: Task, columnId: string) => {
     e.dataTransfer.effectAllowed = 'move';
@@ -77,6 +110,14 @@ export function KanbanBoard({
           return col;
         })
       );
+      // Garantir que o cartão largado (vai para o fim da coluna) fica visível,
+      // mesmo que a coluna de destino estivesse a mostrar só os primeiros N.
+      setVisibleByCol((prev) => {
+        const destino = columns.find((c) => c.id === targetColumnId);
+        const novoTotal = (destino?.tasks.length ?? 0) + 1;
+        const atual = prev[targetColumnId] ?? KANBAN_PAGE_SIZE;
+        return atual < novoTotal ? { ...prev, [targetColumnId]: novoTotal } : prev;
+      });
       onTaskMove?.(task, sourceColumnId, targetColumnId);
     } catch {
       // drop ignorado
@@ -117,18 +158,48 @@ export function KanbanBoard({
                   {column.tasks.length}
                 </span>
               </div>
-              <button
-                onClick={() => onAddTask?.(column.id)}
-                className="shrink-0 p-1 rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
-                title="Adicionar"
-              >
-                <Plus className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => onAddTask?.(column.id)}
+                  className="p-1 rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                  title="Adicionar"
+                >
+                  <Plus className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
+                </button>
+                {column.tasks.length > KANBAN_PAGE_SIZE && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="p-1 rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                        title="Opções"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {limiteVisivel(column.id) < column.tasks.length && (
+                        <DropdownMenuItem
+                          onClick={() => mostrarTodos(column.id, column.tasks.length)}
+                        >
+                          <ChevronDown className="mr-2 h-4 w-4" />
+                          Mostrar todos ({column.tasks.length})
+                        </DropdownMenuItem>
+                      )}
+                      {limiteVisivel(column.id) > KANBAN_PAGE_SIZE && (
+                        <DropdownMenuItem onClick={() => recolher(column.id)}>
+                          <ChevronsDownUp className="mr-2 h-4 w-4" />
+                          Recolher
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
             </div>
 
-            {/* Cartões */}
+            {/* Cartões (limitados ao "Mostrar mais" desta coluna) */}
             <div className="flex flex-col gap-2 flex-1">
-              {column.tasks.map((task) => (
+              {column.tasks.slice(0, limiteVisivel(column.id)).map((task) => (
                 <Card
                   key={task.id}
                   className="cursor-grab active:cursor-grabbing transition-shadow duration-150 border bg-white dark:bg-slate-800 hover:shadow-md"
@@ -213,6 +284,16 @@ export function KanbanBoard({
                   </CardContent>
                 </Card>
               ))}
+
+              {column.tasks.length > limiteVisivel(column.id) && (
+                <button
+                  onClick={() => mostrarMais(column.id, column.tasks.length)}
+                  className="mt-1 flex items-center justify-center gap-1 rounded-md border border-dashed border-slate-300 dark:border-slate-600 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                  Mostrar mais (+{column.tasks.length - limiteVisivel(column.id)})
+                </button>
+              )}
 
               {column.tasks.length === 0 && (
                 <div className="flex items-center justify-center flex-1 text-slate-300 dark:text-slate-600 text-sm select-none">

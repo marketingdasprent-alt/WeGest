@@ -688,13 +688,16 @@ export function ContasResumoTab() {
         .select('grupo_id, preco_semana')
         .eq('ativa', true);
 
-      // 4f. Buscar movimentos financeiros unificados para a semana
+      // 4f. Buscar movimentos financeiros unificados para a semana.
+      // Contam TODOS os movimentos da semana excepto cancelados — um débito
+      // marcado "pago" continua a ser despesa desta semana (alinhado com o
+      // Resumo Financeiro do motorista, que fazia esta conta e divergia).
       const financeiroQuery = supabase
         .from('motorista_financeiro')
         .select('motorista_id, valor, categoria, tipo')
         .gte('data_movimento', weekStartStr)
         .lte('data_movimento', weekEndStr)
-        .eq('status', 'pendente');
+        .neq('status', 'cancelado');
 
       const boltResumosQuery = supabase
         .from('bolt_resumos_semanais')
@@ -1307,11 +1310,12 @@ export function ContasResumoTab() {
 
   // Paginação (render): só corta as linhas mostradas — totais, select-all e
   // export continuam a usar filteredResumos completo.
-  const { page, setPage, totalPages, total, pageItems, start, end } = usePagination(
-    filteredResumos,
-    50,
-    `${searchTerm}|${filterRecibo}|${filterSaldo}|${filterGestor}|${weekStart?.getTime?.() ?? ''}`
-  );
+  const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
+    usePagination(
+      filteredResumos,
+      50,
+      `${searchTerm}|${filterRecibo}|${filterSaldo}|${filterGestor}|${weekStart?.getTime?.() ?? ''}`
+    );
 
   // Totais gerais
   const totais = useMemo(() => {
@@ -2098,6 +2102,8 @@ export function ContasResumoTab() {
           end={end}
           onPageChange={setPage}
           noun={['motorista', 'motoristas']}
+          pageSizeStr={pageSizeStr}
+          onPageSizeChange={setPageSizeStr}
         />
       )}
 

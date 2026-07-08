@@ -49,6 +49,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { usePagination } from '@/hooks/usePagination';
+import { TablePagination } from '@/components/ui/TablePagination';
 import {
   Plus,
   Pencil,
@@ -412,11 +414,9 @@ export function CartoesFlotaTab() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   // 'ativos' (esconde cancelados) · 'todos' · ou um estado específico
   const [statusSel, setStatusSel] = useState<string>('ativos');
-  const [page, setPage] = useState(1);
   const [consumoMap, setConsumoMap] = useState<Record<string, { total: number; litros: number }>>(
     {}
   );
-  const PAGE_SIZE = 25;
 
   // CRUD Dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -581,15 +581,8 @@ export function CartoesFlotaTab() {
     return m;
   }, [cartoes]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paged = useMemo(
-    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filtered, page, PAGE_SIZE]
-  );
-
-  useEffect(() => {
-    setPage(1);
-  }, [search, tipoFilter, statusSel, sortField, sortDir]);
+  const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
+    usePagination(filtered, 25, `${search}|${tipoFilter}|${sortField}|${sortDir}`);
 
   // ── CRUD ──────────────────────────────────────────────────────────────
   const openCreate = () => {
@@ -1097,7 +1090,7 @@ export function CartoesFlotaTab() {
               })()}
             </TableHeader>
             <TableBody>
-              {paged.map((c) => {
+              {pageItems.map((c) => {
                 const info = TIPO_INFO[c.tipo];
                 const Icon = info.Icon;
                 const titular = titularLabel(c);
@@ -1254,33 +1247,19 @@ export function CartoesFlotaTab() {
               })}
             </TableBody>
           </Table>
-        </div>
-      )}
-
-      {/* Paginação */}
-      {!loading && totalPages > 1 && (
-        <div className="flex items-center justify-between pt-1">
-          <span className="text-xs text-muted-foreground">
-            Página {page} de {totalPages} · {filtered.length} cartão(ões)
-          </span>
-          <div className="flex gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              Seguinte
-            </Button>
-          </div>
+          {total > 0 && (
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              start={start}
+              end={end}
+              onPageChange={setPage}
+              noun={['cartao', 'cartoes']}
+              pageSizeStr={pageSizeStr}
+              onPageSizeChange={setPageSizeStr}
+            />
+          )}
         </div>
       )}
 

@@ -15,15 +15,15 @@ import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, Receipt, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Receipt, Plus, Trash2, ListChecks, Calculator } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -125,6 +125,7 @@ export function NovaFaturaDialog({
   const [dataVenc, setDataVenc] = useState<string>(maisDias(30));
   const [linhas, setLinhas] = useState<LinhaArtigo[]>([novaLinha()]);
   const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'artigos' | 'resumo'>('artigos');
 
   function patchLinha(key: string, patch: Partial<LinhaArtigo>) {
     setLinhas((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -338,8 +339,8 @@ export function NovaFaturaDialog({
         if (!submitting) onOpenChange(o);
       }}
     >
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-4 pb-0 bg-card shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Receipt className="h-5 w-5 text-primary" />
             Nova fatura — {alvo.codigoLabel}
@@ -349,166 +350,199 @@ export function NovaFaturaDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Tipo + Método + Datas */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tipo de documento</Label>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={tipoDoc === 'fatura' ? 'default' : 'outline'}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setTipoDoc('fatura')}
-                >
-                  Factura
-                </Button>
-                <Button
-                  type="button"
-                  variant={tipoDoc === 'fatura_recibo' ? 'default' : 'outline'}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setTipoDoc('fatura_recibo')}
-                >
-                  Factura-Recibo
-                </Button>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Método</Label>
-                <Select value={metodo} onValueChange={setMetodo}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {METODO_OPTIONS.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Data doc.</Label>
-                <Input
-                  type="date"
-                  value={dataDoc}
-                  onChange={(e) => setDataDoc(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Vencimento</Label>
-                <Input
-                  type="date"
-                  value={dataVenc}
-                  onChange={(e) => setDataVenc(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-            </div>
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as 'artigos' | 'resumo')}
+          className="flex-1 flex flex-col overflow-hidden"
+        >
+          <div className="px-6 pt-4 border-b bg-card shrink-0">
+            <TabsList className="bg-transparent p-0 h-auto gap-4">
+              <TabsTrigger
+                value="artigos"
+                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary data-[state=active]:border-primary border-b-2 border-transparent rounded-none px-1 pb-2 font-medium gap-2"
+              >
+                <ListChecks className="h-4 w-4" />
+                Artigos
+              </TabsTrigger>
+              <TabsTrigger
+                value="resumo"
+                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary data-[state=active]:border-primary border-b-2 border-transparent rounded-none px-1 pb-2 font-medium gap-2"
+              >
+                <Calculator className="h-4 w-4" />
+                Resumo
+              </TabsTrigger>
+            </TabsList>
           </div>
 
-          {/* Artigos */}
-          <div className="rounded-md border">
-            <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Artigos · preços com IVA incluído
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-1"
-                onClick={addLinha}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Inserir linha
-              </Button>
-            </div>
-
-            {/* Cabeçalho (desktop) */}
-            <div className="hidden sm:grid grid-cols-[160px_1fr_110px_70px_70px_36px] gap-2 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground border-b">
-              <span>Tipo</span>
-              <span>Descrição</span>
-              <span className="text-right">Valor (c/ IVA)</span>
-              <span className="text-right">Unid.</span>
-              <span className="text-center">Isento</span>
-              <span />
-            </div>
-
-            <div className="divide-y">
-              {linhas.map((l) => (
-                <div
-                  key={l.key}
-                  className="grid grid-cols-2 sm:grid-cols-[160px_1fr_110px_70px_70px_36px] gap-2 px-3 py-2 items-center"
-                >
-                  <Select value={l.tipo} onValueChange={(v) => patchLinha(l.key, { tipo: v })}>
+          <TabsContent
+            value="artigos"
+            className="flex-1 overflow-y-auto m-0 p-6 space-y-4 data-[state=inactive]:hidden"
+          >
+            {/* Tipo + Método + Datas */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Tipo de documento</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={tipoDoc === 'fatura' ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setTipoDoc('fatura')}
+                  >
+                    Factura
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={tipoDoc === 'fatura_recibo' ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setTipoDoc('fatura_recibo')}
+                  >
+                    Factura-Recibo
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Método</Label>
+                  <Select value={metodo} onValueChange={setMetodo}>
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Tipo…" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {FATURA_ARTIGO_TIPOS.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
+                      {METODO_OPTIONS.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <Input
-                    value={l.descricao}
-                    onChange={(e) => patchLinha(l.key, { descricao: e.target.value })}
-                    placeholder="Descrição"
-                    className="h-9 col-span-2 sm:col-span-1"
-                  />
-                  <Input
-                    inputMode="decimal"
-                    value={l.valor}
-                    onChange={(e) => patchLinha(l.key, { valor: e.target.value })}
-                    placeholder="0,00"
-                    className="h-9 text-right"
-                  />
-                  <Input
-                    inputMode="numeric"
-                    value={l.unidades}
-                    onChange={(e) => patchLinha(l.key, { unidades: e.target.value })}
-                    className="h-9 text-right"
-                  />
-                  <div className="flex justify-center">
-                    <Checkbox
-                      checked={l.isentoIva}
-                      onCheckedChange={(c) => patchLinha(l.key, { isentoIva: c === true })}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-rose-600"
-                    onClick={() => removeLinha(l.key)}
-                    disabled={linhas.length <= 1}
-                    title="Eliminar linha"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
                 </div>
-              ))}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Data doc.</Label>
+                  <Input
+                    type="date"
+                    value={dataDoc}
+                    onChange={(e) => setDataDoc(e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Vencimento</Label>
+                  <Input
+                    type="date"
+                    value={dataVenc}
+                    onChange={(e) => setDataVenc(e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* Somatório */}
-          <div className="rounded-md border divide-y text-sm">
-            <Row label="Destinatário" value={destinatario.nome} />
-            <Row label="Sub-total" value={formatCurrency(calc.subtotal)} />
-            <Row label="IVA" value={formatCurrency(calc.iva)} muted />
-            <Row label="Total" value={formatCurrency(calc.totalComIva)} total />
-          </div>
-        </div>
+            {/* Artigos */}
+            <div className="rounded-md border">
+              <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Artigos · preços com IVA incluído
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1"
+                  onClick={addLinha}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Inserir linha
+                </Button>
+              </div>
 
-        <DialogFooter>
+              {/* Cabeçalho (desktop) */}
+              <div className="hidden sm:grid grid-cols-[160px_1fr_110px_70px_70px_36px] gap-2 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground border-b">
+                <span>Tipo</span>
+                <span>Descrição</span>
+                <span className="text-right">Valor (c/ IVA)</span>
+                <span className="text-right">Unid.</span>
+                <span className="text-center">Isento</span>
+                <span />
+              </div>
+
+              <div className="divide-y">
+                {linhas.map((l) => (
+                  <div
+                    key={l.key}
+                    className="grid grid-cols-2 sm:grid-cols-[160px_1fr_110px_70px_70px_36px] gap-2 px-3 py-2 items-center"
+                  >
+                    <Select value={l.tipo} onValueChange={(v) => patchLinha(l.key, { tipo: v })}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Tipo…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FATURA_ARTIGO_TIPOS.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      value={l.descricao}
+                      onChange={(e) => patchLinha(l.key, { descricao: e.target.value })}
+                      placeholder="Descrição"
+                      className="h-9 col-span-2 sm:col-span-1"
+                    />
+                    <Input
+                      inputMode="decimal"
+                      value={l.valor}
+                      onChange={(e) => patchLinha(l.key, { valor: e.target.value })}
+                      placeholder="0,00"
+                      className="h-9 text-right"
+                    />
+                    <Input
+                      inputMode="numeric"
+                      value={l.unidades}
+                      onChange={(e) => patchLinha(l.key, { unidades: e.target.value })}
+                      className="h-9 text-right"
+                    />
+                    <div className="flex justify-center">
+                      <Checkbox
+                        checked={l.isentoIva}
+                        onCheckedChange={(c) => patchLinha(l.key, { isentoIva: c === true })}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-rose-600"
+                      onClick={() => removeLinha(l.key)}
+                      disabled={linhas.length <= 1}
+                      title="Eliminar linha"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent
+            value="resumo"
+            className="flex-1 overflow-y-auto m-0 p-6 space-y-4 data-[state=inactive]:hidden"
+          >
+            {/* Somatório */}
+            <div className="rounded-md border divide-y text-sm">
+              <Row label="Destinatário" value={destinatario.nome} />
+              <Row label="Sub-total" value={formatCurrency(calc.subtotal)} />
+              <Row label="IVA" value={formatCurrency(calc.iva)} muted />
+              <Row label="Total" value={formatCurrency(calc.totalComIva)} total />
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        <div className="px-6 py-4 border-t bg-card flex items-center justify-end gap-3 shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancelar
           </Button>
@@ -516,7 +550,7 @@ export function NovaFaturaDialog({
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Criar
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

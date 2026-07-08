@@ -80,9 +80,16 @@ export async function checkFaturacaoHealth(): Promise<boolean> {
 export async function anularCobrancasFaturacao(cobrancaIds: string[]): Promise<void> {
   for (const id of cobrancaIds) {
     // Recibos ativos da cobrança → anulados (estorno a débito).
+    // Grava um motivo automático — se o recibo pertencer a um motorista, o
+    // aviso de anulação sai coerente e tranquilizador (em vez de vazio ou
+    // alarmante: "faturação anulada" faria o motorista pensar que perdeu o
+    // contrato, quando é apenas um reprocessamento administrativo).
     const { error: recErr } = await supabase
       .from('recibos')
-      .update({ estado: 'anulado' })
+      .update({
+        estado: 'anulado',
+        observacoes: 'Recibo anulado por reprocessamento da faturação — será emitido novo recibo.',
+      })
       .eq('referencia', id)
       .eq('estado', 'ativo');
     if (recErr) throw recErr;

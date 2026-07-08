@@ -5,8 +5,15 @@ import { playNotificationSound } from '@/lib/notificationSound';
 export interface Notificacao {
   id: string;
   org_id: string | null;
-  tipo: 'motorista_pendente' | 'escalonamento' | 'viatura_disponivel' | 'pedido_troca_kms';
+  tipo:
+    | 'motorista_pendente'
+    | 'escalonamento'
+    | 'viatura_disponivel'
+    | 'pedido_troca_kms'
+    | 'recibo_anulado';
   candidatura_id: string | null;
+  /** Rota de destino do botão "Ver" (notificações genéricas, ex.: lista de espera). */
+  link: string | null;
   /** Destinatário específico (avisos dirigidos a 1 utilizador, ex: lista de espera). */
   destinatario_id: string | null;
   /** Viatura alvo (tipo 'viatura_disponivel') — o popup abre /viaturas/:id. */

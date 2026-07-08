@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { format, differenceInMonths, differenceInDays, addMonths } from 'date-fns';
 import {
   Car,
@@ -12,6 +13,7 @@ import {
   Pencil,
   Check,
   ChevronsUpDown,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -87,6 +89,7 @@ interface MotoristaTabViaturasProps {
 }
 
 export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
+  const navigate = useNavigate();
   const [associacoes, setAssociacoes] = useState<MotoristaViatura[]>([]);
   const [viaturasDisponiveis, setViaturasDisponiveis] = useState<Viatura[]>([]);
   const [loading, setLoading] = useState(true);
@@ -190,7 +193,9 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '');
         if (s === 'vendida' || s === 'inativo' || s === 'em_reparacao') return false;
-        if (s === 'em_uso' && activeViaturaIds.has(v.id)) return false;
+        // J\u00e1 est\u00e1 com um motorista (independente do status \u2014 carros slot
+        // ficam 'disponivel' mesmo associados): n\u00e3o pode ser re-associada.
+        if (activeViaturaIds.has(v.id)) return false;
         return true;
       });
       setViaturasDisponiveis(disponiveis);
@@ -271,14 +276,20 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
 
       if (insertError) throw insertError;
 
-      const { error: updateError } = await supabase
-        .from('viaturas')
-        .update({
-          status: 'em_uso',
-        })
-        .eq('id', formData.viatura_id);
+      // Motorista slot: o carro é do próprio motorista — a associação não
+      // ocupa a viatura. Fica 'disponivel'; o estado só muda por
+      // reserva/contrato. Nos restantes regimes mantém-se o comportamento.
+      const motoristaSlot = motorista.is_slot === true || (motorista.slot_valor_semanal ?? 0) > 0;
+      if (!motoristaSlot) {
+        const { error: updateError } = await supabase
+          .from('viaturas')
+          .update({
+            status: 'em_uso',
+          })
+          .eq('id', formData.viatura_id);
 
-      if (updateError) throw updateError;
+        if (updateError) throw updateError;
+      }
 
       toast.success('Viatura associada com sucesso!');
       setDialogOpen(false);
@@ -536,10 +547,21 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
                 </div>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setDesassociarDialogOpen(true)}>
-              <X className="h-4 w-4 mr-2" />
-              Desassociar
-            </Button>
+            <div className="flex shrink-0 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/viaturas/${viaturaAtual.viatura_id}`)}
+                title="Abrir a ficha completa da viatura"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                Ver detalhes
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setDesassociarDialogOpen(true)}>
+                <X className="h-4 w-4 mr-2" />
+                Desassociar
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="text-center text-muted-foreground py-4">

@@ -31,6 +31,7 @@ export type Motorista = {
   recibo_verde: boolean | null;
   is_slot: boolean | null;
   slot_valor_semanal: number | null;
+  seguro_valor_semanal: number | null;
   cartao_frota: string | null;
   cartao_bp: string | null;
   cartao_repsol: string | null;

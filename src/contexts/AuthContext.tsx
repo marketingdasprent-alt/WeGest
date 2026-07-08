@@ -41,6 +41,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
       setLoading(false);
+
+      // Link de recuperação de password pode aterrar em qualquer rota (o
+      // Supabase cai para o Site URL raiz quando o redirectTo pedido não está
+      // na allowlist — acontecia nos subdomínios de org). Garantir que o
+      // utilizador vê SEMPRE o formulário de nova password.
+      if (
+        event === 'PASSWORD_RECOVERY' &&
+        !window.location.pathname.startsWith('/reset-password')
+      ) {
+        window.location.replace('/reset-password');
+      }
     });
 
     void syncSession();

@@ -18,7 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -207,8 +206,8 @@ export function RecibosDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-4 pb-4 border-b bg-card shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Receipt className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
             Fazer recibo
@@ -219,11 +218,11 @@ export function RecibosDialog({
         </DialogHeader>
 
         {elegiveis.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">
+          <p className="flex-1 overflow-y-auto px-6 py-6 text-center text-sm text-muted-foreground">
             Não há faturas em aberto para liquidar.
           </p>
         ) : (
-          <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs">Fatura a liquidar</Label>
               <Select value={cobrancaId} onValueChange={setCobrancaId}>
@@ -323,7 +322,7 @@ export function RecibosDialog({
           </div>
         )}
 
-        <DialogFooter>
+        <div className="px-6 py-4 border-t bg-card flex items-center justify-end gap-3 shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancelar
           </Button>
@@ -335,7 +334,7 @@ export function RecibosDialog({
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Registar recibo
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
