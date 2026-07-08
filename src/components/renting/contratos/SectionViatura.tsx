@@ -137,7 +137,7 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
                     >
                       <Command>
                         <CommandInput
-                          placeholder="Pesquisar matrícula, marca, modelo..."
+                          placeholder="Pesquisar por matrícula..."
                           className="h-9"
                         />
                         <CommandList>
@@ -147,7 +147,7 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
                               {viaturasComGrupo.map((v) => (
                                 <CommandItem
                                   key={v.id}
-                                  value={`${v.matricula} ${v.marca} ${v.modelo}`}
+                                  value={v.matricula}
                                   onSelect={() => selecionarViatura(v.id, field.onChange)}
                                   className="cursor-pointer"
                                 >
@@ -168,7 +168,7 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
                                   {mesmoGrupo.map((v) => (
                                     <CommandItem
                                       key={v.id}
-                                      value={`${v.matricula} ${v.marca} ${v.modelo}`}
+                                      value={v.matricula}
                                       onSelect={() => selecionarViatura(v.id, field.onChange)}
                                       className="cursor-pointer"
                                     >
@@ -188,7 +188,7 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
                                   {outrosGrupos.map((v) => (
                                     <CommandItem
                                       key={v.id}
-                                      value={`${v.matricula} ${v.marca} ${v.modelo}`}
+                                      value={v.matricula}
                                       onSelect={() => selecionarViatura(v.id, field.onChange)}
                                       className="cursor-pointer"
                                     >

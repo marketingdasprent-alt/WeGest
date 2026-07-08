@@ -6423,6 +6423,61 @@ export type Database = {
           },
         ]
       }
+      renting_tarifa_precos_modelo: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          modelo_id: string
+          org_id: string
+          preco_semana: number
+          tarifa_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          modelo_id: string
+          org_id: string
+          preco_semana: number
+          tarifa_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          modelo_id?: string
+          org_id?: string
+          preco_semana?: number
+          tarifa_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "renting_tarifa_precos_modelo_modelo_id_fkey"
+            columns: ["modelo_id"]
+            isOneToOne: false
+            referencedRelation: "viatura_modelos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renting_tarifa_precos_modelo_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renting_tarifa_precos_modelo_tarifa_id_fkey"
+            columns: ["tarifa_id"]
+            isOneToOne: false
+            referencedRelation: "renting_tarifas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       renting_tarifas: {
         Row: {
           ativa: boolean
@@ -6438,6 +6493,8 @@ export type Database = {
           preco_fim_semana: number | null
           preco_mes: number | null
           preco_semana: number | null
+          reserva_max_minutos: number | null
+          reserva_min_minutos: number | null
           tipo: string
           updated_at: string
           valido_ate: string | null
@@ -6457,6 +6514,8 @@ export type Database = {
           preco_fim_semana?: number | null
           preco_mes?: number | null
           preco_semana?: number | null
+          reserva_max_minutos?: number | null
+          reserva_min_minutos?: number | null
           tipo?: string
           updated_at?: string
           valido_ate?: string | null
@@ -6476,6 +6535,8 @@ export type Database = {
           preco_fim_semana?: number | null
           preco_mes?: number | null
           preco_semana?: number | null
+          reserva_max_minutos?: number | null
+          reserva_min_minutos?: number | null
           tipo?: string
           updated_at?: string
           valido_ate?: string | null

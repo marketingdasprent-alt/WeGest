@@ -261,7 +261,7 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
               <>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm text-muted-foreground shrink-0">
-                    Preço/dia (IVA inc.)
+                    {regime === 'tvde' ? 'Preço/semana (IVA inc.)' : 'Preço/dia (IVA inc.)'}
                   </span>
                   <Input
                     type="text"
@@ -275,12 +275,12 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
                     disabled={!dias}
                     placeholder="0,00"
                     className="h-8 w-24 text-right tabular-nums text-sm"
-                    title={!dias ? 'Define primeiro as datas' : 'Preço por dia (IVA incluído)'}
+                    title={!dias ? 'Define primeiro as datas' : (regime === 'tvde' ? 'Preço por semana (IVA incluído)' : 'Preço por dia (IVA incluído)')}
                   />
                 </div>
                 {dias ? (
                   <p className="text-xs text-muted-foreground text-right">
-                    × {dias} dia{dias === 1 ? '' : 's'}
+                    {regime === 'tvde' ? '× 1 semana' : `× ${dias} dia${dias === 1 ? '' : 's'}`}
                   </p>
                 ) : (
                   <p className="text-xs text-amber-600 dark:text-amber-400 text-right flex items-center justify-end gap-1">

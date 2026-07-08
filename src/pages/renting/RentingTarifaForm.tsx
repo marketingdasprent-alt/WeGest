@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Tag, Save, Trash2, ChevronRight, Calendar, Gauge, Clock, ShieldCheck } from 'lucide-react';
+import { getTarifaFormValidationError } from './tarifaFormValidation';
+import { Tag, Save, Trash2, ChevronRight, Calendar, Gauge, Clock, ShieldCheck, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,6 +39,12 @@ interface RentingGrupo {
   codigo: string;
 }
 
+interface ModeloComMarca {
+  id: string;
+  nome: string;
+  marca_nome: string;
+}
+
 const MINUTOS_OPTIONS = [
   { value: 'none', label: '— Sem restrição —' },
   { value: '30', label: '30 minutos' },
@@ -70,6 +77,7 @@ const EMPTY_FORM = {
   reserva_max_minutos: 'none',
   tarifa_promocional: false,
   manter_valor_primeira: false,
+  para_tvde: false,
   ativa: true,
 };
 
@@ -91,6 +99,8 @@ const RentingTarifaForm = () => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Mapa modelo_id -> preço/semana (string), só usado quando para_tvde
+  const [precosModelo, setPrecosModelo] = useState<Record<string, string>>({});
 
   // Carregar grupos ativos
   const { data: grupos = [] } = useQuery({
@@ -122,6 +132,39 @@ const RentingTarifaForm = () => {
     enabled: !!id,
   });
 
+  // Todos os modelos do sistema (marca + modelo), para a secção de preço por modelo TVDE
+  const { data: modelos = [] } = useQuery({
+    queryKey: ['viatura_modelos_com_marca', orgId],
+    queryFn: async (): Promise<ModeloComMarca[]> => {
+      const { data, error } = await supabase
+        .from('viatura_modelos')
+        .select('id, nome, viatura_marcas(nome)')
+        .eq('ativo', true)
+        .order('nome');
+      if (error) throw error;
+      return (data ?? []).map((m: any) => ({
+        id: m.id,
+        nome: m.nome,
+        marca_nome: m.viatura_marcas?.nome ?? '',
+      }));
+    },
+    enabled: !!orgId,
+  });
+
+  // Preços por modelo já gravados para esta tarifa
+  const { data: precosModeloDb = [] } = useQuery({
+    queryKey: ['renting_tarifa_precos_modelo', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('renting_tarifa_precos_modelo')
+        .select('modelo_id, preco_semana')
+        .eq('tarifa_id', id!);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+  });
+
   useEffect(() => {
     if (!tarifa) return;
     setForm({
@@ -139,9 +182,19 @@ const RentingTarifaForm = () => {
       reserva_max_minutos: (tarifa as any).reserva_max_minutos?.toString() ?? 'none',
       tarifa_promocional: (tarifa as any).tarifa_promocional ?? false,
       manter_valor_primeira: (tarifa as any).manter_valor_primeira ?? false,
+      para_tvde: tarifa.tipo === 'tvde',
       ativa: tarifa.ativa ?? true,
     });
   }, [tarifa]);
+
+  useEffect(() => {
+    if (!precosModeloDb.length) return;
+    const map: Record<string, string> = {};
+    for (const p of precosModeloDb) {
+      map[p.modelo_id] = p.preco_semana?.toString() ?? '';
+    }
+    setPrecosModelo(map);
+  }, [precosModeloDb]);
 
   const f = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((p) => ({ ...p, [key]: e.target.value }));
@@ -149,10 +202,12 @@ const RentingTarifaForm = () => {
   const n = (v: string) => (v.trim() ? parseFloat(v) : null);
   const ni = (v: string) => (v.trim() ? parseInt(v) : null);
 
+  const minSel = (v: string) => (v && v !== 'none' ? parseInt(v) : null);
+
   const buildPayload = () => ({
-    grupo_id: form.grupo_id,
+    grupo_id: form.para_tvde ? null : (form.grupo_id || null),
     nome: form.nome.trim(),
-    preco_dia: parseFloat(form.preco_dia || '0'),
+    preco_dia: form.para_tvde ? null : parseFloat(form.preco_dia || '0'),
     preco_fim_semana: n(form.preco_fim_semana),
     preco_semana: n(form.preco_semana),
     preco_mes: n(form.preco_mes),
@@ -160,20 +215,45 @@ const RentingTarifaForm = () => {
     km_adicional_valor: n(form.km_adicional_valor),
     valido_de: form.valido_de || null,
     valido_ate: form.valido_ate || null,
+    reserva_min_minutos: minSel(form.reserva_min_minutos),
+    reserva_max_minutos: minSel(form.reserva_max_minutos),
+    tipo: form.para_tvde ? 'tvde' : 'renting',
     ativa: form.ativa,
   });
 
+  /**
+   * Sincroniza renting_tarifa_precos_modelo com o mapa em memória:
+   * apaga tudo e reinsere as linhas com preço válido. Só chamado quando
+   * a tarifa é TVDE; se deixar de ser, limpa os preços.
+   */
+  const savePrecosModelo = async (tarifaId: string) => {
+    await supabase.from('renting_tarifa_precos_modelo').delete().eq('tarifa_id', tarifaId);
+    if (!form.para_tvde) return;
+    const linhas = Object.entries(precosModelo)
+      .filter(([, v]) => v.trim() !== '' && !Number.isNaN(parseFloat(v)))
+      .map(([modelo_id, v]) => ({
+        org_id: orgId!,
+        tarifa_id: tarifaId,
+        modelo_id,
+        preco_semana: parseFloat(v),
+      }));
+    if (linhas.length) {
+      const { error } = await supabase.from('renting_tarifa_precos_modelo').insert(linhas);
+      if (error) throw error;
+    }
+  };
+
   const validate = () => {
-    if (!form.grupo_id) {
-      toast({ title: 'Selecione um grupo', variant: 'destructive' });
-      return false;
-    }
-    if (!form.nome.trim()) {
-      toast({ title: 'Nome é obrigatório', variant: 'destructive' });
-      return false;
-    }
-    if (!form.preco_dia.trim()) {
-      toast({ title: 'Preço/dia é obrigatório', variant: 'destructive' });
+    const error = getTarifaFormValidationError({
+      grupo_id: form.grupo_id,
+      nome: form.nome,
+      preco_dia: form.preco_dia,
+      para_tvde: form.para_tvde,
+      precosModelo,
+    });
+
+    if (error) {
+      toast({ title: error.title, description: error.description, variant: 'destructive' });
       return false;
     }
     return true;
@@ -191,6 +271,7 @@ const RentingTarifaForm = () => {
           .select('id')
           .single();
         if (error) throw error;
+        await savePrecosModelo(data.id);
         qc.invalidateQueries({ queryKey: ['renting_tarifas'] });
         toast({ title: 'Tarifa criada' });
         if (andClose) navigate('/renting/tarifas');
@@ -198,8 +279,10 @@ const RentingTarifaForm = () => {
       } else {
         const { error } = await supabase.from('renting_tarifas').update(payload).eq('id', id!);
         if (error) throw error;
+        await savePrecosModelo(id!);
         qc.invalidateQueries({ queryKey: ['renting_tarifas'] });
         qc.invalidateQueries({ queryKey: ['renting_tarifa', id] });
+        qc.invalidateQueries({ queryKey: ['renting_tarifa_precos_modelo', id] });
         toast({ title: 'Tarifa actualizada' });
         if (andClose) navigate('/renting/tarifas');
       }
@@ -301,29 +384,31 @@ const RentingTarifaForm = () => {
           <div className="flex-1 min-w-0 space-y-6">
             {/* Campos de topo */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2 space-y-2">
-                <Label>
-                  Grupo <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={form.grupo_id}
-                  onValueChange={(v) => setForm((p) => ({ ...p, grupo_id: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecionar grupo de viaturas..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {grupos.map((g) => (
-                      <SelectItem key={g.id} value={g.id}>
-                        <span className="font-mono text-xs mr-2 text-muted-foreground">
-                          {g.codigo}
-                        </span>
-                        {g.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {!form.para_tvde && (
+                <div className="sm:col-span-2 space-y-2">
+                  <Label>
+                    Grupo <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={form.grupo_id}
+                    onValueChange={(v) => setForm((p) => ({ ...p, grupo_id: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecionar grupo de viaturas..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {grupos.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>
+                          <span className="font-mono text-xs mr-2 text-muted-foreground">
+                            {g.codigo}
+                          </span>
+                          {g.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>
@@ -386,6 +471,15 @@ const RentingTarifaForm = () => {
                   <Clock className="h-3.5 w-3.5 mr-1.5" />
                   Tempos de Reserva
                 </TabsTrigger>
+                {form.para_tvde && (
+                  <TabsTrigger
+                    value="precos_modelo"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1"
+                  >
+                    <Car className="h-3.5 w-3.5 mr-1.5" />
+                    Preço por modelo
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               {/* ── Tab Geral ── */}
@@ -394,25 +488,27 @@ const RentingTarifaForm = () => {
                 <div className="space-y-4">
                   <Label className="text-base font-semibold">Preços</Label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="space-y-2">
-                      <Label>
-                        Preço por dia (€) <span className="text-red-500">*</span>
-                      </Label>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={form.preco_dia}
-                          onChange={f('preco_dia')}
-                          placeholder="0.00"
-                          className="pr-8"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
-                          €
-                        </span>
+                    {!form.para_tvde && (
+                      <div className="space-y-2">
+                        <Label>
+                          Preço por dia (€) <span className="text-red-500">*</span>
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={form.preco_dia}
+                            onChange={f('preco_dia')}
+                            placeholder="0.00"
+                            className="pr-8"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                            €
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                    )}
                     <div className="space-y-2">
                       <Label>Preço fim de semana/dia (€)</Label>
                       <div className="relative">
@@ -661,6 +757,68 @@ const RentingTarifaForm = () => {
                   </div>
                 )}
               </TabsContent>
+
+              {/* ── Tab Preço por modelo (só TVDE) ── */}
+              {form.para_tvde && (
+                <TabsContent value="precos_modelo" className="mt-6 space-y-4">
+                  <div>
+                    <Label className="text-base font-semibold">Preço por modelo (semanal)</Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Tarifa TVDE — o aluguer é semanal. Defina o preço por semana de cada modelo.
+                      Ao criar um contrato/reserva TVDE com esta tarifa, só é permitido escolher
+                      viaturas de modelos com preço definido aqui.
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border divide-y">
+                    {modelos.length === 0 && (
+                      <p className="p-4 text-sm text-muted-foreground italic">
+                        Sem modelos no sistema. Crie modelos em Frota → Modelos.
+                      </p>
+                    )}
+                    {modelos.map((m) => (
+                      <div
+                        key={m.id}
+                        className="flex items-center justify-between gap-4 p-2.5 hover:bg-muted/30"
+                      >
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium">{m.nome}</span>
+                          {m.marca_nome && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              {m.marca_nome}
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative w-32 shrink-0">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={precosModelo[m.id] ?? ''}
+                            onChange={(e) =>
+                              setPrecosModelo((p) => ({ ...p, [m.id]: e.target.value }))
+                            }
+                            placeholder="—"
+                            className="pr-12 h-8 text-right"
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
+                            €/sem
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    {
+                      Object.values(precosModelo).filter(
+                        (v) => v.trim() !== '' && !Number.isNaN(parseFloat(v))
+                      ).length
+                    }{' '}
+                    modelo(s) com preço definido. Modelos sem preço ficam indisponíveis nesta tarifa.
+                  </p>
+                </TabsContent>
+              )}
             </Tabs>
           </div>
 
@@ -737,6 +895,33 @@ const RentingTarifaForm = () => {
                   <p className="text-xs text-muted-foreground italic">Sem preços configurados</p>
                 )}
               </div>
+
+              {/* Tarifa para TVDE — abre a aba "Preço por modelo" */}
+              <div className="pt-3 mt-1 border-t">
+                <div className="flex items-start gap-2.5">
+                  <Checkbox
+                    id="para_tvde"
+                    checked={form.para_tvde}
+                    onCheckedChange={(v) => {
+                      setForm((p) => ({
+                        ...p,
+                        para_tvde: !!v,
+                        grupo_id: !!v ? '' : p.grupo_id,
+                      }));
+                    }}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <Label htmlFor="para_tvde" className="cursor-pointer font-medium text-sm">
+                      Tarifa para TVDE
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Só disponível em contratos/reservas TVDE. Usa preços semanais por modelo e
+                      não exige grupo nem preço por dia.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Validade */}
@@ -762,7 +947,7 @@ const RentingTarifaForm = () => {
             )}
 
             {/* Grupo */}
-            {grupoSelecionado && (
+            {!form.para_tvde && grupoSelecionado && (
               <div className="rounded-lg border p-4 space-y-2">
                 <p className="text-sm font-semibold">Grupo</p>
                 <div className="flex items-center gap-2">
