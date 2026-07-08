@@ -65,10 +65,9 @@ const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
  */
 const ORIGENS_RECEBIDO = new Set(['recibo', 'nota_credito']);
 
-function calcularTotais(raw: MovimentoRaw[]): Pick<
-  ContaCorrenteCliente,
-  'faturado' | 'recebido' | 'saldo'
-> {
+function calcularTotais(
+  raw: MovimentoRaw[]
+): Pick<ContaCorrenteCliente, 'faturado' | 'recebido' | 'saldo'> {
   let faturado = 0;
   let recebido = 0;
   for (const m of raw) {
@@ -117,7 +116,7 @@ async function fetchContaCorrente(clienteId: string): Promise<ContaCorrenteClien
       .select('*')
       .in('cobranca_id', cobrancaIds)
       .eq('status', 'emitida');
-    for (const inv of ((invs ?? []) as unknown as InvoiceMetadata[])) {
+    for (const inv of (invs ?? []) as unknown as InvoiceMetadata[]) {
       if (!inv.cobranca_id) continue;
       // Só faturas (FT/FR) têm PDF a mostrar por cobrança; NC/RC não substituem.
       if (inv.tipo !== 'FT' && inv.tipo !== 'FR') continue;

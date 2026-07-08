@@ -83,9 +83,7 @@ function ResumoCard({
             <p className={cn('text-2xl font-bold truncate mt-0.5', valorClass)}>
               {formatCurrency(valor)}
             </p>
-            {legenda && (
-              <p className={cn('text-[11px] mt-0.5 truncate', valorClass)}>{legenda}</p>
-            )}
+            {legenda && <p className={cn('text-[11px] mt-0.5 truncate', valorClass)}>{legenda}</p>}
           </div>
           <div className={cn('p-2 rounded-lg shrink-0', iconWrap)}>{icon}</div>
         </div>
