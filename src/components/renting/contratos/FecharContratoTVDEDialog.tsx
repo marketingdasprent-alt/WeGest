@@ -385,8 +385,11 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   const onSubmit = async (raw: FormInput) => {
     const values = raw as unknown as FormOutput;
 
-    // Devolução de viatura com DUA: exige confirmar a devolução do documento.
-    if (values.tipoEvento === 'devolvido' && viaturaTemDua && !duaDevolvido) {
+    // Retorno de viatura com DUA (recolhida ou devolvida): exige confirmar a
+    // devolução do documento antes de fechar.
+    const eventoDeRetornoSubmit =
+      values.tipoEvento === 'recolhido' || values.tipoEvento === 'devolvido';
+    if (eventoDeRetornoSubmit && viaturaTemDua && !duaDevolvido) {
       toast.error('Esta viatura tem DUA. Confirma que o DUA foi devolvido antes de fechar.');
       return;
     }
@@ -430,6 +433,11 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   const isPending = fecharMutation.isPending || gerandoFolha;
   const temMotorista = !!motoristaId;
   const tipoEvento = form.watch('tipoEvento');
+  // Qualquer fecho traz a viatura de volta à empresa (recolhida pela empresa ou
+  // devolvida pelo motorista) — em ambos o DUA físico regressa e tem de ser
+  // confirmado. Só exigimos quando a viatura tem DUA e já se escolheu o evento.
+  const eventoDeRetorno = tipoEvento === 'recolhido' || tipoEvento === 'devolvido';
+  const exigeDua = eventoDeRetorno && viaturaTemDua && !duaDevolvido;
 
   return (
     <Dialog
@@ -505,7 +513,7 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
                   )}
                 </div>
 
-                {tipoEvento === 'devolvido' && viaturaTemDua && (
+                {eventoDeRetorno && viaturaTemDua && (
                   <label className="flex items-start gap-3 rounded-md border border-amber-500/50 bg-amber-500/5 p-3 cursor-pointer">
                     <Checkbox
                       checked={duaDevolvido}
@@ -842,7 +850,7 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
           <Button
             type="button"
             variant="destructive"
-            disabled={isPending || (tipoEvento === 'devolvido' && viaturaTemDua && !duaDevolvido)}
+            disabled={isPending || exigeDua}
             onClick={form.handleSubmit(onSubmit)}
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}

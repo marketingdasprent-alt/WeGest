@@ -36,6 +36,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -188,6 +190,8 @@ export function FaturacaoTab() {
   const [ncMotivo, setNcMotivo] = useState<string>('');
   const [anularRow, setAnularRow] = useState<FaturacaoRow | null>(null);
   const [anularBusy, setAnularBusy] = useState(false);
+  // Motivo da anulação — obrigatório ao anular um recibo (vai no aviso ao motorista).
+  const [anularMotivo, setAnularMotivo] = useState('');
 
   /** Carrega a cobrança + saldos (recibos/NC ativos) para uma ação. */
   async function resolverCobranca(cobrancaId: string) {
@@ -294,12 +298,19 @@ export function FaturacaoTab() {
   async function confirmarAnular() {
     const row = anularRow;
     if (!row) return;
+    const motivo = anularMotivo.trim();
+    // Motivo é obrigatório ao anular um recibo — segue no aviso ao motorista.
+    if (row.docTipo === 'recibo' && !motivo) {
+      toast.error('Indica o motivo da anulação.');
+      return;
+    }
     setAnularBusy(true);
     try {
       if (row.docTipo === 'recibo' && row.reciboId) {
+        // Grava o motivo em observacoes: é o campo que o trigger lê para o aviso.
         const { error } = await supabase
           .from('recibos')
-          .update({ estado: 'anulado' })
+          .update({ estado: 'anulado', observacoes: motivo })
           .eq('id', row.reciboId)
           .eq('estado', 'ativo');
         if (error) throw error;
@@ -322,6 +333,7 @@ export function FaturacaoTab() {
         toast.success('Nota de crédito anulada (anulamento lançado na conta-corrente).');
       }
       setAnularRow(null);
+      setAnularMotivo('');
       setReloadToken((t) => t + 1);
     } catch (e: any) {
       console.error('Erro ao anular:', e);
@@ -999,7 +1011,10 @@ export function FaturacaoTab() {
       <AlertDialog
         open={!!anularRow}
         onOpenChange={(o) => {
-          if (!o && !anularBusy) setAnularRow(null);
+          if (!o && !anularBusy) {
+            setAnularRow(null);
+            setAnularMotivo('');
+          }
         }}
       >
         <AlertDialogContent>
@@ -1009,10 +1024,26 @@ export function FaturacaoTab() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {anularRow?.docTipo === 'recibo'
-                ? 'Anula o recibo e lança um anulamento na conta-corrente. Um recibo anula-se internamente — não é emitido documento fiscal.'
+                ? 'Anula o recibo e lança um anulamento na conta-corrente. Um recibo anula-se internamente — não é emitido documento fiscal. O motorista é avisado por email com o motivo indicado.'
                 : 'Anula a nota de crédito e lança um anulamento na conta-corrente. A reversão fiscal de uma NC seria uma Nota de Débito, que não é emitida aqui.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {anularRow?.docTipo === 'recibo' && (
+            <div className="space-y-2">
+              <Label htmlFor="anular-motivo">
+                Motivo da anulação <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                id="anular-motivo"
+                value={anularMotivo}
+                onChange={(e) => setAnularMotivo(e.target.value)}
+                placeholder="Ex.: pagamento devolvido pelo banco"
+                className="min-h-[72px] resize-none"
+                disabled={anularBusy}
+                autoFocus
+              />
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={anularBusy}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
@@ -1020,7 +1051,9 @@ export function FaturacaoTab() {
                 e.preventDefault();
                 confirmarAnular();
               }}
-              disabled={anularBusy}
+              disabled={
+                anularBusy || (anularRow?.docTipo === 'recibo' && !anularMotivo.trim())
+              }
               className="bg-rose-600 hover:bg-rose-700"
             >
               {anularBusy ? 'A anular…' : 'Anular'}
