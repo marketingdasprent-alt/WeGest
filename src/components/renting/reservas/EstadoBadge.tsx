@@ -61,7 +61,7 @@ export const EstadoBadge: React.FC<EstadoBadgeProps> = ({ estado }) => {
   const meta = ESTADO_META[estado];
   const Icon = meta.icon;
   return (
-    <Badge variant="outline" className={cn('gap-1 font-medium', meta.badge)}>
+    <Badge variant="outline" className={cn('gap-1 font-medium whitespace-nowrap', meta.badge)}>
       <Icon className="h-3 w-3" />
       {ESTADO_LABELS[estado]}
     </Badge>

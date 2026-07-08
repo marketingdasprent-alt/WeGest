@@ -371,9 +371,18 @@ export function useFecharContratoTVDE() {
       if (errEstacao) throw errEstacao;
       const cidadeEvento = estacao.cidade?.trim() || estacao.nome;
 
+      // O contrato só fecha (estado_operacional) quando a recolha física é
+      // confirmada de facto — ou já aqui (km/combustível/fotos preenchidos,
+      // `recolha` presente) ou mais tarde via QR/Calendário
+      // (realizar_token_realizacao). Sem `recolha`, isto só regista a estação
+      // e cria o evento pendente — o contrato mantém-se em_curso até alguém
+      // confirmar a recolha física.
       const { error: errUpdate } = await supabase
         .from('contratos_renting')
-        .update({ estado_operacional: 'cancelado', estacao_recolha_id: estacaoId })
+        .update({
+          estacao_recolha_id: estacaoId,
+          ...(recolha ? { estado_operacional: 'cancelado' as const } : {}),
+        })
         .eq('id', contratoId);
       if (errUpdate) throw errUpdate;
 
@@ -383,7 +392,12 @@ export function useFecharContratoTVDE() {
       } = await supabase.auth.getSession();
       const userId = session?.user?.id ?? null;
 
-      const tipoCalendario = tipoEvento === 'recolhido' ? 'recolha' : 'devolucao';
+      // Sempre 'recolha' no calendário — é o único tipo que o fluxo de
+      // renting (useEventosPendentesRenting, realizar_token_realizacao)
+      // reconhece como pendente de confirmação para contratos_renting.
+      // 'devolucao' pertence ao sistema legado de `contratos` (não-renting)
+      // e ficaria órfão (invisível/impossível de confirmar) aqui.
+      const tipoCalendario = 'recolha';
       const matriculaNorm = matricula ? matricula.replace(/[\s-]/g, '').toUpperCase() : null;
       const descricaoEvento = [motivo || null, `Fecho do contrato #${contratoCodigo}`]
         .filter(Boolean)
@@ -391,7 +405,9 @@ export function useFecharContratoTVDE() {
 
       // Se a recolha for registada já aqui (km/combustível/fotos), o evento
       // nasce directamente marcado como realizado — não fica pendente à
-      // espera do fluxo de QR/Calendário.
+      // espera do fluxo de QR/Calendário. Caso contrário fica pendente e é o
+      // fluxo de QR/Calendário (realizar_token_realizacao) que, ao confirmar,
+      // marca o evento como realizado e só então fecha o contrato.
       const { error: errEvento } = await supabase.from('calendario_eventos').insert({
         tipo: tipoCalendario,
         titulo: matriculaNorm ?? '?',
@@ -487,7 +503,9 @@ export function useFecharContratoTVDE() {
 
       // Fechar o contrato termina o vínculo TVDE em curso — o motorista fica
       // inactivo automaticamente até ser associado a um novo contrato/viatura.
-      if (motoristaId) {
+      // Só acontece quando a recolha física já foi confirmada aqui (senão o
+      // motorista continua de posse da viatura até a recolha real acontecer).
+      if (motoristaId && recolha) {
         const { error: errMotorista } = await supabase
           .from('motoristas_ativos')
           .update({ status_ativo: false })

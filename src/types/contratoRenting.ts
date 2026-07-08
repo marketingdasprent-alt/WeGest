@@ -180,9 +180,6 @@ export type ContratoRentingInsert = Omit<
   | 'updated_by'
   | 'created_at'
   | 'updated_at'
-  // gestor_id é preenchido por DEFAULT na BD (= quem cria); fica de fora do
-  // payload de criação e é reatribuível via Update (só superiores).
-  | 'gestor_id'
 >;
 
 export type ContratoRentingUpdate = Partial<ContratoRentingInsert> & {

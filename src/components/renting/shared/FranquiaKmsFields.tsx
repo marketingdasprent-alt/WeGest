@@ -21,14 +21,21 @@ interface FranquiaKmsFieldsShape extends FieldValues {
   km_adicional_valor: number | null;
 }
 
-export const FranquiaKmsFields: React.FC<{ kmsReadOnly?: boolean }> = ({ kmsReadOnly = false }) => {
+export const FranquiaKmsFields: React.FC<{
+  kmsReadOnly?: boolean;
+  /** Slot para acção extra junto ao título — ex.: botão "Pedir alteração de kms". */
+  kmsAction?: React.ReactNode;
+}> = ({ kmsReadOnly = false, kmsAction }) => {
   const form = useFormContext<FranquiaKmsFieldsShape>();
 
   return (
     <div className="rounded-lg border bg-gradient-to-br from-muted/40 to-muted/10 p-5 space-y-5">
-      <div className="flex items-center gap-2">
-        <Shield className="h-5 w-5 text-primary" />
-        <h3 className="text-base font-semibold">Franquia, Caução & Quilometragem</h3>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Shield className="h-5 w-5 text-primary" />
+          <h3 className="text-base font-semibold">Franquia, Caução & Quilometragem</h3>
+        </div>
+        {kmsAction}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

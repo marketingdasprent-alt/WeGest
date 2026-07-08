@@ -30,6 +30,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { EmissorSelect } from '@/components/renting/EmissorSelect';
 
 const viaturaSchema = z.object({
   matricula: z.string().min(1, 'Matrícula é obrigatória'),
@@ -47,6 +48,7 @@ const viaturaSchema = z.object({
   observacoes: z.string().optional(),
   extintor_numero: z.string().optional().nullable(),
   extintor_validade: z.string().optional().nullable(),
+  emissor_id: z.string().uuid().optional().nullable(),
 });
 
 type ViaturaFormData = z.infer<typeof viaturaSchema>;
@@ -68,6 +70,7 @@ interface Viatura {
   observacoes?: string | null;
   extintor_numero?: string | null;
   extintor_validade?: string | null;
+  emissor_id?: string | null;
 }
 
 interface ViaturaDialogProps {
@@ -139,6 +142,7 @@ export function ViaturaDialog({
       observacoes: '',
       extintor_numero: '',
       extintor_validade: '',
+      emissor_id: null,
     },
   });
 
@@ -160,6 +164,7 @@ export function ViaturaDialog({
         observacoes: viatura.observacoes || '',
         extintor_numero: viatura.extintor_numero || '',
         extintor_validade: viatura.extintor_validade || '',
+        emissor_id: viatura.emissor_id ?? null,
       });
     } else {
       form.reset({
@@ -178,6 +183,7 @@ export function ViaturaDialog({
         observacoes: '',
         extintor_numero: '',
         extintor_validade: '',
+        emissor_id: null,
       });
     }
   }, [viatura, initialMatricula, form]);
@@ -201,6 +207,7 @@ export function ViaturaDialog({
         observacoes: data.observacoes || null,
         extintor_numero: data.extintor_numero || null,
         extintor_validade: data.extintor_validade || null,
+        emissor_id: data.emissor_id || null,
         // Slot: carro externo do motorista, marcado como is_slot.
         ...(slotMotoristaId ? { is_slot: true } : {}),
       };
@@ -414,6 +421,20 @@ export function ViaturaDialog({
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="emissor_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Empresa Emissora</FormLabel>
+                    <FormControl>
+                      <EmissorSelect value={field.value} onChange={field.onChange} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

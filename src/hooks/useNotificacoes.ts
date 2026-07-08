@@ -5,7 +5,7 @@ import { playNotificationSound } from '@/lib/notificationSound';
 export interface Notificacao {
   id: string;
   org_id: string | null;
-  tipo: 'motorista_pendente' | 'escalonamento' | 'viatura_disponivel';
+  tipo: 'motorista_pendente' | 'escalonamento' | 'viatura_disponivel' | 'pedido_troca_kms';
   candidatura_id: string | null;
   /** Destinatário específico (avisos dirigidos a 1 utilizador, ex: lista de espera). */
   destinatario_id: string | null;

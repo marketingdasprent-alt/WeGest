@@ -257,6 +257,12 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
     const grupo = grupos.find((g) => g.id === v.grupo_id);
     if (grupo) form.setValue('grupo', grupo.nome, { shouldDirty: true });
 
+    // Sugestão de empresa emissora a partir da viatura — só quando o campo
+    // ainda estiver vazio, nunca sobrescreve uma escolha manual do gestor.
+    if (v.emissor_id && !form.getValues('emissor_id')) {
+      form.setValue('emissor_id', v.emissor_id, { shouldDirty: true });
+    }
+
     const tarifa = tarifas.find((t) => t.grupo_id === v.grupo_id);
     if (!tarifa) return;
     if (tarifa.kms_incluidos != null)

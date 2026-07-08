@@ -1,12 +1,17 @@
 import type React from 'react';
+import { useState } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
+import { Gauge } from 'lucide-react';
 
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Estacao } from '@/hooks/useEstacoes';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import type { RentingGrupoMin } from '@/hooks/useRentingGruposTarifas';
+import { Button } from '@/components/ui/button';
 import { ALDFields } from '@/components/renting/shared/ALDFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
+import { PedirTrocaKmsDialog } from './PedirTrocaKmsDialog';
+import { usePedidoTrocaKmsPendente } from '@/hooks/usePedidosTrocaKms';
 import type { ContratoFormValues } from './contratoForm.schema';
 import { SectionEntregaRecolha } from './SectionEntregaRecolha';
 import { SectionInfoAdicional } from './SectionInfoAdicional';
@@ -27,6 +32,8 @@ interface ContratoFormSecoesProps {
   reservaCodigo?: number | null;
   /** Recalcula grupo/tarifa/preço ao trocar de viatura (edição do contrato). */
   onViaturaChange?: (viaturaId: string) => void;
+  /** Contrato já existente (edição) — activa o botão "Pedir alteração de kms". */
+  contratoId?: string | null;
 }
 
 /**
@@ -43,22 +50,57 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   viaturaLocked,
   reservaCodigo,
   onViaturaChange,
-}) => (
-  <div className="space-y-6">
-    <SectionRegime form={form} />
-    <SectionEntregaRecolha form={form} estacoes={estacoes} />
-    <ALDFields idPrefix="contrato" />
-    <SectionViatura
-      form={form}
-      viaturas={viaturas}
-      grupos={grupos}
-      grupoIdAtual={grupoIdAtual ?? null}
-      viaturaLocked={viaturaLocked}
-      reservaCodigo={reservaCodigo}
-      onViaturaChange={onViaturaChange}
-    />
-    <SectionGeral form={form} clientes={clientes} />
-    <FranquiaKmsFields />
-    <SectionInfoAdicional form={form} />
-  </div>
-);
+  contratoId,
+}) => {
+  const [pedirTrocaOpen, setPedirTrocaOpen] = useState(false);
+  const { data: pedidoPendente } = usePedidoTrocaKmsPendente(contratoId);
+  const kmsIncluidos = form.watch('kms_incluidos');
+  const kmAdicionalValor = form.watch('km_adicional_valor');
+
+  return (
+    <div className="space-y-6">
+      <SectionRegime form={form} />
+      <SectionEntregaRecolha form={form} estacoes={estacoes} />
+      <ALDFields idPrefix="contrato" />
+      <SectionViatura
+        form={form}
+        viaturas={viaturas}
+        grupos={grupos}
+        grupoIdAtual={grupoIdAtual ?? null}
+        viaturaLocked={viaturaLocked}
+        reservaCodigo={reservaCodigo}
+        onViaturaChange={onViaturaChange}
+      />
+      <SectionGeral form={form} clientes={clientes} />
+      <FranquiaKmsFields
+        kmsReadOnly
+        kmsAction={
+          contratoId ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={!!pedidoPendente}
+              onClick={() => setPedirTrocaOpen(true)}
+            >
+              <Gauge className="h-3.5 w-3.5" />
+              {pedidoPendente ? 'Pedido pendente' : 'Pedir alteração de kms'}
+            </Button>
+          ) : null
+        }
+      />
+      <SectionInfoAdicional form={form} />
+
+      {contratoId && (
+        <PedirTrocaKmsDialog
+          open={pedirTrocaOpen}
+          onOpenChange={setPedirTrocaOpen}
+          contratoId={contratoId}
+          kmsIncluidosAtual={kmsIncluidos ?? 0}
+          kmAdicionalValorAtual={kmAdicionalValor ?? null}
+        />
+      )}
+    </div>
+  );
+};
