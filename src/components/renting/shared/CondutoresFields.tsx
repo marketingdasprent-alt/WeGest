@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useFieldArray, useFormContext, type FieldValues } from 'react-hook-form';
 import { Eye, Info, Plus, Star, Trash2, UserCheck, UserPlus, Users } from 'lucide-react';
 
+import { supabase } from '@/integrations/supabase/client';
 import { FormField, FormMessage } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -50,6 +51,7 @@ const InfoRow = ({ label, value }: { label: string; value: string | null | undef
  */
 interface CondutoresFieldsShape extends FieldValues {
   cliente_id?: string | null;
+  gestor_id?: string | null;
   condutores: Array<{
     cliente_id: string | null;
     motorista_id: string | null;
@@ -107,6 +109,36 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
     motoristas.forEach((mo) => m.set(mo.id, mo));
     return m;
   }, [motoristas]);
+
+  // Gestor automático: ao definir/trocar o motorista principal, herda o gestor
+  // responsável dele (motoristas_ativos.gestor_responsavel guarda o NOME — aqui
+  // resolve-se para o profiles.id que o campo gestor_id espera). Continua
+  // editável a seguir pelo GestorSelect — isto só define o valor por omissão.
+  const motoristaPrincipalId = isTvde
+    ? (fields.find((f) => f.is_principal)?.motorista_id ?? null)
+    : null;
+
+  useEffect(() => {
+    if (!motoristaPrincipalId) return;
+    const gestorNome = motoristasPorId.get(motoristaPrincipalId)?.gestor_responsavel;
+    if (!gestorNome) return;
+    let cancelado = false;
+    supabase
+      .from('profiles')
+      .select('id')
+      .eq('nome', gestorNome)
+      .limit(1)
+      .then(({ data }) => {
+        const gestorId = data?.[0]?.id;
+        if (!cancelado && gestorId) {
+          form.setValue('gestor_id', gestorId, { shouldDirty: true });
+        }
+      });
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [motoristaPrincipalId]);
 
   const disponiveis = useMemo(() => {
     if (isTvde) {

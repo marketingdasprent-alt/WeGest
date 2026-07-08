@@ -1,0 +1,21 @@
+-- ============================================================
+-- Documentação: realizar_token_realizacao passou a gravar km/combustível
+-- ============================================================
+-- Já aplicada em produção pela migration 20260708130000 (fix de RLS —
+-- quem confirma o token no terreno normalmente não tem 'renting_contratos').
+-- Este ficheiro só regista o estado atual no repo de migrations, sem
+-- alterar nada: nenhuma mudança de schema/função aqui, é no-op.
+--
+-- Estado desde 20260708130000:
+--   realizar_token_realizacao(p_token uuid, p_km numeric DEFAULT NULL,
+--     p_combustivel text DEFAULT NULL)
+--   - tipo='entrega'/'recolha': grava km_saida/km_entrada +
+--     combustivel_saida/combustivel_entrada dentro da própria função
+--     (SECURITY DEFINER), evitando o UPDATE direto sujeito a RLS que o
+--     frontend fazia antes.
+--   - tipo='troca': grava só km_saida/combustivel_saida genéricos no
+--     contrato (fallback simples) — a captura por viatura (antiga vs
+--     nova) continua na função dedicada realizar_token_troca(), que já
+--     grava em troca_viatura_registos (ver 20260707230000).
+-- ============================================================
+SELECT 1;

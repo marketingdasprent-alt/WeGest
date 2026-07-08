@@ -85,6 +85,7 @@ import {
 import { ContratoTabHistorico } from '@/components/renting/contratos/ContratoTabHistorico';
 import { RealizarEntregaDialog } from '@/components/renting/contratos/RealizarEntregaDialog';
 import { ContratoTabAnexos } from '@/components/renting/contratos/ContratoTabAnexos';
+import { ContratoTabDanos } from '@/components/renting/contratos/ContratoTabDanos';
 import { ContratoTabCobertura } from '@/components/renting/contratos/ContratoTabCobertura';
 import { ContratoTabExtras } from '@/components/renting/contratos/ContratoTabExtras';
 import { ContratoTabTaxas } from '@/components/renting/contratos/ContratoTabTaxas';
@@ -92,7 +93,6 @@ import { ContratoTabsPlaceholder } from '@/components/renting/contratos/Contrato
 import { ContratoTabFaturar } from '@/components/renting/contratos/ContratoTabFaturar';
 import { ResumoContrato } from '@/components/renting/contratos/ResumoContrato';
 import { HistoricoEdicoesContrato } from '@/components/renting/contratos/HistoricoEdicoesContrato';
-import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import {
   DEFAULT_CONTRATO_VALUES,
   contratoFormSchema,
@@ -342,7 +342,10 @@ const ContratoForm = () => {
         estacao_entrega_id: reservaFromQuery.estacao_entrega_id,
         estacao_recolha_id: reservaFromQuery.estacao_recolha_id,
         data_inicio: isoToLocalInput(reservaFromQuery.data_inicio),
-        data_fim: isoToLocalInput(reservaFromQuery.data_fim),
+        // TVDE não tem data de fim no contrato (aberto, renovação automática) —
+        // mesmo que a reserva tenha uma data de fim inicial, o contrato não a herda.
+        data_fim:
+          reservaFromQuery.regime === 'tvde' ? '' : isoToLocalInput(reservaFromQuery.data_fim),
         origem: 'sistema',
         regime: reservaFromQuery.regime,
         // Tarifa escolhida na reserva flui para o contrato (essencial em TVDE).
@@ -504,34 +507,13 @@ const ContratoForm = () => {
     const grupo = via.grupo_id ? grupos.find((g) => g.id === via.grupo_id) : null;
     form.setValue('grupo', grupo?.nome ?? '', { shouldDirty: true });
 
-    const ms = new Date(dataFim).getTime() - new Date(dataInicio).getTime();
-    const dias = Number.isFinite(ms) && ms > 0 ? Math.max(1, Math.ceil(ms / 86400000)) : null;
-
-    // TVDE: a tarifa vem da reserva/form (tarifa_id, tipo='tvde') e o preço é
-    // semanal por modelo da viatura. Não deriva do grupo.
-    if (regime === 'tvde') {
-      const tarifaTvdeId = form.getValues('tarifa_id');
-      const tarifaTvde = tarifas.find((t) => t.id === tarifaTvdeId) ?? null;
-      const precoModeloSemana =
-        tarifaTvdeId && via.modelo_id
-          ? (precosModeloTvde.find(
-              (p) => p.tarifa_id === tarifaTvdeId && p.modelo_id === via.modelo_id
-            )?.preco_semana ?? null)
-          : null;
-      const fat = calcularFaturacaoRenting(
-        regime,
-        isLongaDuracao,
-        dias,
-        tarifaTvde,
-        precoModeloSemana
-      );
-      if (fat) form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
-      return;
+    // Sugestão de empresa emissora a partir da viatura — só quando o campo
+    // ainda estiver vazio, nunca sobrescreve uma escolha manual do gestor.
+    if (via.emissor_id && !form.getValues('emissor_id')) {
+      form.setValue('emissor_id', via.emissor_id, { shouldDirty: true });
     }
 
-    const tarifa = via.grupo_id
-      ? (tarifas.find((t) => t.grupo_id === via.grupo_id && t.tipo !== 'tvde') ?? null)
-      : null;
+    const tarifa = via.grupo_id ? (tarifas.find((t) => t.grupo_id === via.grupo_id) ?? null) : null;
     if (!tarifa) return;
 
     form.setValue('tarifa_diaria', tarifa.preco_dia, { shouldDirty: true });
@@ -677,6 +659,17 @@ const ContratoForm = () => {
     return result;
   };
 
+  // Sem isto, uma falha de validação Zod (ex.: campo obrigatório ainda vazio
+  // porque os dados da reserva não acabaram de carregar) não dava nenhum
+  // aviso — parecia que o botão "Guardar" não fazia nada na 1ª tentativa.
+  const onInvalid = () => {
+    toast({
+      title: 'Verifica os campos obrigatórios',
+      description: 'Há campos por preencher ou inválidos — pode estar noutra aba do formulário.',
+      variant: 'destructive',
+    });
+  };
+
   const onSubmit = (values: ContratoFormValues) => {
     // TVDE: bloqueia se o modelo da viatura não tem preço na tarifa TVDE.
     if (values.regime === 'tvde' && values.tarifa_id) {
@@ -728,13 +721,14 @@ const ContratoForm = () => {
       reserva_id: values.reserva_id,
       cliente_id: values.cliente_id,
       emissor_id: values.emissor_id,
+      gestor_id: values.gestor_id ?? null,
       viatura_id: values.viatura_id,
       matricula: matriculaFinal,
       grupo: values.grupo || null,
       estacao_entrega_id: values.estacao_entrega_id || null,
       data_inicio: localInputToIso(values.data_inicio),
       estacao_recolha_id: values.estacao_recolha_id || null,
-      data_fim: localInputToIso(values.data_fim),
+      data_fim: values.regime === 'tvde' ? null : localInputToIso(values.data_fim ?? ''),
       estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
       estado_operacional: values.estado_operacional,
       estado_financeiro: values.estado_financeiro,
@@ -760,13 +754,18 @@ const ContratoForm = () => {
     };
 
     // Nº de dias do contrato — necessário para o total dos extras 'dia'.
+    // TVDE não tem data_fim (contrato aberto) — usa o intervalo de renovação
+    // (normalmente 30 dias) como base de cálculo dos extras periódicos.
     const msDia = 86400000;
-    const diasContrato = Math.max(
-      1,
-      Math.ceil(
-        (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) / msDia
-      )
-    );
+    const diasContrato =
+      values.regime === 'tvde' || !values.data_fim
+        ? Math.max(1, values.renovacao_intervalo_dias ?? 30)
+        : Math.max(
+            1,
+            Math.ceil(
+              (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) / msDia
+            )
+          );
 
     // Subtotal do contrato — base de cálculo das taxas percentuais.
     // Espelha o cálculo do ResumoContrato: aluguer + coberturas + extras, com desconto.
@@ -864,28 +863,20 @@ const ContratoForm = () => {
           const viatura = viaturas.find((v) => v.id === values.viatura_id);
           const matriculaFinal = values.matricula || viatura?.matricula || null;
           const msDia = 86400000;
-          const dias = Math.max(
-            1,
-            Math.ceil(
-              (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) / msDia
-            )
-          );
-          const baseAluguer = calcularBaseAluguerRenting({
-            regime: values.regime,
-            isLongaDuracao: values.is_longa_duracao,
-            dias,
-            tarifa:
-              values.regime === 'tvde' && values.tarifa_id
-                ? (tarifas.find((t) => t.id === values.tarifa_id) ?? null)
-                : (tarifas.find((t) => t.grupo_id === values.grupo) ?? null),
-            valorTotalManual: values.valor_total_manual,
-            precoModeloSemana:
-              values.regime === 'tvde' && values.viatura_id && values.tarifa_id
-                ? precosModeloTvde.find(
-                    (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viatura?.modelo_id
-                  )?.preco_semana ?? null
-                : null,
-          });
+          const dias =
+            values.regime === 'tvde' || !values.data_fim
+              ? Math.max(1, values.renovacao_intervalo_dias ?? 30)
+              : Math.max(
+                  1,
+                  Math.ceil(
+                    (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) /
+                      msDia
+                  )
+                );
+          const baseAluguer =
+            values.valor_total_manual != null && values.valor_total_manual > 0
+              ? values.valor_total_manual
+              : (values.tarifa_diaria ?? 0) * dias;
           const custoCoberturas =
             values.coberturas.reduce((s, c) => s + (c.preco_dia ?? 0), 0) * dias;
           const condutores = values.condutores as CondutorFormItem[];
@@ -910,7 +901,7 @@ const ContratoForm = () => {
               estacao_entrega_id: values.estacao_entrega_id || null,
               data_inicio: localInputToIso(values.data_inicio),
               estacao_recolha_id: values.estacao_recolha_id || null,
-              data_fim: localInputToIso(values.data_fim),
+              data_fim: values.regime === 'tvde' ? null : localInputToIso(values.data_fim ?? ''),
               estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
               estado_operacional: values.estado_operacional,
               estado_financeiro: values.estado_financeiro,
@@ -1080,8 +1071,19 @@ const ContratoForm = () => {
         )}
         <Button
           type="button"
-          onClick={form.handleSubmit(onSubmit)}
-          disabled={isPending || contrato?.substituido_em != null || condutoresRascunho.length > 0}
+          onClick={form.handleSubmit(onSubmit, onInvalid)}
+          disabled={
+            isPending ||
+            contrato?.substituido_em != null ||
+            condutoresRascunho.length > 0 ||
+            // Criação a partir de reserva: espera a reserva (e os condutores
+            // dela) terminarem de carregar antes de liberar o submit — sem
+            // isto, um clique prematuro falhava a validação Zod em silêncio
+            // (campos ainda vazios) e parecia que "não fazia nada".
+            (!isEdit &&
+              !!reservaIdFromQuery &&
+              (!reservaFromQuery || condutoresDaReserva === undefined))
+          }
           className="gap-2"
         >
           {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -1195,13 +1197,13 @@ const ContratoForm = () => {
         <Card className="bg-card border-border">
           <CardContent className="p-4 sm:p-6">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
                 <ContratoTabsPlaceholder
-                  regime={regime}
                   geralContent={
                     <ContratoFormSecoes
                       form={form}
                       clientes={clientes}
+                      motoristas={motoristas}
                       viaturas={viaturasParaSelecao}
                       grupos={grupos}
                       grupoIdAtual={
@@ -1213,14 +1215,7 @@ const ContratoForm = () => {
                       viaturaLocked={viaturaLocked}
                       reservaCodigo={reservaAssociada?.codigo ?? null}
                       onViaturaChange={aplicarDadosViatura}
-                    />
-                  }
-                  condutoresContent={
-                    <CondutoresFields
-                      regime={regime}
-                      clientes={clientes}
-                      motoristas={motoristas}
-                      clientePrincipalLabel="Cliente do contrato também conduz"
+                      contratoId={contrato?.id ?? null}
                       onCriarNovoCliente={() => setClienteDialogOpen(true)}
                       onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
                     />
@@ -1239,6 +1234,7 @@ const ContratoForm = () => {
                       />
                     ) : undefined
                   }
+                  danosContent={<ContratoTabDanos contratoId={contrato?.id ?? null} />}
                   anexosContent={<ContratoTabAnexos contratoId={contrato?.id ?? null} />}
                 />
 

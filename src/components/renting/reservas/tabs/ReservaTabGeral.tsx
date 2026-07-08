@@ -42,6 +42,7 @@ import {
 import { cn } from '@/lib/utils';
 
 import { ALDFields } from '@/components/renting/shared/ALDFields';
+import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
 import { EmissorSelect } from '@/components/renting/EmissorSelect';
 import { GestorSelect } from '@/components/renting/GestorSelect';
@@ -79,6 +80,9 @@ interface ReservaTabGeralProps {
   /** Slot: motoristas para o seletor + callback de criar motorista. */
   motoristas?: Motorista[];
   onCriarMotorista?: () => void;
+  /** Condutores/Motoristas (secção "Condutor/Motorista", antes das OBS). */
+  onCriarNovoCliente?: () => void;
+  onCriarCondutorProvisorio?: () => void;
 }
 
 function diferencaDias(inicio: string, fim: string): number | null {
@@ -127,6 +131,8 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   clientes,
   motoristas = [],
   onCriarMotorista,
+  onCriarNovoCliente,
+  onCriarCondutorProvisorio,
 }) => {
   const [viaturaPopoverOpen, setViaturaPopoverOpen] = useState(false);
   const [clientePopoverOpen, setClientePopoverOpen] = useState(false);
@@ -269,11 +275,13 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
     const grupo = grupos.find((g) => g.id === v.grupo_id);
     if (grupo) form.setValue('grupo', grupo.nome, { shouldDirty: true });
 
-    // Em TVDE a tarifa é escolhida manualmente (tarifa_id), não deriva do grupo —
-    // por isso não se sobrepõem aqui os kms/km da tarifa de grupo.
-    if (isTvde) return;
+    // Sugestão de empresa emissora a partir da viatura — só quando o campo
+    // ainda estiver vazio, nunca sobrescreve uma escolha manual do gestor.
+    if (v.emissor_id && !form.getValues('emissor_id')) {
+      form.setValue('emissor_id', v.emissor_id, { shouldDirty: true });
+    }
 
-    const tarifa = tarifas.find((t) => t.grupo_id === v.grupo_id && t.tipo !== 'tvde');
+    const tarifa = tarifas.find((t) => t.grupo_id === v.grupo_id);
     if (!tarifa) return;
     if (tarifa.kms_incluidos != null)
       form.setValue('kms_incluidos', tarifa.kms_incluidos, { shouldDirty: true });
@@ -1105,6 +1113,17 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
           />
         </div>
       )}
+
+      {/* === Condutor/Motorista === */}
+      <CondutoresFields
+        regime={regime}
+        clientes={clientes}
+        motoristas={motoristas}
+        clientePrincipalLabel="Cliente da Reserva também conduz"
+        onCriarNovoCliente={onCriarNovoCliente}
+        onCriarNovoMotorista={onCriarMotorista}
+        onCriarCondutorProvisorio={onCriarCondutorProvisorio}
+      />
 
       {/* === Observações === */}
       <div className="space-y-4">

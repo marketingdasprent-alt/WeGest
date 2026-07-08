@@ -124,7 +124,7 @@ interface ViaturaDocument {
 interface ViaturaTabDadosProps {
   viatura: Viatura | null;
   isNew: boolean;
-  onSave: (data: Partial<Viatura>) => Promise<void>;
+  onSave: (data: Partial<Viatura>) => Promise<boolean>;
   saving: boolean;
 }
 
@@ -452,7 +452,11 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       tipo_id: data.tipo_id || null,
     };
 
-    await onSave(payload);
+    const ok = await onSave(payload);
+    // Marca os valores atuais como novo baseline "limpo" — sem isto, isFormDirty
+    // (usado para desativar o botão Guardar) ficava preso em `true` após gravar,
+    // porque a hidratação a partir da `viatura` do pai é ignorada enquanto dirty.
+    if (ok) form.reset(data);
   };
 
   const handleUploadDocument = async (tipoDoc: string, file: File) => {
@@ -1174,8 +1178,11 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                 )}
               />
 
-              <div className="flex justify-end">
-                <Button type="submit" disabled={saving}>
+              <div className="flex items-center justify-end gap-3">
+                {isFormDirty && !saving && (
+                  <span className="text-xs text-muted-foreground">Alterações por gravar</span>
+                )}
+                <Button type="submit" disabled={saving || !isFormDirty}>
                   {saving ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (

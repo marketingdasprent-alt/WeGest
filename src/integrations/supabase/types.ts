@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      assinaturas_handover: {
+        Row: {
+          assinado_em: string
+          assinado_por_id: string
+          calendario_evento_id: string | null
+          contrato_id: string | null
+          id: string
+          org_id: string
+          papel: string
+          signatario_id: string | null
+          signatario_nome: string
+          storage_path: string
+        }
+        Insert: {
+          assinado_em?: string
+          assinado_por_id: string
+          calendario_evento_id?: string | null
+          contrato_id?: string | null
+          id?: string
+          org_id?: string
+          papel: string
+          signatario_id?: string | null
+          signatario_nome: string
+          storage_path: string
+        }
+        Update: {
+          assinado_em?: string
+          assinado_por_id?: string
+          calendario_evento_id?: string | null
+          contrato_id?: string | null
+          id?: string
+          org_id?: string
+          papel?: string
+          signatario_id?: string | null
+          signatario_nome?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assinaturas_handover_calendario_evento_id_fkey"
+            columns: ["calendario_evento_id"]
+            isOneToOne: false
+            referencedRelation: "calendario_eventos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assinaturas_handover_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assistencia_anexos: {
         Row: {
           created_at: string | null
@@ -369,45 +423,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      assinaturas_handover: {
-        Row: {
-          id: string;
-          org_id: string;
-          calendario_evento_id: string | null;
-          contrato_id: string | null;
-          papel: string;
-          signatario_nome: string;
-          signatario_id: string | null;
-          storage_path: string;
-          assinado_em: string;
-          assinado_por_id: string;
-        };
-        Insert: {
-          id?: string;
-          org_id?: string;
-          calendario_evento_id?: string | null;
-          contrato_id?: string | null;
-          papel: string;
-          signatario_nome: string;
-          signatario_id?: string | null;
-          storage_path: string;
-          assinado_em?: string;
-          assinado_por_id: string;
-        };
-        Update: {
-          id?: string;
-          org_id?: string;
-          calendario_evento_id?: string | null;
-          contrato_id?: string | null;
-          papel?: string;
-          signatario_nome?: string;
-          signatario_id?: string | null;
-          storage_path?: string;
-          assinado_em?: string;
-          assinado_por_id?: string;
-        };
-        Relationships: [];
       }
       bolt_drivers: {
         Row: {
@@ -1502,6 +1517,8 @@ export type Database = {
           ativo: boolean
           cliente_id: string | null
           created_at: string
+          data_devolucao: string | null
+          data_entrega: string | null
           data_validade: string | null
           detentor: string | null
           devolucao: string | null
@@ -1512,7 +1529,9 @@ export type Database = {
           numero: string
           org_id: string
           pin: string | null
+          status: string
           tipo: string
+          ultimo_motorista_id: string | null
           updated_at: string
         }
         Insert: {
@@ -1520,6 +1539,8 @@ export type Database = {
           ativo?: boolean
           cliente_id?: string | null
           created_at?: string
+          data_devolucao?: string | null
+          data_entrega?: string | null
           data_validade?: string | null
           detentor?: string | null
           devolucao?: string | null
@@ -1530,7 +1551,9 @@ export type Database = {
           numero: string
           org_id?: string
           pin?: string | null
+          status?: string
           tipo: string
+          ultimo_motorista_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -1538,6 +1561,8 @@ export type Database = {
           ativo?: boolean
           cliente_id?: string | null
           created_at?: string
+          data_devolucao?: string | null
+          data_entrega?: string | null
           data_validade?: string | null
           detentor?: string | null
           devolucao?: string | null
@@ -1548,7 +1573,9 @@ export type Database = {
           numero?: string
           org_id?: string
           pin?: string | null
+          status?: string
           tipo?: string
+          ultimo_motorista_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1562,6 +1589,13 @@ export type Database = {
           {
             foreignKeyName: "cartoes_frota_motorista_id_fkey"
             columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cartoes_frota_ultimo_motorista_id_fkey"
+            columns: ["ultimo_motorista_id"]
             isOneToOne: false
             referencedRelation: "motoristas_ativos"
             referencedColumns: ["id"]
@@ -2308,6 +2342,58 @@ export type Database = {
           },
           {
             foreignKeyName: "contrato_extras_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contrato_historico: {
+        Row: {
+          ator_id: string | null
+          contrato_id: string
+          criado_em: string
+          detalhe: string | null
+          evento_tipo: string
+          id: string
+          org_id: string
+        }
+        Insert: {
+          ator_id?: string | null
+          contrato_id: string
+          criado_em?: string
+          detalhe?: string | null
+          evento_tipo: string
+          id?: string
+          org_id?: string
+        }
+        Update: {
+          ator_id?: string | null
+          contrato_id?: string
+          criado_em?: string
+          detalhe?: string | null
+          evento_tipo?: string
+          id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contrato_historico_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contrato_renting_totais"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "contrato_historico_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos_renting"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrato_historico_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
@@ -3157,6 +3243,65 @@ export type Database = {
           },
         ]
       }
+      danos_tokens: {
+        Row: {
+          contrato_renting_id: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          org_id: string
+          viatura_id: string
+        }
+        Insert: {
+          contrato_renting_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          org_id: string
+          viatura_id: string
+        }
+        Update: {
+          contrato_renting_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          org_id?: string
+          viatura_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "danos_tokens_contrato_renting_id_fkey"
+            columns: ["contrato_renting_id"]
+            isOneToOne: false
+            referencedRelation: "contrato_renting_totais"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "danos_tokens_contrato_renting_id_fkey"
+            columns: ["contrato_renting_id"]
+            isOneToOne: false
+            referencedRelation: "contratos_renting"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "danos_tokens_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "danos_tokens_viatura_id_fkey"
+            columns: ["viatura_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dispositivos_obe: {
         Row: {
           ativo: boolean
@@ -3614,6 +3759,13 @@ export type Database = {
             referencedRelation: "formularios"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "formulario_campanhas_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
         ]
       }
       formularios: {
@@ -3852,6 +4004,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads_dasprent"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_status_history_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
             referencedColumns: ["id"]
           },
         ]
@@ -4414,6 +4573,13 @@ export type Database = {
             referencedRelation: "motoristas_ativos"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "motorista_custos_adicionais_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
         ]
       }
       motorista_documentos: {
@@ -4967,6 +5133,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "motoristas_ativos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "motoristas_ativos_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
@@ -5291,7 +5464,10 @@ export type Database = {
           candidatura_id: string | null
           created_at: string
           destinatario_id: string | null
+          destinatario_user_id: string | null
+          evento_id: string | null
           id: string
+          link: string | null
           mensagem: string | null
           org_id: string | null
           resolvida: boolean
@@ -5307,7 +5483,10 @@ export type Database = {
           candidatura_id?: string | null
           created_at?: string
           destinatario_id?: string | null
+          destinatario_user_id?: string | null
+          evento_id?: string | null
           id?: string
+          link?: string | null
           mensagem?: string | null
           org_id?: string | null
           resolvida?: boolean
@@ -5323,7 +5502,10 @@ export type Database = {
           candidatura_id?: string | null
           created_at?: string
           destinatario_id?: string | null
+          destinatario_user_id?: string | null
+          evento_id?: string | null
           id?: string
+          link?: string | null
           mensagem?: string | null
           org_id?: string | null
           resolvida?: boolean
@@ -5344,10 +5526,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "notificacoes_evento_id_fkey"
+            columns: ["evento_id"]
+            isOneToOne: false
+            referencedRelation: "calendario_eventos"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "notificacoes_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificacoes_viatura_id_fkey"
+            columns: ["viatura_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
             referencedColumns: ["id"]
           },
         ]
@@ -5475,6 +5671,82 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      pedidos_alteracao_contrato: {
+        Row: {
+          contrato_id: string
+          created_at: string
+          created_by: string | null
+          estado: string
+          id: string
+          km_adicional_valor_atual: number | null
+          km_adicional_valor_pedido: number | null
+          motivo: string
+          org_id: string
+          respondido_em: string | null
+          respondido_por: string | null
+          resposta_motivo: string | null
+          tipo: string
+          valor_atual: number
+          valor_pedido: number
+        }
+        Insert: {
+          contrato_id: string
+          created_at?: string
+          created_by?: string | null
+          estado?: string
+          id?: string
+          km_adicional_valor_atual?: number | null
+          km_adicional_valor_pedido?: number | null
+          motivo: string
+          org_id: string
+          respondido_em?: string | null
+          respondido_por?: string | null
+          resposta_motivo?: string | null
+          tipo: string
+          valor_atual: number
+          valor_pedido: number
+        }
+        Update: {
+          contrato_id?: string
+          created_at?: string
+          created_by?: string | null
+          estado?: string
+          id?: string
+          km_adicional_valor_atual?: number | null
+          km_adicional_valor_pedido?: number | null
+          motivo?: string
+          org_id?: string
+          respondido_em?: string | null
+          respondido_por?: string | null
+          resposta_motivo?: string | null
+          tipo?: string
+          valor_atual?: number
+          valor_pedido?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pedidos_troca_kms_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contrato_renting_totais"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "pedidos_troca_kms_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos_renting"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pedidos_troca_kms_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       plataformas_configuracao: {
         Row: {
@@ -5732,6 +6004,7 @@ export type Database = {
           cargo: string | null
           cargo_id: string | null
           created_at: string | null
+          disponivel_transferista: boolean
           email: string | null
           id: string
           is_admin: boolean | null
@@ -5745,6 +6018,7 @@ export type Database = {
           cargo?: string | null
           cargo_id?: string | null
           created_at?: string | null
+          disponivel_transferista?: boolean
           email?: string | null
           id: string
           is_admin?: boolean | null
@@ -5758,6 +6032,7 @@ export type Database = {
           cargo?: string | null
           cargo_id?: string | null
           created_at?: string | null
+          disponivel_transferista?: boolean
           email?: string | null
           id?: string
           is_admin?: boolean | null
@@ -5785,25 +6060,25 @@ export type Database = {
       }
       quadro_tokens: {
         Row: {
+          ativo: boolean
+          created_at: string
           id: string
           org_id: string
           token: string
-          ativo: boolean
-          created_at: string
         }
         Insert: {
+          ativo?: boolean
+          created_at?: string
           id?: string
           org_id?: string
           token?: string
-          ativo?: boolean
-          created_at?: string
         }
         Update: {
+          ativo?: boolean
+          created_at?: string
           id?: string
           org_id?: string
           token?: string
-          ativo?: boolean
-          created_at?: string
         }
         Relationships: [
           {
@@ -7275,6 +7550,94 @@ export type Database = {
           },
         ]
       }
+      troca_viatura_registos: {
+        Row: {
+          combustivel_antiga: string | null
+          combustivel_nova: string | null
+          contrato_id: string
+          created_at: string
+          evento_id: string
+          id: string
+          km_antiga: number | null
+          km_nova: number | null
+          org_id: string
+          registado_por: string | null
+          viatura_antiga_id: string | null
+          viatura_nova_id: string | null
+        }
+        Insert: {
+          combustivel_antiga?: string | null
+          combustivel_nova?: string | null
+          contrato_id: string
+          created_at?: string
+          evento_id: string
+          id?: string
+          km_antiga?: number | null
+          km_nova?: number | null
+          org_id: string
+          registado_por?: string | null
+          viatura_antiga_id?: string | null
+          viatura_nova_id?: string | null
+        }
+        Update: {
+          combustivel_antiga?: string | null
+          combustivel_nova?: string | null
+          contrato_id?: string
+          created_at?: string
+          evento_id?: string
+          id?: string
+          km_antiga?: number | null
+          km_nova?: number | null
+          org_id?: string
+          registado_por?: string | null
+          viatura_antiga_id?: string | null
+          viatura_nova_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "troca_viatura_registos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contrato_renting_totais"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "troca_viatura_registos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos_renting"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "troca_viatura_registos_evento_id_fkey"
+            columns: ["evento_id"]
+            isOneToOne: false
+            referencedRelation: "calendario_eventos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "troca_viatura_registos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "troca_viatura_registos_viatura_antiga_id_fkey"
+            columns: ["viatura_antiga_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "troca_viatura_registos_viatura_nova_id_fkey"
+            columns: ["viatura_nova_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uber_atividade_motoristas: {
         Row: {
           created_at: string | null
@@ -8360,6 +8723,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "user_organizacoes_cargo_id_fkey"
+            columns: ["cargo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "user_organizacoes_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
@@ -9303,6 +9673,7 @@ export type Database = {
           data_primeiro_pagamento: string | null
           data_validade_financeira: string | null
           data_venda: string | null
+          emissor_id: string | null
           estacao_id: string | null
           extintor_numero: string | null
           extintor_validade: string | null
@@ -9366,6 +9737,7 @@ export type Database = {
           data_primeiro_pagamento?: string | null
           data_validade_financeira?: string | null
           data_venda?: string | null
+          emissor_id?: string | null
           estacao_id?: string | null
           extintor_numero?: string | null
           extintor_validade?: string | null
@@ -9429,6 +9801,7 @@ export type Database = {
           data_primeiro_pagamento?: string | null
           data_validade_financeira?: string | null
           data_venda?: string | null
+          emissor_id?: string | null
           estacao_id?: string | null
           extintor_numero?: string | null
           extintor_validade?: string | null
@@ -9481,6 +9854,13 @@ export type Database = {
             columns: ["combustivel_id"]
             isOneToOne: false
             referencedRelation: "viatura_combustiveis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "viaturas_emissor_id_fkey"
+            columns: ["emissor_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
             referencedColumns: ["id"]
           },
           {
@@ -9597,6 +9977,7 @@ export type Database = {
           data_inicio: string
           evento_id: string
           matricula: string
+          matricula_devolver: string
           tipo: string
         }[]
       }
@@ -9604,29 +9985,29 @@ export type Database = {
       contexto_folha_por_token: {
         Args: { p_token: string }
         Returns: {
-          viatura_id: string
+          cliente_nome: string
+          combustivel_saida: string
+          condutor_email: string
+          condutor_nome: string
           emissor_id: string
-          empresa_nome: string
-          empresa_nif: string
-          empresa_sede: string
+          empresa_cargo_representante: string
           empresa_licenca_tvde: string
           empresa_licenca_validade: string
+          empresa_nif: string
+          empresa_nome: string
           empresa_representante: string
-          empresa_cargo_representante: string
-          condutor_nome: string
-          condutor_email: string
-          cliente_nome: string
+          empresa_sede: string
           km_saida: number
-          combustivel_saida: string
+          viatura_id: string
         }[]
       }
       contrato_historico_resumo: {
         Args: { p_contrato_id: string }
         Returns: {
-          ator_id: string | null
-          ator_nome: string | null
+          ator_id: string
+          ator_nome: string
           criado_em: string
-          detalhe: string | null
+          detalhe: string
           evento_tipo: string
         }[]
       }
@@ -9645,13 +10026,70 @@ export type Database = {
         Returns: string
       }
       current_user_cargo: { Args: never; Returns: string }
+      ensure_base_cargos: { Args: { _org_id: string }; Returns: undefined }
       ensure_lista_motoristas: {
         Args: never
-        Returns: Database["public"]["Tables"]["marketing_listas"]["Row"]
+        Returns: {
+          atualizado_em: string
+          criado_em: string
+          criado_por: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          org_id: string | null
+          origem: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "marketing_listas"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       execute_gestor_assignment: { Args: never; Returns: number }
+      fn_checkin_abrir_motorista_viatura: {
+        Args: {
+          p_data_inicio: string
+          p_motorista_id: string
+          p_observacoes?: string
+          p_viatura_id: string
+        }
+        Returns: string
+      }
+      fn_checkin_fechar_motorista_viatura: {
+        Args: {
+          p_data_fim?: string
+          p_motorista_id?: string
+          p_viatura_id?: string
+        }
+        Returns: number
+      }
       fn_contrato_dias: {
         Args: { p_data_fim: string; p_data_inicio: string }
+        Returns: number
+      }
+      fn_contrato_historico_log: {
+        Args: {
+          p_ator: string
+          p_contrato_id: string
+          p_detalhe?: string
+          p_evento: string
+          p_org_id: string
+        }
+        Returns: undefined
+      }
+      fn_ensure_cliente_condutor: {
+        Args: { p_motorista_id: string; p_org_id: string }
+        Returns: string
+      }
+      fn_slot_inserir_cobranca: {
+        Args: {
+          p_ate: string
+          p_de: string
+          p_descricao: string
+          p_reserva: Database["public"]["Tables"]["reservas"]["Row"]
+          p_valor_bruto: number
+        }
         Returns: number
       }
       generate_primavera_api_key: { Args: never; Returns: string }
@@ -9660,6 +10098,7 @@ export type Database = {
         Args: { p_contrato_id: string }
         Returns: string
       }
+      gerar_cobrancas_slot_mensais: { Args: never; Returns: number }
       gerar_cobrancas_tvde_semanais: {
         Args: { p_semanas_a_frente?: number }
         Returns: number
@@ -9699,8 +10138,12 @@ export type Database = {
           status: string
         }[]
       }
+      gerar_seguros_semanais: {
+        Args: { p_semanas_a_frente?: number }
+        Returns: number
+      }
       gerar_token_danos: {
-        Args: { p_viatura_id: string; p_contrato_renting_id?: string | null }
+        Args: { p_contrato_renting_id?: string; p_viatura_id: string }
         Returns: string
       }
       gerar_token_realizacao: { Args: { p_evento_id: string }; Returns: string }
@@ -9736,6 +10179,16 @@ export type Database = {
               transacoes: number
             }[]
           }
+      get_cartoes_consumo: {
+        Args: { p_ate: string; p_desde: string }
+        Returns: {
+          litros: number
+          n: number
+          numero: string
+          tipo: string
+          total: number
+        }[]
+      }
       get_current_org_id: { Args: never; Returns: string }
       get_gestores: {
         Args: never
@@ -9791,6 +10244,10 @@ export type Database = {
             Args: { _acao: string; _recurso: string; _user_id: string }
             Returns: boolean
           }
+      has_permission_edit: {
+        Args: { _recurso: string; _user_id: string }
+        Returns: boolean
+      }
       has_renting_access: { Args: never; Returns: boolean }
       has_renting_contratos_access: { Args: never; Returns: boolean }
       has_renting_faturacao_access: { Args: never; Returns: boolean }
@@ -9825,6 +10282,7 @@ export type Database = {
         }
         Returns: Json
       }
+      marcar_convite_usado: { Args: { p_token: string }; Returns: boolean }
       marketing_lista_contagem: {
         Args: { p_lista_id: string }
         Returns: number
@@ -9841,7 +10299,19 @@ export type Database = {
       notificacao_dispensada: { Args: { p_id: string }; Returns: boolean }
       org_privacidade_por_gestor: { Args: never; Returns: boolean }
       realizar_token_realizacao: {
-        Args: { p_token: string; p_km?: number; p_combustivel?: string }
+        Args: { p_combustivel?: string; p_km?: number; p_token: string }
+        Returns: undefined
+      }
+      realizar_token_troca: {
+        Args: {
+          p_combustivel_antiga: string
+          p_combustivel_nova: string
+          p_km_antiga: number
+          p_km_nova: number
+          p_token: string
+          p_viatura_antiga_id: string
+          p_viatura_nova_id: string
+        }
         Returns: undefined
       }
       recalcular_disponibilidade_viatura: {
@@ -9862,6 +10332,14 @@ export type Database = {
         Returns: boolean
       }
       resolver_notificacao: { Args: { p_id: string }; Returns: undefined }
+      responder_pedido_troca_kms: {
+        Args: {
+          p_aceite: boolean
+          p_pedido_id: string
+          p_resposta_motivo?: string
+        }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       trocar_condutor: {
@@ -9874,6 +10352,34 @@ export type Database = {
         Returns: string
       }
       unaccent: { Args: { "": string }; Returns: string }
+      validar_convite_token: {
+        Args: { p_token: string }
+        Returns: {
+          cargo_id: string
+          cargo_nome: string
+          email: string
+          expires_at: string
+          org_id: string
+        }[]
+      }
+      verificar_lista_espera_disponibilidade: { Args: never; Returns: number }
+      viatura_ocupacao_intervalos: {
+        Args: { p_from?: string; p_to?: string; p_viatura_id: string }
+        Returns: {
+          codigo: number
+          data_fim: string
+          data_inicio: string
+          descricao: string
+          estado: string
+          fonte: string
+          fonte_id: string
+          tipo: string
+        }[]
+      }
+      viatura_totalmente_livre: {
+        Args: { p_viatura_id: string }
+        Returns: boolean
+      }
       viaturas_com_disponibilidade: {
         Args: { p_data_fim: string; p_data_inicio: string; p_org_id?: string }
         Returns: {
