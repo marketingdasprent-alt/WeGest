@@ -157,6 +157,8 @@ export interface FaturacaoRow {
   id: string;
   /** cobrança de origem — liga ao documento fiscal em `invoices`. */
   cobrancaId: string | null;
+  /** contrato de origem — p/ navegar para o detalhe do contrato. */
+  contratoId: string | null;
   /** recibo de origem (quando o movimento é um recibo) — p/ anular. */
   reciboId: string | null;
   /** nota de crédito de origem (quando o movimento é uma NC) — p/ anular. */
@@ -213,6 +215,7 @@ export function mapMovimentoToRow(
   return {
     id: m.id,
     cobrancaId: m.cobranca_id,
+    contratoId: m.contrato_id,
     reciboId: m.recibo_id,
     notaCreditoId: m.nota_credito_id,
     dataMovimento: m.data_movimento,
