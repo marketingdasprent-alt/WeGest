@@ -355,6 +355,26 @@ const RealizarEntregaPage = () => {
     },
   });
 
+  const isDevolucao = info?.tipo === 'recolha';
+
+  // A viatura devolvida "tem DUA dentro"? — existe pelo menos um documento DUA
+  // (frente/verso/único) registado. Se sim, exige-se confirmar a sua devolução.
+  const viaturaIdContexto = contexto?.viaturaId ?? null;
+  const { data: viaturaTemDua = false } = useQuery({
+    queryKey: ['viatura-tem-dua', viaturaIdContexto],
+    enabled: isDevolucao && !!viaturaIdContexto,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('viatura_documentos')
+        .select('id', { count: 'exact', head: true })
+        .eq('viatura_id', viaturaIdContexto!)
+        .in('tipo_documento', ['dua_frente', 'dua_verso', 'dua']);
+      return (count ?? 0) > 0;
+    },
+  });
+  const [duaDevolvido, setDuaDevolvido] = useState(false);
+  const exigeDua = isDevolucao && viaturaTemDua;
+
   // Restaurar rascunho do cache uma vez, quando o token resolve.
   useEffect(() => {
     if (!token || restauradoRef.current) return;

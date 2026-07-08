@@ -1,23 +1,44 @@
 import type React from 'react';
 import { useState } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
-import { Gauge } from 'lucide-react';
+import { Gauge, Coins, CircleDollarSign } from 'lucide-react';
 
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Estacao } from '@/hooks/useEstacoes';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import type { RentingGrupoMin } from '@/hooks/useRentingGruposTarifas';
-import { Button } from '@/components/ui/button';
 import { ALDFields } from '@/components/renting/shared/ALDFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
-import { PedirTrocaKmsDialog } from './PedirTrocaKmsDialog';
-import { usePedidoTrocaKmsPendente } from '@/hooks/usePedidosTrocaKms';
+import { PedirAlteracaoContratoDialog } from './PedirAlteracaoContratoDialog';
+import { usePedidoTrocaKmsPendente, type TipoPedidoAlteracao } from '@/hooks/usePedidosTrocaKms';
 import type { ContratoFormValues } from './contratoForm.schema';
 import { SectionEntregaRecolha } from './SectionEntregaRecolha';
 import { SectionInfoAdicional } from './SectionInfoAdicional';
 import { SectionGeral } from './SectionGeral';
 import { SectionRegime } from './SectionRegime';
 import { SectionViatura } from './SectionViatura';
+
+/** Link "Pedir alteração de X" sob o campo travado — trava enquanto já há um pedido pendente desse tipo. */
+const BotaoPedirAlteracao: React.FC<{
+  contratoId: string;
+  tipo: TipoPedidoAlteracao;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  onClick: () => void;
+}> = ({ contratoId, tipo, label, icon: Icon, onClick }) => {
+  const { data: pedidoPendente } = usePedidoTrocaKmsPendente(contratoId, tipo);
+  return (
+    <button
+      type="button"
+      disabled={!!pedidoPendente}
+      onClick={onClick}
+      className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline disabled:text-muted-foreground disabled:no-underline disabled:cursor-not-allowed"
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {pedidoPendente ? 'Pedido pendente' : label}
+    </button>
+  );
+};
 
 interface ContratoFormSecoesProps {
   form: UseFormReturn<ContratoFormValues>;
@@ -52,10 +73,17 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   onViaturaChange,
   contratoId,
 }) => {
-  const [pedirTrocaOpen, setPedirTrocaOpen] = useState(false);
-  const { data: pedidoPendente } = usePedidoTrocaKmsPendente(contratoId);
+  const [dialogAberto, setDialogAberto] = useState<TipoPedidoAlteracao | null>(null);
   const kmsIncluidos = form.watch('kms_incluidos');
   const kmAdicionalValor = form.watch('km_adicional_valor');
+  const franquiaValor = form.watch('franquia_valor');
+  const tarifaDiaria = form.watch('tarifa_diaria');
+
+  const valorAtualPorTipo: Record<TipoPedidoAlteracao, number> = {
+    kms: kmsIncluidos ?? 0,
+    franquia: franquiaValor ?? 0,
+    tarifa: tarifaDiaria ?? 0,
+  };
 
   return (
     <div className="space-y-6">
@@ -71,34 +99,58 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         reservaCodigo={reservaCodigo}
         onViaturaChange={onViaturaChange}
       />
-      <SectionGeral form={form} clientes={clientes} />
+      <SectionGeral
+        form={form}
+        clientes={clientes}
+        tarifaReadOnly
+        tarifaAction={
+          contratoId ? (
+            <BotaoPedirAlteracao
+              contratoId={contratoId}
+              tipo="tarifa"
+              label="Pedir alteração de tarifa"
+              icon={CircleDollarSign}
+              onClick={() => setDialogAberto('tarifa')}
+            />
+          ) : null
+        }
+      />
       <FranquiaKmsFields
+        franquiaReadOnly
         kmsReadOnly
+        franquiaAction={
+          contratoId ? (
+            <BotaoPedirAlteracao
+              contratoId={contratoId}
+              tipo="franquia"
+              label="Pedir alteração de franquia"
+              icon={Coins}
+              onClick={() => setDialogAberto('franquia')}
+            />
+          ) : null
+        }
         kmsAction={
           contratoId ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              disabled={!!pedidoPendente}
-              onClick={() => setPedirTrocaOpen(true)}
-            >
-              <Gauge className="h-3.5 w-3.5" />
-              {pedidoPendente ? 'Pedido pendente' : 'Pedir alteração de kms'}
-            </Button>
+            <BotaoPedirAlteracao
+              contratoId={contratoId}
+              tipo="kms"
+              label="Pedir alteração de kms"
+              icon={Gauge}
+              onClick={() => setDialogAberto('kms')}
+            />
           ) : null
         }
       />
       <SectionInfoAdicional form={form} />
 
-      {contratoId && (
-        <PedirTrocaKmsDialog
-          open={pedirTrocaOpen}
-          onOpenChange={setPedirTrocaOpen}
+      {contratoId && dialogAberto && (
+        <PedirAlteracaoContratoDialog
+          open={!!dialogAberto}
+          onOpenChange={(open) => setDialogAberto(open ? dialogAberto : null)}
           contratoId={contratoId}
-          kmsIncluidosAtual={kmsIncluidos ?? 0}
-          kmAdicionalValorAtual={kmAdicionalValor ?? null}
+          tipo={dialogAberto}
+          valorAtual={valorAtualPorTipo[dialogAberto]}
+          kmAdicionalValorAtual={dialogAberto === 'kms' ? (kmAdicionalValor ?? null) : undefined}
         />
       )}
     </div>

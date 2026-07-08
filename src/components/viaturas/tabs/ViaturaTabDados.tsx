@@ -54,7 +54,6 @@ import {
   deriveViaturaEstado,
 } from '@/lib/viaturas';
 import { useViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
-import { EmissorSelect } from '@/components/renting/EmissorSelect';
 
 const viaturaSchema = z.object({
   matricula: z
@@ -83,7 +82,6 @@ const viaturaSchema = z.object({
   extintor_numero: z.string().optional(),
   extintor_validade: z.string().optional(),
   tipo_id: z.string().optional(),
-  emissor_id: z.string().uuid().optional().nullable(),
 });
 
 type ViaturaFormData = z.infer<typeof viaturaSchema>;
@@ -113,7 +111,6 @@ interface Viatura {
   extintor_numero?: string | null;
   extintor_validade?: string | null;
   tipo_id?: string | null;
-  emissor_id?: string | null;
 }
 
 interface ViaturaDocument {
@@ -332,7 +329,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       extintor_numero: '',
       extintor_validade: '',
       tipo_id: '',
-      emissor_id: null,
     },
   });
 
@@ -372,7 +368,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       extintor_numero: viatura.extintor_numero || '',
       extintor_validade: viatura.extintor_validade || '',
       tipo_id: viatura.tipo_id || '',
-      emissor_id: viatura.emissor_id ?? null,
     });
   }, [viatura, form, isFormDirty, viaturasTipos, marcas, modelos, combustiveis, grupos, estacoes]);
 
@@ -455,7 +450,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       extintor_numero: data.extintor_numero || null,
       extintor_validade: data.extintor_validade || null,
       tipo_id: data.tipo_id || null,
-      emissor_id: data.emissor_id || null,
     };
 
     await onSave(payload);
@@ -1011,19 +1005,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                       </div>
                     );
                   })()}
-                  <FormField
-                    control={form.control}
-                    name="emissor_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Empresa Emissora</FormLabel>
-                        <FormControl>
-                          <EmissorSelect value={field.value} onChange={field.onChange} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                   <FormField
                     control={form.control}
                     name="estacao_id"

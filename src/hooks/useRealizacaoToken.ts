@@ -107,6 +107,9 @@ interface RealizarFromTokenArgs {
   eventoId: string;
   contratoId: string;
   tipo: 'entrega' | 'recolha' | 'troca';
+  /** Entrega/recolha simples — grava km_saida/km_entrada no contrato dentro da RPC (SECURITY DEFINER, não exige permissão renting_contratos a quem confirma o token). */
+  km?: number;
+  combustivel?: string;
   /** Só para tipo='troca' — dados físicos das duas viaturas envolvidas. */
   troca?: {
     viaturaAntigaId: string | null;
@@ -129,7 +132,13 @@ export function useRealizarFromToken() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ token, tipo, troca }: RealizarFromTokenArgs): Promise<void> => {
+    mutationFn: async ({
+      token,
+      tipo,
+      km,
+      combustivel,
+      troca,
+    }: RealizarFromTokenArgs): Promise<void> => {
       if (tipo === 'troca') {
         const { error } = await supabase.rpc('realizar_token_troca', {
           p_token: token,
@@ -144,8 +153,12 @@ export function useRealizarFromToken() {
         return;
       }
       // RPC atómico: muda o estado do contrato (dispara a cascata que marca
-      // o evento realizado) + marca o token usado, na mesma transação.
-      const { error } = await supabase.rpc('realizar_token_realizacao', { p_token: token });
+      // o evento realizado), grava km/combustível e marca o token como usado.
+      const { error } = await supabase.rpc('realizar_token_realizacao', {
+        p_token: token,
+        p_km: km ?? null,
+        p_combustivel: combustivel ?? null,
+      });
       if (error) throw error;
     },
     onSuccess: (_, vars) => {

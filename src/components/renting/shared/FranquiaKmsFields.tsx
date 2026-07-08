@@ -23,19 +23,19 @@ interface FranquiaKmsFieldsShape extends FieldValues {
 
 export const FranquiaKmsFields: React.FC<{
   kmsReadOnly?: boolean;
+  franquiaReadOnly?: boolean;
   /** Slot para acção extra junto ao título — ex.: botão "Pedir alteração de kms". */
   kmsAction?: React.ReactNode;
-}> = ({ kmsReadOnly = false, kmsAction }) => {
+  /** Slot para acção extra junto ao título — ex.: botão "Pedir alteração de franquia". */
+  franquiaAction?: React.ReactNode;
+}> = ({ kmsReadOnly = false, franquiaReadOnly = false, kmsAction, franquiaAction }) => {
   const form = useFormContext<FranquiaKmsFieldsShape>();
 
   return (
     <div className="rounded-lg border bg-gradient-to-br from-muted/40 to-muted/10 p-5 space-y-5">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Shield className="h-5 w-5 text-primary" />
-          <h3 className="text-base font-semibold">Franquia, Caução & Quilometragem</h3>
-        </div>
-        {kmsAction}
+      <div className="flex items-center gap-2">
+        <Shield className="h-5 w-5 text-primary" />
+        <h3 className="text-base font-semibold">Franquia, Caução & Quilometragem</h3>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -55,7 +55,8 @@ export const FranquiaKmsFields: React.FC<{
                     min={0}
                     step="0.01"
                     placeholder="0,00"
-                    className="bg-background pr-8"
+                    readOnly={franquiaReadOnly}
+                    className={franquiaReadOnly ? 'bg-muted pr-8' : 'bg-background pr-8'}
                     value={(field.value as number | null) ?? ''}
                     onChange={(e) =>
                       field.onChange(e.target.value === '' ? null : Number(e.target.value))
@@ -66,6 +67,7 @@ export const FranquiaKmsFields: React.FC<{
                   €
                 </span>
               </div>
+              {franquiaAction && <div className="pt-1">{franquiaAction}</div>}
               <FormMessage />
             </FormItem>
           )}
@@ -130,6 +132,7 @@ export const FranquiaKmsFields: React.FC<{
                   km
                 </span>
               </div>
+              {kmsAction && <div className="pt-1">{kmsAction}</div>}
               <FormMessage />
             </FormItem>
           )}
