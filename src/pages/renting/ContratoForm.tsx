@@ -739,8 +739,7 @@ const ContratoForm = () => {
         : Math.max(
             1,
             Math.ceil(
-              (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) /
-                msDia
+              (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) / msDia
             )
           );
 
