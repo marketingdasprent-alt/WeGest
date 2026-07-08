@@ -61,7 +61,10 @@ export const SectionCliente: React.FC<SectionClienteProps> = ({ form, clientes }
                     </Button>
                   </FormControl>
                 </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <PopoverContent
+                  className="w-[var(--radix-popover-trigger-width)] p-0"
+                  align="start"
+                >
                   <Command
                     filter={(value, search) => {
                       const v = normalizeForSearch(value);

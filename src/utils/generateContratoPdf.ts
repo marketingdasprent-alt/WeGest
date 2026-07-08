@@ -235,8 +235,7 @@ export const generateContratoPdf = async ({
     ? Math.max(
         1,
         Math.ceil(
-          (new Date(contrato.data_fim).getTime() - new Date(contrato.data_inicio).getTime()) /
-            msDia
+          (new Date(contrato.data_fim).getTime() - new Date(contrato.data_inicio).getTime()) / msDia
         )
       )
     : Math.max(1, contrato.renovacao_intervalo_dias ?? 30);
