@@ -39,7 +39,6 @@ import {
   ReservaTabAnexos,
   type AnexoPendente,
 } from '@/components/renting/reservas/tabs/ReservaTabAnexos';
-import { ReservaTabCondutores } from '@/components/renting/reservas/tabs/ReservaTabCondutores';
 import { ReservaTabFaturar } from '@/components/renting/reservas/tabs/ReservaTabFaturar';
 import { ReservaTabGeral } from '@/components/renting/reservas/tabs/ReservaTabGeral';
 import {
@@ -476,9 +475,7 @@ const RentingReservaForm = () => {
     };
     collect(errors);
 
-    // Campo de condutores vive na tab "Condutores"/"Motoristas".
-    if (errors.condutores) setActiveTab('condutores');
-    else setActiveTab('geral');
+    setActiveTab('geral');
 
     const unicas = Array.from(new Set(messages)).slice(0, 4);
     toast({
@@ -659,11 +656,8 @@ const RentingReservaForm = () => {
                 <Card className="bg-card border-border">
                   <CardContent className="p-4 sm:p-6">
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                      <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-flex">
+                      <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
                         <TabsTrigger value="geral">Geral</TabsTrigger>
-                        <TabsTrigger value="condutores">
-                          {regimeWatched === 'rent_a_car' ? 'Condutores' : 'Motoristas'}
-                        </TabsTrigger>
                         <TabsTrigger value="anexos">Anexos</TabsTrigger>
                       </TabsList>
 
@@ -675,17 +669,7 @@ const RentingReservaForm = () => {
                           clientes={clientes}
                           motoristas={motoristas}
                           onCriarMotorista={() => setMotoristaDialogOpen(true)}
-                        />
-                      </TabsContent>
-
-                      <TabsContent value="condutores" className="pt-4">
-                        <ReservaTabCondutores
-                          form={form}
-                          regime={regimeWatched}
-                          clientes={clientes}
-                          motoristas={motoristas}
                           onCriarNovoCliente={() => setClienteDialogOpen(true)}
-                          onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
                           onCriarCondutorProvisorio={() => setCondutorProvisorioOpen(true)}
                         />
                       </TabsContent>

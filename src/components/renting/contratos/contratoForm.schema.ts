@@ -57,7 +57,9 @@ export const contratoFormSchema = z
 
     // Recolha
     estacao_recolha_id: z.string().uuid().nullable().optional(),
-    data_fim: datetimeLocal,
+    // TVDE não tem data de fim (renovação automática) — obrigatória só fora
+    // desse regime (validado no superRefine abaixo).
+    data_fim: z.string().optional().nullable(),
 
     // Estação origem da viatura
     estacao_origem_viatura_id: z.string().uuid().nullable().optional(),
@@ -180,9 +182,25 @@ export const contratoFormSchema = z
         message: 'Apenas um condutor pode ser principal.',
       }),
   })
-  .refine((d) => new Date(d.data_fim).getTime() > new Date(d.data_inicio).getTime(), {
-    message: 'Data fim tem que ser posterior à data início',
-    path: ['data_fim'],
+  .superRefine((d, ctx) => {
+    // TVDE: sem data de fim — o contrato é aberto, renovado automaticamente
+    // (ver is_longa_duracao/renovacao_opcao). Fora de TVDE, é obrigatória.
+    if (d.regime === 'tvde') return;
+    if (!d.data_fim || Number.isNaN(new Date(d.data_fim).getTime())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['data_fim'],
+        message: 'Data fim obrigatória',
+      });
+      return;
+    }
+    if (new Date(d.data_fim).getTime() <= new Date(d.data_inicio).getTime()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['data_fim'],
+        message: 'Data fim tem que ser posterior à data início',
+      });
+    }
   });
 
 export type ContratoFormValues = z.infer<typeof contratoFormSchema>;

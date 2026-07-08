@@ -3,14 +3,9 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
   FileSignature,
-  Pencil,
   User,
-  Phone,
-  CreditCard,
   Car,
   FileText,
-  MessageSquare,
-  Fuel,
   Receipt,
   AlertTriangle,
   ArrowLeft,
@@ -27,8 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SectionCard } from '@/components/ui/section-card';
-import { MotoristaFullModal } from '@/components/motoristas/MotoristaFullModal';
-import { MotoristaCartoesFrota } from '@/components/motoristas/MotoristaCartoesFrota';
+import { MotoristaTabDados } from '@/components/motoristas/tabs/MotoristaTabDados';
 import { MotoristaTabDocumentos } from '@/components/motoristas/tabs/MotoristaTabDocumentos';
 import { MotoristaTabFinanceiro } from '@/components/motoristas/tabs/MotoristaTabFinanceiro';
 import { MotoristaTabRecibos } from '@/components/motoristas/tabs/MotoristaTabRecibos';
@@ -67,8 +61,7 @@ export default function MotoristaDetalhe() {
   const { toast } = useToast();
   const [motorista, setMotorista] = useState<Motorista | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [initialModalTab, setInitialModalTab] = useState<'dados' | 'contratos'>('dados');
+  const [dadosDraft, setDadosDraft] = useState<Record<string, unknown> | null>(null);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [viaturaAtual, setViaturaAtual] = useState<ViaturaAtual | null>(null);
@@ -95,6 +88,7 @@ export default function MotoristaDetalhe() {
       loadViaturaAtual();
       loadFinanceiroResumo();
     }
+    setDadosDraft(null);
   }, [id]);
 
   const loadMotorista = async () => {
@@ -214,52 +208,6 @@ export default function MotoristaDetalhe() {
     }
   };
 
-  const handleViewContracts = () => {
-    setInitialModalTab('contratos');
-    setEditDialogOpen(true);
-  };
-
-  const handleEdit = () => {
-    setInitialModalTab('dados');
-    setEditDialogOpen(true);
-  };
-
-  const handleEditClose = (shouldRefresh: boolean) => {
-    setEditDialogOpen(false);
-    if (shouldRefresh) {
-      loadMotorista();
-    }
-  };
-
-  const handleViewDocument = async (
-    path: string | null,
-    bucket: string = 'motorista-documentos'
-  ) => {
-    if (!path) return;
-
-    try {
-      // Se já for uma URL completa (http...), abre direto
-      if (path.startsWith('http')) {
-        window.open(path, '_blank');
-        return;
-      }
-
-      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 3600);
-
-      if (error) throw error;
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
-      }
-    } catch (error) {
-      console.error('Erro ao gerar link do documento:', error);
-      toast({
-        title: 'Erro ao abrir documento',
-        description: 'Não foi possível gerar um link seguro para o ficheiro.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -316,11 +264,6 @@ export default function MotoristaDetalhe() {
             <CalendarPlus className="h-4 w-4 mr-2" />
             Nova reserva
           </Button>
-          <Button variant="outline" onClick={handleEdit} className="flex-1 md:flex-none">
-            <Pencil className="h-4 w-4 mr-2" />
-            Editar
-          </Button>
-
           <Button
             variant={motorista.status_ativo ? 'destructive' : 'default'}
             onClick={() => setIsStatusDialogOpen(true)}
@@ -354,195 +297,14 @@ export default function MotoristaDetalhe() {
         </TabsList>
 
         <TabsContent value="dados" className="space-y-6 mt-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <SectionCard
-              icon={<User className="h-4 w-4" />}
-              title="Dados Pessoais"
-              headerClassName="bg-blue-50 dark:bg-blue-950/30"
-              className="h-full"
-            >
-              <div className="space-y-1">
-                <InfoItem label="NIF" value={motorista.nif || '-'} />
-                <InfoItem label="Morada" value={motorista.morada || '-'} />
-                <InfoItem label="Código Postal" value={motorista.codigo_postal || '-'} />
-                <InfoItem label="Cidade" value={motorista.cidade || '-'} />
-                <InfoItem label="IBAN" value={motorista.iban || '-'} />
-                <InfoItem label="Gestor Responsável" value={motorista.gestor_responsavel || '-'} />
-              </div>
-            </SectionCard>
+          <MotoristaTabDados
+            motorista={motorista}
+            onSave={loadMotorista}
+            draft={dadosDraft}
+            onDraftChange={setDadosDraft}
+          />
 
-            <SectionCard
-              icon={<CreditCard className="h-4 w-4" />}
-              title="Identificação"
-              headerClassName="bg-amber-50 dark:bg-amber-950/30"
-              className="h-full"
-            >
-              <div className="space-y-1">
-                <InfoItem label="Tipo" value={motorista.documento_tipo || '-'} />
-                <InfoItem label="Número" value={motorista.documento_numero || '-'} />
-                <InfoItem label="Validade" value={formatDate(motorista.documento_validade)} />
-                {(motorista.documento_ficheiro_url ||
-                  motorista.documento_identificacao_verso_url) && (
-                  <div className="flex gap-2 pt-3">
-                    {motorista.documento_ficheiro_url && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 text-xs"
-                        onClick={() => handleViewDocument(motorista.documento_ficheiro_url)}
-                      >
-                        Ver Frente
-                      </Button>
-                    )}
-                    {motorista.documento_identificacao_verso_url && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 text-xs"
-                        onClick={() =>
-                          handleViewDocument(motorista.documento_identificacao_verso_url)
-                        }
-                      >
-                        Ver Verso
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              icon={<FileText className="h-4 w-4" />}
-              title="Licença TVDE"
-              headerClassName="bg-cyan-50 dark:bg-cyan-950/30"
-              className="h-full"
-            >
-              <div className="space-y-1">
-                <InfoItem label="Número" value={motorista.licenca_tvde_numero || '-'} />
-                <InfoItem label="Validade" value={formatDate(motorista.licenca_tvde_validade)} />
-                {motorista.licenca_tvde_ficheiro_url && (
-                  <div className="pt-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-xs"
-                      onClick={() => handleViewDocument(motorista.licenca_tvde_ficheiro_url)}
-                    >
-                      Ver Documento
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              icon={<Phone className="h-4 w-4" />}
-              title="Contactos"
-              headerClassName="bg-green-50 dark:bg-green-950/30"
-              className="h-full"
-            >
-              <div className="space-y-1">
-                <InfoItem label="Telefone" value={motorista.telefone || '-'} />
-                <InfoItem label="Email" value={motorista.email || '-'} />
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              icon={<Car className="h-4 w-4" />}
-              title="Carta de Condução"
-              headerClassName="bg-purple-50 dark:bg-purple-950/30"
-              className="h-full"
-            >
-              <div className="space-y-1">
-                <InfoItem label="Número" value={motorista.carta_conducao || '-'} />
-                <InfoItem
-                  label="Categorias"
-                  value={motorista.carta_categorias?.join(', ') || '-'}
-                />
-                <InfoItem label="Validade" value={formatDate(motorista.carta_validade)} />
-                {(motorista.carta_ficheiro_url || motorista.carta_conducao_verso_url) && (
-                  <div className="flex gap-2 pt-3">
-                    {motorista.carta_ficheiro_url && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 text-xs"
-                        onClick={() => handleViewDocument(motorista.carta_ficheiro_url)}
-                      >
-                        Ver Frente
-                      </Button>
-                    )}
-                    {motorista.carta_conducao_verso_url && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 text-xs"
-                        onClick={() => handleViewDocument(motorista.carta_conducao_verso_url)}
-                      >
-                        Ver Verso
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              icon={<FileText className="h-4 w-4" />}
-              title="Documentos Adicionais"
-              headerClassName="bg-slate-50 dark:bg-slate-950/30"
-              className="h-full"
-            >
-              <div className="grid grid-cols-1 gap-2 pt-1">
-                {motorista.registo_criminal_url && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start text-xs"
-                    onClick={() => handleViewDocument(motorista.registo_criminal_url)}
-                  >
-                    <FileText className="h-3 w-3 mr-2" /> Registo Criminal
-                  </Button>
-                )}
-                {motorista.comprovativo_morada_url && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start text-xs"
-                    onClick={() => handleViewDocument(motorista.comprovativo_morada_url)}
-                  >
-                    <FileText className="h-3 w-3 mr-2" /> Comprovativo Morada
-                  </Button>
-                )}
-                {motorista.comprovativo_iban_url && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start text-xs"
-                    onClick={() => handleViewDocument(motorista.comprovativo_iban_url)}
-                  >
-                    <FileText className="h-3 w-3 mr-2" /> Comprovativo IBAN
-                  </Button>
-                )}
-                {!motorista.registo_criminal_url &&
-                  !motorista.comprovativo_morada_url &&
-                  !motorista.comprovativo_iban_url && (
-                    <p className="text-muted-foreground italic text-center py-2 text-sm">
-                      Sem documentos extra
-                    </p>
-                  )}
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              icon={<Fuel className="h-4 w-4" />}
-              title="Cartões Frota"
-              headerClassName="bg-orange-50 dark:bg-orange-950/30"
-              className="h-full"
-            >
-              <MotoristaCartoesFrota motorista={motorista} onChanged={loadMotorista} />
-            </SectionCard>
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <SectionCard
               icon={<Car className="h-4 w-4" />}
               title="Viatura Atual"
@@ -569,19 +331,6 @@ export default function MotoristaDetalhe() {
                 </p>
               )}
             </SectionCard>
-
-            {motorista.observacoes && (
-              <SectionCard
-                icon={<MessageSquare className="h-4 w-4" />}
-                title="Observações"
-                headerClassName="bg-muted/50"
-                className="h-full"
-              >
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {motorista.observacoes}
-                </p>
-              </SectionCard>
-            )}
 
             <SectionCard
               icon={<Wallet className="h-4 w-4" />}
@@ -656,15 +405,6 @@ export default function MotoristaDetalhe() {
           <MotoristaTabDanos motorista={motorista} />
         </TabsContent>
       </Tabs>
-
-      {/* Modais de Suporte */}
-      <MotoristaFullModal
-        open={editDialogOpen}
-        onOpenChange={(open) => handleEditClose(!open)}
-        motorista={motorista}
-        onMotoristaUpdated={loadMotorista}
-        initialTab={initialModalTab}
-      />
 
       {/* Alerta de Confirmação para Ativar/Inativar */}
       <AlertDialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
