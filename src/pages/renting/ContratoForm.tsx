@@ -64,6 +64,7 @@ import {
   calcularBaseAluguerRenting,
   calcularFaturacaoRenting,
 } from '@/hooks/useRentingGruposTarifas';
+import { useModelosElegiveisTvde } from '@/hooks/useModelosElegiveisTvde';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useMotoristas } from '@/hooks/useMotoristas';
 import { useReserva } from '@/hooks/useReservas';
@@ -129,6 +130,7 @@ const ContratoForm = () => {
   const { data: grupos = [] } = useRentingGruposMin();
   const { data: tarifas = [] } = useRentingTarifasMin();
   const { data: precosModeloTvde = [] } = useRentingTarifaPrecosModelo();
+  const { data: modelosElegiveisTvde } = useModelosElegiveisTvde();
   const { data: orgDefinicoes } = useOrgDefinicoes();
   const { data: contrato, isLoading: loadingContrato } = useContratoRenting(id ?? null);
   const { data: vizinhos } = useContratoVizinhos(contrato?.codigo ?? null);
@@ -446,6 +448,7 @@ const ContratoForm = () => {
   const valorTotalManual = form.watch('valor_total_manual');
   const descontoPercentagem = form.watch('desconto_percentagem');
   const regime = form.watch('regime');
+  const tarifaIdWatch = form.watch('tarifa_id');
   const isLongaDuracao = form.watch('is_longa_duracao');
   // TVDE e Slot já têm IVA incluído no preço — o resumo não aplica IVA adicional
   const rawTaxaIva = form.watch('taxa_iva');
@@ -473,6 +476,28 @@ const ContratoForm = () => {
     });
   }, [regime, orgDefinicoes, form]);
 
+  // Ao escolher tarifa+viatura, copia km incluídos / km extra / franquia da
+  // linha do modelo na tarifa para os campos do contrato (editáveis pelo
+  // gestor). TVDE usa as colunas base; Rent-a-Car usa as c/IVA.
+  useEffect(() => {
+    if (regime === 'slot' || !tarifaIdWatch || !viaturaId) return;
+    const via = viaturas.find((v) => v.id === viaturaId);
+    if (!via?.modelo_id) return;
+    const linha = precosModeloTvde.find(
+      (p) => p.tarifa_id === tarifaIdWatch && p.modelo_id === via.modelo_id
+    );
+    if (!linha) return;
+    const isTvdeReg = regime === 'tvde';
+    const kmIncl = isTvdeReg ? linha.km_mensal : linha.km_mensal_iva;
+    const kmExtra = isTvdeReg ? linha.km_adicional_valor : linha.km_adicional_valor_iva;
+    const franquia = isTvdeReg ? linha.franquia_valor : linha.franquia_valor_iva;
+    const caucao = isTvdeReg ? linha.caucao_valor : linha.caucao_valor_iva;
+    if (kmIncl != null) form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
+    if (kmExtra != null) form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
+    if (franquia != null) form.setValue('franquia_valor', franquia, { shouldDirty: true });
+    if (caucao != null) form.setValue('caucao_valor', caucao, { shouldDirty: true });
+  }, [tarifaIdWatch, viaturaId, regime, viaturas, precosModeloTvde, form]);
+
   // Os condutores PERSISTEM ao trocar de regime — não se apaga a lista (senão
   // "desapareciam" condutores já adicionados ou hidratados da reserva). A tabela
   // mostra clientes (rent-a-car) ou motoristas (TVDE) conforme o tipo de cada linha.
@@ -487,12 +512,15 @@ const ContratoForm = () => {
     excluirReservaId: reservaIdActiva,
   });
 
-  // Qualquer viatura pode ser usada em rent-a-car ou TVDE — habilitada_tvde é
-  // apenas informativo/administrativo, não restringe o seletor (alinhado com a
-  // reserva). Excluímos as ocupadas no período, mantendo sempre a já selecionada.
-  const viaturasParaSelecao = !viaturasOcupadas
-    ? viaturas
-    : viaturas.filter((v) => v.id === viaturaId || !viaturasOcupadas.has(v.id));
+  // Em TVDE, só viaturas cujo modelo é elegível (tipo de frota marcado como
+  // elegível TVDE), tal como na frota; em Rent-a-Car, todas. Excluímos as
+  // ocupadas no período, mantendo sempre a já selecionada.
+  const viaturasParaSelecao = viaturas.filter((v) => {
+    if (v.id === viaturaId) return true;
+    if (viaturasOcupadas?.has(v.id)) return false;
+    if (regime === 'tvde') return !!v.modelo_id && !!modelosElegiveisTvde?.has(v.modelo_id);
+    return true;
+  });
 
   // Ao trocar de viatura no contrato: recalcula o snapshot `grupo` e o preço a
   // partir do grupo da viatura nova. Isto é o que destrava a classificação
@@ -516,40 +544,32 @@ const ContratoForm = () => {
     const ms = new Date(dataFim).getTime() - new Date(dataInicio).getTime();
     const dias = Number.isFinite(ms) && ms > 0 ? Math.max(1, Math.ceil(ms / 86400000)) : null;
 
-    // TVDE: a tarifa vem da reserva/form (tarifa_id, tipo='tvde') e o preço é
-    // semanal por modelo da viatura. Não deriva do grupo.
-    if (regime === 'tvde') {
-      const tarifaTvdeId = form.getValues('tarifa_id');
-      const tarifaTvde = tarifas.find((t) => t.id === tarifaTvdeId) ?? null;
-      const precoModeloSemana =
-        tarifaTvdeId && via.modelo_id
-          ? (precosModeloTvde.find(
-              (p) => p.tarifa_id === tarifaTvdeId && p.modelo_id === via.modelo_id
-            )?.preco_semana ?? null)
-          : null;
-      const fat = calcularFaturacaoRenting(
-        regime,
-        isLongaDuracao,
-        dias,
-        tarifaTvde,
-        precoModeloSemana
-      );
-      if (fat) form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
-      return;
+    // A tarifa vem do form (tarifa_id) e o preço é por modelo da viatura, tanto
+    // em TVDE (semanal) como em Rent-a-Car (diário/mensal). Se a tarifa atual
+    // não cobrir o modelo desta viatura, limpa-a para forçar nova escolha.
+    const isTvdeReg = regime === 'tvde';
+    const tarifaSelId = form.getValues('tarifa_id');
+    const linha =
+      tarifaSelId && via.modelo_id
+        ? (precosModeloTvde.find(
+            (p) => p.tarifa_id === tarifaSelId && p.modelo_id === via.modelo_id
+          ) ?? null)
+        : null;
+    const cobre = isTvdeReg ? linha?.preco_semana != null : linha?.preco_dia != null;
+    if (tarifaSelId && via.modelo_id && !cobre) {
+      form.setValue('tarifa_id', null, { shouldDirty: true });
     }
 
-    const tarifa = via.grupo_id
-      ? (tarifas.find((t) => t.grupo_id === via.grupo_id && t.tipo !== 'tvde') ?? null)
-      : null;
-    if (!tarifa) return;
-
-    form.setValue('tarifa_diaria', tarifa.preco_dia, { shouldDirty: true });
-    form.setValue('kms_incluidos', tarifa.kms_incluidos, { shouldDirty: true });
-    form.setValue('km_adicional_valor', tarifa.km_adicional_valor, { shouldDirty: true });
-
-    // Recalcula o valor de tabela do novo grupo (mensal p/ ALD, diário p/
-    // rent-a-car) e grava em valor_total_manual — a base que o ResumoContrato usa.
-    const fat = calcularFaturacaoRenting(regime, isLongaDuracao, dias, tarifa);
+    const tarifaSel = tarifas.find((t) => t.id === tarifaSelId) ?? null;
+    const fat = calcularFaturacaoRenting(
+      regime,
+      isLongaDuracao,
+      dias,
+      tarifaSel,
+      isTvdeReg ? (linha?.preco_semana ?? null) : null,
+      !isTvdeReg ? (linha?.preco_dia ?? null) : null,
+      !isTvdeReg ? (linha?.preco_mes ?? null) : null
+    );
     if (fat) form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
   };
 
@@ -698,18 +718,23 @@ const ContratoForm = () => {
   };
 
   const onSubmit = (values: ContratoFormValues) => {
-    // TVDE: bloqueia se o modelo da viatura não tem preço na tarifa TVDE.
-    if (values.regime === 'tvde' && values.tarifa_id) {
+    // Bloqueia se o modelo da viatura não tem preço na tarifa escolhida (o
+    // preço é por modelo, tanto TVDE — preco_semana — como Rent-a-Car — preco_dia).
+    if (values.regime !== 'slot' && values.tarifa_id) {
       const via = viaturas.find((v) => v.id === values.viatura_id);
       if (via?.modelo_id) {
-        const temPreco = precosModeloTvde.some(
+        const isTvdeReg = values.regime === 'tvde';
+        const linha = precosModeloTvde.find(
           (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === via.modelo_id
         );
+        const temPreco = isTvdeReg ? linha?.preco_semana != null : linha?.preco_dia != null;
         if (!temPreco) {
           toast({
-            title: 'Modelo sem preço na tarifa TVDE',
+            title: isTvdeReg
+              ? 'Modelo sem preço na tarifa TVDE'
+              : 'Modelo sem preço na tarifa Rent-a-Car',
             description:
-              'A viatura não tem preço definido na tarifa TVDE. Define o preço do modelo na tarifa (Renting → Tarifas) ou ajusta a reserva.',
+              'A viatura não tem preço definido na tarifa escolhida. Define o preço do modelo na tarifa (Renting → Tarifas) ou ajusta a reserva.',
             variant: 'destructive',
           });
           return;
@@ -796,21 +821,25 @@ const ContratoForm = () => {
 
     // Subtotal do contrato — base de cálculo das taxas percentuais.
     // Espelha o cálculo do ResumoContrato: aluguer + coberturas + extras, com desconto.
+    // Preço por modelo da tarifa escolhida (TVDE: semanal; Rent-a-Car: dia/mês).
+    const isTvdeSub = values.regime === 'tvde';
+    const linhaModeloSub =
+      values.tarifa_id && viatura?.modelo_id
+        ? (precosModeloTvde.find(
+            (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viatura.modelo_id
+          ) ?? null)
+        : null;
     const baseAluguer = calcularBaseAluguerRenting({
       regime: values.regime,
       isLongaDuracao: values.is_longa_duracao,
       dias: diasContrato,
-      tarifa:
-        values.regime === 'tvde' && values.tarifa_id
-          ? (tarifas.find((t) => t.id === values.tarifa_id) ?? null)
-          : (tarifas.find((t) => t.grupo_id === values.grupo) ?? null),
+      tarifa: values.tarifa_id
+        ? (tarifas.find((t) => t.id === values.tarifa_id) ?? null)
+        : (tarifas.find((t) => t.grupo_id === values.grupo) ?? null),
       valorTotalManual: values.valor_total_manual,
-      precoModeloSemana:
-        values.regime === 'tvde' && values.viatura_id && values.tarifa_id
-          ? (precosModeloTvde.find(
-              (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viatura?.modelo_id
-            )?.preco_semana ?? null)
-          : null,
+      precoModeloSemana: isTvdeSub ? (linhaModeloSub?.preco_semana ?? null) : null,
+      precoModeloDia: !isTvdeSub ? (linhaModeloSub?.preco_dia ?? null) : null,
+      precoModeloMes: !isTvdeSub ? (linhaModeloSub?.preco_mes ?? null) : null,
     });
     const custoCoberturas =
       values.coberturas.reduce((soma, c) => soma + (c.preco_dia ?? 0), 0) * diasContrato;
@@ -900,21 +929,24 @@ const ContratoForm = () => {
                       msDia
                   )
                 );
+          const isTvdeVer = values.regime === 'tvde';
+          const linhaModeloVer =
+            values.tarifa_id && viatura?.modelo_id
+              ? (precosModeloTvde.find(
+                  (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viatura.modelo_id
+                ) ?? null)
+              : null;
           const baseAluguer = calcularBaseAluguerRenting({
             regime: values.regime,
             isLongaDuracao: values.is_longa_duracao,
             dias,
-            tarifa:
-              values.regime === 'tvde' && values.tarifa_id
-                ? (tarifas.find((t) => t.id === values.tarifa_id) ?? null)
-                : (tarifas.find((t) => t.grupo_id === values.grupo) ?? null),
+            tarifa: values.tarifa_id
+              ? (tarifas.find((t) => t.id === values.tarifa_id) ?? null)
+              : (tarifas.find((t) => t.grupo_id === values.grupo) ?? null),
             valorTotalManual: values.valor_total_manual,
-            precoModeloSemana:
-              values.regime === 'tvde' && values.viatura_id && values.tarifa_id
-                ? (precosModeloTvde.find(
-                    (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viatura?.modelo_id
-                  )?.preco_semana ?? null)
-                : null,
+            precoModeloSemana: isTvdeVer ? (linhaModeloVer?.preco_semana ?? null) : null,
+            precoModeloDia: !isTvdeVer ? (linhaModeloVer?.preco_dia ?? null) : null,
+            precoModeloMes: !isTvdeVer ? (linhaModeloVer?.preco_mes ?? null) : null,
           });
           const custoCoberturas =
             values.coberturas.reduce((s, c) => s + (c.preco_dia ?? 0), 0) * dias;

@@ -6700,41 +6700,62 @@ export type Database = {
       }
       renting_tarifa_precos_modelo: {
         Row: {
+          caucao_valor: number | null
+          caucao_valor_iva: number | null
           created_at: string
           created_by: string | null
           franquia_valor: number | null
+          franquia_valor_iva: number | null
           id: string
           km_adicional_valor: number | null
+          km_adicional_valor_iva: number | null
           km_mensal: number | null
+          km_mensal_iva: number | null
           modelo_id: string
           org_id: string
-          preco_semana: number
+          preco_dia: number | null
+          preco_mes: number | null
+          preco_semana: number | null
           tarifa_id: string
           updated_at: string
         }
         Insert: {
+          caucao_valor?: number | null
+          caucao_valor_iva?: number | null
           created_at?: string
           created_by?: string | null
           franquia_valor?: number | null
+          franquia_valor_iva?: number | null
           id?: string
           km_adicional_valor?: number | null
+          km_adicional_valor_iva?: number | null
           km_mensal?: number | null
+          km_mensal_iva?: number | null
           modelo_id: string
           org_id: string
-          preco_semana: number
+          preco_dia?: number | null
+          preco_mes?: number | null
+          preco_semana?: number | null
           tarifa_id: string
           updated_at?: string
         }
         Update: {
+          caucao_valor?: number | null
+          caucao_valor_iva?: number | null
           created_at?: string
           created_by?: string | null
           franquia_valor?: number | null
+          franquia_valor_iva?: number | null
           id?: string
           km_adicional_valor?: number | null
+          km_adicional_valor_iva?: number | null
           km_mensal?: number | null
+          km_mensal_iva?: number | null
           modelo_id?: string
           org_id?: string
-          preco_semana?: number
+          preco_dia?: number | null
+          preco_mes?: number | null
+          preco_semana?: number | null
           tarifa_id?: string
           updated_at?: string
         }
@@ -6767,13 +6788,13 @@ export type Database = {
           ativa: boolean
           created_at: string
           created_by: string | null
-          grupo_id: string
+          grupo_id: string | null
           id: string
           km_adicional_valor: number | null
           kms_incluidos: number | null
           nome: string
           org_id: string
-          preco_dia: number
+          preco_dia: number | null
           preco_fim_semana: number | null
           preco_mes: number | null
           preco_semana: number | null
@@ -6788,13 +6809,13 @@ export type Database = {
           ativa?: boolean
           created_at?: string
           created_by?: string | null
-          grupo_id: string
+          grupo_id?: string | null
           id?: string
           km_adicional_valor?: number | null
           kms_incluidos?: number | null
           nome: string
           org_id: string
-          preco_dia: number
+          preco_dia?: number | null
           preco_fim_semana?: number | null
           preco_mes?: number | null
           preco_semana?: number | null
@@ -6809,13 +6830,13 @@ export type Database = {
           ativa?: boolean
           created_at?: string
           created_by?: string | null
-          grupo_id?: string
+          grupo_id?: string | null
           id?: string
           km_adicional_valor?: number | null
           kms_incluidos?: number | null
           nome?: string
           org_id?: string
-          preco_dia?: number
+          preco_dia?: number | null
           preco_fim_semana?: number | null
           preco_mes?: number | null
           preco_semana?: number | null

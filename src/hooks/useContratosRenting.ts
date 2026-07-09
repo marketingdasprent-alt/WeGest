@@ -385,17 +385,17 @@ export function useFecharContrato() {
       if (errEstacao) throw errEstacao;
       const cidadeEvento = estacao.cidade?.trim() || estacao.nome;
 
-      // O contrato só fecha (estado_operacional) quando a recolha física é
-      // confirmada de facto — ou já aqui (km/combustível/fotos preenchidos,
-      // `recolha` presente) ou mais tarde via QR/Calendário
-      // (realizar_token_realizacao). Sem `recolha`, isto só regista a estação
-      // e cria o evento pendente — o contrato mantém-se em_curso até alguém
-      // confirmar a recolha física.
+      // Fechar o contrato é uma decisão explícita do gestor: passa sempre a
+      // 'cancelado' (fechado), quer a recolha física seja registada já aqui
+      // (km/combustível/fotos, `recolha` presente) quer fique para confirmar
+      // depois via QR/Calendário. Antes, sem `recolha`, o estado não mudava e
+      // o contrato ficava preso (parecia que não fechava) à espera de uma
+      // confirmação que muitas vezes nunca chegava.
       const { error: errUpdate } = await supabase
         .from('contratos_renting')
         .update({
           estacao_recolha_id: estacaoId,
-          ...(recolha ? { estado_operacional: 'cancelado' as const } : {}),
+          estado_operacional: 'cancelado' as const,
         })
         .eq('id', contratoId);
       if (errUpdate) throw errUpdate;
