@@ -265,7 +265,7 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   // gestor). TVDE usa as colunas base; Rent-a-Car usa as c/IVA.
   useEffect(() => {
     if (isSlot || !precoModeloSel) return;
-    const kmIncl = precoModeloSel.km_mensal;
+    const kmIncl = isTvde ? precoModeloSel.km_mensal : precoModeloSel.km_mensal_iva;
     const kmExtra = isTvde
       ? precoModeloSel.km_adicional_valor
       : precoModeloSel.km_adicional_valor_iva;

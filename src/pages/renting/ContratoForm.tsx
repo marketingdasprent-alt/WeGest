@@ -488,7 +488,7 @@ const ContratoForm = () => {
     );
     if (!linha) return;
     const isTvdeReg = regime === 'tvde';
-    const kmIncl = linha.km_mensal;
+    const kmIncl = isTvdeReg ? linha.km_mensal : linha.km_mensal_iva;
     const kmExtra = isTvdeReg ? linha.km_adicional_valor : linha.km_adicional_valor_iva;
     const franquia = isTvdeReg ? linha.franquia_valor : linha.franquia_valor_iva;
     if (kmIncl != null) form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });

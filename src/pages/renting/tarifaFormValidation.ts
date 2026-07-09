@@ -4,9 +4,10 @@ export interface PrecoModeloForm {
   km_mensal: string;
   km_adicional_valor: string;
   franquia_valor: string;
-  // Rent-a-Car
+  // Rent-a-Car (independentes do TVDE — não partilham campos)
   preco_dia: string;
   preco_mes: string;
+  km_mensal_iva: string;
   km_adicional_valor_iva: string;
   franquia_valor_iva: string;
 }

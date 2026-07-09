@@ -6708,6 +6708,7 @@ export type Database = {
           km_adicional_valor: number | null
           km_adicional_valor_iva: number | null
           km_mensal: number | null
+          km_mensal_iva: number | null
           modelo_id: string
           org_id: string
           preco_dia: number | null
@@ -6725,6 +6726,7 @@ export type Database = {
           km_adicional_valor?: number | null
           km_adicional_valor_iva?: number | null
           km_mensal?: number | null
+          km_mensal_iva?: number | null
           modelo_id: string
           org_id: string
           preco_dia?: number | null
@@ -6742,6 +6744,7 @@ export type Database = {
           km_adicional_valor?: number | null
           km_adicional_valor_iva?: number | null
           km_mensal?: number | null
+          km_mensal_iva?: number | null
           modelo_id?: string
           org_id?: string
           preco_dia?: number | null

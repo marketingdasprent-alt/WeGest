@@ -72,6 +72,7 @@ const EMPTY_PRECO_MODELO: PrecoModeloForm = {
   franquia_valor: '',
   preco_dia: '',
   preco_mes: '',
+  km_mensal_iva: '',
   km_adicional_valor_iva: '',
   franquia_valor_iva: '',
 };
@@ -138,7 +139,7 @@ const RentingTarifaForm = () => {
       const { data, error } = await supabase
         .from('renting_tarifa_precos_modelo')
         .select(
-          'modelo_id, preco_semana, km_mensal, km_adicional_valor, franquia_valor, preco_dia, preco_mes, km_adicional_valor_iva, franquia_valor_iva'
+          'modelo_id, preco_semana, km_mensal, km_adicional_valor, franquia_valor, preco_dia, preco_mes, km_mensal_iva, km_adicional_valor_iva, franquia_valor_iva'
         )
         .eq('tarifa_id', id!);
       if (error) throw error;
@@ -175,6 +176,7 @@ const RentingTarifaForm = () => {
         franquia_valor: p.franquia_valor?.toString() ?? '',
         preco_dia: (p as any).preco_dia?.toString() ?? '',
         preco_mes: (p as any).preco_mes?.toString() ?? '',
+        km_mensal_iva: (p as any).km_mensal_iva?.toString() ?? '',
         km_adicional_valor_iva: (p as any).km_adicional_valor_iva?.toString() ?? '',
         franquia_valor_iva: (p as any).franquia_valor_iva?.toString() ?? '',
       };
@@ -206,11 +208,11 @@ const RentingTarifaForm = () => {
    * Sincroniza renting_tarifa_precos_modelo com o mapa em memória:
    * apaga tudo e reinsere as linhas com preço válido. As colunas gravadas
    * dependem do tipo da tarifa:
-   *   TVDE       → preco_semana (+ km_mensal/km_adicional_valor/franquia_valor)
-   *   Rent-a-Car → preco_dia/preco_mes/km_mensal (+ km_adicional_valor_iva/franquia_valor_iva)
-   * O "preço-chave" (preco_semana no TVDE, preco_dia no RaC) tem de estar
-   * preenchido para a linha ser gravada. `km_mensal` guarda os km incluídos/mês
-   * em ambos os regimes.
+   *   TVDE       → preco_semana + km_mensal/km_adicional_valor/franquia_valor
+   *   Rent-a-Car → preco_dia/preco_mes + km_mensal_iva/km_adicional_valor_iva/franquia_valor_iva
+   * Os campos dos dois regimes são independentes (colunas separadas) — editar
+   * um não afeta o outro. O "preço-chave" (preco_semana no TVDE, preco_dia no
+   * RaC) tem de estar preenchido para a linha ser gravada.
    */
   const savePrecosModelo = async (tarifaId: string) => {
     await supabase.from('renting_tarifa_precos_modelo').delete().eq('tarifa_id', tarifaId);
@@ -237,7 +239,7 @@ const RentingTarifaForm = () => {
               modelo_id,
               preco_dia: parseFloat(v.preco_dia),
               preco_mes: num(v.preco_mes),
-              km_mensal: int(v.km_mensal),
+              km_mensal_iva: int(v.km_mensal_iva),
               km_adicional_valor_iva: num(v.km_adicional_valor_iva),
               franquia_valor_iva: num(v.franquia_valor_iva),
             }
@@ -659,8 +661,8 @@ const RentingTarifaForm = () => {
                                       type="number"
                                       min="0"
                                       step="1"
-                                      value={valores.km_mensal}
-                                      onChange={(e) => setCampo('km_mensal', e.target.value)}
+                                      value={valores.km_mensal_iva}
+                                      onChange={(e) => setCampo('km_mensal_iva', e.target.value)}
                                       placeholder="—"
                                       className="h-8 text-right"
                                     />
