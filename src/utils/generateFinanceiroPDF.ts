@@ -12,6 +12,8 @@ interface FinanceiroPDFData {
     bolt: number;
     uber: number;
     outras_receitas: number;
+    /** Gorjeta Bolt+Uber já somada ao `total` — nunca sofre divisão de recibo verde. */
+    gorjeta?: number;
     total: number;
   };
   despesas: {

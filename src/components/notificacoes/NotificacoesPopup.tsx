@@ -14,12 +14,16 @@ import { AlertTriangle, Bell, Eye, X } from 'lucide-react';
 const notificacaoLink = (n: Notificacao): string => {
   if (n.link) return n.link;
   if (n.tipo === 'viatura_disponivel' && n.viatura_id) return `/viaturas/${n.viatura_id}`;
+  if (n.tipo === 'pedido_troca_kms') return '/renting/pedidos-kms';
   return n.candidatura_id
     ? `/motoristas/candidaturas?candidatura=${n.candidatura_id}`
     : '/motoristas/candidaturas';
 };
-const notificacaoLabel = (n: Notificacao): string =>
-  n.tipo === 'viatura_disponivel' ? 'Ver viatura' : 'Ver candidatura';
+const notificacaoLabel = (n: Notificacao): string => {
+  if (n.tipo === 'viatura_disponivel') return 'Ver viatura';
+  if (n.tipo === 'pedido_troca_kms') return 'Ver pedido';
+  return 'Ver candidatura';
+};
 
 export const NotificacoesPopup = () => {
   const { tipoUtilizador, loading } = usePermissions();

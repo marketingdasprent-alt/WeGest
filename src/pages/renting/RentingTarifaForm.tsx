@@ -1,7 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getTarifaFormValidationError, type PrecoModeloForm } from './tarifaFormValidation';
-import { Tag, Save, Trash2, ChevronRight, Calendar, Gauge, Clock, ShieldCheck, Car } from 'lucide-react';
+import {
+  Tag,
+  Save,
+  Trash2,
+  ChevronRight,
+  Calendar,
+  Gauge,
+  Clock,
+  ShieldCheck,
+  Car,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -211,7 +221,7 @@ const RentingTarifaForm = () => {
   const minSel = (v: string) => (v && v !== 'none' ? parseInt(v) : null);
 
   const buildPayload = () => ({
-    grupo_id: form.para_tvde ? null : (form.grupo_id || null),
+    grupo_id: form.para_tvde ? null : form.grupo_id || null,
     nome: form.nome.trim(),
     preco_dia: form.para_tvde ? null : parseFloat(form.preco_dia || '0'),
     preco_fim_semana: n(form.preco_fim_semana),
@@ -804,10 +814,7 @@ const RentingTarifaForm = () => {
                               km_adicional_valor: '',
                               franquia_valor: '',
                             };
-                            const setCampo = (
-                              campo: keyof PrecoModeloForm,
-                              valor: string
-                            ) =>
+                            const setCampo = (campo: keyof PrecoModeloForm, valor: string) =>
                               setPrecosModelo((p) => ({
                                 ...p,
                                 [m.id]: { ...valores, [campo]: valor },
@@ -850,9 +857,7 @@ const RentingTarifaForm = () => {
                                     min="0"
                                     step="0.01"
                                     value={valores.km_adicional_valor}
-                                    onChange={(e) =>
-                                      setCampo('km_adicional_valor', e.target.value)
-                                    }
+                                    onChange={(e) => setCampo('km_adicional_valor', e.target.value)}
                                     placeholder="—"
                                     className="h-8 text-right"
                                   />
@@ -879,7 +884,8 @@ const RentingTarifaForm = () => {
                   <p className="text-xs text-muted-foreground">
                     {
                       Object.values(precosModelo).filter(
-                        (v) => v.preco_semana.trim() !== '' && !Number.isNaN(parseFloat(v.preco_semana))
+                        (v) =>
+                          v.preco_semana.trim() !== '' && !Number.isNaN(parseFloat(v.preco_semana))
                       ).length
                     }{' '}
                     modelo(s) com preço/semana definido. Modelos sem preço/semana ficam

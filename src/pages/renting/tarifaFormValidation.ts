@@ -18,7 +18,9 @@ export interface TarifaFormValidationError {
   description?: string;
 }
 
-export function getTarifaFormValidationError(input: TarifaFormValidationInput): TarifaFormValidationError | null {
+export function getTarifaFormValidationError(
+  input: TarifaFormValidationInput
+): TarifaFormValidationError | null {
   if (!input.nome.trim()) {
     return { title: 'Nome é obrigatório' };
   }

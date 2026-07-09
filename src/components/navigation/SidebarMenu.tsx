@@ -28,6 +28,7 @@ import {
   CreditCard,
   Wifi,
   Banknote,
+  Gauge,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
@@ -54,6 +55,8 @@ interface SubMenuItem {
   url?: string;
   icon?: React.ComponentType<{ className?: string }>;
   recurso?: string;
+  /** Só visível para Admin ou cargo 'Supervisor Gestor TVDE' (ex.: aprovação de pedidos). */
+  requireSupervisorTvde?: boolean;
   subItems?: SubSubMenuItem[];
 }
 
@@ -91,6 +94,13 @@ const MENU_ITEMS: MenuItem[] = [
         url: '/renting/clientes',
         icon: Users,
         recurso: 'renting_clientes',
+      },
+      {
+        label: 'Pedidos de Kms',
+        url: '/renting/pedidos-kms',
+        icon: Gauge,
+        recurso: 'renting_contratos',
+        requireSupervisorTvde: true,
       },
       {
         label: 'Tarifas',
@@ -189,7 +199,8 @@ const MENU_ITEMS: MenuItem[] = [
 ];
 
 export const SidebarMenu: React.FC = () => {
-  const { isAdmin, hasAccessToResource, loading } = usePermissions();
+  const { isAdmin, hasAccessToResource, cargo, loading } = usePermissions();
+  const isSupervisorTvde = isAdmin || cargo === 'Supervisor Gestor TVDE';
   const { user } = useAuth();
   const userName = user?.user_metadata?.nome || user?.email?.split('@')[0] || 'Utilizador';
   const userRole = isAdmin ? 'Administrador' : 'Utilizador';
@@ -211,6 +222,7 @@ export const SidebarMenu: React.FC = () => {
       })
       .filter((sub) => {
         if (sub.recurso && !hasAccessToResource(sub.recurso)) return false;
+        if (sub.requireSupervisorTvde && !isSupervisorTvde) return false;
         if (sub.subItems && sub.subItems.length === 0) return false;
         return true;
       });

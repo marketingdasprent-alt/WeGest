@@ -163,7 +163,11 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
           ) : isFacturado ? (
             <Row label="Subtotal bruto" value={formatCurrency(calculo.subtotalBruto)} muted />
           ) : (
-            <Row label={regime === 'tvde' ? 'Aluguer (semanal)' : 'Aluguer'} value={formatCurrency(calculo.baseAluguer)} muted />
+            <Row
+              label={regime === 'tvde' ? 'Aluguer (semanal)' : 'Aluguer'}
+              value={formatCurrency(calculo.baseAluguer)}
+              muted
+            />
           )}
 
           {!isFacturado && calculo.custoCoberturas > 0 && (

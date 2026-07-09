@@ -109,7 +109,8 @@ export type ContratoRenting = {
   data_inicio: string;
 
   estacao_recolha_id: string | null;
-  data_fim: string;
+  /** NULL em contratos TVDE — sem data de fim, renovação automática. */
+  data_fim: string | null;
 
   estacao_origem_viatura_id: string | null;
 
@@ -121,6 +122,8 @@ export type ContratoRenting = {
 
   // Tarifário simples (MVP)
   tarifa_diaria: number | null;
+  /** FK para renting_tarifas — usada em TVDE para associar a tarifa por modelo. */
+  tarifa_id: string | null;
   desconto_percentagem: number | null;
   /** Taxa de IVA aplicada — derivada da modalidade + config da org. */
   taxa_iva: number;
@@ -180,9 +183,6 @@ export type ContratoRentingInsert = Omit<
   | 'updated_by'
   | 'created_at'
   | 'updated_at'
-  // gestor_id é preenchido por DEFAULT na BD (= quem cria); fica de fora do
-  // payload de criação e é reatribuível via Update (só superiores).
-  | 'gestor_id'
 >;
 
 export type ContratoRentingUpdate = Partial<ContratoRentingInsert> & {

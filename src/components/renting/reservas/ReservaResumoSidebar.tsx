@@ -275,7 +275,13 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
                     disabled={!dias}
                     placeholder="0,00"
                     className="h-8 w-24 text-right tabular-nums text-sm"
-                    title={!dias ? 'Define primeiro as datas' : (regime === 'tvde' ? 'Preço por semana (IVA incluído)' : 'Preço por dia (IVA incluído)')}
+                    title={
+                      !dias
+                        ? 'Define primeiro as datas'
+                        : regime === 'tvde'
+                          ? 'Preço por semana (IVA incluído)'
+                          : 'Preço por dia (IVA incluído)'
+                    }
                   />
                 </div>
                 {dias ? (

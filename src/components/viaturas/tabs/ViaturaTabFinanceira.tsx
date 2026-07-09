@@ -63,6 +63,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { EmissorSelect } from '@/components/renting/EmissorSelect';
 import { ViaturaFinanceiraResumoCards } from './ViaturaFinanceiraResumoCards';
 import {
   ViaturaFinanceiraReceitas,
@@ -73,6 +74,7 @@ import type { ReceitasData } from './ViaturaFinanceiraMovimentos';
 const financeiraSchema = z.object({
   tipo_frota: z.string().optional(),
   tipo_financiamento: z.string().optional(),
+  emissor_id: z.string().uuid().optional().nullable(),
 
   // Custos
   custo_viatura: z.string().optional(),
@@ -112,6 +114,7 @@ interface Viatura {
   status?: string | null;
   tipo_frota?: string | null;
   tipo_financiamento?: string | null;
+  emissor_id?: string | null;
   custo_viatura?: number | null;
   custos_operacionais?: number | null;
   custos_adicionais?: number | null;
@@ -172,6 +175,7 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
     defaultValues: {
       tipo_frota: 'frota_propria',
       tipo_financiamento: 'sem_financiamento',
+      emissor_id: null,
       custo_viatura: '',
       custos_operacionais: '',
       custos_adicionais: '',
@@ -200,6 +204,7 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
       form.reset({
         tipo_frota: viatura.tipo_frota || 'frota_propria',
         tipo_financiamento: viatura.tipo_financiamento || 'sem_financiamento',
+        emissor_id: viatura.emissor_id ?? null,
         custo_viatura: viatura.custo_viatura?.toString() || '',
         custos_operacionais: viatura.custos_operacionais?.toString() || '',
         custos_adicionais: viatura.custos_adicionais?.toString() || '',
@@ -237,6 +242,7 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
         .update({
           tipo_frota: data.tipo_frota,
           tipo_financiamento: data.tipo_financiamento,
+          emissor_id: data.emissor_id || null,
           custo_viatura: data.custo_viatura ? parseFloat(data.custo_viatura) : null,
           custos_operacionais: data.custos_operacionais
             ? parseFloat(data.custos_operacionais)
@@ -613,7 +619,7 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
                     Tipo de Aquisição
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <FormField
                     control={form.control}
                     name="tipo_frota"
@@ -654,6 +660,19 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
                             <SelectItem value="ald">Aluguer de Longa Duração (ALD)</SelectItem>
                           </SelectContent>
                         </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="emissor_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Entidade proprietária</FormLabel>
+                        <FormControl>
+                          <EmissorSelect value={field.value} onChange={field.onChange} />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}

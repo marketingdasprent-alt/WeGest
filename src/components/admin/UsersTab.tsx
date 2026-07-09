@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -60,6 +62,7 @@ interface Profile {
   cargo_id: string | null;
   is_admin: boolean;
   created_at: string;
+  disponivel_transferista: boolean;
 }
 
 type SortColumn = 'nome' | 'email' | 'created_at';
@@ -133,7 +136,7 @@ export const UsersTab = () => {
       // 2. Profiles desses utilizadores (RLS alargada por migration 140006)
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, email, nome, created_at')
+        .select('id, email, nome, created_at, disponivel_transferista')
         .in('id', userIds)
         .order('created_at', { ascending: false });
 
@@ -148,6 +151,7 @@ export const UsersTab = () => {
         created_at: p.created_at,
         cargo_id: membershipMap[p.id]?.cargo_id ?? null,
         is_admin: membershipMap[p.id]?.is_admin ?? false,
+        disponivel_transferista: p.disponivel_transferista ?? true,
       }));
 
       setProfiles(mapped);
@@ -346,10 +350,13 @@ export const UsersTab = () => {
 
       if (roleError) throw roleError;
 
-      // Nome é identidade global (org-neutra) — fica em profiles.
+      // Nome e disponibilidade de transferista são identidade global (org-neutra) — ficam em profiles.
       const { error: nomeError } = await supabase
         .from('profiles')
-        .update({ nome: editingProfile.nome })
+        .update({
+          nome: editingProfile.nome,
+          disponivel_transferista: editingProfile.disponivel_transferista,
+        })
         .eq('id', editingProfile.id);
 
       if (nomeError) throw nomeError;
@@ -646,6 +653,11 @@ export const UsersTab = () => {
                         Admin
                       </span>
                     )}
+                    {!profile.disponivel_transferista && (
+                      <Badge variant="outline" className="ml-2 text-xs text-muted-foreground">
+                        Indisponível p/ transferista
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{profile.email}</TableCell>
                   <TableCell className="text-muted-foreground">
@@ -856,6 +868,22 @@ export const UsersTab = () => {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div>
+                <Label className="text-foreground">Disponível como transferista</Label>
+                <p className="text-xs text-muted-foreground">
+                  Pode ser escalado para entregas/recolhas de viaturas.
+                </p>
+              </div>
+              <Switch
+                checked={editingProfile?.disponivel_transferista ?? true}
+                onCheckedChange={(checked) =>
+                  setEditingProfile((prev) =>
+                    prev ? { ...prev, disponivel_transferista: checked } : null
+                  )
+                }
+              />
             </div>
           </div>
           <DialogFooter>

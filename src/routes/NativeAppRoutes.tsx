@@ -37,6 +37,7 @@ const AdminDocumentos = lazy(() => import('@/pages/AdminDocumentos'));
 // (sem isto, no Android estas rotas caíam no catch-all → dashboard).
 const RentingContratos = lazy(() => import('@/pages/renting/RentingContratos'));
 const ContratoForm = lazy(() => import('@/pages/renting/ContratoForm'));
+const PedidosTrocaKms = lazy(() => import('@/pages/renting/PedidosTrocaKms'));
 const RealizarEntregaPage = lazy(() => import('@/pages/renting/RealizarEntregaPage'));
 const DanosPublicosPage = lazy(() => import('@/pages/DanosPublicosPage'));
 const RentingReservas = lazy(() => import('@/pages/renting/RentingReservas'));
@@ -313,6 +314,16 @@ const NativeAppRoutes = () => {
             <ProtectedRoute requiredResource="renting_contratos">
               <DashboardLayout>
                 <ContratoForm />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/renting/pedidos-kms"
+          element={
+            <ProtectedRoute requiredResource="renting_contratos">
+              <DashboardLayout>
+                <PedidosTrocaKms />
               </DashboardLayout>
             </ProtectedRoute>
           }
