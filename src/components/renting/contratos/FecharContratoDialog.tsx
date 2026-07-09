@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -38,6 +38,7 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { COMBUSTIVEL_NIVEL_OPTS } from '@/utils/combustivel';
 import { useFecharContrato } from '@/hooks/useContratosRenting';
+import { computeFechoRapidoDefaults } from './fecharContratoDefaults';
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -80,6 +81,8 @@ interface FecharContratoDialogProps {
   motoristaId?: string | null;
   matricula?: string | null;
   viaturaId?: string | null;
+  /** Estação "casa" da viatura — usada para pré-preencher a estação de recolha. */
+  estacaoOrigemId?: string | null;
 }
 
 export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
@@ -90,6 +93,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   motoristaId,
   matricula,
   viaturaId,
+  estacaoOrigemId,
 }) => {
   const fecharMutation = useFecharContrato();
   const { data: estacoes = [] } = useEstacoes();
@@ -127,7 +131,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   // Registar a recolha (km/combustível/fotos) já no fecho — evita ter de ir
   // depois ao Calendário para o check-in. Estado próprio (fora do zod) pelo
   // mesmo padrão usado em RealizarEntregaPage/CheckOutPendentesDrawer.
-  const [registarAgora, setRegistarAgora] = useState(false);
+  const [registarAgora, setRegistarAgora] = useState(true);
   const [km, setKm] = useState('');
   const [combustivel, setCombustivel] = useState('');
   const [files, setFiles] = useState<SelectedFile[]>([]);
@@ -136,6 +140,28 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const assinaturasRef = useRef<AssinaturasHandoverHandle>(null);
   const [gerandoFolha, setGerandoFolha] = useState(false);
+
+  // Ao abrir o dialog, pré-preenche tipo/estação/data — o fecho rápido fica
+  // pronto a submeter sem obrigar a passar por todos os campos manualmente.
+  // Nenhum campo deixa de ser obrigatório, só deixam de vir vazios por omissão.
+  useEffect(() => {
+    if (!open) return;
+    const defaults = computeFechoRapidoDefaults({
+      motoristaId,
+      estacaoOrigemViaturaId: estacaoOrigemId ?? null,
+      estacoesDisponiveisIds: estacoes.map((e) => e.id),
+      agoraIso: new Date().toISOString(),
+    });
+    form.reset({
+      tipoEvento: defaults.tipoEvento,
+      estacaoId: defaults.estacaoId,
+      dataEvento: defaults.dataEvento,
+      motivo: '',
+      valorDivida: '',
+    });
+    setRegistarAgora(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, motoristaId, estacaoOrigemId, estacoes]);
 
   // Contexto para a Folha de Danos (condutor, cliente, empresa emissora, km/
   // combustível de saída) — mesma query/chave usada em RealizarEntregaPage,
@@ -276,7 +302,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   };
 
   const resetRecolhaState = () => {
-    setRegistarAgora(false);
+    setRegistarAgora(true);
     setKm('');
     setCombustivel('');
     setDuaDevolvido(false);
