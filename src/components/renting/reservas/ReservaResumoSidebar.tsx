@@ -68,6 +68,7 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
   const regime = form.watch('regime');
   const slotValorMensal = form.watch('slot_valor_mensal');
   const isSlot = regime === 'slot';
+  const isTvde = regime === 'tvde';
 
   const estacaoEntrega = useMemo(
     () => estacoes.find((e) => e.id === estacaoEntregaId),
@@ -257,6 +258,24 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
                 </span>
                 <span className="text-sm font-medium tabular-nums">{formatEur(total)}</span>
               </div>
+            ) : isTvde ? (
+              // TVDE: o preço/semana vem do modelo na tarifa — é fixo e não
+              // depende das datas. Mostra só leitura, sem input nem aviso.
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-muted-foreground shrink-0">
+                    Preço/semana (IVA inc.)
+                  </span>
+                  <span className="text-sm font-medium tabular-nums">{formatEur(total)}</span>
+                </div>
+                {total > 0 ? (
+                  <p className="text-xs text-muted-foreground text-right">× 1 semana</p>
+                ) : (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 text-right flex items-center justify-end gap-1">
+                    <AlertTriangle className="h-3 w-3" /> Escolhe a tarifa e a viatura
+                  </p>
+                )}
+              </>
             ) : (
               <>
                 <div className="flex items-center justify-between gap-2">

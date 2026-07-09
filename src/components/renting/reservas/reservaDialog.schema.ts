@@ -21,6 +21,9 @@ export const reservaDialogSchema = z
     viatura_id: z.string().uuid('Viatura inválida').nullable().optional(),
     matricula: z.string().max(20).optional().nullable(),
     grupo: z.string().max(50).optional().nullable(),
+    // Tarifa aplicada. Em rent-a-car deriva do grupo da viatura; em TVDE é
+    // escolhida manualmente entre as tarifas tipo='tvde'. Propaga-se ao contrato.
+    tarifa_id: z.string().uuid().nullable().optional(),
 
     estacao_entrega_id: z.string().uuid().nullable().optional(),
     estacao_recolha_id: z.string().uuid().nullable().optional(),
@@ -126,6 +129,15 @@ export const reservaDialogSchema = z
           });
         }
       }
+    }
+
+    // TVDE: a tarifa é escolhida manualmente (tarifas tipo='tvde'). Obrigatória.
+    if (d.regime === 'tvde' && !d.tarifa_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['tarifa_id'],
+        message: 'Seleciona a tarifa TVDE',
+      });
     }
 
     // Slot: exige a viatura (carro do motorista); cliente/estações não se aplicam.

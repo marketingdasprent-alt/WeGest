@@ -81,7 +81,7 @@ export function useContratosRenting(options: UseContratosRentingOptions = {}) {
 
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as ContratoRenting[];
+      return (data ?? []) as unknown as ContratoRenting[];
     },
     placeholderData: keepPreviousData,
     staleTime: 30_000,
@@ -207,7 +207,7 @@ export function useContratoRenting(id: string | null | undefined) {
         .is('deleted_at', null)
         .maybeSingle();
       if (error) throw error;
-      return data as ContratoRenting | null;
+      return data as unknown as ContratoRenting | null;
     },
     enabled: !!id,
   });
@@ -276,7 +276,7 @@ export function useCreateContratoRenting() {
         .select(SELECT_COLUMNS)
         .single();
       if (error) throw error;
-      return data as ContratoRenting;
+      return data as unknown as ContratoRenting;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
@@ -305,7 +305,7 @@ export function useUpdateContratoRenting() {
         .select(SELECT_COLUMNS)
         .single();
       if (error) throw error;
-      return data as ContratoRenting;
+      return data as unknown as ContratoRenting;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
@@ -385,17 +385,17 @@ export function useFecharContrato() {
       if (errEstacao) throw errEstacao;
       const cidadeEvento = estacao.cidade?.trim() || estacao.nome;
 
-      // O contrato só fecha (estado_operacional) quando a recolha física é
-      // confirmada de facto — ou já aqui (km/combustível/fotos preenchidos,
-      // `recolha` presente) ou mais tarde via QR/Calendário
-      // (realizar_token_realizacao). Sem `recolha`, isto só regista a estação
-      // e cria o evento pendente — o contrato mantém-se em_curso até alguém
-      // confirmar a recolha física.
+      // Fechar o contrato é uma decisão explícita do gestor: passa sempre a
+      // 'cancelado' (fechado), quer a recolha física seja registada já aqui
+      // (km/combustível/fotos, `recolha` presente) quer fique para confirmar
+      // depois via QR/Calendário. Antes, sem `recolha`, o estado não mudava e
+      // o contrato ficava preso (parecia que não fechava) à espera de uma
+      // confirmação que muitas vezes nunca chegava.
       const { error: errUpdate } = await supabase
         .from('contratos_renting')
         .update({
           estacao_recolha_id: estacaoId,
-          ...(recolha ? { estado_operacional: 'cancelado' as const } : {}),
+          estado_operacional: 'cancelado' as const,
         })
         .eq('id', contratoId);
       if (errUpdate) throw errUpdate;
@@ -645,7 +645,7 @@ export function useContratoVersoes(contratoId: string | null | undefined) {
           .maybeSingle();
         if (error) throw error;
         if (!data) break;
-        const linha = data as ContratoRenting;
+        const linha = data as unknown as ContratoRenting;
         versoes.push(linha);
         cursor = linha.contrato_anterior_id;
       }

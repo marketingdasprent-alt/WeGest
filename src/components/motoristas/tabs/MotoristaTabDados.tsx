@@ -35,11 +35,10 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Plus,
-  X,
   User,
   Phone,
   Mail,
@@ -60,6 +59,7 @@ import {
 import { Motorista } from '@/pages/Motoristas';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { DocumentUploader } from '@/components/motorista-portal/DocumentUploader';
+import { MotoristaCartoesFrota } from '../MotoristaCartoesFrota';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -205,6 +205,14 @@ export function MotoristaTabDados({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [gestores, setGestores] = useState<{ nome: string }[]>([]);
   const [gestorPopoverOpen, setGestorPopoverOpen] = useState(false);
+  // Independente do isDirty do react-hook-form (que fica `false` logo após um
+  // form.reset, incluindo a hidratação a partir de um `draft` restaurado).
+  // Reflete alterações reais do utilizador — ver o watch em onDraftChange.
+  const [hasChanges, setHasChanges] = useState(!!draft);
+  // Suprime o watch abaixo enquanto sincronizamos os campos cartao_* a partir
+  // da BD (MotoristaCartoesFrota já gravou-os diretamente) — não é uma
+  // alteração do utilizador, não deve acender o botão Guardar.
+  const suppressHasChangesRef = useRef(false);
 
   useEffect(() => {
     const fetchGestores = async () => {
@@ -334,13 +342,13 @@ export function MotoristaTabDados({
       comprovativo_morada_url: motorista.comprovativo_morada_url || '',
       comprovativo_iban_url: motorista.comprovativo_iban_url || '',
     });
+    setHasChanges(false);
     // Intencionalmente sem `draft` nas deps — o draft só hidrata na montagem;
     // edições posteriores são propagadas via watch (não devem re-resetar o form).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [motorista, form]);
 
   useEffect(() => {
-    if (!onDraftChange) return;
     const subscription = form.watch((values, { name }) => {
       // `name` definido = mudança real do utilizador (input ou form.setValue,
       // ex.: Gestor e cartões de combustível). O `form.reset` de hidratação
@@ -348,7 +356,8 @@ export function MotoristaTabDados({
       // Substitui o gate antigo por `isDirty`, que ficava `false` em campos
       // alterados via setValue e fazia perder esses valores ao trocar de aba.
       if (name) {
-        onDraftChange(values as Record<string, unknown>);
+        if (!suppressHasChangesRef.current) setHasChanges(true);
+        onDraftChange?.(values as Record<string, unknown>);
       }
     });
     return () => subscription.unsubscribe();
@@ -431,6 +440,8 @@ export function MotoristaTabDados({
         if (error) throw error;
 
         toast.success('Motorista criado com sucesso!');
+        setHasChanges(false);
+        onDraftChange?.(null);
         onCreated?.(novo as Motorista);
       } else {
         // Edição: UPDATE da ficha existente.
@@ -442,6 +453,8 @@ export function MotoristaTabDados({
         if (error) throw error;
 
         toast.success('Motorista atualizado com sucesso!');
+        setHasChanges(false);
+        onDraftChange?.(null);
         onSave();
       }
     } catch (error) {
@@ -449,6 +462,26 @@ export function MotoristaTabDados({
       toast.error(isCreating ? 'Erro ao criar motorista' : 'Erro ao atualizar motorista');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // A MotoristaCartoesFrota grava diretamente na BD (motoristas_ativos.cartao_*).
+  // Sincroniza o form com o valor fresco sem acender o botão Guardar (nada
+  // ficou por gravar) nem perder um draft de outros campos ainda pendentes.
+  const handleCartoesChanged = async () => {
+    onSave();
+    if (!motorista?.id) return;
+    const { data } = await supabase
+      .from('motoristas_ativos')
+      .select('cartao_bp, cartao_repsol, cartao_edp')
+      .eq('id', motorista.id)
+      .maybeSingle();
+    if (data) {
+      suppressHasChangesRef.current = true;
+      form.setValue('cartao_bp', data.cartao_bp || '');
+      form.setValue('cartao_repsol', data.cartao_repsol || '');
+      form.setValue('cartao_edp', data.cartao_edp || '');
+      suppressHasChangesRef.current = false;
     }
   };
 
@@ -1005,148 +1038,13 @@ export function MotoristaTabDados({
             title="Combustível"
             headerClassName="bg-orange-50 dark:bg-orange-950/30 border-b"
           >
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2 mb-4 p-3 bg-muted/20 rounded-lg border border-dashed">
-                <p className="text-xs text-muted-foreground w-full mb-1">Adicionar novo cartão:</p>
-                {!form.watch('cartao_bp') && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs border-green-600/30 text-green-700 hover:bg-green-600 hover:text-white"
-                    onClick={() => form.setValue('cartao_bp', ' ')}
-                  >
-                    + BP
-                  </Button>
-                )}
-                {!form.watch('cartao_repsol') && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs border-orange-600/30 text-orange-700 hover:bg-orange-600 hover:text-white"
-                    onClick={() => form.setValue('cartao_repsol', ' ')}
-                  >
-                    + REPSOL
-                  </Button>
-                )}
-                {!form.watch('cartao_edp') && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs border-red-600/30 text-red-700 hover:bg-red-600 hover:text-white"
-                    onClick={() => form.setValue('cartao_edp', ' ')}
-                  >
-                    + EDP
-                  </Button>
-                )}
-              </div>
-
-              {form.watch('cartao_bp') !== null && form.watch('cartao_bp') !== '' && (
-                <FormField
-                  control={form.control}
-                  name="cartao_bp"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center justify-between">
-                        <FormLabel className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-green-500" />
-                          Cartão BP
-                        </FormLabel>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-red-600"
-                          onClick={() => form.setValue('cartao_bp', '')}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <FormControl>
-                        <Input
-                          placeholder="Número do cartão BP"
-                          {...field}
-                          value={field.value || ''}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-
-              {/* REPSOL */}
-              {form.watch('cartao_repsol') !== null && form.watch('cartao_repsol') !== '' && (
-                <FormField
-                  control={form.control}
-                  name="cartao_repsol"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center justify-between">
-                        <FormLabel className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-orange-500" />
-                          Cartão REPSOL
-                        </FormLabel>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-red-600"
-                          onClick={() => form.setValue('cartao_repsol', '')}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <FormControl>
-                        <Input
-                          placeholder="Número do cartão REPSOL"
-                          {...field}
-                          value={field.value || ''}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-
-              {/* EDP */}
-              {form.watch('cartao_edp') !== null && form.watch('cartao_edp') !== '' && (
-                <FormField
-                  control={form.control}
-                  name="cartao_edp"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center justify-between">
-                        <FormLabel className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-red-600" />
-                          Cartão EDP
-                        </FormLabel>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-red-600"
-                          onClick={() => form.setValue('cartao_edp', '')}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <FormControl>
-                        <Input
-                          placeholder="Número do cartão EDP"
-                          {...field}
-                          value={field.value || ''}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-            </div>
+            {isCreating || !motorista?.id ? (
+              <p className="text-sm text-muted-foreground italic text-center py-2">
+                Grave o motorista primeiro para poder associar cartões de frota.
+              </p>
+            ) : (
+              <MotoristaCartoesFrota motorista={motorista} onChanged={handleCartoesChanged} />
+            )}
           </SectionCard>
 
           {/* Estado & Configuração */}
@@ -1330,9 +1228,12 @@ export function MotoristaTabDados({
           </SectionCard>
         </div>
 
-        {/* Botão de salvar */}
-        <div className="flex justify-end pt-4 border-t">
-          <Button type="submit" disabled={isSubmitting}>
+        {/* Botão de salvar — só ativo quando há alterações por gravar */}
+        <div className="flex items-center justify-end gap-3 pt-4 border-t">
+          {hasChanges && !isSubmitting && (
+            <span className="text-xs text-muted-foreground">Alterações por gravar</span>
+          )}
+          <Button type="submit" disabled={isSubmitting || !hasChanges}>
             {isSubmitting ? 'A guardar...' : isCreating ? 'Criar Motorista' : 'Guardar Alterações'}
           </Button>
         </div>

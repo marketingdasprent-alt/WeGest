@@ -28,6 +28,10 @@ import { useContratoIdByReserva } from '@/hooks/useContratosRenting';
 import { uploadReservaAnexoSync } from '@/hooks/useReservaAnexos';
 import { useViaturas } from '@/hooks/useViaturas';
 import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
+import {
+  calcularBaseAluguerRenting,
+  useRentingTarifaPrecosModelo,
+} from '@/hooks/useRentingGruposTarifas';
 
 import { ClienteDialog } from '@/components/renting/ClienteDialog';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
@@ -39,7 +43,6 @@ import {
   ReservaTabAnexos,
   type AnexoPendente,
 } from '@/components/renting/reservas/tabs/ReservaTabAnexos';
-import { ReservaTabCondutores } from '@/components/renting/reservas/tabs/ReservaTabCondutores';
 import { ReservaTabFaturar } from '@/components/renting/reservas/tabs/ReservaTabFaturar';
 import { ReservaTabGeral } from '@/components/renting/reservas/tabs/ReservaTabGeral';
 import {
@@ -67,6 +70,7 @@ const DEFAULT_VALUES: ReservaFormValues = {
   gestor_id: null,
   estado: 'pendente',
   regime: 'rent_a_car',
+  tarifa_id: null,
   valor_total: null,
   franquia_valor: null,
   caucao_valor: null,
@@ -98,6 +102,7 @@ const RentingReservaForm = () => {
   const { data: clientes = [] } = useClientes();
   const { data: motoristas = [] } = useMotoristas({ apenasAtivos: true });
   const { data: viaturas = [] } = useViaturas({ apenasDisponiveis: !isEdit });
+  const { data: precosModeloTvde = [] } = useRentingTarifaPrecosModelo();
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
 
   const createMutation = useCreateReserva();
@@ -239,6 +244,7 @@ const RentingReservaForm = () => {
       gestor_id: reserva.gestor_id ?? null,
       estado: reserva.estado,
       regime: reserva.regime,
+      tarifa_id: (reserva as any).tarifa_id ?? null,
       slot_valor_semanal: reserva.slot_valor_semanal,
       slot_valor_mensal: reserva.slot_valor_mensal,
       valor_total: reserva.valor_total,
@@ -363,6 +369,28 @@ const RentingReservaForm = () => {
       const viaturaSelecionada = viaturas.find((v) => v.id === values.viatura_id);
       const matriculaFinal = values.matricula || viaturaSelecionada?.matricula || null;
 
+      // Bloqueia guardar se o modelo da viatura não tem preço na tarifa
+      // escolhida (o preço é definido por modelo na tarifa, tanto TVDE como
+      // Rent-a-Car). TVDE valida preco_semana; Rent-a-Car valida preco_dia.
+      const isTvdeSubmit = values.regime === 'tvde';
+      if (values.regime !== 'slot' && values.tarifa_id && viaturaSelecionada?.modelo_id) {
+        const linha = precosModeloTvde.find(
+          (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaSelecionada.modelo_id
+        );
+        const temPreco = isTvdeSubmit ? linha?.preco_semana != null : linha?.preco_dia != null;
+        if (!temPreco) {
+          toast({
+            title: isTvdeSubmit
+              ? 'Modelo sem preço na tarifa TVDE'
+              : 'Modelo sem preço na tarifa Rent-a-Car',
+            description:
+              'A viatura escolhida não tem preço definido na tarifa selecionada. Define o preço do modelo na tarifa ou escolhe outra viatura/tarifa.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
       // Condutor principal — derivado da lista para snapshot legado em reservas.
       // Pode ser cliente (rent-a-car) ou motorista (TVDE).
       const condutorPrincipal = values.condutores.find((c) => c.is_principal) ?? null;
@@ -374,6 +402,44 @@ const RentingReservaForm = () => {
         : null;
       const condutorPrincipalNome =
         condutorPrincipalCliente?.nome ?? condutorPrincipalMotorista?.nome ?? null;
+
+      // Linha de preço por modelo da tarifa escolhida (TVDE ou Rent-a-Car).
+      const precoModeloLinha =
+        values.tarifa_id && viaturaSelecionada?.modelo_id
+          ? (precosModeloTvde.find(
+              (p) =>
+                p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaSelecionada.modelo_id
+            ) ?? null)
+          : null;
+
+      const baseAluguer = calcularBaseAluguerRenting({
+        regime: values.regime,
+        isLongaDuracao: values.is_longa_duracao,
+        dias:
+          values.data_fim && values.data_inicio
+            ? Math.max(
+                1,
+                Math.ceil(
+                  (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) /
+                    86400000
+                )
+              )
+            : null,
+        tarifa: null,
+        valorTotalManual: values.valor_total,
+        precoModeloSemana:
+          isTvdeSubmit && values.tarifa_id && viaturaSelecionada?.modelo_id
+            ? (precoModeloLinha?.preco_semana ?? null)
+            : null,
+        precoModeloDia:
+          !isTvdeSubmit && values.tarifa_id && viaturaSelecionada?.modelo_id
+            ? (precoModeloLinha?.preco_dia ?? null)
+            : null,
+        precoModeloMes:
+          !isTvdeSubmit && values.tarifa_id && viaturaSelecionada?.modelo_id
+            ? (precoModeloLinha?.preco_mes ?? null)
+            : null,
+      });
 
       const payload: ReservaInsert = {
         viatura_id: values.viatura_id || null,
@@ -393,10 +459,11 @@ const RentingReservaForm = () => {
         emissor_id: values.emissor_id ?? null,
         estado: values.estado,
         regime: values.regime,
+        tarifa_id: values.tarifa_id ?? null,
         // Valor semanal só no regime slot (cobrado por carro).
         slot_valor_semanal: values.regime === 'slot' ? (values.slot_valor_semanal ?? null) : null,
         slot_valor_mensal: values.regime === 'slot' ? (values.slot_valor_mensal ?? null) : null,
-        valor_total: values.valor_total,
+        valor_total: baseAluguer ?? values.valor_total,
         franquia_valor: values.franquia_valor,
         caucao_valor: values.caucao_valor,
         kms_incluidos: values.kms_incluidos,
@@ -476,9 +543,7 @@ const RentingReservaForm = () => {
     };
     collect(errors);
 
-    // Campo de condutores vive na tab "Condutores"/"Motoristas".
-    if (errors.condutores) setActiveTab('condutores');
-    else setActiveTab('geral');
+    setActiveTab('geral');
 
     const unicas = Array.from(new Set(messages)).slice(0, 4);
     toast({
@@ -659,11 +724,8 @@ const RentingReservaForm = () => {
                 <Card className="bg-card border-border">
                   <CardContent className="p-4 sm:p-6">
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                      <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-flex">
+                      <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
                         <TabsTrigger value="geral">Geral</TabsTrigger>
-                        <TabsTrigger value="condutores">
-                          {regimeWatched === 'rent_a_car' ? 'Condutores' : 'Motoristas'}
-                        </TabsTrigger>
                         <TabsTrigger value="anexos">Anexos</TabsTrigger>
                       </TabsList>
 
@@ -675,17 +737,7 @@ const RentingReservaForm = () => {
                           clientes={clientes}
                           motoristas={motoristas}
                           onCriarMotorista={() => setMotoristaDialogOpen(true)}
-                        />
-                      </TabsContent>
-
-                      <TabsContent value="condutores" className="pt-4">
-                        <ReservaTabCondutores
-                          form={form}
-                          regime={regimeWatched}
-                          clientes={clientes}
-                          motoristas={motoristas}
                           onCriarNovoCliente={() => setClienteDialogOpen(true)}
-                          onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
                           onCriarCondutorProvisorio={() => setCondutorProvisorioOpen(true)}
                         />
                       </TabsContent>

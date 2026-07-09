@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, FileDown, ArrowDownAZ, GripVertical } from 'lucide-react';
+import {
+  Loader2,
+  FileDown,
+  ArrowDownAZ,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 
@@ -74,6 +83,24 @@ const CAT_MAP: Record<string, ColunaFinanceira> = {
 const fmtEur = (v: number) =>
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v || 0);
 
+// Colunas ordenáveis: clicar no cabeçalho ordena por esta chave (asc/desc).
+type SortKey =
+  | 'nome'
+  | 'liquido'
+  | 'viatura'
+  | 'combustivel'
+  | 'portagens'
+  | 'rnvat'
+  | 'seguros'
+  | 'acordos'
+  | 'danos'
+  | 'caucao'
+  | 'negativoAnterior'
+  | 'devCaucao'
+  | 'bonificacao'
+  | 'ajudaCusto'
+  | 'outrasDevolucoes';
+
 export function RelatorioPagamentoDialog({
   open,
   onOpenChange,
@@ -94,23 +121,94 @@ export function RelatorioPagamentoDialog({
   // Arrastar uma linha preenche esta ordem e passa a sobrepor a alfabética.
   const [ordemManual, setOrdemManual] = useState<string[]>([]);
   const [dragId, setDragId] = useState<string | null>(null);
+  // Ordenação por coluna (clicar no cabeçalho). Sobrepõe-se à alfabética e à
+  // ordem manual; arrastar uma linha limpa a ordenação (ver handleDrop).
+  const [sortCol, setSortCol] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  // Reset ao reabrir o diálogo (nova semana / nova sessão de pagamentos).
+  // Reset da ordenação ao fechar (os "pagos" são recarregados da BD ao abrir).
   useEffect(() => {
     if (!open) {
       setPagos(new Set());
       setOrdemManual([]);
       setDragId(null);
+      setSortCol(null);
+      setSortDir('asc');
     }
   }, [open]);
 
-  const togglePago = (id: string) =>
+  // Carrega os motoristas já marcados como "pago" desta semana. Fica guardado
+  // na BD (partilhado por toda a equipa), por isso corre ao abrir e sempre que
+  // a semana muda.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const semana = format(weekStart, 'yyyy-MM-dd');
+      const { data, error } = await supabase
+        .from('relatorio_pagamento_pagos')
+        .select('motorista_id')
+        .eq('semana_inicio', semana);
+      if (cancelled) return;
+      if (error) {
+        console.error('Erro a carregar pagamentos marcados:', error);
+        return;
+      }
+      setPagos(new Set((data || []).map((r) => r.motorista_id)));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, weekStart]);
+
+  // Marca/desmarca um motorista como pago e persiste na BD. Atualização
+  // otimista (UI mexe já); se a BD falhar, reverte e avisa.
+  const togglePago = async (id: string) => {
+    const semana = format(weekStart, 'yyyy-MM-dd');
+    const estavaPago = pagos.has(id);
+
     setPagos((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
+      if (estavaPago) next.delete(id);
       else next.add(id);
       return next;
     });
+
+    const { error } = estavaPago
+      ? await supabase
+          .from('relatorio_pagamento_pagos')
+          .delete()
+          .eq('motorista_id', id)
+          .eq('semana_inicio', semana)
+      : await supabase
+          .from('relatorio_pagamento_pagos')
+          .upsert(
+            { motorista_id: id, semana_inicio: semana },
+            { onConflict: 'org_id,motorista_id,semana_inicio', ignoreDuplicates: true }
+          );
+
+    if (error) {
+      setPagos((prev) => {
+        const next = new Set(prev);
+        if (estavaPago) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+      toast.error('Não foi possível guardar o estado de pagamento. Tenta de novo.');
+    }
+  };
+
+  // Clicar num cabeçalho: 1.º clique ordena, clique seguinte inverte asc/desc.
+  const toggleSort = (col: SortKey) => {
+    setOrdemManual([]); // ordenar por coluna limpa a ordem manual (arrastada)
+    if (sortCol === col) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortCol(col);
+      // Números: maior→menor por defeito (mais útil); nome: A→Z.
+      setSortDir(col === 'nome' ? 'asc' : 'desc');
+    }
+  };
 
   const comMotoristaId = useMemo(
     () => resumos.filter((r): r is ResumoBase & { motorista_id: string } => !!r.motorista_id),
@@ -193,11 +291,26 @@ export function RelatorioPagamentoDialog({
     [comMotoristaId, financeiroMap, ibanMap]
   );
 
-  // Ordenação: alfabética por nome por defeito; se houver ordem manual
-  // (utilizador arrastou linhas), essa sobrepõe-se. Motoristas não presentes
-  // na ordem manual (ex.: dados carregaram depois) vão para o fim, alfabéticos.
+  // Ordenação, por prioridade:
+  //  1) por coluna, se o utilizador clicou num cabeçalho (sortCol);
+  //  2) senão, alfabética por nome, com a ordem manual (arrastada) a sobrepor-se.
+  // Motoristas fora da ordem manual (ex.: dados que carregaram depois) vão para
+  // o fim, alfabéticos.
   const linhasOrdenadas = useMemo(() => {
-    const alfabetica = [...linhas].sort((a, b) =>
+    const arr = [...linhas];
+
+    if (sortCol) {
+      arr.sort((a, b) => {
+        const cmp =
+          sortCol === 'nome'
+            ? a.nome.localeCompare(b.nome, 'pt', { sensitivity: 'base' })
+            : (a[sortCol] as number) - (b[sortCol] as number);
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+      return arr;
+    }
+
+    const alfabetica = arr.sort((a, b) =>
       a.nome.localeCompare(b.nome, 'pt', { sensitivity: 'base' })
     );
     if (ordemManual.length === 0) return alfabetica;
@@ -207,7 +320,7 @@ export function RelatorioPagamentoDialog({
       const pb = pos.has(b.motorista_id) ? pos.get(b.motorista_id)! : Number.MAX_SAFE_INTEGER;
       return pa - pb;
     });
-  }, [linhas, ordemManual]);
+  }, [linhas, ordemManual, sortCol, sortDir]);
 
   // Drag-n-drop (HTML5 nativo — mesmo padrão do kanban-board do projeto).
   const handleDrop = (targetId: string) => {
@@ -217,6 +330,7 @@ export function RelatorioPagamentoDialog({
     const to = base.indexOf(targetId);
     if (from === -1 || to === -1) return;
     base.splice(to, 0, base.splice(from, 1)[0]);
+    setSortCol(null); // arrastar assume o controlo: passa a mandar a ordem manual
     setOrdemManual(base);
     setDragId(null);
   };
@@ -290,10 +404,42 @@ export function RelatorioPagamentoDialog({
   const creditoCls =
     'bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400';
 
-  const Cell = ({ value, cls }: { value: number; cls?: string }) => (
-    <td className={`px-3 py-2 text-right text-xs whitespace-nowrap ${cls || ''}`}>
+  // Quando a linha está paga (verde), suprime-se o tom vermelho/verde da célula
+  // para o verde da linha aparecer por baixo.
+  const Cell = ({ value, cls, pago }: { value: number; cls?: string; pago?: boolean }) => (
+    <td className={`px-3 py-2 text-right text-xs whitespace-nowrap ${pago ? '' : cls || ''}`}>
       {value ? fmtEur(value) : <span className="text-muted-foreground/50">—</span>}
     </td>
+  );
+
+  // Indicador de ordenação no cabeçalho. Coluna ativa: seta maior, traço grosso
+  // e fundo em pílula para saltar à vista. Inativa: seta dupla bem legível.
+  const sortIcon = (col: SortKey) =>
+    sortCol === col ? (
+      <span className="inline-flex items-center justify-center rounded bg-primary-foreground/25 p-0.5">
+        {sortDir === 'asc' ? (
+          <ChevronUp className="h-4 w-4" strokeWidth={3} />
+        ) : (
+          <ChevronDown className="h-4 w-4" strokeWidth={3} />
+        )}
+      </span>
+    ) : (
+      <ChevronsUpDown className="h-4 w-4 opacity-70" strokeWidth={2.5} />
+    );
+
+  // Cabeçalho de coluna numérica, clicável para ordenar.
+  const Th = ({ col, label }: { col: SortKey; label: string }) => (
+    <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
+      <button
+        type="button"
+        onClick={() => toggleSort(col)}
+        className="inline-flex flex-row-reverse items-center gap-1 hover:opacity-80"
+        title={`Ordenar por ${label}`}
+      >
+        <span>{label}</span>
+        {sortIcon(col)}
+      </button>
+    </th>
   );
 
   return (
@@ -303,8 +449,15 @@ export function RelatorioPagamentoDialog({
           <div className="flex items-center justify-between gap-4">
             <DialogTitle>Relatório de Pagamento — {weekLabel}</DialogTitle>
             <div className="flex items-center gap-2 mr-2">
-              {ordemManual.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setOrdemManual([])}>
+              {(ordemManual.length > 0 || sortCol) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setOrdemManual([]);
+                    setSortCol(null);
+                  }}
+                >
                   <ArrowDownAZ className="h-4 w-4 mr-2" />
                   Ordem alfabética
                 </Button>
@@ -334,7 +487,15 @@ export function RelatorioPagamentoDialog({
                     <span className="inline-flex items-center gap-1.5">
                       <span title="Marcar como pago">Pago</span>
                       <span className="opacity-60">·</span>
-                      Nome
+                      <button
+                        type="button"
+                        onClick={() => toggleSort('nome')}
+                        className="inline-flex items-center gap-1 hover:opacity-80"
+                        title="Ordenar por nome"
+                      >
+                        Nome
+                        {sortIcon('nome')}
+                      </button>
                     </span>
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap">
@@ -343,67 +504,42 @@ export function RelatorioPagamentoDialog({
                   <th className="px-3 py-2 text-center text-xs font-semibold whitespace-nowrap">
                     Semana
                   </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Valor a Pagar
-                  </th>
+                  <Th col="liquido" label="Valor a Pagar" />
                   <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
                     Negativos
                   </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Viatura
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Combustível
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Portagens
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    RNVAT
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Seguros
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Acordos
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Danos
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Caução
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Neg. Anterior
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Dev. Caução
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Bonificação
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Ajuda Custo
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                    Outras Devol.
-                  </th>
+                  <Th col="viatura" label="Viatura" />
+                  <Th col="combustivel" label="Combustível" />
+                  <Th col="portagens" label="Portagens" />
+                  <Th col="rnvat" label="RNVAT" />
+                  <Th col="seguros" label="Seguros" />
+                  <Th col="acordos" label="Acordos" />
+                  <Th col="danos" label="Danos" />
+                  <Th col="caucao" label="Caução" />
+                  <Th col="negativoAnterior" label="Neg. Anterior" />
+                  <Th col="devCaucao" label="Dev. Caução" />
+                  <Th col="bonificacao" label="Bonificação" />
+                  <Th col="ajudaCusto" label="Ajuda Custo" />
+                  <Th col="outrasDevolucoes" label="Outras Devol." />
                 </tr>
               </thead>
               <tbody>
                 {linhasOrdenadas.map((l, idx) => {
                   const negativo = l.liquido < 0;
                   const pago = pagos.has(l.motorista_id);
+                  const rowBg = pago
+                    ? 'bg-emerald-100 dark:bg-emerald-950/50'
+                    : idx % 2 === 0
+                      ? 'bg-background'
+                      : 'bg-muted/20';
                   return (
                     <tr
                       key={l.motorista_id}
                       onDragOver={(e) => dragId && e.preventDefault()}
                       onDrop={() => handleDrop(l.motorista_id)}
-                      className={`border-b ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'} ${
-                        negativo ? 'ring-1 ring-inset ring-red-300 dark:ring-red-900' : ''
-                      } ${dragId === l.motorista_id ? 'opacity-50' : ''} ${
-                        pago ? 'opacity-60' : ''
-                      }`}
+                      className={`border-b transition-colors ${rowBg} ${
+                        negativo && !pago ? 'ring-1 ring-inset ring-red-300 dark:ring-red-900' : ''
+                      } ${dragId === l.motorista_id ? 'opacity-50' : ''}`}
                     >
                       <td className="px-3 py-2 text-xs font-medium whitespace-nowrap sticky left-0 bg-inherit">
                         <div className="flex items-center gap-2">
@@ -423,7 +559,11 @@ export function RelatorioPagamentoDialog({
                             onCheckedChange={() => togglePago(l.motorista_id)}
                             aria-label={`Marcar ${l.nome} como pago`}
                           />
-                          <span className={pago ? 'line-through text-muted-foreground' : ''}>
+                          <span
+                            className={
+                              pago ? 'font-semibold text-emerald-800 dark:text-emerald-200' : ''
+                            }
+                          >
                             {l.nome}
                           </span>
                         </div>
@@ -438,9 +578,11 @@ export function RelatorioPagamentoDialog({
                       </td>
                       <td
                         className={`px-3 py-2 text-right text-xs font-bold whitespace-nowrap ${
-                          negativo
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-emerald-600 dark:text-emerald-400'
+                          pago
+                            ? 'text-emerald-800 dark:text-emerald-200'
+                            : negativo
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-emerald-600 dark:text-emerald-400'
                         }`}
                       >
                         {fmtEur(l.liquido)}
@@ -454,19 +596,19 @@ export function RelatorioPagamentoDialog({
                           <span className="text-muted-foreground/50">—</span>
                         )}
                       </td>
-                      <Cell value={l.viatura} cls={custoCls} />
-                      <Cell value={l.combustivel} cls={custoCls} />
-                      <Cell value={l.portagens} cls={custoCls} />
-                      <Cell value={l.rnvat} cls={custoCls} />
-                      <Cell value={l.seguros} cls={custoCls} />
-                      <Cell value={l.acordos} cls={custoCls} />
-                      <Cell value={l.danos} cls={custoCls} />
-                      <Cell value={l.caucao} cls={custoCls} />
-                      <Cell value={l.negativoAnterior} cls={custoCls} />
-                      <Cell value={l.devCaucao} cls={creditoCls} />
-                      <Cell value={l.bonificacao} cls={creditoCls} />
-                      <Cell value={l.ajudaCusto} cls={creditoCls} />
-                      <Cell value={l.outrasDevolucoes} cls={creditoCls} />
+                      <Cell value={l.viatura} cls={custoCls} pago={pago} />
+                      <Cell value={l.combustivel} cls={custoCls} pago={pago} />
+                      <Cell value={l.portagens} cls={custoCls} pago={pago} />
+                      <Cell value={l.rnvat} cls={custoCls} pago={pago} />
+                      <Cell value={l.seguros} cls={custoCls} pago={pago} />
+                      <Cell value={l.acordos} cls={custoCls} pago={pago} />
+                      <Cell value={l.danos} cls={custoCls} pago={pago} />
+                      <Cell value={l.caucao} cls={custoCls} pago={pago} />
+                      <Cell value={l.negativoAnterior} cls={custoCls} pago={pago} />
+                      <Cell value={l.devCaucao} cls={creditoCls} pago={pago} />
+                      <Cell value={l.bonificacao} cls={creditoCls} pago={pago} />
+                      <Cell value={l.ajudaCusto} cls={creditoCls} pago={pago} />
+                      <Cell value={l.outrasDevolucoes} cls={creditoCls} pago={pago} />
                     </tr>
                   );
                 })}

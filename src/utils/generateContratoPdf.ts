@@ -228,13 +228,17 @@ export const generateContratoPdf = async ({
       : { nome: '—', nif: '', morada: '', email: '', telefone: '' };
 
   // 3) Duração em meses (placeholder {{duracao_meses}}). Arredonda para cima.
+  // TVDE não tem data_fim (contrato aberto, renovação automática) — usa o
+  // intervalo de renovação (normalmente 30 dias) como base do cálculo.
   const msDia = 86400000;
-  const diasContrato = Math.max(
-    1,
-    Math.ceil(
-      (new Date(contrato.data_fim).getTime() - new Date(contrato.data_inicio).getTime()) / msDia
-    )
-  );
+  const diasContrato = contrato.data_fim
+    ? Math.max(
+        1,
+        Math.ceil(
+          (new Date(contrato.data_fim).getTime() - new Date(contrato.data_inicio).getTime()) / msDia
+        )
+      )
+    : Math.max(1, contrato.renovacao_intervalo_dias ?? 30);
   const duracaoMeses = Math.max(1, Math.round(diasContrato / 30));
 
   // Colaborador que gera o contrato — placeholders {{colaborador_nome}} e

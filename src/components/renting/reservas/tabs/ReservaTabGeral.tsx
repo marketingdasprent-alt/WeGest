@@ -39,10 +39,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 
 import { ALDFields } from '@/components/renting/shared/ALDFields';
+import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
 import { EmissorSelect } from '@/components/renting/EmissorSelect';
 import { GestorSelect } from '@/components/renting/GestorSelect';
@@ -51,14 +51,15 @@ import { useModules } from '@/hooks/useModules';
 import {
   useRentingGruposMin,
   useRentingTarifasMin,
+  useRentingTarifaPrecosModelo,
   calcularFaturacaoRenting,
 } from '@/hooks/useRentingGruposTarifas';
+import { useModelosElegiveisTvde } from '@/hooks/useModelosElegiveisTvde';
 import { AlertTriangle } from 'lucide-react';
 
 import { SLOT_ESTADOS_PERMITIDOS, SLOT_ESTADO_LABELS } from '@/types/reserva';
 import type { ReservaFormValues } from '../reservaDialog.schema';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
-import { gruposComViatura, filtrarViaturasPorGrupo } from '../filtrarViaturasPorGrupo';
 import type { Estacao } from '@/hooks/useEstacoes';
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Motorista } from '@/types/motorista';
@@ -80,6 +81,9 @@ interface ReservaTabGeralProps {
   /** Slot: motoristas para o seletor + callback de criar motorista. */
   motoristas?: Motorista[];
   onCriarMotorista?: () => void;
+  /** Condutores/Motoristas (secção "Condutor/Motorista", antes das OBS). */
+  onCriarNovoCliente?: () => void;
+  onCriarCondutorProvisorio?: () => void;
 }
 
 function diferencaDias(inicio: string, fim: string): number | null {
@@ -128,13 +132,13 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   clientes,
   motoristas = [],
   onCriarMotorista,
+  onCriarNovoCliente,
+  onCriarCondutorProvisorio,
 }) => {
   const [viaturaPopoverOpen, setViaturaPopoverOpen] = useState(false);
   const [clientePopoverOpen, setClientePopoverOpen] = useState(false);
   const [novaViaturaOpen, setNovaViaturaOpen] = useState(false);
   const [viaturaSearchTerm, setViaturaSearchTerm] = useState('');
-  /** Vazio = sem filtro (mostra todos os grupos). */
-  const [gruposFiltro, setGruposFiltro] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const { has } = useModules();
 
@@ -158,30 +162,95 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   // Grupos e tarifas — para preencher automaticamente ao escolher a viatura.
   const { data: grupos = [] } = useRentingGruposMin();
   const { data: tarifas = [] } = useRentingTarifasMin();
+  const { data: precosModelo = [] } = useRentingTarifaPrecosModelo();
+  const { data: modelosElegiveisTvde } = useModelosElegiveisTvde();
 
-  // Tarifa aplicável = a do grupo da viatura escolhida.
+  const regime = form.watch('regime');
+  const isSlot = regime === 'slot';
+  const isTvde = regime === 'tvde';
+  const tarifaIdSel = form.watch('tarifa_id');
+
   const viaturaIdSel = form.watch('viatura_id');
   const viaturaSelected = useMemo(
     () => viaturas.find((x) => x.id === viaturaIdSel) ?? null,
     [viaturaIdSel, viaturas]
   );
-  const tarifaAtual = useMemo(() => {
-    if (!viaturaIdSel) return null;
-    const v = viaturas.find((x) => x.id === viaturaIdSel);
-    if (!v?.grupo_id) return null;
-    return tarifas.find((t) => t.grupo_id === v.grupo_id) ?? null;
-  }, [viaturaIdSel, viaturas, tarifas]);
+
+  // Tarifas do regime escolhido cujo preço cobre o MODELO da viatura selecionada.
+  // O regime filtra primeiro (TVDE só tarifas tipo='tvde'; Rent-a-Car só as
+  // não-TVDE); depois, se já houver viatura escolhida, mostram-se apenas as
+  // tarifas onde o modelo dessa viatura tem preço definido — permite alternar
+  // entre as tarifas aplicáveis à matrícula.
+  const modeloIdSel = viaturaSelected?.modelo_id ?? null;
+  const tarifasDoRegime = useMemo(() => {
+    const doTipo = tarifas.filter((t) => (isTvde ? t.tipo === 'tvde' : t.tipo !== 'tvde'));
+    if (!modeloIdSel) return doTipo;
+    return doTipo.filter((t) =>
+      precosModelo.some(
+        (p) =>
+          p.tarifa_id === t.id &&
+          p.modelo_id === modeloIdSel &&
+          (isTvde ? p.preco_semana != null : p.preco_dia != null)
+      )
+    );
+  }, [tarifas, isTvde, modeloIdSel, precosModelo]);
+
+  // Compat.: mantém o nome usado na UI (apenas TVDE).
+  const tarifasTvde = tarifasDoRegime;
+
+  // Tarifa aplicável = a escolhida manualmente (tarifa_id), em ambos os regimes.
+  const tarifaAtual = useMemo(
+    () => tarifas.find((t) => t.id === tarifaIdSel) ?? null,
+    [tarifaIdSel, tarifas]
+  );
+
+  // Preço por modelo da tarifa escolhida, para o modelo da viatura.
+  const precoModeloSel = useMemo(() => {
+    if (!tarifaIdSel || !modeloIdSel) return null;
+    return (
+      precosModelo.find((p) => p.tarifa_id === tarifaIdSel && p.modelo_id === modeloIdSel) ?? null
+    );
+  }, [tarifaIdSel, modeloIdSel, precosModelo]);
+
+  // TVDE: preço/semana; Rent-a-Car: preço/dia e preço/mês (por modelo).
+  const precoModeloSemanaTvde = isTvde ? (precoModeloSel?.preco_semana ?? null) : null;
+  const precoModeloDiaRac = !isTvde ? (precoModeloSel?.preco_dia ?? null) : null;
+  const precoModeloMesRac = !isTvde ? (precoModeloSel?.preco_mes ?? null) : null;
+
+  // Viatura escolhida mas modelo sem preço na tarifa → bloquear/avisar (ambos os regimes).
+  const modeloSemPreco =
+    !isSlot &&
+    !!tarifaIdSel &&
+    !!modeloIdSel &&
+    (isTvde ? precoModeloSemanaTvde == null : precoModeloDiaRac == null);
+  // Alias mantido para a UI existente do TVDE.
+  const tvdeModeloSemPreco = modeloSemPreco;
 
   // Faturação automática: regime + ALD + duração + tarifa → valor_total.
-  const regime = form.watch('regime');
-  const isSlot = regime === 'slot';
   const isLongaDuracao = form.watch('is_longa_duracao');
   const renovacaoOpcao = form.watch('renovacao_opcao');
   const renovacaoIntervalo = form.watch('renovacao_intervalo_dias');
-  const modoMensal = !isSlot && (regime === 'tvde' || isLongaDuracao);
+  const modoMensal = !isSlot && !isTvde && isLongaDuracao;
   const faturacao = useMemo(
-    () => calcularFaturacaoRenting(regime, isLongaDuracao, dias, tarifaAtual),
-    [regime, isLongaDuracao, dias, tarifaAtual]
+    () =>
+      calcularFaturacaoRenting(
+        regime,
+        isLongaDuracao,
+        dias,
+        tarifaAtual,
+        precoModeloSemanaTvde,
+        precoModeloDiaRac,
+        precoModeloMesRac
+      ),
+    [
+      regime,
+      isLongaDuracao,
+      dias,
+      tarifaAtual,
+      precoModeloSemanaTvde,
+      precoModeloDiaRac,
+      precoModeloMesRac,
+    ]
   );
 
   // Slot não tem faturação de aluguer (carro é do motorista) — só valor semanal.
@@ -191,25 +260,38 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
     }
   }, [faturacao, isSlot, form]);
 
-  // Lista de viaturas filtrada por regime: slot mostra só carros slot
-  // (do motorista); restantes regimes escondem carros slot. habilitada_tvde é
-  // apenas informativo/administrativo — não restringe o seletor.
-  // Viaturas do regime actual, antes do filtro de grupo — usado para saber
-  // que grupos mostrar no filtro (não faz sentido oferecer um checkbox de
-  // grupo sem nenhuma viatura disponível nesse regime).
+  // Ao escolher tarifa+viatura, copia km incluídos / km extra / franquia da
+  // linha do modelo na tarifa para os campos do formulário (editáveis pelo
+  // gestor). TVDE usa as colunas base; Rent-a-Car usa as c/IVA.
+  useEffect(() => {
+    if (isSlot || !precoModeloSel) return;
+    const kmIncl = isTvde ? precoModeloSel.km_mensal : precoModeloSel.km_mensal_iva;
+    const kmExtra = isTvde
+      ? precoModeloSel.km_adicional_valor
+      : precoModeloSel.km_adicional_valor_iva;
+    const franquia = isTvde ? precoModeloSel.franquia_valor : precoModeloSel.franquia_valor_iva;
+    const caucao = isTvde ? precoModeloSel.caucao_valor : precoModeloSel.caucao_valor_iva;
+    if (kmIncl != null) form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
+    if (kmExtra != null) form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
+    if (franquia != null) form.setValue('franquia_valor', franquia, { shouldDirty: true });
+    if (caucao != null) form.setValue('caucao_valor', caucao, { shouldDirty: true });
+  }, [precoModeloSel, isTvde, isSlot, form]);
+
+  // Lista de viaturas filtrada por regime. A pesquisa no seletor é apenas por
+  // matrícula (sem filtro por grupo):
+  //   • slot  → só carros slot (do motorista);
+  //   • TVDE  → só viaturas cujo modelo é elegível para TVDE (tipo de frota
+  //             marcado como elegível), tal como na frota;
+  //   • outros (Rent-a-Car) → todas as não-slot.
   const viaturasDoRegime = useMemo(
-    () => viaturas.filter((v) => (isSlot ? v.is_slot === true : v.is_slot !== true)),
-    [viaturas, isSlot]
-  );
-
-  const gruposDisponiveisNoFiltro = useMemo(
-    () => gruposComViatura(viaturasDoRegime, grupos),
-    [viaturasDoRegime, grupos]
-  );
-
-  const viaturasFiltradas = useMemo(
-    () => filtrarViaturasPorGrupo(viaturasDoRegime, gruposFiltro),
-    [viaturasDoRegime, gruposFiltro]
+    () =>
+      viaturas.filter((v) => {
+        if (isSlot) return v.is_slot === true;
+        if (v.is_slot === true) return false;
+        if (isTvde) return !!v.modelo_id && !!modelosElegiveisTvde?.has(v.modelo_id);
+        return true;
+      }),
+    [viaturas, isSlot, isTvde, modelosElegiveisTvde]
   );
 
   // Modo mensal (TVDE ou ALD): data_fim calculada conforme a opção de renovação.
@@ -248,13 +330,12 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
     form.setValue('renovacao_intervalo_dias', n, { shouldDirty: true });
   };
 
-  // Ao escolher a viatura: puxa o grupo e os valores da tarifa desse grupo.
+  // Ao escolher a viatura: puxa o nome do grupo, sugere emissora e, se a tarifa
+  // já escolhida não cobrir o modelo desta viatura, limpa a seleção para forçar
+  // uma nova escolha entre as tarifas aplicáveis. O preço vem da tarifa por
+  // modelo (não do grupo), por isso já não se derivam kms/km do grupo aqui.
   const aplicarDadosViatura = (v: ViaturaBasic) => {
-    if (!v.grupo_id) {
-      // Sem grupo: o Alert amarelo mostra a mensagem; sem toast.
-      return;
-    }
-    const grupo = grupos.find((g) => g.id === v.grupo_id);
+    const grupo = v.grupo_id ? grupos.find((g) => g.id === v.grupo_id) : null;
     if (grupo) form.setValue('grupo', grupo.nome, { shouldDirty: true });
 
     // Sugestão de empresa emissora a partir da viatura — só quando o campo
@@ -263,12 +344,17 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
       form.setValue('emissor_id', v.emissor_id, { shouldDirty: true });
     }
 
-    const tarifa = tarifas.find((t) => t.grupo_id === v.grupo_id);
-    if (!tarifa) return;
-    if (tarifa.kms_incluidos != null)
-      form.setValue('kms_incluidos', tarifa.kms_incluidos, { shouldDirty: true });
-    if (tarifa.km_adicional_valor != null)
-      form.setValue('km_adicional_valor', tarifa.km_adicional_valor, { shouldDirty: true });
+    // Se a tarifa atual não tiver preço para o modelo desta viatura, limpa-a.
+    const tarifaAtualId = form.getValues('tarifa_id');
+    if (tarifaAtualId && v.modelo_id) {
+      const cobre = precosModelo.some(
+        (p) =>
+          p.tarifa_id === tarifaAtualId &&
+          p.modelo_id === v.modelo_id &&
+          (isTvde ? p.preco_semana != null : p.preco_dia != null)
+      );
+      if (!cobre) form.setValue('tarifa_id', null, { shouldDirty: true });
+    }
     // O valor_total é calculado automaticamente pelo useEffect (regime + duração).
   };
 
@@ -719,32 +805,6 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                         className="w-[var(--radix-popover-trigger-width)] p-0"
                         align="start"
                       >
-                        {gruposDisponiveisNoFiltro.length > 1 && (
-                          <div className="border-b p-2 space-y-1.5 max-h-32 overflow-y-auto">
-                            <p className="text-[11px] font-semibold uppercase text-muted-foreground px-1">
-                              Filtrar por grupo
-                            </p>
-                            {gruposDisponiveisNoFiltro.map((g) => (
-                              <label
-                                key={g.id}
-                                className="flex items-center gap-2 px-1 py-0.5 text-sm cursor-pointer hover:bg-muted/50 rounded-sm"
-                              >
-                                <Checkbox
-                                  checked={gruposFiltro.has(g.id)}
-                                  onCheckedChange={(checked) => {
-                                    setGruposFiltro((prev) => {
-                                      const next = new Set(prev);
-                                      if (checked) next.add(g.id);
-                                      else next.delete(g.id);
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                {g.nome}
-                              </label>
-                            ))}
-                          </div>
-                        )}
                         <Command
                           filter={(value, search) => {
                             const v = normalizeForSearch(value);
@@ -777,10 +837,10 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                                 />
                                 — Sem viatura —
                               </CommandItem>
-                              {viaturasFiltradas.map((v) => (
+                              {viaturasDoRegime.map((v) => (
                                 <CommandItem
                                   key={v.id}
-                                  value={`${v.matricula} ${v.marca} ${v.modelo} ${v.categoria ?? ''}`}
+                                  value={v.matricula}
                                   onSelect={() => {
                                     field.onChange(v.id);
                                     form.setValue('matricula', v.matricula);
@@ -899,23 +959,104 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
       {!isSlot && (
         <div>
           <SectionHeader icon={Coins} title="Tarifa & Faturação" accent="emerald" />
+
+          {/* Escolha manual da tarifa (o regime filtra primeiro; depois só as
+              tarifas cujo modelo da viatura tem preço). O preço vem por modelo
+              da própria tarifa — semanal no TVDE, diário/mensal no Rent-a-Car. */}
+          <div className="mb-3">
+            <FormField
+              control={form.control}
+              name="tarifa_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {isTvde ? 'Tarifa TVDE' : 'Tarifa Rent-a-Car'}{' '}
+                    <span className="text-red-500">*</span>
+                  </FormLabel>
+                  <Select
+                    value={field.value ?? ''}
+                    onValueChange={(v) => field.onChange(v || null)}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            isTvde ? 'Selecionar tarifa TVDE...' : 'Selecionar tarifa Rent-a-Car...'
+                          }
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {tarifasDoRegime.length === 0 && (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          {modeloIdSel
+                            ? 'Nenhuma tarifa cobre o modelo desta viatura.'
+                            : isTvde
+                              ? 'Nenhuma tarifa TVDE. Cria uma em Renting → Tarifas.'
+                              : 'Nenhuma tarifa Rent-a-Car. Cria uma em Renting → Tarifas.'}
+                        </div>
+                      )}
+                      {tarifasDoRegime.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {modeloSemPreco && (
+              <Alert variant="destructive" className="mt-3">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Modelo sem preço nesta tarifa</AlertTitle>
+                <AlertDescription>
+                  A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) não tem
+                  preço definido na tarifa selecionada. Define o preço deste modelo na tarifa ou
+                  escolhe outra viatura/tarifa — não é possível guardar assim.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+
           {tarifaAtual ? (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { label: 'Tarifa', value: tarifaAtual.nome },
-                {
-                  label: 'Preço / dia',
-                  value: tarifaAtual.preco_dia != null ? `${tarifaAtual.preco_dia} €` : '—',
-                },
-                {
-                  label: 'Preço / semana',
-                  value: tarifaAtual.preco_semana != null ? `${tarifaAtual.preco_semana} €` : '—',
-                },
-                {
-                  label: 'Preço / mês',
-                  value: tarifaAtual.preco_mes != null ? `${tarifaAtual.preco_mes} €` : '—',
-                },
-              ].map((cell) => (
+              {(isTvde
+                ? [
+                    { label: 'Tarifa', value: tarifaAtual.nome },
+                    {
+                      label: 'Modelo',
+                      value: viaturaSelected
+                        ? `${viaturaSelected.marca} ${viaturaSelected.modelo}`
+                        : '—',
+                    },
+                    {
+                      label: 'Preço / semana',
+                      value:
+                        precoModeloSemanaTvde != null ? `${precoModeloSemanaTvde} €` : 'Sem preço',
+                    },
+                    { label: 'Faturação', value: 'Semanal' },
+                  ]
+                : [
+                    { label: 'Tarifa', value: tarifaAtual.nome },
+                    {
+                      label: 'Modelo',
+                      value: viaturaSelected
+                        ? `${viaturaSelected.marca} ${viaturaSelected.modelo}`
+                        : '—',
+                    },
+                    {
+                      label: 'Preço / dia',
+                      value: precoModeloDiaRac != null ? `${precoModeloDiaRac} €` : 'Sem preço',
+                    },
+                    {
+                      label: 'Preço / mês',
+                      value: precoModeloMesRac != null ? `${precoModeloMesRac} €` : '—',
+                    },
+                  ]
+              ).map((cell) => (
                 <div key={cell.label} className="rounded-lg border bg-muted/20 p-3">
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
                     {cell.label}
@@ -926,7 +1067,9 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
             </div>
           ) : (
             <div className="rounded-lg border border-dashed bg-muted/10 p-4 text-sm text-muted-foreground">
-              Escolhe uma viatura com grupo definido para ver a tarifa aplicável.
+              {isTvde
+                ? 'Seleciona a tarifa TVDE e uma viatura para ver o preço semanal do modelo.'
+                : 'Seleciona uma viatura e a tarifa Rent-a-Car para ver o preço do modelo.'}
             </div>
           )}
 
@@ -1047,6 +1190,17 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
           />
         </div>
       )}
+
+      {/* === Condutor/Motorista === */}
+      <CondutoresFields
+        regime={regime}
+        clientes={clientes}
+        motoristas={motoristas}
+        clientePrincipalLabel="Cliente da Reserva também conduz"
+        onCriarNovoCliente={onCriarNovoCliente}
+        onCriarNovoMotorista={onCriarMotorista}
+        onCriarCondutorProvisorio={onCriarCondutorProvisorio}
+      />
 
       {/* === Observações === */}
       <div className="space-y-4">

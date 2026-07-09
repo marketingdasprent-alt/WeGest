@@ -6698,21 +6698,108 @@ export type Database = {
           },
         ]
       }
+      renting_tarifa_precos_modelo: {
+        Row: {
+          caucao_valor: number | null
+          caucao_valor_iva: number | null
+          created_at: string
+          created_by: string | null
+          franquia_valor: number | null
+          franquia_valor_iva: number | null
+          id: string
+          km_adicional_valor: number | null
+          km_adicional_valor_iva: number | null
+          km_mensal: number | null
+          km_mensal_iva: number | null
+          modelo_id: string
+          org_id: string
+          preco_dia: number | null
+          preco_mes: number | null
+          preco_semana: number | null
+          tarifa_id: string
+          updated_at: string
+        }
+        Insert: {
+          caucao_valor?: number | null
+          caucao_valor_iva?: number | null
+          created_at?: string
+          created_by?: string | null
+          franquia_valor?: number | null
+          franquia_valor_iva?: number | null
+          id?: string
+          km_adicional_valor?: number | null
+          km_adicional_valor_iva?: number | null
+          km_mensal?: number | null
+          km_mensal_iva?: number | null
+          modelo_id: string
+          org_id: string
+          preco_dia?: number | null
+          preco_mes?: number | null
+          preco_semana?: number | null
+          tarifa_id: string
+          updated_at?: string
+        }
+        Update: {
+          caucao_valor?: number | null
+          caucao_valor_iva?: number | null
+          created_at?: string
+          created_by?: string | null
+          franquia_valor?: number | null
+          franquia_valor_iva?: number | null
+          id?: string
+          km_adicional_valor?: number | null
+          km_adicional_valor_iva?: number | null
+          km_mensal?: number | null
+          km_mensal_iva?: number | null
+          modelo_id?: string
+          org_id?: string
+          preco_dia?: number | null
+          preco_mes?: number | null
+          preco_semana?: number | null
+          tarifa_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "renting_tarifa_precos_modelo_modelo_id_fkey"
+            columns: ["modelo_id"]
+            isOneToOne: false
+            referencedRelation: "viatura_modelos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renting_tarifa_precos_modelo_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "renting_tarifa_precos_modelo_tarifa_id_fkey"
+            columns: ["tarifa_id"]
+            isOneToOne: false
+            referencedRelation: "renting_tarifas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       renting_tarifas: {
         Row: {
           ativa: boolean
           created_at: string
           created_by: string | null
-          grupo_id: string
+          grupo_id: string | null
           id: string
           km_adicional_valor: number | null
           kms_incluidos: number | null
           nome: string
           org_id: string
-          preco_dia: number
+          preco_dia: number | null
           preco_fim_semana: number | null
           preco_mes: number | null
           preco_semana: number | null
+          reserva_max_minutos: number | null
+          reserva_min_minutos: number | null
           tipo: string
           updated_at: string
           valido_ate: string | null
@@ -6722,16 +6809,18 @@ export type Database = {
           ativa?: boolean
           created_at?: string
           created_by?: string | null
-          grupo_id: string
+          grupo_id?: string | null
           id?: string
           km_adicional_valor?: number | null
           kms_incluidos?: number | null
           nome: string
           org_id: string
-          preco_dia: number
+          preco_dia?: number | null
           preco_fim_semana?: number | null
           preco_mes?: number | null
           preco_semana?: number | null
+          reserva_max_minutos?: number | null
+          reserva_min_minutos?: number | null
           tipo?: string
           updated_at?: string
           valido_ate?: string | null
@@ -6741,16 +6830,18 @@ export type Database = {
           ativa?: boolean
           created_at?: string
           created_by?: string | null
-          grupo_id?: string
+          grupo_id?: string | null
           id?: string
           km_adicional_valor?: number | null
           kms_incluidos?: number | null
           nome?: string
           org_id?: string
-          preco_dia?: number
+          preco_dia?: number | null
           preco_fim_semana?: number | null
           preco_mes?: number | null
           preco_semana?: number | null
+          reserva_max_minutos?: number | null
+          reserva_min_minutos?: number | null
           tipo?: string
           updated_at?: string
           valido_ate?: string | null

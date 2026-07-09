@@ -92,6 +92,8 @@ export type Reserva = {
   /** Valor mensal BRUTO (IVA incl.) cobrado ao motorista no regime slot. */
   slot_valor_mensal: number | null;
   valor_total: number | null;
+  /** FK para renting_tarifas — usada em TVDE para associar a tarifa por modelo. */
+  tarifa_id: string | null;
   observacoes: string | null;
   observacoes_internas: string | null;
   // Longa duração / renovação

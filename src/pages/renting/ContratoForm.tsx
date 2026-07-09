@@ -60,8 +60,11 @@ import { useRentingTaxas } from '@/hooks/useRentingTaxas';
 import {
   useRentingGruposMin,
   useRentingTarifasMin,
+  useRentingTarifaPrecosModelo,
+  calcularBaseAluguerRenting,
   calcularFaturacaoRenting,
 } from '@/hooks/useRentingGruposTarifas';
+import { useModelosElegiveisTvde } from '@/hooks/useModelosElegiveisTvde';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useMotoristas } from '@/hooks/useMotoristas';
 import { useReserva } from '@/hooks/useReservas';
@@ -91,7 +94,6 @@ import { ContratoTabsPlaceholder } from '@/components/renting/contratos/Contrato
 import { ContratoTabFaturar } from '@/components/renting/contratos/ContratoTabFaturar';
 import { ResumoContrato } from '@/components/renting/contratos/ResumoContrato';
 import { HistoricoEdicoesContrato } from '@/components/renting/contratos/HistoricoEdicoesContrato';
-import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import {
   DEFAULT_CONTRATO_VALUES,
   contratoFormSchema,
@@ -111,7 +113,6 @@ import type { CondutorFormItem } from '@/types/reserva';
 // Mapeia o 1º campo do schema com erro para o separador onde ele vive —
 // os restantes campos ficam todos no separador "Geral" (ContratoFormSecoes).
 const FIELD_TAB_MAP: Partial<Record<keyof ContratoFormValues, string>> = {
-  condutores: 'condutores',
   coberturas: 'coberturas',
   extras: 'extras',
   taxas: 'taxas',
@@ -119,7 +120,6 @@ const FIELD_TAB_MAP: Partial<Record<keyof ContratoFormValues, string>> = {
 
 const TAB_LABELS: Record<string, string> = {
   geral: 'Geral',
-  condutores: 'Condutores/Motoristas',
   coberturas: 'Coberturas',
   extras: 'Extras',
   taxas: 'Taxas',
@@ -144,6 +144,8 @@ const ContratoForm = () => {
   // Grupos/tarifas — para recalcular grupo + preço ao trocar de viatura no contrato.
   const { data: grupos = [] } = useRentingGruposMin();
   const { data: tarifas = [] } = useRentingTarifasMin();
+  const { data: precosModeloTvde = [] } = useRentingTarifaPrecosModelo();
+  const { data: modelosElegiveisTvde } = useModelosElegiveisTvde();
   const { data: orgDefinicoes } = useOrgDefinicoes();
   const { data: contrato, isLoading: loadingContrato } = useContratoRenting(id ?? null);
   const { data: vizinhos } = useContratoVizinhos(contrato?.codigo ?? null);
@@ -294,6 +296,7 @@ const ContratoForm = () => {
         origem: contrato.origem,
         regime: contrato.regime,
         tarifa_diaria: contrato.tarifa_diaria,
+        tarifa_id: (contrato as any).tarifa_id ?? null,
         desconto_percentagem: contrato.desconto_percentagem,
         taxa_iva: contrato.taxa_iva,
         valor_total_manual: contrato.valor_total_manual,
@@ -357,9 +360,14 @@ const ContratoForm = () => {
         estacao_entrega_id: reservaFromQuery.estacao_entrega_id,
         estacao_recolha_id: reservaFromQuery.estacao_recolha_id,
         data_inicio: isoToLocalInput(reservaFromQuery.data_inicio),
-        data_fim: isoToLocalInput(reservaFromQuery.data_fim),
+        // TVDE não tem data de fim no contrato (aberto, renovação automática) —
+        // mesmo que a reserva tenha uma data de fim inicial, o contrato não a herda.
+        data_fim:
+          reservaFromQuery.regime === 'tvde' ? '' : isoToLocalInput(reservaFromQuery.data_fim),
         origem: 'sistema',
         regime: reservaFromQuery.regime,
+        // Tarifa escolhida na reserva flui para o contrato (essencial em TVDE).
+        tarifa_id: (reservaFromQuery as any).tarifa_id ?? null,
         // Orçamento da reserva → override do total no contrato
         valor_total_manual: reservaFromQuery.valor_total,
         // ALD da reserva
@@ -456,6 +464,7 @@ const ContratoForm = () => {
   const valorTotalManual = form.watch('valor_total_manual');
   const descontoPercentagem = form.watch('desconto_percentagem');
   const regime = form.watch('regime');
+  const tarifaIdWatch = form.watch('tarifa_id');
   const isLongaDuracao = form.watch('is_longa_duracao');
   // TVDE e Slot já têm IVA incluído no preço — o resumo não aplica IVA adicional
   const rawTaxaIva = form.watch('taxa_iva');
@@ -483,6 +492,28 @@ const ContratoForm = () => {
     });
   }, [regime, orgDefinicoes, form]);
 
+  // Ao escolher tarifa+viatura, copia km incluídos / km extra / franquia da
+  // linha do modelo na tarifa para os campos do contrato (editáveis pelo
+  // gestor). TVDE usa as colunas base; Rent-a-Car usa as c/IVA.
+  useEffect(() => {
+    if (regime === 'slot' || !tarifaIdWatch || !viaturaId) return;
+    const via = viaturas.find((v) => v.id === viaturaId);
+    if (!via?.modelo_id) return;
+    const linha = precosModeloTvde.find(
+      (p) => p.tarifa_id === tarifaIdWatch && p.modelo_id === via.modelo_id
+    );
+    if (!linha) return;
+    const isTvdeReg = regime === 'tvde';
+    const kmIncl = isTvdeReg ? linha.km_mensal : linha.km_mensal_iva;
+    const kmExtra = isTvdeReg ? linha.km_adicional_valor : linha.km_adicional_valor_iva;
+    const franquia = isTvdeReg ? linha.franquia_valor : linha.franquia_valor_iva;
+    const caucao = isTvdeReg ? linha.caucao_valor : linha.caucao_valor_iva;
+    if (kmIncl != null) form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
+    if (kmExtra != null) form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
+    if (franquia != null) form.setValue('franquia_valor', franquia, { shouldDirty: true });
+    if (caucao != null) form.setValue('caucao_valor', caucao, { shouldDirty: true });
+  }, [tarifaIdWatch, viaturaId, regime, viaturas, precosModeloTvde, form]);
+
   // Os condutores PERSISTEM ao trocar de regime — não se apaga a lista (senão
   // "desapareciam" condutores já adicionados ou hidratados da reserva). A tabela
   // mostra clientes (rent-a-car) ou motoristas (TVDE) conforme o tipo de cada linha.
@@ -497,12 +528,15 @@ const ContratoForm = () => {
     excluirReservaId: reservaIdActiva,
   });
 
-  // Qualquer viatura pode ser usada em rent-a-car ou TVDE — habilitada_tvde é
-  // apenas informativo/administrativo, não restringe o seletor (alinhado com a
-  // reserva). Excluímos as ocupadas no período, mantendo sempre a já selecionada.
-  const viaturasParaSelecao = !viaturasOcupadas
-    ? viaturas
-    : viaturas.filter((v) => v.id === viaturaId || !viaturasOcupadas.has(v.id));
+  // Em TVDE, só viaturas cujo modelo é elegível (tipo de frota marcado como
+  // elegível TVDE), tal como na frota; em Rent-a-Car, todas. Excluímos as
+  // ocupadas no período, mantendo sempre a já selecionada.
+  const viaturasParaSelecao = viaturas.filter((v) => {
+    if (v.id === viaturaId) return true;
+    if (viaturasOcupadas?.has(v.id)) return false;
+    if (regime === 'tvde') return !!v.modelo_id && !!modelosElegiveisTvde?.has(v.modelo_id);
+    return true;
+  });
 
   // Ao trocar de viatura no contrato: recalcula o snapshot `grupo` e o preço a
   // partir do grupo da viatura nova. Isto é o que destrava a classificação
@@ -523,18 +557,35 @@ const ContratoForm = () => {
       form.setValue('emissor_id', via.emissor_id, { shouldDirty: true });
     }
 
-    const tarifa = via.grupo_id ? (tarifas.find((t) => t.grupo_id === via.grupo_id) ?? null) : null;
-    if (!tarifa) return;
-
-    form.setValue('tarifa_diaria', tarifa.preco_dia, { shouldDirty: true });
-    form.setValue('kms_incluidos', tarifa.kms_incluidos, { shouldDirty: true });
-    form.setValue('km_adicional_valor', tarifa.km_adicional_valor, { shouldDirty: true });
-
-    // Recalcula o valor de tabela do novo grupo (mensal p/ TVDE/ALD, diário p/
-    // rent-a-car) e grava em valor_total_manual — a base que o ResumoContrato usa.
     const ms = new Date(dataFim).getTime() - new Date(dataInicio).getTime();
     const dias = Number.isFinite(ms) && ms > 0 ? Math.max(1, Math.ceil(ms / 86400000)) : null;
-    const fat = calcularFaturacaoRenting(regime, isLongaDuracao, dias, tarifa);
+
+    // A tarifa vem do form (tarifa_id) e o preço é por modelo da viatura, tanto
+    // em TVDE (semanal) como em Rent-a-Car (diário/mensal). Se a tarifa atual
+    // não cobrir o modelo desta viatura, limpa-a para forçar nova escolha.
+    const isTvdeReg = regime === 'tvde';
+    const tarifaSelId = form.getValues('tarifa_id');
+    const linha =
+      tarifaSelId && via.modelo_id
+        ? (precosModeloTvde.find(
+            (p) => p.tarifa_id === tarifaSelId && p.modelo_id === via.modelo_id
+          ) ?? null)
+        : null;
+    const cobre = isTvdeReg ? linha?.preco_semana != null : linha?.preco_dia != null;
+    if (tarifaSelId && via.modelo_id && !cobre) {
+      form.setValue('tarifa_id', null, { shouldDirty: true });
+    }
+
+    const tarifaSel = tarifas.find((t) => t.id === tarifaSelId) ?? null;
+    const fat = calcularFaturacaoRenting(
+      regime,
+      isLongaDuracao,
+      dias,
+      tarifaSel,
+      isTvdeReg ? (linha?.preco_semana ?? null) : null,
+      !isTvdeReg ? (linha?.preco_dia ?? null) : null,
+      !isTvdeReg ? (linha?.preco_mes ?? null) : null
+    );
     if (fat) form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
   };
 
@@ -686,6 +737,30 @@ const ContratoForm = () => {
   };
 
   const onSubmit = (values: ContratoFormValues) => {
+    // Bloqueia se o modelo da viatura não tem preço na tarifa escolhida (o
+    // preço é por modelo, tanto TVDE — preco_semana — como Rent-a-Car — preco_dia).
+    if (values.regime !== 'slot' && values.tarifa_id) {
+      const via = viaturas.find((v) => v.id === values.viatura_id);
+      if (via?.modelo_id) {
+        const isTvdeReg = values.regime === 'tvde';
+        const linha = precosModeloTvde.find(
+          (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === via.modelo_id
+        );
+        const temPreco = isTvdeReg ? linha?.preco_semana != null : linha?.preco_dia != null;
+        if (!temPreco) {
+          toast({
+            title: isTvdeReg
+              ? 'Modelo sem preço na tarifa TVDE'
+              : 'Modelo sem preço na tarifa Rent-a-Car',
+            description:
+              'A viatura não tem preço definido na tarifa escolhida. Define o preço do modelo na tarifa (Renting → Tarifas) ou ajusta a reserva.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+    }
+
     // Em criação, a viatura do contrato tem de coincidir com a da reserva
     // (preserva o snapshot inicial e o EXCLUDE anti-overbooking).
     // Em edição, a divergência é permitida — vai disparar uma nova versão.
@@ -724,13 +799,14 @@ const ContratoForm = () => {
       estacao_entrega_id: values.estacao_entrega_id || null,
       data_inicio: localInputToIso(values.data_inicio),
       estacao_recolha_id: values.estacao_recolha_id || null,
-      data_fim: localInputToIso(values.data_fim),
+      data_fim: values.regime === 'tvde' ? null : localInputToIso(values.data_fim ?? ''),
       estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
       estado_operacional: values.estado_operacional,
       estado_financeiro: values.estado_financeiro,
       origem: values.origem,
       regime: values.regime,
       tarifa_diaria: values.tarifa_diaria,
+      tarifa_id: values.tarifa_id ?? null,
       desconto_percentagem: values.desconto_percentagem,
       taxa_iva: values.taxa_iva,
       valor_total_manual: values.valor_total_manual,
@@ -749,20 +825,41 @@ const ContratoForm = () => {
     };
 
     // Nº de dias do contrato — necessário para o total dos extras 'dia'.
+    // TVDE não tem data_fim (contrato aberto) — usa o intervalo de renovação
+    // (normalmente 30 dias) como base de cálculo dos extras periódicos.
     const msDia = 86400000;
-    const diasContrato = Math.max(
-      1,
-      Math.ceil(
-        (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) / msDia
-      )
-    );
+    const diasContrato =
+      values.regime === 'tvde' || !values.data_fim
+        ? Math.max(1, values.renovacao_intervalo_dias ?? 30)
+        : Math.max(
+            1,
+            Math.ceil(
+              (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) / msDia
+            )
+          );
 
     // Subtotal do contrato — base de cálculo das taxas percentuais.
     // Espelha o cálculo do ResumoContrato: aluguer + coberturas + extras, com desconto.
-    const baseAluguer =
-      values.valor_total_manual != null && values.valor_total_manual > 0
-        ? values.valor_total_manual
-        : (values.tarifa_diaria ?? 0) * diasContrato;
+    // Preço por modelo da tarifa escolhida (TVDE: semanal; Rent-a-Car: dia/mês).
+    const isTvdeSub = values.regime === 'tvde';
+    const linhaModeloSub =
+      values.tarifa_id && viatura?.modelo_id
+        ? (precosModeloTvde.find(
+            (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viatura.modelo_id
+          ) ?? null)
+        : null;
+    const baseAluguer = calcularBaseAluguerRenting({
+      regime: values.regime,
+      isLongaDuracao: values.is_longa_duracao,
+      dias: diasContrato,
+      tarifa: values.tarifa_id
+        ? (tarifas.find((t) => t.id === values.tarifa_id) ?? null)
+        : (tarifas.find((t) => t.grupo_id === values.grupo) ?? null),
+      valorTotalManual: values.valor_total_manual,
+      precoModeloSemana: isTvdeSub ? (linhaModeloSub?.preco_semana ?? null) : null,
+      precoModeloDia: !isTvdeSub ? (linhaModeloSub?.preco_dia ?? null) : null,
+      precoModeloMes: !isTvdeSub ? (linhaModeloSub?.preco_mes ?? null) : null,
+    });
     const custoCoberturas =
       values.coberturas.reduce((soma, c) => soma + (c.preco_dia ?? 0), 0) * diasContrato;
     // Os arrays do form já passaram a validação Zod do handleSubmit — os
@@ -841,16 +938,35 @@ const ContratoForm = () => {
           const viatura = viaturas.find((v) => v.id === values.viatura_id);
           const matriculaFinal = values.matricula || viatura?.matricula || null;
           const msDia = 86400000;
-          const dias = Math.max(
-            1,
-            Math.ceil(
-              (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) / msDia
-            )
-          );
-          const baseAluguer =
-            values.valor_total_manual != null && values.valor_total_manual > 0
-              ? values.valor_total_manual
-              : (values.tarifa_diaria ?? 0) * dias;
+          const dias =
+            values.regime === 'tvde' || !values.data_fim
+              ? Math.max(1, values.renovacao_intervalo_dias ?? 30)
+              : Math.max(
+                  1,
+                  Math.ceil(
+                    (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) /
+                      msDia
+                  )
+                );
+          const isTvdeVer = values.regime === 'tvde';
+          const linhaModeloVer =
+            values.tarifa_id && viatura?.modelo_id
+              ? (precosModeloTvde.find(
+                  (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viatura.modelo_id
+                ) ?? null)
+              : null;
+          const baseAluguer = calcularBaseAluguerRenting({
+            regime: values.regime,
+            isLongaDuracao: values.is_longa_duracao,
+            dias,
+            tarifa: values.tarifa_id
+              ? (tarifas.find((t) => t.id === values.tarifa_id) ?? null)
+              : (tarifas.find((t) => t.grupo_id === values.grupo) ?? null),
+            valorTotalManual: values.valor_total_manual,
+            precoModeloSemana: isTvdeVer ? (linhaModeloVer?.preco_semana ?? null) : null,
+            precoModeloDia: !isTvdeVer ? (linhaModeloVer?.preco_dia ?? null) : null,
+            precoModeloMes: !isTvdeVer ? (linhaModeloVer?.preco_mes ?? null) : null,
+          });
           const custoCoberturas =
             values.coberturas.reduce((s, c) => s + (c.preco_dia ?? 0), 0) * dias;
           const condutores = values.condutores as CondutorFormItem[];
@@ -875,13 +991,14 @@ const ContratoForm = () => {
               estacao_entrega_id: values.estacao_entrega_id || null,
               data_inicio: localInputToIso(values.data_inicio),
               estacao_recolha_id: values.estacao_recolha_id || null,
-              data_fim: localInputToIso(values.data_fim),
+              data_fim: values.regime === 'tvde' ? null : localInputToIso(values.data_fim ?? ''),
               estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
               estado_operacional: values.estado_operacional,
               estado_financeiro: values.estado_financeiro,
               origem: values.origem,
               regime: values.regime,
               tarifa_diaria: values.tarifa_diaria,
+              tarifa_id: values.tarifa_id ?? null,
               desconto_percentagem: values.desconto_percentagem,
               taxa_iva: values.taxa_iva,
               valor_total_manual: values.valor_total_manual,
@@ -1172,13 +1289,13 @@ const ContratoForm = () => {
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
                 <ContratoTabsPlaceholder
-                  regime={regime}
                   value={activeTab}
                   onValueChange={setActiveTab}
                   geralContent={
                     <ContratoFormSecoes
                       form={form}
                       clientes={clientes}
+                      motoristas={motoristas}
                       viaturas={viaturasParaSelecao}
                       grupos={grupos}
                       grupoIdAtual={
@@ -1191,14 +1308,6 @@ const ContratoForm = () => {
                       reservaCodigo={reservaAssociada?.codigo ?? null}
                       onViaturaChange={aplicarDadosViatura}
                       contratoId={contrato?.id ?? null}
-                    />
-                  }
-                  condutoresContent={
-                    <CondutoresFields
-                      regime={regime}
-                      clientes={clientes}
-                      motoristas={motoristas}
-                      clientePrincipalLabel="Cliente do contrato também conduz"
                       onCriarNovoCliente={() => setClienteDialogOpen(true)}
                       onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
                     />
@@ -1243,6 +1352,7 @@ const ContratoForm = () => {
             valorTotalManual={valorTotalManual}
             descontoPercentagem={descontoPercentagem}
             taxaIva={taxaIva}
+            regime={regime}
             coberturasPrecoDia={coberturasPrecoDia}
             extras={extrasForm}
             taxas={taxasForm}
