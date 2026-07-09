@@ -9,7 +9,12 @@ describe('getTarifaFormValidationError', () => {
       preco_dia: '',
       para_tvde: true,
       precosModelo: {
-        modelo_1: { preco_semana: '100', km_mensal: '', km_adicional_valor: '', franquia_valor: '' },
+        modelo_1: {
+          preco_semana: '100',
+          km_mensal: '',
+          km_adicional_valor: '',
+          franquia_valor: '',
+        },
       },
     });
 

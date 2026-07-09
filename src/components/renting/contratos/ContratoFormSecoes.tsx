@@ -151,7 +151,10 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                     Nenhuma tarifa TVDE. Cria uma em Renting → Tarifas.
                   </div>
                 ) : (
-                  <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || null)}>
+                  <Select
+                    value={field.value ?? ''}
+                    onValueChange={(v) => field.onChange(v || null)}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecionar tarifa TVDE..." />
@@ -183,7 +186,8 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                 const tarifasDoGrupo = tarifas.filter(
                   (t) => t.grupo_id === viaturaSelected.grupo_id && t.tipo !== 'tvde'
                 );
-                const grupoNome = grupos.find((g) => g.id === viaturaSelected.grupo_id)?.nome || 'o grupo';
+                const grupoNome =
+                  grupos.find((g) => g.id === viaturaSelected.grupo_id)?.nome || 'o grupo';
 
                 // Auto-select primeira tarifa se houver e nada selecionado
                 if (tarifasDoGrupo.length > 0 && !field.value) {
@@ -198,7 +202,10 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                         Nenhuma tarifa disponível para {grupoNome}. Cria uma em Renting → Tarifas.
                       </div>
                     ) : (
-                      <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || null)}>
+                      <Select
+                        value={field.value ?? ''}
+                        onValueChange={(v) => field.onChange(v || null)}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Selecione uma tarifa..." />

@@ -783,8 +783,8 @@ const RentingTarifaForm = () => {
                   <div>
                     <Label className="text-base font-semibold">Modelos</Label>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Tarifa TVDE — o aluguer é semanal. Defina, por modelo, o preço/semana, os
-                      km incluídos por mês, o custo por km adicional e a franquia. Ao criar um
+                      Tarifa TVDE — o aluguer é semanal. Defina, por modelo, o preço/semana, os km
+                      incluídos por mês, o custo por km adicional e a franquia. Ao criar um
                       contrato/reserva TVDE com esta tarifa, só é permitido escolher viaturas de
                       modelos com preço/semana definido aqui.
                     </p>
@@ -990,8 +990,8 @@ const RentingTarifaForm = () => {
                       Tarifa para TVDE
                     </Label>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Só disponível em contratos/reservas TVDE. Usa preços semanais por modelo e
-                      não exige grupo nem preço por dia.
+                      Só disponível em contratos/reservas TVDE. Usa preços semanais por modelo e não
+                      exige grupo nem preço por dia.
                     </p>
                   </div>
                 </div>
