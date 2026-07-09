@@ -28,6 +28,10 @@ import { useContratoIdByReserva } from '@/hooks/useContratosRenting';
 import { uploadReservaAnexoSync } from '@/hooks/useReservaAnexos';
 import { useViaturas } from '@/hooks/useViaturas';
 import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
+import {
+  calcularBaseAluguerRenting,
+  useRentingTarifaPrecosModelo,
+} from '@/hooks/useRentingGruposTarifas';
 
 import { ClienteDialog } from '@/components/renting/ClienteDialog';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
@@ -66,6 +70,7 @@ const DEFAULT_VALUES: ReservaFormValues = {
   gestor_id: null,
   estado: 'pendente',
   regime: 'rent_a_car',
+  tarifa_id: null,
   valor_total: null,
   franquia_valor: null,
   caucao_valor: null,
@@ -97,6 +102,7 @@ const RentingReservaForm = () => {
   const { data: clientes = [] } = useClientes();
   const { data: motoristas = [] } = useMotoristas({ apenasAtivos: true });
   const { data: viaturas = [] } = useViaturas({ apenasDisponiveis: !isEdit });
+  const { data: precosModeloTvde = [] } = useRentingTarifaPrecosModelo();
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
 
   const createMutation = useCreateReserva();
@@ -238,6 +244,7 @@ const RentingReservaForm = () => {
       gestor_id: reserva.gestor_id ?? null,
       estado: reserva.estado,
       regime: reserva.regime,
+      tarifa_id: (reserva as any).tarifa_id ?? null,
       slot_valor_semanal: reserva.slot_valor_semanal,
       slot_valor_mensal: reserva.slot_valor_mensal,
       valor_total: reserva.valor_total,
@@ -362,6 +369,23 @@ const RentingReservaForm = () => {
       const viaturaSelecionada = viaturas.find((v) => v.id === values.viatura_id);
       const matriculaFinal = values.matricula || viaturaSelecionada?.matricula || null;
 
+      // TVDE: bloqueia guardar se o modelo da viatura não tem preço na tarifa
+      // TVDE escolhida (o preço é definido por modelo na tarifa).
+      if (values.regime === 'tvde' && values.tarifa_id && viaturaSelecionada?.modelo_id) {
+        const temPreco = precosModeloTvde.some(
+          (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaSelecionada.modelo_id
+        );
+        if (!temPreco) {
+          toast({
+            title: 'Modelo sem preço na tarifa TVDE',
+            description:
+              'A viatura escolhida não tem preço definido na tarifa TVDE selecionada. Define o preço do modelo na tarifa ou escolhe outra viatura/tarifa.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
       // Condutor principal — derivado da lista para snapshot legado em reservas.
       // Pode ser cliente (rent-a-car) ou motorista (TVDE).
       const condutorPrincipal = values.condutores.find((c) => c.is_principal) ?? null;
@@ -373,6 +397,30 @@ const RentingReservaForm = () => {
         : null;
       const condutorPrincipalNome =
         condutorPrincipalCliente?.nome ?? condutorPrincipalMotorista?.nome ?? null;
+
+      const baseAluguer = calcularBaseAluguerRenting({
+        regime: values.regime,
+        isLongaDuracao: values.is_longa_duracao,
+        dias:
+          values.data_fim && values.data_inicio
+            ? Math.max(
+                1,
+                Math.ceil(
+                  (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) /
+                    86400000
+                )
+              )
+            : null,
+        tarifa: null,
+        valorTotalManual: values.valor_total,
+        precoModeloSemana:
+          values.regime === 'tvde' && values.tarifa_id && viaturaSelecionada?.modelo_id
+            ? (precosModeloTvde.find(
+                (p) =>
+                  p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaSelecionada.modelo_id
+              )?.preco_semana ?? null)
+            : null,
+      });
 
       const payload: ReservaInsert = {
         viatura_id: values.viatura_id || null,
@@ -392,10 +440,11 @@ const RentingReservaForm = () => {
         emissor_id: values.emissor_id ?? null,
         estado: values.estado,
         regime: values.regime,
+        tarifa_id: values.tarifa_id ?? null,
         // Valor semanal só no regime slot (cobrado por carro).
         slot_valor_semanal: values.regime === 'slot' ? (values.slot_valor_semanal ?? null) : null,
         slot_valor_mensal: values.regime === 'slot' ? (values.slot_valor_mensal ?? null) : null,
-        valor_total: values.valor_total,
+        valor_total: baseAluguer ?? values.valor_total,
         franquia_valor: values.franquia_valor,
         caucao_valor: values.caucao_valor,
         kms_incluidos: values.kms_incluidos,

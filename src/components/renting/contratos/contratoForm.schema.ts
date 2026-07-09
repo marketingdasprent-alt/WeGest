@@ -72,6 +72,9 @@ export const contratoFormSchema = z
 
     // Tarifário simples
     tarifa_diaria: optionalNonNegativeNumber,
+    // Tarifa aplicada (herdada da reserva). Em TVDE é a tarifa tipo='tvde'
+    // escolhida na reserva; usada para o preço semanal por modelo.
+    tarifa_id: z.string().uuid().nullable().optional(),
     desconto_percentagem: optionalPercentage,
     taxa_iva: z
       .union([z.number(), z.string()])
@@ -223,6 +226,7 @@ export const DEFAULT_CONTRATO_VALUES: ContratoFormValues = {
   origem: 'sistema',
   regime: 'rent_a_car',
   tarifa_diaria: null,
+  tarifa_id: null,
   desconto_percentagem: null,
   taxa_iva: 23,
   valor_total_manual: null,

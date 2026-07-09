@@ -81,7 +81,7 @@ export function useContratosRenting(options: UseContratosRentingOptions = {}) {
 
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as ContratoRenting[];
+      return (data ?? []) as unknown as ContratoRenting[];
     },
     placeholderData: keepPreviousData,
     staleTime: 30_000,
@@ -207,7 +207,7 @@ export function useContratoRenting(id: string | null | undefined) {
         .is('deleted_at', null)
         .maybeSingle();
       if (error) throw error;
-      return data as ContratoRenting | null;
+      return data as unknown as ContratoRenting | null;
     },
     enabled: !!id,
   });
@@ -276,7 +276,7 @@ export function useCreateContratoRenting() {
         .select(SELECT_COLUMNS)
         .single();
       if (error) throw error;
-      return data as ContratoRenting;
+      return data as unknown as ContratoRenting;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
@@ -305,7 +305,7 @@ export function useUpdateContratoRenting() {
         .select(SELECT_COLUMNS)
         .single();
       if (error) throw error;
-      return data as ContratoRenting;
+      return data as unknown as ContratoRenting;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
@@ -628,7 +628,7 @@ export function useContratoVersoes(contratoId: string | null | undefined) {
           .maybeSingle();
         if (error) throw error;
         if (!data) break;
-        const linha = data as ContratoRenting;
+        const linha = data as unknown as ContratoRenting;
         versoes.push(linha);
         cursor = linha.contrato_anterior_id;
       }

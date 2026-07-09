@@ -14,6 +14,7 @@ interface ResumoContratoProps {
   valorTotalManual: number | null | undefined;
   descontoPercentagem: number | null | undefined;
   taxaIva: number;
+  regime?: string;
   /** Soma do preço/dia das coberturas seleccionadas (× dias = custo total) */
   coberturasPrecoDia?: number;
   /** Extras seleccionados — custo calculado por tipo (dia/fixo) */
@@ -45,6 +46,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
   valorTotalManual,
   descontoPercentagem,
   taxaIva,
+  regime = 'rent_a_car',
   coberturasPrecoDia = 0,
   extras = [],
   taxas = [],
@@ -161,7 +163,11 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
           ) : isFacturado ? (
             <Row label="Subtotal bruto" value={formatCurrency(calculo.subtotalBruto)} muted />
           ) : (
-            <Row label="Aluguer" value={formatCurrency(calculo.baseAluguer)} muted />
+            <Row
+              label={regime === 'tvde' ? 'Aluguer (semanal)' : 'Aluguer'}
+              value={formatCurrency(calculo.baseAluguer)}
+              muted
+            />
           )}
 
           {!isFacturado && calculo.custoCoberturas > 0 && (

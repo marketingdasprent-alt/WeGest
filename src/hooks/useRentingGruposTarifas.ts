@@ -16,13 +16,22 @@ export interface RentingGrupoMin {
 }
 
 export interface RentingTarifaMin {
+  id: string;
   grupo_id: string;
   nome: string;
+  tipo: string; // 'renting' | 'tvde'
   kms_incluidos: number | null;
   km_adicional_valor: number | null;
   preco_dia: number | null;
   preco_semana: number | null;
   preco_mes: number | null;
+}
+
+/** Preço semanal por modelo, específico de uma tarifa TVDE. */
+export interface RentingTarifaPrecoModelo {
+  tarifa_id: string;
+  modelo_id: string;
+  preco_semana: number;
 }
 
 /** Grupos de renting activos (id + nome). */
@@ -49,7 +58,7 @@ export function useRentingTarifasMin() {
       const { data, error } = await supabase
         .from('renting_tarifas')
         .select(
-          'grupo_id, nome, kms_incluidos, km_adicional_valor, preco_dia, preco_semana, preco_mes'
+          'id, grupo_id, nome, tipo, kms_incluidos, km_adicional_valor, preco_dia, preco_semana, preco_mes'
         )
         .eq('ativa', true);
       if (error) throw error;
@@ -59,38 +68,96 @@ export function useRentingTarifasMin() {
   });
 }
 
+/** Preços por modelo de todas as tarifas TVDE activas da org. */
+export function useRentingTarifaPrecosModelo() {
+  return useQuery({
+    queryKey: ['renting_tarifa_precos_modelo_min'],
+    queryFn: async (): Promise<RentingTarifaPrecoModelo[]> => {
+      const { data, error } = await supabase
+        .from('renting_tarifa_precos_modelo')
+        .select('tarifa_id, modelo_id, preco_semana');
+      if (error) throw error;
+      return (data ?? []) as RentingTarifaPrecoModelo[];
+    },
+    staleTime: 60_000,
+  });
+}
+
 export interface FaturacaoRenting {
   valor: number; // valor faturado ao cliente
-  modo: 'Diário' | 'Mensal';
+  modo: 'Diário' | 'Mensal' | 'Semanal';
   descricao: string;
   semanalCondutor: number | null; // preço/semana atribuído ao condutor (só TVDE)
 }
 
 /**
  * Valor a faturar ao cliente a partir da tarifa do grupo:
- *   TVDE ou ALD       → mensal (preço/mês, período travado em 30 dias)
+ *   TVDE              → semanal, preço POR MODELO da viatura (precoModeloSemana)
+ *   ALD (longa dur.)  → mensal (preço/mês, período travado em 30 dias)
  *   Rent-a-Car normal → diário (nº dias × preço/dia)
- * No TVDE, o preço/semana vai para a conta-corrente do condutor.
  *
- * Partilhado por reserva e contrato — ao trocar de viatura ambos recalculam o
- * valor do novo grupo (a reserva grava em valor_total; o contrato em
- * valor_total_manual). Devolve null se a tarifa não cobrir o regime.
+ * No TVDE o preço é definido por modelo na tarifa (renting_tarifa_precos_modelo).
+ * Se a viatura for de um modelo sem preço nessa tarifa, devolve null — a UI
+ * bloqueia + avisa. `precoModeloSemana` é o preço/semana do modelo da viatura
+ * na tarifa escolhida (ou null se não configurado).
+ *
+ * Partilhado por reserva e contrato — ao trocar de viatura ambos recalculam.
+ * Devolve null se a tarifa não cobrir o regime.
  */
+export interface CalculoBaseAluguerRentingInput {
+  regime: string;
+  isLongaDuracao: boolean;
+  dias: number | null;
+  tarifa: Pick<RentingTarifaMin, 'preco_dia' | 'preco_semana' | 'preco_mes'> | null;
+  valorTotalManual?: number | null;
+  precoModeloSemana?: number | null;
+}
+
+export function calcularBaseAluguerRenting(input: CalculoBaseAluguerRentingInput): number | null {
+  const { regime, isLongaDuracao, dias, tarifa, valorTotalManual, precoModeloSemana } = input;
+
+  if (valorTotalManual != null && valorTotalManual > 0) return valorTotalManual;
+
+  if (regime === 'tvde') {
+    return precoModeloSemana ?? null;
+  }
+
+  if (isLongaDuracao) {
+    if (!tarifa?.preco_mes) return null;
+    return tarifa.preco_mes;
+  }
+
+  if (dias == null || dias <= 0 || tarifa?.preco_dia == null) return null;
+  return tarifa.preco_dia * dias;
+}
+
 export function calcularFaturacaoRenting(
   regime: string,
   isLongaDuracao: boolean,
   dias: number | null,
-  tarifa: Pick<RentingTarifaMin, 'preco_dia' | 'preco_semana' | 'preco_mes'> | null
+  tarifa: Pick<RentingTarifaMin, 'preco_dia' | 'preco_semana' | 'preco_mes'> | null,
+  precoModeloSemana?: number | null
 ): FaturacaoRenting | null {
   if (!tarifa) return null;
 
-  if (regime === 'tvde' || isLongaDuracao) {
+  if (regime === 'tvde') {
+    // TVDE cobra por semana, com preço específico do modelo da viatura.
+    if (precoModeloSemana == null) return null; // modelo sem preço nesta tarifa → bloqueia
+    return {
+      valor: Number(precoModeloSemana.toFixed(2)),
+      modo: 'Semanal',
+      descricao: 'Preço semanal do modelo · renova a cada semana',
+      semanalCondutor: precoModeloSemana,
+    };
+  }
+
+  if (isLongaDuracao) {
     if (tarifa.preco_mes == null) return null;
     return {
       valor: Number(tarifa.preco_mes.toFixed(2)),
       modo: 'Mensal',
       descricao: '30 dias · renova a cada mês',
-      semanalCondutor: regime === 'tvde' ? tarifa.preco_semana : null,
+      semanalCondutor: null,
     };
   }
 

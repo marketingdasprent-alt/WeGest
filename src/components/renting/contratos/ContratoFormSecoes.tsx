@@ -8,6 +8,15 @@ import type { Motorista } from '@/types/motorista';
 import type { Estacao } from '@/hooks/useEstacoes';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import type { RentingGrupoMin } from '@/hooks/useRentingGruposTarifas';
+import { useRentingTarifasMin } from '@/hooks/useRentingGruposTarifas';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ALDFields } from '@/components/renting/shared/ALDFields';
 import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
@@ -21,6 +30,7 @@ import { SectionInfoAdicional } from './SectionInfoAdicional';
 import { SectionGeral } from './SectionGeral';
 import { SectionRegime } from './SectionRegime';
 import { SectionViatura } from './SectionViatura';
+import { SectionTitle } from './SectionTitle';
 
 /** Link "Pedir alteração de X" sob o campo travado — trava enquanto já há um pedido pendente desse tipo. */
 const BotaoPedirAlteracao: React.FC<{

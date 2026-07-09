@@ -17,6 +17,7 @@ export interface ViaturaBasic {
   is_vendida: boolean | null;
   is_slot: boolean | null;
   grupo_id: string | null;
+  modelo_id: string | null;
   habilitada_tvde: boolean;
   emissor_id: string | null;
 }
