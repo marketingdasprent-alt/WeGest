@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
-  Plus,
   Trash2,
   Calendar,
-  Wallet,
   CheckCircle2,
   Clock,
   Loader2,
@@ -11,13 +9,12 @@ import {
   X,
   Edit2,
   Check,
+  Info,
 } from 'lucide-react';
-import { format, startOfWeek, addWeeks, parseISO } from 'date-fns';
-import { pt } from 'date-fns/locale';
+import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -34,7 +31,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Motorista } from '@/pages/Motoristas';
@@ -57,18 +53,8 @@ interface MotoristaTabOutrosCustosProps {
 export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustosProps) {
   const [custos, setCustos] = useState<CustoAdicional[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editCusto, setEditCusto] = useState<Partial<CustoAdicional>>({});
-
-  // Form states
-  const [tipo, setTipo] = useState<string>('Caução');
-  const [valor, setValor] = useState<string>('');
-  const [semanas, setSemanas] = useState<string>('1');
-  const [dataInicio, setDataInicio] = useState<string>(
-    format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  );
 
   useEffect(() => {
     loadCustos();
@@ -90,54 +76,6 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
       // Don't toast error if table doesn't exist yet, we'll handle it nicely
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleGerarCustos() {
-    if (!valor || Number(valor) <= 0) {
-      toast.error('Insira um valor válido.');
-      return;
-    }
-    if (!semanas || Number(semanas) <= 0) {
-      toast.error('Insira o número de semanas.');
-      return;
-    }
-
-    try {
-      setGenerating(true);
-      const numSemanas = parseInt(semanas);
-      const valorNum = parseFloat(valor);
-      const payloads = [];
-      let currentWeek = parseISO(dataInicio);
-
-      for (let i = 0; i < numSemanas; i++) {
-        payloads.push({
-          motorista_id: motorista.id,
-          tipo,
-          valor: valorNum,
-          semana_referencia: format(currentWeek, 'yyyy-MM-dd'),
-          status: 'pendente',
-          descricao: `Gerado automaticamente: ${numSemanas} semanas`,
-        });
-        currentWeek = addWeeks(currentWeek, 1);
-      }
-
-      const { error } = await supabase.from('motorista_custos_adicionais').insert(payloads);
-
-      if (error) throw error;
-
-      toast.success(`${numSemanas} lançamentos gerados com sucesso!`);
-      setShowForm(false);
-      loadCustos();
-
-      // Reset form
-      setValor('');
-      setSemanas('1');
-    } catch (error: any) {
-      console.error('Erro ao gerar custos:', error);
-      toast.error('Erro ao gerar custos: ' + error.message);
-    } finally {
-      setGenerating(false);
     }
   }
 
@@ -220,99 +158,21 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold">Gestão de Outros Custos</h3>
-          <p className="text-sm text-muted-foreground">
-            Agende cauções, seguros e outras deduções semanais.
-          </p>
-        </div>
-        {!showForm && (
-          <Button onClick={() => setShowForm(true)} className="bg-emerald-600 hover:bg-emerald-700">
-            <Plus className="h-4 w-4 mr-2" />
-            Incluir Custos
-          </Button>
-        )}
+      <div>
+        <h3 className="text-lg font-semibold">Outros Custos (histórico)</h3>
+        <p className="text-sm text-muted-foreground">
+          Lançamentos agendados por esta via antiga. Ainda podes editar/remover os existentes.
+        </p>
       </div>
 
-      {showForm && (
-        <Card className="border-emerald-200 bg-emerald-50/30 dark:bg-emerald-950/10">
-          <CardHeader className="pb-3 flex-row items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Plus className="h-4 w-4 text-emerald-600" />
-              Novo Agendamento de Custo
-            </CardTitle>
-            <Button variant="ghost" size="icon" onClick={() => setShowForm(false)}>
-              <X className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-              <div className="space-y-2">
-                <Label>Tipo de Custo</Label>
-                <Select value={tipo} onValueChange={setTipo}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Caução">Caução</SelectItem>
-                    <SelectItem value="Seguros">Seguros</SelectItem>
-                    <SelectItem value="Outros Custos">Outros Custos</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Valor Semanal (€)</Label>
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  value={valor}
-                  onChange={(e) => setValor(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Nº Semanas</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={semanas}
-                  onChange={(e) => setSemanas(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Semana de Início</Label>
-                <Input
-                  type="date"
-                  value={dataInicio}
-                  onChange={(e) => setDataInicio(e.target.value)}
-                />
-              </div>
-
-              <div className="md:col-start-4">
-                <Button
-                  onClick={handleGerarCustos}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700"
-                  disabled={generating}
-                >
-                  {generating ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Wallet className="h-4 w-4 mr-2" />
-                  )}
-                  Gerar Custos
-                </Button>
-              </div>
-            </div>
-            <p className="mt-4 text-xs text-muted-foreground italic">
-              * Ao clicar em "Gerar Custos", o sistema criará individualmente os lançamentos para as
-              semanas seguintes, permitindo controlo granular por período.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 p-4">
+        <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+        <p className="text-sm text-blue-800 dark:text-blue-300">
+          Para agendar novas cauções, seguros ou outros custos recorrentes, usa o separador{' '}
+          <strong>Financeiro</strong> → "Novo Movimento" → "Repetição". Passou a suportar
+          recorrência semanal e mensal automática, sem limite de duração.
+        </p>
+      </div>
 
       <div className="border rounded-lg overflow-hidden">
         <Table>

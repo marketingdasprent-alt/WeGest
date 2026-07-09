@@ -249,6 +249,14 @@ export function ContasResumoTab() {
           }
         }
 
+        // extraCosts vem de motorista_custos_adicionais (via "Outros Custos", legado —
+        // mantido só para não perder o histórico). motorista.outros_custos vem de
+        // motorista_financeiro (mesma fonte da tabela em ecrã e do resumo consolidado —
+        // inclui as recorrências novas de seguro/caução/outros). Somam-se sem duplicar
+        // porque, a partir da migração para o motor de recorrências, uma semana nunca
+        // tem lançamento nas duas tabelas para o mesmo custo.
+        const outrosCustosTotal = extraCosts.outros + extraCosts.caucao + extraCosts.seguros + motorista.outros_custos;
+
         const receitaAjustada = motorista.recibo_verde
           ? motorista.total_faturado
           : motorista.total_faturado / 1.06;
@@ -257,9 +265,7 @@ export function ContasResumoTab() {
           motorista.combustivel +
           motorista.portagens +
           motorista.reparacoes +
-          extraCosts.outros +
-          extraCosts.caucao +
-          extraCosts.seguros;
+          outrosCustosTotal;
 
         const pdfData = {
           driver_name: motorista.driver_name,
@@ -278,7 +284,7 @@ export function ContasResumoTab() {
             combustivel: motorista.combustivel,
             portagens: motorista.portagens,
             reparacoes: motorista.reparacoes,
-            outros: extraCosts.outros + extraCosts.caucao + extraCosts.seguros,
+            outros: outrosCustosTotal,
             total: totalDespesas,
           },
           resumo: {
