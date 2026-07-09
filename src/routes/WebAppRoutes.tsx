@@ -59,6 +59,7 @@ const FaturacaoPage = lazy(() => import('@/pages/administrativo/FaturacaoPage'))
 const Instalar = lazy(() => import('@/pages/Instalar'));
 const Calendario = lazy(() => import('@/pages/Calendario'));
 const Marketing = lazy(() => import('@/pages/Marketing'));
+const Realize = lazy(() => import('@/pages/Realize'));
 const MotoristaDetalhe = lazy(() => import('@/pages/MotoristaDetalhe'));
 const Index = lazy(() => import('@/pages/Index'));
 const EliminarConta = lazy(() => import('@/pages/EliminarConta'));
@@ -405,6 +406,16 @@ const WebAppRoutes = () => {
               <ProtectedRoute requiredResource={RECURSOS.MARKETING_VER}>
                 <DashboardLayout>
                   <Marketing />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/realize"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout fullBleed>
+                  <Realize />
                 </DashboardLayout>
               </ProtectedRoute>
             }

@@ -30,6 +30,7 @@ import { useConsumirTokenRealizacao, useRealizarFromToken } from '@/hooks/useRea
 import { formatMatricula } from '@/components/calendario/calendarioUtils';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
+import { errorMessage } from '@/utils/errorMessage';
 import {
   AssinaturasHandoverSection,
   type AssinaturasHandoverHandle,
@@ -431,7 +432,7 @@ const RealizarEntregaPage = () => {
     } catch (err) {
       toast({
         title: 'Erro ao guardar',
-        description: err instanceof Error ? err.message : 'Limite de armazenamento atingido?',
+        description: errorMessage(err, 'Limite de armazenamento atingido?'),
         variant: 'destructive',
       });
     }
@@ -602,7 +603,7 @@ const RealizarEntregaPage = () => {
     } catch (err) {
       toast({
         title: 'Erro ao gerar folha',
-        description: err instanceof Error ? err.message : 'Erro inesperado',
+        description: errorMessage(err),
         variant: 'destructive',
       });
     } finally {
@@ -677,7 +678,8 @@ const RealizarEntregaPage = () => {
     const paths: string[] = [];
     for (const fp of lista) {
       const valorNum = fp.valor.trim() ? Number(fp.valor) : null;
-      const { data: dano, error: dErr } = await supabase
+      // Cast: realizacao_token_id é coluna nova, types.ts ainda não regenerado.
+      const { data: dano, error: dErr } = await (supabase as any)
         .from('viatura_danos')
         .insert({
           viatura_id: viaturaId,
@@ -688,6 +690,9 @@ const RealizarEntregaPage = () => {
           estado: 'existente',
           contrato_renting_id: info!.contrato_id,
           registado_por: userId,
+          // Liga o dano a este token — permite limpar/recriar num retry sem
+          // duplicar (ver limpar_danos_token, migration 20260709100000).
+          realizacao_token_id: token,
         })
         .select('id')
         .single();
@@ -733,6 +738,14 @@ const RealizarEntregaPage = () => {
     setUploading(true);
     const uploadedPaths: string[] = [];
     try {
+      // Limpa danos/fotos duma tentativa anterior falhada deste mesmo token —
+      // ver comentário equivalente em handleConfirmar.
+      // Cast: RPC nova, types.ts ainda não regenerado.
+      const { error: limparErr } = await (supabase as any).rpc('limpar_danos_token', {
+        p_token: token,
+      });
+      if (limparErr) throw limparErr;
+
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth.user?.id ?? null;
 
@@ -793,7 +806,7 @@ const RealizarEntregaPage = () => {
       }
       toast({
         title: 'Erro no upload',
-        description: err instanceof Error ? err.message : 'Erro inesperado',
+        description: errorMessage(err),
         variant: 'destructive',
       });
     } finally {
@@ -848,6 +861,15 @@ const RealizarEntregaPage = () => {
       {
         onSuccess: async () => {
           try {
+            // Limpa danos/fotos duma tentativa anterior falhada deste mesmo
+            // token (ex.: onSuccess rebentou a meio depois de confirmar) — sem
+            // isto, reenviar duplicava os registos em vez de os substituir.
+            // Cast: RPC nova, types.ts ainda não regenerado.
+            const { error: limparErr } = await (supabase as any).rpc('limpar_danos_token', {
+              p_token: token,
+            });
+            if (limparErr) throw limparErr;
+
             if (files.length > 0) {
               const { data: auth } = await supabase.auth.getUser();
               const userId = auth.user?.id ?? null;
@@ -887,7 +909,8 @@ const RealizarEntregaPage = () => {
               }
 
               for (const grupo of grupos) {
-                const { data: dano, error: dErr } = await supabase
+                // Cast: realizacao_token_id é coluna nova, types.ts ainda não regenerado.
+                const { data: dano, error: dErr } = await (supabase as any)
                   .from('viatura_danos')
                   .insert({
                     viatura_id: vId,
@@ -898,6 +921,7 @@ const RealizarEntregaPage = () => {
                     estado: 'existente',
                     contrato_renting_id: info.contrato_id,
                     registado_por: userId,
+                    realizacao_token_id: token,
                   })
                   .select('id')
                   .single();
@@ -934,7 +958,7 @@ const RealizarEntregaPage = () => {
             }
             toast({
               title: 'Confirmado, mas falhou guardar os danos',
-              description: err instanceof Error ? err.message : 'Erro inesperado',
+              description: errorMessage(err),
               variant: 'destructive',
             });
           }

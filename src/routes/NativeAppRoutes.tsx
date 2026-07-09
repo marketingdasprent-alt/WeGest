@@ -28,6 +28,7 @@ const MotoristaCandidaturas = lazy(() => import('@/pages/MotoristaCandidaturas')
 const Calendario = lazy(() => import('@/pages/Calendario'));
 const Administrativo = lazy(() => import('@/pages/Administrativo'));
 const Marketing = lazy(() => import('@/pages/Marketing'));
+const Realize = lazy(() => import('@/pages/Realize'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const MeusTickets = lazy(() => import('@/pages/MeusTickets'));
 const AdminSettings = lazy(() => import('@/pages/AdminSettings'));
@@ -232,6 +233,16 @@ const NativeAppRoutes = () => {
             <ProtectedRoute requiredResource={RECURSOS.MARKETING_VER}>
               <DashboardLayout>
                 <Marketing />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/realize"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout fullBleed>
+                <Realize />
               </DashboardLayout>
             </ProtectedRoute>
           }

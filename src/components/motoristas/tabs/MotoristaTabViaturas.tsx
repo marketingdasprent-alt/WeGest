@@ -265,6 +265,17 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
     setIsSubmitting(true);
 
     try {
+      const { error: closeError } = await supabase
+        .from('motorista_viaturas')
+        .update({
+          status: 'encerrado',
+          data_fim: formData.data_inicio,
+        })
+        .eq('motorista_id', motorista.id)
+        .eq('status', 'ativo');
+
+      if (closeError) throw closeError;
+
       const { error: insertError } = await supabase.from('motorista_viaturas').insert({
         motorista_id: motorista.id,
         viatura_id: formData.viatura_id,

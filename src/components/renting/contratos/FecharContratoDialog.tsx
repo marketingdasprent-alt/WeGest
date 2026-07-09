@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import {
   Calendar,
+  CalendarClock,
   Camera,
   Car,
   Euro,
@@ -36,7 +37,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { COMBUSTIVEL_NIVEL_OPTS } from '@/utils/combustivel';
-import { useFecharContratoTVDE } from '@/hooks/useContratosRenting';
+import { useFecharContrato } from '@/hooks/useContratosRenting';
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -71,7 +72,7 @@ interface SelectedFile {
   preview: string | null;
 }
 
-interface FecharContratoTVDEDialogProps {
+interface FecharContratoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contratoId: string;
@@ -81,7 +82,7 @@ interface FecharContratoTVDEDialogProps {
   viaturaId?: string | null;
 }
 
-export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> = ({
+export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   open,
   onOpenChange,
   contratoId,
@@ -90,7 +91,7 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   matricula,
   viaturaId,
 }) => {
-  const fecharMutation = useFecharContratoTVDE();
+  const fecharMutation = useFecharContrato();
   const { data: estacoes = [] } = useEstacoes();
   const { user } = useAuth();
   const responsavelNome =
@@ -449,18 +450,41 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
       }}
     >
       <DialogContent className="max-w-6xl w-[96vw] h-[92vh] p-0 gap-0 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b bg-gradient-to-r from-destructive/10 via-destructive/5 to-transparent shrink-0">
+        {/* Header — muda consoante "Registar a recolha agora": só fecha o
+            contrato de facto quando a recolha é confirmada já aqui; caso
+            contrário isto agenda a recolha e o contrato mantém-se em curso
+            (ver resolveFechoContratoToast em useContratosRenting). */}
+        <div
+          className={cn(
+            'px-6 py-4 border-b bg-gradient-to-r shrink-0',
+            registarAgora
+              ? 'from-destructive/10 via-destructive/5 to-transparent'
+              : 'from-amber-500/10 via-amber-500/5 to-transparent'
+          )}
+        >
           <div className="flex items-center gap-3">
-            <div className="rounded-full bg-destructive/15 p-2">
-              <XCircle className="h-5 w-5 text-destructive" />
+            <div
+              className={cn(
+                'rounded-full p-2',
+                registarAgora ? 'bg-destructive/15' : 'bg-amber-500/15'
+              )}
+            >
+              {registarAgora ? (
+                <XCircle className="h-5 w-5 text-destructive" />
+              ) : (
+                <CalendarClock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              )}
             </div>
             <div>
               <h2 className="text-lg font-semibold leading-tight">
-                Fechar contrato #{contratoCodigo}
+                {registarAgora
+                  ? `Fechar contrato #${contratoCodigo}`
+                  : `Agendar recolha do contrato #${contratoCodigo}`}
               </h2>
               <p className="text-sm text-muted-foreground">
-                Indica o que foi feito com a viatura e, se quiseres, regista a recolha já aqui.
+                {registarAgora
+                  ? 'A recolha fica registada agora — o contrato fecha ao confirmar.'
+                  : 'O contrato mantém-se em curso até a recolha ser confirmada (agora ou via Calendário).'}
               </p>
             </div>
           </div>
@@ -859,13 +883,13 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
           </Button>
           <Button
             type="button"
-            variant="destructive"
+            variant={registarAgora ? 'destructive' : 'default'}
             disabled={isPending || exigeDua}
             title={exigeDua ? 'Confirma primeiro que o DUA foi devolvido' : undefined}
             onClick={form.handleSubmit(onSubmit)}
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-            Fechar contrato
+            {registarAgora ? 'Fechar contrato' : 'Agendar recolha'}
           </Button>
         </DialogFooter>
       </DialogContent>
