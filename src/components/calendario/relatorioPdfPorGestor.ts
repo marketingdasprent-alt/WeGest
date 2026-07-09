@@ -2,7 +2,12 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { formatMatricula } from './EventoCard';
 import type { CalendarioEvento } from '@/pages/Calendario';
-import { TIPOS_CONFIG, TIPO_LABELS, TIPO_COLORS_PDF, loadImageWithDimensions } from './relatorioDialog.constants';
+import {
+  TIPOS_CONFIG,
+  TIPO_LABELS,
+  TIPO_COLORS_PDF,
+  loadImageWithDimensions,
+} from './relatorioDialog.constants';
 
 export async function exportarPDFPorGestor(params: {
   eventosFiltrados: CalendarioEvento[];
@@ -155,11 +160,7 @@ export async function exportarPDFPorGestor(params: {
         y = drawColHeaders(headerH + 4);
       }
 
-      doc.setFillColor(
-        i % 2 === 0 ? 255 : 250,
-        i % 2 === 0 ? 255 : 250,
-        i % 2 === 0 ? 255 : 252
-      );
+      doc.setFillColor(i % 2 === 0 ? 255 : 250, i % 2 === 0 ? 255 : 250, i % 2 === 0 ? 255 : 252);
       doc.rect(0, y, pageW, rowH, 'F');
 
       const tc = TIPO_COLORS_PDF[ev.tipo] || [120, 120, 120];
@@ -297,9 +298,7 @@ export async function exportarPDFPorGestor(params: {
   doc.text('Resumo por Gestor e Tipo', marginL, gy);
   gy += 6;
 
-  const tiposPdf = TIPOS_CONFIG.filter((t) =>
-    eventosFiltrados.some((ev) => ev.tipo === t.value)
-  );
+  const tiposPdf = TIPOS_CONFIG.filter((t) => eventosFiltrados.some((ev) => ev.tipo === t.value));
   const cGestor = marginL;
   const cTotal = pageW - marginR; // alinhado à direita
   const gestorW = 56;

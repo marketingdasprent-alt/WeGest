@@ -17,6 +17,8 @@ interface ProtectedRouteProps {
   /** Um recurso, ou uma lista — o acesso é concedido se o utilizador tiver QUALQUER um. */
   requiredResource?: string | string[];
   requiredModule?: Modulo;
+  /** Mesma regra usada para mostrar o item no menu — admin ou cargo Supervisor Gestor TVDE. */
+  requireSupervisorTvde?: boolean;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
@@ -24,6 +26,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAdmin = false,
   requiredResource,
   requiredModule,
+  requireSupervisorTvde = false,
 }) => {
   const { user, loading: authLoading } = useAuth();
   const { orgId, orgs, loading: tenantLoading } = useTenant();
@@ -32,9 +35,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     hasAccessToResource,
     loading: permissionsLoading,
     cargo_id,
+    cargo,
     recursos,
     tipoUtilizador,
   } = usePermissions();
+  const isSupervisorTvde = isAdmin || cargo === 'Supervisor Gestor TVDE';
   const { has: hasModulo, isLoading: modulesLoading } = useModules();
   const navigate = useNavigate();
   const location = useLocation();
@@ -110,6 +115,28 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           <h2 className="mb-2 text-xl font-bold text-foreground">Acesso restrito</h2>
           <p className="mb-4 text-muted-foreground">
             Precisa de permissões de administrador para aceder a esta página.
+          </p>
+          <Button
+            onClick={() => defaultRoute && navigate(defaultRoute)}
+            className="auth-primary-button"
+          >
+            Voltar ao painel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (requireSupervisorTvde && !isSupervisorTvde) {
+    return (
+      <div className="auth-screen auth-screen-safe">
+        <div className="auth-screen__background" aria-hidden="true" />
+        <div className="auth-screen__pattern" aria-hidden="true" />
+        <div className="relative z-10 max-w-md text-center">
+          <Shield className="mx-auto mb-4 h-12 w-12 text-primary" />
+          <h2 className="mb-2 text-xl font-bold text-foreground">Acesso restrito</h2>
+          <p className="mb-4 text-muted-foreground">
+            Esta página está reservada a administradores e Supervisores Gestor TVDE.
           </p>
           <Button
             onClick={() => defaultRoute && navigate(defaultRoute)}

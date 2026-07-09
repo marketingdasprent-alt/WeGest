@@ -125,9 +125,7 @@ export function RelatorioEventosPainel({
                           )}
                         </td>
                       ))}
-                      <td className="px-3 py-1.5 text-center font-bold tabular-nums">
-                        {g.total}
-                      </td>
+                      <td className="px-3 py-1.5 text-center font-bold tabular-nums">{g.total}</td>
                     </tr>
                   ))}
                   <tr className="border-t-2 bg-muted/40 font-semibold">
@@ -165,9 +163,7 @@ export function RelatorioEventosPainel({
                     <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Eventos
                     </span>
-                    <span className="text-xs text-muted-foreground">
-                      ({eventosNormais.length})
-                    </span>
+                    <span className="text-xs text-muted-foreground">({eventosNormais.length})</span>
                     <div className="flex-1 h-px bg-border" />
                   </div>
                 )}

@@ -2,7 +2,12 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { formatMatricula } from './EventoCard';
 import type { CalendarioEvento } from '@/pages/Calendario';
-import { TIPOS_CONFIG, TIPO_LABELS, TIPO_COLORS_PDF, loadImageWithDimensions } from './relatorioDialog.constants';
+import {
+  TIPOS_CONFIG,
+  TIPO_LABELS,
+  TIPO_COLORS_PDF,
+  loadImageWithDimensions,
+} from './relatorioDialog.constants';
 
 export async function exportarPDFGestorUnico(params: {
   gestorId: string;
@@ -347,9 +352,7 @@ export async function exportarPDFGestorUnico(params: {
 
     totaisTipo.forEach((t, i) => {
       const pct =
-        eventosDoGestor.length > 0
-          ? ((t.count / eventosDoGestor.length) * 100).toFixed(1)
-          : '0.0';
+        eventosDoGestor.length > 0 ? ((t.count / eventosDoGestor.length) * 100).toFixed(1) : '0.0';
 
       if (i % 2 === 0) {
         doc.setFillColor(248, 248, 252);

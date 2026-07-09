@@ -56,8 +56,7 @@ export function ContasResumoStats({
           <span className="text-green-600 font-bold">●</span> Passa recibo verde (valor integral)
         </div>
         <div className="flex items-center gap-1">
-          <span className="text-orange-500 font-bold">●</span> Não passa recibo verde (valor ÷
-          1.06)
+          <span className="text-orange-500 font-bold">●</span> Não passa recibo verde (valor ÷ 1.06)
         </div>
         <div className="flex items-center gap-1">
           <span className="text-red-500 font-bold">●</span> Líquido negativo

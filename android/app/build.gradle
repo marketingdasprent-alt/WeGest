@@ -19,9 +19,9 @@ android {
     signingConfigs {
         release {
             storeFile file("wegest-release.jks")
-            storePassword "WeGest@2025"
+            storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: project.findProperty("ANDROID_KEYSTORE_PASSWORD") ?: ""
             keyAlias "wegest"
-            keyPassword "WeGest@2025"
+            keyPassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: project.findProperty("ANDROID_KEYSTORE_PASSWORD") ?: ""
         }
     }
     buildTypes {

@@ -117,7 +117,14 @@ export function ContasResumoTab() {
   };
 
   const handleBulkPrint = () =>
-    gerarRelatoriosIndividuaisPDF({ resumos, selectedIds, weekStart, weekEnd, logoSrc, setLoading });
+    gerarRelatoriosIndividuaisPDF({
+      resumos,
+      selectedIds,
+      weekStart,
+      weekEnd,
+      logoSrc,
+      setLoading,
+    });
 
   const handleBulkPrintConsolidado = () =>
     gerarRelatorioConsolidadoPrint({ resumos, selectedIds, weekStart, weekEnd });

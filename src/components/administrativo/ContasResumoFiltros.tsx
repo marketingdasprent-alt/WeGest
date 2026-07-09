@@ -286,9 +286,7 @@ export function ContasResumoFiltros({
           Recibo Verde
         </button>
         <button
-          onClick={() =>
-            onFilterReciboChange(filterRecibo === 'nao_verde' ? 'todos' : 'nao_verde')
-          }
+          onClick={() => onFilterReciboChange(filterRecibo === 'nao_verde' ? 'todos' : 'nao_verde')}
           className={cn(
             'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors',
             filterRecibo === 'nao_verde'

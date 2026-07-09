@@ -2,7 +2,12 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { formatMatricula } from './EventoCard';
 import type { CalendarioEvento } from '@/pages/Calendario';
-import { TIPOS_CONFIG, TIPO_LABELS, TIPO_COLORS_PDF, loadImageWithDimensions } from './relatorioDialog.constants';
+import {
+  TIPOS_CONFIG,
+  TIPO_LABELS,
+  TIPO_COLORS_PDF,
+  loadImageWithDimensions,
+} from './relatorioDialog.constants';
 
 export async function exportarPDFTodos(params: {
   eventosFiltrados: CalendarioEvento[];

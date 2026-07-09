@@ -1,11 +1,6 @@
 /** Normaliza nome para matching (lowercase, sem acentos, sem espaços extra). */
 export function normalizeName(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 /** Extrai primeiro+último nome normalizado para dedup. */

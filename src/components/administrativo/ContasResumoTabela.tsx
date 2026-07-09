@@ -199,10 +199,7 @@ export function ContasResumoTabela({
                       )}
                     </TableCell>
                     <TableCell
-                      className={cn(
-                        'text-right font-bold',
-                        resumo.liquido < 0 && 'text-red-500'
-                      )}
+                      className={cn('text-right font-bold', resumo.liquido < 0 && 'text-red-500')}
                       onClick={() => onRowClick(resumo)}
                     >
                       {formatCurrency(resumo.liquido)}
@@ -318,7 +315,10 @@ export function ContasResumoTabela({
                     )}
                   </div>
 
-                  <div className="flex justify-between border-t pt-3" onClick={() => onRowClick(resumo)}>
+                  <div
+                    className="flex justify-between border-t pt-3"
+                    onClick={() => onRowClick(resumo)}
+                  >
                     <span className="font-semibold">Líquido</span>
                     <span
                       className={cn(
