@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import { Gauge, Coins, CircleDollarSign } from 'lucide-react';
 
@@ -95,7 +95,17 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   onCriarNovoMotorista,
   contratoId,
 }) => {
+  const viaturaId = form.watch('viatura_id');
+  const { data: tarifas = [] } = useRentingTarifasMin();
+
+  const viaturaSelected = useMemo(
+    () => viaturas.find((v) => v.id === viaturaId) ?? null,
+    [viaturaId, viaturas]
+  );
+
   const regime = form.watch('regime');
+  const isTvde = regime === 'tvde';
+  const tarifasTvde = useMemo(() => tarifas.filter((t) => t.tipo === 'tvde'), [tarifas]);
   const [dialogAberto, setDialogAberto] = useState<TipoPedidoAlteracao | null>(null);
   const kmsIncluidos = form.watch('kms_incluidos');
   const kmAdicionalValor = form.watch('km_adicional_valor');
@@ -124,6 +134,101 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         reservaCodigo={reservaCodigo}
         onViaturaChange={onViaturaChange}
       />
+
+      {/* Seleção de Tarifa — TVDE: qualquer tarifa tipo='tvde' (preço por modelo).
+          Rent-a-car: apenas tarifas do grupo da viatura com tipo!='tvde'. */}
+      {isTvde ? (
+        <div className="space-y-4">
+          <SectionTitle>Tarifa</SectionTitle>
+          <FormField
+            control={form.control}
+            name="tarifa_id"
+            render={({ field }) => (
+              <FormItem className="max-w-xs">
+                <FormLabel>Tarifa TVDE</FormLabel>
+                {tarifasTvde.length === 0 ? (
+                  <div className="text-sm text-muted-foreground p-2 border rounded">
+                    Nenhuma tarifa TVDE. Cria uma em Renting → Tarifas.
+                  </div>
+                ) : (
+                  <Select
+                    value={field.value ?? ''}
+                    onValueChange={(v) => field.onChange(v || null)}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecionar tarifa TVDE..." />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {tarifasTvde.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+      ) : (
+        viaturaSelected &&
+        viaturaSelected.grupo_id && (
+          <div className="space-y-4">
+            <SectionTitle>Tarifa</SectionTitle>
+            <FormField
+              control={form.control}
+              name="tarifa_id"
+              render={({ field }) => {
+                const tarifasDoGrupo = tarifas.filter(
+                  (t) => t.grupo_id === viaturaSelected.grupo_id && t.tipo !== 'tvde'
+                );
+                const grupoNome =
+                  grupos.find((g) => g.id === viaturaSelected.grupo_id)?.nome || 'o grupo';
+
+                // Auto-select primeira tarifa se houver e nada selecionado
+                if (tarifasDoGrupo.length > 0 && !field.value) {
+                  setTimeout(() => field.onChange(tarifasDoGrupo[0].id), 0);
+                }
+
+                return (
+                  <FormItem className="max-w-xs">
+                    <FormLabel>Tarifa para {grupoNome}</FormLabel>
+                    {tarifasDoGrupo.length === 0 ? (
+                      <div className="text-sm text-muted-foreground p-2 border rounded">
+                        Nenhuma tarifa disponível para {grupoNome}. Cria uma em Renting → Tarifas.
+                      </div>
+                    ) : (
+                      <Select
+                        value={field.value ?? ''}
+                        onValueChange={(v) => field.onChange(v || null)}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione uma tarifa..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {tarifasDoGrupo.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.nome} ({t.preco_dia ?? 0}€/dia)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
+            />
+          </div>
+        )
+      )}
+
       <SectionGeral
         form={form}
         tarifaReadOnly

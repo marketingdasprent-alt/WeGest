@@ -513,17 +513,42 @@ const ContratoForm = () => {
       form.setValue('emissor_id', via.emissor_id, { shouldDirty: true });
     }
 
-    const tarifa = via.grupo_id ? (tarifas.find((t) => t.grupo_id === via.grupo_id) ?? null) : null;
+    const ms = new Date(dataFim).getTime() - new Date(dataInicio).getTime();
+    const dias = Number.isFinite(ms) && ms > 0 ? Math.max(1, Math.ceil(ms / 86400000)) : null;
+
+    // TVDE: a tarifa vem da reserva/form (tarifa_id, tipo='tvde') e o preço é
+    // semanal por modelo da viatura. Não deriva do grupo.
+    if (regime === 'tvde') {
+      const tarifaTvdeId = form.getValues('tarifa_id');
+      const tarifaTvde = tarifas.find((t) => t.id === tarifaTvdeId) ?? null;
+      const precoModeloSemana =
+        tarifaTvdeId && via.modelo_id
+          ? (precosModeloTvde.find(
+              (p) => p.tarifa_id === tarifaTvdeId && p.modelo_id === via.modelo_id
+            )?.preco_semana ?? null)
+          : null;
+      const fat = calcularFaturacaoRenting(
+        regime,
+        isLongaDuracao,
+        dias,
+        tarifaTvde,
+        precoModeloSemana
+      );
+      if (fat) form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
+      return;
+    }
+
+    const tarifa = via.grupo_id
+      ? (tarifas.find((t) => t.grupo_id === via.grupo_id && t.tipo !== 'tvde') ?? null)
+      : null;
     if (!tarifa) return;
 
     form.setValue('tarifa_diaria', tarifa.preco_dia, { shouldDirty: true });
     form.setValue('kms_incluidos', tarifa.kms_incluidos, { shouldDirty: true });
     form.setValue('km_adicional_valor', tarifa.km_adicional_valor, { shouldDirty: true });
 
-    // Recalcula o valor de tabela do novo grupo (mensal p/ TVDE/ALD, diário p/
+    // Recalcula o valor de tabela do novo grupo (mensal p/ ALD, diário p/
     // rent-a-car) e grava em valor_total_manual — a base que o ResumoContrato usa.
-    const ms = new Date(dataFim).getTime() - new Date(dataInicio).getTime();
-    const dias = Number.isFinite(ms) && ms > 0 ? Math.max(1, Math.ceil(ms / 86400000)) : null;
     const fat = calcularFaturacaoRenting(regime, isLongaDuracao, dias, tarifa);
     if (fat) form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
   };
@@ -875,10 +900,22 @@ const ContratoForm = () => {
                       msDia
                   )
                 );
-          const baseAluguer =
-            values.valor_total_manual != null && values.valor_total_manual > 0
-              ? values.valor_total_manual
-              : (values.tarifa_diaria ?? 0) * dias;
+          const baseAluguer = calcularBaseAluguerRenting({
+            regime: values.regime,
+            isLongaDuracao: values.is_longa_duracao,
+            dias,
+            tarifa:
+              values.regime === 'tvde' && values.tarifa_id
+                ? (tarifas.find((t) => t.id === values.tarifa_id) ?? null)
+                : (tarifas.find((t) => t.grupo_id === values.grupo) ?? null),
+            valorTotalManual: values.valor_total_manual,
+            precoModeloSemana:
+              values.regime === 'tvde' && values.viatura_id && values.tarifa_id
+                ? (precosModeloTvde.find(
+                    (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viatura?.modelo_id
+                  )?.preco_semana ?? null)
+                : null,
+          });
           const custoCoberturas =
             values.coberturas.reduce((s, c) => s + (c.preco_dia ?? 0), 0) * dias;
           const condutores = values.condutores as CondutorFormItem[];

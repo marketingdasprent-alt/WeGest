@@ -281,7 +281,11 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
       form.setValue('emissor_id', v.emissor_id, { shouldDirty: true });
     }
 
-    const tarifa = tarifas.find((t) => t.grupo_id === v.grupo_id);
+    // Em TVDE a tarifa é escolhida manualmente (tarifa_id), não deriva do grupo —
+    // por isso não se sobrepõem aqui os kms/km da tarifa de grupo.
+    if (isTvde) return;
+
+    const tarifa = tarifas.find((t) => t.grupo_id === v.grupo_id && t.tipo !== 'tvde');
     if (!tarifa) return;
     if (tarifa.kms_incluidos != null)
       form.setValue('kms_incluidos', tarifa.kms_incluidos, { shouldDirty: true });

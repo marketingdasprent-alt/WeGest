@@ -8,7 +8,14 @@ describe('getTarifaFormValidationError', () => {
       nome: 'TVDE semanal',
       preco_dia: '',
       para_tvde: true,
-      precosModelo: { modelo_1: '100' },
+      precosModelo: {
+        modelo_1: {
+          preco_semana: '100',
+          km_mensal: '',
+          km_adicional_valor: '',
+          franquia_valor: '',
+        },
+      },
     });
 
     expect(error).toBeNull();
