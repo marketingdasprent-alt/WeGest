@@ -332,7 +332,7 @@ const NativeAppRoutes = () => {
         <Route
           path="/renting/pedidos-kms"
           element={
-            <ProtectedRoute requiredResource="renting_contratos">
+            <ProtectedRoute requiredResource="renting_contratos" requireSupervisorTvde>
               <DashboardLayout>
                 <PedidosTrocaKms />
               </DashboardLayout>

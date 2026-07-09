@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface ContratoTabsPlaceholderProps {
+  /** Tab activa, controlada pelo pai (ex.: para saltar para o separador com erro de validação). */
+  value?: string;
+  /** Notifica o pai da mudança de tab — omitir mantém o componente não-controlado. */
+  onValueChange?: (value: string) => void;
   /** Conteúdo da tab "Geral" — passado pela página pai. Inclui a secção Condutor/Motorista. */
   geralContent: React.ReactNode;
   /** Conteúdo da tab "Coberturas" — passado pela página pai. */
@@ -21,6 +25,8 @@ interface ContratoTabsPlaceholderProps {
 }
 
 export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = ({
+  value,
+  onValueChange,
   geralContent,
   coberturasContent,
   extrasContent,
@@ -30,7 +36,9 @@ export const ContratoTabsPlaceholder: React.FC<ContratoTabsPlaceholderProps> = (
   danosContent,
   anexosContent,
 }) => {
-  const [active, setActive] = useState<string>('geral');
+  const [activeUncontrolled, setActiveUncontrolled] = useState<string>('geral');
+  const active = value ?? activeUncontrolled;
+  const setActive = onValueChange ?? setActiveUncontrolled;
 
   return (
     <Tabs value={active} onValueChange={setActive} className="w-full">

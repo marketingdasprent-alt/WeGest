@@ -224,15 +224,33 @@ const RentingTarifaForm = () => {
     const int = (v: string) => (v.trim() ? parseInt(v) : null);
     const valido = (v: string) => v.trim() !== '' && !Number.isNaN(parseFloat(v));
 
+    // Grava a linha se QUALQUER campo do regime estiver preenchido — não só o
+    // "preço-chave". Um modelo pode ter só caução/franquia/km definidos sem
+    // diária/semanal (ex.: herda o preço do grupo mas tem franquia própria).
+    // Exigir só o preço-chave fazia o delete+insert apagar essas linhas em
+    // silêncio (sem erro, sem toast) sempre que o utilizador gravava.
     const linhas = Object.entries(precosModelo)
-      .filter(([, v]) => (form.para_tvde ? valido(v.preco_semana) : valido(v.preco_dia)))
+      .filter(([, v]) =>
+        form.para_tvde
+          ? valido(v.preco_semana) ||
+            valido(v.km_mensal) ||
+            valido(v.km_adicional_valor) ||
+            valido(v.franquia_valor) ||
+            valido(v.caucao_valor)
+          : valido(v.preco_dia) ||
+            valido(v.preco_mes) ||
+            valido(v.km_mensal_iva) ||
+            valido(v.km_adicional_valor_iva) ||
+            valido(v.franquia_valor_iva) ||
+            valido(v.caucao_valor_iva)
+      )
       .map(([modelo_id, v]) =>
         form.para_tvde
           ? {
               org_id: orgId!,
               tarifa_id: tarifaId,
               modelo_id,
-              preco_semana: parseFloat(v.preco_semana),
+              preco_semana: num(v.preco_semana),
               km_mensal: int(v.km_mensal),
               km_adicional_valor: num(v.km_adicional_valor),
               franquia_valor: num(v.franquia_valor),
@@ -242,7 +260,7 @@ const RentingTarifaForm = () => {
               org_id: orgId!,
               tarifa_id: tarifaId,
               modelo_id,
-              preco_dia: parseFloat(v.preco_dia),
+              preco_dia: num(v.preco_dia),
               preco_mes: num(v.preco_mes),
               km_mensal_iva: int(v.km_mensal_iva),
               km_adicional_valor_iva: num(v.km_adicional_valor_iva),

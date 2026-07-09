@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -110,6 +110,21 @@ import type {
 } from '@/types/contratoRenting';
 import type { CondutorFormItem } from '@/types/reserva';
 
+// Mapeia o 1º campo do schema com erro para o separador onde ele vive —
+// os restantes campos ficam todos no separador "Geral" (ContratoFormSecoes).
+const FIELD_TAB_MAP: Partial<Record<keyof ContratoFormValues, string>> = {
+  coberturas: 'coberturas',
+  extras: 'extras',
+  taxas: 'taxas',
+};
+
+const TAB_LABELS: Record<string, string> = {
+  geral: 'Geral',
+  coberturas: 'Coberturas',
+  extras: 'Extras',
+  taxas: 'Taxas',
+};
+
 const ContratoForm = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -175,6 +190,7 @@ const ContratoForm = () => {
     syncExtrasMutation.isPending ||
     syncTaxasMutation.isPending;
 
+  const [activeTab, setActiveTab] = useState('geral');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [clienteDialogOpen, setClienteDialogOpen] = useState(false);
   const [motoristaDialogOpen, setMotoristaDialogOpen] = useState(false);
@@ -709,10 +725,13 @@ const ContratoForm = () => {
   // Sem isto, uma falha de validação Zod (ex.: campo obrigatório ainda vazio
   // porque os dados da reserva não acabaram de carregar) não dava nenhum
   // aviso — parecia que o botão "Guardar" não fazia nada na 1ª tentativa.
-  const onInvalid = () => {
+  const onInvalid = (errors: FieldErrors<ContratoFormValues>) => {
+    const camposComErro = Object.keys(errors) as Array<keyof ContratoFormValues>;
+    const tabDoErro = camposComErro.map((campo) => FIELD_TAB_MAP[campo] ?? 'geral')[0] ?? 'geral';
+    setActiveTab(tabDoErro);
     toast({
       title: 'Verifica os campos obrigatórios',
-      description: 'Há campos por preencher ou inválidos — pode estar noutra aba do formulário.',
+      description: `Há campos por preencher ou inválidos no separador "${TAB_LABELS[tabDoErro]}".`,
       variant: 'destructive',
     });
   };
@@ -1270,6 +1289,8 @@ const ContratoForm = () => {
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
                 <ContratoTabsPlaceholder
+                  value={activeTab}
+                  onValueChange={setActiveTab}
                   geralContent={
                     <ContratoFormSecoes
                       form={form}

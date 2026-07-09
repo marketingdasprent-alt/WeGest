@@ -54,6 +54,7 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
         motoristaId={motoristaId}
         matricula={contrato.matricula}
         viaturaId={contrato.viatura_id}
+        estacaoOrigemId={contrato.estacao_origem_viatura_id}
       />
     </>
   );
