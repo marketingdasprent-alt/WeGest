@@ -6700,6 +6700,8 @@ export type Database = {
       }
       renting_tarifa_precos_modelo: {
         Row: {
+          caucao_valor: number | null
+          caucao_valor_iva: number | null
           created_at: string
           created_by: string | null
           franquia_valor: number | null
@@ -6718,6 +6720,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          caucao_valor?: number | null
+          caucao_valor_iva?: number | null
           created_at?: string
           created_by?: string | null
           franquia_valor?: number | null
@@ -6736,6 +6740,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          caucao_valor?: number | null
+          caucao_valor_iva?: number | null
           created_at?: string
           created_by?: string | null
           franquia_valor?: number | null

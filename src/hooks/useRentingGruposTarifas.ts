@@ -40,14 +40,16 @@ export interface RentingTarifaPrecoModelo {
   preco_semana: number | null;
   preco_dia: number | null;
   preco_mes: number | null;
-  // TVDE: km incluídos/mês, km extra e franquia
+  // TVDE: km incluídos/mês, km extra, franquia e caução
   km_mensal: number | null;
   km_adicional_valor: number | null;
   franquia_valor: number | null;
-  // Rent-a-Car: km incluídos/mês, km extra e franquia (c/IVA) — independentes do TVDE
+  caucao_valor: number | null;
+  // Rent-a-Car: km incluídos/mês, km extra, franquia e caução (c/IVA) — independentes do TVDE
   km_mensal_iva: number | null;
   km_adicional_valor_iva: number | null;
   franquia_valor_iva: number | null;
+  caucao_valor_iva: number | null;
 }
 
 /** Grupos de renting activos (id + nome). */
@@ -92,7 +94,7 @@ export function useRentingTarifaPrecosModelo() {
       const { data, error } = await supabase
         .from('renting_tarifa_precos_modelo')
         .select(
-          'tarifa_id, modelo_id, preco_semana, preco_dia, preco_mes, km_mensal, km_adicional_valor, franquia_valor, km_mensal_iva, km_adicional_valor_iva, franquia_valor_iva'
+          'tarifa_id, modelo_id, preco_semana, preco_dia, preco_mes, km_mensal, km_adicional_valor, franquia_valor, caucao_valor, km_mensal_iva, km_adicional_valor_iva, franquia_valor_iva, caucao_valor_iva'
         );
       if (error) throw error;
       return (data ?? []) as RentingTarifaPrecoModelo[];

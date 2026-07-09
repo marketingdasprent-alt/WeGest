@@ -70,11 +70,13 @@ const EMPTY_PRECO_MODELO: PrecoModeloForm = {
   km_mensal: '',
   km_adicional_valor: '',
   franquia_valor: '',
+  caucao_valor: '',
   preco_dia: '',
   preco_mes: '',
   km_mensal_iva: '',
   km_adicional_valor_iva: '',
   franquia_valor_iva: '',
+  caucao_valor_iva: '',
 };
 
 const minutesToLabel = (min: number | null | undefined) => {
@@ -139,7 +141,7 @@ const RentingTarifaForm = () => {
       const { data, error } = await supabase
         .from('renting_tarifa_precos_modelo')
         .select(
-          'modelo_id, preco_semana, km_mensal, km_adicional_valor, franquia_valor, preco_dia, preco_mes, km_mensal_iva, km_adicional_valor_iva, franquia_valor_iva'
+          'modelo_id, preco_semana, km_mensal, km_adicional_valor, franquia_valor, caucao_valor, preco_dia, preco_mes, km_mensal_iva, km_adicional_valor_iva, franquia_valor_iva, caucao_valor_iva'
         )
         .eq('tarifa_id', id!);
       if (error) throw error;
@@ -174,11 +176,13 @@ const RentingTarifaForm = () => {
         km_mensal: p.km_mensal?.toString() ?? '',
         km_adicional_valor: p.km_adicional_valor?.toString() ?? '',
         franquia_valor: p.franquia_valor?.toString() ?? '',
+        caucao_valor: (p as any).caucao_valor?.toString() ?? '',
         preco_dia: (p as any).preco_dia?.toString() ?? '',
         preco_mes: (p as any).preco_mes?.toString() ?? '',
         km_mensal_iva: (p as any).km_mensal_iva?.toString() ?? '',
         km_adicional_valor_iva: (p as any).km_adicional_valor_iva?.toString() ?? '',
         franquia_valor_iva: (p as any).franquia_valor_iva?.toString() ?? '',
+        caucao_valor_iva: (p as any).caucao_valor_iva?.toString() ?? '',
       };
     }
     setPrecosModelo(map);
@@ -232,6 +236,7 @@ const RentingTarifaForm = () => {
               km_mensal: int(v.km_mensal),
               km_adicional_valor: num(v.km_adicional_valor),
               franquia_valor: num(v.franquia_valor),
+              caucao_valor: num(v.caucao_valor),
             }
           : {
               org_id: orgId!,
@@ -242,6 +247,7 @@ const RentingTarifaForm = () => {
               km_mensal_iva: int(v.km_mensal_iva),
               km_adicional_valor_iva: num(v.km_adicional_valor_iva),
               franquia_valor_iva: num(v.franquia_valor_iva),
+              caucao_valor_iva: num(v.caucao_valor_iva),
             }
       );
     if (linhas.length) {
@@ -543,6 +549,7 @@ const RentingTarifaForm = () => {
                               <th className="px-3 py-2 font-medium text-right w-28">
                                 Franquia (€)
                               </th>
+                              <th className="px-3 py-2 font-medium text-right w-28">Caução (€)</th>
                             </>
                           ) : (
                             <>
@@ -560,6 +567,9 @@ const RentingTarifaForm = () => {
                               </th>
                               <th className="px-3 py-2 font-medium text-right w-28">
                                 Franquia c/IVA
+                              </th>
+                              <th className="px-3 py-2 font-medium text-right w-28">
+                                Caução c/IVA
                               </th>
                             </>
                           )}
@@ -631,6 +641,17 @@ const RentingTarifaForm = () => {
                                       className="h-8 text-right"
                                     />
                                   </td>
+                                  <td className="px-3 py-1.5">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={valores.caucao_valor}
+                                      onChange={(e) => setCampo('caucao_valor', e.target.value)}
+                                      placeholder="—"
+                                      className="h-8 text-right"
+                                    />
+                                  </td>
                                 </>
                               ) : (
                                 <>
@@ -689,6 +710,17 @@ const RentingTarifaForm = () => {
                                       onChange={(e) =>
                                         setCampo('franquia_valor_iva', e.target.value)
                                       }
+                                      placeholder="—"
+                                      className="h-8 text-right"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-1.5">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={valores.caucao_valor_iva}
+                                      onChange={(e) => setCampo('caucao_valor_iva', e.target.value)}
                                       placeholder="—"
                                       className="h-8 text-right"
                                     />

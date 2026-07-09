@@ -270,9 +270,11 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
       ? precoModeloSel.km_adicional_valor
       : precoModeloSel.km_adicional_valor_iva;
     const franquia = isTvde ? precoModeloSel.franquia_valor : precoModeloSel.franquia_valor_iva;
+    const caucao = isTvde ? precoModeloSel.caucao_valor : precoModeloSel.caucao_valor_iva;
     if (kmIncl != null) form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
     if (kmExtra != null) form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
     if (franquia != null) form.setValue('franquia_valor', franquia, { shouldDirty: true });
+    if (caucao != null) form.setValue('caucao_valor', caucao, { shouldDirty: true });
   }, [precoModeloSel, isTvde, isSlot, form]);
 
   // Lista de viaturas filtrada por regime. A pesquisa no seletor é apenas por

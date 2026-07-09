@@ -491,9 +491,11 @@ const ContratoForm = () => {
     const kmIncl = isTvdeReg ? linha.km_mensal : linha.km_mensal_iva;
     const kmExtra = isTvdeReg ? linha.km_adicional_valor : linha.km_adicional_valor_iva;
     const franquia = isTvdeReg ? linha.franquia_valor : linha.franquia_valor_iva;
+    const caucao = isTvdeReg ? linha.caucao_valor : linha.caucao_valor_iva;
     if (kmIncl != null) form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
     if (kmExtra != null) form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
     if (franquia != null) form.setValue('franquia_valor', franquia, { shouldDirty: true });
+    if (caucao != null) form.setValue('caucao_valor', caucao, { shouldDirty: true });
   }, [tarifaIdWatch, viaturaId, regime, viaturas, precosModeloTvde, form]);
 
   // Os condutores PERSISTEM ao trocar de regime — não se apaga a lista (senão

@@ -6,11 +6,13 @@ const EMPTY_PRECO: PrecoModeloForm = {
   km_mensal: '',
   km_adicional_valor: '',
   franquia_valor: '',
+  caucao_valor: '',
   preco_dia: '',
   preco_mes: '',
   km_mensal_iva: '',
   km_adicional_valor_iva: '',
   franquia_valor_iva: '',
+  caucao_valor_iva: '',
 };
 
 describe('getTarifaFormValidationError', () => {
