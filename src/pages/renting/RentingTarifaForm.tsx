@@ -42,6 +42,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { useModelosElegiveisTvde } from '@/hooks/useModelosElegiveisTvde';
 
 interface RentingGrupo {
   id: string;
@@ -89,6 +90,17 @@ const EMPTY_FORM = {
   manter_valor_primeira: false,
   para_tvde: false,
   ativa: true,
+};
+
+const EMPTY_PRECO_MODELO: PrecoModeloForm = {
+  preco_semana: '',
+  km_mensal: '',
+  km_adicional_valor: '',
+  franquia_valor: '',
+  preco_dia: '',
+  preco_mes: '',
+  km_adicional_valor_iva: '',
+  franquia_valor_iva: '',
 };
 
 const minutesToLabel = (min: number | null | undefined) => {
@@ -162,19 +174,25 @@ const RentingTarifaForm = () => {
     enabled: !!orgId,
   });
 
-  // Preços por modelo já gravados para esta tarifa
+  // Preços por modelo já gravados para esta tarifa (TVDE e Rent-a-Car)
   const { data: precosModeloDb = [] } = useQuery({
     queryKey: ['renting_tarifa_precos_modelo', id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('renting_tarifa_precos_modelo')
-        .select('modelo_id, preco_semana, km_mensal, km_adicional_valor, franquia_valor')
+        .select(
+          'modelo_id, preco_semana, km_mensal, km_adicional_valor, franquia_valor, preco_dia, preco_mes, km_adicional_valor_iva, franquia_valor_iva'
+        )
         .eq('tarifa_id', id!);
       if (error) throw error;
       return data;
     },
     enabled: !!id,
   });
+
+  // Modelos elegíveis para TVDE (têm ≥1 viatura de tipo elegível). Nas tarifas
+  // TVDE a aba "Modelos" só mostra estes; nas Rent-a-Car mostra todos.
+  const { data: modelosElegiveisTvde } = useModelosElegiveisTvde();
 
   useEffect(() => {
     if (!tarifa) return;
@@ -207,6 +225,10 @@ const RentingTarifaForm = () => {
         km_mensal: p.km_mensal?.toString() ?? '',
         km_adicional_valor: p.km_adicional_valor?.toString() ?? '',
         franquia_valor: p.franquia_valor?.toString() ?? '',
+        preco_dia: (p as any).preco_dia?.toString() ?? '',
+        preco_mes: (p as any).preco_mes?.toString() ?? '',
+        km_adicional_valor_iva: (p as any).km_adicional_valor_iva?.toString() ?? '',
+        franquia_valor_iva: (p as any).franquia_valor_iva?.toString() ?? '',
       };
     }
     setPrecosModelo(map);
@@ -223,7 +245,9 @@ const RentingTarifaForm = () => {
   const buildPayload = () => ({
     grupo_id: form.para_tvde ? null : form.grupo_id || null,
     nome: form.nome.trim(),
-    preco_dia: form.para_tvde ? null : parseFloat(form.preco_dia || '0'),
+    // O preço passa a ser por modelo (aba Modelos) em ambos os regimes; o
+    // preco_dia global fica como referência opcional do grupo (pode ser null).
+    preco_dia: form.para_tvde ? null : n(form.preco_dia),
     preco_fim_semana: n(form.preco_fim_semana),
     preco_semana: n(form.preco_semana),
     preco_mes: n(form.preco_mes),
@@ -239,23 +263,42 @@ const RentingTarifaForm = () => {
 
   /**
    * Sincroniza renting_tarifa_precos_modelo com o mapa em memória:
-   * apaga tudo e reinsere as linhas com preço válido. Só chamado quando
-   * a tarifa é TVDE; se deixar de ser, limpa os preços.
+   * apaga tudo e reinsere as linhas com preço válido. As colunas gravadas
+   * dependem do tipo da tarifa:
+   *   TVDE       → preco_semana (+ km_mensal/km_adicional_valor/franquia_valor)
+   *   Rent-a-Car → preco_dia/preco_mes (+ km_adicional_valor_iva/franquia_valor_iva)
+   * O "preço-chave" (preco_semana no TVDE, preco_dia no RaC) tem de estar
+   * preenchido para a linha ser gravada.
    */
   const savePrecosModelo = async (tarifaId: string) => {
     await supabase.from('renting_tarifa_precos_modelo').delete().eq('tarifa_id', tarifaId);
-    if (!form.para_tvde) return;
+    const num = (v: string) => (v.trim() ? parseFloat(v) : null);
+    const int = (v: string) => (v.trim() ? parseInt(v) : null);
+    const valido = (v: string) => v.trim() !== '' && !Number.isNaN(parseFloat(v));
+
     const linhas = Object.entries(precosModelo)
-      .filter(([, v]) => v.preco_semana.trim() !== '' && !Number.isNaN(parseFloat(v.preco_semana)))
-      .map(([modelo_id, v]) => ({
-        org_id: orgId!,
-        tarifa_id: tarifaId,
-        modelo_id,
-        preco_semana: parseFloat(v.preco_semana),
-        km_mensal: v.km_mensal.trim() ? parseInt(v.km_mensal) : null,
-        km_adicional_valor: v.km_adicional_valor.trim() ? parseFloat(v.km_adicional_valor) : null,
-        franquia_valor: v.franquia_valor.trim() ? parseFloat(v.franquia_valor) : null,
-      }));
+      .filter(([, v]) => (form.para_tvde ? valido(v.preco_semana) : valido(v.preco_dia)))
+      .map(([modelo_id, v]) =>
+        form.para_tvde
+          ? {
+              org_id: orgId!,
+              tarifa_id: tarifaId,
+              modelo_id,
+              preco_semana: parseFloat(v.preco_semana),
+              km_mensal: int(v.km_mensal),
+              km_adicional_valor: num(v.km_adicional_valor),
+              franquia_valor: num(v.franquia_valor),
+            }
+          : {
+              org_id: orgId!,
+              tarifa_id: tarifaId,
+              modelo_id,
+              preco_dia: parseFloat(v.preco_dia),
+              preco_mes: num(v.preco_mes),
+              km_adicional_valor_iva: num(v.km_adicional_valor_iva),
+              franquia_valor_iva: num(v.franquia_valor_iva),
+            }
+      );
     if (linhas.length) {
       const { error } = await supabase.from('renting_tarifa_precos_modelo').insert(linhas);
       if (error) throw error;
@@ -325,6 +368,18 @@ const RentingTarifaForm = () => {
   };
 
   const grupoSelecionado = grupos.find((g) => g.id === form.grupo_id);
+
+  // Numa tarifa TVDE só listamos modelos elegíveis; numa Rent-a-Car, todos.
+  const modelosVisiveis = form.para_tvde
+    ? modelos.filter((m) => modelosElegiveisTvde?.has(m.id))
+    : modelos;
+
+  const nModelosComPrecoTvde = Object.values(precosModelo).filter(
+    (v) => v.preco_semana.trim() !== '' && !Number.isNaN(parseFloat(v.preco_semana))
+  ).length;
+  const nModelosComPrecoRac = Object.values(precosModelo).filter(
+    (v) => v.preco_dia.trim() !== '' && !Number.isNaN(parseFloat(v.preco_dia))
+  ).length;
 
   if (!isNew && isLoading) {
     return (
@@ -405,15 +460,13 @@ const RentingTarifaForm = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {!form.para_tvde && (
                 <div className="sm:col-span-2 space-y-2">
-                  <Label>
-                    Grupo <span className="text-red-500">*</span>
-                  </Label>
+                  <Label>Grupo</Label>
                   <Select
                     value={form.grupo_id}
                     onValueChange={(v) => setForm((p) => ({ ...p, grupo_id: v }))}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecionar grupo de viaturas..." />
+                      <SelectValue placeholder="Selecionar grupo de viaturas (opcional)..." />
                     </SelectTrigger>
                     <SelectContent>
                       {grupos.map((g) => (
@@ -490,15 +543,13 @@ const RentingTarifaForm = () => {
                   <Clock className="h-3.5 w-3.5 mr-1.5" />
                   Tempos de Reserva
                 </TabsTrigger>
-                {form.para_tvde && (
-                  <TabsTrigger
-                    value="precos_modelo"
-                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1"
-                  >
-                    <Car className="h-3.5 w-3.5 mr-1.5" />
-                    Modelos
-                  </TabsTrigger>
-                )}
+                <TabsTrigger
+                  value="precos_modelo"
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1"
+                >
+                  <Car className="h-3.5 w-3.5 mr-1.5" />
+                  Modelos
+                </TabsTrigger>
               </TabsList>
 
               {/* ── Tab Geral ── */}
@@ -509,9 +560,7 @@ const RentingTarifaForm = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {!form.para_tvde && (
                       <div className="space-y-2">
-                        <Label>
-                          Preço por dia (€) <span className="text-red-500">*</span>
-                        </Label>
+                        <Label>Preço por dia (€) — referência do grupo</Label>
                         <div className="relative">
                           <Input
                             type="number"
@@ -777,122 +826,188 @@ const RentingTarifaForm = () => {
                 )}
               </TabsContent>
 
-              {/* ── Tab Modelos (só TVDE) ── */}
-              {form.para_tvde && (
-                <TabsContent value="precos_modelo" className="mt-6 space-y-4">
-                  <div>
-                    <Label className="text-base font-semibold">Modelos</Label>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Tarifa TVDE — o aluguer é semanal. Defina, por modelo, o preço/semana, os km
-                      incluídos por mês, o custo por km adicional e a franquia. Ao criar um
-                      contrato/reserva TVDE com esta tarifa, só é permitido escolher viaturas de
-                      modelos com preço/semana definido aqui.
-                    </p>
-                  </div>
-
-                  <div className="rounded-lg border overflow-x-auto">
-                    {modelos.length === 0 ? (
-                      <p className="p-4 text-sm text-muted-foreground italic">
-                        Sem modelos no sistema. Crie modelos em Frota → Modelos.
-                      </p>
-                    ) : (
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b bg-muted/40 text-left">
-                            <th className="px-3 py-2 font-medium">Modelo</th>
-                            <th className="px-3 py-2 font-medium text-right w-28">€/semana</th>
-                            <th className="px-3 py-2 font-medium text-right w-28">Km/mês</th>
-                            <th className="px-3 py-2 font-medium text-right w-28">€/km extra</th>
-                            <th className="px-3 py-2 font-medium text-right w-28">Franquia (€)</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {modelos.map((m) => {
-                            const valores = precosModelo[m.id] ?? {
-                              preco_semana: '',
-                              km_mensal: '',
-                              km_adicional_valor: '',
-                              franquia_valor: '',
-                            };
-                            const setCampo = (campo: keyof PrecoModeloForm, valor: string) =>
-                              setPrecosModelo((p) => ({
-                                ...p,
-                                [m.id]: { ...valores, [campo]: valor },
-                              }));
-                            return (
-                              <tr key={m.id} className="hover:bg-muted/30">
-                                <td className="px-3 py-1.5 min-w-0">
-                                  <span className="font-medium">{m.nome}</span>
-                                  {m.marca_nome && (
-                                    <span className="ml-2 text-xs text-muted-foreground">
-                                      {m.marca_nome}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="px-3 py-1.5">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={valores.preco_semana}
-                                    onChange={(e) => setCampo('preco_semana', e.target.value)}
-                                    placeholder="—"
-                                    className="h-8 text-right"
-                                  />
-                                </td>
-                                <td className="px-3 py-1.5">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="1"
-                                    value={valores.km_mensal}
-                                    onChange={(e) => setCampo('km_mensal', e.target.value)}
-                                    placeholder="—"
-                                    className="h-8 text-right"
-                                  />
-                                </td>
-                                <td className="px-3 py-1.5">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={valores.km_adicional_valor}
-                                    onChange={(e) => setCampo('km_adicional_valor', e.target.value)}
-                                    placeholder="—"
-                                    className="h-8 text-right"
-                                  />
-                                </td>
-                                <td className="px-3 py-1.5">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={valores.franquia_valor}
-                                    onChange={(e) => setCampo('franquia_valor', e.target.value)}
-                                    placeholder="—"
-                                    className="h-8 text-right"
-                                  />
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    {
-                      Object.values(precosModelo).filter(
-                        (v) =>
-                          v.preco_semana.trim() !== '' && !Number.isNaN(parseFloat(v.preco_semana))
-                      ).length
-                    }{' '}
-                    modelo(s) com preço/semana definido. Modelos sem preço/semana ficam
-                    indisponíveis nesta tarifa.
+              {/* ── Tab Modelos (TVDE e Rent-a-Car) ── */}
+              <TabsContent value="precos_modelo" className="mt-6 space-y-4">
+                <div>
+                  <Label className="text-base font-semibold">Modelos</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {form.para_tvde
+                      ? 'Tarifa TVDE — o aluguer é semanal. Defina, por modelo, o preço/semana, os km incluídos por mês, o custo por km adicional e a franquia. Só aparecem modelos elegíveis para TVDE. Ao criar contrato/reserva TVDE com esta tarifa, só é permitido escolher viaturas de modelos com preço/semana definido aqui.'
+                      : 'Tarifa Rent-a-Car — defina, por modelo, a diária (s/IVA), a mensal (s/IVA), o custo por km extra (c/IVA) e a franquia (c/IVA). Só é permitido escolher, no contrato/reserva, viaturas de modelos com diária definida aqui.'}
                   </p>
-                </TabsContent>
-              )}
+                </div>
+
+                <div className="rounded-lg border overflow-x-auto">
+                  {modelosVisiveis.length === 0 ? (
+                    <p className="p-4 text-sm text-muted-foreground italic">
+                      {form.para_tvde
+                        ? 'Sem modelos elegíveis para TVDE. Marca o tipo das viaturas como elegível TVDE em Frota → Tipos.'
+                        : 'Sem modelos no sistema. Crie modelos em Frota → Modelos.'}
+                    </p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/40 text-left">
+                          <th className="px-3 py-2 font-medium">Modelo</th>
+                          {form.para_tvde ? (
+                            <>
+                              <th className="px-3 py-2 font-medium text-right w-28">€/semana</th>
+                              <th className="px-3 py-2 font-medium text-right w-28">Km/mês</th>
+                              <th className="px-3 py-2 font-medium text-right w-28">€/km extra</th>
+                              <th className="px-3 py-2 font-medium text-right w-28">
+                                Franquia (€)
+                              </th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="px-3 py-2 font-medium text-right w-28">
+                                Diária s/IVA
+                              </th>
+                              <th className="px-3 py-2 font-medium text-right w-28">
+                                Mensal s/IVA
+                              </th>
+                              <th className="px-3 py-2 font-medium text-right w-32">
+                                €/km extra c/IVA
+                              </th>
+                              <th className="px-3 py-2 font-medium text-right w-28">
+                                Franquia c/IVA
+                              </th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {modelosVisiveis.map((m) => {
+                          const valores = precosModelo[m.id] ?? EMPTY_PRECO_MODELO;
+                          const setCampo = (campo: keyof PrecoModeloForm, valor: string) =>
+                            setPrecosModelo((p) => ({
+                              ...p,
+                              [m.id]: { ...EMPTY_PRECO_MODELO, ...valores, [campo]: valor },
+                            }));
+                          return (
+                            <tr key={m.id} className="hover:bg-muted/30">
+                              <td className="px-3 py-1.5 min-w-0">
+                                <span className="font-medium">{m.nome}</span>
+                                {m.marca_nome && (
+                                  <span className="ml-2 text-xs text-muted-foreground">
+                                    {m.marca_nome}
+                                  </span>
+                                )}
+                              </td>
+                              {form.para_tvde ? (
+                                <>
+                                  <td className="px-3 py-1.5">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={valores.preco_semana}
+                                      onChange={(e) => setCampo('preco_semana', e.target.value)}
+                                      placeholder="—"
+                                      className="h-8 text-right"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-1.5">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      value={valores.km_mensal}
+                                      onChange={(e) => setCampo('km_mensal', e.target.value)}
+                                      placeholder="—"
+                                      className="h-8 text-right"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-1.5">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={valores.km_adicional_valor}
+                                      onChange={(e) =>
+                                        setCampo('km_adicional_valor', e.target.value)
+                                      }
+                                      placeholder="—"
+                                      className="h-8 text-right"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-1.5">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={valores.franquia_valor}
+                                      onChange={(e) => setCampo('franquia_valor', e.target.value)}
+                                      placeholder="—"
+                                      className="h-8 text-right"
+                                    />
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="px-3 py-1.5">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={valores.preco_dia}
+                                      onChange={(e) => setCampo('preco_dia', e.target.value)}
+                                      placeholder="—"
+                                      className="h-8 text-right"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-1.5">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={valores.preco_mes}
+                                      onChange={(e) => setCampo('preco_mes', e.target.value)}
+                                      placeholder="—"
+                                      className="h-8 text-right"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-1.5">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.0001"
+                                      value={valores.km_adicional_valor_iva}
+                                      onChange={(e) =>
+                                        setCampo('km_adicional_valor_iva', e.target.value)
+                                      }
+                                      placeholder="—"
+                                      className="h-8 text-right"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-1.5">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={valores.franquia_valor_iva}
+                                      onChange={(e) =>
+                                        setCampo('franquia_valor_iva', e.target.value)
+                                      }
+                                      placeholder="—"
+                                      className="h-8 text-right"
+                                    />
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  {form.para_tvde ? nModelosComPrecoTvde : nModelosComPrecoRac} modelo(s) com preço
+                  definido. Modelos sem preço ficam indisponíveis nesta tarifa.
+                </p>
+              </TabsContent>
             </Tabs>
           </div>
 

@@ -8,7 +8,10 @@ import type { Motorista } from '@/types/motorista';
 import type { Estacao } from '@/hooks/useEstacoes';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import type { RentingGrupoMin } from '@/hooks/useRentingGruposTarifas';
-import { useRentingTarifasMin } from '@/hooks/useRentingGruposTarifas';
+import {
+  useRentingTarifasMin,
+  useRentingTarifaPrecosModelo,
+} from '@/hooks/useRentingGruposTarifas';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import {
   Select,
@@ -103,9 +106,29 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
     [viaturaId, viaturas]
   );
 
+  const { data: precosModelo = [] } = useRentingTarifaPrecosModelo();
+
   const regime = form.watch('regime');
   const isTvde = regime === 'tvde';
-  const tarifasTvde = useMemo(() => tarifas.filter((t) => t.tipo === 'tvde'), [tarifas]);
+  const modeloIdSel = viaturaSelected?.modelo_id ?? null;
+
+  // Tarifas do regime cujo preço cobre o modelo da viatura. O regime filtra
+  // primeiro (TVDE só tipo='tvde'; Rent-a-Car só as não-TVDE); depois, se já há
+  // viatura, mostram-se só as tarifas onde o modelo tem preço definido —
+  // permite alternar entre as tarifas aplicáveis à matrícula.
+  const tarifasDoRegime = useMemo(() => {
+    const doTipo = tarifas.filter((t) => (isTvde ? t.tipo === 'tvde' : t.tipo !== 'tvde'));
+    if (!modeloIdSel) return doTipo;
+    return doTipo.filter((t) =>
+      precosModelo.some(
+        (p) =>
+          p.tarifa_id === t.id &&
+          p.modelo_id === modeloIdSel &&
+          (isTvde ? p.preco_semana != null : p.preco_dia != null)
+      )
+    );
+  }, [tarifas, isTvde, modeloIdSel, precosModelo]);
+
   const [dialogAberto, setDialogAberto] = useState<TipoPedidoAlteracao | null>(null);
   const kmsIncluidos = form.watch('kms_incluidos');
   const kmAdicionalValor = form.watch('km_adicional_valor');
@@ -135,99 +158,50 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         onViaturaChange={onViaturaChange}
       />
 
-      {/* Seleção de Tarifa — TVDE: qualquer tarifa tipo='tvde' (preço por modelo).
-          Rent-a-car: apenas tarifas do grupo da viatura com tipo!='tvde'. */}
-      {isTvde ? (
-        <div className="space-y-4">
-          <SectionTitle>Tarifa</SectionTitle>
-          <FormField
-            control={form.control}
-            name="tarifa_id"
-            render={({ field }) => (
-              <FormItem className="max-w-xs">
-                <FormLabel>Tarifa TVDE</FormLabel>
-                {tarifasTvde.length === 0 ? (
-                  <div className="text-sm text-muted-foreground p-2 border rounded">
-                    Nenhuma tarifa TVDE. Cria uma em Renting → Tarifas.
-                  </div>
-                ) : (
-                  <Select
-                    value={field.value ?? ''}
-                    onValueChange={(v) => field.onChange(v || null)}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecionar tarifa TVDE..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {tarifasTvde.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-      ) : (
-        viaturaSelected &&
-        viaturaSelected.grupo_id && (
-          <div className="space-y-4">
-            <SectionTitle>Tarifa</SectionTitle>
-            <FormField
-              control={form.control}
-              name="tarifa_id"
-              render={({ field }) => {
-                const tarifasDoGrupo = tarifas.filter(
-                  (t) => t.grupo_id === viaturaSelected.grupo_id && t.tipo !== 'tvde'
-                );
-                const grupoNome =
-                  grupos.find((g) => g.id === viaturaSelected.grupo_id)?.nome || 'o grupo';
-
-                // Auto-select primeira tarifa se houver e nada selecionado
-                if (tarifasDoGrupo.length > 0 && !field.value) {
-                  setTimeout(() => field.onChange(tarifasDoGrupo[0].id), 0);
-                }
-
-                return (
-                  <FormItem className="max-w-xs">
-                    <FormLabel>Tarifa para {grupoNome}</FormLabel>
-                    {tarifasDoGrupo.length === 0 ? (
-                      <div className="text-sm text-muted-foreground p-2 border rounded">
-                        Nenhuma tarifa disponível para {grupoNome}. Cria uma em Renting → Tarifas.
-                      </div>
-                    ) : (
-                      <Select
-                        value={field.value ?? ''}
-                        onValueChange={(v) => field.onChange(v || null)}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione uma tarifa..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {tarifasDoGrupo.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.nome} ({t.preco_dia ?? 0}€/dia)
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                );
-              }}
-            />
-          </div>
-        )
-      )}
+      {/* Seleção de Tarifa — o regime filtra primeiro (TVDE / Rent-a-Car) e só
+          aparecem as tarifas cujo preço cobre o modelo da viatura escolhida.
+          O preço vem por modelo da própria tarifa. */}
+      <div className="space-y-4">
+        <SectionTitle>Tarifa</SectionTitle>
+        <FormField
+          control={form.control}
+          name="tarifa_id"
+          render={({ field }) => (
+            <FormItem className="max-w-xs">
+              <FormLabel>{isTvde ? 'Tarifa TVDE' : 'Tarifa Rent-a-Car'}</FormLabel>
+              {tarifasDoRegime.length === 0 ? (
+                <div className="text-sm text-muted-foreground p-2 border rounded">
+                  {modeloIdSel
+                    ? 'Nenhuma tarifa cobre o modelo desta viatura. Define o preço do modelo na tarifa em Renting → Tarifas.'
+                    : isTvde
+                      ? 'Nenhuma tarifa TVDE. Cria uma em Renting → Tarifas.'
+                      : 'Nenhuma tarifa Rent-a-Car. Cria uma em Renting → Tarifas.'}
+                </div>
+              ) : (
+                <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || null)}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          isTvde ? 'Selecionar tarifa TVDE...' : 'Selecionar tarifa Rent-a-Car...'
+                        }
+                      />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {tarifasDoRegime.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
 
       <SectionGeral
         form={form}

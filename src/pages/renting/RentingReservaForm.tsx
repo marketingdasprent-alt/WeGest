@@ -369,17 +369,22 @@ const RentingReservaForm = () => {
       const viaturaSelecionada = viaturas.find((v) => v.id === values.viatura_id);
       const matriculaFinal = values.matricula || viaturaSelecionada?.matricula || null;
 
-      // TVDE: bloqueia guardar se o modelo da viatura não tem preço na tarifa
-      // TVDE escolhida (o preço é definido por modelo na tarifa).
-      if (values.regime === 'tvde' && values.tarifa_id && viaturaSelecionada?.modelo_id) {
-        const temPreco = precosModeloTvde.some(
+      // Bloqueia guardar se o modelo da viatura não tem preço na tarifa
+      // escolhida (o preço é definido por modelo na tarifa, tanto TVDE como
+      // Rent-a-Car). TVDE valida preco_semana; Rent-a-Car valida preco_dia.
+      const isTvdeSubmit = values.regime === 'tvde';
+      if (values.regime !== 'slot' && values.tarifa_id && viaturaSelecionada?.modelo_id) {
+        const linha = precosModeloTvde.find(
           (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaSelecionada.modelo_id
         );
+        const temPreco = isTvdeSubmit ? linha?.preco_semana != null : linha?.preco_dia != null;
         if (!temPreco) {
           toast({
-            title: 'Modelo sem preço na tarifa TVDE',
+            title: isTvdeSubmit
+              ? 'Modelo sem preço na tarifa TVDE'
+              : 'Modelo sem preço na tarifa Rent-a-Car',
             description:
-              'A viatura escolhida não tem preço definido na tarifa TVDE selecionada. Define o preço do modelo na tarifa ou escolhe outra viatura/tarifa.',
+              'A viatura escolhida não tem preço definido na tarifa selecionada. Define o preço do modelo na tarifa ou escolhe outra viatura/tarifa.',
             variant: 'destructive',
           });
           return;
@@ -398,6 +403,15 @@ const RentingReservaForm = () => {
       const condutorPrincipalNome =
         condutorPrincipalCliente?.nome ?? condutorPrincipalMotorista?.nome ?? null;
 
+      // Linha de preço por modelo da tarifa escolhida (TVDE ou Rent-a-Car).
+      const precoModeloLinha =
+        values.tarifa_id && viaturaSelecionada?.modelo_id
+          ? (precosModeloTvde.find(
+              (p) =>
+                p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaSelecionada.modelo_id
+            ) ?? null)
+          : null;
+
       const baseAluguer = calcularBaseAluguerRenting({
         regime: values.regime,
         isLongaDuracao: values.is_longa_duracao,
@@ -414,11 +428,16 @@ const RentingReservaForm = () => {
         tarifa: null,
         valorTotalManual: values.valor_total,
         precoModeloSemana:
-          values.regime === 'tvde' && values.tarifa_id && viaturaSelecionada?.modelo_id
-            ? (precosModeloTvde.find(
-                (p) =>
-                  p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaSelecionada.modelo_id
-              )?.preco_semana ?? null)
+          isTvdeSubmit && values.tarifa_id && viaturaSelecionada?.modelo_id
+            ? (precoModeloLinha?.preco_semana ?? null)
+            : null,
+        precoModeloDia:
+          !isTvdeSubmit && values.tarifa_id && viaturaSelecionada?.modelo_id
+            ? (precoModeloLinha?.preco_dia ?? null)
+            : null,
+        precoModeloMes:
+          !isTvdeSubmit && values.tarifa_id && viaturaSelecionada?.modelo_id
+            ? (precoModeloLinha?.preco_mes ?? null)
             : null,
       });
 
