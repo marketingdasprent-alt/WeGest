@@ -21,6 +21,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useEmpresas } from '@/hooks/useEmpresas';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import { useEventosPendentesRenting } from '@/hooks/useEventosPendentesRenting';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
 import type { Motorista } from '@/pages/Motoristas';
 
@@ -72,6 +73,11 @@ export function MotoristaTabContratos({ motorista }: MotoristaTabContratosProps)
 
   const [contratosRenting, setContratosRenting] = useState<ContratoRentingResumo[]>([]);
   const [loadingRenting, setLoadingRenting] = useState(true);
+
+  // Contratos com recolha agendada mas ainda não confirmada — indicador extra
+  // no badge de estado (ver EstadoOperacionalBadge).
+  const { data: recolhasPendentes = [] } = useEventosPendentesRenting({ tipo: 'recolha' });
+  const idsComRecolhaPendente = new Set(recolhasPendentes.map((e) => e.origem_id));
 
   const loadContratos = async () => {
     try {
@@ -344,7 +350,10 @@ export function MotoristaTabContratos({ motorista }: MotoristaTabContratosProps)
                   <TableCell className="text-sm">{formatDate(c.data_inicio)}</TableCell>
                   <TableCell className="text-sm">{formatDate(c.data_fim)}</TableCell>
                   <TableCell>
-                    <EstadoOperacionalBadge estado={c.estado_operacional} />
+                    <EstadoOperacionalBadge
+                      estado={c.estado_operacional}
+                      recolhaPendente={idsComRecolhaPendente.has(c.id)}
+                    />
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="gap-1 font-medium">

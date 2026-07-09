@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { errorMessage } from '@/utils/errorMessage';
 
 export interface TokenRealizacaoInfo {
   evento_id: string;
@@ -28,7 +29,7 @@ export function useGerarTokenRealizacao() {
     onError: (err: unknown) => {
       toast({
         title: 'Erro ao gerar QR',
-        description: err instanceof Error ? err.message : 'Erro inesperado',
+        description: errorMessage(err),
         variant: 'destructive',
       });
     },
@@ -184,7 +185,7 @@ export function useRealizarFromToken() {
     onError: (err: unknown) => {
       toast({
         title: 'Erro ao confirmar',
-        description: err instanceof Error ? err.message : 'Erro inesperado',
+        description: errorMessage(err),
         variant: 'destructive',
       });
     },
