@@ -32,21 +32,12 @@ import { matchesSearch } from '@/lib/utils';
 
 interface RentingTarifa {
   id: string;
-  grupo_id: string;
   nome: string;
-  preco_dia: number;
-  preco_fim_semana: number | null;
-  preco_semana: number | null;
-  preco_mes: number | null;
-  kms_incluidos: number | null;
-  km_adicional_valor: number | null;
+  tipo: string;
   valido_de: string | null;
   valido_ate: string | null;
   ativa: boolean;
-  grupo?: { id: string; nome: string; codigo: string };
 }
-
-const fmt = (v: number | null) => (v != null ? `${v.toFixed(2)} €` : '—');
 
 const RentingTarifas = () => {
   const { toast } = useToast();
@@ -62,7 +53,7 @@ const RentingTarifas = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('renting_tarifas')
-        .select('*, grupo:renting_grupos(id, nome, codigo)')
+        .select('id, nome, tipo, valido_de, valido_ate, ativa')
         .order('nome');
       if (error) throw error;
       return data as RentingTarifa[];
@@ -83,9 +74,7 @@ const RentingTarifas = () => {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const filtered = tarifas.filter((t) => {
-    return !search || matchesSearch(t.nome, search) || matchesSearch(t.grupo?.nome, search);
-  });
+  const filtered = tarifas.filter((t) => !search || matchesSearch(t.nome, search));
 
   return (
     <div className="w-full">
@@ -107,7 +96,7 @@ const RentingTarifas = () => {
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Pesquisar por nome ou grupo..."
+          placeholder="Pesquisar por nome..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9 h-10"
@@ -143,12 +132,8 @@ const RentingTarifas = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-20">Grupo</TableHead>
                 <TableHead className="min-w-[180px]">Nome</TableHead>
-                <TableHead className="w-24 text-right">€/dia</TableHead>
-                <TableHead className="w-24 text-right">€/sem.</TableHead>
-                <TableHead className="w-24 text-right">€/mês</TableHead>
-                <TableHead className="w-28">Kms incl.</TableHead>
+                <TableHead className="w-28">Tipo</TableHead>
                 <TableHead className="w-28">Validade</TableHead>
                 <TableHead className="w-20">Estado</TableHead>
                 <TableHead className="w-20" />
@@ -157,23 +142,11 @@ const RentingTarifas = () => {
             <TableBody>
               {filtered.map((t) => (
                 <TableRow key={t.id} className="hover:bg-muted/50">
-                  <TableCell>
-                    <Badge variant="outline" className="font-mono text-xs">
-                      {t.grupo?.codigo ?? '—'}
-                    </Badge>
-                  </TableCell>
                   <TableCell className="font-medium">{t.nome}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(t.preco_dia)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {fmt(t.preco_semana)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {fmt(t.preco_mes)}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {t.kms_incluidos != null
-                      ? `${t.kms_incluidos.toLocaleString('pt-PT')} km`
-                      : 'Ilimitado'}
+                  <TableCell>
+                    <Badge variant="outline" className="text-xs">
+                      {t.tipo === 'tvde' ? 'TVDE' : 'Rent-a-Car'}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {t.valido_de && t.valido_ate
