@@ -448,6 +448,7 @@ const ContratoForm = () => {
   const valorTotalManual = form.watch('valor_total_manual');
   const descontoPercentagem = form.watch('desconto_percentagem');
   const regime = form.watch('regime');
+  const tarifaIdWatch = form.watch('tarifa_id');
   const isLongaDuracao = form.watch('is_longa_duracao');
   // TVDE e Slot já têm IVA incluído no preço — o resumo não aplica IVA adicional
   const rawTaxaIva = form.watch('taxa_iva');
@@ -474,6 +475,26 @@ const ContratoForm = () => {
       shouldDirty: false,
     });
   }, [regime, orgDefinicoes, form]);
+
+  // Ao escolher tarifa+viatura, copia km incluídos / km extra / franquia da
+  // linha do modelo na tarifa para os campos do contrato (editáveis pelo
+  // gestor). TVDE usa as colunas base; Rent-a-Car usa as c/IVA.
+  useEffect(() => {
+    if (regime === 'slot' || !tarifaIdWatch || !viaturaId) return;
+    const via = viaturas.find((v) => v.id === viaturaId);
+    if (!via?.modelo_id) return;
+    const linha = precosModeloTvde.find(
+      (p) => p.tarifa_id === tarifaIdWatch && p.modelo_id === via.modelo_id
+    );
+    if (!linha) return;
+    const isTvdeReg = regime === 'tvde';
+    const kmIncl = linha.km_mensal;
+    const kmExtra = isTvdeReg ? linha.km_adicional_valor : linha.km_adicional_valor_iva;
+    const franquia = isTvdeReg ? linha.franquia_valor : linha.franquia_valor_iva;
+    if (kmIncl != null) form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
+    if (kmExtra != null) form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
+    if (franquia != null) form.setValue('franquia_valor', franquia, { shouldDirty: true });
+  }, [tarifaIdWatch, viaturaId, regime, viaturas, precosModeloTvde, form]);
 
   // Os condutores PERSISTEM ao trocar de regime — não se apaga a lista (senão
   // "desapareciam" condutores já adicionados ou hidratados da reserva). A tabela

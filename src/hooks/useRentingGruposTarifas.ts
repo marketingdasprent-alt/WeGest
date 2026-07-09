@@ -30,7 +30,9 @@ export interface RentingTarifaMin {
 /**
  * Preço por modelo, específico de uma tarifa. Consoante o tipo da tarifa:
  *   TVDE       → usa preco_semana (+ km_mensal/km_adicional_valor/franquia_valor)
- *   Rent-a-Car → usa preco_dia/preco_mes (+ km_adicional_valor_iva/franquia_valor_iva)
+ *   Rent-a-Car → usa preco_dia/preco_mes/km_mensal (+ km_adicional_valor_iva/franquia_valor_iva)
+ * Os campos de km incluídos (km_mensal), km extra e franquia são copiados para
+ * o contrato/reserva ao escolher a tarifa+viatura.
  */
 export interface RentingTarifaPrecoModelo {
   tarifa_id: string;
@@ -38,6 +40,14 @@ export interface RentingTarifaPrecoModelo {
   preco_semana: number | null;
   preco_dia: number | null;
   preco_mes: number | null;
+  // km incluídos por mês (usado em ambos os regimes)
+  km_mensal: number | null;
+  // TVDE: km extra e franquia
+  km_adicional_valor: number | null;
+  franquia_valor: number | null;
+  // Rent-a-Car: km extra e franquia (c/IVA)
+  km_adicional_valor_iva: number | null;
+  franquia_valor_iva: number | null;
 }
 
 /** Grupos de renting activos (id + nome). */
@@ -81,7 +91,9 @@ export function useRentingTarifaPrecosModelo() {
     queryFn: async (): Promise<RentingTarifaPrecoModelo[]> => {
       const { data, error } = await supabase
         .from('renting_tarifa_precos_modelo')
-        .select('tarifa_id, modelo_id, preco_semana, preco_dia, preco_mes');
+        .select(
+          'tarifa_id, modelo_id, preco_semana, preco_dia, preco_mes, km_mensal, km_adicional_valor, franquia_valor, km_adicional_valor_iva, franquia_valor_iva'
+        );
       if (error) throw error;
       return (data ?? []) as RentingTarifaPrecoModelo[];
     },

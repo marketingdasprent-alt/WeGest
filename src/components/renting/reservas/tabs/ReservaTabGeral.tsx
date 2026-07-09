@@ -260,6 +260,21 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
     }
   }, [faturacao, isSlot, form]);
 
+  // Ao escolher tarifa+viatura, copia km incluídos / km extra / franquia da
+  // linha do modelo na tarifa para os campos do formulário (editáveis pelo
+  // gestor). TVDE usa as colunas base; Rent-a-Car usa as c/IVA.
+  useEffect(() => {
+    if (isSlot || !precoModeloSel) return;
+    const kmIncl = precoModeloSel.km_mensal;
+    const kmExtra = isTvde
+      ? precoModeloSel.km_adicional_valor
+      : precoModeloSel.km_adicional_valor_iva;
+    const franquia = isTvde ? precoModeloSel.franquia_valor : precoModeloSel.franquia_valor_iva;
+    if (kmIncl != null) form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
+    if (kmExtra != null) form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
+    if (franquia != null) form.setValue('franquia_valor', franquia, { shouldDirty: true });
+  }, [precoModeloSel, isTvde, isSlot, form]);
+
   // Lista de viaturas filtrada por regime. A pesquisa no seletor é apenas por
   // matrícula (sem filtro por grupo):
   //   • slot  → só carros slot (do motorista);
