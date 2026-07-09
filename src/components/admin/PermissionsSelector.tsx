@@ -252,8 +252,7 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
 
       const mapped: Permission[] = (data || []).map((p: any) => ({
         recurso_id: p.recurso_id,
-        // Tenta tem_acesso primeiro, depois pode_ver (retrocompatibilidade)
-        tem_acesso: p.tem_acesso ?? p.pode_ver ?? false,
+        tem_acesso: p.tem_acesso ?? false,
         pode_editar: p.pode_editar ?? false,
       }));
       setPermissions(mapped);
