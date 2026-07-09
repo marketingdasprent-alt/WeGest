@@ -29,6 +29,7 @@ import {
   Wifi,
   Banknote,
   Gauge,
+  ExternalLink,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
@@ -196,6 +197,7 @@ const MENU_ITEMS: MenuItem[] = [
   { label: 'Assistência', url: '/assistencia', icon: Wrench, recurso: 'assistencia_tickets' },
   { label: 'Movimentações', url: '/calendario', icon: CalendarDays, recurso: 'calendario_ver' },
   { label: 'Marketing', url: '/marketing', icon: Mail, recurso: 'marketing_ver' },
+  { label: 'Realize', url: '/realize', icon: ExternalLink },
 ];
 
 export const SidebarMenu: React.FC = () => {

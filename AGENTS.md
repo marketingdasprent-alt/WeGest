@@ -416,7 +416,8 @@ pnpm format:check      # Prettier check (CI)
 - **Prettier:** config em [.prettierrc](.prettierrc) — `printWidth: 100`, `singleQuote: true`, `semi: true`.
 - **ESLint:** algumas regras estão `off`/`warn` por motivos históricos ([eslint.config.js](eslint.config.js)). **Código novo deve passar como se fossem `error`** — laxismo é para legacy.
 - **Ignorados pelo lint:** `dist/`, `android/`, `ios/`, `supabase/` (Edge Functions Deno), `src/integrations/supabase/types.ts`.
-- **Vitest** (`pnpm test` / `pnpm test:watch`) — testes unitários em `src/**/*.test.ts`. Cobertura actual: `pt-validators` (NIF, IBAN, CP, telefone, documentos). Lógica pura nova deve trazer testes. Sem Playwright (E2E em backlog).
+- **Vitest** (`pnpm test` / `pnpm test:watch`) — testes unitários em `src/**/*.test.ts`. Sem Playwright (E2E em backlog).
+- **Toda feature ou fix nova traz teste unitário.** Sem excepção — é o que apanha regressões antes de chegarem à produção (ex.: bug real de 2026-07-08 — folha de danos preenchida no terreno mas não gravada porque `error instanceof Error` mascarava a mensagem real do Postgres; só foi possível diagnosticar e travar com testes). Lógica com side-effects (Supabase, storage) extrai-se para função pura testável ou mocka-se o cliente (ver `useContratos.test.ts`). Se algo genuinamente não é testável (ex.: puro JSX sem lógica), diz explicitamente porquê em vez de saltar o teste em silêncio.
 
 ### Capacitor (mobile)
 
@@ -459,6 +460,7 @@ AuthProvider → user, session, signOut + onAuthStateChange
 
 ```
 OBRIGATÓRIO
+[ ] Feature/fix nova tem teste unitário próprio (não só os pré-existentes a passar)
 [ ] pnpm type-check         → sem erros TS
 [ ] pnpm lint               → sem errors (warnings tolerados)
 [ ] pnpm format:check       → código formatado
@@ -626,14 +628,16 @@ Priorizar análise e segurança sobre velocidade de implementação.
 2. Identificar impacto da alteração.
 3. Procurar reutilização.
 4. Implementar apenas o necessário.
-5. Rever possíveis regressões.
-6. Executar:
+5. Escrever teste unitário para a feature/fix (ver secção 13 — obrigatório, não opcional).
+6. Rever possíveis regressões.
+7. Executar:
    - pnpm type-check
    - pnpm lint
+   - pnpm test
    - pnpm build
 
-7. Só depois declarar a tarefa concluída.
+8. Só depois declarar a tarefa concluída.
 
-8. Quando a tarefa envolver refactor, apresente primeiro o plano de refatoração e aguarde aprovação antes de alterar múltiplos módulos do sistema.
+9. Quando a tarefa envolver refactor, apresente primeiro o plano de refatoração e aguarde aprovação antes de alterar múltiplos módulos do sistema.
 
-_Última actualização: 2026-05-18 · WeGest (Década Ousada)_
+_Última actualização: 2026-07-09 · WeGest (Década Ousada)_

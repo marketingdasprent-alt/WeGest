@@ -8,6 +8,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { useEventosPendentesRenting } from '@/hooks/useEventosPendentesRenting';
 import type { ContratoRenting } from '@/types/contratoRenting';
 import { EstadoOperacionalBadge } from './EstadoOperacionalBadge';
 import { EstadoFinanceiroBadge } from './EstadoFinanceiroBadge';
@@ -90,6 +91,11 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
 }) => {
   const headProps = { current: sortColumn, dir: sortDir, onSort };
 
+  // Contratos com recolha agendada mas ainda não confirmada — mostra-se um
+  // indicador extra no badge de estado (ver EstadoOperacionalBadge).
+  const { data: recolhasPendentes = [] } = useEventosPendentesRenting({ tipo: 'recolha' });
+  const idsComRecolhaPendente = new Set(recolhasPendentes.map((e) => e.origem_id));
+
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -171,7 +177,10 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
                   {getClienteNome(c.cliente_id)}
                 </TableCell>
                 <TableCell>
-                  <EstadoOperacionalBadge estado={c.estado_operacional} />
+                  <EstadoOperacionalBadge
+                    estado={c.estado_operacional}
+                    recolhaPendente={idsComRecolhaPendente.has(c.id)}
+                  />
                 </TableCell>
                 <TableCell>
                   <EstadoFinanceiroBadge estado={c.estado_financeiro} />

@@ -320,7 +320,7 @@ export function useUpdateContratoRenting() {
 }
 
 // ────────────────────────────────────────────────────────────
-// Fechar contrato TVDE
+// Fechar contrato (TVDE e rent-a-car — mesmo fluxo para ambos)
 // ────────────────────────────────────────────────────────────
 
 /** Dados da recolha (KM/combustível/fotos) preenchidos já no fecho do
@@ -331,7 +331,7 @@ export interface FecharContratoRecolhaInfo {
   fotos: File[];
 }
 
-export interface FecharContratoTVDEArgs {
+export interface FecharContratoArgs {
   contratoId: string;
   contratoCodigo: number;
   tipoEvento: 'recolhido' | 'devolvido';
@@ -345,7 +345,21 @@ export interface FecharContratoTVDEArgs {
   recolha?: FecharContratoRecolhaInfo;
 }
 
-export function useFecharContratoTVDE() {
+/** Título/descrição do toast final — depende de a recolha ter sido
+ *  confirmada já aqui (`fechouAgora`) ou só agendada para mais tarde. */
+export function resolveFechoContratoToast(fechouAgora: boolean): {
+  title: string;
+  description?: string;
+} {
+  return fechouAgora
+    ? { title: 'Contrato fechado' }
+    : {
+        title: 'Recolha agendada',
+        description: 'O contrato mantém-se em curso até a recolha ser confirmada.',
+      };
+}
+
+export function useFecharContrato() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -362,7 +376,7 @@ export function useFecharContratoTVDE() {
       matricula,
       viaturaId,
       recolha,
-    }: FecharContratoTVDEArgs): Promise<void> => {
+    }: FecharContratoArgs): Promise<{ fechouAgora: boolean }> => {
       const { data: estacao, error: errEstacao } = await supabase
         .from('estacoes')
         .select('nome, cidade')
@@ -514,11 +528,14 @@ export function useFecharContratoTVDE() {
           .eq('id', motoristaId);
         if (errMotorista) throw errMotorista;
       }
+
+      return { fechouAgora: !!recolha };
     },
-    onSuccess: () => {
+    onSuccess: ({ fechouAgora }) => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
       qc.invalidateQueries({ queryKey: ['motoristas'] });
-      toast({ title: 'Contrato fechado' });
+      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+      toast(resolveFechoContratoToast(fechouAgora));
     },
     onError: (error: unknown) => {
       const { title, description } = contratoErrorMessage(error);
