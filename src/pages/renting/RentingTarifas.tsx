@@ -134,7 +134,7 @@ const RentingTarifas = () => {
               <TableRow>
                 <TableHead className="min-w-[180px]">Nome</TableHead>
                 <TableHead className="w-28">Tipo</TableHead>
-                <TableHead className="w-28">Validade</TableHead>
+                <TableHead className="w-44 whitespace-nowrap">Validade</TableHead>
                 <TableHead className="w-20">Estado</TableHead>
                 <TableHead className="w-20" />
               </TableRow>
@@ -148,7 +148,7 @@ const RentingTarifas = () => {
                       {t.tipo === 'tvde' ? 'TVDE' : 'Rent-a-Car'}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     {t.valido_de && t.valido_ate
                       ? `${t.valido_de} → ${t.valido_ate}`
                       : t.valido_de
