@@ -6427,7 +6427,10 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          franquia_valor: number | null
           id: string
+          km_adicional_valor: number | null
+          km_mensal: number | null
           modelo_id: string
           org_id: string
           preco_semana: number
@@ -6437,7 +6440,10 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          franquia_valor?: number | null
           id?: string
+          km_adicional_valor?: number | null
+          km_mensal?: number | null
           modelo_id: string
           org_id: string
           preco_semana: number
@@ -6447,7 +6453,10 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          franquia_valor?: number | null
           id?: string
+          km_adicional_valor?: number | null
+          km_mensal?: number | null
           modelo_id?: string
           org_id?: string
           preco_semana?: number

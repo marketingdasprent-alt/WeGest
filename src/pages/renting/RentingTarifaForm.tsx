@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getTarifaFormValidationError } from './tarifaFormValidation';
+import { getTarifaFormValidationError, type PrecoModeloForm } from './tarifaFormValidation';
 import { Tag, Save, Trash2, ChevronRight, Calendar, Gauge, Clock, ShieldCheck, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -99,8 +99,9 @@ const RentingTarifaForm = () => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  // Mapa modelo_id -> preço/semana (string), só usado quando para_tvde
-  const [precosModelo, setPrecosModelo] = useState<Record<string, string>>({});
+  // Mapa modelo_id -> valores desta tarifa TVDE para o modelo (strings de input).
+  // Só usado quando para_tvde.
+  const [precosModelo, setPrecosModelo] = useState<Record<string, PrecoModeloForm>>({});
 
   // Carregar grupos ativos
   const { data: grupos = [] } = useQuery({
@@ -157,7 +158,7 @@ const RentingTarifaForm = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('renting_tarifa_precos_modelo')
-        .select('modelo_id, preco_semana')
+        .select('modelo_id, preco_semana, km_mensal, km_adicional_valor, franquia_valor')
         .eq('tarifa_id', id!);
       if (error) throw error;
       return data;
@@ -189,9 +190,14 @@ const RentingTarifaForm = () => {
 
   useEffect(() => {
     if (!precosModeloDb.length) return;
-    const map: Record<string, string> = {};
+    const map: Record<string, PrecoModeloForm> = {};
     for (const p of precosModeloDb) {
-      map[p.modelo_id] = p.preco_semana?.toString() ?? '';
+      map[p.modelo_id] = {
+        preco_semana: p.preco_semana?.toString() ?? '',
+        km_mensal: p.km_mensal?.toString() ?? '',
+        km_adicional_valor: p.km_adicional_valor?.toString() ?? '',
+        franquia_valor: p.franquia_valor?.toString() ?? '',
+      };
     }
     setPrecosModelo(map);
   }, [precosModeloDb]);
@@ -230,12 +236,15 @@ const RentingTarifaForm = () => {
     await supabase.from('renting_tarifa_precos_modelo').delete().eq('tarifa_id', tarifaId);
     if (!form.para_tvde) return;
     const linhas = Object.entries(precosModelo)
-      .filter(([, v]) => v.trim() !== '' && !Number.isNaN(parseFloat(v)))
+      .filter(([, v]) => v.preco_semana.trim() !== '' && !Number.isNaN(parseFloat(v.preco_semana)))
       .map(([modelo_id, v]) => ({
         org_id: orgId!,
         tarifa_id: tarifaId,
         modelo_id,
-        preco_semana: parseFloat(v),
+        preco_semana: parseFloat(v.preco_semana),
+        km_mensal: v.km_mensal.trim() ? parseInt(v.km_mensal) : null,
+        km_adicional_valor: v.km_adicional_valor.trim() ? parseFloat(v.km_adicional_valor) : null,
+        franquia_valor: v.franquia_valor.trim() ? parseFloat(v.franquia_valor) : null,
       }));
     if (linhas.length) {
       const { error } = await supabase.from('renting_tarifa_precos_modelo').insert(linhas);
@@ -477,7 +486,7 @@ const RentingTarifaForm = () => {
                     className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-2 pt-1"
                   >
                     <Car className="h-3.5 w-3.5 mr-1.5" />
-                    Preço por modelo
+                    Modelos
                   </TabsTrigger>
                 )}
               </TabsList>
@@ -758,64 +767,123 @@ const RentingTarifaForm = () => {
                 )}
               </TabsContent>
 
-              {/* ── Tab Preço por modelo (só TVDE) ── */}
+              {/* ── Tab Modelos (só TVDE) ── */}
               {form.para_tvde && (
                 <TabsContent value="precos_modelo" className="mt-6 space-y-4">
                   <div>
-                    <Label className="text-base font-semibold">Preço por modelo (semanal)</Label>
+                    <Label className="text-base font-semibold">Modelos</Label>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Tarifa TVDE — o aluguer é semanal. Defina o preço por semana de cada modelo.
-                      Ao criar um contrato/reserva TVDE com esta tarifa, só é permitido escolher
-                      viaturas de modelos com preço definido aqui.
+                      Tarifa TVDE — o aluguer é semanal. Defina, por modelo, o preço/semana, os
+                      km incluídos por mês, o custo por km adicional e a franquia. Ao criar um
+                      contrato/reserva TVDE com esta tarifa, só é permitido escolher viaturas de
+                      modelos com preço/semana definido aqui.
                     </p>
                   </div>
 
-                  <div className="rounded-lg border divide-y">
-                    {modelos.length === 0 && (
+                  <div className="rounded-lg border overflow-x-auto">
+                    {modelos.length === 0 ? (
                       <p className="p-4 text-sm text-muted-foreground italic">
                         Sem modelos no sistema. Crie modelos em Frota → Modelos.
                       </p>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/40 text-left">
+                            <th className="px-3 py-2 font-medium">Modelo</th>
+                            <th className="px-3 py-2 font-medium text-right w-28">€/semana</th>
+                            <th className="px-3 py-2 font-medium text-right w-28">Km/mês</th>
+                            <th className="px-3 py-2 font-medium text-right w-28">€/km extra</th>
+                            <th className="px-3 py-2 font-medium text-right w-28">Franquia (€)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {modelos.map((m) => {
+                            const valores = precosModelo[m.id] ?? {
+                              preco_semana: '',
+                              km_mensal: '',
+                              km_adicional_valor: '',
+                              franquia_valor: '',
+                            };
+                            const setCampo = (
+                              campo: keyof PrecoModeloForm,
+                              valor: string
+                            ) =>
+                              setPrecosModelo((p) => ({
+                                ...p,
+                                [m.id]: { ...valores, [campo]: valor },
+                              }));
+                            return (
+                              <tr key={m.id} className="hover:bg-muted/30">
+                                <td className="px-3 py-1.5 min-w-0">
+                                  <span className="font-medium">{m.nome}</span>
+                                  {m.marca_nome && (
+                                    <span className="ml-2 text-xs text-muted-foreground">
+                                      {m.marca_nome}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-1.5">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={valores.preco_semana}
+                                    onChange={(e) => setCampo('preco_semana', e.target.value)}
+                                    placeholder="—"
+                                    className="h-8 text-right"
+                                  />
+                                </td>
+                                <td className="px-3 py-1.5">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={valores.km_mensal}
+                                    onChange={(e) => setCampo('km_mensal', e.target.value)}
+                                    placeholder="—"
+                                    className="h-8 text-right"
+                                  />
+                                </td>
+                                <td className="px-3 py-1.5">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={valores.km_adicional_valor}
+                                    onChange={(e) =>
+                                      setCampo('km_adicional_valor', e.target.value)
+                                    }
+                                    placeholder="—"
+                                    className="h-8 text-right"
+                                  />
+                                </td>
+                                <td className="px-3 py-1.5">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={valores.franquia_valor}
+                                    onChange={(e) => setCampo('franquia_valor', e.target.value)}
+                                    placeholder="—"
+                                    className="h-8 text-right"
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     )}
-                    {modelos.map((m) => (
-                      <div
-                        key={m.id}
-                        className="flex items-center justify-between gap-4 p-2.5 hover:bg-muted/30"
-                      >
-                        <div className="min-w-0">
-                          <span className="text-sm font-medium">{m.nome}</span>
-                          {m.marca_nome && (
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              {m.marca_nome}
-                            </span>
-                          )}
-                        </div>
-                        <div className="relative w-32 shrink-0">
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={precosModelo[m.id] ?? ''}
-                            onChange={(e) =>
-                              setPrecosModelo((p) => ({ ...p, [m.id]: e.target.value }))
-                            }
-                            placeholder="—"
-                            className="pr-12 h-8 text-right"
-                          />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
-                            €/sem
-                          </span>
-                        </div>
-                      </div>
-                    ))}
                   </div>
 
                   <p className="text-xs text-muted-foreground">
                     {
                       Object.values(precosModelo).filter(
-                        (v) => v.trim() !== '' && !Number.isNaN(parseFloat(v))
+                        (v) => v.preco_semana.trim() !== '' && !Number.isNaN(parseFloat(v.preco_semana))
                       ).length
                     }{' '}
-                    modelo(s) com preço definido. Modelos sem preço ficam indisponíveis nesta tarifa.
+                    modelo(s) com preço/semana definido. Modelos sem preço/semana ficam
+                    indisponíveis nesta tarifa.
                   </p>
                 </TabsContent>
               )}
@@ -906,7 +974,7 @@ const RentingTarifaForm = () => {
                       setForm((p) => ({
                         ...p,
                         para_tvde: !!v,
-                        grupo_id: !!v ? '' : p.grupo_id,
+                        grupo_id: v ? '' : p.grupo_id,
                       }));
                     }}
                     className="mt-0.5"

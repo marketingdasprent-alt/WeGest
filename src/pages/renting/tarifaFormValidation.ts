@@ -1,9 +1,16 @@
+export interface PrecoModeloForm {
+  preco_semana: string;
+  km_mensal: string;
+  km_adicional_valor: string;
+  franquia_valor: string;
+}
+
 export interface TarifaFormValidationInput {
   grupo_id: string;
   nome: string;
   preco_dia: string;
   para_tvde: boolean;
-  precosModelo: Record<string, string>;
+  precosModelo: Record<string, PrecoModeloForm>;
 }
 
 export interface TarifaFormValidationError {
@@ -28,12 +35,12 @@ export function getTarifaFormValidationError(input: TarifaFormValidationInput): 
 
   if (input.para_tvde) {
     const temAlgum = Object.values(input.precosModelo).some(
-      (v) => v.trim() !== '' && !Number.isNaN(parseFloat(v))
+      (v) => v.preco_semana.trim() !== '' && !Number.isNaN(parseFloat(v.preco_semana))
     );
     if (!temAlgum) {
       return {
         title: 'Tarifa TVDE sem preços',
-        description: 'Defina o preço semanal de pelo menos um modelo na aba "Preço por modelo".',
+        description: 'Defina o preço semanal de pelo menos um modelo na aba "Modelos".',
       };
     }
   }
