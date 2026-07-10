@@ -184,7 +184,11 @@ function NovoMovimentoOverlay({
       toast.error('Preencha a descrição e o valor');
       return;
     }
-    if (isRecorrenciaAutomatica && duracaoTipo === 'ocorrencias' && !(parseInt(maxOcorrencias) > 0)) {
+    if (
+      isRecorrenciaAutomatica &&
+      duracaoTipo === 'ocorrencias' &&
+      !(parseInt(maxOcorrencias) > 0)
+    ) {
       toast.error('Indique um número de ocorrências válido');
       return;
     }
@@ -651,9 +655,7 @@ function NovoMovimentoOverlay({
                     <SelectItem value="nenhuma">Não — lançamento único</SelectItem>
                     <SelectItem value="parcelas">Parcelas fixas (gera já N semanas)</SelectItem>
                     <SelectItem value="semanal">Recorrência semanal (automática)</SelectItem>
-                    <SelectItem value="mensal">
-                      Recorrência mensal (semana fixa do mês)
-                    </SelectItem>
+                    <SelectItem value="mensal">Recorrência mensal (semana fixa do mês)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1041,8 +1043,7 @@ export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProp
         </div>
 
         {/* Recorrências ativas */}
-        {recorrencias.filter((r) => r.status === 'ativa' || r.status === 'pausada').length >
-          0 && (
+        {recorrencias.filter((r) => r.status === 'ativa' || r.status === 'pausada').length > 0 && (
           <SectionCard
             icon={<Repeat className="h-4 w-4" />}
             title="Recorrências Ativas"
