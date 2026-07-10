@@ -756,6 +756,20 @@ const ContratoForm = () => {
     // preço é por modelo, tanto TVDE — preco_semana — como Rent-a-Car — preco_dia).
     if (values.regime !== 'slot' && values.tarifa_id) {
       const via = viaturas.find((v) => v.id === values.viatura_id);
+      // Viatura nunca associada a um modelo de catálogo (ficha antiga/
+      // importada só com texto marca/modelo) — os preços por modelo nunca
+      // vão casar com NENHUMA tarifa, mesmo bem configurada. Sem isto o
+      // "temPreco" abaixo nem chega a correr e o contrato guarda-se sem
+      // preço, em silêncio.
+      if (via && !via.modelo_id) {
+        toast({
+          title: 'Viatura sem modelo associado',
+          description:
+            'Esta viatura não está associada a nenhum modelo do catálogo — não é possível aplicar preços por modelo. Associa o modelo em Viaturas antes de continuar.',
+          variant: 'destructive',
+        });
+        return;
+      }
       if (via?.modelo_id) {
         const isTvdeReg = values.regime === 'tvde';
         const linha = precosModeloTvde.find(
