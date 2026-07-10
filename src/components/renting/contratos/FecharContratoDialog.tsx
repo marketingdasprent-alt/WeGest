@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import {
+  ArrowRightLeft,
   Calendar,
   CalendarClock,
   Camera,
@@ -72,6 +73,12 @@ interface SelectedFile {
   preview: string | null;
 }
 
+export interface AlteracaoMaterial {
+  label: string;
+  valorAntes: string;
+  valorDepois: string;
+}
+
 interface FecharContratoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -80,6 +87,14 @@ interface FecharContratoDialogProps {
   motoristaId?: string | null;
   matricula?: string | null;
   viaturaId?: string | null;
+  /** Presente quando este fecho faz parte de uma troca/upgrade/downgrade:
+   *  mostra o resumo das alterações e, se alguma for de viatura, exige
+   *  motivo. O contrato fecha-se sempre a sério primeiro (este dialog) —
+   *  onFechado é quem cria a seguir a nova versão com os valores novos. */
+  alteracoesTroca?: AlteracaoMaterial[];
+  /** Chamado depois do fecho ter sucesso, com o motivo introduzido. Usado
+   *  em modo troca para encadear a criação da nova versão do contrato. */
+  onFechado?: (motivo: string | undefined) => void | Promise<void>;
 }
 
 export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
@@ -90,7 +105,11 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   motoristaId,
   matricula,
   viaturaId,
+  alteracoesTroca,
+  onFechado,
 }) => {
+  const emModoTroca = !!alteracoesTroca && alteracoesTroca.length > 0;
+  const motivoObrigatorioTroca = emModoTroca && alteracoesTroca.some((a) => a.label === 'Viatura');
   const fecharMutation = useFecharContrato();
   const { data: estacoes = [] } = useEstacoes();
   const { user } = useAuth();
@@ -395,6 +414,13 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       return;
     }
 
+    // Troca de viatura precisa sempre de motivo explícito (avaria, pedido do
+    // cliente, etc.) — mesma regra que existia no antigo dialog de nova versão.
+    if (motivoObrigatorioTroca && !values.motivo?.trim()) {
+      toast.error('Indica o motivo da troca de viatura antes de continuar.');
+      return;
+    }
+
     if (registarAgora) {
       if (!km.trim() || Number.isNaN(Number(km))) {
         toast.error('Indica o KM actual para registar a recolha.');
@@ -429,6 +455,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     form.reset();
     resetRecolhaState();
     onOpenChange(false);
+    await onFechado?.(values.motivo);
   };
 
   const isPending = fecharMutation.isPending || gerandoFolha;
@@ -486,6 +513,12 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                   ? 'A recolha fica registada agora — o contrato fecha ao confirmar.'
                   : 'O contrato mantém-se em curso até a recolha ser confirmada (agora ou via Calendário).'}
               </p>
+              {emModoTroca && (
+                <p className="text-sm text-violet-700 dark:text-violet-400 mt-0.5">
+                  Isto faz parte de uma troca — a seguir abre automaticamente o novo contrato com a
+                  viatura nova.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -500,6 +533,24 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             {/* Coluna esquerda: o que aconteceu + valor em dívida */}
             <div className="space-y-4">
+              {emModoTroca && (
+                <section className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-2 dark:border-violet-900/50 dark:bg-violet-950/20">
+                  <h3 className="text-sm font-semibold text-violet-900 dark:text-violet-300 flex items-center gap-2">
+                    <ArrowRightLeft className="h-4 w-4" />
+                    Alterações desta troca
+                  </h3>
+                  <ul className="space-y-1 rounded-md border bg-background/70 p-3">
+                    {alteracoesTroca!.map((a, i) => (
+                      <li key={i} className="text-sm flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">{a.label}:</span>
+                        <span className="text-muted-foreground line-through">{a.valorAntes}</span>
+                        <span>→</span>
+                        <span className="font-semibold">{a.valorDepois}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               {/* ── Secção azul: o que aconteceu ── */}
               <section className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 space-y-4 dark:border-blue-900/50 dark:bg-blue-950/20">
                 <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-300 flex items-center gap-2">
@@ -607,15 +658,27 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                 <div className="space-y-2">
                   <Label htmlFor="motivo" className="flex items-center gap-1.5">
                     <MessageSquareText className="h-3.5 w-3.5" />
-                    Motivo (opcional)
+                    Motivo {motivoObrigatorioTroca ? <span className="text-red-500">*</span> : '(opcional)'}
                   </Label>
                   <Textarea
                     id="motivo"
-                    placeholder="Ex: fim de contrato, rescisão por acordo, ..."
+                    placeholder={
+                      motivoObrigatorioTroca
+                        ? 'Ex: avaria, pedido do cliente...'
+                        : emModoTroca
+                          ? alteracoesTroca!.map((a) => `${a.label}: ${a.valorAntes} → ${a.valorDepois}`).join('; ')
+                          : 'Ex: fim de contrato, rescisão por acordo, ...'
+                    }
                     rows={3}
                     className="bg-background resize-none"
                     {...form.register('motivo')}
                   />
+                  {motivoObrigatorioTroca && (
+                    <p className="text-xs text-muted-foreground">
+                      Obrigatório porque a viatura vai mudar — fica registado na nova versão do
+                      contrato.
+                    </p>
+                  )}
                 </div>
               </section>
 

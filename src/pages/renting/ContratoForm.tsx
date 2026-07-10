@@ -80,9 +80,9 @@ import { ContratoDeleteConfirm } from '@/components/renting/contratos/ContratoDe
 import { ContratoEstadoActions } from '@/components/renting/contratos/ContratoEstadoActions';
 import { ContratoFormSecoes } from '@/components/renting/contratos/ContratoFormSecoes';
 import {
-  ContratoNovaVersaoDialog,
+  FecharContratoDialog,
   type AlteracaoMaterial,
-} from '@/components/renting/contratos/ContratoNovaVersaoDialog';
+} from '@/components/renting/contratos/FecharContratoDialog';
 import { ContratoTabHistorico } from '@/components/renting/contratos/ContratoTabHistorico';
 import { RealizarEntregaDialog } from '@/components/renting/contratos/RealizarEntregaDialog';
 import { ContratoTabAnexos } from '@/components/renting/contratos/ContratoTabAnexos';
@@ -167,6 +167,10 @@ const ContratoForm = () => {
   const { data: coberturasDb } = useContratoCoberturas(contrato?.id ?? null);
   const { data: extrasDb } = useContratoExtras(contrato?.id ?? null);
   const { data: taxasDb } = useContratoTaxas(contrato?.id ?? null);
+  // Motorista TVDE principal — usado tanto no fecho normal (ContratoEstadoActions)
+  // como no fecho embutido na troca de viatura (FecharContratoDialog em modo troca).
+  const motoristaIdPrincipal =
+    condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null;
   const isPending =
     createMutation.isPending ||
     updateMutation.isPending ||
@@ -899,8 +903,10 @@ const ContratoForm = () => {
   };
 
   /** Confirma a criação de uma nova versão: clona via RPC, aplica os novos
-   *  valores na linha nova e sincroniza condutores/coberturas/extras/taxas. */
-  const confirmarNovaVersao = (motivo: string) => {
+   *  valores na linha nova e sincroniza condutores/coberturas/extras/taxas.
+   *  Chamado pelo FecharContratoDialog (onFechado) depois do contrato
+   *  antigo já estar fechado a sério. */
+  const confirmarNovaVersao = (motivo: string | undefined) => {
     if (!contrato || !novaVersaoCtx) return;
     const motivoFinal =
       motivo ||
@@ -1105,12 +1111,7 @@ const ContratoForm = () => {
           Voltar
         </Button>
         {isEdit && contrato && (
-          <ContratoEstadoActions
-            contrato={contrato}
-            motoristaId={
-              condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null
-            }
-          />
+          <ContratoEstadoActions contrato={contrato} motoristaId={motoristaIdPrincipal} />
         )}
         {isEdit && contrato && (
           <Button
@@ -1367,15 +1368,26 @@ const ContratoForm = () => {
         onMotoristaCreated={(m) => handleMotoristaCriado(m.id)}
       />
 
-      <ContratoNovaVersaoDialog
-        open={novaVersaoCtx !== null}
-        onOpenChange={(o) => {
-          if (!o) setNovaVersaoCtx(null);
-        }}
-        alteracoes={novaVersaoCtx?.alteracoes ?? []}
-        isPending={criarVersaoMutation.isPending || updateMutation.isPending}
-        onConfirmar={confirmarNovaVersao}
-      />
+      {/* Troca/upgrade/downgrade: alteração material detectada no submit
+          (ver detectarAlteracoesMateriais) abre o mesmo popup de fecho
+          normal, em modo troca — fecha o contrato actual a sério e só
+          depois cria a nova versão com os valores novos (confirmarNovaVersao,
+          chamado via onFechado). */}
+      {contrato && (
+        <FecharContratoDialog
+          open={novaVersaoCtx !== null}
+          onOpenChange={(o) => {
+            if (!o) setNovaVersaoCtx(null);
+          }}
+          contratoId={contrato.id}
+          contratoCodigo={contrato.codigo}
+          motoristaId={motoristaIdPrincipal}
+          matricula={contrato.matricula}
+          viaturaId={contrato.viatura_id}
+          alteracoesTroca={novaVersaoCtx?.alteracoes ?? []}
+          onFechado={confirmarNovaVersao}
+        />
+      )}
 
       <RealizarEntregaDialog
         open={!!realizarDialog}

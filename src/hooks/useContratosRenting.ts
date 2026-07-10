@@ -627,29 +627,60 @@ export function useCriarVersaoContrato() {
   });
 }
 
-/** Carrega a cadeia de versões anteriores de um contrato (mais recente primeiro). */
+/** Carrega toda a cadeia de versões de um contrato (mais recente primeiro),
+ *  a partir de qualquer ponto da cadeia — inclui tanto as versões
+ *  anteriores como as seguintes. Isto garante que abrir uma versão antiga
+ *  (ex.: um contrato fechado por uma troca) também mostra a versão nova
+ *  que a substituiu, e não só o caminho para trás. */
 export function useContratoVersoes(contratoId: string | null | undefined) {
   return useQuery({
     queryKey: [...QUERY_KEY_BASE, 'versoes', contratoId ?? null],
     queryFn: async (): Promise<ContratoRenting[]> => {
       if (!contratoId) return [];
-      // Sobe a cadeia via contrato_anterior_id usando WITH RECURSIVE via RPC.
-      // Mais simples: pega o contrato actual, navega para trás iterativamente.
-      const versoes: ContratoRenting[] = [];
-      let cursor: string | null = contratoId;
-      while (cursor) {
+
+      const buscarPorId = async (id: string): Promise<ContratoRenting | null> => {
         const { data, error } = await supabase
           .from('contratos_renting')
           .select(SELECT_COLUMNS)
-          .eq('id', cursor)
+          .eq('id', id)
+          .maybeSingle();
+        if (error) throw error;
+        return data as unknown as ContratoRenting | null;
+      };
+
+      // Sobe a cadeia via contrato_anterior_id, a partir da própria versão
+      // (inclui-a) até à mais antiga.
+      const anteriores: ContratoRenting[] = [];
+      let cursorAtras: string | null = contratoId;
+      while (cursorAtras) {
+        const linha = await buscarPorId(cursorAtras);
+        if (!linha) break;
+        anteriores.push(linha);
+        cursorAtras = linha.contrato_anterior_id;
+      }
+      if (anteriores.length === 0) return [];
+
+      // Desce a cadeia para a frente (quem tem contrato_anterior_id = esta
+      // versão), da própria até à mais recente. Cada versão só pode ter no
+      // máximo uma seguinte (criar_versao_contrato_renting bloqueia
+      // versionar um contrato já substituído), por isso .limit(1) é seguro.
+      const seguintes: ContratoRenting[] = [];
+      let cursorFrente: string = contratoId;
+      for (;;) {
+        const { data, error } = await supabase
+          .from('contratos_renting')
+          .select(SELECT_COLUMNS)
+          .eq('contrato_anterior_id', cursorFrente)
+          .limit(1)
           .maybeSingle();
         if (error) throw error;
         if (!data) break;
         const linha = data as unknown as ContratoRenting;
-        versoes.push(linha);
-        cursor = linha.contrato_anterior_id;
+        seguintes.push(linha);
+        cursorFrente = linha.id;
       }
-      return versoes;
+
+      return [...seguintes.reverse(), ...anteriores];
     },
     enabled: !!contratoId,
     staleTime: 30_000,
