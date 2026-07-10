@@ -33,11 +33,7 @@ export function CartoesFlotaKpis({ kpis }: CartoesFlotaKpisProps) {
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
       <KpiTile label="Total" value={kpis.total} />
       <KpiTile label="Em Uso" value={kpis.emUso} accent="text-blue-600 dark:text-blue-400" />
-      <KpiTile
-        label="Disponíveis"
-        value={kpis.disp}
-        accent="text-slate-600 dark:text-slate-300"
-      />
+      <KpiTile label="Disponíveis" value={kpis.disp} accent="text-slate-600 dark:text-slate-300" />
       <KpiTile label="Cancelados" value={kpis.canc} accent="text-red-600 dark:text-red-400" />
       <KpiTile label="Plafond ativo" value={fmtEur(kpis.plafondAtivo)} />
       <KpiTile label="Consumo do mês" value={fmtEur(kpis.consumoMes)} accent="text-orange-500" />

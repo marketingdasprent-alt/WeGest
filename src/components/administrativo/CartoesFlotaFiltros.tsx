@@ -2,7 +2,13 @@ import type { RefObject } from 'react';
 import { Search, Printer, FileDown, ChevronDown, Download, Upload, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,7 +62,10 @@ export function CartoesFlotaFiltros({
             className="pl-9 w-64"
           />
         </div>
-        <Select value={tipoFilter} onValueChange={(v) => onTipoFilterChange(v as typeof tipoFilter)}>
+        <Select
+          value={tipoFilter}
+          onValueChange={(v) => onTipoFilterChange(v as typeof tipoFilter)}
+        >
           <SelectTrigger className="w-28">
             <SelectValue />
           </SelectTrigger>

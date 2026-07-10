@@ -49,12 +49,7 @@ export function parseExcelDate(raw: unknown): string {
 }
 
 export function colKey(header: string) {
-  return header
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .trim()
-    .replace(/\s+/g, '_');
+  return header.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, '_');
 }
 
 export const COL_MAP: Record<string, keyof Omit<ImportRow, '_row' | 'erros'>> = {

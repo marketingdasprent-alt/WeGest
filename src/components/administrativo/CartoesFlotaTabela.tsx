@@ -179,9 +179,7 @@ export function CartoesFlotaTabela({
                   </span>
                 </TableCell>
                 <TableCell className="font-mono font-medium text-sm">{c.numero}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {c.detentor || '-'}
-                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{c.detentor || '-'}</TableCell>
                 <TableCell>
                   {titular ? (
                     <span className="flex items-center gap-1.5 text-sm">
@@ -289,7 +287,12 @@ export function CartoesFlotaTabela({
                     >
                       <History className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(c)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => onEdit(c)}
+                    >
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <Button

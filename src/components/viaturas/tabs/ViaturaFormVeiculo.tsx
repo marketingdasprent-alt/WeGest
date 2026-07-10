@@ -3,7 +3,13 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   CATEGORIAS,
   type ViaturaFormData,
@@ -94,7 +100,9 @@ export function ViaturaFormVeiculo({
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue
-                      placeholder={watchedMarcaId ? 'Selecionar modelo' : 'Selecione a marca primeiro'}
+                      placeholder={
+                        watchedMarcaId ? 'Selecionar modelo' : 'Selecione a marca primeiro'
+                      }
                     />
                   </SelectTrigger>
                 </FormControl>
@@ -271,7 +279,8 @@ export function ViaturaFormVeiculo({
                     <p className="text-xs text-muted-foreground">{t.nome}</p>
                     {t.preco_dia != null && (
                       <p className="text-sm font-medium">
-                        {fmt(t.preco_dia)} <span className="text-xs text-muted-foreground">/dia</span>
+                        {fmt(t.preco_dia)}{' '}
+                        <span className="text-xs text-muted-foreground">/dia</span>
                       </p>
                     )}
                     {t.preco_semana != null && (
@@ -282,7 +291,8 @@ export function ViaturaFormVeiculo({
                     )}
                     {t.preco_mes != null && (
                       <p className="text-sm font-medium">
-                        {fmt(t.preco_mes)} <span className="text-xs text-muted-foreground">/mês</span>
+                        {fmt(t.preco_mes)}{' '}
+                        <span className="text-xs text-muted-foreground">/mês</span>
                       </p>
                     )}
                     {t.kms_incluidos != null && (

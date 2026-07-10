@@ -16,7 +16,11 @@ interface CartaoDeleteAlertProps {
   onConfirm: () => void;
 }
 
-export function CartaoDeleteAlert({ deleteTarget, onOpenChange, onConfirm }: CartaoDeleteAlertProps) {
+export function CartaoDeleteAlert({
+  deleteTarget,
+  onOpenChange,
+  onConfirm,
+}: CartaoDeleteAlertProps) {
   return (
     <AlertDialog open={!!deleteTarget} onOpenChange={onOpenChange}>
       <AlertDialogContent>

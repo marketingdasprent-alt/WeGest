@@ -110,11 +110,7 @@ export const fmtDT = (s: string | null) => {
   }
 };
 export const norm = (s: string) =>
-  (s || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .trim();
+  (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 
 export type Movimento = 'nenhum' | 'entrega' | 'devolucao';
 

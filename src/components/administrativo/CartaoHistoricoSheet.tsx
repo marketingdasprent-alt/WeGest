@@ -8,7 +8,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { fmtEur, fmtDT, TIPO_INFO, type CartaoFrota, type HistoricoItem } from './cartoesFlotaTab.types';
+import {
+  fmtEur,
+  fmtDT,
+  TIPO_INFO,
+  type CartaoFrota,
+  type HistoricoItem,
+} from './cartoesFlotaTab.types';
 
 interface CartaoHistoricoSheetProps {
   historyCartao: CartaoFrota | null;

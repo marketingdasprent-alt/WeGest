@@ -1,5 +1,13 @@
 import * as XLSX from 'xlsx';
-import { TIPO_INFO, STATUS_INFO, fmtEur, fmtDate, fmtDT, type CartaoFrota, type StatusCartao } from './cartoesFlotaTab.types';
+import {
+  TIPO_INFO,
+  STATUS_INFO,
+  fmtEur,
+  fmtDate,
+  fmtDT,
+  type CartaoFrota,
+  type StatusCartao,
+} from './cartoesFlotaTab.types';
 
 export function exportarCartoesExcel(params: {
   filtered: CartaoFrota[];

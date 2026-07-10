@@ -101,6 +101,13 @@ const RentingReservaForm = () => {
 
   const { data: clientes = [] } = useClientes();
   const { data: motoristas = [] } = useMotoristas({ apenasAtivos: true });
+  // Segundo condutor da reserva (regime slot, 2 motoristas a partilhar a
+  // viatura) — alimenta o seletor de condutor no dialog "Gerar Documentos".
+  const condutorSecundarioId =
+    condutoresAtuais.find((c) => !c.is_principal && c.motorista_id)?.motorista_id ?? null;
+  const motoristaSecundario = condutorSecundarioId
+    ? (motoristas.find((m) => m.id === condutorSecundarioId) ?? null)
+    : null;
   const { data: viaturas = [] } = useViaturas({ apenasDisponiveis: !isEdit });
   const { data: precosModeloTvde = [] } = useRentingTarifaPrecosModelo();
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
@@ -806,6 +813,7 @@ const RentingReservaForm = () => {
           open={documentosDialogOpen}
           onOpenChange={setDocumentosDialogOpen}
           motorista={motoristas.find((m) => m.id === reserva.condutor_id) ?? null}
+          motoristaSecundario={motoristaSecundario}
           viaturaId={reserva.viatura_id}
         />
       )}

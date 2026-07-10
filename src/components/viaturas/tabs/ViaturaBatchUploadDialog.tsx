@@ -59,7 +59,10 @@ export function ViaturaBatchUploadDialog({
                 </p>
               </div>
               {entry.reconhecido && (
-                <Badge variant="outline" className="text-xs shrink-0 border-green-300 text-green-700">
+                <Badge
+                  variant="outline"
+                  className="text-xs shrink-0 border-green-300 text-green-700"
+                >
                   {entry.labelDetectado}
                 </Badge>
               )}

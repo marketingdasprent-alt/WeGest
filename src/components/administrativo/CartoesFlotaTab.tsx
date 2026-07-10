@@ -416,7 +416,15 @@ export function CartoesFlotaTab() {
   const handleExport = () => exportarCartoesExcel({ filtered, consumoOf });
 
   const handlePrint = () =>
-    exportarCartoesPrint({ filtered, kpis, tipoFilter, statusSel, search, consumoOf, titularLabel });
+    exportarCartoesPrint({
+      filtered,
+      kpis,
+      tipoFilter,
+      statusSel,
+      search,
+      consumoOf,
+      titularLabel,
+    });
 
   // ── RENDER ────────────────────────────────────────────────────────────
   return (

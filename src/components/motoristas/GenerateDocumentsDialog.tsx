@@ -29,7 +29,7 @@ import {
   uploadDocumentToStorage,
 } from '@/utils/generateDocumentFromTemplate';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
-import { matchesSearch } from '@/lib/utils';
+import { matchesSearch, cn } from '@/lib/utils';
 import { printPdf } from '@/lib/printPdf';
 
 interface Motorista {
@@ -67,6 +67,10 @@ interface GenerateDocumentsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   motorista?: Motorista | null; // Agora opcional
+  /** Segundo condutor (ex.: regime slot com 2 motoristas a partilhar a
+   *  viatura) — quando presente, o utilizador pode escolher para qual dos
+   *  dois gerar os documentos. */
+  motoristaSecundario?: Motorista | null;
   onSuccess?: () => void; // Callback quando documentos são gerados
   // Parâmetros opcionais para contexto de calendário (entrega/troca de viatura)
   viaturaId?: string | null;
@@ -80,6 +84,7 @@ export const GenerateDocumentsDialog = ({
   open,
   onOpenChange,
   motorista,
+  motoristaSecundario,
   onSuccess,
   viaturaId,
   calendarioEventoId,
@@ -108,8 +113,19 @@ export const GenerateDocumentsDialog = ({
   const [generatedTemplates, setGeneratedTemplates] = useState<Set<string>>(new Set());
   const [currentGenerating, setCurrentGenerating] = useState<string | null>(null);
 
-  // Motorista ativo: das props OU selecionado internamente
-  const activeMotorista = motorista || selectedMotorista;
+  // Condutor escolhido quando há 2 (ex.: regime slot) — 'principal' usa
+  // `motorista`, 'secundario' usa `motoristaSecundario`.
+  const [condutorEscolhido, setCondutorEscolhido] = useState<'principal' | 'secundario'>(
+    'principal'
+  );
+
+  // Motorista ativo: das props (principal ou secundário escolhido) OU
+  // selecionado internamente quando nenhum é passado.
+  const activeMotorista = motorista
+    ? condutorEscolhido === 'secundario' && motoristaSecundario
+      ? motoristaSecundario
+      : motorista
+    : selectedMotorista;
 
   // Data de assinatura editável no modal — default: data de contratação do
   // motorista (se existir) ou hoje. Recalculada ao abrir/trocar de motorista.
@@ -122,12 +138,9 @@ export const GenerateDocumentsDialog = ({
 
   useEffect(() => {
     if (open) {
+      setCondutorEscolhido('principal');
       if (!motorista) {
         loadMotoristas();
-      } else {
-        // Usar a cidade de assinatura salva ou a cidade do motorista como fallback
-        const defaultCidade = motorista.cidade_assinatura || motorista.cidade || 'Leiria';
-        setCidadeAssinatura(defaultCidade);
       }
       loadTemplates();
     } else {
@@ -139,6 +152,15 @@ export const GenerateDocumentsDialog = ({
       setSelectedMotorista(null);
     }
   }, [open, motorista]);
+
+  // Cidade de assinatura por defeito segue o condutor activo (principal ou
+  // secundário) — recalcula ao trocar entre os dois.
+  useEffect(() => {
+    if (!open || !activeMotorista) return;
+    const defaultCidade = activeMotorista.cidade_assinatura || activeMotorista.cidade || 'Leiria';
+    setCidadeAssinatura(defaultCidade);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, activeMotorista?.id]);
 
   // Filtrar motoristas baseado na busca
   useEffect(() => {
@@ -602,14 +624,47 @@ export const GenerateDocumentsDialog = ({
             {motorista && (
               <div className="grid grid-cols-2 gap-4 p-3 bg-muted rounded-lg">
                 <div>
-                  <p className="text-xs text-muted-foreground">Motorista</p>
-                  <p className="font-medium">{motorista.nome}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">Motorista</p>
+                    {motoristaSecundario && (
+                      <div className="flex gap-0.5" role="group" aria-label="Escolher condutor">
+                        <button
+                          type="button"
+                          onClick={() => setCondutorEscolhido('principal')}
+                          aria-pressed={condutorEscolhido === 'principal'}
+                          className={cn(
+                            'rounded px-1 py-px text-[10px] font-medium leading-tight transition-colors',
+                            condutorEscolhido === 'principal'
+                              ? 'bg-primary/15 text-primary'
+                              : 'text-muted-foreground/70 hover:text-foreground'
+                          )}
+                        >
+                          Principal
+                        </button>
+                        <span className="text-muted-foreground/40">·</span>
+                        <button
+                          type="button"
+                          onClick={() => setCondutorEscolhido('secundario')}
+                          aria-pressed={condutorEscolhido === 'secundario'}
+                          className={cn(
+                            'rounded px-1 py-px text-[10px] font-medium leading-tight transition-colors',
+                            condutorEscolhido === 'secundario'
+                              ? 'bg-primary/15 text-primary'
+                              : 'text-muted-foreground/70 hover:text-foreground'
+                          )}
+                        >
+                          Secundário
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <p className="font-medium">{activeMotorista?.nome}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Data Contratação</p>
                   <p className="font-medium">
-                    {motorista.data_contratacao
-                      ? new Date(motorista.data_contratacao).toLocaleDateString('pt-PT')
+                    {activeMotorista?.data_contratacao
+                      ? new Date(activeMotorista.data_contratacao).toLocaleDateString('pt-PT')
                       : 'Não definida'}
                   </p>
                 </div>

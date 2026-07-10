@@ -10,7 +10,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   TIPO_INFO,
   STATUS_INFO,
@@ -193,7 +199,8 @@ export function CartaoFormDialog({
                     setForm((f) => ({
                       ...f,
                       movimento: v as Movimento,
-                      data_entrega: v === 'entrega' && !f.data_entrega ? todayISO() : f.data_entrega,
+                      data_entrega:
+                        v === 'entrega' && !f.data_entrega ? todayISO() : f.data_entrega,
                       data_devolucao:
                         v === 'devolucao' && !f.data_devolucao ? todayISO() : f.data_devolucao,
                     }))

@@ -2,7 +2,13 @@ import type { UseFormReturn } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Lock } from 'lucide-react';
 import { getStatusBadgeClass, getStatusLabel, getStatusColorClass } from '@/lib/viaturas';
 import type { ViaturaFormData } from './viaturaTabDados.types';
@@ -12,7 +18,10 @@ interface ViaturaFormIdentificacaoProps {
   estadoDerivedado: string | null;
 }
 
-export function ViaturaFormIdentificacao({ form, estadoDerivedado }: ViaturaFormIdentificacaoProps) {
+export function ViaturaFormIdentificacao({
+  form,
+  estadoDerivedado,
+}: ViaturaFormIdentificacaoProps) {
   return (
     <div>
       <h3 className="text-sm font-medium text-muted-foreground mb-4">Identificação</h3>
