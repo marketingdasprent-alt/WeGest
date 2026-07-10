@@ -42,3 +42,6 @@ docs/**/*.md
 
 # Skills locais do Claude Code — ferramentas de apoio, não fazem parte do produto.
 .claude/skills/
+
+.sisyphus/drafts/
+.sisyphus/run-continuation/

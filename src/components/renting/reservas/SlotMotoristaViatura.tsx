@@ -193,12 +193,7 @@ export const SlotMotoristaViatura: React.FC<Props> = ({ form, motoristas, onCria
       {/* === Condutor secundário (opcional) === */}
       {slotMotoristaId && (
         <div className="space-y-3">
-          <SectionHeader
-            icon={User}
-            title="Condutor secundário"
-            accent="amber"
-            hint="Opcional — ex: mãe e filho a partilhar o mesmo carro"
-          />
+          <SectionHeader icon={User} title="Condutor secundário" accent="amber" />
           <div className="flex flex-wrap items-center gap-2">
             <Popover open={secundarioOpen} onOpenChange={setSecundarioOpen} modal={false}>
               <PopoverTrigger asChild>

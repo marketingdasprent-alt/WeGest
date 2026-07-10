@@ -27,6 +27,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, Pencil, Trash2, Users, Eye, Edit2, ShieldOff } from 'lucide-react';
 import type { Cargo } from '@/hooks/useRBAC';
 import { PermissionsSelector, type Permission } from './PermissionsSelector';
+import { buildCargoPermissoesRows } from './cargoPermissoesRows';
 
 // ── Resumo visual das permissões do grupo ────────────────────────────────────
 
@@ -42,7 +43,6 @@ const GrupoPermSummary: React.FC<GrupoPermSummaryProps> = ({ cargoId }) => {
       .from('cargo_permissoes')
       .select('*')
       .eq('cargo_id', cargoId)
-      // Filtra por quem tem acesso (seja via tem_acesso ou pode_ver)
       .then(({ data, error }) => {
         if (error) {
           console.error('Erro ao carregar sumário:', error);
@@ -50,7 +50,7 @@ const GrupoPermSummary: React.FC<GrupoPermSummaryProps> = ({ cargoId }) => {
         }
         if (data) {
           // Filtra apenas os que têm algum tipo de acesso
-          const acessos = data.filter((p: any) => p.tem_acesso === true || p.pode_ver === true);
+          const acessos = data.filter((p: any) => p.tem_acesso === true);
           const editar = acessos.filter((p: any) => p.pode_editar === true).length;
           const ver = acessos.length - editar;
           setSummary({ ver, editar });
@@ -186,69 +186,12 @@ export const GruposTab = () => {
         grupoId = data.id;
       }
 
-      // Inserir permissões — apenas as que têm acesso (tem_acesso = true)
-      const toInsert = selectedPermissions
-        .filter((p) => p.tem_acesso)
-        .map((p) => ({
-          cargo_id: grupoId,
-          recurso_id: p.recurso_id,
-          tem_acesso: true,
-          pode_editar: p.pode_editar,
-        }));
+      // Inserir permissões — apenas as que têm acesso (tem_acesso = true).
+      const toInsert = buildCargoPermissoesRows(selectedPermissions, grupoId);
 
-      // ── Gravação com Auto-Recuperação de Emergência ─────────────────────
       if (toInsert.length > 0) {
-        const currentToInsert = toInsert.map((p) => ({
-          cargo_id: p.cargo_id,
-          recurso_id: p.recurso_id,
-          tem_acesso: true,
-          pode_editar: p.pode_editar,
-          pode_ver: true, // Tenta ambos para máxima compatibilidade
-        }));
-
-        const performSafeInsert = async (data: any[]): Promise<void> => {
-          const { error } = await supabase.from('cargo_permissoes').insert(data);
-
-          if (error) {
-            console.error('Tentativa de gravação falhou:', error.message);
-
-            // Se o erro for de coluna inexistente, removemos essa coluna e tentamos de novo
-            const missingColumnMatch =
-              error.message.match(/column ['"](.+)['"]/i) ||
-              error.message.match(/find the ['"](.+)['"] column/i);
-
-            if (missingColumnMatch && missingColumnMatch[1]) {
-              const columnName = missingColumnMatch[1];
-              console.warn(`A remover coluna inexistente '${columnName}' e a tentar novamente...`);
-
-              const cleanedData = data.map((item) => {
-                const { [columnName]: _, ...rest } = item;
-                return rest;
-              });
-
-              if (Object.keys(cleanedData[0]).length <= 2) {
-                // Se só sobraram cargo_id e recurso_id, paramos para evitar loop infinito
-                throw new Error('A base de dados não aceita as colunas de permissão básicas.');
-              }
-
-              return performSafeInsert(cleanedData);
-            }
-            throw error;
-          }
-        };
-
-        try {
-          await performSafeInsert(currentToInsert);
-        } catch (err: any) {
-          console.error('Falha crítica na gravação:', err);
-          toast({
-            title: 'Erro Crítico',
-            description:
-              'Não foi possível gravar as permissões. Por favor, verifique a base de dados.',
-            variant: 'destructive',
-          });
-          return;
-        }
+        const { error } = await supabase.from('cargo_permissoes').insert(toInsert);
+        if (error) throw error;
       }
 
       toast({

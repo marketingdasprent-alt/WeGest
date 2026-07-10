@@ -1413,7 +1413,7 @@ const ContratoForm = () => {
           open={docsDialogOpen}
           onOpenChange={setDocsDialogOpen}
           contrato={contrato}
-          condutorPrincipal={(condutoresDb ?? []).find((c) => c.is_principal) ?? null}
+          condutores={condutoresDb ?? []}
           clientes={clientes}
           motoristas={motoristas}
           viatura={viaturas.find((v) => v.id === contrato.viatura_id) ?? null}
