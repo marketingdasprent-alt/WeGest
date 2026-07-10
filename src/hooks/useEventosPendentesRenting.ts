@@ -27,6 +27,12 @@ interface UseOptions {
 
 const QUERY_KEY_BASE = ['calendario', 'eventos-pendentes-renting'] as const;
 
+// Conta "Marketing" (marketing@dasprent.pt) foi usada para gerar em lote 150
+// contratos de teste/demo (import directo na BD, mesmo timestamp ao
+// microssegundo). Não são operações reais — não devem poluir as filas de
+// Entrega/Recolha que os gestores usam a sério.
+const CRIADOR_EXCLUIDO_ID = '290a09b7-3e8a-4032-a9e2-d1bc41a75ad7';
+
 /**
  * Lista eventos de renting que ainda não foram realizados, com data
  * de abertura do contrato e nome de quem o abriu.
@@ -101,20 +107,22 @@ export function useEventosPendentesRenting({
         }
       }
 
-      return eventos.map((e) => {
-        const c = contratosMap[e.origem_id as string];
-        return {
-          id: e.id as string,
-          titulo: e.titulo as string,
-          cidade: (e.cidade as string | null) ?? null,
-          data_inicio: e.data_inicio as string,
-          matricula_devolver: (e.matricula_devolver as string | null) ?? null,
-          origem_id: e.origem_id as string,
-          contrato_codigo: c?.codigo ?? null,
-          aberto_em: c?.created_at ?? null,
-          aberto_por: c?.created_by ? profilesMap[c.created_by] || null : null,
-        };
-      });
+      return eventos
+        .filter((e) => contratosMap[e.origem_id as string]?.created_by !== CRIADOR_EXCLUIDO_ID)
+        .map((e) => {
+          const c = contratosMap[e.origem_id as string];
+          return {
+            id: e.id as string,
+            titulo: e.titulo as string,
+            cidade: (e.cidade as string | null) ?? null,
+            data_inicio: e.data_inicio as string,
+            matricula_devolver: (e.matricula_devolver as string | null) ?? null,
+            origem_id: e.origem_id as string,
+            contrato_codigo: c?.codigo ?? null,
+            aberto_em: c?.created_at ?? null,
+            aberto_por: c?.created_by ? profilesMap[c.created_by] || null : null,
+          };
+        });
     },
     enabled,
     staleTime: 30_000,
