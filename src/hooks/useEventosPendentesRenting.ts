@@ -18,6 +18,11 @@ export interface EventoPendenteRenting {
 interface UseOptions {
   tipo: 'entrega' | 'recolha';
   enabled?: boolean;
+  /** Ignora eventos agendados para o futuro (data_inicio > agora) — evita
+   *  mostrar como "pendente" uma recolha que só vai acontecer daqui a
+   *  semanas/meses (ex.: a recolha final de um contrato Rent-a-Car em
+   *  curso, agendada para a data_fim). */
+  ignorarFuturos?: boolean;
 }
 
 const QUERY_KEY_BASE = ['calendario', 'eventos-pendentes-renting'] as const;
@@ -26,18 +31,27 @@ const QUERY_KEY_BASE = ['calendario', 'eventos-pendentes-renting'] as const;
  * Lista eventos de renting que ainda não foram realizados, com data
  * de abertura do contrato e nome de quem o abriu.
  */
-export function useEventosPendentesRenting({ tipo, enabled = true }: UseOptions) {
+export function useEventosPendentesRenting({
+  tipo,
+  enabled = true,
+  ignorarFuturos = false,
+}: UseOptions) {
   return useQuery({
-    queryKey: [...QUERY_KEY_BASE, tipo],
+    queryKey: [...QUERY_KEY_BASE, tipo, ignorarFuturos],
     queryFn: async (): Promise<EventoPendenteRenting[]> => {
       // 1) Eventos pendentes (entrega ou recolha)
-      const { data: eventos, error } = await supabase
+      let eventosQuery = supabase
         .from('calendario_eventos')
         .select('id, titulo, cidade, data_inicio, matricula_devolver, origem_id')
         .eq('origem_tipo', 'contrato_renting')
         .eq('tipo', tipo)
-        .is('realizado_em', null)
-        .order('data_inicio', { ascending: true });
+        .is('realizado_em', null);
+      if (ignorarFuturos) {
+        eventosQuery = eventosQuery.lte('data_inicio', new Date().toISOString());
+      }
+      const { data: eventos, error } = await eventosQuery.order('data_inicio', {
+        ascending: true,
+      });
       if (error) throw error;
       if (!eventos || eventos.length === 0) return [];
 

@@ -93,7 +93,13 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
 
   // Contratos com recolha agendada mas ainda não confirmada — mostra-se um
   // indicador extra no badge de estado (ver EstadoOperacionalBadge).
-  const { data: recolhasPendentes = [] } = useEventosPendentesRenting({ tipo: 'recolha' });
+  // ignorarFuturos: só conta como pendente quando a data já chegou — senão
+  // todo o contrato em curso com data_fim no futuro mostrava "Recolha
+  // agendada" desde o dia 1, semanas/meses antes de ser preciso.
+  const { data: recolhasPendentes = [] } = useEventosPendentesRenting({
+    tipo: 'recolha',
+    ignorarFuturos: true,
+  });
   const idsComRecolhaPendente = new Set(recolhasPendentes.map((e) => e.origem_id));
 
   return (

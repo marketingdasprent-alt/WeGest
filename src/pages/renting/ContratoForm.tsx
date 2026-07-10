@@ -602,14 +602,22 @@ const ContratoForm = () => {
     queryKey: ['calendario-evento-pendente', contrato?.id ?? null, tipoEventoEsperado],
     queryFn: async () => {
       if (!contrato || !tipoEventoEsperado) return null;
-      const { data, error } = await supabase
+      let query = supabase
         .from('calendario_eventos')
         .select('id, tipo')
         .eq('origem_tipo', 'contrato_renting')
         .eq('origem_id', contrato.id)
         .eq('tipo', tipoEventoEsperado)
-        .is('realizado_em', null)
-        .maybeSingle();
+        .is('realizado_em', null);
+      // A recolha final só é "pendente" (a pedir acção) quando a data
+      // realmente chegar — senão, mal a entrega é marcada (ex.: via "Any
+      // Rent"), o banner reaparecia logo a pedir a recolha semanas/meses
+      // antes da data_fim do contrato. A entrega não tem este filtro: cria-
+      // se logo com o contrato, é normal e esperado poder marcá-la já.
+      if (tipoEventoEsperado === 'recolha') {
+        query = query.lte('data_inicio', new Date().toISOString());
+      }
+      const { data, error } = await query.maybeSingle();
       if (error || !data) return null;
       return { id: data.id as string, tipo: data.tipo as 'entrega' | 'recolha' };
     },
