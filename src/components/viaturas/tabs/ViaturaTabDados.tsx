@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -292,6 +292,20 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
     if (ok) form.reset(data);
   };
 
+  // Sem isto, uma validação falhada (ex.: marca/modelo obrigatórios ainda por
+  // escolher) fazia o handleSubmit não chamar o onSubmit E não dar feedback —
+  // o utilizador carregava em Guardar e "não acontecia nada". Mostra os campos
+  // em falta num toast.
+  const onInvalid = (errors: FieldErrors<ViaturaFormData>) => {
+    const msgs = Object.values(errors)
+      .map((e) => (e && typeof e.message === 'string' ? e.message : null))
+      .filter((m): m is string => !!m);
+    const unicas = Array.from(new Set(msgs)).slice(0, 5);
+    toast.error(
+      unicas.length ? unicas.join(' · ') : 'Verifica os campos obrigatórios assinalados a vermelho.'
+    );
+  };
+
   const handleUploadDocument = async (tipoDoc: string, file: File) => {
     if (!viatura?.id) {
       toast.error('Guarde a viatura primeiro antes de anexar documentos.');
@@ -480,7 +494,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
               <ViaturaFormIdentificacao form={form} estadoDerivedado={estadoDerivedado} />
 
               <Separator />
