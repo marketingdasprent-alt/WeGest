@@ -63,13 +63,8 @@ import {
   type ReservaFormValues,
 } from '@/components/renting/reservas/reservaDialog.schema';
 
-import type {
-  CondutorFormItem,
-  CoberturaFormItem,
-  ExtraFormItem,
-  TaxaFormItem,
-  ReservaInsert,
-} from '@/types/reserva';
+import type { CondutorFormItem, ReservaInsert } from '@/types/reserva';
+import type { CoberturaFormItem, ExtraFormItem, TaxaFormItem } from '@/types/contratoRenting';
 
 const DEFAULT_VALUES: ReservaFormValues = {
   viatura_id: null,

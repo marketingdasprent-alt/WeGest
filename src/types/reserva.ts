@@ -161,6 +161,9 @@ export type CondutorFormItem = {
 // ============================================================
 // Coberturas (m:n entre reservas e renting_coberturas)
 // ============================================================
+// Nota: o snapshot do formulário (CoberturaFormItem/ExtraFormItem/TaxaFormItem)
+// vive em contratoRenting.ts — a forma é igual em contrato e reserva, e um
+// segundo nome aqui colidiria no barrel de src/types/index.ts.
 export type ReservaCobertura = {
   id: string;
   org_id: string;
@@ -171,14 +174,6 @@ export type ReservaCobertura = {
   franquia_valor: number | null;
   created_by: string | null;
   created_at: string;
-};
-
-/** Forma usada no formulário — carrega o snapshot do catálogo. */
-export type CoberturaFormItem = {
-  cobertura_id: string;
-  cobertura_nome: string;
-  preco_dia: number;
-  franquia_valor: number | null;
 };
 
 // ============================================================
@@ -198,15 +193,6 @@ export type ReservaExtra = {
   created_at: string;
 };
 
-/** Forma usada no formulário — carrega o snapshot do catálogo + quantidade. */
-export type ExtraFormItem = {
-  extra_id: string;
-  extra_nome: string;
-  preco_unidade: number;
-  tipo_calculo: ExtraTipoCalculo;
-  quantidade: number;
-};
-
 // ============================================================
 // Taxas (m:n entre reservas e renting_taxas)
 // ============================================================
@@ -222,14 +208,6 @@ export type ReservaTaxa = {
   valor_calculado: number;
   created_by: string | null;
   created_at: string;
-};
-
-/** Forma usada no formulário — carrega o snapshot do catálogo. */
-export type TaxaFormItem = {
-  taxa_id: string;
-  taxa_nome: string;
-  percentagem: number | null;
-  valor_fixo: number | null;
 };
 
 // ============================================================

@@ -11,6 +11,7 @@ import { calcTaxaValor } from '@/hooks/useReservaTaxas';
 import type { ReservaFormValues } from './reservaDialog.schema';
 import type { Estacao } from '@/hooks/useEstacoes';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
+import type { CoberturaFormItem, ExtraFormItem, TaxaFormItem } from '@/types/contratoRenting';
 
 interface ReservaResumoSidebarProps {
   form: UseFormReturn<ReservaFormValues>;
@@ -93,9 +94,9 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
   // Coberturas/extras somam-se ao valor base antes do IVA (mesmo bruto que
   // se decompõe/soma consoante o regime) — taxas somam-se depois do IVA.
   // Mesma lógica do ResumoContrato.tsx, agora também na reserva.
-  const coberturas = form.watch('coberturas') ?? [];
-  const extras = form.watch('extras') ?? [];
-  const taxas = form.watch('taxas') ?? [];
+  const coberturas = (form.watch('coberturas') as CoberturaFormItem[]) ?? [];
+  const extras = (form.watch('extras') as ExtraFormItem[]) ?? [];
+  const taxas = (form.watch('taxas') as TaxaFormItem[]) ?? [];
   const custoCoberturas = coberturas.reduce((s, c) => s + (c.preco_dia ?? 0), 0) * (dias ?? 0);
   const custoExtras = extras.reduce((s, e) => s + calcExtraTotal(e, dias ?? 0), 0);
   const brutoComExtras = rawTotal + custoCoberturas + custoExtras;

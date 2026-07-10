@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import type { ReservaTaxa, TaxaFormItem } from '@/types/reserva';
+import type { ReservaTaxa } from '@/types/reserva';
+import type { TaxaFormItem } from '@/types/contratoRenting';
 
 const QUERY_KEY_BASE = ['renting', 'reserva-taxas'] as const;
 
