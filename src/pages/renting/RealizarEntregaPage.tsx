@@ -844,11 +844,117 @@ const RealizarEntregaPage = () => {
     const uploadedPaths: string[] = [];
     const isEntrega = info.tipo === 'entrega' || info.tipo === 'troca';
 
-    // ORDEM IMPORTANTE: confirmar PRIMEIRO. realizar_token_realizacao marca o
-    // evento como realizado + o token como usado (atómico) e grava km/comb. no
-    // contrato. Só DEPOIS se gravam os danos. Assim uma 2.ª tentativa falha logo
-    // no realizar ("evento já realizado"/"token já usado") ANTES de reinserir os
-    // danos — evita os registos duplicados que aconteciam com várias tentativas.
+    // ORDEM IMPORTANTE: danos PRIMEIRO, confirmar SÓ DEPOIS. As fotos têm de
+    // ficar mesmo gravadas na BD antes de a entrega/recolha ser dada como
+    // concluída — nunca "confirmado, mas falhou guardar os danos" (esse
+    // estado deixava as fotos irrecuperáveis, só na memória do telemóvel).
+    // Se isto falhar, NADA se perde: o token continua por usar, os ficheiros
+    // continuam escolhidos no formulário e o utilizador só tem de carregar em
+    // "Confirmar" outra vez.
+    try {
+      // Limpa danos/fotos duma tentativa anterior falhada deste mesmo token
+      // (token ainda não usado neste ponto — a RPC só recusa tokens já
+      // usados, por isso isto tem de correr antes de confirmar).
+      // Cast: RPC nova, types.ts ainda não regenerado.
+      const { error: limparErr } = await (supabase as any).rpc('limpar_danos_token', {
+        p_token: token,
+      });
+      if (limparErr) throw limparErr;
+
+      if (files.length > 0) {
+        const { data: auth } = await supabase.auth.getUser();
+        const userId = auth.user?.id ?? null;
+
+        // Viatura resolvida pelo contexto (RPC do token, SECURITY DEFINER)
+        // — sem ela não há onde pendurar os danos.
+        const vId = contexto?.viaturaId ?? null;
+        if (!vId) throw new Error('Viatura do contrato não encontrada.');
+        // Fotos descritas individualmente viram cada uma o seu registo de
+        // dano; as genéricas juntam-se num único "Registo entrega/recolha".
+        const temDetalhe = (fp: (typeof files)[number]) =>
+          !!(fp.localizacao || fp.descricao.trim() || fp.valor.trim());
+        const detalhados = files.filter(temDetalhe);
+        const genericos = files.filter((fp) => !temDetalhe(fp));
+
+        const grupos: Array<{
+          localizacao: string | null;
+          descricao: string;
+          valor: number | null;
+          fotos: (typeof files)[number][];
+        }> = detalhados.map((fp) => {
+          const valorNum = fp.valor.trim() ? Number(fp.valor) : null;
+          return {
+            localizacao: fp.localizacao || null,
+            descricao: fp.descricao.trim() || `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
+            valor: valorNum != null && !Number.isNaN(valorNum) ? valorNum : null,
+            fotos: [fp],
+          };
+        });
+        if (genericos.length > 0) {
+          grupos.push({
+            localizacao: null,
+            descricao: `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
+            valor: null,
+            fotos: genericos,
+          });
+        }
+
+        for (const grupo of grupos) {
+          // Cast: realizacao_token_id é coluna nova, types.ts ainda não regenerado.
+          const { data: dano, error: dErr } = await (supabase as any)
+            .from('viatura_danos')
+            .insert({
+              viatura_id: vId,
+              localizacao: grupo.localizacao,
+              descricao: grupo.descricao,
+              valor: grupo.valor,
+              observacoes: observacoes.trim() || null,
+              estado: 'existente',
+              contrato_renting_id: info.contrato_id,
+              registado_por: userId,
+              realizacao_token_id: token,
+            })
+            .select('id')
+            .single();
+          if (dErr) throw dErr;
+
+          for (const fp of grupo.fotos) {
+            const ext = fp.file.name.split('.').pop() || 'bin';
+            const path = `${dano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+            const { error: upErr } = await supabase.storage
+              .from('viatura-danos')
+              .upload(path, fp.file, { contentType: fp.file.type });
+            if (upErr) throw upErr;
+            uploadedPaths.push(path);
+            const { error: fErr } = await supabase.from('viatura_dano_fotos').insert({
+              dano_id: dano.id,
+              ficheiro_url: path,
+              nome_ficheiro: fp.file.name,
+              uploaded_by: userId,
+            });
+            if (fErr) throw fErr;
+          }
+        }
+      }
+    } catch (err: unknown) {
+      if (uploadedPaths.length > 0) {
+        try {
+          await supabase.storage.from('viatura-danos').remove(uploadedPaths);
+        } catch {
+          /* limpeza best-effort */
+        }
+      }
+      toast({
+        title: 'Erro ao guardar os danos',
+        description: errorMessage(err),
+        variant: 'destructive',
+      });
+      setUploading(false);
+      return;
+    }
+
+    // Danos gravados (ou não havia nenhum a gravar) — só agora confirma a
+    // entrega/recolha em si.
     realizar.mutate(
       {
         token,
@@ -859,112 +965,7 @@ const RealizarEntregaPage = () => {
         combustivel,
       },
       {
-        onSuccess: async () => {
-          try {
-            // Limpa danos/fotos duma tentativa anterior falhada deste mesmo
-            // token (ex.: onSuccess rebentou a meio depois de confirmar) — sem
-            // isto, reenviar duplicava os registos em vez de os substituir.
-            // Cast: RPC nova, types.ts ainda não regenerado.
-            const { error: limparErr } = await (supabase as any).rpc('limpar_danos_token', {
-              p_token: token,
-            });
-            if (limparErr) throw limparErr;
-
-            if (files.length > 0) {
-              const { data: auth } = await supabase.auth.getUser();
-              const userId = auth.user?.id ?? null;
-
-              // Viatura resolvida pelo contexto (RPC do token, SECURITY DEFINER)
-              // — sem ela não há onde pendurar os danos.
-              const vId = contexto?.viaturaId ?? null;
-              if (!vId) throw new Error('Viatura do contrato não encontrada.');
-              // Fotos descritas individualmente viram cada uma o seu registo de
-              // dano; as genéricas juntam-se num único "Registo entrega/recolha".
-              const temDetalhe = (fp: (typeof files)[number]) =>
-                !!(fp.localizacao || fp.descricao.trim() || fp.valor.trim());
-              const detalhados = files.filter(temDetalhe);
-              const genericos = files.filter((fp) => !temDetalhe(fp));
-
-              const grupos: Array<{
-                localizacao: string | null;
-                descricao: string;
-                valor: number | null;
-                fotos: (typeof files)[number][];
-              }> = detalhados.map((fp) => {
-                const valorNum = fp.valor.trim() ? Number(fp.valor) : null;
-                return {
-                  localizacao: fp.localizacao || null,
-                  descricao: fp.descricao.trim() || `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
-                  valor: valorNum != null && !Number.isNaN(valorNum) ? valorNum : null,
-                  fotos: [fp],
-                };
-              });
-              if (genericos.length > 0) {
-                grupos.push({
-                  localizacao: null,
-                  descricao: `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
-                  valor: null,
-                  fotos: genericos,
-                });
-              }
-
-              for (const grupo of grupos) {
-                // Cast: realizacao_token_id é coluna nova, types.ts ainda não regenerado.
-                const { data: dano, error: dErr } = await (supabase as any)
-                  .from('viatura_danos')
-                  .insert({
-                    viatura_id: vId,
-                    localizacao: grupo.localizacao,
-                    descricao: grupo.descricao,
-                    valor: grupo.valor,
-                    observacoes: observacoes.trim() || null,
-                    estado: 'existente',
-                    contrato_renting_id: info.contrato_id,
-                    registado_por: userId,
-                    realizacao_token_id: token,
-                  })
-                  .select('id')
-                  .single();
-                if (dErr) throw dErr;
-
-                for (const fp of grupo.fotos) {
-                  const ext = fp.file.name.split('.').pop() || 'bin';
-                  const path = `${dano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-                  const { error: upErr } = await supabase.storage
-                    .from('viatura-danos')
-                    .upload(path, fp.file, { contentType: fp.file.type });
-                  if (upErr) throw upErr;
-                  uploadedPaths.push(path);
-                  const { error: fErr } = await supabase.from('viatura_dano_fotos').insert({
-                    dano_id: dano.id,
-                    ficheiro_url: path,
-                    nome_ficheiro: fp.file.name,
-                    uploaded_by: userId,
-                  });
-                  if (fErr) throw fErr;
-                }
-              }
-            }
-          } catch (err: unknown) {
-            // Danos falharam DEPOIS da confirmação: limpa ficheiros órfãos e
-            // avisa. A entrega/recolha fica confirmada na mesma — os danos podem
-            // ser adicionados à mão na viatura/contrato.
-            if (uploadedPaths.length > 0) {
-              try {
-                await supabase.storage.from('viatura-danos').remove(uploadedPaths);
-              } catch {
-                /* limpeza best-effort */
-              }
-            }
-            toast({
-              title: 'Confirmado, mas falhou guardar os danos',
-              description: errorMessage(err),
-              variant: 'destructive',
-            });
-          }
-
-          // A realização está feita — imprime a folha, limpa o rascunho e mostra
-          // o ecrã de confirmação, mesmo que os danos tenham falhado.
+        onSuccess: () => {
           void gerarFolha('print');
           try {
             localStorage.removeItem(cacheKey(token));
@@ -975,7 +976,9 @@ const RealizarEntregaPage = () => {
           setUploading(false);
         },
         onError: () => {
-          // useRealizarFromToken já mostra o toast de erro da confirmação.
+          // useRealizarFromToken já mostra o toast de erro da confirmação. Os
+          // danos já gravados ficam ligados a este token (ainda por usar) —
+          // um novo "Confirmar" limpa-os e regrava antes de tentar de novo.
           setUploading(false);
         },
       }
