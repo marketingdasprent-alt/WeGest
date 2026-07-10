@@ -190,7 +190,11 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
         (p) =>
           p.tarifa_id === t.id &&
           p.modelo_id === modeloIdSel &&
-          (isTvde ? p.preco_semana != null : p.preco_dia != null)
+          // Rent-a-Car: o modelo tem preço nesta tarifa se tiver diário OU
+          // mensal (ex.: viaturas só vocacionadas para longa duração, como
+          // carrinhas de carga, costumam só ter preco_mes). modeloSemPreco,
+          // mais abaixo, é quem valida o campo certo consoante o modo actual.
+          (isTvde ? p.preco_semana != null : p.preco_dia != null || p.preco_mes != null)
       )
     );
   }, [tarifas, isTvde, modeloIdSel, precosModelo]);
@@ -217,17 +221,23 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   const precoModeloDiaRac = !isTvde ? (precoModeloSel?.preco_dia ?? null) : null;
   const precoModeloMesRac = !isTvde ? (precoModeloSel?.preco_mes ?? null) : null;
 
+  // Faturação automática: regime + ALD + duração + tarifa → valor_total.
+  const isLongaDuracao = form.watch('is_longa_duracao');
+
   // Viatura escolhida mas modelo sem preço na tarifa → bloquear/avisar (ambos os regimes).
+  // Em Rent-a-Car um modelo pode só ter preço diário OU só mensal (ex.: viaturas
+  // vocacionadas para longa duração) — o campo relevante depende do modo actual.
   const modeloSemPreco =
     !isSlot &&
     !!tarifaIdSel &&
     !!modeloIdSel &&
-    (isTvde ? precoModeloSemanaTvde == null : precoModeloDiaRac == null);
+    (isTvde
+      ? precoModeloSemanaTvde == null
+      : isLongaDuracao
+        ? precoModeloMesRac == null
+        : precoModeloDiaRac == null);
   // Alias mantido para a UI existente do TVDE.
   const tvdeModeloSemPreco = modeloSemPreco;
-
-  // Faturação automática: regime + ALD + duração + tarifa → valor_total.
-  const isLongaDuracao = form.watch('is_longa_duracao');
   const renovacaoOpcao = form.watch('renovacao_opcao');
   const renovacaoIntervalo = form.watch('renovacao_intervalo_dias');
   const modoMensal = !isSlot && !isTvde && isLongaDuracao;
@@ -351,7 +361,7 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
         (p) =>
           p.tarifa_id === tarifaAtualId &&
           p.modelo_id === v.modelo_id &&
-          (isTvde ? p.preco_semana != null : p.preco_dia != null)
+          (isTvde ? p.preco_semana != null : p.preco_dia != null || p.preco_mes != null)
       );
       if (!cobre) form.setValue('tarifa_id', null, { shouldDirty: true });
     }
@@ -1013,9 +1023,25 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Modelo sem preço nesta tarifa</AlertTitle>
                 <AlertDescription>
-                  A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) não tem
-                  preço definido na tarifa selecionada. Define o preço deste modelo na tarifa ou
-                  escolhe outra viatura/tarifa — não é possível guardar assim.
+                  {!isTvde && !isLongaDuracao && precoModeloMesRac != null ? (
+                    <>
+                      A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) só
+                      tem preço mensal definido nesta tarifa — ativa "Longa Duração" ou escolhe
+                      outra tarifa.
+                    </>
+                  ) : !isTvde && isLongaDuracao && precoModeloDiaRac != null ? (
+                    <>
+                      A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) só
+                      tem preço diário definido nesta tarifa — desativa "Longa Duração" ou escolhe
+                      outra tarifa.
+                    </>
+                  ) : (
+                    <>
+                      A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) não
+                      tem preço definido na tarifa selecionada. Define o preço deste modelo na
+                      tarifa ou escolhe outra viatura/tarifa — não é possível guardar assim.
+                    </>
+                  )}
                 </AlertDescription>
               </Alert>
             )}
