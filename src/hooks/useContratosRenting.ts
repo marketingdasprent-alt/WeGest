@@ -669,8 +669,15 @@ export function useReverterFecho() {
 
   return useMutation({
     mutationFn: async (contrato: ReverterFechoArgs): Promise<void> => {
-      const { id: contratoId, codigo, regime, matricula, data_fim, estacao_recolha_id, reserva_id } =
-        contrato;
+      const {
+        id: contratoId,
+        codigo,
+        regime,
+        matricula,
+        data_fim,
+        estacao_recolha_id,
+        reserva_id,
+      } = contrato;
       const {
         data: { user },
       } = await supabase.auth.getUser();

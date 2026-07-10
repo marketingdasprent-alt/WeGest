@@ -54,7 +54,9 @@ export const ContratoTabHistorico: React.FC<ContratoTabHistoricoProps> = ({
               <li
                 key={v.id}
                 className={`border rounded-md p-3 ${
-                  isActual || isCurrent ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20'
+                  isActual || isCurrent
+                    ? 'border-primary/40 bg-primary/5'
+                    : 'border-border bg-muted/20'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">

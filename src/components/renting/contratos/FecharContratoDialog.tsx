@@ -684,7 +684,12 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                 <div className="space-y-2">
                   <Label htmlFor="motivo" className="flex items-center gap-1.5">
                     <MessageSquareText className="h-3.5 w-3.5" />
-                    Motivo {motivoObrigatorioTroca ? <span className="text-red-500">*</span> : '(opcional)'}
+                    Motivo{' '}
+                    {motivoObrigatorioTroca ? (
+                      <span className="text-red-500">*</span>
+                    ) : (
+                      '(opcional)'
+                    )}
                   </Label>
                   <Textarea
                     id="motivo"
@@ -692,7 +697,9 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                       motivoObrigatorioTroca
                         ? 'Ex: avaria, pedido do cliente...'
                         : emModoTroca
-                          ? alteracoesTroca!.map((a) => `${a.label}: ${a.valorAntes} → ${a.valorDepois}`).join('; ')
+                          ? alteracoesTroca!
+                              .map((a) => `${a.label}: ${a.valorAntes} → ${a.valorDepois}`)
+                              .join('; ')
                           : 'Ex: fim de contrato, rescisão por acordo, ...'
                     }
                     rows={3}

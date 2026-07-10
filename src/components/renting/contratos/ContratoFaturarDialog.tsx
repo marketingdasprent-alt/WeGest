@@ -274,8 +274,7 @@ export function ContratoFaturarDialog({
             .map((it) => ({
               descricao: it.descricao,
               quantidade: 1,
-              preco_unitario:
-                taxaIva > 0 ? round2(it.valor / (1 + taxaIva / 100)) : it.valor,
+              preco_unitario: taxaIva > 0 ? round2(it.valor / (1 + taxaIva / 100)) : it.valor,
               taxa_iva: taxaIva,
               desconto: contrato.desconto_percentagem ?? 0,
             }));
