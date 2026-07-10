@@ -32,6 +32,12 @@ import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTempla
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
 import { errorMessage } from '@/utils/errorMessage';
 import {
+  COMBUSTIVEL_NIVEL_OPTS,
+  ELETRICO_OPTS,
+  precisaCombustivel,
+  precisaEletrico,
+} from '@/utils/combustivel';
+import {
   AssinaturasHandoverSection,
   type AssinaturasHandoverHandle,
 } from '@/components/assinatura/AssinaturasHandoverSection';
@@ -66,6 +72,7 @@ const LOCALIZACAO_LABEL: Record<string, string> = Object.fromEntries(
 interface RascunhoCache {
   km: string;
   combustivel: string;
+  eletricidade?: string;
   observacoes: string;
   fotos: {
     name: string;
@@ -78,6 +85,46 @@ interface RascunhoCache {
 }
 
 const cacheKey = (token: string) => `realizar-rascunho-${token}`;
+
+/** Tipo de combustível da viatura (nome do catálogo, com fallback ao texto
+ *  legado) — decide se se mostra o nível de combustível, de bateria, ou ambos
+ *  (híbridos). Mesma resolução usada em useViaturas.ts. */
+function useTipoCombustivel(viaturaId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['viatura-tipo-combustivel', viaturaId],
+    enabled: !!viaturaId,
+    queryFn: async (): Promise<string | null> => {
+      const { data } = await supabase
+        .from('viaturas')
+        .select('combustivel, combustivel_id')
+        .eq('id', viaturaId!)
+        .maybeSingle();
+      if (!data) return null;
+      if (data.combustivel_id) {
+        const { data: cat } = await supabase
+          .from('viatura_combustiveis')
+          .select('nome')
+          .eq('id', data.combustivel_id as string)
+          .maybeSingle();
+        if (cat?.nome) return cat.nome as string;
+      }
+      return (data.combustivel as string | null) ?? null;
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** Valida se os níveis exigidos por este tipo de viatura estão preenchidos —
+ *  combustível para combustão/híbrido, bateria para elétrico/híbrido. */
+function nivelPreenchido(
+  tipoCombustivel: string | null | undefined,
+  combustivel: string,
+  eletricidade: string
+): boolean {
+  const okCombustivel = !precisaCombustivel(tipoCombustivel) || !!combustivel;
+  const okEletrico = !precisaEletrico(tipoCombustivel) || !!eletricidade;
+  return okCombustivel && okEletrico;
+}
 
 const tipoLabel = (tipo: 'entrega' | 'recolha' | 'troca' | undefined): string =>
   tipo === 'entrega' ? 'Entrega' : tipo === 'troca' ? 'Troca' : 'Recolha';
@@ -102,6 +149,12 @@ interface BlocoViaturaProps {
   onKmChange: (v: string) => void;
   combustivel: string;
   onCombustivelChange: (v: string) => void;
+  eletricidade: string;
+  onEletricidadeChange: (v: string) => void;
+  /** Tipo de combustível da viatura (nome do catálogo) — decide que
+   *  seletor(es) mostrar. null/undefined = ainda a carregar ou desconhecido,
+   *  mostra combustível por omissão (comportamento anterior). */
+  tipoCombustivel: string | null | undefined;
   files: FilePreview[];
   onAddFiles: (list: FileList | null) => void;
   onUpdateFoto: (id: string, campo: 'localizacao' | 'descricao' | 'valor', valor: string) => void;
@@ -110,157 +163,194 @@ interface BlocoViaturaProps {
   fileInputRef: React.RefObject<HTMLInputElement>;
 }
 
-/** Bloco km/combustível/fotos — reaproveitado para entrega/recolha simples
- *  e, na troca, uma vez para cada viatura (antiga e nova). */
+/** Bloco km/combustível-ou-bateria/fotos — reaproveitado para entrega/recolha
+ *  simples e, na troca, uma vez para cada viatura (antiga e nova). */
 const BlocoViatura: React.FC<BlocoViaturaProps> = ({
   titulo,
   km,
   onKmChange,
   combustivel,
   onCombustivelChange,
+  eletricidade,
+  onEletricidadeChange,
+  tipoCombustivel,
   files,
   onAddFiles,
   onUpdateFoto,
   onRemoveFile,
   cameraInputRef,
   fileInputRef,
-}) => (
-  <Card>
-    <CardContent className="p-4 space-y-4">
-      <p className="text-sm font-semibold">{titulo}</p>
-      <div className="space-y-2">
-        <Label>
-          KM Actual <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          type="number"
-          inputMode="numeric"
-          value={km}
-          onChange={(e) => onKmChange(e.target.value)}
-          placeholder="Ex: 45120"
-        />
-      </div>
+}) => {
+  const mostraEletrico = precisaEletrico(tipoCombustivel);
+  // Combustão por omissão enquanto o tipo não é conhecido — espelha o
+  // comportamento anterior (só combustível) para não regredir a UI a meio do
+  // carregamento.
+  const mostraCombustivel = tipoCombustivel == null || precisaCombustivel(tipoCombustivel);
 
-      <div className="space-y-2">
-        <Label>
-          Combustível <span className="text-red-500">*</span>
-        </Label>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-          {['Reserva', '1/4', '1/2', '3/4', 'Cheio'].map((nivel) => (
-            <button
-              key={nivel}
-              type="button"
-              onClick={() => onCombustivelChange(nivel)}
-              className={`rounded-md border-2 py-2 text-sm font-medium transition-colors ${
-                combustivel === nivel
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border hover:border-primary/40'
-              }`}
-            >
-              {nivel}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <Label>Fotos / Vídeos</Label>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => cameraInputRef.current?.click()}
-            className="gap-2"
-          >
-            <Camera className="h-4 w-4" />
-            Câmara
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            className="gap-2"
-          >
-            <Upload className="h-4 w-4" />
-            Ficheiros
-          </Button>
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            multiple
-            hidden
-            onChange={(e) => onAddFiles(e.target.files)}
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            hidden
-            onChange={(e) => onAddFiles(e.target.files)}
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-4">
+        <p className="text-sm font-semibold">{titulo}</p>
+        <div className="space-y-2">
+          <Label>
+            KM Actual <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            type="number"
+            inputMode="numeric"
+            value={km}
+            onChange={(e) => onKmChange(e.target.value)}
+            placeholder="Ex: 45120"
           />
         </div>
 
-        {files.length > 0 && (
-          <div className="space-y-3 mt-3">
-            <p className="text-xs text-muted-foreground">
-              Descreve cada foto (localização, descrição e valor) — vai para a tabela de danos da
-              folha.
-            </p>
-            {files.map((f) => (
-              <div key={f.id} className="flex flex-col gap-3 rounded-md border p-2 sm:flex-row">
-                <div className="relative mx-auto shrink-0 sm:mx-0">
-                  <img
-                    src={f.url}
-                    alt={f.file.name}
-                    className="h-24 w-24 rounded border object-cover sm:h-20 sm:w-20"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => onRemoveFile(f.id)}
-                    className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-white"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-                <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
-                  <select
-                    value={f.localizacao}
-                    onChange={(e) => onUpdateFoto(f.id, 'localizacao', e.target.value)}
-                    className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm"
-                  >
-                    <option value="">Localização…</option>
-                    {LOCALIZACOES.map((l) => (
-                      <option key={l.value} value={l.value}>
-                        {l.label}
-                      </option>
-                    ))}
-                  </select>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    placeholder="Valor (€)"
-                    value={f.valor}
-                    onChange={(e) => onUpdateFoto(f.id, 'valor', e.target.value)}
-                    className="h-9 min-w-0"
-                  />
-                  <Input
-                    placeholder="Descrição do dano"
-                    value={f.descricao}
-                    onChange={(e) => onUpdateFoto(f.id, 'descricao', e.target.value)}
-                    className="col-span-2 h-9 min-w-0"
-                  />
-                </div>
-              </div>
-            ))}
+        {mostraCombustivel && (
+          <div className="space-y-2">
+            <Label>
+              Combustível <span className="text-red-500">*</span>
+            </Label>
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+              {COMBUSTIVEL_NIVEL_OPTS.map((nivel) => (
+                <button
+                  key={nivel}
+                  type="button"
+                  onClick={() => onCombustivelChange(nivel)}
+                  className={`rounded-md border-2 py-2 text-sm font-medium transition-colors ${
+                    combustivel === nivel
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:border-primary/40'
+                  }`}
+                >
+                  {nivel}
+                </button>
+              ))}
+            </div>
           </div>
         )}
-      </div>
-    </CardContent>
-  </Card>
-);
+
+        {mostraEletrico && (
+          <div className="space-y-2">
+            <Label>
+              Nível da Bateria <span className="text-red-500">*</span>
+            </Label>
+            <div className="grid grid-cols-5 gap-2">
+              {ELETRICO_OPTS.map((nivel) => (
+                <button
+                  key={nivel}
+                  type="button"
+                  onClick={() => onEletricidadeChange(nivel)}
+                  className={`rounded-md border-2 py-2 text-sm font-medium transition-colors ${
+                    eletricidade === nivel
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:border-primary/40'
+                  }`}
+                >
+                  {nivel}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <Label>Fotos / Vídeos</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => cameraInputRef.current?.click()}
+              className="gap-2"
+            >
+              <Camera className="h-4 w-4" />
+              Câmara
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              className="gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              Ficheiros
+            </Button>
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              hidden
+              onChange={(e) => onAddFiles(e.target.files)}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              hidden
+              onChange={(e) => onAddFiles(e.target.files)}
+            />
+          </div>
+
+          {files.length > 0 && (
+            <div className="space-y-3 mt-3">
+              <p className="text-xs text-muted-foreground">
+                Descreve cada foto (localização, descrição e valor) — vai para a tabela de danos da
+                folha.
+              </p>
+              {files.map((f) => (
+                <div key={f.id} className="flex flex-col gap-3 rounded-md border p-2 sm:flex-row">
+                  <div className="relative mx-auto shrink-0 sm:mx-0">
+                    <img
+                      src={f.url}
+                      alt={f.file.name}
+                      className="h-24 w-24 rounded border object-cover sm:h-20 sm:w-20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onRemoveFile(f.id)}
+                      className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-white"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
+                    <select
+                      value={f.localizacao}
+                      onChange={(e) => onUpdateFoto(f.id, 'localizacao', e.target.value)}
+                      className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      <option value="">Localização…</option>
+                      {LOCALIZACOES.map((l) => (
+                        <option key={l.value} value={l.value}>
+                          {l.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="Valor (€)"
+                      value={f.valor}
+                      onChange={(e) => onUpdateFoto(f.id, 'valor', e.target.value)}
+                      className="h-9 min-w-0"
+                    />
+                    <Input
+                      placeholder="Descrição do dano"
+                      value={f.descricao}
+                      onChange={(e) => onUpdateFoto(f.id, 'descricao', e.target.value)}
+                      className="col-span-2 h-9 min-w-0"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 const RealizarEntregaPage = () => {
   const { token } = useParams<{ token: string }>();
@@ -271,12 +361,14 @@ const RealizarEntregaPage = () => {
 
   const [km, setKm] = useState('');
   const [combustivel, setCombustivel] = useState<string>('');
+  const [eletrico, setEletrico] = useState<string>('');
   const [observacoes, setObservacoes] = useState('');
   const [files, setFiles] = useState<FilePreview[]>([]);
   // Troca (mesmo grupo): bloco extra para a viatura que sai do contrato —
   // km/combustível/fotos próprios, associados a viatura_antiga_id.
   const [kmAntiga, setKmAntiga] = useState('');
   const [combustivelAntiga, setCombustivelAntiga] = useState<string>('');
+  const [eletricoAntiga, setEletricoAntiga] = useState<string>('');
   const [filesAntiga, setFilesAntiga] = useState<FilePreview[]>([]);
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
@@ -356,6 +448,11 @@ const RealizarEntregaPage = () => {
     },
   });
 
+  // Tipo de combustível de cada viatura envolvida — decide se se mostra o
+  // seletor de combustível, de bateria, ou ambos (híbridos).
+  const { data: tipoCombustivel } = useTipoCombustivel(contexto?.viaturaId);
+  const { data: tipoCombustivelAntiga } = useTipoCombustivel(isTroca ? viaturaAntigaId : null);
+
   const isDevolucao = info?.tipo === 'recolha';
 
   // A viatura devolvida "tem DUA dentro"? — existe pelo menos um documento DUA
@@ -386,6 +483,7 @@ const RealizarEntregaPage = () => {
       const c = JSON.parse(raw) as RascunhoCache;
       setKm(c.km ?? '');
       setCombustivel(c.combustivel ?? '');
+      setEletrico(c.eletricidade ?? '');
       setObservacoes(c.observacoes ?? '');
       if (c.fotos?.length) {
         Promise.all(
@@ -426,7 +524,7 @@ const RealizarEntregaPage = () => {
           valor: f.valor,
         }))
       );
-      const cache: RascunhoCache = { km, combustivel, observacoes, fotos };
+      const cache: RascunhoCache = { km, combustivel, eletricidade: eletrico, observacoes, fotos };
       localStorage.setItem(cacheKey(token), JSON.stringify(cache));
       toast({ title: 'Rascunho guardado', description: 'Podes recarregar sem perder os dados.' });
     } catch (err) {
@@ -452,6 +550,7 @@ const RealizarEntregaPage = () => {
       isEntrega: boolean;
       km: string;
       combustivel: string;
+      eletricidade: string;
       files: FilePreview[];
     }
   ) => {
@@ -461,6 +560,7 @@ const RealizarEntregaPage = () => {
       isEntrega,
       km: kmBloco,
       combustivel: combustivelBloco,
+      eletricidade: eletricidadeBloco,
       files: filesBloco,
     } = bloco;
     const fotosMomento =
@@ -504,10 +604,15 @@ const RealizarEntregaPage = () => {
       momentoFolha: isEntrega ? 'ENTREGA' : 'RECOLHA',
       observacoesMomento: observacoes,
       ...(isEntrega
-        ? { km_saida: kmBloco, combustivel_saida: combustivelBloco }
+        ? {
+            km_saida: kmBloco,
+            combustivel_saida: combustivelBloco,
+            eletricidade_saida: eletricidadeBloco,
+          }
         : {
             km_entrada: kmBloco,
             combustivel_entrada: combustivelBloco,
+            eletricidade_entrada: eletricidadeBloco,
             km_saida: contexto?.kmSaida?.toString() ?? '',
             combustivel_saida: contexto?.combustivelSaida ?? '',
           }),
@@ -532,18 +637,22 @@ const RealizarEntregaPage = () => {
 
   const gerarFolha = async (modo: 'preview' | 'print') => {
     if (!info) return;
-    if (!km.trim() || !combustivel) {
+    if (!km.trim() || !nivelPreenchido(tipoCombustivel, combustivel, eletrico)) {
       toast({
         title: 'Campos obrigatórios',
-        description: 'Preenche o km e o nível de combustível antes de gerar a folha.',
+        description: 'Preenche o km e o nível de combustível/bateria antes de gerar a folha.',
         variant: 'destructive',
       });
       return;
     }
-    if (isTroca && (!kmAntiga.trim() || !combustivelAntiga)) {
+    if (
+      isTroca &&
+      (!kmAntiga.trim() ||
+        !nivelPreenchido(tipoCombustivelAntiga, combustivelAntiga, eletricoAntiga))
+    ) {
       toast({
         title: 'Campos obrigatórios',
-        description: 'Preenche também o km e combustível da viatura devolvida.',
+        description: 'Preenche também o km e combustível/bateria da viatura devolvida.',
         variant: 'destructive',
       });
       return;
@@ -579,6 +688,7 @@ const RealizarEntregaPage = () => {
           isEntrega: false,
           km: kmAntiga,
           combustivel: combustivelAntiga,
+          eletricidade: eletricoAntiga,
           files: filesAntiga,
         });
         await gerarFolhaBloco(modo, tmplId, {
@@ -587,6 +697,7 @@ const RealizarEntregaPage = () => {
           isEntrega: true,
           km,
           combustivel,
+          eletricidade: eletrico,
           files,
         });
       } else {
@@ -597,6 +708,7 @@ const RealizarEntregaPage = () => {
           isEntrega,
           km,
           combustivel,
+          eletricidade: eletrico,
           files,
         });
       }
@@ -718,18 +830,21 @@ const RealizarEntregaPage = () => {
 
   const handleConfirmarTroca = async () => {
     if (!token || !info) return;
-    if (!km.trim() || !combustivel) {
+    if (!km.trim() || !nivelPreenchido(tipoCombustivel, combustivel, eletrico)) {
       toast({
         title: 'Campos obrigatórios',
-        description: 'Preenche o km e combustível da viatura entregue.',
+        description: 'Preenche o km e combustível/bateria da viatura entregue.',
         variant: 'destructive',
       });
       return;
     }
-    if (!kmAntiga.trim() || !combustivelAntiga) {
+    if (
+      !kmAntiga.trim() ||
+      !nivelPreenchido(tipoCombustivelAntiga, combustivelAntiga, eletricoAntiga)
+    ) {
       toast({
         title: 'Campos obrigatórios',
-        description: 'Preenche o km e combustível da viatura devolvida.',
+        description: 'Preenche o km e combustível/bateria da viatura devolvida.',
         variant: 'destructive',
       });
       return;
@@ -778,10 +893,12 @@ const RealizarEntregaPage = () => {
           troca: {
             viaturaAntigaId: viaturaAntigaId ?? null,
             kmAntiga: Number(kmAntiga),
-            combustivelAntiga,
+            combustivelAntiga: combustivelAntiga || null,
+            eletricidadeAntiga: eletricoAntiga || null,
             viaturaNovaId: vNovaId,
             kmNova: Number(km),
-            combustivelNova: combustivel,
+            combustivelNova: combustivel || null,
+            eletricidadeNova: eletrico || null,
           },
         },
         {
@@ -820,10 +937,10 @@ const RealizarEntregaPage = () => {
       await handleConfirmarTroca();
       return;
     }
-    if (!km.trim() || !combustivel) {
+    if (!km.trim() || !nivelPreenchido(tipoCombustivel, combustivel, eletrico)) {
       toast({
         title: 'Campos obrigatórios',
-        description: 'Preenche o km e o nível de combustível.',
+        description: 'Preenche o km e o nível de combustível/bateria.',
         variant: 'destructive',
       });
       return;
@@ -844,11 +961,117 @@ const RealizarEntregaPage = () => {
     const uploadedPaths: string[] = [];
     const isEntrega = info.tipo === 'entrega' || info.tipo === 'troca';
 
-    // ORDEM IMPORTANTE: confirmar PRIMEIRO. realizar_token_realizacao marca o
-    // evento como realizado + o token como usado (atómico) e grava km/comb. no
-    // contrato. Só DEPOIS se gravam os danos. Assim uma 2.ª tentativa falha logo
-    // no realizar ("evento já realizado"/"token já usado") ANTES de reinserir os
-    // danos — evita os registos duplicados que aconteciam com várias tentativas.
+    // ORDEM IMPORTANTE: danos PRIMEIRO, confirmar SÓ DEPOIS. As fotos têm de
+    // ficar mesmo gravadas na BD antes de a entrega/recolha ser dada como
+    // concluída — nunca "confirmado, mas falhou guardar os danos" (esse
+    // estado deixava as fotos irrecuperáveis, só na memória do telemóvel).
+    // Se isto falhar, NADA se perde: o token continua por usar, os ficheiros
+    // continuam escolhidos no formulário e o utilizador só tem de carregar em
+    // "Confirmar" outra vez.
+    try {
+      // Limpa danos/fotos duma tentativa anterior falhada deste mesmo token
+      // (token ainda não usado neste ponto — a RPC só recusa tokens já
+      // usados, por isso isto tem de correr antes de confirmar).
+      // Cast: RPC nova, types.ts ainda não regenerado.
+      const { error: limparErr } = await (supabase as any).rpc('limpar_danos_token', {
+        p_token: token,
+      });
+      if (limparErr) throw limparErr;
+
+      if (files.length > 0) {
+        const { data: auth } = await supabase.auth.getUser();
+        const userId = auth.user?.id ?? null;
+
+        // Viatura resolvida pelo contexto (RPC do token, SECURITY DEFINER)
+        // — sem ela não há onde pendurar os danos.
+        const vId = contexto?.viaturaId ?? null;
+        if (!vId) throw new Error('Viatura do contrato não encontrada.');
+        // Fotos descritas individualmente viram cada uma o seu registo de
+        // dano; as genéricas juntam-se num único "Registo entrega/recolha".
+        const temDetalhe = (fp: (typeof files)[number]) =>
+          !!(fp.localizacao || fp.descricao.trim() || fp.valor.trim());
+        const detalhados = files.filter(temDetalhe);
+        const genericos = files.filter((fp) => !temDetalhe(fp));
+
+        const grupos: Array<{
+          localizacao: string | null;
+          descricao: string;
+          valor: number | null;
+          fotos: (typeof files)[number][];
+        }> = detalhados.map((fp) => {
+          const valorNum = fp.valor.trim() ? Number(fp.valor) : null;
+          return {
+            localizacao: fp.localizacao || null,
+            descricao: fp.descricao.trim() || `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
+            valor: valorNum != null && !Number.isNaN(valorNum) ? valorNum : null,
+            fotos: [fp],
+          };
+        });
+        if (genericos.length > 0) {
+          grupos.push({
+            localizacao: null,
+            descricao: `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
+            valor: null,
+            fotos: genericos,
+          });
+        }
+
+        for (const grupo of grupos) {
+          // Cast: realizacao_token_id é coluna nova, types.ts ainda não regenerado.
+          const { data: dano, error: dErr } = await (supabase as any)
+            .from('viatura_danos')
+            .insert({
+              viatura_id: vId,
+              localizacao: grupo.localizacao,
+              descricao: grupo.descricao,
+              valor: grupo.valor,
+              observacoes: observacoes.trim() || null,
+              estado: 'existente',
+              contrato_renting_id: info.contrato_id,
+              registado_por: userId,
+              realizacao_token_id: token,
+            })
+            .select('id')
+            .single();
+          if (dErr) throw dErr;
+
+          for (const fp of grupo.fotos) {
+            const ext = fp.file.name.split('.').pop() || 'bin';
+            const path = `${dano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+            const { error: upErr } = await supabase.storage
+              .from('viatura-danos')
+              .upload(path, fp.file, { contentType: fp.file.type });
+            if (upErr) throw upErr;
+            uploadedPaths.push(path);
+            const { error: fErr } = await supabase.from('viatura_dano_fotos').insert({
+              dano_id: dano.id,
+              ficheiro_url: path,
+              nome_ficheiro: fp.file.name,
+              uploaded_by: userId,
+            });
+            if (fErr) throw fErr;
+          }
+        }
+      }
+    } catch (err: unknown) {
+      if (uploadedPaths.length > 0) {
+        try {
+          await supabase.storage.from('viatura-danos').remove(uploadedPaths);
+        } catch {
+          /* limpeza best-effort */
+        }
+      }
+      toast({
+        title: 'Erro ao guardar os danos',
+        description: errorMessage(err),
+        variant: 'destructive',
+      });
+      setUploading(false);
+      return;
+    }
+
+    // Danos gravados (ou não havia nenhum a gravar) — só agora confirma a
+    // entrega/recolha em si.
     realizar.mutate(
       {
         token,
@@ -856,115 +1079,11 @@ const RealizarEntregaPage = () => {
         contratoId: info.contrato_id,
         tipo: info.tipo,
         km: Number(km),
-        combustivel,
+        combustivel: combustivel || undefined,
+        eletricidade: eletrico || undefined,
       },
       {
-        onSuccess: async () => {
-          try {
-            // Limpa danos/fotos duma tentativa anterior falhada deste mesmo
-            // token (ex.: onSuccess rebentou a meio depois de confirmar) — sem
-            // isto, reenviar duplicava os registos em vez de os substituir.
-            // Cast: RPC nova, types.ts ainda não regenerado.
-            const { error: limparErr } = await (supabase as any).rpc('limpar_danos_token', {
-              p_token: token,
-            });
-            if (limparErr) throw limparErr;
-
-            if (files.length > 0) {
-              const { data: auth } = await supabase.auth.getUser();
-              const userId = auth.user?.id ?? null;
-
-              // Viatura resolvida pelo contexto (RPC do token, SECURITY DEFINER)
-              // — sem ela não há onde pendurar os danos.
-              const vId = contexto?.viaturaId ?? null;
-              if (!vId) throw new Error('Viatura do contrato não encontrada.');
-              // Fotos descritas individualmente viram cada uma o seu registo de
-              // dano; as genéricas juntam-se num único "Registo entrega/recolha".
-              const temDetalhe = (fp: (typeof files)[number]) =>
-                !!(fp.localizacao || fp.descricao.trim() || fp.valor.trim());
-              const detalhados = files.filter(temDetalhe);
-              const genericos = files.filter((fp) => !temDetalhe(fp));
-
-              const grupos: Array<{
-                localizacao: string | null;
-                descricao: string;
-                valor: number | null;
-                fotos: (typeof files)[number][];
-              }> = detalhados.map((fp) => {
-                const valorNum = fp.valor.trim() ? Number(fp.valor) : null;
-                return {
-                  localizacao: fp.localizacao || null,
-                  descricao: fp.descricao.trim() || `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
-                  valor: valorNum != null && !Number.isNaN(valorNum) ? valorNum : null,
-                  fotos: [fp],
-                };
-              });
-              if (genericos.length > 0) {
-                grupos.push({
-                  localizacao: null,
-                  descricao: `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
-                  valor: null,
-                  fotos: genericos,
-                });
-              }
-
-              for (const grupo of grupos) {
-                // Cast: realizacao_token_id é coluna nova, types.ts ainda não regenerado.
-                const { data: dano, error: dErr } = await (supabase as any)
-                  .from('viatura_danos')
-                  .insert({
-                    viatura_id: vId,
-                    localizacao: grupo.localizacao,
-                    descricao: grupo.descricao,
-                    valor: grupo.valor,
-                    observacoes: observacoes.trim() || null,
-                    estado: 'existente',
-                    contrato_renting_id: info.contrato_id,
-                    registado_por: userId,
-                    realizacao_token_id: token,
-                  })
-                  .select('id')
-                  .single();
-                if (dErr) throw dErr;
-
-                for (const fp of grupo.fotos) {
-                  const ext = fp.file.name.split('.').pop() || 'bin';
-                  const path = `${dano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-                  const { error: upErr } = await supabase.storage
-                    .from('viatura-danos')
-                    .upload(path, fp.file, { contentType: fp.file.type });
-                  if (upErr) throw upErr;
-                  uploadedPaths.push(path);
-                  const { error: fErr } = await supabase.from('viatura_dano_fotos').insert({
-                    dano_id: dano.id,
-                    ficheiro_url: path,
-                    nome_ficheiro: fp.file.name,
-                    uploaded_by: userId,
-                  });
-                  if (fErr) throw fErr;
-                }
-              }
-            }
-          } catch (err: unknown) {
-            // Danos falharam DEPOIS da confirmação: limpa ficheiros órfãos e
-            // avisa. A entrega/recolha fica confirmada na mesma — os danos podem
-            // ser adicionados à mão na viatura/contrato.
-            if (uploadedPaths.length > 0) {
-              try {
-                await supabase.storage.from('viatura-danos').remove(uploadedPaths);
-              } catch {
-                /* limpeza best-effort */
-              }
-            }
-            toast({
-              title: 'Confirmado, mas falhou guardar os danos',
-              description: errorMessage(err),
-              variant: 'destructive',
-            });
-          }
-
-          // A realização está feita — imprime a folha, limpa o rascunho e mostra
-          // o ecrã de confirmação, mesmo que os danos tenham falhado.
+        onSuccess: () => {
           void gerarFolha('print');
           try {
             localStorage.removeItem(cacheKey(token));
@@ -975,7 +1094,9 @@ const RealizarEntregaPage = () => {
           setUploading(false);
         },
         onError: () => {
-          // useRealizarFromToken já mostra o toast de erro da confirmação.
+          // useRealizarFromToken já mostra o toast de erro da confirmação. Os
+          // danos já gravados ficam ligados a este token (ainda por usar) —
+          // um novo "Confirmar" limpa-os e regrava antes de tentar de novo.
           setUploading(false);
         },
       }
@@ -1060,6 +1181,16 @@ const RealizarEntregaPage = () => {
       >
         <Button
           type="button"
+          variant="outline"
+          onClick={() => window.history.back()}
+          disabled={isPending}
+          className="gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Voltar
+        </Button>
+        <Button
+          type="button"
           onClick={handleConfirmar}
           disabled={isPending || (exigeDua && !duaDevolvido)}
           className="gap-2"
@@ -1087,6 +1218,9 @@ const RealizarEntregaPage = () => {
             onKmChange={setKmAntiga}
             combustivel={combustivelAntiga}
             onCombustivelChange={setCombustivelAntiga}
+            eletricidade={eletricoAntiga}
+            onEletricidadeChange={setEletricoAntiga}
+            tipoCombustivel={tipoCombustivelAntiga}
             files={filesAntiga}
             onAddFiles={handleAddFilesAntiga}
             onUpdateFoto={updateFotoAntiga}
@@ -1102,6 +1236,9 @@ const RealizarEntregaPage = () => {
           onKmChange={setKm}
           combustivel={combustivel}
           onCombustivelChange={setCombustivel}
+          eletricidade={eletrico}
+          onEletricidadeChange={setEletrico}
+          tipoCombustivel={tipoCombustivel}
           files={files}
           onAddFiles={handleAddFiles}
           onUpdateFoto={updateFoto}

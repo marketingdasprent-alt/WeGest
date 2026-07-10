@@ -78,7 +78,9 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
           data_inicio: reserva.data_inicio
             ? new Date(reserva.data_inicio).toISOString().split('T')[0]
             : undefined,
-          valor_semanal: reserva.slot_valor_semanal,
+          // Coluna chama-se valor_semanal por legado, mas o slot é cobrado ao
+          // mês — usa slot_valor_mensal (o campo que a app realmente preenche).
+          valor_semanal: reserva.slot_valor_mensal,
           motorista_nome: motorista.nome,
           motorista_nif: motorista.nif ?? null,
           motorista_morada: motorista.morada ?? null,
@@ -94,7 +96,7 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
       await generateContratoPrestacaoPdf({
         motorista,
         viatura,
-        valorSemanal: reserva.slot_valor_semanal,
+        valorSemanal: reserva.slot_valor_mensal,
         dataInicio: reserva.data_inicio,
         numeroContrato: inserted?.codigo ?? null,
         empresa,
@@ -157,8 +159,8 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
           <div className="flex items-start gap-2 text-sm">
             <Coins className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
             <div>
-              <p className="text-xs text-muted-foreground">Valor semanal do slot</p>
-              <p className="font-medium">{fmtEur(reserva.slot_valor_semanal)}</p>
+              <p className="text-xs text-muted-foreground">Valor mensal do slot</p>
+              <p className="font-medium">{fmtEur(reserva.slot_valor_mensal)}</p>
             </div>
           </div>
         </div>

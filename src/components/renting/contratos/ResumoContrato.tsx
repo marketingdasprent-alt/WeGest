@@ -71,7 +71,9 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
       };
     }
 
-    if (!dataInicio || !dataFim) {
+    // TVDE/slot não têm data de fim (contrato aberto) — não bloqueia o cálculo,
+    // já que nesses regimes o valor vem de valorTotalManual, não de dias×tarifa.
+    if (!dataInicio) {
       return {
         dias: 0,
         baseAluguer: 0,
@@ -86,7 +88,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
       };
     }
 
-    const dias = calcDias(dataInicio, dataFim);
+    const dias = dataFim ? calcDias(dataInicio, dataFim) : 0;
     const baseAluguer =
       valorTotalManual != null && valorTotalManual > 0
         ? valorTotalManual
@@ -161,10 +163,16 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
         </div>
 
         <div className="space-y-1.5 text-sm">
-          {!isFacturado && <Row label={`Dias`} value={String(calculo.dias)} muted />}
+          {!isFacturado && regime !== 'tvde' && regime !== 'slot' && (
+            <Row label={`Dias`} value={String(calculo.dias)} muted />
+          )}
 
           {showsManual ? (
-            <Row label="Valor manual" value={formatCurrency(valorTotalManual ?? 0)} muted />
+            <Row
+              label={regime === 'tvde' || regime === 'slot' ? 'Valor semanal' : 'Valor manual'}
+              value={formatCurrency(valorTotalManual ?? 0)}
+              muted
+            />
           ) : isFacturado ? (
             <Row label="Subtotal bruto" value={formatCurrency(calculo.subtotalBruto)} muted />
           ) : (

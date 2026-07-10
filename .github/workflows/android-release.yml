@@ -68,12 +68,14 @@ jobs:
 
       - name: Build AAB assinado
         working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
         run: |
           ./gradlew -Dorg.gradle.java.home="$JAVA_HOME" bundleRelease \
             -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/android/app/wegest-release.jks" \
-            -Pandroid.injected.signing.store.password=WeGest@2025 \
+            -Pandroid.injected.signing.store.password="$ANDROID_STORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias=wegest \
-            -Pandroid.injected.signing.key.password=WeGest@2025
+            -Pandroid.injected.signing.key.password="$ANDROID_STORE_PASSWORD"
 
       - name: Guardar AAB (descarregar em Actions → este workflow → Artifacts)
         uses: actions/upload-artifact@v4
