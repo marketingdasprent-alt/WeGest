@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -51,6 +52,20 @@ export function ViaturaFormVeiculo({
   allTarifas,
   estacoes,
 }: ViaturaFormVeiculoProps) {
+  // is_slot deriva do TIPO: ao escolher o tipo "SLOT", is_slot é ligado
+  // automaticamente. Antes o toggle estava escondido atrás de `elegivel_tvde`,
+  // por isso quem marcava o tipo SLOT nem via o switch — daí ficarem
+  // dessincronizados. Unidirecional: NÃO desliga is_slot noutros tipos, para
+  // não afetar viaturas slot antigas sem tipo atribuído.
+  const tipoIdWatch = form.watch('tipo_id');
+  const isTipoSlot =
+    (viaturasTipos.find((t) => t.id === tipoIdWatch)?.nome ?? '').trim().toUpperCase() === 'SLOT';
+  useEffect(() => {
+    if (isTipoSlot && !form.getValues('is_slot')) {
+      form.setValue('is_slot', true, { shouldDirty: true });
+    }
+  }, [isTipoSlot, form]);
+
   return (
     <div>
       <h3 className="text-sm font-medium text-muted-foreground mb-4">Veículo</h3>
@@ -335,40 +350,31 @@ export function ViaturaFormVeiculo({
         />
       </div>
 
-      {/* Cards TVDE — só visíveis para tipos elegíveis a TVDE */}
-      {(() => {
-        const tipoId = form.watch('tipo_id');
-        const tipo = viaturasTipos.find((t) => t.id === tipoId);
-        if (!tipo?.elegivel_tvde) return null;
-        return (
-          <div className="md:col-span-3 mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
-              <div>
-                <p className="font-medium">Elegível para TVDE?</p>
-                <Badge variant={form.watch('habilitada_tvde') ? 'default' : 'secondary'}>
-                  {form.watch('habilitada_tvde') ? 'Sim' : 'Não'}
-                </Badge>
-              </div>
-              <Switch
-                checked={form.watch('habilitada_tvde')}
-                onCheckedChange={(checked) => form.setValue('habilitada_tvde', checked)}
-              />
-            </div>
-            <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
-              <div>
-                <p className="font-medium">Viatura SLOT</p>
-                <Badge variant={form.watch('is_slot') ? 'default' : 'secondary'}>
-                  {form.watch('is_slot') ? 'Ativo' : 'Inativo'}
-                </Badge>
-              </div>
-              <Switch
-                checked={form.watch('is_slot')}
-                onCheckedChange={(checked) => form.setValue('is_slot', checked)}
-              />
-            </div>
+      {/* Estado SLOT — derivado do tipo. Ao escolher o tipo "SLOT", is_slot liga
+          automaticamente e o campo fica só de leitura (fonte de verdade = o tipo).
+          Nos outros tipos mantém-se editável, para casos legados de viaturas slot
+          sem tipo atribuído.
+          NOTA: "Elegível para TVDE?" (habilitada_tvde) foi removido daqui — não
+          tinha efeito. A elegibilidade real vem de viatura_tipos.elegivel_tvde
+          (ver useModelosElegiveisTvde). O campo mantém-se na BD. */}
+      <div className="md:col-span-3 mt-2">
+        <div className="flex max-w-md items-center justify-between rounded-lg border bg-muted/30 p-4">
+          <div>
+            <p className="font-medium">Viatura SLOT</p>
+            <Badge variant={form.watch('is_slot') ? 'default' : 'secondary'}>
+              {form.watch('is_slot') ? 'Ativo' : 'Inativo'}
+            </Badge>
+            {isTipoSlot && (
+              <p className="mt-1 text-xs text-muted-foreground">Definido pelo tipo SLOT</p>
+            )}
           </div>
-        );
-      })()}
+          <Switch
+            checked={form.watch('is_slot')}
+            disabled={isTipoSlot}
+            onCheckedChange={(checked) => form.setValue('is_slot', checked)}
+          />
+        </div>
+      </div>
     </div>
   );
 }
