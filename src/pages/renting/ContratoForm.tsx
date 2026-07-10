@@ -559,7 +559,9 @@ const ContratoForm = () => {
             (p) => p.tarifa_id === tarifaSelId && p.modelo_id === via.modelo_id
           ) ?? null)
         : null;
-    const cobre = isTvdeReg ? linha?.preco_semana != null : linha?.preco_dia != null;
+    const cobre = isTvdeReg
+      ? linha?.preco_semana != null
+      : linha?.preco_dia != null || linha?.preco_mes != null;
     if (tarifaSelId && via.modelo_id && !cobre) {
       form.setValue('tarifa_id', null, { shouldDirty: true });
     }
@@ -731,7 +733,9 @@ const ContratoForm = () => {
         const linha = precosModeloTvde.find(
           (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === via.modelo_id
         );
-        const temPreco = isTvdeReg ? linha?.preco_semana != null : linha?.preco_dia != null;
+        const temPreco = isTvdeReg
+          ? linha?.preco_semana != null
+          : linha?.preco_dia != null || linha?.preco_mes != null;
         if (!temPreco) {
           toast({
             title: isTvdeReg

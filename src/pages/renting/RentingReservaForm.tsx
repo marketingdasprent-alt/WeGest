@@ -377,7 +377,9 @@ const RentingReservaForm = () => {
         const linha = precosModeloTvde.find(
           (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaSelecionada.modelo_id
         );
-        const temPreco = isTvdeSubmit ? linha?.preco_semana != null : linha?.preco_dia != null;
+        const temPreco = isTvdeSubmit
+          ? linha?.preco_semana != null
+          : linha?.preco_dia != null || linha?.preco_mes != null;
         if (!temPreco) {
           toast({
             title: isTvdeSubmit
