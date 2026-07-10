@@ -136,7 +136,6 @@ const formSchema = z.object({
   recibo_verde: z.boolean().default(true),
   is_slot: z.boolean().default(false),
   slot_valor_semanal: z.number().optional().nullable(),
-  seguro_valor_semanal: z.number().optional().nullable(),
   status_ativo: z.boolean().default(true),
   observacoes: z.string().optional(),
   iban: z
@@ -269,7 +268,6 @@ export function MotoristaTabDados({
       recibo_verde: true,
       is_slot: false,
       slot_valor_semanal: null,
-      seguro_valor_semanal: null,
       status_ativo: true,
       observacoes: '',
       iban: '',
@@ -327,7 +325,6 @@ export function MotoristaTabDados({
       recibo_verde: motorista.recibo_verde ?? true,
       is_slot: motorista.is_slot ?? false,
       slot_valor_semanal: motorista.slot_valor_semanal ?? null,
-      seguro_valor_semanal: motorista.seguro_valor_semanal ?? null,
       status_ativo: motorista.status_ativo ?? true,
       observacoes: motorista.observacoes || '',
       iban: motorista.iban || '',
@@ -411,7 +408,6 @@ export function MotoristaTabDados({
         recibo_verde: data.recibo_verde,
         is_slot: data.is_slot,
         slot_valor_semanal: data.is_slot ? data.slot_valor_semanal : null,
-        seguro_valor_semanal: data.seguro_valor_semanal ?? null,
         status_ativo: data.status_ativo,
         observacoes: data.observacoes || null,
         iban: data.iban ? data.iban.replace(/\s/g, '').toUpperCase() : null,
@@ -1125,32 +1121,6 @@ export function MotoristaTabDados({
                         )}
                       />
                     )}
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="seguro_valor_semanal"
-                render={({ field }) => (
-                  <FormItem className="rounded-lg border p-3 space-y-1">
-                    <FormLabel className="text-sm">Seguro semanal (€)</FormLabel>
-                    <p className="text-xs text-muted-foreground">
-                      Débito lançado automaticamente todas as semanas no financeiro do motorista.
-                      Deixa vazio para não cobrar seguro.
-                    </p>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="Ex: 15.00"
-                        value={field.value ?? ''}
-                        onChange={(e) =>
-                          field.onChange(e.target.value ? parseFloat(e.target.value) : null)
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
                   </FormItem>
                 )}
               />

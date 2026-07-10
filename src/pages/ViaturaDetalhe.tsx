@@ -226,8 +226,10 @@ export default function ViaturaDetalhe() {
 
         if (error) throw error;
         if (!updated) throw new Error('Nenhuma viatura foi atualizada');
+        // Espera pela recarga antes de devolver `true`: o formulário refaz o seu
+        // baseline logo a seguir e, sem este await, fá-lo-ia contra a viatura antiga.
+        await loadViatura(false);
         toast.success('Viatura atualizada com sucesso!');
-        loadViatura(false);
         return true;
       }
       return false;
