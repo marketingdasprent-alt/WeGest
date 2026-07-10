@@ -1,3 +1,5 @@
+import type { ExtraTipoCalculo } from './rentingExtra';
+
 export const RESERVA_ESTADOS = [
   'pendente',
   'confirmada',
@@ -154,6 +156,80 @@ export type CondutorFormItem = {
   cliente_id: string | null;
   motorista_id: string | null;
   is_principal: boolean;
+};
+
+// ============================================================
+// Coberturas (m:n entre reservas e renting_coberturas)
+// ============================================================
+export type ReservaCobertura = {
+  id: string;
+  org_id: string;
+  reserva_id: string;
+  cobertura_id: string;
+  cobertura_nome: string;
+  preco_dia: number;
+  franquia_valor: number | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+/** Forma usada no formulário — carrega o snapshot do catálogo. */
+export type CoberturaFormItem = {
+  cobertura_id: string;
+  cobertura_nome: string;
+  preco_dia: number;
+  franquia_valor: number | null;
+};
+
+// ============================================================
+// Extras (m:n entre reservas e renting_extras)
+// ============================================================
+export type ReservaExtra = {
+  id: string;
+  org_id: string;
+  reserva_id: string;
+  extra_id: string;
+  extra_nome: string;
+  preco_unidade: number;
+  tipo_calculo: ExtraTipoCalculo;
+  quantidade: number;
+  total: number;
+  created_by: string | null;
+  created_at: string;
+};
+
+/** Forma usada no formulário — carrega o snapshot do catálogo + quantidade. */
+export type ExtraFormItem = {
+  extra_id: string;
+  extra_nome: string;
+  preco_unidade: number;
+  tipo_calculo: ExtraTipoCalculo;
+  quantidade: number;
+};
+
+// ============================================================
+// Taxas (m:n entre reservas e renting_taxas)
+// ============================================================
+export type ReservaTaxa = {
+  id: string;
+  org_id: string;
+  reserva_id: string;
+  taxa_id: string;
+  taxa_nome: string;
+  percentagem: number | null;
+  valor_fixo: number | null;
+  base_calculo: number | null;
+  valor_calculado: number;
+  created_by: string | null;
+  created_at: string;
+};
+
+/** Forma usada no formulário — carrega o snapshot do catálogo. */
+export type TaxaFormItem = {
+  taxa_id: string;
+  taxa_nome: string;
+  percentagem: number | null;
+  valor_fixo: number | null;
 };
 
 // ============================================================

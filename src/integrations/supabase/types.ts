@@ -7108,6 +7108,64 @@ export type Database = {
           },
         ]
       }
+      reserva_coberturas: {
+        Row: {
+          cobertura_id: string
+          cobertura_nome: string
+          created_at: string
+          created_by: string | null
+          franquia_valor: number | null
+          id: string
+          org_id: string
+          preco_dia: number
+          reserva_id: string
+        }
+        Insert: {
+          cobertura_id: string
+          cobertura_nome: string
+          created_at?: string
+          created_by?: string | null
+          franquia_valor?: number | null
+          id?: string
+          org_id: string
+          preco_dia: number
+          reserva_id: string
+        }
+        Update: {
+          cobertura_id?: string
+          cobertura_nome?: string
+          created_at?: string
+          created_by?: string | null
+          franquia_valor?: number | null
+          id?: string
+          org_id?: string
+          preco_dia?: number
+          reserva_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reserva_coberturas_cobertura_id_fkey"
+            columns: ["cobertura_id"]
+            isOneToOne: false
+            referencedRelation: "renting_coberturas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reserva_coberturas_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reserva_coberturas_reserva_id_fkey"
+            columns: ["reserva_id"]
+            isOneToOne: false
+            referencedRelation: "reservas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reserva_condutores: {
         Row: {
           cliente_id: string | null
