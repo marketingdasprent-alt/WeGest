@@ -74,6 +74,7 @@ const maisDias = (n: number) => {
   d.setDate(d.getDate() + n);
   return d.toISOString().slice(0, 10);
 };
+const round2 = (v: number) => Math.round(v * 100) / 100;
 
 export function ContratoFaturarDialog({
   open,
@@ -179,9 +180,10 @@ export function ContratoFaturarDialog({
         return;
       }
 
-      // TVDE e Slot já têm IVA incluído no preço — fatura sem IVA adicional
-      const taxaIva =
-        contrato.regime === 'tvde' || contrato.regime === 'slot' ? 0 : (contrato.taxa_iva ?? 23);
+      // fatura.subtotal já vem correctamente decomposto (o preço da tarifa
+      // inclui sempre IVA — ver ContratoTabFaturar). Reaproveita a mesma
+      // taxa/valor em vez de os recalcular aqui, para não desalinhar os dois.
+      const taxaIva = fatura.taxaIva;
       // As taxas somam-se DEPOIS do IVA e a cobrança não as modela; o movimento WeGest
       // regista subtotal + IVA. A fatura fiscal (com taxas) é emitida pelo programa externo.
       const valorSemIva = fatura.subtotal;
@@ -263,13 +265,18 @@ export function ContratoFaturarDialog({
         try {
           // Itens fiscais = linhas brutas (sem a linha sintética de desconto);
           // o desconto vai como % por linha, p/ o total bater certo sem linhas negativas.
+          // it.valor é o preço final por linha (já com IVA, como a tarifa) —
+          // decompõe para o preço unitário SEM IVA que o emissor espera: ele
+          // próprio soma taxa_iva por cima ao gerar o documento fiscal, por
+          // isso enviar o valor já-com-IVA duplicaria o imposto na fatura real.
           const itensFatura: ItemFatura[] = fatura.itens
             .filter((it) => !it.descricao.startsWith('Desconto'))
             .map((it) => ({
               descricao: it.descricao,
               quantidade: 1,
-              preco_unitario: it.valor,
-              taxa_iva: fatura.taxaIva,
+              preco_unitario:
+                taxaIva > 0 ? round2(it.valor / (1 + taxaIva / 100)) : it.valor,
+              taxa_iva: taxaIva,
               desconto: contrato.desconto_percentagem ?? 0,
             }));
           const cliente = await fetchClienteFatura();

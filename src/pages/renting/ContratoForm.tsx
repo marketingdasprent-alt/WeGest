@@ -454,9 +454,10 @@ const ContratoForm = () => {
   const regime = form.watch('regime');
   const tarifaIdWatch = form.watch('tarifa_id');
   const isLongaDuracao = form.watch('is_longa_duracao');
-  // TVDE e Slot já têm IVA incluído no preço — o resumo não aplica IVA adicional
-  const rawTaxaIva = form.watch('taxa_iva');
-  const taxaIva = regime === 'tvde' || regime === 'slot' ? 0 : rawTaxaIva;
+  // Taxa de IVA do contrato (23% rent-a-car / 6% TVDE, definida pela org) — o
+  // preço da tarifa já vem com IVA incluído em todos os regimes, por isso o
+  // resumo DECOMPÕE este valor em vez de o somar por cima (ver ResumoContrato).
+  const taxaIva = form.watch('taxa_iva');
   const coberturasForm = form.watch('coberturas');
   const extrasForm = form.watch('extras') as ExtraFormItem[];
   const taxasForm = form.watch('taxas') as TaxaFormItem[];

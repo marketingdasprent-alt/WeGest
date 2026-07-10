@@ -373,16 +373,20 @@ export function ContratoTabFaturar({ contrato }: Props) {
     const desconto = subtotalBruto * (descPct / 100);
     if (desconto > 0) itens.push({ descricao: `Desconto (${descPct}%)`, valor: -round2(desconto) });
 
-    const subtotal = subtotalBruto - desconto;
-    // TVDE e Slot já têm IVA incluído no preço — fatura sem IVA adicional
-    const taxaIva =
-      contrato.regime === 'tvde' || contrato.regime === 'slot' ? 0 : (contrato.taxa_iva ?? 23);
-    const iva = subtotal * (taxaIva / 100);
+    // O preço da tarifa (baseAluguer) já vem com IVA incluído, em todos os
+    // regimes — este valor, com desconto aplicado, é o que é cobrado ao
+    // cliente. Decompõe-se em Incidência (sem IVA) + IVA só para a fatura;
+    // não se soma IVA por cima, isso duplicaria o imposto. Mesma lógica que
+    // a reserva usa (ReservaFaturarDialog).
+    const totalComIva = subtotalBruto - desconto;
+    const taxaIva = contrato.taxa_iva ?? (contrato.regime === 'tvde' ? 6 : 23);
+    const subtotal = taxaIva > 0 ? totalComIva / (1 + taxaIva / 100) : totalComIva;
+    const iva = totalComIva - subtotal;
 
     const taxasItens: FaturaCalculo['taxasItens'] = [];
     let custoTaxas = 0;
     (taxas ?? []).forEach((t) => {
-      const v = calcTaxaValor(t as any, subtotal);
+      const v = calcTaxaValor(t as any, totalComIva);
       custoTaxas += v;
       taxasItens.push({ descricao: `Taxa: ${t.taxa_nome}`, valor: round2(v) });
     });
@@ -397,9 +401,9 @@ export function ContratoTabFaturar({ contrato }: Props) {
       iva: ivaR,
       taxasItens,
       custoTaxas: custoTaxasR,
-      total: round2(subtotalR + ivaR + custoTaxasR),
-      // movimento WeGest = subtotal + IVA (taxas são emitidas pelo programa externo)
-      valorRegistado: round2(subtotalR + ivaR),
+      total: round2(totalComIva + custoTaxasR),
+      // movimento WeGest = valor cobrado pelo aluguer (já com IVA) — sem duplicar o imposto
+      valorRegistado: round2(totalComIva),
       taxaIva,
     };
   }, [contrato, coberturas, extras, taxas]);

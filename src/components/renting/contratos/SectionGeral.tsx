@@ -13,11 +13,7 @@ import {
 
 import type { ContratoFormValues } from './contratoForm.schema';
 import { SectionTitle } from './SectionTitle';
-import {
-  ESTADO_OP_OPTIONS,
-  ESTADO_FIN_OPTIONS,
-  DEFAULT_IVA_PERCENTAGE,
-} from './contratoFormConstants';
+import { ESTADO_OP_OPTIONS, ESTADO_FIN_OPTIONS } from './contratoFormConstants';
 
 interface SectionGeralProps {
   form: UseFormReturn<ContratoFormValues>;
@@ -153,29 +149,6 @@ export const SectionGeral: React.FC<SectionGeralProps> = ({
                   }
                 />
               </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="taxa_iva"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>IVA (%)</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  readOnly
-                  tabIndex={-1}
-                  className="bg-muted/50 cursor-not-allowed"
-                  value={field.value ?? DEFAULT_IVA_PERCENTAGE}
-                />
-              </FormControl>
-              <p className="text-xs text-muted-foreground">
-                Definido pelo regime e pelas taxas da organização (Definições › Fiscal).
-              </p>
               <FormMessage />
             </FormItem>
           )}
