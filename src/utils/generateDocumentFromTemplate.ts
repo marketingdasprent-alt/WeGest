@@ -83,6 +83,9 @@ interface GenerateDocumentParams {
   km_entrada?: string;
   combustivel_saida?: string;
   combustivel_entrada?: string;
+  /** Nível de bateria (%) — viaturas elétricas/híbridas. Paralelo a combustivel_saida/entrada. */
+  eletricidade_saida?: string;
+  eletricidade_entrada?: string;
   /** Momento da folha de danos: 'ENTREGA' | 'RECOLHA' | 'DEVOLUÇÃO'. Preenche {{momento_folha}}. */
   momentoFolha?: string;
   /** Fotos locais (data URLs) a juntar à grelha de danos — usado na pré-visualização
@@ -401,6 +404,8 @@ const replaceDynamicFields = (
     'km_entrada',
     'combustivel_saida',
     'combustivel_entrada',
+    'eletricidade_saida',
+    'eletricidade_entrada',
     'momento_folha',
     'observacoes_momento',
     'responsavel_nome',
@@ -908,6 +913,12 @@ export const generateDocumentFromTemplate = async (
       ...(params.combustivel_saida != null ? { combustivel_saida: params.combustivel_saida } : {}),
       ...(params.combustivel_entrada != null
         ? { combustivel_entrada: params.combustivel_entrada }
+        : {}),
+      ...(params.eletricidade_saida != null
+        ? { eletricidade_saida: params.eletricidade_saida }
+        : {}),
+      ...(params.eletricidade_entrada != null
+        ? { eletricidade_entrada: params.eletricidade_entrada }
         : {}),
       ...(params.momentoFolha != null ? { momento_folha: params.momentoFolha } : {}),
       ...(params.observacoesMomento != null
