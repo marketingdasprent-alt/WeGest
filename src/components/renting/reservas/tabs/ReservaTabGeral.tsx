@@ -407,30 +407,34 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
           required
           hint="Os documentos da reserva usam os templates desta empresa"
         />
-        <FormField
-          control={form.control}
-          name="emissor_id"
-          render={({ field }) => (
-            <FormItem className="max-w-md">
-              <FormLabel className="sr-only">Empresa emissora</FormLabel>
-              <EmissorSelect value={field.value} onChange={field.onChange} />
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        {podeVerTodosRenting && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
           <FormField
             control={form.control}
-            name="gestor_id"
+            name="emissor_id"
             render={({ field }) => (
-              <FormItem className="max-w-md">
-                <FormLabel>Gestor responsável</FormLabel>
-                <GestorSelect value={field.value} onChange={field.onChange} />
+              <FormItem>
+                <FormLabel>Empresa emissora</FormLabel>
+                <EmissorSelect value={field.value} onChange={field.onChange} />
                 <FormMessage />
               </FormItem>
             )}
           />
-        )}
+          {/* Gestor responsável só faz sentido em TVDE/slot (gestão de frota
+              de motoristas) — em Rent-a-Car não há gestor a atribuir. */}
+          {podeVerTodosRenting && (isTvde || isSlot) && (
+            <FormField
+              control={form.control}
+              name="gestor_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Gestor responsável</FormLabel>
+                  <GestorSelect value={field.value} onChange={field.onChange} />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+        </div>
       </div>
 
       {/* === Cliente da Reserva (não aplicável a slot) === */}
