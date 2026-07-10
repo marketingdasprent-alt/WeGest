@@ -1,4 +1,14 @@
-export const COMBUSTIVEL_NIVEL_OPTS = ['Vazio', '1/4', '1/2', '3/4', 'Cheio'] as const;
+// 1/8 e 7/8 acrescentados além dos quartos — a diferença entre "quase vazio"
+// e "quase cheio" gera discussão com o motorista na entrega/recolha.
+export const COMBUSTIVEL_NIVEL_OPTS = [
+  'Vazio',
+  '1/8',
+  '1/4',
+  '1/2',
+  '3/4',
+  '7/8',
+  'Cheio',
+] as const;
 export const ELETRICO_OPTS = ['0%', '25%', '50%', '75%', '100%'] as const;
 export const GPL_OPTS = ['Vazio', '1/4', '1/2', '3/4', 'Cheio'] as const;
 

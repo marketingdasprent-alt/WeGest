@@ -111,14 +111,18 @@ interface RealizarFromTokenArgs {
   /** Entrega/recolha simples — grava km_saida/km_entrada no contrato dentro da RPC (SECURITY DEFINER, não exige permissão renting_contratos a quem confirma o token). */
   km?: number;
   combustivel?: string;
+  /** Nível de bateria (viaturas elétricas/híbridas) — paralelo a `combustivel`. */
+  eletricidade?: string;
   /** Só para tipo='troca' — dados físicos das duas viaturas envolvidas. */
   troca?: {
     viaturaAntigaId: string | null;
     kmAntiga: number | null;
     combustivelAntiga: string | null;
+    eletricidadeAntiga: string | null;
     viaturaNovaId: string | null;
     kmNova: number | null;
     combustivelNova: string | null;
+    eletricidadeNova: string | null;
   };
 }
 
@@ -138,6 +142,7 @@ export function useRealizarFromToken() {
       tipo,
       km,
       combustivel,
+      eletricidade,
       troca,
     }: RealizarFromTokenArgs): Promise<void> => {
       if (tipo === 'troca') {
@@ -146,9 +151,11 @@ export function useRealizarFromToken() {
           p_viatura_antiga_id: troca?.viaturaAntigaId ?? null,
           p_km_antiga: troca?.kmAntiga ?? null,
           p_combustivel_antiga: troca?.combustivelAntiga ?? null,
+          p_eletricidade_antiga: troca?.eletricidadeAntiga ?? null,
           p_viatura_nova_id: troca?.viaturaNovaId ?? null,
           p_km_nova: troca?.kmNova ?? null,
           p_combustivel_nova: troca?.combustivelNova ?? null,
+          p_eletricidade_nova: troca?.eletricidadeNova ?? null,
         });
         if (error) throw error;
         return;
@@ -159,6 +166,7 @@ export function useRealizarFromToken() {
         p_token: token,
         p_km: km ?? null,
         p_combustivel: combustivel ?? null,
+        p_eletricidade: eletricidade ?? null,
       });
       if (error) throw error;
     },
