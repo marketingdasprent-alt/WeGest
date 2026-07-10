@@ -80,9 +80,9 @@ import { ContratoDeleteConfirm } from '@/components/renting/contratos/ContratoDe
 import { ContratoEstadoActions } from '@/components/renting/contratos/ContratoEstadoActions';
 import { ContratoFormSecoes } from '@/components/renting/contratos/ContratoFormSecoes';
 import {
-  ContratoNovaVersaoDialog,
+  FecharContratoDialog,
   type AlteracaoMaterial,
-} from '@/components/renting/contratos/ContratoNovaVersaoDialog';
+} from '@/components/renting/contratos/FecharContratoDialog';
 import { ContratoTabHistorico } from '@/components/renting/contratos/ContratoTabHistorico';
 import { RealizarEntregaDialog } from '@/components/renting/contratos/RealizarEntregaDialog';
 import { ContratoTabAnexos } from '@/components/renting/contratos/ContratoTabAnexos';
@@ -182,6 +182,10 @@ const ContratoForm = () => {
   const { data: coberturasDb } = useContratoCoberturas(contrato?.id ?? null);
   const { data: extrasDb } = useContratoExtras(contrato?.id ?? null);
   const { data: taxasDb } = useContratoTaxas(contrato?.id ?? null);
+  // Motorista TVDE principal — usado tanto no fecho normal (ContratoEstadoActions)
+  // como no fecho embutido na troca de viatura (FecharContratoDialog em modo troca).
+  const motoristaIdPrincipal =
+    condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null;
   const isPending =
     createMutation.isPending ||
     updateMutation.isPending ||
@@ -296,7 +300,7 @@ const ContratoForm = () => {
         origem: contrato.origem,
         regime: contrato.regime,
         tarifa_diaria: contrato.tarifa_diaria,
-        tarifa_id: (contrato as any).tarifa_id ?? null,
+        tarifa_id: contrato.tarifa_id ?? null,
         desconto_percentagem: contrato.desconto_percentagem,
         taxa_iva: contrato.taxa_iva,
         valor_total_manual: contrato.valor_total_manual,
@@ -367,7 +371,7 @@ const ContratoForm = () => {
         origem: 'sistema',
         regime: reservaFromQuery.regime,
         // Tarifa escolhida na reserva flui para o contrato (essencial em TVDE).
-        tarifa_id: (reservaFromQuery as any).tarifa_id ?? null,
+        tarifa_id: reservaFromQuery.tarifa_id ?? null,
         // Orçamento da reserva → override do total no contrato
         valor_total_manual: reservaFromQuery.valor_total,
         // ALD da reserva
@@ -466,9 +470,10 @@ const ContratoForm = () => {
   const regime = form.watch('regime');
   const tarifaIdWatch = form.watch('tarifa_id');
   const isLongaDuracao = form.watch('is_longa_duracao');
-  // TVDE e Slot já têm IVA incluído no preço — o resumo não aplica IVA adicional
-  const rawTaxaIva = form.watch('taxa_iva');
-  const taxaIva = regime === 'tvde' || regime === 'slot' ? 0 : rawTaxaIva;
+  // Taxa de IVA do contrato (23% rent-a-car / 6% TVDE, definida pela org) — o
+  // preço da tarifa já vem com IVA incluído em todos os regimes, por isso o
+  // resumo DECOMPÕE este valor em vez de o somar por cima (ver ResumoContrato).
+  const taxaIva = form.watch('taxa_iva');
   const coberturasForm = form.watch('coberturas');
   const extrasForm = form.watch('extras') as ExtraFormItem[];
   const taxasForm = form.watch('taxas') as TaxaFormItem[];
@@ -571,7 +576,9 @@ const ContratoForm = () => {
             (p) => p.tarifa_id === tarifaSelId && p.modelo_id === via.modelo_id
           ) ?? null)
         : null;
-    const cobre = isTvdeReg ? linha?.preco_semana != null : linha?.preco_dia != null;
+    const cobre = isTvdeReg
+      ? linha?.preco_semana != null
+      : linha?.preco_dia != null || linha?.preco_mes != null;
     if (tarifaSelId && via.modelo_id && !cobre) {
       form.setValue('tarifa_id', null, { shouldDirty: true });
     }
@@ -611,18 +618,26 @@ const ContratoForm = () => {
     queryKey: ['calendario-evento-pendente', contrato?.id ?? null, tipoEventoEsperado],
     queryFn: async () => {
       if (!contrato || !tipoEventoEsperado) return null;
-      const { data, error } = await supabase
+      let query = supabase
         .from('calendario_eventos')
         .select('id, tipo')
         .eq('origem_tipo', 'contrato_renting')
         .eq('origem_id', contrato.id)
         .eq('tipo', tipoEventoEsperado)
-        .is('realizado_em', null)
-        .maybeSingle();
+        .is('realizado_em', null);
+      // A recolha final só é "pendente" (a pedir acção) quando a data
+      // realmente chegar — senão, mal a entrega é marcada (ex.: via "Any
+      // Rent"), o banner reaparecia logo a pedir a recolha semanas/meses
+      // antes da data_fim do contrato. A entrega não tem este filtro: cria-
+      // se logo com o contrato, é normal e esperado poder marcá-la já.
+      if (tipoEventoEsperado === 'recolha') {
+        query = query.lte('data_inicio', new Date().toISOString());
+      }
+      const { data, error } = await query.maybeSingle();
       if (error || !data) return null;
       return { id: data.id as string, tipo: data.tipo as 'entrega' | 'recolha' };
     },
-    enabled: isEdit && !!contrato && !!tipoEventoEsperado && !isFacturado,
+    enabled: isEdit && !!contrato && !!tipoEventoEsperado,
     // Sempre fresco ao montar: depois de realizar a entrega/recolha, ao voltar
     // ao contrato não queremos reabrir a modal com base no evento em cache.
     refetchOnMount: 'always',
@@ -746,7 +761,9 @@ const ContratoForm = () => {
         const linha = precosModeloTvde.find(
           (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === via.modelo_id
         );
-        const temPreco = isTvdeReg ? linha?.preco_semana != null : linha?.preco_dia != null;
+        const temPreco = isTvdeReg
+          ? linha?.preco_semana != null
+          : linha?.preco_dia != null || linha?.preco_mes != null;
         if (!temPreco) {
           toast({
             title: isTvdeReg
@@ -918,8 +935,10 @@ const ContratoForm = () => {
   };
 
   /** Confirma a criação de uma nova versão: clona via RPC, aplica os novos
-   *  valores na linha nova e sincroniza condutores/coberturas/extras/taxas. */
-  const confirmarNovaVersao = (motivo: string) => {
+   *  valores na linha nova e sincroniza condutores/coberturas/extras/taxas.
+   *  Chamado pelo FecharContratoDialog (onFechado) depois do contrato
+   *  antigo já estar fechado a sério. */
+  const confirmarNovaVersao = (motivo: string | undefined) => {
     if (!contrato || !novaVersaoCtx) return;
     const motivoFinal =
       motivo ||
@@ -1124,12 +1143,7 @@ const ContratoForm = () => {
           Voltar
         </Button>
         {isEdit && contrato && (
-          <ContratoEstadoActions
-            contrato={contrato}
-            motoristaId={
-              condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null
-            }
-          />
+          <ContratoEstadoActions contrato={contrato} motoristaId={motoristaIdPrincipal} />
         )}
         {isEdit && contrato && (
           <Button
@@ -1233,36 +1247,37 @@ const ContratoForm = () => {
               <FileText className="h-4 w-4" />
               Realizar {realizacaoPendente.tipo === 'entrega' ? 'entrega' : 'recolha'}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setConfirmarRealizacaoDireta(true)}
-              disabled={marcarRealizacaoDireta.isPending}
-              title="Marca como realizada sem passar pelo check (fotos/km) — para contratos já existentes no Any Rent."
-            >
-              {marcarRealizacaoDireta.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                'Any Rent'
-              )}
-            </Button>
+            {realizacaoPendente.tipo === 'entrega' && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmarRealizacaoDireta(true)}
+                disabled={marcarRealizacaoDireta.isPending}
+                title="Marca a entrega como realizada sem passar pelo check (fotos/km) — para contratos já existentes no Any Rent."
+              >
+                {marcarRealizacaoDireta.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Any Rent'
+                )}
+              </Button>
+            )}
           </div>
         </div>
       )}
 
-      {/* Confirmação do atalho "marcar como já realizada" (sem check) */}
+      {/* Confirmação do atalho "marcar entrega como já realizada" (sem check).
+          Recolha/fecho não têm atalho — passam sempre por "Fechar contrato",
+          pelo fluxo QR/Realizar recolha, ou por troca de viatura. */}
       <AlertDialog open={confirmarRealizacaoDireta} onOpenChange={setConfirmarRealizacaoDireta}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              Marcar {realizacaoPendente?.tipo === 'entrega' ? 'entrega' : 'recolha'} como já
-              realizada?
-            </AlertDialogTitle>
+            <AlertDialogTitle>Marcar entrega como já realizada?</AlertDialogTitle>
             <AlertDialogDescription>
-              O contrato passa para o estado seguinte sem registar fotos, km ou confirmação no
-              terreno. Usa isto só para contratos já existentes no <strong>Any Rent</strong> — essa
-              informação nunca existiu porque foram migrados de outro sistema.
+              O contrato passa a "Em curso" sem registar fotos, km ou confirmação no terreno. Usa
+              isto só para contratos já existentes no <strong>Any Rent</strong> — essa informação
+              nunca existiu porque foram migrados de outro sistema.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1270,10 +1285,7 @@ const ContratoForm = () => {
             <AlertDialogAction
               onClick={() => {
                 if (!contrato || !realizacaoPendente) return;
-                marcarRealizacaoDireta.mutate({
-                  contratoId: contrato.id,
-                  tipo: realizacaoPendente.tipo,
-                });
+                marcarRealizacaoDireta.mutate({ contratoId: contrato.id });
                 setConfirmarRealizacaoDireta(false);
               }}
             >
@@ -1388,15 +1400,26 @@ const ContratoForm = () => {
         onMotoristaCreated={(m) => handleMotoristaCriado(m.id)}
       />
 
-      <ContratoNovaVersaoDialog
-        open={novaVersaoCtx !== null}
-        onOpenChange={(o) => {
-          if (!o) setNovaVersaoCtx(null);
-        }}
-        alteracoes={novaVersaoCtx?.alteracoes ?? []}
-        isPending={criarVersaoMutation.isPending || updateMutation.isPending}
-        onConfirmar={confirmarNovaVersao}
-      />
+      {/* Troca/upgrade/downgrade: alteração material detectada no submit
+          (ver detectarAlteracoesMateriais) abre o mesmo popup de fecho
+          normal, em modo troca — fecha o contrato actual a sério e só
+          depois cria a nova versão com os valores novos (confirmarNovaVersao,
+          chamado via onFechado). */}
+      {contrato && (
+        <FecharContratoDialog
+          open={novaVersaoCtx !== null}
+          onOpenChange={(o) => {
+            if (!o) setNovaVersaoCtx(null);
+          }}
+          contratoId={contrato.id}
+          contratoCodigo={contrato.codigo}
+          motoristaId={motoristaIdPrincipal}
+          matricula={contrato.matricula}
+          viaturaId={contrato.viatura_id}
+          alteracoesTroca={novaVersaoCtx?.alteracoes ?? []}
+          onFechado={confirmarNovaVersao}
+        />
+      )}
 
       <RealizarEntregaDialog
         open={!!realizarDialog}

@@ -1,11 +1,23 @@
 import { useState } from 'react';
-import { XCircle } from 'lucide-react';
+import { RotateCcw, XCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { FecharContratoDialog } from '@/components/renting/contratos/FecharContratoDialog';
+import { useReverterAbertura, useReverterFecho } from '@/hooks/useContratosRenting';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 const ESTADOS_ORIGEM_FECHO = ['agendado', 'em_curso'] as const;
+const ESTADOS_REVERTER_FECHO = ['devolvido', 'cancelado'] as const;
 
 interface ContratoEstadoActionsProps {
   contrato: ContratoRenting;
@@ -14,37 +26,78 @@ interface ContratoEstadoActionsProps {
   motoristaId?: string | null;
 }
 
-// Entrega e devolução são feitas via fluxo QR/check-out pendente — os
-// botões "Confirmar entrega"/"Marcar devolução" foram removidos para
-// evitar transições directas sem fotos. "Fechar contrato…" continua
-// disponível para todos os regimes (TVDE e rent-a-car) através do mesmo
-// dialog: regista a condição da viatura (km/combustível/fotos) e só aí
-// fecha de facto — ou agenda a recolha para confirmar mais tarde via
-// Calendário. Reticências no label sinalizam que há mais passos.
+// Entrega e devolução são feitas via fluxo QR/check-out pendente ou via
+// "Any Rent" (só entrega). "Fechar contrato…" continua disponível para
+// todos os regimes (TVDE e rent-a-car) — INCLUINDO contratos já
+// facturados: a factura protege os valores fiscais (congelados por
+// trigger), não o estado operacional. É a única forma de encerrar um
+// contrato a sério, a par da troca de viatura — nenhum atalho (Any Rent,
+// QR) fecha um contrato sozinho. "Reverter abertura"/"Reverter fecho"
+// desfazem um estado indevido (ex.: clique em falso) sem editar a BD à
+// mão — ver useReverterAbertura/useReverterFecho para o que cada um repõe.
 export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
   contrato,
   motoristaId,
 }) => {
   const [dialogAberto, setDialogAberto] = useState(false);
+  const [confirmarReverter, setConfirmarReverter] = useState<'abertura' | 'fecho' | null>(null);
 
-  const isFacturado = contrato.estado_financeiro === 'facturado';
+  const reverterAbertura = useReverterAbertura();
+  const reverterFecho = useReverterFecho();
+
   const podeFechar = (ESTADOS_ORIGEM_FECHO as readonly string[]).includes(
     contrato.estado_operacional
   );
+  const podeReverterAbertura = contrato.estado_operacional === 'em_curso';
+  const podeReverterFecho = (ESTADOS_REVERTER_FECHO as readonly string[]).includes(
+    contrato.estado_operacional
+  );
 
-  if (isFacturado || !podeFechar) return null;
+  if (!podeFechar && !podeReverterAbertura && !podeReverterFecho) return null;
 
   return (
     <>
-      <Button
-        type="button"
-        variant="destructive"
-        onClick={() => setDialogAberto(true)}
-        className="gap-2"
-      >
-        <XCircle className="h-4 w-4" />
-        Fechar contrato…
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        {podeFechar && (
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => setDialogAberto(true)}
+            className="gap-2"
+          >
+            <XCircle className="h-4 w-4" />
+            Fechar contrato…
+          </Button>
+        )}
+
+        {podeReverterAbertura && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setConfirmarReverter('abertura')}
+            disabled={reverterAbertura.isPending}
+            className="gap-2"
+            title="Volta o contrato a Agendado — a entrega volta a ficar pendente."
+          >
+            <RotateCcw className="h-4 w-4" />
+            Reverter abertura
+          </Button>
+        )}
+
+        {podeReverterFecho && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setConfirmarReverter('fecho')}
+            disabled={reverterFecho.isPending}
+            className="gap-2"
+            title="Volta o contrato a Em Curso — a recolha volta a ficar pendente."
+          >
+            <RotateCcw className="h-4 w-4" />
+            Reverter fecho
+          </Button>
+        )}
+      </div>
 
       <FecharContratoDialog
         open={dialogAberto}
@@ -56,6 +109,39 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
         viaturaId={contrato.viatura_id}
         estacaoOrigemId={contrato.estacao_origem_viatura_id}
       />
+
+      <AlertDialog
+        open={confirmarReverter !== null}
+        onOpenChange={(o) => !o && setConfirmarReverter(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmarReverter === 'abertura' ? 'Reverter abertura?' : 'Reverter fecho?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmarReverter === 'abertura'
+                ? 'O contrato volta a "Agendado" — a entrega volta a ficar pendente e a viatura deixa de estar "Em uso".'
+                : 'O contrato volta a "Em curso" — a recolha volta a ficar pendente e a viatura volta a ficar "Em uso".'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmarReverter === 'abertura') {
+                  reverterAbertura.mutate(contrato.id);
+                } else if (confirmarReverter === 'fecho') {
+                  reverterFecho.mutate(contrato);
+                }
+                setConfirmarReverter(null);
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };

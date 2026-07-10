@@ -98,11 +98,16 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
     const subtotalBruto = baseAluguer + custoCoberturas + custoExtras;
     const descontoPct = descontoPercentagem ?? 0;
     const desconto = subtotalBruto * (descontoPct / 100);
-    const subtotal = subtotalBruto - desconto;
-    const iva = subtotal * (taxaIva / 100);
-    // Taxas incidem sobre o subtotal e somam-se depois do IVA.
-    const custoTaxas = taxas.reduce((soma, t) => soma + calcTaxaValor(t, subtotal), 0);
-    const total = subtotal + iva + custoTaxas;
+    // O preço da tarifa (baseAluguer) já vem com IVA incluído — este valor,
+    // com desconto aplicado, é o total a cobrar. Decompõe-se em Incidência +
+    // IVA só para a fatura (não se soma IVA por cima, isso duplicaria o
+    // imposto). Mesma lógica que as reservas (ReservaResumoSidebar).
+    const totalComIva = subtotalBruto - desconto;
+    const subtotal = taxaIva > 0 ? totalComIva / (1 + taxaIva / 100) : totalComIva;
+    const iva = totalComIva - subtotal;
+    // Taxas incidem sobre o valor já com IVA e somam-se depois do IVA.
+    const custoTaxas = taxas.reduce((soma, t) => soma + calcTaxaValor(t, totalComIva), 0);
+    const total = totalComIva + custoTaxas;
 
     return {
       dias,
