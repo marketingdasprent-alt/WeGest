@@ -18,6 +18,12 @@ export interface ImportRow {
 
 export const VALID_TIPOS: TipoCartao[] = ['bp', 'repsol', 'edp'];
 
+/** Lê um ficheiro .xlsx/.xls (ArrayBuffer) para um WorkBook — wrapper fino
+ *  sobre XLSX.read para o orquestrador não precisar de importar 'xlsx'. */
+export function readWorkbook(data: ArrayBuffer): XLSX.WorkBook {
+  return XLSX.read(data, { type: 'array', cellDates: false });
+}
+
 export function parseTipo(raw: unknown): TipoCartao | '' {
   const s = String(raw || '')
     .toLowerCase()
