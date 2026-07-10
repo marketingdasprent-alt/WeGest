@@ -167,6 +167,12 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
 
   // Subscrição ao estado dirty (lida em render) para o guard do reset abaixo.
   const isFormDirty = form.formState.isDirty;
+  // O dirty é um *guard*, não um *gatilho*. Se entrasse nas deps do efeito abaixo,
+  // o `form.reset(data)` do onSubmit (dirty: true -> false) voltava a disparar a
+  // hidratação e reescrevia o formulário a partir da `viatura` do pai — que nesse
+  // instante ainda podia ser a versão pré-gravação (modelo_id antigo/vazio).
+  const isFormDirtyRef = useRef(isFormDirty);
+  isFormDirtyRef.current = isFormDirty;
 
   // Sincroniza o formulário com a viatura. É reaplicado à medida que as listas de
   // opções (marcas, modelos, combustíveis, tipos, grupos, estações) carregam,
@@ -176,7 +182,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   // (as opções chegavam depois do reset). O guard isFormDirty evita sobrepor
   // edições do utilizador ainda por guardar.
   useEffect(() => {
-    if (!viatura || isFormDirty) return;
+    if (!viatura || isFormDirtyRef.current) return;
     form.reset({
       matricula: viatura.matricula || '',
       marca: viatura.marca || '',
@@ -202,7 +208,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       extintor_validade: viatura.extintor_validade || '',
       tipo_id: viatura.tipo_id || '',
     });
-  }, [viatura, form, isFormDirty, viaturasTipos, marcas, modelos, combustiveis, grupos, estacoes]);
+  }, [viatura, form, viaturasTipos, marcas, modelos, combustiveis, grupos, estacoes]);
 
   // Documentos: carregar uma vez por viatura.
   useEffect(() => {
@@ -217,6 +223,9 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       setModelos([]);
       return;
     }
+    // Ignora respostas fora de ordem: se a marca mudar antes desta query voltar,
+    // a lista antiga não pode sobrepor-se à nova.
+    let cancelado = false;
     supabase
       .from('viatura_modelos')
       .select('id, nome, marca_id')
@@ -224,9 +233,14 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       .eq('ativo', true)
       .order('nome')
       .then(
-        ({ data }) => setModelos(data || []),
+        ({ data }) => {
+          if (!cancelado) setModelos(data || []);
+        },
         (err) => console.error('Erro ao carregar modelos:', err)
       );
+    return () => {
+      cancelado = true;
+    };
   }, [watchedMarcaId]);
 
   const loadDocuments = async () => {
