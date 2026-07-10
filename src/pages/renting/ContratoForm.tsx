@@ -621,7 +621,7 @@ const ContratoForm = () => {
       if (error || !data) return null;
       return { id: data.id as string, tipo: data.tipo as 'entrega' | 'recolha' };
     },
-    enabled: isEdit && !!contrato && !!tipoEventoEsperado && !isFacturado,
+    enabled: isEdit && !!contrato && !!tipoEventoEsperado,
     // Sempre fresco ao montar: depois de realizar a entrega/recolha, ao voltar
     // ao contrato não queremos reabrir a modal com base no evento em cache.
     refetchOnMount: 'always',
@@ -1228,36 +1228,37 @@ const ContratoForm = () => {
               <FileText className="h-4 w-4" />
               Realizar {realizacaoPendente.tipo === 'entrega' ? 'entrega' : 'recolha'}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setConfirmarRealizacaoDireta(true)}
-              disabled={marcarRealizacaoDireta.isPending}
-              title="Marca como realizada sem passar pelo check (fotos/km) — para contratos já existentes no Any Rent."
-            >
-              {marcarRealizacaoDireta.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                'Any Rent'
-              )}
-            </Button>
+            {realizacaoPendente.tipo === 'entrega' && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmarRealizacaoDireta(true)}
+                disabled={marcarRealizacaoDireta.isPending}
+                title="Marca a entrega como realizada sem passar pelo check (fotos/km) — para contratos já existentes no Any Rent."
+              >
+                {marcarRealizacaoDireta.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Any Rent'
+                )}
+              </Button>
+            )}
           </div>
         </div>
       )}
 
-      {/* Confirmação do atalho "marcar como já realizada" (sem check) */}
+      {/* Confirmação do atalho "marcar entrega como já realizada" (sem check).
+          Recolha/fecho não têm atalho — passam sempre por "Fechar contrato",
+          pelo fluxo QR/Realizar recolha, ou por troca de viatura. */}
       <AlertDialog open={confirmarRealizacaoDireta} onOpenChange={setConfirmarRealizacaoDireta}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              Marcar {realizacaoPendente?.tipo === 'entrega' ? 'entrega' : 'recolha'} como já
-              realizada?
-            </AlertDialogTitle>
+            <AlertDialogTitle>Marcar entrega como já realizada?</AlertDialogTitle>
             <AlertDialogDescription>
-              O contrato passa para o estado seguinte sem registar fotos, km ou confirmação no
-              terreno. Usa isto só para contratos já existentes no <strong>Any Rent</strong> — essa
-              informação nunca existiu porque foram migrados de outro sistema.
+              O contrato passa a "Em curso" sem registar fotos, km ou confirmação no terreno. Usa
+              isto só para contratos já existentes no <strong>Any Rent</strong> — essa informação
+              nunca existiu porque foram migrados de outro sistema.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1265,10 +1266,7 @@ const ContratoForm = () => {
             <AlertDialogAction
               onClick={() => {
                 if (!contrato || !realizacaoPendente) return;
-                marcarRealizacaoDireta.mutate({
-                  contratoId: contrato.id,
-                  tipo: realizacaoPendente.tipo,
-                });
+                marcarRealizacaoDireta.mutate({ contratoId: contrato.id });
                 setConfirmarRealizacaoDireta(false);
               }}
             >

@@ -208,6 +208,7 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
       <SectionGeral
         form={form}
         tarifaReadOnly
+        estadoOperacionalReadOnly={!!contratoId}
         tarifaAction={
           contratoId ? (
             <BotaoPedirAlteracao
