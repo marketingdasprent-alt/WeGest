@@ -203,6 +203,29 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   const tvdeModeloSemPreco =
     isTvde && !!tarifaIdSel && !!viaturaSelected?.modelo_id && precoModeloSemanaTvde == null;
 
+  // TVDE: km/franquia vêm do modelo da viatura na tarifa escolhida — puxa-os
+  // automaticamente sempre que a tarifa ou a viatura mudam (mesma fonte do
+  // preço/semana). Não sobrepõe rent-a-car/slot, que têm as suas próprias regras.
+  useEffect(() => {
+    if (!isTvde || !tarifaIdSel || !viaturaSelected?.modelo_id) return;
+    const preco = precosModelo.find(
+      (p) => p.tarifa_id === tarifaIdSel && p.modelo_id === viaturaSelected.modelo_id
+    );
+    if (!preco) return;
+    form.setValue('kms_incluidos', preco.km_mensal, { shouldDirty: true });
+    form.setValue('km_adicional_valor', preco.km_adicional_valor, { shouldDirty: true });
+    form.setValue('franquia_valor', preco.franquia_valor, { shouldDirty: true });
+  }, [isTvde, tarifaIdSel, viaturaSelected, precosModelo, form]);
+
+  // Auto-selecciona a tarifa TVDE quando só há uma (o normal) — o preço real
+  // vem sempre do modelo da viatura, não da escolha da tarifa, por isso não
+  // faz sentido obrigar a seleção manual.
+  useEffect(() => {
+    if (isTvde && tarifasTvde.length > 0 && !tarifaIdSel) {
+      form.setValue('tarifa_id', tarifasTvde[0].id, { shouldDirty: true });
+    }
+  }, [isTvde, tarifasTvde, tarifaIdSel, form]);
+
   // Faturação automática: regime + ALD + duração + tarifa → valor_total.
   const isLongaDuracao = form.watch('is_longa_duracao');
   const renovacaoOpcao = form.watch('renovacao_opcao');

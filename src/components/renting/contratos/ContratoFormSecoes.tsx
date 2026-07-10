@@ -143,7 +143,14 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
           <FormField
             control={form.control}
             name="tarifa_id"
-            render={({ field }) => (
+            render={({ field }) => {
+              // Auto-selecciona a tarifa TVDE quando só há uma (o normal) — o
+              // preço real vem sempre do modelo da viatura, não da escolha da
+              // tarifa, por isso não faz sentido obrigar a seleção manual.
+              if (tarifasTvde.length > 0 && !field.value) {
+                setTimeout(() => field.onChange(tarifasTvde[0].id), 0);
+              }
+              return (
               <FormItem className="max-w-xs">
                 <FormLabel>Tarifa TVDE</FormLabel>
                 {tarifasTvde.length === 0 ? (
@@ -171,7 +178,8 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                 )}
                 <FormMessage />
               </FormItem>
-            )}
+              );
+            }}
           />
         </div>
       ) : (

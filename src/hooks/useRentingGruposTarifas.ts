@@ -32,6 +32,9 @@ export interface RentingTarifaPrecoModelo {
   tarifa_id: string;
   modelo_id: string;
   preco_semana: number;
+  km_mensal: number | null;
+  km_adicional_valor: number | null;
+  franquia_valor: number | null;
 }
 
 /** Grupos de renting activos (id + nome). */
@@ -75,7 +78,7 @@ export function useRentingTarifaPrecosModelo() {
     queryFn: async (): Promise<RentingTarifaPrecoModelo[]> => {
       const { data, error } = await supabase
         .from('renting_tarifa_precos_modelo')
-        .select('tarifa_id, modelo_id, preco_semana');
+        .select('tarifa_id, modelo_id, preco_semana, km_mensal, km_adicional_valor, franquia_valor');
       if (error) throw error;
       return (data ?? []) as RentingTarifaPrecoModelo[];
     },

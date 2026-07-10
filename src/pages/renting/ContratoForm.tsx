@@ -521,20 +521,27 @@ const ContratoForm = () => {
     if (regime === 'tvde') {
       const tarifaTvdeId = form.getValues('tarifa_id');
       const tarifaTvde = tarifas.find((t) => t.id === tarifaTvdeId) ?? null;
-      const precoModeloSemana =
+      const precoModelo =
         tarifaTvdeId && via.modelo_id
           ? (precosModeloTvde.find(
               (p) => p.tarifa_id === tarifaTvdeId && p.modelo_id === via.modelo_id
-            )?.preco_semana ?? null)
+            ) ?? null)
           : null;
       const fat = calcularFaturacaoRenting(
         regime,
         isLongaDuracao,
         dias,
         tarifaTvde,
-        precoModeloSemana
+        precoModelo?.preco_semana ?? null
       );
       if (fat) form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
+      if (precoModelo) {
+        form.setValue('kms_incluidos', precoModelo.km_mensal, { shouldDirty: true });
+        form.setValue('km_adicional_valor', precoModelo.km_adicional_valor, {
+          shouldDirty: true,
+        });
+        form.setValue('franquia_valor', precoModelo.franquia_valor, { shouldDirty: true });
+      }
       return;
     }
 
