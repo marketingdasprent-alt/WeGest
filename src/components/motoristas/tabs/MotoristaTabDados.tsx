@@ -89,13 +89,13 @@ const formSchema = z.object({
   nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   nif: z
     .string()
-    .optional()
+    .min(1, 'NIF é obrigatório')
     .refine(
-      (v) => !v || validarNIF(v).valid,
-      (v) => ({ message: (v ? validarNIF(v).message : '') || 'NIF inválido' })
+      (v) => validarNIF(v).valid,
+      (v) => ({ message: validarNIF(v).message || 'NIF inválido' })
     ),
-  email: z.string().email('Email inválido').optional().or(z.literal('')),
-  telefone: z.string().optional(),
+  email: z.string().min(1, 'Email é obrigatório').email('Email inválido'),
+  telefone: z.string().min(1, 'Telefone é obrigatório'),
   morada: z.string().optional(),
   codigo_postal: z
     .string()
@@ -105,11 +105,12 @@ const formSchema = z.object({
       (v) => ({ message: (v ? validarCodigoPostal(v).message : '') || 'Código postal inválido' })
     ),
   cidade: z.string().optional(),
-  documento_tipo: z.string().optional(),
-  documento_numero: z.string().optional(),
-  documento_validade: z.string().optional().refine(validateDateYear, {
-    message: YEAR_RANGE_MESSAGE,
-  }),
+  documento_tipo: z.string().min(1, 'Tipo de documento é obrigatório'),
+  documento_numero: z.string().min(1, 'Número do documento é obrigatório'),
+  documento_validade: z
+    .string()
+    .min(1, 'Validade é obrigatória')
+    .refine(validateDateYear, { message: YEAR_RANGE_MESSAGE }),
   carta_conducao: z
     .string()
     .optional()
@@ -139,10 +140,10 @@ const formSchema = z.object({
   observacoes: z.string().optional(),
   iban: z
     .string()
-    .optional()
+    .min(1, 'IBAN é obrigatório')
     .refine(
-      (v) => !v || validarIBAN(v).valid,
-      (v) => ({ message: (v ? validarIBAN(v).message : '') || 'IBAN inválido' })
+      (v) => validarIBAN(v).valid,
+      (v) => ({ message: validarIBAN(v).message || 'IBAN inválido' })
     ),
   gestor_responsavel: z.string().optional().nullable(),
   bolt_id: z.string().optional().nullable(),
@@ -595,7 +596,9 @@ export function MotoristaTabDados({
                 name="nif"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>NIF</FormLabel>
+                    <FormLabel>
+                      NIF <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
@@ -608,7 +611,9 @@ export function MotoristaTabDados({
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>
+                      Email <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input type="email" {...field} />
                     </FormControl>
@@ -621,7 +626,9 @@ export function MotoristaTabDados({
                 name="iban"
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>IBAN</FormLabel>
+                    <FormLabel>
+                      IBAN <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input placeholder="PT50..." {...field} />
                     </FormControl>
@@ -634,7 +641,9 @@ export function MotoristaTabDados({
                 name="telefone"
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Telefone</FormLabel>
+                    <FormLabel>
+                      Telefone <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <PhoneInput
                         value={field.value || ''}
@@ -710,7 +719,9 @@ export function MotoristaTabDados({
                 name="documento_tipo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tipo de Documento</FormLabel>
+                    <FormLabel>
+                      Tipo de Documento <span className="text-red-500">*</span>
+                    </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -733,7 +744,9 @@ export function MotoristaTabDados({
                 name="documento_numero"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Número do Documento</FormLabel>
+                    <FormLabel>
+                      Número do Documento <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
@@ -746,7 +759,9 @@ export function MotoristaTabDados({
                 name="documento_validade"
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Validade</FormLabel>
+                    <FormLabel>
+                      Validade <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>

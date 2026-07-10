@@ -189,11 +189,18 @@ describe('validarCartaConducao', () => {
 // Número de Documento (por tipo)
 // ──────────────────────────────────────────────────────────────
 describe('validarNumeroDocumento', () => {
-  it('Cartão de Cidadão: 8 dígitos, com sufixo de versão opcional', () => {
+  it('Cartão de Cidadão: 8 dígitos, com sufixo de controlo+versão+controlo opcional', () => {
     expect(validarNumeroDocumento('cc', '12345678').valid).toBe(true);
-    expect(validarNumeroDocumento('cc', '12345678ZZ4').valid).toBe(true);
+    expect(validarNumeroDocumento('cc', '123456789ZZ4').valid).toBe(true);
     expect(validarNumeroDocumento('cc', '1234567').valid).toBe(false);
     expect(validarNumeroDocumento('cc', '12345678Z').valid).toBe(false);
+    // Sem o dígito de controlo do meio (bug antigo: lia-o como parte das letras)
+    expect(validarNumeroDocumento('cc', '12345678ZZ4').valid).toBe(false);
+  });
+
+  it('Cartão de Cidadão: aceita espaços, como aparece impresso no cartão físico', () => {
+    expect(validarNumeroDocumento('cc', '12345678 9 ZZ 4').valid).toBe(true);
+    expect(validarNumeroDocumento('cc', '32810377 2 ZZ 9').valid).toBe(true);
   });
 
   it('Bilhete de Identidade: exactamente 8 dígitos', () => {

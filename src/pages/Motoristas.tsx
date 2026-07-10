@@ -11,6 +11,7 @@ import {
   CreditCard,
   Car,
   Fuel,
+  FileWarning,
 } from 'lucide-react';
 import { startOfWeek, format as formatDate } from 'date-fns';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { MotoristaFullModal } from '@/components/motoristas/MotoristaFullModal';
 import { MotoristasPlataformaNaoAssociados } from '@/components/motoristas/MotoristasPlataformaNaoAssociados';
+import { MotoristasFichaIncompleta } from '@/components/motoristas/MotoristasFichaIncompleta';
 import { CartoesNaoReconhecidos } from '@/components/motoristas/CartoesNaoReconhecidos';
 import { PortagensNaoAssociadas } from '@/components/motoristas/PortagensNaoAssociadas';
 import { BpNaoAssociadas } from '@/components/motoristas/BpNaoAssociadas';
@@ -45,6 +47,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { cn, normalizeString } from '@/lib/utils';
+import { camposFichaEmFalta } from '@/lib/motoristaFichaCompleta';
 import { useMotoristas } from '@/hooks/useMotoristas';
 import {
   useCartoesNaoAssociadosCount,
@@ -129,6 +132,7 @@ export default function Motoristas() {
   const [bpNaoAssociadasOpen, setBpNaoAssociadasOpen] = useState(false);
   const bpNaoAssociadasCountQuery = useBpNaoAssociadasCount();
   const bpNaoAssociadasCount = bpNaoAssociadasCountQuery.data ?? 0;
+  const [fichaIncompletaOpen, setFichaIncompletaOpen] = useState(false);
   const [novaFichaPrefill, setNovaFichaPrefill] = useState<{
     nome?: string;
     bolt_id?: string;
@@ -148,6 +152,16 @@ export default function Motoristas() {
     const gestores = motoristas.map((m) => m.gestor_responsavel).filter((g): g is string => !!g);
     return [...new Set(gestores)].sort();
   }, [motoristas]);
+
+  // Motoristas com campos obrigatórios da ficha por preencher (NIF, email, IBAN,
+  // telefone, documento) — badge "sem documentos" ao lado de "sem ficha".
+  const motoristasFichaIncompleta = useMemo(
+    () =>
+      motoristas
+        .map((motorista) => ({ motorista, camposEmFalta: camposFichaEmFalta(motorista) }))
+        .filter((m) => m.camposEmFalta.length > 0),
+    [motoristas]
+  );
 
   // Sortable header component
   const SortableHeader = ({
@@ -351,6 +365,22 @@ export default function Motoristas() {
                 className="ml-1 bg-amber-500/20 text-amber-700 dark:text-amber-300"
               >
                 associar
+              </Badge>
+            </Button>
+          )}
+          {motoristasFichaIncompleta.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setFichaIncompletaOpen(true)}
+              className="w-full sm:w-auto gap-2 border-rose-500/50 text-rose-600 hover:bg-rose-500/10 dark:text-rose-400"
+            >
+              <FileWarning className="h-4 w-4" />
+              {motoristasFichaIncompleta.length} sem documentos
+              <Badge
+                variant="secondary"
+                className="ml-1 bg-rose-500/20 text-rose-700 dark:text-rose-300"
+              >
+                atualizar
               </Badge>
             </Button>
           )}
@@ -621,6 +651,17 @@ export default function Motoristas() {
           setMotoristaToEdit(null);
           setNovaFichaPrefill({ nome, bolt_id: boltId, uber_uuid: uberId });
           setIsDialogOpen(true);
+        }}
+      />
+
+      {/* Dialog: motoristas com ficha incompleta (campos obrigatórios por preencher) */}
+      <MotoristasFichaIncompleta
+        open={fichaIncompletaOpen}
+        onOpenChange={setFichaIncompletaOpen}
+        motoristas={motoristasFichaIncompleta}
+        onSelect={(motorista) => {
+          setFichaIncompletaOpen(false);
+          handleRowClick(motorista);
         }}
       />
 

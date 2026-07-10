@@ -236,6 +236,13 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
       : isLongaDuracao
         ? precoModeloMesRac == null
         : precoModeloDiaRac == null);
+  // Viatura escolhida mas NUNCA associada a um modelo de catálogo
+  // (viaturas.modelo_id null — normalmente ficha antiga/importada só com os
+  // campos de texto marca/modelo). Os preços por modelo (renting_tarifa_
+  // precos_modelo) são sempre chave por modelo_id — sem essa ligação o preço
+  // nunca casa com NENHUMA tarifa, mesmo que exista e esteja bem configurado.
+  // Caso distinto de modeloSemPreco (aí o modelo existe, só falta o preço).
+  const viaturaSemModeloCatalogo = !isSlot && !!tarifaIdSel && !!viaturaSelected && !modeloIdSel;
   // Alias mantido para a UI existente do TVDE.
   const tvdeModeloSemPreco = modeloSemPreco;
   const renovacaoOpcao = form.watch('renovacao_opcao');
@@ -1021,6 +1028,19 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
                 </FormItem>
               )}
             />
+
+            {viaturaSemModeloCatalogo && (
+              <Alert variant="destructive" className="mt-3">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Viatura sem modelo associado</AlertTitle>
+                <AlertDescription>
+                  A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) não está
+                  associada a nenhum modelo do catálogo — os preços por modelo não conseguem casar
+                  com nenhuma tarifa, mesmo que estejam bem configurados. Associa o modelo em
+                  Viaturas antes de continuar.
+                </AlertDescription>
+              </Alert>
+            )}
 
             {modeloSemPreco && (
               <Alert variant="destructive" className="mt-3">

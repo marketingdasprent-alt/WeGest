@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { RotateCcw, XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { RotateCcw, Undo2, XCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -13,7 +14,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { FecharContratoDialog } from '@/components/renting/contratos/FecharContratoDialog';
-import { useReverterAbertura, useReverterFecho } from '@/hooks/useContratosRenting';
+import {
+  useReverterAbertura,
+  useReverterFecho,
+  useReverterParaReserva,
+} from '@/hooks/useContratosRenting';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 const ESTADOS_ORIGEM_FECHO = ['agendado', 'em_curso'] as const;
@@ -39,11 +44,15 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
   contrato,
   motoristaId,
 }) => {
+  const navigate = useNavigate();
   const [dialogAberto, setDialogAberto] = useState(false);
-  const [confirmarReverter, setConfirmarReverter] = useState<'abertura' | 'fecho' | null>(null);
+  const [confirmarReverter, setConfirmarReverter] = useState<
+    'abertura' | 'fecho' | 'paraReserva' | null
+  >(null);
 
   const reverterAbertura = useReverterAbertura();
   const reverterFecho = useReverterFecho();
+  const reverterParaReserva = useReverterParaReserva();
 
   const podeFechar = (ESTADOS_ORIGEM_FECHO as readonly string[]).includes(
     contrato.estado_operacional
@@ -52,8 +61,15 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
   const podeReverterFecho = (ESTADOS_REVERTER_FECHO as readonly string[]).includes(
     contrato.estado_operacional
   );
+  // Só faz sentido "desconverter" um contrato ainda não entregue — depois
+  // disso já não é "só uma reserva outra vez" (ver useReverterParaReserva).
+  const podeReverterParaReserva =
+    contrato.estado_operacional === 'agendado' &&
+    !!contrato.reserva_id &&
+    contrato.estado_financeiro !== 'facturado';
 
-  if (!podeFechar && !podeReverterAbertura && !podeReverterFecho) return null;
+  if (!podeFechar && !podeReverterAbertura && !podeReverterFecho && !podeReverterParaReserva)
+    return null;
 
   return (
     <>
@@ -97,6 +113,20 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
             Reverter fecho
           </Button>
         )}
+
+        {podeReverterParaReserva && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setConfirmarReverter('paraReserva')}
+            disabled={reverterParaReserva.isPending}
+            className="gap-2"
+            title="Remove este contrato — volta a ser só a reserva de origem."
+          >
+            <Undo2 className="h-4 w-4" />
+            Reverter para reserva
+          </Button>
+        )}
       </div>
 
       <FecharContratoDialog
@@ -117,12 +147,17 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirmarReverter === 'abertura' ? 'Reverter abertura?' : 'Reverter fecho?'}
+              {confirmarReverter === 'abertura' && 'Reverter abertura?'}
+              {confirmarReverter === 'fecho' && 'Reverter fecho?'}
+              {confirmarReverter === 'paraReserva' && 'Reverter para reserva?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmarReverter === 'abertura'
-                ? 'O contrato volta a "Agendado" — a entrega volta a ficar pendente e a viatura deixa de estar "Em uso".'
-                : 'O contrato volta a "Em curso" — a recolha volta a ficar pendente e a viatura volta a ficar "Em uso".'}
+              {confirmarReverter === 'abertura' &&
+                'O contrato volta a "Agendado" — a entrega volta a ficar pendente e a viatura deixa de estar "Em uso".'}
+              {confirmarReverter === 'fecho' &&
+                'O contrato volta a "Em curso" — a recolha volta a ficar pendente e a viatura volta a ficar "Em uso".'}
+              {confirmarReverter === 'paraReserva' &&
+                'Este contrato é removido e volta a ser só a reserva de origem — a viatura deixa de estar reservada por ele. Não é possível desfazer isto pela aplicação.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -133,6 +168,11 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
                   reverterAbertura.mutate(contrato.id);
                 } else if (confirmarReverter === 'fecho') {
                   reverterFecho.mutate(contrato);
+                } else if (confirmarReverter === 'paraReserva') {
+                  const reservaId = contrato.reserva_id;
+                  reverterParaReserva.mutate(contrato, {
+                    onSuccess: () => navigate(`/renting/reservas/${reservaId}`),
+                  });
                 }
                 setConfirmarReverter(null);
               }}

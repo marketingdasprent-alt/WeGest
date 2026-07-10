@@ -19,6 +19,23 @@ function ivaRate(regime: string): number {
   return regime === 'tvde' || regime === 'slot' ? 0 : 0.23;
 }
 
+/** Rent-a-Car: o preço da tarifa é SEM IVA — soma-se por cima. TVDE/slot:
+ *  o preço já vem com IVA incluído — decompõe-se (divide), nunca soma. */
+function calcularSubtotalIvaTotal(
+  regime: string,
+  rawTotal: number
+): { subtotal: number; iva: number; total: number } {
+  const taxaIVA = ivaRate(regime);
+  if (regime === 'rent_a_car' && taxaIVA > 0) {
+    const subtotal = rawTotal;
+    const iva = subtotal * taxaIVA;
+    return { subtotal, iva, total: subtotal + iva };
+  }
+  const total = rawTotal;
+  const subtotal = taxaIVA > 0 && total > 0 ? total / (1 + taxaIVA) : total;
+  return { subtotal, iva: total - subtotal, total };
+}
+
 function diferencaDias(inicio: string, fim: string): number | null {
   if (!inicio || !fim) return null;
   const di = new Date(inicio).getTime();
@@ -56,11 +73,10 @@ export const ReservaTabCaixa: React.FC<ReservaTabCaixaProps> = ({
   const regime = form.watch('regime');
 
   const dias = useMemo(() => diferencaDias(dataInicio, dataFim), [dataInicio, dataFim]);
-  const total = valorTotal ?? 0;
+  const rawTotal = valorTotal ?? 0;
   const taxaIVA = ivaRate(regime);
-  const subtotal = taxaIVA > 0 && total > 0 ? total / (1 + taxaIVA) : total;
-  const iva = total - subtotal;
-  const precoUnitarioDerivado = dias && dias > 0 ? total / dias : 0;
+  const { subtotal, iva, total } = calcularSubtotalIvaTotal(regime, rawTotal);
+  const precoUnitarioDerivado = dias && dias > 0 ? rawTotal / dias : 0;
 
   // Estado local para o input de preço unitário — permite editar livremente
   // sem ser sobrescrito por cada cálculo derivado.
@@ -70,9 +86,9 @@ export const ReservaTabCaixa: React.FC<ReservaTabCaixaProps> = ({
 
   // Sincroniza o input quando valor_total ou dias mudam externamente.
   useEffect(() => {
-    const novo = dias && dias > 0 && total > 0 ? (total / dias).toFixed(2) : '';
+    const novo = dias && dias > 0 && rawTotal > 0 ? (rawTotal / dias).toFixed(2) : '';
     setPrecoUnitInput(novo);
-  }, [total, dias]);
+  }, [rawTotal, dias]);
 
   const handlePrecoUnitarioChange = (raw: string) => {
     // Aceita "," ou "." como separador decimal
@@ -99,7 +115,9 @@ export const ReservaTabCaixa: React.FC<ReservaTabCaixaProps> = ({
           <Receipt className="h-5 w-5 text-primary" />
           <h3 className="text-base font-semibold">Artigos</h3>
           <span className="text-xs text-muted-foreground ml-auto italic">
-            Preços com IVA incluído
+            {regime === 'rent_a_car'
+              ? 'Preços sem IVA — soma-se no total'
+              : 'Preços com IVA incluído'}
           </span>
         </div>
 

@@ -64,6 +64,64 @@ export const reservaDialogSchema = z
     observacoes: z.string().max(2000).optional().nullable(),
     observacoes_internas: z.string().max(2000).optional().nullable(),
 
+    // Coberturas (m:n com renting_coberturas — várias por reserva, com snapshot)
+    coberturas: z
+      .array(
+        z.object({
+          cobertura_id: z.string().uuid('Cobertura inválida'),
+          cobertura_nome: z.string(),
+          preco_dia: z.number(),
+          franquia_valor: z.number().nullable(),
+        })
+      )
+      .default([])
+      .refine(
+        (lista) => {
+          const ids = lista.map((c) => c.cobertura_id);
+          return new Set(ids).size === ids.length;
+        },
+        { message: 'Cada cobertura só pode aparecer uma vez.' }
+      ),
+
+    // Extras (m:n com renting_extras — vários por reserva, com snapshot + quantidade)
+    extras: z
+      .array(
+        z.object({
+          extra_id: z.string().uuid('Extra inválido'),
+          extra_nome: z.string(),
+          preco_unidade: z.number(),
+          tipo_calculo: z.enum(['dia', 'fixo']),
+          quantidade: z.number().int().min(1, 'Quantidade mínima: 1'),
+        })
+      )
+      .default([])
+      .refine(
+        (lista) => {
+          const ids = lista.map((e) => e.extra_id);
+          return new Set(ids).size === ids.length;
+        },
+        { message: 'Cada extra só pode aparecer uma vez.' }
+      ),
+
+    // Taxas (m:n com renting_taxas — várias por reserva, % ou valor fixo)
+    taxas: z
+      .array(
+        z.object({
+          taxa_id: z.string().uuid('Taxa inválida'),
+          taxa_nome: z.string(),
+          percentagem: z.number().nullable(),
+          valor_fixo: z.number().nullable(),
+        })
+      )
+      .default([])
+      .refine(
+        (lista) => {
+          const ids = lista.map((t) => t.taxa_id);
+          return new Set(ids).size === ids.length;
+        },
+        { message: 'Cada taxa só pode aparecer uma vez.' }
+      ),
+
     condutores: z
       .array(
         z
