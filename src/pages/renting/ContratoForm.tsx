@@ -284,7 +284,7 @@ const ContratoForm = () => {
         origem: contrato.origem,
         regime: contrato.regime,
         tarifa_diaria: contrato.tarifa_diaria,
-        tarifa_id: (contrato as any).tarifa_id ?? null,
+        tarifa_id: contrato.tarifa_id ?? null,
         desconto_percentagem: contrato.desconto_percentagem,
         taxa_iva: contrato.taxa_iva,
         valor_total_manual: contrato.valor_total_manual,
@@ -355,7 +355,7 @@ const ContratoForm = () => {
         origem: 'sistema',
         regime: reservaFromQuery.regime,
         // Tarifa escolhida na reserva flui para o contrato (essencial em TVDE).
-        tarifa_id: (reservaFromQuery as any).tarifa_id ?? null,
+        tarifa_id: reservaFromQuery.tarifa_id ?? null,
         // Orçamento da reserva → override do total no contrato
         valor_total_manual: reservaFromQuery.valor_total,
         // ALD da reserva
