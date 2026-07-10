@@ -115,7 +115,9 @@ export const ReservaTabCaixa: React.FC<ReservaTabCaixaProps> = ({
           <Receipt className="h-5 w-5 text-primary" />
           <h3 className="text-base font-semibold">Artigos</h3>
           <span className="text-xs text-muted-foreground ml-auto italic">
-            {regime === 'rent_a_car' ? 'Preços sem IVA — soma-se no total' : 'Preços com IVA incluído'}
+            {regime === 'rent_a_car'
+              ? 'Preços sem IVA — soma-se no total'
+              : 'Preços com IVA incluído'}
           </span>
         </div>
 

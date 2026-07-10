@@ -24,11 +24,7 @@ import {
 } from '@/hooks/useReservas';
 import { useReservaCondutores, useSyncReservaCondutores } from '@/hooks/useReservaCondutores';
 import { useReservaCoberturas, useSyncReservaCoberturas } from '@/hooks/useReservaCoberturas';
-import {
-  useReservaExtras,
-  useSyncReservaExtras,
-  calcExtraTotal,
-} from '@/hooks/useReservaExtras';
+import { useReservaExtras, useSyncReservaExtras, calcExtraTotal } from '@/hooks/useReservaExtras';
 import { useReservaTaxas, useSyncReservaTaxas } from '@/hooks/useReservaTaxas';
 import { useContratoIdByReserva } from '@/hooks/useContratosRenting';
 import { uploadReservaAnexoSync } from '@/hooks/useReservaAnexos';
@@ -576,7 +572,8 @@ const RentingReservaForm = () => {
       const custoCoberturas =
         coberturasFinal.reduce((s, c) => s + (c.preco_dia ?? 0), 0) * diasRelacoes;
       const custoExtras = extrasFinal.reduce((s, e) => s + calcExtraTotal(e, diasRelacoes), 0);
-      const subtotalTaxas = (baseAluguer ?? values.valor_total ?? 0) + custoCoberturas + custoExtras;
+      const subtotalTaxas =
+        (baseAluguer ?? values.valor_total ?? 0) + custoCoberturas + custoExtras;
       const syncRelacoesExtra = (reservaId: string) => {
         syncCoberturasMutation.mutate({ reservaId, desejadas: coberturasFinal });
         syncExtrasMutation.mutate({ reservaId, desejados: extrasFinal, dias: diasRelacoes });

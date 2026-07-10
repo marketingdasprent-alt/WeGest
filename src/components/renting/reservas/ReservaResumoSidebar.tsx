@@ -325,7 +325,9 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
             ) : (
               <>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-muted-foreground shrink-0">Preço/dia (sem IVA)</span>
+                  <span className="text-sm text-muted-foreground shrink-0">
+                    Preço/dia (sem IVA)
+                  </span>
                   <Input
                     type="text"
                     inputMode="decimal"
@@ -338,7 +340,11 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
                     disabled={!dias}
                     placeholder="0,00"
                     className="h-8 w-24 text-right tabular-nums text-sm"
-                    title={!dias ? 'Define primeiro as datas' : 'Preço por dia (sem IVA) — o IVA soma-se no total'}
+                    title={
+                      !dias
+                        ? 'Define primeiro as datas'
+                        : 'Preço por dia (sem IVA) — o IVA soma-se no total'
+                    }
                   />
                 </div>
                 {dias ? (

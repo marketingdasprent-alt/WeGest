@@ -45,8 +45,8 @@ export const ReservaTabHistorico: React.FC<ReservaTabHistoricoProps> = ({
       </div>
 
       <p className="text-xs text-muted-foreground mb-4">
-        A reserva não é versionada — as alterações gravam-se directamente. O histórico de versões
-        só começa a existir a partir do contrato.
+        A reserva não é versionada — as alterações gravam-se directamente. O histórico de versões só
+        começa a existir a partir do contrato.
       </p>
 
       <ul className="space-y-2">
