@@ -373,15 +373,25 @@ export function ContratoTabFaturar({ contrato }: Props) {
     const desconto = subtotalBruto * (descPct / 100);
     if (desconto > 0) itens.push({ descricao: `Desconto (${descPct}%)`, valor: -round2(desconto) });
 
-    // O preço da tarifa (baseAluguer) já vem com IVA incluído, em todos os
-    // regimes — este valor, com desconto aplicado, é o que é cobrado ao
-    // cliente. Decompõe-se em Incidência (sem IVA) + IVA só para a fatura;
-    // não se soma IVA por cima, isso duplicaria o imposto. Mesma lógica que
-    // a reserva usa (ReservaFaturarDialog).
-    const totalComIva = subtotalBruto - desconto;
+    // Rent-a-Car: o preço da tarifa é SEM IVA — soma-se por cima. TVDE/slot:
+    // o preço já vem com IVA incluído — decompõe-se (divide), nunca soma
+    // (duplicaria o imposto). Mesma lógica que a view contrato_renting_totais
+    // e o trigger de congelamento usam.
+    const isRentACar = contrato.regime === 'rent_a_car';
     const taxaIva = contrato.taxa_iva ?? (contrato.regime === 'tvde' ? 6 : 23);
-    const subtotal = taxaIva > 0 ? totalComIva / (1 + taxaIva / 100) : totalComIva;
-    const iva = totalComIva - subtotal;
+    const subtotalBrutoComDesconto = subtotalBruto - desconto;
+    let subtotal: number;
+    let iva: number;
+    let totalComIva: number;
+    if (isRentACar) {
+      subtotal = subtotalBrutoComDesconto;
+      iva = taxaIva > 0 ? subtotal * (taxaIva / 100) : 0;
+      totalComIva = subtotal + iva;
+    } else {
+      totalComIva = subtotalBrutoComDesconto;
+      subtotal = taxaIva > 0 ? totalComIva / (1 + taxaIva / 100) : totalComIva;
+      iva = totalComIva - subtotal;
+    }
 
     const taxasItens: FaturaCalculo['taxasItens'] = [];
     let custoTaxas = 0;
