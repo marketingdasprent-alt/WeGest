@@ -783,6 +783,69 @@ export function useReverterFecho() {
   });
 }
 
+export type ReverterParaReservaArgs = Pick<ContratoRenting, 'id' | 'reserva_id'>;
+
+/** agendado → apaga o contrato (soft-delete) e devolve a reserva de origem
+ *  ao estado activo — desfaz a conversão reserva→contrato por completo, não
+ *  só o estado_operacional. Só faz sentido antes de a viatura ser entregue
+ *  (agendado): depois disso já não é "só uma reserva outra vez" — é para
+ *  isso que existem "Reverter abertura"/"Reverter fecho". */
+export function useReverterParaReserva() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id: contratoId, reserva_id }: ReverterParaReservaArgs): Promise<void> => {
+      if (!reserva_id) throw new Error('Este contrato não tem reserva de origem.');
+
+      const { data: updated, error } = await supabase
+        .from('contratos_renting')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', contratoId)
+        .eq('estado_operacional', 'agendado')
+        .is('deleted_at', null)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!updated) return;
+
+      // Devolve a reserva ao estado que tinha antes de virar contrato — o
+      // mesmo valor que contrato_renting_cascata_estado usa para "cancelado
+      // vindo de agendado" (cliente continua com reserva válida).
+      const { error: errReserva } = await supabase
+        .from('reservas')
+        .update({ estado: 'confirmada' })
+        .eq('id', reserva_id);
+      if (errReserva) throw errReserva;
+
+      // O contrato deixou de existir — os eventos de entrega/recolha que
+      // contrato_renting_cascata_open criou ao abri-lo ficariam órfãos,
+      // ainda pendentes, nas listas do Calendário. Mesma limpeza que a
+      // cascata de 'cancelado' já faz para contratos que chegam a abrir.
+      const { error: errEventos } = await supabase
+        .from('calendario_eventos')
+        .delete()
+        .eq('origem_tipo', 'contrato_renting')
+        .eq('origem_id', contratoId);
+      if (errEventos) throw errEventos;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      qc.invalidateQueries({ queryKey: ['renting', 'reservas'] });
+      qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
+      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+      toast({
+        title: 'Contrato revertido para reserva',
+        description: 'O contrato foi removido — volta a ser só uma reserva.',
+      });
+    },
+    onError: (error: unknown) => {
+      const { title, description } = contratoErrorMessage(error);
+      toast({ title, description, variant: 'destructive' });
+    },
+  });
+}
+
 // ────────────────────────────────────────────────────────────
 // Versionamento (upgrade/downgrade)
 // ────────────────────────────────────────────────────────────
