@@ -371,9 +371,7 @@ export function ViaturaFormVeiculo({
           <Switch
             checked={form.watch('is_slot')}
             disabled={isTipoSlot}
-            onCheckedChange={(checked) =>
-              form.setValue('is_slot', checked, { shouldDirty: true })
-            }
+            onCheckedChange={(checked) => form.setValue('is_slot', checked, { shouldDirty: true })}
           />
         </div>
       </div>
