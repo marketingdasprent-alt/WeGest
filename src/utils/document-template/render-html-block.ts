@@ -1,0 +1,276 @@
+import type jsPDF from 'jspdf';
+import type { DocEl, RGB } from './types';
+import { htmlToText, loadImage } from './parser';
+import { renderTable } from './render-table';
+import type { TableCtx } from './types';
+
+export interface RenderHtmlBlockCtx {
+  leftMargin: number;
+  rightMargin: number;
+  topMargin: number;
+  pageWidth: number;
+  pageHeight: number;
+  bottomMargin: number;
+  maxWidth: number;
+  lineFactor: number;
+  hasLetterhead: boolean;
+  bg: HTMLImageElement | null;
+  signatures: Map<string, HTMLImageElement>;
+}
+
+/**
+ * Renderiza um bloco de HTML (texto, imagens, tabelas, hr) a partir de startY,
+ * tratando agrupamento, assinaturas e quebra de página. Devolve o novo yPos.
+ */
+export async function renderHtmlBlock(
+  pdf: jsPDF,
+  html: string,
+  startY: number,
+  ctx: RenderHtmlBlockCtx
+): Promise<number> {
+  const {
+    leftMargin, rightMargin, topMargin, pageWidth, pageHeight, bottomMargin,
+    maxWidth, lineFactor, hasLetterhead, bg, signatures,
+  } = ctx;
+
+  const contentElements = htmlToText(html);
+
+  // Agrupar elementos consecutivos com mesmo alinhamento em "linhas lógicas"
+  const groupedElements: Array<{
+    align: string;
+    segments: Array<{
+      text: string;
+      style: any;
+      isImage?: boolean;
+      isTable?: boolean;
+      isHr?: boolean;
+    }>;
+  }> = [];
+
+  let currentGroup: {
+    align: string;
+    segments: Array<{
+      text: string;
+      style: any;
+      isImage?: boolean;
+      isTable?: boolean;
+      isHr?: boolean;
+    }>;
+  } | null = null;
+
+  for (const element of contentElements) {
+    if (element.type === 'image' || element.type === 'table' || element.type === 'hr') {
+      if (currentGroup && currentGroup.segments.length > 0) {
+        groupedElements.push(currentGroup);
+        currentGroup = null;
+      }
+      groupedElements.push({
+        align: element.style?.align || 'left',
+        segments: [
+          {
+            text: '',
+            style: element,
+            isImage: element.type === 'image',
+            isTable: element.type === 'table',
+            isHr: element.type === 'hr',
+          },
+        ],
+      });
+      continue;
+    }
+
+    const { text, style } = element;
+    const align = text === '\n' ? currentGroup?.align || 'left' : style.align || 'left';
+
+    if (text === '\n') {
+      if (currentGroup && currentGroup.segments.length > 0) {
+        groupedElements.push(currentGroup);
+      }
+      groupedElements.push({ align: 'left', segments: [{ text: '\n', style: {} }] });
+      currentGroup = null;
+      continue;
+    }
+
+    if (!currentGroup || currentGroup.align !== align) {
+      if (currentGroup && currentGroup.segments.length > 0) {
+        groupedElements.push(currentGroup);
+      }
+      currentGroup = { align, segments: [] };
+    }
+
+    currentGroup.segments.push({ text, style });
+  }
+
+  if (currentGroup && currentGroup.segments.length > 0) {
+    groupedElements.push(currentGroup);
+  }
+
+  let yPos = startY;
+
+  // Renderizar conteúdo agrupado
+  for (const group of groupedElements) {
+    // Quebra de linha
+    if (group.segments.length === 1 && group.segments[0].text === '\n') {
+      yPos += 10 * 0.352777778 * lineFactor;
+      continue;
+    }
+
+    // Imagem
+    if (group.segments[0].isImage) {
+      const imgElement = group.segments[0].style;
+      try {
+        const img = await loadImage(imgElement.src);
+        const maxImgWidth = maxWidth;
+        const maxImgHeight = 80;
+        const imgAspect = img.width / img.height;
+
+        let imgWidth = maxImgWidth;
+        let imgHeight = imgWidth / imgAspect;
+
+        if (imgHeight > maxImgHeight) {
+          imgHeight = maxImgHeight;
+          imgWidth = imgHeight * imgAspect;
+        }
+
+        if (yPos + imgHeight > pageHeight - bottomMargin) {
+          pdf.addPage();
+          if (bg) pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
+          yPos = topMargin;
+        }
+
+        let xPos = leftMargin;
+        if (group.align === 'center') {
+          xPos = (pageWidth - imgWidth) / 2;
+        } else if (group.align === 'right') {
+          xPos = pageWidth - rightMargin - imgWidth;
+        }
+
+        pdf.addImage(img, 'JPEG', xPos, yPos, imgWidth, imgHeight);
+        yPos += imgHeight + 5;
+      } catch (error) {
+        console.warn('Erro ao carregar imagem:', imgElement.src, error);
+      }
+      continue;
+    }
+
+    // Tabela
+    if (group.segments[0].isTable) {
+      const tableEl = group.segments[0].style as DocEl;
+      if (tableEl.rows && tableEl.rows.length > 0) {
+        yPos = renderTable(pdf, tableEl.rows, leftMargin, yPos, maxWidth, !!tableEl.bordered, {
+          pageHeight,
+          bottomMargin,
+          topMargin,
+          compact: hasLetterhead,
+          bg,
+          signatures,
+        });
+      }
+      continue;
+    }
+
+    // Divisória (<hr>)
+    if (group.segments[0].isHr) {
+      yPos += 1;
+      pdf.setDrawColor(224, 226, 232);
+      pdf.setLineWidth(0.3);
+      pdf.line(leftMargin, yPos, pageWidth - rightMargin, yPos);
+      yPos += 3;
+      continue;
+    }
+
+    // Renderizar grupo de texto com quebra automática
+    const align = group.align;
+    const maxFontSize = Math.max(...group.segments.map((seg) => seg.style.fontSize || 10));
+
+    const renderLine = (
+      segments: Array<{ text: string; style: any; width: number }>,
+      lineAlign: string,
+      y: number
+    ) => {
+      const totalWidth = segments.reduce((sum, seg) => sum + seg.width, 0);
+
+      let xPos = leftMargin;
+      if (lineAlign === 'center') {
+        xPos = (pageWidth - totalWidth) / 2;
+      } else if (lineAlign === 'right') {
+        xPos = pageWidth - rightMargin - totalWidth;
+      }
+
+      for (const seg of segments) {
+        const fontSize = seg.style.fontSize || 10;
+        const fontStyle = seg.style.bold ? 'bold' : seg.style.italic ? 'italic' : 'normal';
+
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', fontStyle);
+        const c = seg.style.color as RGB | undefined;
+        pdf.setTextColor(c ? c[0] : 0, c ? c[1] : 0, c ? c[2] : 0);
+        pdf.text(seg.text, xPos, y);
+
+        xPos += seg.width;
+      }
+      pdf.setTextColor(0, 0, 0);
+    };
+
+    // Combinar todos os segmentos do grupo em linhas com quebra automática
+    let currentLineSegments: Array<{ text: string; style: any; width: number }> = [];
+    let currentLineWidth = 0;
+
+    for (let i = 0; i < group.segments.length; i++) {
+      const segment = group.segments[i];
+      const nextSegment = group.segments[i + 1];
+      const { text, style } = segment;
+      const fontSize = style.fontSize || 10;
+      const fontStyle = style.bold ? 'bold' : style.italic ? 'italic' : 'normal';
+
+      pdf.setFontSize(fontSize);
+      pdf.setFont('helvetica', fontStyle);
+
+      const words = text.match(/\S+\s*/g) || (text.trim() ? [text] : []);
+
+      for (let j = 0; j < words.length; j++) {
+        const word = words[j];
+        const isLastWordInSegment = j === words.length - 1;
+        let wordToRender = word;
+
+        if (isLastWordInSegment && nextSegment) {
+          const currentEndsWithSpace = /\s$/.test(word);
+          const nextStartsWithSpace = /^\s/.test(nextSegment.text);
+
+          if (!currentEndsWithSpace && nextStartsWithSpace) {
+            wordToRender = word + ' ';
+          }
+        }
+
+        const wordWidth = pdf.getTextWidth(wordToRender);
+
+        if (currentLineWidth + wordWidth <= maxWidth) {
+          currentLineSegments.push({ text: wordToRender, style, width: wordWidth });
+          currentLineWidth += wordWidth;
+        } else {
+          if (currentLineSegments.length > 0) {
+            const lineHeight = maxFontSize * 0.352777778 * lineFactor;
+            if (yPos + lineHeight > pageHeight - bottomMargin) {
+              pdf.addPage();
+              if (bg) pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
+              yPos = topMargin;
+            }
+
+            renderLine(currentLineSegments, align, yPos);
+            yPos += lineHeight;
+          }
+
+          currentLineSegments = [{ text: wordToRender, style, width: wordWidth }];
+          currentLineWidth = wordWidth;
+        }
+      }
+    }
+
+    // Renderizar última linha do grupo
+    if (currentLineSegments.length > 0) {
+      renderLine(currentLineSegments, align, yPos);
+    }
+  }
+
+  return yPos;
+}
