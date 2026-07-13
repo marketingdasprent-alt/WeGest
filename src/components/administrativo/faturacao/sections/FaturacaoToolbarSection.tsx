@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { pt } from 'date-fns/locale';
-import { METODO_OPTIONS } from '../faturacao';
+import { METODO_OPTIONS } from '../../faturacao';
 
 interface FaturacaoToolbarSectionProps {
   // Estação
@@ -27,7 +27,7 @@ interface FaturacaoToolbarSectionProps {
   onWeekShortcut: (d: Date) => void;
   getWeekLabel: () => string;
   weekShortcuts: { label: string; date: Date }[];
-  weekStartsOn: number;
+  weekStartsOn: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   // Filtros
   hasFilters: boolean;
   onLimparFiltros: () => void;

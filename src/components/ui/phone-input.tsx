@@ -55,8 +55,6 @@ const COUNTRIES = [
   { code: 'CN', name: 'China', dial: '+86', flag: '🇨🇳' },
 ] as const;
 
-type Country = (typeof COUNTRIES)[number];
-
 interface PhoneInputProps {
   value: string;
   onChange: (value: string) => void;

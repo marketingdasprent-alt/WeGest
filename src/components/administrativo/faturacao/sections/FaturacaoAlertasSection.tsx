@@ -1,4 +1,4 @@
-import type { FaturacaoRow } from '../faturacao';
+import type { FaturacaoRow } from '../../faturacao';
 import {
   AlertDialog,
   AlertDialogAction,

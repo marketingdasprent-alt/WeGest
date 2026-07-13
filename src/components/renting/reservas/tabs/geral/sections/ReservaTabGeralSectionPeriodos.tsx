@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SectionHeader } from '../../../SectionHeader';
 import { ALDFields } from '@/components/renting/shared/ALDFields';
 
-import type { ReservaFormValues } from '../../reservaDialog.schema';
+import type { ReservaFormValues } from '../../../reservaDialog.schema';
 import type { Estacao } from '@/hooks/useEstacoes';
 
 import { addDaysToLocalInput, diferencaDias } from '@/utils/reserva-formatters';

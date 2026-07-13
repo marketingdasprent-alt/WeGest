@@ -26,6 +26,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { FileBarChart, Check, X, Minus, ExternalLink } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface VendaSectionProps {
   showChecklistModal: boolean;

@@ -16,6 +16,10 @@ export interface Notificacao {
   link: string | null;
   /** Destinatário específico (avisos dirigidos a 1 utilizador, ex: lista de espera). */
   destinatario_id: string | null;
+  /** Utilizador destinatário (RLS por user_id, ex.: lista de espera). */
+  destinatario_user_id: string | null;
+  /** Evento de calendário associado (ex.: escalar viatura). */
+  evento_id: string | null;
   /** Viatura alvo (tipo 'viatura_disponivel') — o popup abre /viaturas/:id. */
   viatura_id: string | null;
   titulo: string;

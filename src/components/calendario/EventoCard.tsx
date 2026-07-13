@@ -11,8 +11,8 @@ import { TIPO_LABELS, TIPO_BORDER_COLORS } from './eventoTipoConfig';
 
 interface Props {
   evento: CalendarioEvento;
-  onEdit: (e: CalendarioEvento) => void;
-  onDelete: (id: string) => void;
+  onEdit?: (e: CalendarioEvento) => void;
+  onDelete?: (id: string) => void;
   onDetails: (e: CalendarioEvento) => void;
   onAbrirCheckin?: (e: CalendarioEvento) => void;
   canEdit: boolean;
@@ -139,7 +139,7 @@ export const EventoCard: React.FC<Props> = ({
               className="h-7 w-7"
               onClick={(e) => {
                 e.stopPropagation();
-                onEdit(evento);
+                onEdit?.(evento);
               }}
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -150,7 +150,7 @@ export const EventoCard: React.FC<Props> = ({
               className="h-7 w-7 text-destructive"
               onClick={(e) => {
                 e.stopPropagation();
-                onDelete(evento.id);
+                onDelete?.(evento.id);
               }}
             >
               <Trash2 className="h-3.5 w-3.5" />

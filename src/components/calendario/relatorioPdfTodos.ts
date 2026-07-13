@@ -290,7 +290,6 @@ export async function exportarPDFTodos(params: {
     const barH = 10;
     const barGap = 7;
     const labelW = 38;
-    const numW = 12;
     const barStartX = marginL + labelW + 2;
 
     totais.forEach((t) => {

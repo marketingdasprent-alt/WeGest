@@ -1,6 +1,6 @@
 import { Info } from 'lucide-react';
 import { FaturacaoTabela } from '../../FaturacaoTabela';
-import type { FaturacaoRow } from '../faturacao';
+import type { FaturacaoRow } from '../../faturacao';
 import {
   Pagination,
   PaginationContent,

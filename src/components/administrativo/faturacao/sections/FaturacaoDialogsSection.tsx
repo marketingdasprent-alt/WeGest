@@ -4,7 +4,7 @@ import {
   NotaCreditoDialog,
   type NotaCreditoCobranca,
 } from '@/components/renting/contratos/NotaCreditoDialog';
-import type { FaturacaoRow } from '../faturacao';
+import type { FaturacaoRow } from '../../faturacao';
 import type { InvoiceMetadata } from '@/types/faturacao';
 import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
 

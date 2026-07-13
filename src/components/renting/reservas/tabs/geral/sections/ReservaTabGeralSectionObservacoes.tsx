@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 
 import { SectionHeader } from '../../../SectionHeader';
 
-import type { ReservaFormValues } from '../../reservaDialog.schema';
+import type { ReservaFormValues } from '../../../reservaDialog.schema';
 
 interface ObservacoesSectionProps {
   form: UseFormReturn<ReservaFormValues>;

@@ -39,6 +39,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { SectionCard } from '@/components/ui/section-card';
+import { FinanceiroSection } from '@/components/ui/financeiro-section';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Motorista } from '@/pages/Motoristas';
@@ -555,7 +556,7 @@ function NovoMovimentoOverlay({
 
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
 
-export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProps) {
+export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: string }) {
   const [movimentos, setMovimentos] = useState<MovimentoFinanceiro[]>([]);
   const [loading, setLoading] = useState(true);
   const [novoMovimentoOpen, setNovoMovimentoOpen] = useState(false);
@@ -568,7 +569,7 @@ export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProp
 
   useEffect(() => {
     loadMovimentos();
-  }, [motorista.id]);
+  }, [motoristaId]);
 
   const loadMovimentos = async () => {
     try {
@@ -576,7 +577,7 @@ export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProp
       const { data, error } = await supabase
         .from('motorista_financeiro')
         .select('*')
-        .eq('motorista_id', motorista.id)
+        .eq('motorista_id', motoristaId)
         .order('data_movimento', { ascending: false });
 
       if (error) throw error;
@@ -720,7 +721,7 @@ export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProp
     <>
       {novoMovimentoOpen && (
         <NovoMovimentoOverlay
-          motoristaId={motorista.id}
+          motoristaId={motoristaId}
           reparacaoPendente={reparacaoParaAcordo ?? undefined}
           movimentoParaEditar={movimentoParaEditar ?? undefined}
           faturaUrlExterna={faturaUrlAcordo}
@@ -977,4 +978,12 @@ export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProp
       </div>
     </>
   );
+}
+
+/**
+ * Wrapper público — mantém a API original (<MotoristaTabFinanceiro motorista={m} />)
+ * para páginas que já a importam. Delega para o componente partilhado FinanceiroSection.
+ */
+export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProps) {
+  return <FinanceiroSection entidade="motorista" id={motorista.id} />;
 }

@@ -5,12 +5,13 @@ import React from 'react';
 
 // ── Mocks (hoisted) ──────────────────────────────────────────────────────────
 
-// Supabase mock: chainable + thenable. Cada método retorna o próprio proxy
-// (para encadear .select().eq().in()...) e o proxy é thenable (resolve com
-// { data: null, error: null, count: 0 }). Override do mock básico do setup.ts.
+// Supabase mock: chainable + Promise real. Cada método retorna a própria
+// Promise (para encadear .select().eq().in()...) e a Promise resolve com
+// { data: null, error: null, count: 0 }. Usar uma Promise real (em vez de
+// thenable proxy) evita edge-cases de resolução do motor JS. Override do
+// mock básico do setup.ts.
 vi.mock('@/integrations/supabase/client', () => {
   const result = { data: null, error: null, count: 0 };
-  const proxy: Record<string, unknown> = {};
   const methods = [
     'select',
     'eq',
@@ -32,15 +33,21 @@ vi.mock('@/integrations/supabase/client', () => {
     'delete',
     'upsert',
   ];
-  for (const m of methods) {
-    proxy[m] = vi.fn(() => proxy);
+
+  // Cria uma Promise real com os métodos encadeáveis anexados. `await` usa
+  // o `then` nativo do Promise — sem proxy thenable, sem ambiguidade.
+  function createChainable(): Promise<typeof result> {
+    const p = Promise.resolve(result);
+    for (const m of methods) {
+      (p as unknown as Record<string, unknown>)[m] = vi.fn(() => p);
+    }
+    return p;
   }
-  proxy.then = (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
-    Promise.resolve(result).then(resolve, reject);
+
   return {
     supabase: {
-      from: vi.fn(() => proxy),
-      rpc: vi.fn(() => proxy),
+      from: vi.fn(() => createChainable()),
+      rpc: vi.fn(() => createChainable()),
       auth: { getSession: vi.fn() },
     },
   };
@@ -54,14 +61,17 @@ vi.mock('@/hooks/useContratosRenting', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useEstacoes', () => ({
-  useEstacoes: () => ({
-    data: [
-      { id: 'est-1', nome: 'Lisboa', morada: null, cidade: 'Lisboa', ativa: true },
-      { id: 'est-2', nome: 'Porto', morada: null, cidade: 'Porto', ativa: true },
-    ],
-  }),
-}));
+// A referência do array `data` tem de ser estável entre renders — o componente
+// tem um useEffect com dependência em `estacoes`; se o mock devolver um novo
+// array a cada render, o useEffect dispara em loop infinito (form.reset →
+// re-render → novo array → useEffect → ...).
+vi.mock('@/hooks/useEstacoes', () => {
+  const estacoes = [
+    { id: 'est-1', nome: 'Lisboa', morada: null, cidade: 'Lisboa', ativa: true },
+    { id: 'est-2', nome: 'Porto', morada: null, cidade: 'Porto', ativa: true },
+  ];
+  return { useEstacoes: () => ({ data: estacoes }) };
+});
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -139,6 +149,7 @@ const baseProps = {
 
 describe('FecharContratoDialog', () => {
   it('rent-a-car: pré-preenche "Recolhida", data e estação — fecho funciona sem editar defaults', async () => {
+    // Aumenta timeout: o componente faz queries Supabase mockadas + Radix Dialog é pesado no jsdom.
     const onOpenChange = vi.fn();
     renderWithProviders(
       <FecharContratoDialog
@@ -150,17 +161,22 @@ describe('FecharContratoDialog', () => {
     );
 
     // Default tipoEvento = 'recolhido' (sem motorista → rent-a-car simples).
+    // Radix RadioGroupItem renderiza <button role="radio"> — usar data-state
+    // em vez de .checked (que só existe em HTMLInputElement).
     const radioRecolhida = screen.getByRole('radio', { name: /recolhida/i });
-    expect((radioRecolhida as HTMLInputElement).checked).toBe(true);
+    await waitFor(() => {
+      expect(radioRecolhida.getAttribute('data-state')).toBe('checked');
+    });
 
     // Default data preenchida (formato datetime-local).
     const dataInput = screen.getByDisplayValue(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
     expect(dataInput).toBeTruthy();
 
     // Default estação pré-preenchida com a estação de origem da viatura.
-    // O Select mostra o nome da estação seleccionada.
+    // O Select mostra o nome da estação seleccionada. "Lisboa" aparece tanto
+    // no trigger do Select como na <option> — usar getAllByText.
     await waitFor(() => {
-      expect(screen.getByText('Lisboa')).toBeTruthy();
+      expect(screen.getAllByText('Lisboa').length).toBeGreaterThan(0);
     });
 
     // registarAgora = true por defeito → campos de recolha visíveis.
@@ -187,7 +203,7 @@ describe('FecharContratoDialog', () => {
     expect(callArgs.recolha).toBeDefined();
     expect(callArgs.recolha.km).toBe('45120');
     expect(callArgs.recolha.combustivel).toBe('3/4');
-  });
+  }, 15000);
 
   it('TVDE: pré-preenche "Devolvida" e mostra campos de recolha física (KM, combustível, assinatura)', async () => {
     renderWithProviders(
@@ -201,7 +217,7 @@ describe('FecharContratoDialog', () => {
     // Default tipoEvento = 'devolvido' (com motorista → TVDE).
     const radioDevolvida = screen.getByRole('radio', { name: /devolvida/i });
     await waitFor(() => {
-      expect((radioDevolvida as HTMLInputElement).checked).toBe(true);
+      expect(radioDevolvida.getAttribute('data-state')).toBe('checked');
     });
 
     // Campos de recolha física visíveis (registarAgora=true por defeito).
@@ -234,8 +250,9 @@ describe('FecharContratoDialog', () => {
     expect(screen.getByText('Combustível')).toBeTruthy();
     expect(screen.getByTestId('assinaturas-mock')).toBeTruthy();
 
-    // Toggle OFF: clicar no switch.
-    const switchBtn = screen.getByRole('switch', { name: /registar a recolha agora/i });
+    // Toggle OFF: clicar no switch. O Switch não tem label associado via
+    // <label htmlFor>, pelo que o nome acessível é vazio — usar role apenas.
+    const switchBtn = screen.getByRole('switch');
     fireEvent.click(switchBtn);
 
     // Campos de recolha desaparecem.

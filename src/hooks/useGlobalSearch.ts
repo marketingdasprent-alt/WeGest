@@ -182,7 +182,7 @@ export function useGlobalSearch(options: UseGlobalSearchOptions) {
         entities.map(async (entity) => {
           const config = ENTITY_CONFIG[entity];
           const { data, error } = await supabase
-            .from(config.table)
+            .from(config.table as never)
             .select(config.select)
             .ilike(config.searchColumn, pattern)
             .is('deleted_at', null)
@@ -190,7 +190,7 @@ export function useGlobalSearch(options: UseGlobalSearchOptions) {
 
           if (error) throw error;
 
-          const rows = (data ?? []) as Record<string, unknown>[];
+          const rows = (data ?? []) as unknown as Record<string, unknown>[];
           return rows
             .map((row) => mapRowToSearchResult(entity, row))
             .filter((r): r is SearchResult => r !== null);

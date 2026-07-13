@@ -141,14 +141,24 @@ export function useRealizarFromToken() {
       troca,
     }: RealizarFromTokenArgs): Promise<void> => {
       if (tipo === 'troca') {
+        if (
+          !troca?.viaturaAntigaId ||
+          !troca?.viaturaNovaId ||
+          troca?.kmAntiga == null ||
+          troca?.kmNova == null ||
+          !troca?.combustivelAntiga ||
+          !troca?.combustivelNova
+        ) {
+          throw new Error('Dados da troca incompletos');
+        }
         const { error } = await supabase.rpc('realizar_token_troca', {
           p_token: token,
-          p_viatura_antiga_id: troca?.viaturaAntigaId ?? null,
-          p_km_antiga: troca?.kmAntiga ?? null,
-          p_combustivel_antiga: troca?.combustivelAntiga ?? null,
-          p_viatura_nova_id: troca?.viaturaNovaId ?? null,
-          p_km_nova: troca?.kmNova ?? null,
-          p_combustivel_nova: troca?.combustivelNova ?? null,
+          p_viatura_antiga_id: troca.viaturaAntigaId,
+          p_km_antiga: troca.kmAntiga,
+          p_combustivel_antiga: troca.combustivelAntiga,
+          p_viatura_nova_id: troca.viaturaNovaId,
+          p_km_nova: troca.kmNova,
+          p_combustivel_nova: troca.combustivelNova,
         });
         if (error) throw error;
         return;
@@ -157,8 +167,8 @@ export function useRealizarFromToken() {
       // o evento realizado), grava km/combustível e marca o token como usado.
       const { error } = await supabase.rpc('realizar_token_realizacao', {
         p_token: token,
-        p_km: km ?? null,
-        p_combustivel: combustivel ?? null,
+        p_km: km,
+        p_combustivel: combustivel,
       });
       if (error) throw error;
     },

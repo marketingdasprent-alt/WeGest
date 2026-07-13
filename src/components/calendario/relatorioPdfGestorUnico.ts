@@ -293,7 +293,6 @@ export async function exportarPDFGestorUnico(params: {
     const barH = 10;
     const barGap = 7;
     const labelW = 38;
-    const numW = 12;
     const barStartX = marginL + labelW + 2;
 
     totaisTipo.forEach((t) => {

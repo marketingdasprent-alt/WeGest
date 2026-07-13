@@ -13,6 +13,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
     "type-check": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "type-check:strict": "tsc -p tsconfig.strict.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },

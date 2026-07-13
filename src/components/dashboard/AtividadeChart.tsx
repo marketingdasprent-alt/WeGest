@@ -30,9 +30,16 @@ export interface AtividadePonto {
 interface AtividadeChartProps {
   data: AtividadePonto[];
   formatCurrency: (value: number) => string;
+  /** Quando false (variante Operacional), esconde a série de rentabilidade —
+   *  só ficam as linhas de Alugadas/Devolvidas. */
+  showRentabilidade?: boolean;
 }
 
-export default function AtividadeChart({ data, formatCurrency }: AtividadeChartProps) {
+export default function AtividadeChart({
+  data,
+  formatCurrency,
+  showRentabilidade = true,
+}: AtividadeChartProps) {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     const point = data.find((p) => p.periodo === label);
@@ -53,11 +60,13 @@ export default function AtividadeChart({ data, formatCurrency }: AtividadeChartP
       <ComposedChart data={data} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
         <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
-        <YAxis
-          yAxisId="euro"
-          tick={{ fontSize: 11 }}
-          tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-        />
+        {showRentabilidade && (
+          <YAxis
+            yAxisId="euro"
+            tick={{ fontSize: 11 }}
+            tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+          />
+        )}
         <YAxis yAxisId="count" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} />
         <Tooltip content={<CustomTooltip />} />
         <Legend
@@ -66,14 +75,16 @@ export default function AtividadeChart({ data, formatCurrency }: AtividadeChartP
             v === 'rentabilidade' ? 'Renda (€)' : v === 'alugadas' ? 'Alugadas' : 'Devolvidas'
           }
         />
-        <Bar
-          yAxisId="euro"
-          dataKey="rentabilidade"
-          fill={COLORS.rentabilidade}
-          radius={[4, 4, 0, 0]}
-          name="rentabilidade"
-          opacity={0.85}
-        />
+        {showRentabilidade && (
+          <Bar
+            yAxisId="euro"
+            dataKey="rentabilidade"
+            fill={COLORS.rentabilidade}
+            radius={[4, 4, 0, 0]}
+            name="rentabilidade"
+            opacity={0.85}
+          />
+        )}
         <Line
           yAxisId="count"
           type="monotone"

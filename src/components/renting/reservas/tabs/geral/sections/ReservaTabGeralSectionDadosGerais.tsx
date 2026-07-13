@@ -20,7 +20,7 @@ import { RegimeCards } from '../../../RegimeCards';
 import { EmissorSelect } from '@/components/renting/EmissorSelect';
 import { GestorSelect } from '@/components/renting/GestorSelect';
 
-import type { ReservaFormValues } from '../../reservaDialog.schema';
+import type { ReservaFormValues } from '../../../reservaDialog.schema';
 import type { ClienteComDocumentos } from '@/types/cliente';
 
 const normalizeForSearch = (s: string) =>

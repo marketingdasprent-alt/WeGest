@@ -14,6 +14,7 @@ Fonte de verdade para developers humanos e agentes IA. Em conflito com legacy, e
 3. [Nomenclatura](#3-nomenclatura)
 4. [Padrão de páginas e componentes](#4-padrão-de-páginas-e-componentes)
 5. [React Query (server state)](#5-react-query-server-state)
+   5B. [Convenções Soft-Delete](#5b-convenções-soft-delete)
 6. [Estado: local vs global vs server](#6-estado-local-vs-global-vs-server)
 7. [Validação com Zod](#7-validação-com-zod)
 8. [Error handling](#8-error-handling)
@@ -220,6 +221,124 @@ export function useCreateMotorista() {
 
 ---
 
+## 5B. Convenções Soft-Delete
+
+> **Padrão escolhido:** `deleted_at TIMESTAMPTZ` nullable (NULL = registo activo, preenchido = apagado).
+> **Justificação:** Permite queries nativas (`WHERE deleted_at IS NULL`), índices parciais, recuperação por admin, e evita duplicação de schema (ao contrário de tabelas \*\_apagados). O `ativo` booleano não permite distinguir "apagado em" nem auditoria temporal.
+
+### Catálogo actual (145 tabelas)
+
+| Convenção                                  | Tabelas  | %       | Exemplos                                                              |
+| ------------------------------------------ | -------- | ------- | --------------------------------------------------------------------- |
+| `deleted_at` nullable                      | 4        | 3%      | `clientes`, `contratos_renting`, `contratos_prestacao`, `documentos`  |
+| `ativo` boolean                            | 36       | 25%     | `empresas`, `viatura_marcas`, `renting_grupos`, `uber_drivers`, etc.  |
+| Archive table (\*\_apagados/\*\_historico) | 4        | 3%      | `calendario_eventos_apagados`, `contrato_historico`                   |
+| **HARD DELETE**                            | **~101** | **69%** | `motoristas`, `contratos`, `reservas`, `viaturas`, `movimentos`, etc. |
+
+### Top 10 tabelas prioritárias para migração
+
+Prioridade por: nº de referências em hooks + criticidade de negócio + risco de perda de dados.
+
+| #   | Tabela                 | Refs hooks | Risco | Motivo                                                        |
+| --- | ---------------------- | ---------- | ----- | ------------------------------------------------------------- |
+| 1   | `motoristas`           | 8          | Alto  | Entidade core; cascata em financeiro, documentos, viaturas    |
+| 2   | `contratos`            | —          | Alto  | Valor legal/fiscal; cascata em coberturas, condutores, extras |
+| 3   | `reservas`             | 9          | Alto  | Alta rotação; perde histórico de ocupação                     |
+| 4   | `viaturas`             | 8          | Alto  | Dados financeiros + documentais; FK para danos/reparações     |
+| 5   | `movimentos`           | 7          | Alto  | Lançamentos financeiros; erro humano apaga registo            |
+| 6   | `motorista_viaturas`   | 7          | Médio | Junction; DELETE cascata quebra histórico de alocações        |
+| 7   | `motorista_financeiro` | 6          | Alto  | Saldos/custos/recibos do motorista                            |
+| 8   | `reserva_condutores`   | 6          | Médio | Junction; perde registo de condutores adicionais              |
+| 9   | `contrato_condutores`  | 6          | Médio | Junction; perde histórico de condutores secundários           |
+| 10  | `invoices`             | 2          | Alto  | Faturação; obrigação fiscal de retenção                       |
+
+### Exemplo de migration
+
+```sql
+-- Adicionar coluna deleted_at a tabela existente
+ALTER TABLE public.motoristas ADD COLUMN deleted_at TIMESTAMPTZ;
+
+-- Índice parcial: só registos activos (performance em queries comuns)
+CREATE INDEX idx_motoristas_active ON public.motoristas(deleted_at)
+  WHERE deleted_at IS NULL;
+
+-- Trigger para impedir DELETE (ou policy RLS)
+CREATE OR REPLACE FUNCTION public.prevent_hard_delete_motoristas()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.motoristas SET deleted_at = NOW() WHERE id = OLD.id;
+  RETURN NULL; -- cancela o DELETE original
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_soft_delete_motoristas
+  BEFORE DELETE ON public.motoristas
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_hard_delete_motoristas();
+```
+
+### Query patterns (hooks)
+
+```typescript
+// Leitura (só activos)
+const { data } = await supabase.from('motoristas').select('*').is('deleted_at', null);
+
+// Admin: incluir apagados
+const { data } = await supabase
+  .from('motoristas')
+  .select('*')
+  .is('deleted_at', null)
+  .or('deleted_at.is.not.null'); // apenas se user for admin
+
+// Soft-delete (mutation)
+const { error } = await supabase
+  .from('motoristas')
+  .update({ deleted_at: new Date().toISOString() })
+  .eq('id', motoristaId);
+
+// Hard-delete (admin apenas)
+const { error } = await supabase.rpc('hard_delete_motorista', { motorista_id: motoristaId });
+```
+
+### Regras RLS
+
+```sql
+-- Política base: utilizador normal vê só activos
+CREATE POLICY "view_active_only" ON public.motoristas
+  FOR SELECT USING (deleted_at IS NULL);
+
+-- Admin vê tudo (se necessário)
+CREATE POLICY "view_all_for_admin" ON public.motoristas
+  FOR SELECT USING (
+    deleted_at IS NULL OR public.is_current_user_admin()
+  );
+
+-- UPDATE só permite marcar deleted_at, não apagar
+CREATE POLICY "soft_delete_only" ON public.motoristas
+  FOR UPDATE USING (deleted_at IS NULL)
+  WITH CHECK (deleted_at IS NOT NULL OR public.is_current_user_admin());
+```
+
+### Regras de migração para tabelas novas
+
+1. **Toda a tabela nova** deve ter `deleted_at TIMESTAMPTZ` (nullable).
+2. Tabelas de configuração/dicionário (ex.: `viatura_marcas`, `cargos`) podem usar `ativo boolean` em vez de `deleted_at` — argumento: poucas linhas, sem necessidade de auditoria temporal. Mas `deleted_at` é preferido.
+3. Tabelas com `ativo` existente **não migrar** para `deleted_at` a menos que haja necessidade de auditoria (risco de regressão > benefício).
+4. Sempre criar índice parcial `WHERE deleted_at IS NULL` em cada tabela.
+5. Sempre associar trigger/BEFORE DELETE nas tabelas core (top 10).
+
+### Migrations aplicadas (Task 24, 2026-07-10)
+
+Foram criadas 11 migrations em `supabase/migrations/` cobrindo o top 10 tabelas prioritárias + função helper reutilizável:
+
+- **`soft_delete_entity(table_name, record_id)`** — função PL/pgSQL genérica que marca `deleted_at = NOW()` em qualquer tabela com a coluna. Reutilizada pelos triggers das 10 tabelas core.
+- **10 tabelas core migradas:** `motoristas`, `contratos`, `reservas`, `viaturas`, `movimentos`, `motorista_viaturas`, `motorista_financeiro`, `reserva_condutores`, `contrato_condutores`, `invoices`.
+- Cada tabela recebeu: coluna `deleted_at`, índice parcial `WHERE deleted_at IS NULL`, e trigger `BEFORE DELETE` que converte `DELETE` em `UPDATE deleted_at`.
+- **Hard-delete** só via RPC admin (`hard_delete_*`), não via `DELETE` directo.
+
+Ver ficheiros: `supabase/migrations/20260710090000_soft_delete_entity_function.sql` e `supabase/migrations/20260710100000_soft_delete_*.sql`.
+
+---
+
 ## 6. Estado: local vs global vs server
 
 | Tipo           | Ferramenta                | Exemplos                       |
@@ -299,6 +418,7 @@ type MotoristaUpdate = Database['public']['Tables']['motoristas']['Update'];
 - Composições de domínio → criar tipo em `src/types/<dominio>.ts`.
 - `any` está `off` no ESLint mas é dívida — preferir tipos específicos.
 - Preferir **union literals** a enums TypeScript.
+- **Módulos novos** devem usar strict mode opt-in via `tsconfig.strict.json`. Adicionar ficheiro ao `include` do strict config e correr `pnpm type-check:strict`.
 
 ---
 
@@ -377,6 +497,7 @@ if (admins.find(a => a.id === user.id)) { /* ... */ }
 | `useState + useEffect` para fetch          | `useQuery`                                        |
 | `any` por preguiça                         | Tipo auto-gerado ou custom                        |
 | Componente 500+ linhas                     | Dividir em sub-componentes                        |
+| Ficheiro `.ts`/`.tsx` >500 linhas          | ESLint `max-lines` bloqueia (Task 7) — dividir    |
 | Context para server state                  | React Query                                       |
 | Context novo para cada feature             | Hook + React Query                                |
 | `console.log` em código merged             | Remover, ou `console.warn`/`error` com contexto   |
@@ -462,6 +583,7 @@ AuthProvider → user, session, signOut + onAuthStateChange
 OBRIGATÓRIO
 [ ] Feature/fix nova tem teste unitário próprio (não só os pré-existentes a passar)
 [ ] pnpm type-check         → sem erros TS
+[ ] pnpm type-check:strict  → ficheiros novos sem erros (strict opt-in, Task 7)
 [ ] pnpm lint               → sem errors (warnings tolerados)
 [ ] pnpm format:check       → código formatado
 [ ] pnpm test               → testes verdes

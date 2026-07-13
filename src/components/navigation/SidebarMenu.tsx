@@ -37,6 +37,8 @@ import { UserMenu } from '@/components/auth/UserMenu';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { OrgSelector } from '@/components/OrgSelector';
+import { useTenant } from '@/contexts/TenantContext';
+import { REALIZE_ORG_IDS } from '@/config/realize';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -69,6 +71,8 @@ interface MenuItem {
   /** Mostra o item se o utilizador tiver QUALQUER um destes recursos. */
   recursosAny?: string[];
   requireAdmin?: boolean;
+  /** Restringe o item a orgs específicas (ex.: ferramentas internas que não fazem sentido para outros tenants). */
+  orgIds?: string[];
   subItems?: SubMenuItem[];
 }
 
@@ -197,12 +201,13 @@ const MENU_ITEMS: MenuItem[] = [
   { label: 'Assistência', url: '/assistencia', icon: Wrench, recurso: 'assistencia_tickets' },
   { label: 'Movimentações', url: '/calendario', icon: CalendarDays, recurso: 'calendario_ver' },
   { label: 'Marketing', url: '/marketing', icon: Mail, recurso: 'marketing_ver' },
-  { label: 'Realize', url: '/realize', icon: ExternalLink },
+  { label: 'Realize', url: '/realize', icon: ExternalLink, orgIds: REALIZE_ORG_IDS },
 ];
 
 export const SidebarMenu: React.FC = () => {
   const { isAdmin, hasAccessToResource, cargo, loading } = usePermissions();
   const isSupervisorTvde = isAdmin || cargo === 'Supervisor Gestor TVDE';
+  const { orgId } = useTenant();
   const { user } = useAuth();
   const userName = user?.user_metadata?.nome || user?.email?.split('@')[0] || 'Utilizador';
   const userRole = isAdmin ? 'Administrador' : 'Utilizador';
@@ -238,6 +243,7 @@ export const SidebarMenu: React.FC = () => {
       !item.recursosAny.some((r) => hasAccessToResource(r))
     )
       return false;
+    if (item.orgIds && (!orgId || !item.orgIds.includes(orgId))) return false;
     if (item.subItems && item.subItems.length === 0) return false;
     return true;
   });

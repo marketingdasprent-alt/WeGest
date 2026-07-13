@@ -3,6 +3,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { ReceitasData } from '@/components/viaturas/tabs/ViaturaFinanceiraMovimentos';
 
+// Quebra a cadeia de inferência de tipos do Supabase para queries com .select('*')
+// em tabelas com muitas colunas (evita TS2589 "Type instantiation is excessively deep").
+type SimpleQueryBuilder = {
+  select: (cols: string) => {
+    in: (col: string, vals: string[]) => Promise<{
+      data: Record<string, unknown>[] | null;
+      error: unknown;
+    }>;
+  };
+};
+const db = supabase as unknown as { from: (t: string) => SimpleQueryBuilder };
+
 function getTrimestreDataRange() {
   const now = new Date();
   const month = now.getMonth();
@@ -62,12 +74,12 @@ export function useViaturaFinanceiraReceitas(viaturaId: string | undefined) {
 
       // B. Financeiro dos contratos (em paralelo)
       const [finRes, contratosRes, boltRes, bpRes, repsolRes, edpRes] = await Promise.all([
-        supabase.from('financeiro').select('*').in('motorista_id', motoristaIds),
-        supabase.from('contratos').select('*').in('motorista_id', motoristaIds),
-        supabase.from('bolt_portagens').select('*').in('motorista_id', motoristaIds),
-        supabase.from('bp_fuel_transactions').select('*').in('motorista_id', motoristaIds),
-        supabase.from('repsol_fuel').select('*').in('motorista_id', motoristaIds),
-        supabase.from('edp_fuel').select('*').in('motorista_id', motoristaIds),
+        db.from('financeiro').select('*').in('motorista_id', motoristaIds),
+        db.from('contratos').select('*').in('motorista_id', motoristaIds),
+        db.from('bolt_portagens').select('*').in('motorista_id', motoristaIds),
+        db.from('bp_fuel_transactions').select('*').in('motorista_id', motoristaIds),
+        db.from('repsol_fuel').select('*').in('motorista_id', motoristaIds),
+        db.from('edp_fuel').select('*').in('motorista_id', motoristaIds),
       ]);
 
       const finData = finRes.data || [];

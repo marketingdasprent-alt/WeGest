@@ -1,6 +1,6 @@
 import QRCode from 'qrcode';
 import { supabase } from '@/integrations/supabase/client';
-import type { AnexoDanos, AnexoFotoItem } from './generateDocumentFromTemplate';
+import type { AnexoDanos, AnexoFotoItem } from './document-template/types';
 
 export async function fetchAnexoDanos(
   viaturaId: string,
@@ -152,7 +152,7 @@ export async function fetchAnexoDanos(
     try {
       const { data: tokenId } = await supabase.rpc('gerar_token_danos', {
         p_viatura_id: viaturaId,
-        p_contrato_renting_id: contratoId ?? null,
+        p_contrato_renting_id: contratoId,
       });
       if (tokenId) linkUrl = `${window.location.origin}/danos/${tokenId}`;
     } catch {

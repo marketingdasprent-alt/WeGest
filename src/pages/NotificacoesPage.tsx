@@ -31,7 +31,7 @@ const NotificacoesPage = () => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useInfiniteQuery<NotificacaoPageData>({
+  } = useInfiniteQuery<NotificacoesPageData>({
     queryKey: ['notificacoes', 'infinite', { apenasNaoResolvidas }],
     queryFn: async ({ pageParam }) => {
       const page = (pageParam as number) ?? 1;

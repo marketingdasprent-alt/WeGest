@@ -22,7 +22,7 @@ import { SectionHeader } from '../../../SectionHeader';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
 import { ViaturaDialog } from '@/components/viaturas/ViaturaDialog';
 
-import type { ReservaFormValues } from '../../reservaDialog.schema';
+import type { ReservaFormValues } from '../../../reservaDialog.schema';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import type { RentingGrupoMin, RentingTarifaPrecoModelo } from '@/hooks/useRentingGruposTarifas';
 

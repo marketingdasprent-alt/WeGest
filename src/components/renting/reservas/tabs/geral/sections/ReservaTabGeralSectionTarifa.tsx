@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import { SectionHeader } from '../../../SectionHeader';
 
-import type { ReservaFormValues } from '../../reservaDialog.schema';
+import type { ReservaFormValues } from '../../../reservaDialog.schema';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import type { RentingTarifaMin, FaturacaoRenting } from '@/hooks/useRentingGruposTarifas';
 
