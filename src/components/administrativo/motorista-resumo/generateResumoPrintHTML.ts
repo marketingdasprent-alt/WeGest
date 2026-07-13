@@ -41,11 +41,11 @@ export interface GenerateResumoPrintHTMLParams {
   infoFields: InfoField[];
   isImportado: boolean;
   receitas: Receitas;
-  gorjeta: number;
   totalReceitas: number;
   receitaAjustada: number;
   despesas: Despesas;
   totalDespesas: number;
+  aluguerSemTarifa?: boolean;
   slotPeriodos: SlotPeriodo[];
   totalSlot: number;
   valoresSemanaAnterior: number;
@@ -70,11 +70,11 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
     infoFields,
     isImportado,
     receitas,
-    gorjeta,
     totalReceitas,
     receitaAjustada,
     despesas,
     totalDespesas,
+    aluguerSemTarifa,
     slotPeriodos,
     totalSlot,
     valoresSemanaAnterior,
@@ -98,8 +98,12 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
     )
     .join('');
 
+  const aluguerCell = aluguerSemTarifa
+    ? '<span style="color:#b45309">⚠ Sem tarifa configurada</span>'
+    : `<span style="color:#b91c1c">${fmtEur(despesas.aluguer)}</span>`;
+
   const despesasRows = [
-    ['Aluguer', despesas.aluguer],
+    ['Aluguer', despesas.aluguer, aluguerCell],
     ['Combustível', despesas.combustivel],
     ['Portagens', despesas.portagens],
     ['Outros Custos', despesas.outros_custos],
@@ -108,9 +112,9 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
     ['Reparações', despesas.reparacoes],
   ]
     .map(
-      ([label, val]) =>
+      ([label, val, cell]) =>
         `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
-            <span>${label}</span><span style="color:#b91c1c">${fmtEur(Number(val))}</span>
+            <span>${label}</span>${cell ?? `<span style="color:#b91c1c">${fmtEur(Number(val))}</span>`}
           </div>`
     )
     .join('');
@@ -184,7 +188,7 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Bolt</span><span style="color:#15803d">${fmtEur(receitas.bolt)}</span></div>
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Uber</span><span style="color:#15803d">${fmtEur(receitas.uber)}</span></div>
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Outras Receitas</span><span style="color:#15803d">${fmtEur(receitas.outras_receitas)}</span></div>
-            ${gorjeta > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Gorjetas (sem IVA)</span><span style="color:#15803d">${fmtEur(gorjeta)}</span></div>` : ''}
+            <!-- Gorjeta sem linha própria: já embutida no TOTAL RECEITAS. Ver resumoFinanceiro.ts -->
             <div style="border-top:1px solid #86efac;margin:6px 0"></div>
             <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:3px 0"><span>TOTAL RECEITAS</span><span style="color:#15803d">${fmtEur(isImportado ? totalReceitas : receitaAjustada)}</span></div>
           </div>

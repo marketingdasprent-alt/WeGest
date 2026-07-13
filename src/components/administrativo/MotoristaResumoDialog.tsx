@@ -11,6 +11,7 @@ import { ResumoReportContent } from './motorista-resumo/sections/ResumoReportCon
 import { ResumoActionBar } from './motorista-resumo/sections/ResumoActionBar';
 import { EmailResumoDialog } from './motorista-resumo/sections/EmailResumoDialog';
 import { useMotoristaResumoData } from './motorista-resumo/useMotoristaResumoData';
+import { deriveResumoFinanceiro } from './motorista-resumo/resumoFinanceiro';
 import { generateResumoPrintHTML } from './motorista-resumo/generateResumoPrintHTML';
 
 /* ───────── Exported types ───────── */
@@ -79,7 +80,9 @@ function loadSettings(): PrintSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
-  } catch {}
+  } catch {
+    // Se localStorage falhar ou JSON for inválido, usamos o default.
+  }
   return DEFAULT_SETTINGS;
 }
 
@@ -100,6 +103,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     extraCosts,
     outrasReceitas,
     slotPeriodos,
+    aluguerSemTarifa,
   } = useMotoristaResumoData(open, motorista, dateRange);
   const [isSending, setIsSending] = useState(false);
   const [settings, setSettings] = useState<PrintSettings>(loadSettings);
@@ -117,7 +121,6 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
   const isImportado = motorista.tem_recibo_importado === true;
   const gorjetaBolt = isImportado ? 0 : motorista.gorjeta_bolt || 0;
   const gorjetaUber = isImportado ? 0 : motorista.gorjeta_uber || 0;
-  const gorjeta = gorjetaBolt + gorjetaUber;
   const receitas = {
     bolt: motorista.faturado_bolt,
     uber: motorista.faturado_uber,
@@ -146,20 +149,23 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       };
   const totalSlot = slotPeriodos.reduce((s, p) => s + p.custo, 0);
   const totalDespesas = Object.values(despesas).reduce((a, b) => a + b, 0);
+  // Só avisar quando o valor mostrado é mesmo 0 — se houver renda manual
+  // (renda_viatura) o aluguer já vem preenchido e não há falha a assinalar.
+  const mostrarAvisoAluguer = !isImportado && aluguerSemTarifa && despesas.aluguer === 0;
   const valoresSemanaAnterior = 0;
 
-  const receitaAjustada = isImportado
-    ? totalReceitas
-    : motorista.recibo_verde
-      ? totalReceitas + gorjeta
-      : receitas.bolt / 1.06 +
-        gorjetaBolt +
-        (receitas.uber / 1.06 + gorjetaUber) +
-        receitas.outras_receitas;
-  const totalAReceber = isImportado
-    ? motorista.liquido
-    : receitaAjustada - totalDespesas + gorjeta + valoresSemanaAnterior;
-  const liquido = isImportado ? motorista.liquido : totalAReceber;
+  // Cálculo puro (testado em resumoFinanceiro.test.ts). A gorjeta entra uma
+  // única vez, na receita ajustada — não voltar a somar no total a receber.
+  const { receitasExibidas, receitaAjustada, totalAReceber, liquido } = deriveResumoFinanceiro({
+    isImportado,
+    reciboVerde: motorista.recibo_verde,
+    receitas,
+    gorjetaBolt,
+    gorjetaUber,
+    totalDespesas,
+    valoresSemanaAnterior,
+    liquidoImportado: motorista.liquido,
+  });
 
   const fmt = (value: number) =>
     new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
@@ -215,12 +221,12 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       logoSrc,
       infoFields,
       isImportado,
-      receitas,
-      gorjeta,
+      receitas: receitasExibidas,
       totalReceitas,
       receitaAjustada,
       despesas,
       totalDespesas,
+      aluguerSemTarifa: mostrarAvisoAluguer,
       slotPeriodos,
       totalSlot,
       valoresSemanaAnterior,
@@ -275,10 +281,9 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
         dateRange,
         recibo_verde: motorista.recibo_verde,
         receitas: {
-          bolt: receitas.bolt,
-          uber: receitas.uber,
-          outras_receitas: receitas.outras_receitas,
-          gorjeta,
+          bolt: receitasExibidas.bolt,
+          uber: receitasExibidas.uber,
+          outras_receitas: receitasExibidas.outras_receitas,
           total: isImportado ? totalReceitas : receitaAjustada,
         },
         despesas: {
@@ -346,12 +351,12 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             loading={loading}
             fmt={fmt}
             isImportado={isImportado}
-            receitas={receitas}
-            gorjeta={gorjeta}
+            receitas={receitasExibidas}
             totalReceitas={totalReceitas}
             receitaAjustada={receitaAjustada}
             despesas={despesas}
             totalDespesas={totalDespesas}
+            aluguerSemTarifa={mostrarAvisoAluguer}
             slotPeriodos={slotPeriodos}
             totalSlot={totalSlot}
             valoresSemanaAnterior={valoresSemanaAnterior}

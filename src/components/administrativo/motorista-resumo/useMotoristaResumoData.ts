@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { format, differenceInDays, parseISO, max, min } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import type { MotoristaResumoProps, SlotPeriodo } from '../MotoristaResumoDialog';
+import { deriveAluguerSemTarifa } from './aluguerSemTarifa';
 
 export interface UseMotoristaResumoDataReturn {
   loading: boolean;
@@ -14,6 +15,7 @@ export interface UseMotoristaResumoDataReturn {
   extraCosts: { caucao: number; seguros: number; outros: number };
   outrasReceitas: number;
   slotPeriodos: SlotPeriodo[];
+  aluguerSemTarifa: boolean;
 }
 
 /**
@@ -41,6 +43,7 @@ export function useMotoristaResumoData(
   );
   const [outrasReceitas, setOutrasReceitas] = useState(0);
   const [slotPeriodos, setSlotPeriodos] = useState<SlotPeriodo[]>([]);
+  const [aluguerSemTarifa, setAluguerSemTarifa] = useState(false);
 
   useEffect(() => {
     if (open && (motorista?.motorista_id || motorista?.driver_uuid)) {
@@ -59,6 +62,7 @@ export function useMotoristaResumoData(
     setMotoristaIban(null);
     setExtraCosts({ caucao: 0, seguros: 0, outros: 0 });
     setSlotPeriodos([]);
+    setAluguerSemTarifa(false);
 
     try {
       let resolvedMotoristaId = motorista.motorista_id || null;
@@ -150,6 +154,11 @@ export function useMotoristaResumoData(
           setMatricula((viaturaData.viaturas as any).matricula);
         }
 
+        // Aviso "sem tarifa": tem viatura ativa mas o grupo não tem tarifa
+        // ativa com preço semanal > 0 (aluguer aparece a 0€ por falta de
+        // configuração, não por ser grátis).
+        setAluguerSemTarifa(deriveAluguerSemTarifa(viaturasPeriodoData));
+
         if (motoristaData) {
           const m = motoristaData as any;
           const cards = [m.cartao_bp, m.cartao_repsol, m.cartao_edp, m.cartao_frota]
@@ -231,5 +240,6 @@ export function useMotoristaResumoData(
     extraCosts,
     outrasReceitas,
     slotPeriodos,
+    aluguerSemTarifa,
   };
 }

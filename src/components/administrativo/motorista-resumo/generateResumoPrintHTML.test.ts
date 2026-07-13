@@ -13,7 +13,6 @@ const baseParams = {
   ],
   isImportado: false,
   receitas: { bolt: 500, uber: 300, outras_receitas: 50 },
-  gorjeta: 20,
   totalReceitas: 850,
   receitaAjustada: 830,
   despesas: {
@@ -98,13 +97,8 @@ describe('generateResumoPrintHTML', () => {
     expect(html).toContain('@page{size:landscape');
   });
 
-  it('includes gorjeta row when gorjeta > 0', () => {
+  it('nunca mostra linha de gorjeta (já embutida no TOTAL RECEITAS)', () => {
     const html = generateResumoPrintHTML(baseParams);
-    expect(html).toContain('Gorjetas (sem IVA)');
-  });
-
-  it('omits gorjeta row when gorjeta is 0', () => {
-    const html = generateResumoPrintHTML({ ...baseParams, gorjeta: 0 });
     expect(html).not.toContain('Gorjetas (sem IVA)');
   });
 
@@ -195,6 +189,20 @@ describe('generateResumoPrintHTML', () => {
     expect(html).toContain('João Silva');
     expect(html).toContain('Matrícula');
     expect(html).toContain('AB-12-CD');
+  });
+
+  it('mostra aviso "Sem tarifa" no aluguer quando aluguerSemTarifa é true', () => {
+    const html = generateResumoPrintHTML({ ...baseParams, aluguerSemTarifa: true });
+    expect(html).toContain('Sem tarifa configurada');
+  });
+
+  it('mostra o valor do aluguer quando aluguerSemTarifa é false/omitido', () => {
+    const html = generateResumoPrintHTML({
+      ...baseParams,
+      despesas: { ...baseParams.despesas, aluguer: 175 },
+    });
+    expect(html).not.toContain('Sem tarifa configurada');
+    expect(html).toContain('175,00');
   });
 
   it('shows "—" for null infoField values', () => {

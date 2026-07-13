@@ -42,7 +42,6 @@ interface ResumoReportContentProps {
   fmt: (value: number) => string;
   isImportado: boolean;
   receitas: { bolt: number; uber: number; outras_receitas: number };
-  gorjeta: number;
   totalReceitas: number;
   receitaAjustada: number;
   despesas: {
@@ -55,6 +54,7 @@ interface ResumoReportContentProps {
     reparacoes: number;
   };
   totalDespesas: number;
+  aluguerSemTarifa?: boolean;
   slotPeriodos: SlotPeriodo[];
   totalSlot: number;
   valoresSemanaAnterior: number;
@@ -70,11 +70,11 @@ export function ResumoReportContent({
   fmt,
   isImportado,
   receitas,
-  gorjeta,
   totalReceitas,
   receitaAjustada,
   despesas,
   totalDespesas,
+  aluguerSemTarifa,
   slotPeriodos,
   totalSlot,
   valoresSemanaAnterior,
@@ -185,13 +185,9 @@ export function ResumoReportContent({
               value={fmt(receitas.outras_receitas)}
               colored="text-green-700 dark:text-green-300"
             />
-            {gorjeta > 0 && (
-              <Row
-                label="Gorjetas (sem IVA)"
-                value={fmt(gorjeta)}
-                colored="text-green-700 dark:text-green-300"
-              />
-            )}
+            {/* Gorjeta não tem linha própria: já está embutida no TOTAL RECEITAS
+                (receita ajustada). Mostrá-la separada dava a ideia de dupla
+                contagem. Ver resumoFinanceiro.ts. */}
             <Separator className="bg-green-200 dark:bg-green-800" />
             <Row
               label="TOTAL RECEITAS"
@@ -216,8 +212,12 @@ export function ResumoReportContent({
           <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-red-50 dark:bg-red-950/20 print:bg-red-50">
             <Row
               label="Aluguer"
-              value={fmt(despesas.aluguer)}
-              colored="text-red-700 dark:text-red-300"
+              value={aluguerSemTarifa ? '⚠ Sem tarifa configurada' : fmt(despesas.aluguer)}
+              colored={
+                aluguerSemTarifa
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-red-700 dark:text-red-300'
+              }
             />
             <Row
               label="Combustível"

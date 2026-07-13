@@ -1,6 +1,7 @@
 import type jsPDF from 'jspdf';
 import type { AnexoDanos, AnexoDanoItem, AnexoFotoItem } from './types';
-import { loadImage, LOCALIZACAO_LABELS, ESTADO_LABELS } from './parser';
+import { loadImage } from './parser';
+import { LOCALIZACAO_LABELS, ESTADO_LABELS } from './labels';
 
 export interface AnexoDanosCtx {
   leftMargin: number;
