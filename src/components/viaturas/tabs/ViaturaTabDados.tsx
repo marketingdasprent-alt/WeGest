@@ -19,17 +19,20 @@ import { toast } from 'sonner';
 import { deriveViaturaEstado } from '@/lib/viaturas';
 import { useViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 import {
+  useViaturaMarcas,
+  useViaturaModelos,
+  useViaturaCombustiveis,
+  useViaturaTipos,
+  useViaturaGrupos,
+  useViaturaEstacoes,
+  useViaturaTarifas,
+} from '@/hooks/useViaturaCatalogos';
+import {
   viaturaSchema,
   DOCUMENTOS_VIATURA,
   type ViaturaFormData,
   type Viatura,
   type ViaturaDocument,
-  type ViaturaMarca,
-  type ViaturaModelo,
-  type ViaturaCombustivel,
-  type Estacao,
-  type ViaturasTipo,
-  type RentingGrupo,
   type BatchViaturaEntry,
 } from './viaturaTabDados.types';
 import { viaturaToFormValues, VIATURA_FK_FIELDS } from './viaturaFormValues';
@@ -52,22 +55,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   const [documents, setDocuments] = useState<ViaturaDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
-  const [estacoes, setEstacoes] = useState<Estacao[]>([]);
-  const [viaturasTipos, setViaturasTipos] = useState<ViaturasTipo[]>([]);
-  const [grupos, setGrupos] = useState<RentingGrupo[]>([]);
-  const [allTarifas, setAllTarifas] = useState<
-    Array<{
-      grupo_id: string;
-      nome: string;
-      preco_dia: number | null;
-      preco_semana: number | null;
-      preco_mes: number | null;
-      kms_incluidos: number | null;
-    }>
-  >([]);
-  const [marcas, setMarcas] = useState<ViaturaMarca[]>([]);
-  const [modelos, setModelos] = useState<ViaturaModelo[]>([]);
-  const [combustiveis, setCombustiveis] = useState<ViaturaCombustivel[]>([]);
 
   // Estado derivado da viatura (considera ocupações ativas: contrato, reserva, movimento)
   const { data: fontesMap } = useViaturasOcupacao();
@@ -80,62 +67,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   const [batchEntries, setBatchEntries] = useState<BatchViaturaEntry[]>([]);
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
   const [batchUploading, setBatchUploading] = useState(false);
-
-  useEffect(() => {
-    supabase
-      .from('estacoes')
-      .select('id, nome, cidade')
-      .eq('ativa', true)
-      .order('nome')
-      .then(
-        ({ data }) => setEstacoes(data || []),
-        (err) => console.error('Erro ao carregar estações:', err)
-      );
-    supabase
-      .from('viatura_tipos')
-      .select('id, nome, elegivel_tvde')
-      .eq('ativo', true)
-      .order('nome')
-      .then(
-        ({ data }) => setViaturasTipos(data || []),
-        (err) => console.error('Erro ao carregar tipos:', err)
-      );
-    supabase
-      .from('renting_grupos')
-      .select('id, nome')
-      .eq('ativo', true)
-      .order('nome')
-      .then(
-        ({ data }) => setGrupos(data || []),
-        (err) => console.error('Erro ao carregar grupos:', err)
-      );
-    supabase
-      .from('renting_tarifas')
-      .select('grupo_id, nome, preco_dia, preco_semana, preco_mes, kms_incluidos')
-      .eq('ativa', true)
-      .then(
-        ({ data }) => setAllTarifas((data as any) || []),
-        (err) => console.error('Erro ao carregar tarifas:', err)
-      );
-    supabase
-      .from('viatura_marcas')
-      .select('id, nome')
-      .eq('ativa', true)
-      .order('nome')
-      .then(
-        ({ data }) => setMarcas(data || []),
-        (err) => console.error('Erro ao carregar marcas:', err)
-      );
-    supabase
-      .from('viatura_combustiveis')
-      .select('id, nome')
-      .eq('ativo', true)
-      .order('nome')
-      .then(
-        ({ data }) => setCombustiveis(data || []),
-        (err) => console.error('Erro ao carregar combustíveis:', err)
-      );
-  }, []);
 
   const form = useForm<ViaturaFormData>({
     resolver: zodResolver(viaturaSchema),
@@ -165,6 +96,17 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       tipo_id: '',
     },
   });
+
+  // Catálogos em cache (react-query): instantâneos a partir da 2ª abertura,
+  // sem re-fetch nem flicker ao trocar de aba / abrir outra viatura.
+  const watchedMarcaId = form.watch('marca_id');
+  const marcas = useViaturaMarcas();
+  const modelos = useViaturaModelos(watchedMarcaId);
+  const combustiveis = useViaturaCombustiveis();
+  const viaturasTipos = useViaturaTipos();
+  const grupos = useViaturaGrupos();
+  const estacoes = useViaturaEstacoes();
+  const allTarifas = useViaturaTarifas();
 
   // Subscrição ao estado dirty (lida em render) — usada para o botão Guardar.
   const isFormDirty = form.formState.isDirty;
@@ -210,33 +152,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
     if (viatura?.id) loadDocuments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viatura?.id]);
-
-  // Fetch modelos when marca_id changes
-  const watchedMarcaId = form.watch('marca_id');
-  useEffect(() => {
-    if (!watchedMarcaId) {
-      setModelos([]);
-      return;
-    }
-    // Ignora respostas fora de ordem: se a marca mudar antes desta query voltar,
-    // a lista antiga não pode sobrepor-se à nova.
-    let cancelado = false;
-    supabase
-      .from('viatura_modelos')
-      .select('id, nome, marca_id')
-      .eq('marca_id', watchedMarcaId)
-      .eq('ativo', true)
-      .order('nome')
-      .then(
-        ({ data }) => {
-          if (!cancelado) setModelos(data || []);
-        },
-        (err) => console.error('Erro ao carregar modelos:', err)
-      );
-    return () => {
-      cancelado = true;
-    };
-  }, [watchedMarcaId]);
 
   const loadDocuments = async () => {
     if (!viatura?.id) return;
