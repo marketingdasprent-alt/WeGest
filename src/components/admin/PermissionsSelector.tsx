@@ -107,6 +107,7 @@ const RECURSO_LABELS: Record<string, string> = {
   contratos_ver: 'Ver contratos',
   contratos_criar: 'Criar novos contratos',
   contratos_reimprimir: 'Reimprimir contratos',
+  contratos_reverter_reserva: 'Reverter contrato para reserva',
   motoristas_contratos: 'Gestão completa de contratos',
   motoristas_editar_data_contrato: 'Editar data do 1.º contrato',
   // Administrativo

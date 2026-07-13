@@ -68,12 +68,13 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
   );
   // Só faz sentido "desconverter" um contrato ainda não entregue — depois
   // disso já não é "só uma reserva outra vez" (ver useReverterParaReserva).
-  // Restringido a admin e a quem tem nível "editar" no módulo de contratos.
+  // Restringido a admin e a quem tem a permissão dedicada "Reverter contrato
+  // para reserva" (módulo Contratos).
   const podeReverterParaReserva =
     contrato.estado_operacional === 'agendado' &&
     !!contrato.reserva_id &&
     contrato.estado_financeiro !== 'facturado' &&
-    canEdit('renting_contratos');
+    canEdit('contratos_reverter_reserva');
 
   // Renovação: só rent-a-car de longa duração, versão actual e activo.
   const podeRenovar = contratoRenovavel(contrato);

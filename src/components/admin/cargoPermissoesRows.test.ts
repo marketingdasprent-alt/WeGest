@@ -45,4 +45,14 @@ describe('buildCargoPermissoesRows', () => {
     expect(buildCargoPermissoesRows([], CARGO)).toEqual([]);
     expect(buildCargoPermissoesRows([perm('r1', false, true)], CARGO)).toEqual([]);
   });
+
+  it('deduplica por recurso_id — a última ganha (evita duplicate key)', () => {
+    const rows = buildCargoPermissoesRows(
+      [perm('r1', true, false), perm('r1', true, true), perm('r2', true, false)],
+      CARGO
+    );
+    expect(rows).toHaveLength(2);
+    const r1 = rows.find((r) => r.recurso_id === 'r1');
+    expect(r1?.pode_editar).toBe(true); // a última entrada de r1 prevalece
+  });
 });
