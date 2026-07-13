@@ -81,7 +81,24 @@ export function useContratosRenting(options: UseContratosRentingOptions = {}) {
 
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as unknown as ContratoRenting[];
+      const contratos = (data ?? []) as unknown as ContratoRenting[];
+      if (contratos.length === 0) return contratos;
+
+      // Merge do total calculado (view contrato_renting_totais) para que a
+      // listagem mostre tarifa + extras + coberturas + taxas + IVA em tempo
+      // real, e não apenas o valor_total_manual (base sem extras/IVA).
+      const ids = contratos.map((c) => c.id);
+      const { data: totais, error: errTotais } = await supabase
+        .from('contrato_renting_totais')
+        .select('contrato_id, total')
+        .in('contrato_id', ids);
+      if (errTotais) throw errTotais;
+      const totalById = new Map<string, number | null>();
+      (totais ?? []).forEach((t) => {
+        const row = t as { contrato_id: string | null; total: number | null };
+        if (row.contrato_id) totalById.set(row.contrato_id, row.total);
+      });
+      return contratos.map((c) => ({ ...c, total_calculado: totalById.get(c.id) ?? null }));
     },
     placeholderData: keepPreviousData,
     staleTime: 30_000,
