@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RotateCcw, Undo2, XCircle } from 'lucide-react';
+import { RotateCcw, Undo2, XCircle, RefreshCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -14,12 +14,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { FecharContratoDialog } from '@/components/renting/contratos/FecharContratoDialog';
+import { RenovarContratoDialog } from '@/components/renting/contratos/RenovarContratoDialog';
 import {
   useReverterAbertura,
   useReverterFecho,
   useReverterParaReserva,
 } from '@/hooks/useContratosRenting';
 import { usePermissions } from '@/hooks/usePermissions';
+import { contratoRenovavel, estadoRenovacaoContrato } from '@/lib/renovacaoContrato';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 const ESTADOS_ORIGEM_FECHO = ['agendado', 'em_curso'] as const;
@@ -48,6 +50,7 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
   const navigate = useNavigate();
   const { canEdit } = usePermissions();
   const [dialogAberto, setDialogAberto] = useState(false);
+  const [renovarAberto, setRenovarAberto] = useState(false);
   const [confirmarReverter, setConfirmarReverter] = useState<
     'abertura' | 'fecho' | 'paraReserva' | null
   >(null);
@@ -72,12 +75,35 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
     contrato.estado_financeiro !== 'facturado' &&
     canEdit('renting_contratos');
 
-  if (!podeFechar && !podeReverterAbertura && !podeReverterFecho && !podeReverterParaReserva)
+  // Renovação: só rent-a-car de longa duração, versão actual e activo.
+  const podeRenovar = contratoRenovavel(contrato);
+  const renovacaoEstado = estadoRenovacaoContrato(contrato);
+
+  if (
+    !podeFechar &&
+    !podeReverterAbertura &&
+    !podeReverterFecho &&
+    !podeReverterParaReserva &&
+    !podeRenovar
+  )
     return null;
 
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
+        {podeRenovar && (
+          <Button
+            type="button"
+            variant={renovacaoEstado ? 'default' : 'outline'}
+            onClick={() => setRenovarAberto(true)}
+            className="gap-2"
+            title="Fecha o mês atual e abre o mês seguinte (por faturar), com código novo."
+          >
+            <RefreshCw className="h-4 w-4" />
+            {renovacaoEstado === 'atraso' ? 'Renovar (em atraso)' : 'Renovar contrato'}
+          </Button>
+        )}
+
         {podeFechar && (
           <Button
             type="button"
@@ -143,6 +169,14 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
         viaturaId={contrato.viatura_id}
         estacaoOrigemId={contrato.estacao_origem_viatura_id}
       />
+
+      {podeRenovar && (
+        <RenovarContratoDialog
+          open={renovarAberto}
+          onOpenChange={setRenovarAberto}
+          contrato={contrato}
+        />
+      )}
 
       <AlertDialog
         open={confirmarReverter !== null}

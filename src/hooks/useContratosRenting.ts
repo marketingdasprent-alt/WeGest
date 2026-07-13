@@ -895,6 +895,35 @@ export function useCriarVersaoContrato() {
   });
 }
 
+/**
+ * Renova um contrato rent-a-car de longa duração (RPC renovar_contrato_renting):
+ * fecha o mês actual (passa a histórico) e cria o mês seguinte por faturar, com
+ * código novo. Devolve o id do novo contrato (para navegar). O feedback (toast /
+ * navegação) é tratado no diálogo de confirmação.
+ */
+export function useRenovarContrato() {
+  const qc = useQueryClient();
+
+  return useMutation<string, Error, { contratoId: string }>({
+    mutationFn: async ({ contratoId }): Promise<string> => {
+      // A RPC ainda não consta dos tipos gerados — cast controlado.
+      const { data, error } = await (
+        supabase.rpc as unknown as (
+          fn: string,
+          args: Record<string, unknown>
+        ) => Promise<{ data: string | null; error: { message: string } | null }>
+      )('renovar_contrato_renting', { p_contrato_id: contratoId });
+      if (error) throw new Error(error.message);
+      return data as string;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      qc.invalidateQueries({ queryKey: ['renting'] });
+      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+    },
+  });
+}
+
 /** Carrega toda a cadeia de versões de um contrato (mais recente primeiro),
  *  a partir de qualquer ponto da cadeia — inclui tanto as versões
  *  anteriores como as seguintes. Isto garante que abrir uma versão antiga

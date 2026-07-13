@@ -50,6 +50,7 @@ export const ContratoTabHistorico: React.FC<ContratoTabHistoricoProps> = ({
           {versoes.map((v) => {
             const isActual = v.substituido_em === null;
             const isCurrent = v.id === contratoId;
+            const isRenovacao = (v.motivo_versao ?? '').startsWith('Renovação');
             return (
               <li
                 key={v.id}
@@ -66,6 +67,10 @@ export const ContratoTabHistorico: React.FC<ContratoTabHistoricoProps> = ({
                       {isActual ? (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">
                           actual
+                        </span>
+                      ) : isRenovacao ? (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30 font-medium">
+                          Fechado · renovado em {fmtData(v.substituido_em)}
                         </span>
                       ) : (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">

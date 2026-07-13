@@ -33,6 +33,7 @@ import {
   getContratoTotal,
   normalizeMatricula,
 } from '@/components/renting/contratos/contratosUtils';
+import { RenovacoesBanner } from '@/components/renting/contratos/RenovacoesBanner';
 
 import {
   CONTRATO_ESTADO_FIN_LABELS,
@@ -263,6 +264,12 @@ const RentingContratos = () => {
         title="Contratos"
         description="Lista de contratos de renting"
         icon={FileText}
+      />
+
+      <RenovacoesBanner
+        contratos={contratos}
+        getClienteNome={getClienteNome}
+        getCondutorNome={getCondutorNome}
       />
 
       <Card className="bg-card border-border">
