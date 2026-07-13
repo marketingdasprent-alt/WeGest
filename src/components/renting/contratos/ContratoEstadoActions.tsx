@@ -19,6 +19,7 @@ import {
   useReverterFecho,
   useReverterParaReserva,
 } from '@/hooks/useContratosRenting';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 const ESTADOS_ORIGEM_FECHO = ['agendado', 'em_curso'] as const;
@@ -45,6 +46,7 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
   motoristaId,
 }) => {
   const navigate = useNavigate();
+  const { canEdit } = usePermissions();
   const [dialogAberto, setDialogAberto] = useState(false);
   const [confirmarReverter, setConfirmarReverter] = useState<
     'abertura' | 'fecho' | 'paraReserva' | null
@@ -63,10 +65,12 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
   );
   // Só faz sentido "desconverter" um contrato ainda não entregue — depois
   // disso já não é "só uma reserva outra vez" (ver useReverterParaReserva).
+  // Restringido a admin e a quem tem nível "editar" no módulo de contratos.
   const podeReverterParaReserva =
     contrato.estado_operacional === 'agendado' &&
     !!contrato.reserva_id &&
-    contrato.estado_financeiro !== 'facturado';
+    contrato.estado_financeiro !== 'facturado' &&
+    canEdit('renting_contratos');
 
   if (!podeFechar && !podeReverterAbertura && !podeReverterFecho && !podeReverterParaReserva)
     return null;
