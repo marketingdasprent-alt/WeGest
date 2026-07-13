@@ -81,7 +81,24 @@ export function useContratosRenting(options: UseContratosRentingOptions = {}) {
 
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as unknown as ContratoRenting[];
+      const contratos = (data ?? []) as unknown as ContratoRenting[];
+      if (contratos.length === 0) return contratos;
+
+      // Merge do total calculado (view contrato_renting_totais) para que a
+      // listagem mostre tarifa + extras + coberturas + taxas + IVA em tempo
+      // real, e não apenas o valor_total_manual (base sem extras/IVA).
+      const ids = contratos.map((c) => c.id);
+      const { data: totais, error: errTotais } = await supabase
+        .from('contrato_renting_totais')
+        .select('contrato_id, total')
+        .in('contrato_id', ids);
+      if (errTotais) throw errTotais;
+      const totalById = new Map<string, number | null>();
+      (totais ?? []).forEach((t) => {
+        const row = t as { contrato_id: string | null; total: number | null };
+        if (row.contrato_id) totalById.set(row.contrato_id, row.total);
+      });
+      return contratos.map((c) => ({ ...c, total_calculado: totalById.get(c.id) ?? null }));
     },
     placeholderData: keepPreviousData,
     staleTime: 30_000,
@@ -874,6 +891,35 @@ export function useCriarVersaoContrato() {
     onError: (error: unknown) => {
       const description = error instanceof Error ? error.message : 'Erro inesperado';
       toast({ title: 'Erro ao criar versão', description, variant: 'destructive' });
+    },
+  });
+}
+
+/**
+ * Renova um contrato rent-a-car de longa duração (RPC renovar_contrato_renting):
+ * fecha o mês actual (passa a histórico) e cria o mês seguinte por faturar, com
+ * código novo. Devolve o id do novo contrato (para navegar). O feedback (toast /
+ * navegação) é tratado no diálogo de confirmação.
+ */
+export function useRenovarContrato() {
+  const qc = useQueryClient();
+
+  return useMutation<string, Error, { contratoId: string }>({
+    mutationFn: async ({ contratoId }): Promise<string> => {
+      // A RPC ainda não consta dos tipos gerados — cast controlado.
+      const { data, error } = await (
+        supabase.rpc as unknown as (
+          fn: string,
+          args: Record<string, unknown>
+        ) => Promise<{ data: string | null; error: { message: string } | null }>
+      )('renovar_contrato_renting', { p_contrato_id: contratoId });
+      if (error) throw new Error(error.message);
+      return data as string;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      qc.invalidateQueries({ queryKey: ['renting'] });
+      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
     },
   });
 }

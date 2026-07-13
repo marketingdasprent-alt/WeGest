@@ -8,7 +8,7 @@ export const viaturaSchema = z.object({
   marca: z.string().optional(),
   modelo: z.string().optional(),
   marca_id: z.string().min(1, 'Marca é obrigatória'),
-  modelo_id: z.string().min(1, 'Modelo é obrigatório'),
+  modelo_id: z.string().optional(),
   combustivel_id: z.string().optional(),
   ano: z.string().optional(),
   cor: z.string().optional(),

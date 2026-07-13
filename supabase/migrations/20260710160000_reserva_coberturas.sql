@@ -33,12 +33,14 @@ begin
 end;
 $function$;
 
+drop trigger if exists trg_reserva_coberturas_set_org_id on public.reserva_coberturas;
 create trigger trg_reserva_coberturas_set_org_id
   before insert on public.reserva_coberturas
   for each row execute function public.set_reserva_cobertura_org_id();
 
 -- Mesmo padrão de RLS das restantes tabelas reserva_* (isolamento restritivo
 -- por org_id + gate permissivo por permissão de acesso a reservas de renting).
+drop policy if exists rls_org_isolation on public.reserva_coberturas;
 create policy rls_org_isolation on public.reserva_coberturas
   as restrictive
   for all
@@ -46,21 +48,25 @@ create policy rls_org_isolation on public.reserva_coberturas
   using (org_id = get_current_org_id())
   with check (org_id is null or org_id = get_current_org_id());
 
+drop policy if exists mt_reserva_coberturas_select on public.reserva_coberturas;
 create policy mt_reserva_coberturas_select on public.reserva_coberturas
   for select
   to authenticated
   using (org_id = get_current_org_id() and has_renting_reservas_access());
 
+drop policy if exists mt_reserva_coberturas_insert on public.reserva_coberturas;
 create policy mt_reserva_coberturas_insert on public.reserva_coberturas
   for insert
   to authenticated
   with check ((org_id is null or org_id = get_current_org_id()) and has_renting_reservas_access());
 
+drop policy if exists mt_reserva_coberturas_update on public.reserva_coberturas;
 create policy mt_reserva_coberturas_update on public.reserva_coberturas
   for update
   to authenticated
   using (org_id = get_current_org_id() and has_renting_reservas_access());
 
+drop policy if exists mt_reserva_coberturas_delete on public.reserva_coberturas;
 create policy mt_reserva_coberturas_delete on public.reserva_coberturas
   for delete
   to authenticated

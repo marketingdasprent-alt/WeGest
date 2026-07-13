@@ -173,9 +173,6 @@ export const GruposTab = () => {
           .eq('id', editingGrupo.id);
         if (error) throw error;
         grupoId = editingGrupo.id;
-
-        // Apagar permissões antigas
-        await supabase.from('cargo_permissoes').delete().eq('cargo_id', grupoId);
       } else {
         const { data, error } = await supabase
           .from('cargos')
@@ -186,13 +183,25 @@ export const GruposTab = () => {
         grupoId = data.id;
       }
 
-      // Inserir permissões — apenas as que têm acesso (tem_acesso = true).
-      const toInsert = buildCargoPermissoesRows(selectedPermissions, grupoId);
+      // Persistência robusta das permissões: faz UPSERT das selecionadas
+      // (atualiza o nível, sem "duplicate key" mesmo que a linha já exista) e
+      // remove só as desmarcadas. Nunca apaga tudo antes de inserir — assim um
+      // erro a meio não deixa o grupo sem permissões.
+      const toKeep = buildCargoPermissoesRows(selectedPermissions, grupoId);
 
-      if (toInsert.length > 0) {
-        const { error } = await supabase.from('cargo_permissoes').insert(toInsert);
+      if (toKeep.length > 0) {
+        const { error } = await supabase
+          .from('cargo_permissoes')
+          .upsert(toKeep, { onConflict: 'cargo_id,recurso_id' });
         if (error) throw error;
       }
+
+      // Apaga as permissões que deixaram de estar selecionadas.
+      const keepIds = toKeep.map((r) => r.recurso_id);
+      let del = supabase.from('cargo_permissoes').delete().eq('cargo_id', grupoId);
+      if (keepIds.length > 0) del = del.not('recurso_id', 'in', `(${keepIds.join(',')})`);
+      const { error: delErr } = await del;
+      if (delErr) throw delErr;
 
       toast({
         title: editingGrupo ? 'Grupo atualizado' : 'Grupo criado',

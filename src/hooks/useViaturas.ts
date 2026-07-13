@@ -48,7 +48,7 @@ export function useViaturas(options: UseViaturasOptions = {}) {
       let q = supabase
         .from('viaturas')
         .select(
-          'id, matricula, data_matricula, marca, modelo, status, categoria, km_atual, combustivel, combustivel_id, is_vendida, is_slot, grupo_id, modelo_id, tipo_id, habilitada_tvde, emissor_id'
+          'id, matricula, data_matricula, marca, modelo, status, categoria, km_atual, combustivel, combustivel_id, is_vendida, is_slot, grupo_id, marca_id, modelo_id, tipo_id, habilitada_tvde, emissor_id'
         )
         .order('matricula');
 
