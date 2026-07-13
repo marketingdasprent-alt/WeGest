@@ -267,11 +267,20 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   };
 
   const onSubmit = async (data: ViaturaFormData) => {
-    // Resolve text names from FK IDs
-    const marcaNome = marcas.find((m) => m.id === data.marca_id)?.nome || data.marca || '';
-    const modeloNome = modelos.find((m) => m.id === data.modelo_id)?.nome || data.modelo || '';
+    // Resolve text names from FK IDs. Preserva o valor existente na BD quando
+    // o catálogo não resolve (ex.: lista de modelos ainda a carregar após
+    // mudar a marca, ou marca/modelo inativos) — sem isto, o sync colapsava
+    // para '' e clobberava o texto correcto guardado, fazendo desaparecer a
+    // marca/modelo da listagem e do header.
+    const marcaNome =
+      marcas.find((m) => m.id === data.marca_id)?.nome || data.marca || viatura?.marca || '';
+    const modeloNome =
+      modelos.find((m) => m.id === data.modelo_id)?.nome || data.modelo || viatura?.modelo || '';
     const combustivelNome =
-      combustiveis.find((c) => c.id === data.combustivel_id)?.nome || data.combustivel || '';
+      combustiveis.find((c) => c.id === data.combustivel_id)?.nome ||
+      data.combustivel ||
+      viatura?.combustivel ||
+      '';
 
     const payload: Partial<Viatura> = {
       matricula: data.matricula.toUpperCase(),

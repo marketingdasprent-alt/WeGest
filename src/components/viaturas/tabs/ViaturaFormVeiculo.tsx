@@ -108,9 +108,7 @@ export function ViaturaFormVeiculo({
           name="modelo_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>
-                Modelo <span className="text-red-500">*</span>
-              </FormLabel>
+              <FormLabel>Modelo</FormLabel>
               <Select onValueChange={field.onChange} value={field.value} disabled={!watchedMarcaId}>
                 <FormControl>
                   <SelectTrigger>
