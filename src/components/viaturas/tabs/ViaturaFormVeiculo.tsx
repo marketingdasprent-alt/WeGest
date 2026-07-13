@@ -79,6 +79,9 @@ export function ViaturaFormVeiculo({
                 Marca <span className="text-red-500">*</span>
               </FormLabel>
               <Select
+                // Re-monta quando a opção guardada fica disponível, para o valor
+                // aparecer mesmo que o catálogo carregue depois do valor ser definido.
+                key={`marca-${marcas.some((m) => m.id === field.value)}`}
                 onValueChange={(v) => {
                   field.onChange(v);
                   // Limpar modelo quando muda a marca
@@ -109,7 +112,12 @@ export function ViaturaFormVeiculo({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Modelo</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value} disabled={!watchedMarcaId}>
+              <Select
+                key={`modelo-${modelos.some((m) => m.id === field.value)}`}
+                onValueChange={field.onChange}
+                value={field.value}
+                disabled={!watchedMarcaId}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue
@@ -163,7 +171,11 @@ export function ViaturaFormVeiculo({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Combustível</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
+              <Select
+                key={`comb-${combustiveis.some((c) => c.id === field.value)}`}
+                onValueChange={field.onChange}
+                value={field.value}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecionar" />
@@ -188,6 +200,7 @@ export function ViaturaFormVeiculo({
             <FormItem>
               <FormLabel>Tipo</FormLabel>
               <Select
+                key={`tipo-${viaturasTipos.some((t) => t.id === field.value)}`}
                 value={field.value || ''}
                 onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}
               >
@@ -247,6 +260,7 @@ export function ViaturaFormVeiculo({
             <FormItem>
               <FormLabel>Grupo</FormLabel>
               <Select
+                key={`grupo-${grupos.some((g) => g.id === field.value)}`}
                 value={field.value || ''}
                 onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}
               >
@@ -324,6 +338,7 @@ export function ViaturaFormVeiculo({
             <FormItem>
               <FormLabel>Estação</FormLabel>
               <Select
+                key={`estacao-${estacoes.some((e) => e.id === field.value)}`}
                 value={field.value || ''}
                 onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}
               >

@@ -32,6 +32,7 @@ import {
   type RentingGrupo,
   type BatchViaturaEntry,
 } from './viaturaTabDados.types';
+import { viaturaToFormValues, VIATURA_FK_FIELDS } from './viaturaFormValues';
 import { detectViaturaTipoFromFilename } from './viaturaBatchDetect';
 import { ViaturaFormIdentificacao } from './ViaturaFormIdentificacao';
 import { ViaturaFormVeiculo } from './ViaturaFormVeiculo';
@@ -165,49 +166,43 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
     },
   });
 
-  // Subscrição ao estado dirty (lida em render) para o guard do reset abaixo.
+  // Subscrição ao estado dirty (lida em render) — usada para o botão Guardar.
   const isFormDirty = form.formState.isDirty;
-  // O dirty é um *guard*, não um *gatilho*. Se entrasse nas deps do efeito abaixo,
-  // o `form.reset(data)` do onSubmit (dirty: true -> false) voltava a disparar a
-  // hidratação e reescrevia o formulário a partir da `viatura` do pai — que nesse
-  // instante ainda podia ser a versão pré-gravação (modelo_id antigo/vazio).
-  const isFormDirtyRef = useRef(isFormDirty);
-  isFormDirtyRef.current = isFormDirty;
 
-  // Sincroniza o formulário com a viatura. É reaplicado à medida que as listas de
-  // opções (marcas, modelos, combustíveis, tipos, grupos, estações) carregam,
-  // porque os <Select> ligados aos IDs (marca_id, modelo_id, …) só mostram o valor
-  // guardado se a respetiva <SelectItem> já estiver montada quando o valor é
-  // definido. Sem isto, ao reentrar numa viatura os dropdowns apareciam vazios
-  // (as opções chegavam depois do reset). O guard isFormDirty evita sobrepor
-  // edições do utilizador ainda por guardar.
+  // Hidratação do formulário a partir da viatura.
+  //
+  // Os <Select> por FK (marca, modelo, grupo, combustível, tipo, estação) só
+  // mostram o valor guardado quando a respetiva <SelectItem> já está montada — e
+  // os catálogos chegam de forma ASSÍNCRONA, depois da viatura. Por isso:
+  //  1) reset completo quando muda de viatura (baseline limpo);
+  //  2) reaplicação de cada FK à medida que o seu catálogo carrega (a opção já
+  //     está montada, portanto o Select passa a mostrar o valor), SEM sobrepor
+  //     campos que o utilizador tenha editado (guard por-campo via getFieldState).
+  //
+  // Antes usava-se um único reset com guard de dirty global: os IDs eram
+  // definidos antes de as opções existirem e nunca mais eram reaplicados, pelo
+  // que marca/modelo/grupo apareciam vazios apesar de estarem na BD.
+  const viaturaIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!viatura || isFormDirtyRef.current) return;
-    form.reset({
-      matricula: viatura.matricula || '',
-      marca: viatura.marca || '',
-      modelo: viatura.modelo || '',
-      marca_id: viatura.marca_id || '',
-      modelo_id: viatura.modelo_id || '',
-      combustivel_id: viatura.combustivel_id || '',
-      ano: viatura.ano?.toString() || '',
-      cor: viatura.cor || '',
-      categoria: viatura.categoria || '',
-      combustivel: viatura.combustivel || '',
-      status: viatura.status === 'em_uso' ? 'disponivel' : viatura.status || 'disponivel',
-      km_atual: viatura.km_atual?.toString() || '',
-      numero_motor: viatura.numero_motor || '',
-      numero_chassis: viatura.numero_chassis || '',
-      data_matricula: viatura.data_matricula || '',
-      observacoes: viatura.observacoes || '',
-      grupo_id: viatura.grupo_id || '',
-      is_slot: viatura.is_slot || false,
-      habilitada_tvde: viatura.habilitada_tvde || false,
-      estacao_id: viatura.estacao_id || '',
-      extintor_numero: viatura.extintor_numero || '',
-      extintor_validade: viatura.extintor_validade || '',
-      tipo_id: viatura.tipo_id || '',
-    });
+    if (!viatura) return;
+
+    if (viaturaIdRef.current !== viatura.id) {
+      viaturaIdRef.current = viatura.id;
+      form.reset(viaturaToFormValues(viatura));
+    }
+
+    const valores = viaturaToFormValues(viatura);
+    for (const name of VIATURA_FK_FIELDS) {
+      const alvo = valores[name];
+      const atual = form.getValues(name);
+      // Reaplica quando o campo não foi editado pelo utilizador OU quando está
+      // vazio mas a viatura tem valor (recupera um <Select> que perdeu o valor
+      // por a opção ainda não estar montada). Como o efeito só corre enquanto os
+      // catálogos carregam, isto não impede o utilizador de limpar o campo depois.
+      if (atual !== alvo && (!form.getFieldState(name).isDirty || (!atual && alvo))) {
+        form.setValue(name, alvo, { shouldDirty: false });
+      }
+    }
   }, [viatura, form, viaturasTipos, marcas, modelos, combustiveis, grupos, estacoes]);
 
   // Documentos: carregar uma vez por viatura.
