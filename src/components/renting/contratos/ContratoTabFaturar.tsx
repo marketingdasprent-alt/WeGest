@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Receipt, Lock, FileText, Download, Loader2, Send, RotateCcw } from 'lucide-react';
+import { Receipt, Lock, FileText, Download, Loader2, Send, RotateCcw, Mail } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +46,9 @@ import {
   type ToolbarCobranca,
 } from '@/components/faturacao/FaturacaoActionsToolbar';
 import { NovaFaturaDialog } from '@/components/faturacao/NovaFaturaDialog';
+import { EnviarDocumentoEmailDialog } from '@/components/faturacao/EnviarDocumentoEmailDialog';
+import { DocumentosEmitidosExtra } from '@/components/faturacao/DocumentosEmitidosExtra';
+import { useContactosDocumento } from '@/hooks/useContactosDocumento';
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -91,6 +94,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
   const [anularOpen, setAnularOpen] = useState(false);
   const [anularBusy, setAnularBusy] = useState(false);
+  const [enviarInvoice, setEnviarInvoice] = useState<InvoiceMetadata | null>(null);
 
   const { data: coberturas } = useContratoCoberturas(contrato.id);
   const { data: extras } = useContratoExtras(contrato.id);
@@ -112,6 +116,18 @@ export function ContratoTabFaturar({ contrato }: Props) {
     () => (condutores ?? []).find((c) => c.is_principal && c.cliente_id) ?? null,
     [condutores]
   );
+
+  // Condutor principal (cliente OU motorista) — para pré-preencher o envio por email.
+  const principalCond = useMemo(
+    () => (condutores ?? []).find((c) => c.is_principal) ?? null,
+    [condutores]
+  );
+  const { data: contactosEnvio = [] } = useContactosDocumento({
+    clienteId: contrato.cliente_id,
+    condutor: principalCond
+      ? { cliente_id: principalCond.cliente_id, motorista_id: principalCond.motorista_id }
+      : null,
+  });
 
   const idsClientes = useMemo(() => {
     const ids = [contrato.cliente_id, principal?.cliente_id].filter(Boolean) as string[];
@@ -191,11 +207,31 @@ export function ContratoTabFaturar({ contrato }: Props) {
   const { data: invoices = [], refetch: refetchInvoices } = useInvoicesByContrato(contrato.id);
   const emitirMut = useEmitirEEscreverFatura();
 
+  // Documentos (NC/RC) ligados às cobranças do contrato — o RC pode não ter
+  // contrato_id preenchido, por isso procuramos também por cobranca_id.
+  const cobrancaIds = useMemo(() => (cobrancas ?? []).map((c) => c.id), [cobrancas]);
+  const { data: invoicesExtra = [], refetch: refetchInvoicesExtra } = useQuery({
+    queryKey: ['contrato-invoices-cobrancas', contrato.id, cobrancaIds.slice().sort().join(',')],
+    enabled: cobrancaIds.length > 0,
+    queryFn: async (): Promise<InvoiceMetadata[]> => {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .in('cobranca_id', cobrancaIds);
+      if (error) {
+        console.warn('invoices por cobrança indisponíveis:', error.message);
+        return [];
+      }
+      return (data ?? []) as unknown as InvoiceMetadata[];
+    },
+  });
+
   const refetchAll = () => {
     refetchCobrancas();
     refetchNC();
     refetchRecibos();
     refetchInvoices();
+    refetchInvoicesExtra();
   };
 
   // Pode anular se o contrato está facturado/pago, OU se há cobranças activas
@@ -572,21 +608,33 @@ export function ContratoTabFaturar({ contrato }: Props) {
                           <div className="flex items-center gap-1.5">
                             <span>{c.documento_externo_ref}</span>
                             {inv && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 shrink-0"
-                                title="Descarregar PDF"
-                                onClick={() => baixarPdf(inv)}
-                                disabled={baixandoId === c.id}
-                              >
-                                {baixandoId === c.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <Download className="h-3.5 w-3.5" />
-                                )}
-                              </Button>
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0"
+                                  title="Descarregar PDF"
+                                  onClick={() => baixarPdf(inv)}
+                                  disabled={baixandoId === c.id}
+                                >
+                                  {baixandoId === c.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Download className="h-3.5 w-3.5" />
+                                  )}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0"
+                                  title="Enviar por email"
+                                  onClick={() => setEnviarInvoice(inv)}
+                                >
+                                  <Mail className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
                             )}
                           </div>
                         ) : porEmitir ? (
@@ -657,6 +705,8 @@ export function ContratoTabFaturar({ contrato }: Props) {
         </div>
       </div>
 
+      <DocumentosEmitidosExtra invoices={invoicesExtra} onEnviar={setEnviarInvoice} />
+
       <ContratoFaturarDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -680,6 +730,16 @@ export function ContratoTabFaturar({ contrato }: Props) {
         destinatario={clienteEntidade}
         emitente={emitente}
         onCriada={refetchAll}
+      />
+
+      <EnviarDocumentoEmailDialog
+        open={!!enviarInvoice}
+        onOpenChange={(o) => {
+          if (!o) setEnviarInvoice(null);
+        }}
+        invoice={enviarInvoice}
+        contextoLabel={`Contrato #${String(contrato.codigo).padStart(4, '0')}`}
+        entidades={contactosEnvio}
       />
 
       <AlertDialog
