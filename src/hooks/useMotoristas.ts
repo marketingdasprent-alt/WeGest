@@ -45,11 +45,7 @@ export function useCreateMotorista() {
 
   return useMutation({
     mutationFn: async (motorista: TablesInsert<'motoristas'>) => {
-      const { data, error } = await supabase
-        .from('motoristas')
-        .insert(motorista)
-        .select()
-        .single();
+      const { data, error } = await supabase.from('motoristas').insert(motorista).select().single();
       if (error) throw error;
       return data;
     },
@@ -71,13 +67,7 @@ export function useUpdateMotorista() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({
-      id,
-      dados,
-    }: {
-      id: string;
-      dados: TablesUpdate<'motoristas'>;
-    }) => {
+    mutationFn: async ({ id, dados }: { id: string; dados: TablesUpdate<'motoristas'> }) => {
       const { data, error } = await supabase
         .from('motoristas')
         .update(dados)

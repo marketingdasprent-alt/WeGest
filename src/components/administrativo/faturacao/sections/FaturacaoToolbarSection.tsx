@@ -1,6 +1,17 @@
-import { Building2, CreditCard, Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Building2,
+  CreditCard,
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  X,
+} from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -38,13 +49,27 @@ interface FaturacaoToolbarSectionProps {
 }
 
 export function FaturacaoToolbarSection({
-  estacoes, estacaoId, onEstacaoChange,
-  metodo, onMetodoChange,
-  weekStart, weekEnd, selectedWeek, isCurrentWeek,
-  onPreviousWeek, onNextWeek, onWeekDayClick, onWeekShortcut,
-  getWeekLabel, weekShortcuts, weekStartsOn,
-  hasFilters, onLimparFiltros, totalCount,
-  TODAS, TODOS,
+  estacoes,
+  estacaoId,
+  onEstacaoChange,
+  metodo,
+  onMetodoChange,
+  weekStart,
+  weekEnd,
+  selectedWeek,
+  isCurrentWeek,
+  onPreviousWeek,
+  onNextWeek,
+  onWeekDayClick,
+  onWeekShortcut,
+  getWeekLabel,
+  weekShortcuts,
+  weekStartsOn,
+  hasFilters,
+  onLimparFiltros,
+  totalCount,
+  TODAS,
+  TODOS,
 }: FaturacaoToolbarSectionProps) {
   return (
     <>
@@ -57,7 +82,9 @@ export function FaturacaoToolbarSection({
           <SelectContent>
             <SelectItem value={TODAS}>Todas as estações</SelectItem>
             {estacoes.map((e) => (
-              <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+              <SelectItem key={e.id} value={e.id}>
+                {e.nome}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -72,7 +99,9 @@ export function FaturacaoToolbarSection({
           <SelectContent>
             <SelectItem value={TODOS}>Todos os métodos</SelectItem>
             {METODO_OPTIONS.map((m) => (
-              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+              <SelectItem key={m.value} value={m.value}>
+                {m.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -93,24 +122,49 @@ export function FaturacaoToolbarSection({
             <div className="p-3 border-b">
               <div className="flex flex-wrap gap-1.5">
                 {weekShortcuts.map((s) => (
-                  <Button key={s.label} variant="outline" size="sm" className="text-xs h-7"
-                    onClick={() => onWeekShortcut(s.date)}>{s.label}</Button>
+                  <Button
+                    key={s.label}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-7"
+                    onClick={() => onWeekShortcut(s.date)}
+                  >
+                    {s.label}
+                  </Button>
                 ))}
               </div>
             </div>
-            <Calendar initialFocus mode="single" defaultMonth={selectedWeek}
-              selected={selectedWeek} onSelect={onWeekDayClick}
-              numberOfMonths={2} locale={pt} weekStartsOn={weekStartsOn}
+            <Calendar
+              initialFocus
+              mode="single"
+              defaultMonth={selectedWeek}
+              selected={selectedWeek}
+              onSelect={onWeekDayClick}
+              numberOfMonths={2}
+              locale={pt}
+              weekStartsOn={weekStartsOn}
               className="pointer-events-auto"
               modifiers={{ selected: { from: weekStart, to: weekEnd } }}
-              modifiersStyles={{ selected: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', borderRadius: 0 } }}
+              modifiersStyles={{
+                selected: {
+                  backgroundColor: 'hsl(var(--primary))',
+                  color: 'hsl(var(--primary-foreground))',
+                  borderRadius: 0,
+                },
+              }}
             />
             <div className="p-2 text-center text-xs text-muted-foreground border-t bg-muted/50">
               Clique num dia para selecionar a semana inteira (Seg-Dom)
             </div>
           </PopoverContent>
         </Popover>
-        <Button variant="outline" size="icon" className="h-9 w-9" onClick={onNextWeek} disabled={isCurrentWeek}>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-9 w-9"
+          onClick={onNextWeek}
+          disabled={isCurrentWeek}
+        >
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>

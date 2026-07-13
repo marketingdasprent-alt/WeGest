@@ -32,7 +32,10 @@ interface UseDateRangeReturn {
  */
 export function useDateRange(initialPreset: DatePreset = '30d'): UseDateRangeReturn {
   const [preset, setPresetState] = useState<DatePreset>(initialPreset);
-  const [customRange, setCustomRangeState] = useState<DateRange>({ from: undefined, to: undefined });
+  const [customRange, setCustomRangeState] = useState<DateRange>({
+    from: undefined,
+    to: undefined,
+  });
 
   const isCustom = preset === 'custom';
 

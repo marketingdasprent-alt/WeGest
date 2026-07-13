@@ -18,9 +18,7 @@ import { renderAnexoDanos, type AnexoDanosCtx } from './render-anexo-danos';
  * Substitui placeholders, renderiza HTML, tabelas, imagens, e anexos de danos.
  * Devolve o objecto jsPDF gerado.
  */
-export async function generateDocumentFromTemplate(
-  params: GenerateDocumentParams
-): Promise<jsPDF> {
+export async function generateDocumentFromTemplate(params: GenerateDocumentParams): Promise<jsPDF> {
   const {
     templateId,
     motoristaData,
@@ -79,12 +77,9 @@ export async function generateDocumentFromTemplate(
     const hasLetterhead = !!bg;
 
     // Margens ajustadas para papel timbrado
-    const topMargin =
-      templateData.template_data.topMargin ??
-      (hasLetterhead ? 42 : 32);
+    const topMargin = templateData.template_data.topMargin ?? (hasLetterhead ? 42 : 32);
     const bottomMarginLetterhead =
-      templateData.template_data.bottomMargin ??
-      (hasLetterhead ? 38 : 22);
+      templateData.template_data.bottomMargin ?? (hasLetterhead ? 38 : 22);
     const bottomMargin = hasLetterhead ? bottomMarginLetterhead : 22;
     const maxWidth = pageWidth - leftMargin - rightMargin;
     let yPos = topMargin;
@@ -133,7 +128,9 @@ export async function generateDocumentFromTemplate(
           if (!imagens.has(url)) {
             try {
               imagens.set(url, await loadImage(url));
-            } catch { /* skip falhas de carregamento */ }
+            } catch {
+              /* skip falhas de carregamento */
+            }
           }
         }
       }

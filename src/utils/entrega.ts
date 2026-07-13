@@ -68,11 +68,7 @@ export function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-export async function dataUrlToFile(
-  dataUrl: string,
-  name: string,
-  type: string
-): Promise<File> {
+export async function dataUrlToFile(dataUrl: string, name: string, type: string): Promise<File> {
   const res = await fetch(dataUrl);
   const blob = await res.blob();
   return new File([blob], name, { type: type || blob.type });

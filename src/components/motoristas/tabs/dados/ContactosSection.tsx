@@ -1,13 +1,7 @@
 import { MapPin } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { SectionCard } from '@/components/ui/section-card';
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import type { Control } from 'react-hook-form';
 
 interface ContactosSectionProps {

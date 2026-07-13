@@ -12,7 +12,13 @@ import { toast } from 'sonner';
 import { Motorista } from '@/pages/Motoristas';
 import { MotoristaCartoesFrota } from '../MotoristaCartoesFrota';
 import { validateDateYear, YEAR_RANGE_MESSAGE } from '@/utils/dateValidators';
-import { validarNIF, validarIBAN, validarCodigoPostal, validarCartaConducao, validarNumeroDocumento } from '@/lib/pt-validators';
+import {
+  validarNIF,
+  validarIBAN,
+  validarCodigoPostal,
+  validarCartaConducao,
+  validarNumeroDocumento,
+} from '@/lib/pt-validators';
 import {
   DadosPessoaisSection,
   ContactosSection,
@@ -174,19 +180,44 @@ export function MotoristaTabDados({
   const form = useForm<FormData>({
     resolver: zodResolver(formSchemaValidado),
     defaultValues: {
-      nome: '', nif: '', email: '', telefone: '', morada: '', codigo_postal: '', cidade: '',
-      documento_tipo: '', documento_numero: '', documento_validade: '',
-      carta_conducao: '', carta_categorias: [], carta_validade: '',
-      licenca_tvde_numero: '', licenca_tvde_validade: '',
-      cartao_frota: '', cartao_bp: '', cartao_repsol: '', cartao_edp: '',
-      data_contratacao: '', recibo_verde: true, is_slot: false,
-      slot_valor_semanal: null, seguro_valor_semanal: null, status_ativo: true,
-      observacoes: '', iban: '', gestor_responsavel: '',
-      bolt_id: '', uber_uuid: '',
-      documento_ficheiro_url: '', documento_identificacao_verso_url: '',
-      carta_ficheiro_url: '', carta_conducao_verso_url: '',
-      licenca_tvde_ficheiro_url: '', registo_criminal_url: '',
-      comprovativo_morada_url: '', comprovativo_iban_url: '',
+      nome: '',
+      nif: '',
+      email: '',
+      telefone: '',
+      morada: '',
+      codigo_postal: '',
+      cidade: '',
+      documento_tipo: '',
+      documento_numero: '',
+      documento_validade: '',
+      carta_conducao: '',
+      carta_categorias: [],
+      carta_validade: '',
+      licenca_tvde_numero: '',
+      licenca_tvde_validade: '',
+      cartao_frota: '',
+      cartao_bp: '',
+      cartao_repsol: '',
+      cartao_edp: '',
+      data_contratacao: '',
+      recibo_verde: true,
+      is_slot: false,
+      slot_valor_semanal: null,
+      seguro_valor_semanal: null,
+      status_ativo: true,
+      observacoes: '',
+      iban: '',
+      gestor_responsavel: '',
+      bolt_id: '',
+      uber_uuid: '',
+      documento_ficheiro_url: '',
+      documento_identificacao_verso_url: '',
+      carta_ficheiro_url: '',
+      carta_conducao_verso_url: '',
+      licenca_tvde_ficheiro_url: '',
+      registo_criminal_url: '',
+      comprovativo_morada_url: '',
+      comprovativo_iban_url: '',
     },
   });
 
@@ -197,26 +228,36 @@ export function MotoristaTabDados({
       return;
     }
     form.reset({
-      nome: motorista.nome || '', nif: motorista.nif || '', email: motorista.email || '',
-      telefone: motorista.telefone || '', morada: motorista.morada || '',
-      codigo_postal: motorista.codigo_postal || '', cidade: motorista.cidade || '',
+      nome: motorista.nome || '',
+      nif: motorista.nif || '',
+      email: motorista.email || '',
+      telefone: motorista.telefone || '',
+      morada: motorista.morada || '',
+      codigo_postal: motorista.codigo_postal || '',
+      cidade: motorista.cidade || '',
       documento_tipo: motorista.documento_tipo || '',
       documento_numero: motorista.documento_numero || '',
       documento_validade: motorista.documento_validade || '',
-      carta_conducao: motorista.carta_conducao || '', carta_categorias: motorista.carta_categorias || [],
+      carta_conducao: motorista.carta_conducao || '',
+      carta_categorias: motorista.carta_categorias || [],
       carta_validade: motorista.carta_validade || '',
       licenca_tvde_numero: motorista.licenca_tvde_numero || '',
       licenca_tvde_validade: motorista.licenca_tvde_validade || '',
-      cartao_frota: motorista.cartao_frota || '', cartao_bp: motorista.cartao_bp || '',
-      cartao_repsol: motorista.cartao_repsol || '', cartao_edp: motorista.cartao_edp || '',
+      cartao_frota: motorista.cartao_frota || '',
+      cartao_bp: motorista.cartao_bp || '',
+      cartao_repsol: motorista.cartao_repsol || '',
+      cartao_edp: motorista.cartao_edp || '',
       data_contratacao: motorista.data_contratacao || '',
-      recibo_verde: motorista.recibo_verde ?? true, is_slot: motorista.is_slot ?? false,
+      recibo_verde: motorista.recibo_verde ?? true,
+      is_slot: motorista.is_slot ?? false,
       slot_valor_semanal: motorista.slot_valor_semanal ?? null,
       seguro_valor_semanal: motorista.seguro_valor_semanal ?? null,
       status_ativo: motorista.status_ativo ?? true,
-      observacoes: motorista.observacoes || '', iban: motorista.iban || '',
+      observacoes: motorista.observacoes || '',
+      iban: motorista.iban || '',
       gestor_responsavel: motorista.gestor_responsavel || '',
-      uber_uuid: motorista.uber_uuid || '', bolt_id: motorista.bolt_id || '',
+      uber_uuid: motorista.uber_uuid || '',
+      bolt_id: motorista.bolt_id || '',
       documento_ficheiro_url: motorista.documento_ficheiro_url || '',
       documento_identificacao_verso_url: motorista.documento_identificacao_verso_url || '',
       carta_ficheiro_url: motorista.carta_ficheiro_url || '',
@@ -251,15 +292,21 @@ export function MotoristaTabDados({
           .eq('nif', nifNormalizado)
           .maybeSingle();
         if (existing) {
-          toast.error(`Já existe um motorista com este NIF: ${existing.nome} (Cód. ${existing.codigo})`);
+          toast.error(
+            `Já existe um motorista com este NIF: ${existing.nome} (Cód. ${existing.codigo})`
+          );
           setIsSubmitting(false);
           return;
         }
       }
       const updateData = {
-        nome: data.nome, nif: nifNormalizado, email: data.email || null,
-        telefone: data.telefone || null, morada: data.morada || null,
-        codigo_postal: data.codigo_postal || null, cidade: data.cidade || null,
+        nome: data.nome,
+        nif: nifNormalizado,
+        email: data.email || null,
+        telefone: data.telefone || null,
+        morada: data.morada || null,
+        codigo_postal: data.codigo_postal || null,
+        cidade: data.cidade || null,
         documento_tipo: data.documento_tipo || null,
         documento_numero: data.documento_numero || null,
         documento_validade: data.documento_validade || null,
@@ -268,16 +315,22 @@ export function MotoristaTabDados({
         carta_validade: data.carta_validade || null,
         licenca_tvde_numero: data.licenca_tvde_numero || null,
         licenca_tvde_validade: data.licenca_tvde_validade || null,
-        cartao_frota: data.cartao_frota || null, cartao_bp: data.cartao_bp || null,
-        cartao_repsol: data.cartao_repsol || null, cartao_edp: data.cartao_edp || null,
+        cartao_frota: data.cartao_frota || null,
+        cartao_bp: data.cartao_bp || null,
+        cartao_repsol: data.cartao_repsol || null,
+        cartao_edp: data.cartao_edp || null,
         data_contratacao: data.data_contratacao || null,
-        recibo_verde: data.recibo_verde, is_slot: data.is_slot,
+        recibo_verde: data.recibo_verde,
+        is_slot: data.is_slot,
         slot_valor_semanal: data.is_slot ? data.slot_valor_semanal : null,
         seguro_valor_semanal: data.seguro_valor_semanal ?? null,
-        status_ativo: data.status_ativo, observacoes: data.observacoes || null,
+        status_ativo: data.status_ativo,
+        observacoes: data.observacoes || null,
         iban: data.iban ? data.iban.replace(/\s/g, '').toUpperCase() : null,
-        gestor_responsavel: data.gestor_responsavel === 'none' ? null : data.gestor_responsavel || null,
-        uber_uuid: data.uber_uuid || null, bolt_id: data.bolt_id || null,
+        gestor_responsavel:
+          data.gestor_responsavel === 'none' ? null : data.gestor_responsavel || null,
+        uber_uuid: data.uber_uuid || null,
+        bolt_id: data.bolt_id || null,
         documento_ficheiro_url: data.documento_ficheiro_url || null,
         documento_identificacao_verso_url: data.documento_identificacao_verso_url || null,
         carta_ficheiro_url: data.carta_ficheiro_url || null,
@@ -289,7 +342,10 @@ export function MotoristaTabDados({
       };
       if (isCreating) {
         const { data: novo, error } = await supabase
-          .from('motoristas_ativos').insert(updateData).select().single();
+          .from('motoristas_ativos')
+          .insert(updateData)
+          .select()
+          .single();
         if (error) throw error;
         toast.success('Motorista criado com sucesso!');
         setHasChanges(false);
@@ -297,7 +353,9 @@ export function MotoristaTabDados({
         onCreated?.(novo as Motorista);
       } else {
         const { error } = await supabase
-          .from('motoristas_ativos').update(updateData).eq('id', motorista.id);
+          .from('motoristas_ativos')
+          .update(updateData)
+          .eq('id', motorista.id);
         if (error) throw error;
         toast.success('Motorista atualizado com sucesso!');
         setHasChanges(false);

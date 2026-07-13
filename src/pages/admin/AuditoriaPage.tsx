@@ -28,10 +28,7 @@ const ENTITY_OPTIONS: { value: EntidadeAuditavel; label: string }[] = [
  * Entidades sem tabelas de histórico dedicada (cf. useAuditHistory).
  * O hook retorna `undefined` para estas entidades — mostramos aviso.
  */
-const ENTITIES_WITHOUT_HISTORY: ReadonlySet<EntidadeAuditavel> = new Set([
-  'reserva',
-  'motorista',
-]);
+const ENTITIES_WITHOUT_HISTORY: ReadonlySet<EntidadeAuditavel> = new Set(['reserva', 'motorista']);
 
 // ── Página ────────────────────────────────────────────────────
 
@@ -71,10 +68,7 @@ export default function AuditoriaPage() {
       />
 
       {/* Formulário de filtro */}
-      <form
-        onSubmit={handleSubmit}
-        className="flex flex-col gap-3 sm:flex-row sm:items-center"
-      >
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Select
           value={entidade}
           onValueChange={(v) => {
@@ -112,8 +106,8 @@ export default function AuditoriaPage() {
       {hasNoHistory && (
         <div className="rounded-md border border-border/60 bg-muted/30 p-4 text-center">
           <p className="text-sm text-muted-foreground">
-            Esta entidade não tem tabelas de histórico dedicadas. A auditoria
-            não está disponível para {entidade === 'reserva' ? 'reservas' : 'motoristas'}.
+            Esta entidade não tem tabelas de histórico dedicadas. A auditoria não está disponível
+            para {entidade === 'reserva' ? 'reservas' : 'motoristas'}.
           </p>
         </div>
       )}
@@ -134,8 +128,7 @@ export default function AuditoriaPage() {
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <History className="mb-2 h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            Seleccione uma entidade e introduza o ID do registo para ver o
-            histórico de auditoria.
+            Seleccione uma entidade e introduza o ID do registo para ver o histórico de auditoria.
           </p>
         </div>
       )}

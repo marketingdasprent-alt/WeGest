@@ -4,7 +4,13 @@ import { MapPin } from 'lucide-react';
 
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 import { SectionHeader } from '../../../SectionHeader';
 import { ALDFields } from '@/components/renting/shared/ALDFields';
@@ -84,7 +90,12 @@ export function ReservaTabGeralSectionPeriodos({
                   Data Início <span className="text-red-500">*</span>
                 </FormLabel>
                 <FormControl>
-                  <Input type="datetime-local" className="bg-background" {...field} value={field.value ?? ''} />
+                  <Input
+                    type="datetime-local"
+                    className="bg-background"
+                    {...field}
+                    value={field.value ?? ''}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -141,7 +152,12 @@ export function ReservaTabGeralSectionPeriodos({
                     Data Início <span className="text-red-500">*</span>
                   </FormLabel>
                   <FormControl>
-                    <Input type="datetime-local" className="bg-background" {...field} value={field.value ?? ''} />
+                    <Input
+                      type="datetime-local"
+                      className="bg-background"
+                      {...field}
+                      value={field.value ?? ''}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -158,7 +174,9 @@ export function ReservaTabGeralSectionPeriodos({
               right={
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium text-muted-foreground">
-                    {modoMensal && renovacaoOpcao === 'intervalo_dias' ? 'Intervalo (dias)' : 'Nº Dias'}
+                    {modoMensal && renovacaoOpcao === 'intervalo_dias'
+                      ? 'Intervalo (dias)'
+                      : 'Nº Dias'}
                   </span>
                   <Input
                     type="text"

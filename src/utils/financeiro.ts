@@ -10,8 +10,7 @@ import type { ResumoFinanceiro } from '@/types/financeiro';
 export const fmtDay = (d: Date): string => format(d, 'yyyy-MM-dd');
 
 /** Capitaliza a primeira letra de uma string. */
-export const capitalize = (s: string): string =>
-  s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+export const capitalize = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 /** Cria um ResumoFinanceiro vazio (KPIs). */
 export const emptyResumo = (dateLabel = ''): ResumoFinanceiro => ({
@@ -29,8 +28,7 @@ export const getWeekShortcuts = () => [
 ];
 
 /** Arredonda para 2 casas decimais (centavos). */
-export const round2 = (n: number): number =>
-  Math.round((Number(n) || 0) * 100) / 100;
+export const round2 = (n: number): number => Math.round((Number(n) || 0) * 100) / 100;
 
 /** Converte string da semana selecionada para label legível. */
 export function weekLabel(

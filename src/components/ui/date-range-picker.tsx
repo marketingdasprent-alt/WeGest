@@ -108,11 +108,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           <div className="p-3">
             <Calendar
               mode="range"
-              selected={
-                dateRange.from
-                  ? { from: dateRange.from, to: dateRange.to }
-                  : undefined
-              }
+              selected={dateRange.from ? { from: dateRange.from, to: dateRange.to } : undefined}
               onSelect={handleRangeSelect}
               numberOfMonths={2}
               defaultMonth={dateRange.from ?? new Date()}

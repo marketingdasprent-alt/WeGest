@@ -40,18 +40,12 @@ export function FaturacaoListaSection({
     <>
       {capped && (
         <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
-          <Info className="h-3.5 w-3.5 shrink-0" />
-          A mostrar os {listCap} registos mais recentes. Use o filtro de datas
-          para ver períodos anteriores.
+          <Info className="h-3.5 w-3.5 shrink-0" />A mostrar os {listCap} registos mais recentes.
+          Use o filtro de datas para ver períodos anteriores.
         </p>
       )}
 
-      <FaturacaoTabela
-        rows={rows}
-        loading={loading}
-        pageSize={pageSize}
-        onRowClick={onRowClick}
-      />
+      <FaturacaoTabela rows={rows} loading={loading} pageSize={pageSize} onRowClick={onRowClick} />
 
       {totalPages > 1 && (
         <div className="flex flex-col items-center gap-2">
@@ -60,11 +54,7 @@ export function FaturacaoListaSection({
               <PaginationItem>
                 <PaginationPrevious
                   onClick={() => goToPage(page - 1)}
-                  className={
-                    page === 1
-                      ? 'pointer-events-none opacity-50'
-                      : 'cursor-pointer'
-                  }
+                  className={page === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                 />
               </PaginationItem>
               {pageWindow.map((p) => (
@@ -82,9 +72,7 @@ export function FaturacaoListaSection({
                 <PaginationNext
                   onClick={() => goToPage(page + 1)}
                   className={
-                    page === totalPages
-                      ? 'pointer-events-none opacity-50'
-                      : 'cursor-pointer'
+                    page === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'
                   }
                 />
               </PaginationItem>

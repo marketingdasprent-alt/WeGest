@@ -137,10 +137,9 @@ describe('useNotifications', () => {
       count: 3,
     });
 
-    const { result } = renderHook(
-      () => useNotifications({ apenasNaoResolvidas: false }),
-      { wrapper: createWrapper() }
-    );
+    const { result } = renderHook(() => useNotifications({ apenasNaoResolvidas: false }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 

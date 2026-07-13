@@ -186,7 +186,9 @@ describe('useCreateMotorista', () => {
   });
 
   it('propaga erro quando NIF duplicado (constraint violation)', async () => {
-    const dbError = new Error('duplicate key value violates unique constraint "motoristas_nif_key"');
+    const dbError = new Error(
+      'duplicate key value violates unique constraint "motoristas_nif_key"'
+    );
 
     const chain = {
       insert: vi.fn().mockReturnThis(),
@@ -269,9 +271,7 @@ describe('useUpdateMotorista', () => {
     expect(result.current.data).toEqual(motoristaActualizado);
 
     // Toast de sucesso
-    expect(toast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Motorista actualizado' })
-    );
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Motorista actualizado' }));
   });
 });
 
@@ -310,8 +310,6 @@ describe('useDeleteMotorista', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['motoristas'] });
 
     // Toast de sucesso
-    expect(toast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Motorista eliminado' })
-    );
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Motorista eliminado' }));
   });
 });

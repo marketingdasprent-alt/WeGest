@@ -1,13 +1,7 @@
 import { Smartphone, Zap } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { SectionCard } from '@/components/ui/section-card';
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import type { Control } from 'react-hook-form';
 
 interface IntegracoesSectionProps {
@@ -51,8 +45,8 @@ export function IntegracoesSection({ control }: IntegracoesSectionProps) {
           )}
         />
         <p className="text-[10px] text-muted-foreground sm:col-span-2 mt-1">
-          Estes IDs são usados para unificar automaticamente os ganhos das plataformas no
-          Dashboard financeiro.
+          Estes IDs são usados para unificar automaticamente os ganhos das plataformas no Dashboard
+          financeiro.
         </p>
       </div>
     </SectionCard>

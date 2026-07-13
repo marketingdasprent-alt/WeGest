@@ -24,11 +24,19 @@ interface DocumentosSectionProps {
 }
 
 export const DocumentosSection: React.FC<DocumentosSectionProps> = ({
-  licencaTvdeNumero, licencaTvdeValidade, licencaTvdeFicheiroUrl,
-  setLicencaTvdeNumero, setLicencaTvdeValidade, setLicencaTvdeFicheiroUrl,
-  registoCriminalUrl, comprovativoIbanUrl,
-  setRegistoCriminalUrl, setComprovativoIbanUrl,
-  fieldErrors, clearFieldError, onUploadToDb,
+  licencaTvdeNumero,
+  licencaTvdeValidade,
+  licencaTvdeFicheiroUrl,
+  setLicencaTvdeNumero,
+  setLicencaTvdeValidade,
+  setLicencaTvdeFicheiroUrl,
+  registoCriminalUrl,
+  comprovativoIbanUrl,
+  setRegistoCriminalUrl,
+  setComprovativoIbanUrl,
+  fieldErrors,
+  clearFieldError,
+  onUploadToDb,
 }) => {
   const renderError = (field: string) =>
     fieldErrors[field] ? (
@@ -51,10 +59,16 @@ export const DocumentosSection: React.FC<DocumentosSectionProps> = ({
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="licencaTvdeNumero">Número da Licença TVDE <span className="text-red-500">*</span></Label>
+            <Label htmlFor="licencaTvdeNumero">
+              Número da Licença TVDE <span className="text-red-500">*</span>
+            </Label>
             <Input
-              id="licencaTvdeNumero" value={licencaTvdeNumero}
-              onChange={(e) => { setLicencaTvdeNumero(e.target.value); clearFieldError('licencaTvdeNumero'); }}
+              id="licencaTvdeNumero"
+              value={licencaTvdeNumero}
+              onChange={(e) => {
+                setLicencaTvdeNumero(e.target.value);
+                clearFieldError('licencaTvdeNumero');
+              }}
               placeholder="Nº da licença TVDE"
               aria-invalid={!!fieldErrors.licencaTvdeNumero}
               className={fieldErrors.licencaTvdeNumero ? 'border-destructive' : ''}
@@ -62,20 +76,34 @@ export const DocumentosSection: React.FC<DocumentosSectionProps> = ({
             {renderError('licencaTvdeNumero')}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="licencaTvdeValidade">Data de Validade <span className="text-red-500">*</span></Label>
+            <Label htmlFor="licencaTvdeValidade">
+              Data de Validade <span className="text-red-500">*</span>
+            </Label>
             <Input
-              id="licencaTvdeValidade" type="date" value={licencaTvdeValidade}
-              onChange={(e) => { setLicencaTvdeValidade(e.target.value); clearFieldError('licencaTvdeValidade'); }}
+              id="licencaTvdeValidade"
+              type="date"
+              value={licencaTvdeValidade}
+              onChange={(e) => {
+                setLicencaTvdeValidade(e.target.value);
+                clearFieldError('licencaTvdeValidade');
+              }}
               aria-invalid={!!fieldErrors.licencaTvdeValidade}
               className={fieldErrors.licencaTvdeValidade ? 'border-destructive' : ''}
             />
             {renderError('licencaTvdeValidade')}
           </div>
           <div className="space-y-2 sm:col-span-2">
-            <Label>Upload da Licença TVDE <span className="text-red-500">*</span></Label>
+            <Label>
+              Upload da Licença TVDE <span className="text-red-500">*</span>
+            </Label>
             <DocumentUploader
-              folder="licenca-tvde" currentUrl={licencaTvdeFicheiroUrl}
-              onUpload={(url) => { setLicencaTvdeFicheiroUrl(url); clearFieldError('licencaTvdeFicheiroUrl'); void onUploadToDb('licenca_tvde_ficheiro_url', url); }}
+              folder="licenca-tvde"
+              currentUrl={licencaTvdeFicheiroUrl}
+              onUpload={(url) => {
+                setLicencaTvdeFicheiroUrl(url);
+                clearFieldError('licencaTvdeFicheiroUrl');
+                void onUploadToDb('licenca_tvde_ficheiro_url', url);
+              }}
               accept="application/pdf,image/jpeg,image/png"
             />
             {renderError('licencaTvdeFicheiroUrl')}
@@ -99,11 +127,18 @@ export const DocumentosSection: React.FC<DocumentosSectionProps> = ({
               Registo Criminal <span className="text-red-500">*</span>
             </Label>
             <DocumentUploader
-              folder="registo-criminal" currentUrl={registoCriminalUrl}
-              onUpload={(url) => { setRegistoCriminalUrl(url); clearFieldError('registoCriminalUrl'); void onUploadToDb('registo_criminal_url', url); }}
+              folder="registo-criminal"
+              currentUrl={registoCriminalUrl}
+              onUpload={(url) => {
+                setRegistoCriminalUrl(url);
+                clearFieldError('registoCriminalUrl');
+                void onUploadToDb('registo_criminal_url', url);
+              }}
               accept="application/pdf,image/jpeg,image/png"
             />
-            <p className="text-xs text-muted-foreground">Certificado do registo criminal português (válido por 3 meses)</p>
+            <p className="text-xs text-muted-foreground">
+              Certificado do registo criminal português (válido por 3 meses)
+            </p>
             {renderError('registoCriminalUrl')}
           </div>
           <div className="space-y-2">
@@ -112,11 +147,18 @@ export const DocumentosSection: React.FC<DocumentosSectionProps> = ({
               Comprovativo de IBAN <span className="text-red-500">*</span>
             </Label>
             <DocumentUploader
-              folder="comprovativo-iban" currentUrl={comprovativoIbanUrl}
-              onUpload={(url) => { setComprovativoIbanUrl(url); clearFieldError('comprovativoIbanUrl'); void onUploadToDb('comprovativo_iban_url', url); }}
+              folder="comprovativo-iban"
+              currentUrl={comprovativoIbanUrl}
+              onUpload={(url) => {
+                setComprovativoIbanUrl(url);
+                clearFieldError('comprovativoIbanUrl');
+                void onUploadToDb('comprovativo_iban_url', url);
+              }}
               accept="application/pdf,image/jpeg,image/png"
             />
-            <p className="text-xs text-muted-foreground">Documento bancário com IBAN para recebimento de pagamentos</p>
+            <p className="text-xs text-muted-foreground">
+              Documento bancário com IBAN para recebimento de pagamentos
+            </p>
             {renderError('comprovativoIbanUrl')}
           </div>
         </CardContent>

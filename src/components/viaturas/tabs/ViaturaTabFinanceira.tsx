@@ -10,7 +10,10 @@ import { Wallet, History, TrendingUp, TrendingDown, Tag } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ViaturaFinanceiraResumoCards } from './ViaturaFinanceiraResumoCards';
-import { ViaturaFinanceiraReceitas, ViaturaFinanceiraDespesas } from './ViaturaFinanceiraMovimentos';
+import {
+  ViaturaFinanceiraReceitas,
+  ViaturaFinanceiraDespesas,
+} from './ViaturaFinanceiraMovimentos';
 import { AquisicaoConfigSection } from './financeira/sections/AquisicaoConfigSection';
 import { FinanciamentoSection } from './financeira/sections/FinanciamentoSection';
 import { DepreciacaoSection } from './financeira/sections/DepreciacaoSection';
@@ -139,7 +142,9 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
           tipo_financiamento: data.tipo_financiamento,
           emissor_id: data.emissor_id || null,
           custo_viatura: data.custo_viatura ? parseFloat(data.custo_viatura) : null,
-          custos_operacionais: data.custos_operacionais ? parseFloat(data.custos_operacionais) : null,
+          custos_operacionais: data.custos_operacionais
+            ? parseFloat(data.custos_operacionais)
+            : null,
           custos_adicionais: data.custos_adicionais ? parseFloat(data.custos_adicionais) : null,
           impostos_aquisicao: data.impostos_aquisicao ? parseFloat(data.impostos_aquisicao) : null,
           total_viatura: data.total_viatura ? parseFloat(data.total_viatura) : null,
@@ -155,7 +160,11 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
           metodo_depreciacao: data.metodo_depreciacao,
           vida_util_anos: data.vida_util_anos ? parseInt(data.vida_util_anos) : 5,
           is_vendida: data.is_vendida,
-          status: data.is_vendida ? 'vendida' : viatura.status === 'vendida' ? 'disponivel' : viatura.status,
+          status: data.is_vendida
+            ? 'vendida'
+            : viatura.status === 'vendida'
+              ? 'disponivel'
+              : viatura.status,
           data_venda: data.data_venda || null,
           valor_venda: data.valor_venda ? parseFloat(data.valor_venda) : null,
           venda_observacoes: data.venda_observacoes || null,
@@ -185,13 +194,15 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
 
   const totalAquisicaoVal = parseFloat(form.watch('total_viatura') || '0');
   const totalReceitasVal = (receitas.contratos || 0) + (receitas.outros || 0);
-  const totalDespesasVal = (receitas.combustivel || 0) + (receitas.portagens || 0) + (receitas.danos || 0);
+  const totalDespesasVal =
+    (receitas.combustivel || 0) + (receitas.portagens || 0) + (receitas.danos || 0);
   const lucroOperacional = totalReceitasVal - totalDespesasVal;
-  const rentabilidadePerc = totalAquisicaoVal > 0 ? (lucroOperacional / totalAquisicaoVal) * 100 : 0;
+  const rentabilidadePerc =
+    totalAquisicaoVal > 0 ? (lucroOperacional / totalAquisicaoVal) * 100 : 0;
   const restanteMeses = calculateRestanteFinanciamento(
     form.watch('tipo_financiamento'),
     form.watch('data_primeiro_pagamento'),
-    parseInt(form.watch('num_prestacoes') || '0'),
+    parseInt(form.watch('num_prestacoes') || '0')
   );
 
   return (

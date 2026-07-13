@@ -44,7 +44,7 @@ function chainable(result: SupabaseResult = { data: null, error: null }) {
   // Thenable: `await chain` (sem .single()) resolve para result
   (c as unknown as { then: unknown }).then = (
     resolve: (v: SupabaseResult) => void,
-    reject?: (r: unknown) => void,
+    reject?: (r: unknown) => void
   ) => Promise.resolve(result).then(resolve, reject);
   return c;
 }
@@ -152,9 +152,7 @@ describe('useCreateContratoRenting', () => {
     expect(chains.contratos_renting.insert).toHaveBeenCalledWith(contratoPayload);
 
     // 2. Toast de sucesso
-    expect(toastMock).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Contrato criado' }),
-    );
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Contrato criado' }));
   });
 
   it('surfaces a mensagem real do Postgres quando campos obrigatórios faltam (regressão fix 10/07)', async () => {
@@ -192,7 +190,7 @@ describe('useCreateContratoRenting', () => {
         title: 'Erro',
         description: expect.stringContaining('null value in column "cliente_id"'),
         variant: 'destructive',
-      }),
+      })
     );
     const call = toastMock.mock.calls[0][0] as { description: string };
     expect(call.description).not.toMatch(/erro inesperado/i);
@@ -229,7 +227,7 @@ describe('useCreateContratoRenting', () => {
       expect.objectContaining({
         title: 'Reserva já tem contrato',
         variant: 'destructive',
-      }),
+      })
     );
     // NÃO é um redirect silencioso — o toast foi chamado exactamente uma vez
     expect(toastMock).toHaveBeenCalledTimes(1);
@@ -287,7 +285,7 @@ describe('useFecharContrato', () => {
       expect.objectContaining({
         estado_operacional: 'cancelado',
         estacao_recolha_id: 'est-1',
-      }),
+      })
     );
 
     // 2. Evento de calendário criado com tipo 'recolha'
@@ -296,7 +294,7 @@ describe('useFecharContrato', () => {
         tipo: 'recolha',
         origem_tipo: 'contrato_renting',
         origem_id: 'c1',
-      }),
+      })
     );
 
     // 3. KM e combustível registados no contrato
@@ -304,12 +302,12 @@ describe('useFecharContrato', () => {
       expect.objectContaining({
         km_entrada: 12345,
         combustivel_entrada: 'meio',
-      }),
+      })
     );
 
     // 4. Motorista desactivado (recolha confirmada → vínculo TVDE termina)
     expect(chains.motoristas_ativos.update).toHaveBeenCalledWith(
-      expect.objectContaining({ status_ativo: false }),
+      expect.objectContaining({ status_ativo: false })
     );
 
     // 5. Dívida registada no financeiro do motorista
@@ -318,16 +316,14 @@ describe('useFecharContrato', () => {
         motorista_id: 'mot-1',
         tipo: 'debito',
         valor: 50,
-      }),
+      })
     );
 
     // 6. Return confirma que fechou agora (recolha presente)
     expect(fechouAgora).toBe(true);
 
     // 7. Toast de sucesso
-    expect(toastMock).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Contrato fechado' }),
-    );
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Contrato fechado' }));
   });
 
   it('sem recolha física → fica agendado (fechouAgora=false) e motorista mantém-se activo', async () => {
@@ -361,7 +357,7 @@ describe('useFecharContrato', () => {
 
     // Contrato ainda foi fechado (estado_operacional = 'cancelado')
     expect(chains.contratos_renting.update).toHaveBeenCalledWith(
-      expect.objectContaining({ estado_operacional: 'cancelado' }),
+      expect.objectContaining({ estado_operacional: 'cancelado' })
     );
 
     // Motorista NÃO foi desactivado (sem recolha confirmada)
@@ -371,8 +367,6 @@ describe('useFecharContrato', () => {
     expect(fechouAgora).toBe(false);
 
     // Toast diz "Recolha agendada"
-    expect(toastMock).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Recolha agendada' }),
-    );
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Recolha agendada' }));
   });
 });

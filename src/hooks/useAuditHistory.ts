@@ -8,7 +8,10 @@ import type { AuditEntry, EntidadeAuditavel, UseAuditHistoryOptions } from '@/ty
 const db = supabase as unknown as {
   from: (t: string) => {
     select: (cols: string) => {
-      eq: (col: string, val: string) => {
+      eq: (
+        col: string,
+        val: string
+      ) => {
         order: (
           col: string,
           opts: { ascending: boolean }
@@ -113,14 +116,9 @@ const TABLES_BY_ENTITY: Record<string, TableMapping[]> = {
  * Converte uma linha de uma tabela de histórico para `AuditEntry`.
  * Lida com diferenças de schema entre tabelas.
  */
-function rowToAuditEntry(
-  row: Record<string, unknown>,
-  mapping: TableMapping
-): AuditEntry {
+function rowToAuditEntry(row: Record<string, unknown>, mapping: TableMapping): AuditEntry {
   const actorId =
-    typeof row[mapping.actorColumn] === 'string'
-      ? (row[mapping.actorColumn] as string)
-      : null;
+    typeof row[mapping.actorColumn] === 'string' ? (row[mapping.actorColumn] as string) : null;
 
   let acao = mapping.acaoPadrao;
   if (mapping.actionColumn && typeof row[mapping.actionColumn] === 'string') {
@@ -141,7 +139,11 @@ function rowToAuditEntry(
   }
 
   let payload: Record<string, unknown> | null = null;
-  if (mapping.payloadColumn && row[mapping.payloadColumn] !== null && row[mapping.payloadColumn] !== undefined) {
+  if (
+    mapping.payloadColumn &&
+    row[mapping.payloadColumn] !== null &&
+    row[mapping.payloadColumn] !== undefined
+  ) {
     const raw = row[mapping.payloadColumn];
     if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
       payload = raw as Record<string, unknown>;
@@ -183,9 +185,7 @@ async function queryTable(
   if (error) throw error;
   if (!data || !Array.isArray(data)) return [];
 
-  return (data as Record<string, unknown>[]).map((row) =>
-    rowToAuditEntry(row, mapping)
-  );
+  return (data as Record<string, unknown>[]).map((row) => rowToAuditEntry(row, mapping));
 }
 
 // ── Hook principal ──────────────────────────────────────────
@@ -213,11 +213,7 @@ interface UseAuditHistoryParams {
  * });
  * ```
  */
-export function useAuditHistory({
-  entidade,
-  id,
-  options,
-}: UseAuditHistoryParams) {
+export function useAuditHistory({ entidade, id, options }: UseAuditHistoryParams) {
   const limit = options?.limit ?? 50;
   const mappings = TABLES_BY_ENTITY[entidade] ?? [];
 
@@ -226,17 +222,12 @@ export function useAuditHistory({
     queryFn: async (): Promise<AuditEntry[]> => {
       if (!id || mappings.length === 0) return [];
 
-      const results = await Promise.all(
-        mappings.map((m) => queryTable(m, id, limit))
-      );
+      const results = await Promise.all(mappings.map((m) => queryTable(m, id, limit)));
 
       // Juntar, ordenar por createdAt descendente e limitar
       return results
         .flat()
-        .sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        )
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, limit);
     },
     enabled: !!id && mappings.length > 0,

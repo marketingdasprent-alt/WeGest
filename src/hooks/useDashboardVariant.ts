@@ -9,10 +9,7 @@ interface UseDashboardVariantReturn {
   isExecutivo: boolean;
 }
 
-function deriveDashboardRole(
-  isAdmin: boolean,
-  cargo: string | null,
-): DashboardRole | null {
+function deriveDashboardRole(isAdmin: boolean, cargo: string | null): DashboardRole | null {
   if (isAdmin) return 'admin';
   if (cargo && cargo.toLowerCase().includes('gestor')) return 'gestor';
   if (cargo === 'colaborador' || cargo === null) return 'operacional';
@@ -24,9 +21,7 @@ export function useDashboardVariant(): UseDashboardVariantReturn {
   const { isAdmin, cargo } = usePermissions();
 
   const role = deriveDashboardRole(isAdmin, cargo);
-  const variant: DashboardVariant = role
-    ? ROLE_TO_VARIANT[role]
-    : 'executivo';
+  const variant: DashboardVariant = role ? ROLE_TO_VARIANT[role] : 'executivo';
 
   return {
     variant,

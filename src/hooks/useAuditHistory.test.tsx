@@ -60,10 +60,9 @@ describe('useAuditHistory', () => {
   it('retorna undefined (disabled) para entidades sem tabelas (reserva)', async () => {
     mockFromResolve([]);
 
-    const { result } = renderHook(
-      () => useAuditHistory({ entidade: 'reserva', id: 'any-id' }),
-      { wrapper: createWrapper() }
-    );
+    const { result } = renderHook(() => useAuditHistory({ entidade: 'reserva', id: 'any-id' }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     // enabled=false → query não corre → data é undefined
@@ -72,10 +71,9 @@ describe('useAuditHistory', () => {
   });
 
   it('retorna undefined (disabled) para entidades sem tabelas (motorista)', async () => {
-    const { result } = renderHook(
-      () => useAuditHistory({ entidade: 'motorista', id: 'any-id' }),
-      { wrapper: createWrapper() }
-    );
+    const { result } = renderHook(() => useAuditHistory({ entidade: 'motorista', id: 'any-id' }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.data).toBeUndefined();
@@ -97,10 +95,9 @@ describe('useAuditHistory', () => {
 
     mockFromResolve(fakeRows);
 
-    const { result } = renderHook(
-      () => useAuditHistory({ entidade: 'lead', id: 'lead-1' }),
-      { wrapper: createWrapper() }
-    );
+    const { result } = renderHook(() => useAuditHistory({ entidade: 'lead', id: 'lead-1' }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.data).toHaveLength(1);
@@ -131,10 +128,9 @@ describe('useAuditHistory', () => {
 
     mockFromResolve(fakeRows);
 
-    const { result } = renderHook(
-      () => useAuditHistory({ entidade: 'calendario', id: 'evt-1' }),
-      { wrapper: createWrapper() }
-    );
+    const { result } = renderHook(() => useAuditHistory({ entidade: 'calendario', id: 'evt-1' }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.data).toHaveLength(1);
@@ -151,8 +147,7 @@ describe('useAuditHistory', () => {
     mockFromResolve([]);
 
     const { result } = renderHook(
-      () =>
-        useAuditHistory({ entidade: 'contrato', id: 'contrato-1', options: { limit: 100 } }),
+      () => useAuditHistory({ entidade: 'contrato', id: 'contrato-1', options: { limit: 100 } }),
       { wrapper: createWrapper() }
     );
 
@@ -166,10 +161,9 @@ describe('useAuditHistory', () => {
   });
 
   it('não faz query quando id é vazio', async () => {
-    const { result } = renderHook(
-      () => useAuditHistory({ entidade: 'lead', id: '' }),
-      { wrapper: createWrapper() }
-    );
+    const { result } = renderHook(() => useAuditHistory({ entidade: 'lead', id: '' }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     // enabled=false (id vazio) → data undefined
@@ -179,10 +173,9 @@ describe('useAuditHistory', () => {
   it('propaga erro da query Supabase', async () => {
     mockFromResolve([], new Error('Erro de BD'));
 
-    const { result } = renderHook(
-      () => useAuditHistory({ entidade: 'lead', id: 'lead-1' }),
-      { wrapper: createWrapper() }
-    );
+    const { result } = renderHook(() => useAuditHistory({ entidade: 'lead', id: 'lead-1' }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.error).toBeDefined();
@@ -196,19 +189,36 @@ describe('useAuditHistory', () => {
 
     const results = [
       // contrato_historico (later)
-      [{ id: 'h1', contrato_id: 'c1', evento_tipo: 'contrato_aberto', ator_id: null, detalhe: null, criado_em: later }],
+      [
+        {
+          id: 'h1',
+          contrato_id: 'c1',
+          evento_tipo: 'contrato_aberto',
+          ator_id: null,
+          detalhe: null,
+          criado_em: later,
+        },
+      ],
       // contratos_edicoes (earlier)
-      [{ id: 'h2', contrato_id: 'c1', editado_por: 'u1', editado_em: earlier, campos_alterados: { status: 'ativo' }, observacoes: null }],
+      [
+        {
+          id: 'h2',
+          contrato_id: 'c1',
+          editado_por: 'u1',
+          editado_em: earlier,
+          campos_alterados: { status: 'ativo' },
+          observacoes: null,
+        },
+      ],
       // contratos_reimpressoes → vazio
       [],
     ];
 
     mockFromResolveSequence(results);
 
-    const { result } = renderHook(
-      () => useAuditHistory({ entidade: 'contrato', id: 'c1' }),
-      { wrapper: createWrapper() }
-    );
+    const { result } = renderHook(() => useAuditHistory({ entidade: 'contrato', id: 'c1' }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.data).toHaveLength(2);

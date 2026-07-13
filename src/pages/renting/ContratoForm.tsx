@@ -169,7 +169,11 @@ const ContratoForm = () => {
                 size="icon"
                 className="h-7 w-7 -ml-1"
                 disabled={!vizinhos?.anterior}
-                title={vizinhos?.anterior ? `Contrato anterior — #${vizinhos.anterior.codigo}` : undefined}
+                title={
+                  vizinhos?.anterior
+                    ? `Contrato anterior — #${vizinhos.anterior.codigo}`
+                    : undefined
+                }
                 onClick={() =>
                   vizinhos?.anterior && navigate(`/renting/contratos/${vizinhos.anterior.id}`)
                 }
@@ -183,7 +187,11 @@ const ContratoForm = () => {
                 size="icon"
                 className="h-7 w-7"
                 disabled={!vizinhos?.seguinte}
-                title={vizinhos?.seguinte ? `Contrato seguinte — #${vizinhos.seguinte.codigo}` : undefined}
+                title={
+                  vizinhos?.seguinte
+                    ? `Contrato seguinte — #${vizinhos.seguinte.codigo}`
+                    : undefined
+                }
                 onClick={() =>
                   vizinhos?.seguinte && navigate(`/renting/contratos/${vizinhos.seguinte.id}`)
                 }
@@ -198,29 +206,53 @@ const ContratoForm = () => {
         description={isEdit ? 'Editar dados do contrato existente' : 'Novo contrato de renting'}
         icon={FileText}
       >
-        <Button type="button" variant="outline" onClick={() => navigate('/renting/contratos')} className="gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => navigate('/renting/contratos')}
+          className="gap-2"
+        >
           <ArrowLeft className="h-4 w-4" />
           Voltar
         </Button>
         {isEdit && contrato && (
           <ContratoEstadoActions
             contrato={contrato}
-            motoristaId={condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null}
+            motoristaId={
+              condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null
+            }
           />
         )}
         {isEdit && contrato && (
-          <Button type="button" variant="outline" onClick={() => setDocsDialogOpen(true)} className="gap-2" title="Gerar documentos (contrato, prestação, declarações...)">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setDocsDialogOpen(true)}
+            className="gap-2"
+            title="Gerar documentos (contrato, prestação, declarações...)"
+          >
             <Printer className="h-4 w-4" />
             Documentos
           </Button>
         )}
         {isEdit && contrato && (
-          <Button type="button" variant="outline" onClick={handleDelete} disabled={false} className="gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleDelete}
+            disabled={false}
+            className="gap-2"
+          >
             <Trash2 className="h-4 w-4" />
             Eliminar
           </Button>
         )}
-        <Button type="button" onClick={handleSubmit} disabled={isPending || contrato?.substituido_em != null || condutoresRascunho.length > 0} className="gap-2">
+        <Button
+          type="button"
+          onClick={handleSubmit}
+          disabled={isPending || contrato?.substituido_em != null || condutoresRascunho.length > 0}
+          className="gap-2"
+        >
           {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
           {isEdit ? 'Guardar' : 'Abrir Contrato'}
         </Button>
@@ -230,9 +262,13 @@ const ContratoForm = () => {
         <Alert className="mb-3 border-amber-300 bg-amber-50 dark:bg-amber-950/20">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
           <AlertDescription className="text-amber-700 dark:text-amber-400">
-            <strong>Contrato bloqueado.</strong> O seguinte condutor tem perfil incompleto (sem NIF / carta de condução):{' '}
-            {condutoresRascunho.map((c) => motoristas.find((m) => m.id === c.motorista_id)?.nome ?? c.motorista_id).join(', ')}.
-            Abre a ficha do motorista, preenche todos os dados obrigatórios e guarda — o contrato ficará disponível de seguida.
+            <strong>Contrato bloqueado.</strong> O seguinte condutor tem perfil incompleto (sem NIF
+            / carta de condução):{' '}
+            {condutoresRascunho
+              .map((c) => motoristas.find((m) => m.id === c.motorista_id)?.nome ?? c.motorista_id)
+              .join(', ')}
+            . Abre a ficha do motorista, preenche todos os dados obrigatórios e guarda — o contrato
+            ficará disponível de seguida.
           </AlertDescription>
         </Alert>
       )}
@@ -240,7 +276,10 @@ const ContratoForm = () => {
       {isEdit && contrato?.substituido_em && (
         <div className="mb-3 flex items-start gap-2 p-3 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-          <p className="text-sm">Esta versão foi <strong>substituída</strong>. É apenas leitura — para alterações, abre a versão actual a partir do histórico.</p>
+          <p className="text-sm">
+            Esta versão foi <strong>substituída</strong>. É apenas leitura — para alterações, abre a
+            versão actual a partir do histórico.
+          </p>
         </div>
       )}
 
@@ -393,7 +432,10 @@ const ContratoForm = () => {
                 {temConflito && (
                   <div className="flex items-start gap-2 p-3 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                     <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                    <p className="text-sm">Conflito de disponibilidade — esta viatura já tem contrato ou reserva activa sobreposta a este período. Guardar irá falhar.</p>
+                    <p className="text-sm">
+                      Conflito de disponibilidade — esta viatura já tem contrato ou reserva activa
+                      sobreposta a este período. Guardar irá falhar.
+                    </p>
                   </div>
                 )}
               </form>
@@ -427,7 +469,9 @@ const ContratoForm = () => {
         onOpenChange={setConfirmDeleteOpen}
         contrato={contrato ?? null}
         isPending={false}
-        onConfirm={() => { /* handled via handleDelete + confirmDelete in hook */ }}
+        onConfirm={() => {
+          /* handled via handleDelete + confirmDelete in hook */
+        }}
       />
 
       <ClienteDialog

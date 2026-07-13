@@ -102,7 +102,13 @@ export const ENTITY_CONFIG: Record<SearchEntity, EntityConfig> = {
 };
 
 /** Todas as entidades pesquisáveis, por ordem de prioridade */
-export const ALL_ENTITIES: SearchEntity[] = ['motorista', 'viatura', 'contrato', 'reserva', 'cliente'];
+export const ALL_ENTITIES: SearchEntity[] = [
+  'motorista',
+  'viatura',
+  'contrato',
+  'reserva',
+  'cliente',
+];
 
 // ─── Funções puras (testáveis) ──────────────────────────────────────────────
 

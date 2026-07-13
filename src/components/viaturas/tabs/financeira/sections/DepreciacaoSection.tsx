@@ -1,13 +1,7 @@
 import { useFormContext } from 'react-hook-form';
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import {
   Select,
   SelectContent,
@@ -18,10 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Save, Loader2, History } from 'lucide-react';
-import {
-  calculateDepreciationSchedule,
-  type DepreciationEntry,
-} from '@/utils/viaturas-financeiro';
+import { calculateDepreciationSchedule, type DepreciationEntry } from '@/utils/viaturas-financeiro';
 
 interface DepreciacaoSectionProps {
   saving: boolean;
@@ -37,7 +28,7 @@ export function DepreciacaoSection({ saving }: DepreciacaoSectionProps) {
 
   const depSchedule: DepreciationEntry[] = useMemo(
     () => calculateDepreciationSchedule(totalViatura, vidaUtilAnos, metodoDepreciacao),
-    [totalViatura, vidaUtilAnos, metodoDepreciacao],
+    [totalViatura, vidaUtilAnos, metodoDepreciacao]
   );
 
   return (
@@ -134,7 +125,9 @@ export function DepreciacaoSection({ saving }: DepreciacaoSectionProps) {
               </div>
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Método</p>
-                <p className="text-lg font-semibold capitalize">{metodoDepreciacao.replace('_', ' ')}</p>
+                <p className="text-lg font-semibold capitalize">
+                  {metodoDepreciacao.replace('_', ' ')}
+                </p>
               </div>
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Vida Útil</p>
@@ -165,13 +158,15 @@ export function DepreciacaoSection({ saving }: DepreciacaoSectionProps) {
                     <tr key={item.ano} className="border-b hover:bg-muted/30">
                       <td className="p-3 font-medium">{item.ano}º Ano</td>
                       <td className="p-3 text-right font-bold text-red-600">
-                        € {item.depreciacaoAnual.toLocaleString('pt-PT', {
+                        €{' '}
+                        {item.depreciacaoAnual.toLocaleString('pt-PT', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}
                       </td>
                       <td className="p-3 text-right font-bold">
-                        € {item.valorContabil.toLocaleString('pt-PT', {
+                        €{' '}
+                        {item.valorContabil.toLocaleString('pt-PT', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}

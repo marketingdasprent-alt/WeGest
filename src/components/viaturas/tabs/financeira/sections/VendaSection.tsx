@@ -1,16 +1,6 @@
 import { useFormContext } from 'react-hook-form';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-} from '@/components/ui/form';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormControl, FormField, FormItem, FormLabel } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -23,7 +13,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { FileBarChart, Check, X, Minus, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
@@ -79,9 +76,7 @@ export function VendaSection({ showChecklistModal, setShowChecklistModal }: Vend
         <div className="flex items-center gap-4 p-4 border rounded-xl bg-muted/30">
           <div className="space-y-0.5">
             <Label className="text-base">Viatura Vendida</Label>
-            <p className="text-sm text-muted-foreground">
-              Marque aqui se a viatura foi vendida
-            </p>
+            <p className="text-sm text-muted-foreground">Marque aqui se a viatura foi vendida</p>
           </div>
           <FormField
             control={control}
@@ -147,10 +142,12 @@ export function VendaSection({ showChecklistModal, setShowChecklistModal }: Vend
                 <Button variant="outline" onClick={() => setShowChecklistModal(false)}>
                   Fechar
                 </Button>
-                <Button onClick={() => {
-                  toast.success('Relatório de saída gerado com sucesso!');
-                  setShowChecklistModal(false);
-                }}>
+                <Button
+                  onClick={() => {
+                    toast.success('Relatório de saída gerado com sucesso!');
+                    setShowChecklistModal(false);
+                  }}
+                >
                   Gerar Relatório
                 </Button>
               </div>
@@ -243,5 +240,3 @@ export function VendaSection({ showChecklistModal, setShowChecklistModal }: Vend
     </div>
   );
 }
-
-

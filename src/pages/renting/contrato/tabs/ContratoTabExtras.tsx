@@ -12,9 +12,6 @@ interface ContratoTabExtrasProps {
  * Separador "Extras" do formulário de contrato renting.
  * Delega no ContratoTabExtras (componente existente).
  */
-export const ContratoTabExtras: React.FC<ContratoTabExtrasProps> = ({
-  form,
-  extras,
-}) => {
+export const ContratoTabExtras: React.FC<ContratoTabExtrasProps> = ({ form, extras }) => {
   return <ContratoTabExtrasComponent form={form} extras={extras} />;
 };

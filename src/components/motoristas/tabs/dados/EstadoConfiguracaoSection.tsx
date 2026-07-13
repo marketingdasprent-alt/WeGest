@@ -3,13 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { SectionCard } from '@/components/ui/section-card';
 import { cn } from '@/lib/utils';
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import type { Control } from 'react-hook-form';
 
 interface EstadoConfiguracaoSectionProps {
@@ -30,9 +24,7 @@ export function EstadoConfiguracaoSection({ control }: EstadoConfiguracaoSection
           render={({ field }) => (
             <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
               <FormLabel className="text-sm flex items-center gap-2">
-                <span
-                  className={cn('text-lg', field.value ? 'text-green-600' : 'text-red-600')}
-                >
+                <span className={cn('text-lg', field.value ? 'text-green-600' : 'text-red-600')}>
                   ●
                 </span>
                 Motorista Verde
@@ -69,9 +61,7 @@ export function EstadoConfiguracaoSection({ control }: EstadoConfiguracaoSection
                           placeholder="Ex: 400.00"
                           value={valorField.value ?? ''}
                           onChange={(e) =>
-                            valorField.onChange(
-                              e.target.value ? parseFloat(e.target.value) : null
-                            )
+                            valorField.onChange(e.target.value ? parseFloat(e.target.value) : null)
                           }
                         />
                       </FormControl>
@@ -90,8 +80,8 @@ export function EstadoConfiguracaoSection({ control }: EstadoConfiguracaoSection
             <FormItem className="rounded-lg border p-3 space-y-1">
               <FormLabel className="text-sm">Seguro semanal (€)</FormLabel>
               <p className="text-xs text-muted-foreground">
-                Débito lançado automaticamente todas as semanas no financeiro do motorista.
-                Deixa vazio para não cobrar seguro.
+                Débito lançado automaticamente todas as semanas no financeiro do motorista. Deixa
+                vazio para não cobrar seguro.
               </p>
               <FormControl>
                 <Input

@@ -1,10 +1,5 @@
 import * as React from 'react';
-import {
-  AlertCircle,
-  AlertTriangle,
-  Info,
-  ChevronRight,
-} from 'lucide-react';
+import { AlertCircle, AlertTriangle, Info, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 

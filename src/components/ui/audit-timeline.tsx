@@ -169,9 +169,7 @@ export const AuditTimeline: React.FC<AuditTimelineProps> = ({
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <History className="mb-2 h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            {entries.length === 0
-              ? 'Sem registos de auditoria.'
-              : 'Nenhum resultado para a busca.'}
+            {entries.length === 0 ? 'Sem registos de auditoria.' : 'Nenhum resultado para a busca.'}
           </p>
         </div>
       ) : (
@@ -190,9 +188,7 @@ export const AuditTimeline: React.FC<AuditTimelineProps> = ({
                       <Badge variant="secondary" className="text-xs">
                         {ENTITY_LABELS[entry.entidade] ?? entry.entidade}
                       </Badge>
-                      <span className="text-sm font-medium text-foreground">
-                        {entry.acao}
-                      </span>
+                      <span className="text-sm font-medium text-foreground">{entry.acao}</span>
                       <span className="text-xs text-muted-foreground">
                         {formatTimestamp(entry.createdAt)}
                       </span>
@@ -219,8 +215,7 @@ export const AuditTimeline: React.FC<AuditTimelineProps> = ({
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-2">
               <span className="text-xs text-muted-foreground">
-                {start + 1}–{Math.min(start + PAGE_SIZE, filtered.length)} de{' '}
-                {filtered.length}
+                {start + 1}–{Math.min(start + PAGE_SIZE, filtered.length)} de {filtered.length}
               </span>
               <div className="flex items-center gap-2">
                 <Button

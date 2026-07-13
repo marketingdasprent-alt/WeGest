@@ -1,12 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  fmtDay,
-  capitalize,
-  emptyResumo,
-  getWeekShortcuts,
-  round2,
-  weekLabel,
-} from './financeiro';
+import { fmtDay, capitalize, emptyResumo, getWeekShortcuts, round2, weekLabel } from './financeiro';
 
 describe('fmtDay', () => {
   it('formata Date como yyyy-MM-dd', () => {

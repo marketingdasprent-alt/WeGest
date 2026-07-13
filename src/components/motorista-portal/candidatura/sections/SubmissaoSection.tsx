@@ -15,7 +15,12 @@ interface SubmissaoSectionProps {
 }
 
 export const SubmissaoSection: React.FC<SubmissaoSectionProps> = ({
-  observacoes, setObservacoes, saving, submitting, onSave, onSubmit,
+  observacoes,
+  setObservacoes,
+  saving,
+  submitting,
+  onSave,
+  onSubmit,
 }) => {
   return (
     <>
@@ -24,10 +29,12 @@ export const SubmissaoSection: React.FC<SubmissaoSectionProps> = ({
         <CardContent className="space-y-2 pt-6">
           <Label htmlFor="observacoes">Observações (opcional)</Label>
           <Textarea
-            id="observacoes" value={observacoes}
+            id="observacoes"
+            value={observacoes}
             onChange={(e) => setObservacoes(e.target.value)}
             placeholder="Algo que queiras dizer-nos? (ex.: disponibilidade, experiência, se tens viatura própria...)"
-            className="min-h-[100px] resize-none" maxLength={1000}
+            className="min-h-[100px] resize-none"
+            maxLength={1000}
           />
           <p className="text-xs text-muted-foreground">
             Esta nota é vista pela equipa ao analisar a tua candidatura.
@@ -38,21 +45,37 @@ export const SubmissaoSection: React.FC<SubmissaoSectionProps> = ({
       {/* Actions */}
       <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground sm:justify-end">
         <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-        As suas alterações ficam guardadas automaticamente neste dispositivo, mesmo que feche a página.
+        As suas alterações ficam guardadas automaticamente neste dispositivo, mesmo que feche a
+        página.
       </p>
       <div className="flex flex-col sm:flex-row gap-3 justify-end">
-        <Button variant="outline" onClick={onSave} disabled={saving || submitting} className="w-full sm:w-auto">
+        <Button
+          variant="outline"
+          onClick={onSave}
+          disabled={saving || submitting}
+          className="w-full sm:w-auto"
+        >
           {saving ? (
-            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />A guardar...</>
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />A guardar...
+            </>
           ) : (
-            <><Save className="mr-2 h-4 w-4" />Guardar Rascunho</>
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Guardar Rascunho
+            </>
           )}
         </Button>
         <Button onClick={onSubmit} disabled={saving || submitting} className="w-full sm:w-auto">
           {submitting ? (
-            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />A submeter...</>
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />A submeter...
+            </>
           ) : (
-            <><Send className="mr-2 h-4 w-4" />Submeter Candidatura</>
+            <>
+              <Send className="mr-2 h-4 w-4" />
+              Submeter Candidatura
+            </>
           )}
         </Button>
       </div>

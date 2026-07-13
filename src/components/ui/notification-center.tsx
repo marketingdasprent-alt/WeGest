@@ -103,10 +103,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   return (
     <div className="space-y-4">
       {/* ── Filter tabs ── */}
-      <Tabs
-        value={filtro}
-        onValueChange={(v) => onFiltroChange(v as NotificationFilter)}
-      >
+      <Tabs value={filtro} onValueChange={(v) => onFiltroChange(v as NotificationFilter)}>
         <TabsList>
           <TabsTrigger value="unread" className="gap-1.5">
             Não resolvidas
@@ -233,16 +230,10 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
           {/* ── Load more ── */}
           {hasMore && (
             <div className="flex justify-center pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onLoadMore}
-                disabled={isLoadingMore}
-              >
+              <Button variant="outline" size="sm" onClick={onLoadMore} disabled={isLoadingMore}>
                 {isLoadingMore ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    A carregar...
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />A carregar...
                   </>
                 ) : (
                   'Carregar mais'

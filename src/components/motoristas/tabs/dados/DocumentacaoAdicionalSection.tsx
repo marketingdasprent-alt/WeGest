@@ -1,13 +1,7 @@
 import { FileText } from 'lucide-react';
 import { SectionCard } from '@/components/ui/section-card';
 import { DocumentUploader } from '@/components/motorista-portal/DocumentUploader';
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import type { Control } from 'react-hook-form';
 import type { Motorista } from '@/pages/Motoristas';
 
@@ -16,7 +10,10 @@ interface DocumentacaoAdicionalSectionProps {
   motorista: Motorista;
 }
 
-export function DocumentacaoAdicionalSection({ control, motorista }: DocumentacaoAdicionalSectionProps) {
+export function DocumentacaoAdicionalSection({
+  control,
+  motorista,
+}: DocumentacaoAdicionalSectionProps) {
   return (
     <SectionCard
       icon={<FileText className="h-4 w-4 text-rose-600 dark:text-rose-400" />}

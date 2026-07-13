@@ -12,9 +12,6 @@ interface ContratoTabTaxasProps {
  * Separador "Taxas" do formulário de contrato renting.
  * Delega no ContratoTabTaxas (componente existente).
  */
-export const ContratoTabTaxas: React.FC<ContratoTabTaxasProps> = ({
-  form,
-  taxas,
-}) => {
+export const ContratoTabTaxas: React.FC<ContratoTabTaxasProps> = ({ form, taxas }) => {
   return <ContratoTabTaxasComponent form={form} taxas={taxas} />;
 };

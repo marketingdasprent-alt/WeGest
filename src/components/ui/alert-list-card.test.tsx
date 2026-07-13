@@ -10,13 +10,7 @@ const mockItems: AlertItem[] = [
 
 describe('AlertListCard', () => {
   it('renderiza título e items', () => {
-    render(
-      <AlertListCard
-        titulo="Alertas Ativos"
-        items={mockItems}
-        emptyMessage="Sem alertas"
-      />
-    );
+    render(<AlertListCard titulo="Alertas Ativos" items={mockItems} emptyMessage="Sem alertas" />);
     expect(screen.getByText('Alertas Ativos')).toBeTruthy();
     expect(screen.getByText('Extintor AB-12-34')).toBeTruthy();
     expect(screen.getByText('Expirado')).toBeTruthy();
@@ -24,13 +18,7 @@ describe('AlertListCard', () => {
   });
 
   it('mostra emptyMessage quando items está vazio', () => {
-    render(
-      <AlertListCard
-        titulo="Alertas"
-        items={[]}
-        emptyMessage="Sem alertas pendentes"
-      />
-    );
+    render(<AlertListCard titulo="Alertas" items={[]} emptyMessage="Sem alertas pendentes" />);
     expect(screen.getByText('Sem alertas pendentes')).toBeTruthy();
   });
 
@@ -55,9 +43,7 @@ describe('AlertListCard', () => {
     const { container } = render(
       <AlertListCard
         titulo="Críticos"
-        items={[
-          { id: '1', label: 'Item crítico', valor: 'Urgente', severity: 'critical' },
-        ]}
+        items={[{ id: '1', label: 'Item crítico', valor: 'Urgente', severity: 'critical' }]}
         emptyMessage="Vazio"
       />
     );
@@ -71,13 +57,7 @@ describe('AlertListCard', () => {
     const itemsComLink: AlertItem[] = [
       { id: '1', label: 'Ver contrato', valor: 'CT-001', link: '/contratos/1' },
     ];
-    render(
-      <AlertListCard
-        titulo="Contratos"
-        items={itemsComLink}
-        emptyMessage="Vazio"
-      />
-    );
+    render(<AlertListCard titulo="Contratos" items={itemsComLink} emptyMessage="Vazio" />);
     const item = screen.getByText('Ver contrato').closest('[role="button"]');
     expect(item).toBeTruthy();
     fireEvent.click(item!);

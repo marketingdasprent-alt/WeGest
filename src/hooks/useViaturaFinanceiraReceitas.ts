@@ -7,7 +7,10 @@ import type { ReceitasData } from '@/components/viaturas/tabs/ViaturaFinanceiraM
 // em tabelas com muitas colunas (evita TS2589 "Type instantiation is excessively deep").
 type SimpleQueryBuilder = {
   select: (cols: string) => {
-    in: (col: string, vals: string[]) => Promise<{
+    in: (
+      col: string,
+      vals: string[]
+    ) => Promise<{
       data: Record<string, unknown>[] | null;
       error: unknown;
     }>;
@@ -65,7 +68,15 @@ export function useViaturaFinanceiraReceitas(viaturaId: string | undefined) {
         .eq('viatura_id', viaturaId);
 
       if (!associacoes || associacoes.length === 0) {
-        setReceitas({ contratos: 0, portagens: 0, combustivel: 0, danos: 0, outros: 0, reembolsos: 0, loading: false });
+        setReceitas({
+          contratos: 0,
+          portagens: 0,
+          combustivel: 0,
+          danos: 0,
+          outros: 0,
+          reembolsos: 0,
+          loading: false,
+        });
         return;
       }
 
@@ -147,7 +158,10 @@ export function useViaturaFinanceiraReceitas(viaturaId: string | undefined) {
           return f.motorista_id === assoc.motorista_id && d >= periodoInicio && d <= periodoFim;
         });
 
-        totalCombustivel += fuelItems.reduce((acc: number, curr: any) => acc + (Number(curr.amount) || 0), 0);
+        totalCombustivel += fuelItems.reduce(
+          (acc: number, curr: any) => acc + (Number(curr.amount) || 0),
+          0
+        );
       }
 
       // Danos
@@ -158,7 +172,7 @@ export function useViaturaFinanceiraReceitas(viaturaId: string | undefined) {
 
       const totalDanos = (reparacoesData || []).reduce(
         (acc: number, curr: any) => acc + (Number(curr.custo) || 0),
-        0,
+        0
       );
 
       setReceitas({

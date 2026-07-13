@@ -1,11 +1,6 @@
 import * as React from 'react';
 
-import {
-  CommandDialog,
-  CommandEmpty,
-  CommandInput,
-  CommandList,
-} from '@/components/ui/command';
+import { CommandDialog, CommandEmpty, CommandInput, CommandList } from '@/components/ui/command';
 
 interface CommandMenuProps {
   /** Controla a abertura/fecho do menu */

@@ -3,13 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SectionCard } from '@/components/ui/section-card';
 import { DocumentUploader } from '@/components/motorista-portal/DocumentUploader';
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import type { Control } from 'react-hook-form';
 import type { Motorista } from '@/pages/Motoristas';
 
@@ -121,9 +115,7 @@ export function CartaConducaoSection({ control, motorista }: CartaConducaoSectio
                             }}
                           />
                         </FormControl>
-                        <FormLabel className="text-xs font-normal cursor-pointer">
-                          {cat}
-                        </FormLabel>
+                        <FormLabel className="text-xs font-normal cursor-pointer">{cat}</FormLabel>
                       </FormItem>
                     )}
                   />

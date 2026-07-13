@@ -100,7 +100,10 @@ export function ResumoReportContent({
           className="rounded-xl p-4 print:p-3 print:rounded-lg text-center"
           style={{ backgroundColor: '#22c55e', color: '#fff' }}
         >
-          <p className="text-xs font-medium uppercase tracking-wide print:text-[10px]" style={{ opacity: 0.85 }}>
+          <p
+            className="text-xs font-medium uppercase tracking-wide print:text-[10px]"
+            style={{ opacity: 0.85 }}
+          >
             Total Receitas
           </p>
           <p className="text-2xl print:text-lg font-bold mt-1">
@@ -111,7 +114,10 @@ export function ResumoReportContent({
           className="rounded-xl p-4 print:p-3 print:rounded-lg text-center"
           style={{ backgroundColor: '#ef4444', color: '#fff' }}
         >
-          <p className="text-xs font-medium uppercase tracking-wide print:text-[10px]" style={{ opacity: 0.85 }}>
+          <p
+            className="text-xs font-medium uppercase tracking-wide print:text-[10px]"
+            style={{ opacity: 0.85 }}
+          >
             Total Despesas
           </p>
           <p className="text-2xl print:text-lg font-bold mt-1">{fmt(totalDespesas)}</p>
@@ -120,7 +126,10 @@ export function ResumoReportContent({
           className="rounded-xl p-4 print:p-3 print:rounded-lg text-center"
           style={{ backgroundColor: liquido >= 0 ? '#2563eb' : '#f97316', color: '#fff' }}
         >
-          <p className="text-xs font-medium uppercase tracking-wide print:text-[10px]" style={{ opacity: 0.85 }}>
+          <p
+            className="text-xs font-medium uppercase tracking-wide print:text-[10px]"
+            style={{ opacity: 0.85 }}
+          >
             Líquido a Receber
           </p>
           <p className="text-2xl print:text-lg font-bold mt-1">{fmt(liquido)}</p>
@@ -134,9 +143,7 @@ export function ResumoReportContent({
         >
           {infoFields.map((f) => (
             <div key={f.key}>
-              <span className="text-xs text-muted-foreground print:text-[10px]">
-                {f.label}
-              </span>
+              <span className="text-xs text-muted-foreground print:text-[10px]">{f.label}</span>
               {f.value === null ? (
                 <Loader2 className="h-4 w-4 animate-spin mt-1" />
               ) : (
@@ -154,41 +161,101 @@ export function ResumoReportContent({
         {/* Receitas */}
         <div className="rounded-lg overflow-hidden border border-green-200 print:border-green-300">
           <div className="px-4 py-2 print:px-3 print:py-1.5" style={{ backgroundColor: '#22c55e' }}>
-            <h2 className="font-semibold flex items-center gap-2 text-sm print:text-xs" style={{ color: '#fff' }}>
+            <h2
+              className="font-semibold flex items-center gap-2 text-sm print:text-xs"
+              style={{ color: '#fff' }}
+            >
               <TrendingUp className="h-4 w-4" />
               RECEITAS
             </h2>
           </div>
           <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-green-50 dark:bg-green-950/20 print:bg-green-50">
-            <Row label="Bolt" value={fmt(receitas.bolt)} colored="text-green-700 dark:text-green-300" />
-            <Row label="Uber" value={fmt(receitas.uber)} colored="text-green-700 dark:text-green-300" />
-            <Row label="Outras Receitas" value={fmt(receitas.outras_receitas)} colored="text-green-700 dark:text-green-300" />
+            <Row
+              label="Bolt"
+              value={fmt(receitas.bolt)}
+              colored="text-green-700 dark:text-green-300"
+            />
+            <Row
+              label="Uber"
+              value={fmt(receitas.uber)}
+              colored="text-green-700 dark:text-green-300"
+            />
+            <Row
+              label="Outras Receitas"
+              value={fmt(receitas.outras_receitas)}
+              colored="text-green-700 dark:text-green-300"
+            />
             {gorjeta > 0 && (
-              <Row label="Gorjetas (sem IVA)" value={fmt(gorjeta)} colored="text-green-700 dark:text-green-300" />
+              <Row
+                label="Gorjetas (sem IVA)"
+                value={fmt(gorjeta)}
+                colored="text-green-700 dark:text-green-300"
+              />
             )}
             <Separator className="bg-green-200 dark:bg-green-800" />
-            <Row label="TOTAL RECEITAS" value={fmt(isImportado ? totalReceitas : receitaAjustada)} bold colored="text-green-700 dark:text-green-300" />
+            <Row
+              label="TOTAL RECEITAS"
+              value={fmt(isImportado ? totalReceitas : receitaAjustada)}
+              bold
+              colored="text-green-700 dark:text-green-300"
+            />
           </div>
         </div>
 
         {/* Despesas */}
         <div className="rounded-lg overflow-hidden border border-red-200 print:border-red-300">
           <div className="px-4 py-2 print:px-3 print:py-1.5" style={{ backgroundColor: '#ef4444' }}>
-            <h2 className="font-semibold flex items-center gap-2 text-sm print:text-xs" style={{ color: '#fff' }}>
+            <h2
+              className="font-semibold flex items-center gap-2 text-sm print:text-xs"
+              style={{ color: '#fff' }}
+            >
               <TrendingDown className="h-4 w-4" />
               DESPESAS
             </h2>
           </div>
           <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-red-50 dark:bg-red-950/20 print:bg-red-50">
-            <Row label="Aluguer" value={fmt(despesas.aluguer)} colored="text-red-700 dark:text-red-300" />
-            <Row label="Combustível" value={fmt(despesas.combustivel)} colored="text-red-700 dark:text-red-300" />
-            <Row label="Portagens" value={fmt(despesas.portagens)} colored="text-red-700 dark:text-red-300" />
-            <Row label="Outros Custos" value={fmt(despesas.outros_custos)} colored="text-red-700 dark:text-red-300" />
-            <Row label="Caução" value={fmt(despesas.caucao)} colored="text-red-700 dark:text-red-300" />
-            <Row label="Seguros" value={fmt(despesas.seguros)} colored="text-red-700 dark:text-red-300" />
-            <Row label="Reparações" value={fmt(despesas.reparacoes)} colored="text-red-700 dark:text-red-300" />
+            <Row
+              label="Aluguer"
+              value={fmt(despesas.aluguer)}
+              colored="text-red-700 dark:text-red-300"
+            />
+            <Row
+              label="Combustível"
+              value={fmt(despesas.combustivel)}
+              colored="text-red-700 dark:text-red-300"
+            />
+            <Row
+              label="Portagens"
+              value={fmt(despesas.portagens)}
+              colored="text-red-700 dark:text-red-300"
+            />
+            <Row
+              label="Outros Custos"
+              value={fmt(despesas.outros_custos)}
+              colored="text-red-700 dark:text-red-300"
+            />
+            <Row
+              label="Caução"
+              value={fmt(despesas.caucao)}
+              colored="text-red-700 dark:text-red-300"
+            />
+            <Row
+              label="Seguros"
+              value={fmt(despesas.seguros)}
+              colored="text-red-700 dark:text-red-300"
+            />
+            <Row
+              label="Reparações"
+              value={fmt(despesas.reparacoes)}
+              colored="text-red-700 dark:text-red-300"
+            />
             <Separator className="bg-red-200 dark:bg-red-800" />
-            <Row label="TOTAL DESPESAS" value={fmt(totalDespesas)} bold colored="text-red-700 dark:text-red-300" />
+            <Row
+              label="TOTAL DESPESAS"
+              value={fmt(totalDespesas)}
+              bold
+              colored="text-red-700 dark:text-red-300"
+            />
           </div>
         </div>
       </div>
@@ -197,7 +264,10 @@ export function ResumoReportContent({
       {slotPeriodos.length > 0 && (
         <div className="rounded-lg overflow-hidden border border-amber-200 print:border-amber-300">
           <div className="px-4 py-2 print:px-3 print:py-1.5" style={{ backgroundColor: '#f59e0b' }}>
-            <h2 className="font-semibold flex items-center gap-2 text-sm print:text-xs" style={{ color: '#fff' }}>
+            <h2
+              className="font-semibold flex items-center gap-2 text-sm print:text-xs"
+              style={{ color: '#fff' }}
+            >
               ALUGUER — DETALHE
             </h2>
           </div>
@@ -213,7 +283,12 @@ export function ResumoReportContent({
             {slotPeriodos.length > 1 && (
               <>
                 <Separator className="bg-amber-200 dark:bg-amber-800" />
-                <Row label="TOTAL ALUGUER" value={fmt(totalSlot)} bold colored="text-amber-700 dark:text-amber-300" />
+                <Row
+                  label="TOTAL ALUGUER"
+                  value={fmt(totalSlot)}
+                  bold
+                  colored="text-amber-700 dark:text-amber-300"
+                />
               </>
             )}
           </div>
@@ -225,18 +300,29 @@ export function ResumoReportContent({
       {/* Resumo Final */}
       <div className="rounded-lg overflow-hidden border border-blue-200 print:border-blue-300">
         <div className="px-4 py-2 print:px-3 print:py-1.5" style={{ backgroundColor: '#2563eb' }}>
-          <h2 className="font-semibold flex items-center gap-2 text-sm print:text-xs" style={{ color: '#fff' }}>
+          <h2
+            className="font-semibold flex items-center gap-2 text-sm print:text-xs"
+            style={{ color: '#fff' }}
+          >
             <Calculator className="h-4 w-4" />
             RESUMO FINAL
           </h2>
         </div>
         <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-blue-50 dark:bg-blue-950/20 print:bg-blue-50">
-          <Row label="Valores a Transportar (Semana Anterior)" value={fmt(valoresSemanaAnterior)} colored="text-blue-700 dark:text-blue-300" />
+          <Row
+            label="Valores a Transportar (Semana Anterior)"
+            value={fmt(valoresSemanaAnterior)}
+            colored="text-blue-700 dark:text-blue-300"
+          />
           <Separator className="bg-blue-200 dark:bg-blue-800" />
           <Row
             label="Total a Receber"
             value={fmt(totalAReceber)}
-            colored={totalAReceber >= 0 ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}
+            colored={
+              totalAReceber >= 0
+                ? 'text-green-700 dark:text-green-300'
+                : 'text-red-700 dark:text-red-300'
+            }
           />
           <Separator className="my-2 print:my-1 bg-blue-200 dark:bg-blue-800" />
           <div
@@ -255,9 +341,7 @@ export function ResumoReportContent({
 
       {/* Rodapé */}
       <div className="hidden print:block text-center text-[10px] text-gray-400 pt-4 border-t print:pt-2">
-        <p>
-          Documento gerado em {format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: pt })}
-        </p>
+        <p>Documento gerado em {format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: pt })}</p>
         <p className="mt-0.5">WeGest, Lda. • NIF: 515127850</p>
       </div>
     </div>

@@ -35,8 +35,18 @@ export const formatDateExtended = (date: Date | string): string => {
     return 'DATA INVÁLIDA';
   }
   const meses = [
-    'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+    'janeiro',
+    'fevereiro',
+    'março',
+    'abril',
+    'maio',
+    'junho',
+    'julho',
+    'agosto',
+    'setembro',
+    'outubro',
+    'novembro',
+    'dezembro',
   ];
   const dia = d.getDate();
   const mes = meses[d.getMonth()];
@@ -231,13 +241,38 @@ export const replaceDynamicFields = (
 
   // Campos do contrato
   const contratoFields = [
-    'data_inicio', 'data_fim', 'data_assinatura', 'cidade_assinatura',
-    'duracao_meses', 'numero_contrato', 'viatura_matricula', 'viatura_data_matricula',
-    'viatura_marca_modelo', 'viatura_grupo', 'viatura_kms', 'local_entrega',
-    'local_recolha', 'tarifa_diaria', 'valor_semanal', 'franquia', 'caucao',
-    'kms_incluidos', 'km_adicional', 'subtotal', 'iva', 'dias', 'total',
-    'observacoes', 'colaborador_nome', 'km_saida', 'km_entrada', 'combustivel_saida',
-    'combustivel_entrada', 'momento_folha', 'observacoes_momento', 'responsavel_nome',
+    'data_inicio',
+    'data_fim',
+    'data_assinatura',
+    'cidade_assinatura',
+    'duracao_meses',
+    'numero_contrato',
+    'viatura_matricula',
+    'viatura_data_matricula',
+    'viatura_marca_modelo',
+    'viatura_grupo',
+    'viatura_kms',
+    'local_entrega',
+    'local_recolha',
+    'tarifa_diaria',
+    'valor_semanal',
+    'franquia',
+    'caucao',
+    'kms_incluidos',
+    'km_adicional',
+    'subtotal',
+    'iva',
+    'dias',
+    'total',
+    'observacoes',
+    'colaborador_nome',
+    'km_saida',
+    'km_entrada',
+    'combustivel_saida',
+    'combustivel_entrada',
+    'momento_folha',
+    'observacoes_momento',
+    'responsavel_nome',
     'momento_responsavel',
   ];
   contratoFields.forEach((field) => {
@@ -361,7 +396,9 @@ export const cellToLines = (el: HTMLElement, headerBold: boolean): CellLine[] =>
   return lines;
 };
 
-export const parseTable = (tableEl: HTMLElement): { rows: TableCellData[][]; bordered: boolean } => {
+export const parseTable = (
+  tableEl: HTMLElement
+): { rows: TableCellData[][]; bordered: boolean } => {
   const rows: TableCellData[][] = [];
   const trs = Array.from(tableEl.querySelectorAll('tr'));
   trs.forEach((tr) => {
@@ -400,11 +437,7 @@ export const htmlToText = (html: string): DocEl[] => {
 
   const elements: DocEl[] = [];
 
-  const processNode = (
-    node: Node,
-    inheritedStyle: any = {},
-    parentIsBlock: boolean = false
-  ) => {
+  const processNode = (node: Node, inheritedStyle: any = {}, parentIsBlock: boolean = false) => {
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent;
       if (text && text.length > 0) {
@@ -473,9 +506,7 @@ export const htmlToText = (html: string): DocEl[] => {
             });
           } else {
             // tbody/thead/tfoot: process children directly
-            Array.from(el.childNodes).forEach((child) =>
-              processNode(child, style, true)
-            );
+            Array.from(el.childNodes).forEach((child) => processNode(child, style, true));
           }
           break;
         }
@@ -509,9 +540,7 @@ export const htmlToText = (html: string): DocEl[] => {
         case 'header':
         case 'footer':
         default: {
-          Array.from(el.childNodes).forEach((child) =>
-            processNode(child, style, true)
-          );
+          Array.from(el.childNodes).forEach((child) => processNode(child, style, true));
           break;
         }
       }
@@ -527,7 +556,7 @@ export const htmlToText = (html: string): DocEl[] => {
 export const LOCALIZACAO_LABELS: Record<string, string> = {
   'para-choques-dianteiro': 'Para-choques dianteiro',
   'para-choques-traseiro': 'Para-choques traseiro',
-  'capota': 'Capota',
+  capota: 'Capota',
   'porta-dianteira-esquerda': 'Porta dianteira esquerda',
   'porta-dianteira-direita': 'Porta dianteira direita',
   'porta-traseira-esquerda': 'Porta traseira esquerda',
@@ -544,20 +573,20 @@ export const LOCALIZACAO_LABELS: Record<string, string> = {
   'jante-direita-dianteira': 'Jante direita dianteira',
   'jante-esquerda-traseira': 'Jante esquerda traseira',
   'jante-direita-traseira': 'Jante direita traseira',
-  'tejadilho': 'Tejadilho',
+  tejadilho: 'Tejadilho',
   'lateral-esquerda': 'Lateral esquerda',
   'lateral-direita': 'Lateral direita',
-  'interior': 'Interior',
-  'outro': 'Outro',
+  interior: 'Interior',
+  outro: 'Outro',
 };
 
 export const ESTADO_LABELS: Record<string, string> = {
-  'bom': 'Bom',
-  'risco': 'Risco',
-  'amolgadela': 'Amolgadela',
-  'partido': 'Partido',
-  'danificado': 'Danificado',
-  'oxidado': 'Oxidado',
-  'sujidade': 'Sujidade',
-  'risco_partido': 'Risco / Partido',
+  bom: 'Bom',
+  risco: 'Risco',
+  amolgadela: 'Amolgadela',
+  partido: 'Partido',
+  danificado: 'Danificado',
+  oxidado: 'Oxidado',
+  sujidade: 'Sujidade',
+  risco_partido: 'Risco / Partido',
 };

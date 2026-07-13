@@ -1,12 +1,7 @@
 import { MessageSquare } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { SectionCard } from '@/components/ui/section-card';
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormMessage,
-} from '@/components/ui/form';
+import { FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import type { Control } from 'react-hook-form';
 
 interface ObservacoesSectionProps {

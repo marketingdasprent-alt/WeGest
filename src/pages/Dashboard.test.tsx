@@ -48,8 +48,20 @@ vi.mock('@/integrations/supabase/client', () => {
   const result = { data: null, error: null, count: 0 };
   const proxy: Record<string, unknown> = {};
   const methods = [
-    'select', 'eq', 'neq', 'not', 'lte', 'gte', 'in', 'order', 'or',
-    'single', 'limit', 'range', 'ilike', 'like',
+    'select',
+    'eq',
+    'neq',
+    'not',
+    'lte',
+    'gte',
+    'in',
+    'order',
+    'or',
+    'single',
+    'limit',
+    'range',
+    'ilike',
+    'like',
   ];
   for (const m of methods) {
     proxy[m] = vi.fn(() => proxy);

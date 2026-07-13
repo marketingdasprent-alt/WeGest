@@ -29,8 +29,17 @@ export async function renderHtmlBlock(
   ctx: RenderHtmlBlockCtx
 ): Promise<number> {
   const {
-    leftMargin, rightMargin, topMargin, pageWidth, pageHeight, bottomMargin,
-    maxWidth, lineFactor, hasLetterhead, bg, signatures,
+    leftMargin,
+    rightMargin,
+    topMargin,
+    pageWidth,
+    pageHeight,
+    bottomMargin,
+    maxWidth,
+    lineFactor,
+    hasLetterhead,
+    bg,
+    signatures,
   } = ctx;
 
   const contentElements = htmlToText(html);

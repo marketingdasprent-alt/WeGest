@@ -7,7 +7,21 @@ import {
   validarEmail,
 } from '@/lib/pt-validators';
 
-export const CATEGORIAS_CARTA = ['A', 'A1', 'A2', 'AM', 'B', 'B1', 'BE', 'C', 'C1', 'CE', 'D', 'D1', 'DE'];
+export const CATEGORIAS_CARTA = [
+  'A',
+  'A1',
+  'A2',
+  'AM',
+  'B',
+  'B1',
+  'BE',
+  'C',
+  'C1',
+  'CE',
+  'D',
+  'D1',
+  'DE',
+];
 
 export const TIPOS_DOCUMENTO = [
   { value: 'cc', label: 'Cartão de Cidadão (CC)' },
@@ -47,7 +61,12 @@ export function traduzirErro(msg?: string, fallback = 'Ocorreu um erro. Tente no
   const m = (msg || '').toLowerCase();
   if (m === 'sem_permissao_guardar')
     return 'Não foi possível guardar — a sua sessão não tem permissões adequadas. Feche a sessão, entre novamente e tente outra vez.';
-  if (m.includes('row-level security') || m.includes('permission') || m.includes('not authorized') || m.includes('rls'))
+  if (
+    m.includes('row-level security') ||
+    m.includes('permission') ||
+    m.includes('not authorized') ||
+    m.includes('rls')
+  )
     return 'Não tem permissão para esta ação. Inicie sessão novamente e tente outra vez.';
   if (m.includes('could not find') && m.includes('column'))
     return 'Erro de base de dados: uma coluna está em falta. O administrador precisa de aplicar a migration mais recente no Supabase.';
@@ -121,10 +140,12 @@ export function buildValidationErrors(campos: CandidaturaCampos): Record<string,
     if (!r.valid) errors.cartaConducao = `Carta de Condução — Número: ${r.message}`;
   }
   if (campos.cartaCategorias.length === 0)
-    errors.cartaCategorias = 'Carta de Condução — Categorias: selecione pelo menos uma categoria (ex.: B).';
+    errors.cartaCategorias =
+      'Carta de Condução — Categorias: selecione pelo menos uma categoria (ex.: B).';
   if (!campos.cartaValidade)
     errors.cartaValidade = 'Carta de Condução — Validade: indique a data de validade.';
-  if (!campos.cartaFicheiroUrl) errors.cartaFicheiroUrl = `Carta de Condução — Frente: ${UPLOAD_HINT}`;
+  if (!campos.cartaFicheiroUrl)
+    errors.cartaFicheiroUrl = `Carta de Condução — Frente: ${UPLOAD_HINT}`;
   if (!campos.cartaConducaoVersoUrl)
     errors.cartaConducaoVersoUrl = `Carta de Condução — Verso: ${UPLOAD_HINT}`;
 
@@ -138,7 +159,8 @@ export function buildValidationErrors(campos: CandidaturaCampos): Record<string,
 
   // Documentos Adicionais
   if (!campos.registoCriminalUrl) errors.registoCriminalUrl = `Registo Criminal: ${UPLOAD_HINT}`;
-  if (!campos.comprovativoIbanUrl) errors.comprovativoIbanUrl = `Comprovativo de IBAN: ${UPLOAD_HINT}`;
+  if (!campos.comprovativoIbanUrl)
+    errors.comprovativoIbanUrl = `Comprovativo de IBAN: ${UPLOAD_HINT}`;
 
   return errors;
 }

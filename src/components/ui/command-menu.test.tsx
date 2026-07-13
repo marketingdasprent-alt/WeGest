@@ -36,11 +36,7 @@ describe('CommandMenu', () => {
 
   it('mostra placeholder personalizado', () => {
     render(
-      <CommandMenu
-        open={true}
-        onOpenChange={vi.fn()}
-        placeholder="Saltar para..."
-      >
+      <CommandMenu open={true} onOpenChange={vi.fn()} placeholder="Saltar para...">
         <div>conteúdo</div>
       </CommandMenu>
     );
@@ -77,9 +73,7 @@ describe('CommandMenu', () => {
 
   it('abre/fecha com Cmd+K', () => {
     const onOpenChange = vi.fn();
-    const { rerender } = render(
-      <CommandMenu open={false} onOpenChange={onOpenChange} />
-    );
+    const { rerender } = render(<CommandMenu open={false} onOpenChange={onOpenChange} />);
 
     // Cmd+K com menu fechado → deve abrir
     fireEvent.keyDown(document, { key: 'k', metaKey: true });

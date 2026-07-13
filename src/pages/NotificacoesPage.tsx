@@ -24,45 +24,39 @@ const NotificacoesPage = () => {
 
   const markAsRead = useMarkNotificationRead();
 
-  const {
-    data,
-    error,
-    isLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteQuery<NotificacoesPageData>({
-    queryKey: ['notificacoes', 'infinite', { apenasNaoResolvidas }],
-    queryFn: async ({ pageParam }) => {
-      const page = (pageParam as number) ?? 1;
-      const from = (page - 1) * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
+  const { data, error, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useInfiniteQuery<NotificacoesPageData>({
+      queryKey: ['notificacoes', 'infinite', { apenasNaoResolvidas }],
+      queryFn: async ({ pageParam }) => {
+        const page = (pageParam as number) ?? 1;
+        const from = (page - 1) * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
 
-      let q = supabase
-        .from('notificacoes')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(from, to);
+        let q = supabase
+          .from('notificacoes')
+          .select('*', { count: 'exact' })
+          .order('created_at', { ascending: false })
+          .range(from, to);
 
-      if (apenasNaoResolvidas) {
-        q = q.eq('resolvida', false);
-      }
+        if (apenasNaoResolvidas) {
+          q = q.eq('resolvida', false);
+        }
 
-      const { data: rows, error: queryError, count } = await q;
-      if (queryError) throw queryError;
+        const { data: rows, error: queryError, count } = await q;
+        if (queryError) throw queryError;
 
-      return {
-        data: (rows ?? []) as Notificacao[],
-        total: count ?? 0,
-        totalPages: Math.ceil((count ?? 0) / PAGE_SIZE),
-        page,
-      };
-    },
-    initialPageParam: 1,
-    getNextPageParam: (lastPage) =>
-      lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
-    staleTime: 30_000,
-  });
+        return {
+          data: (rows ?? []) as Notificacao[],
+          total: count ?? 0,
+          totalPages: Math.ceil((count ?? 0) / PAGE_SIZE),
+          page,
+        };
+      },
+      initialPageParam: 1,
+      getNextPageParam: (lastPage) =>
+        lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
+      staleTime: 30_000,
+    });
 
   const notificacoes = data?.pages.flatMap((p) => p.data) ?? [];
   const totalUnread = data?.pages[0]?.total ?? 0;

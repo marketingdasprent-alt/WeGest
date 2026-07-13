@@ -42,9 +42,7 @@ export function FaturacaoAlertasSection({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {anularRow?.docTipo === 'recibo'
-              ? 'Anular recibo?'
-              : 'Anular nota de crédito?'}
+            {anularRow?.docTipo === 'recibo' ? 'Anular recibo?' : 'Anular nota de crédito?'}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {anularRow?.docTipo === 'recibo'
@@ -79,11 +77,7 @@ export function FaturacaoAlertasSection({
               onConfirmarAnular();
             }}
             disabled={anularBusy || !anularMotivo.trim()}
-            title={
-              !anularMotivo.trim()
-                ? 'Indica o motivo para continuar'
-                : undefined
-            }
+            title={!anularMotivo.trim() ? 'Indica o motivo para continuar' : undefined}
             className="bg-rose-600 hover:bg-rose-700"
           >
             {anularBusy ? 'A anular…' : 'Anular'}

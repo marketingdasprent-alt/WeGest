@@ -536,14 +536,18 @@ const Dashboard = () => {
       ) : (
         <>
           {/* ── Linha 1: Viaturas + Candidaturas ─────────────────────── */}
-          <div className={`grid grid-cols-2 gap-4 ${isExecutivo ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+          <div
+            className={`grid grid-cols-2 gap-4 ${isExecutivo ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}
+          >
             <KpiCard
               label="Disponíveis"
               value={fleet.disponiveis}
               icon={Car}
               color="green"
               onClick={() => navigate('/viaturas?status=disponivel')}
-              footer={<p className="text-xs text-muted-foreground mt-1">de {fleet.total} viaturas</p>}
+              footer={
+                <p className="text-xs text-muted-foreground mt-1">de {fleet.total} viaturas</p>
+              }
             />
 
             <KpiCard
@@ -745,132 +749,132 @@ const Dashboard = () => {
           {/* ── Linha 4: Upgrade/Downgrade + Trocas (só executivo) ──── */}
           {isExecutivo && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Upgrade / Downgrade */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                  Upgrades / Downgrades
-                </CardTitle>
-                <CardDescription>Mudanças de viatura no período selecionado</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Contador */}
-                <div className="flex items-center gap-4">
-                  <div className="text-4xl font-bold text-primary">{upgradeData.count}</div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">trocas de categoria</p>
-                    <p className="text-xs text-muted-foreground">registadas no calendário</p>
-                  </div>
-                </div>
-
-                {/* Comparação de renda */}
-                <div className="rounded-lg bg-muted/50 p-4 space-y-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Renda de Viaturas
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-muted-foreground">Período Anterior</p>
-                      <p className="text-lg font-bold text-foreground">
-                        {formatCurrency(upgradeData.rendaAnterior)}
-                      </p>
-                    </div>
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-muted-foreground">Período Atual</p>
-                      <p className="text-lg font-bold text-foreground">
-                        {formatCurrency(upgradeData.rendaAtual)}
-                      </p>
+              {/* Upgrade / Downgrade */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    Upgrades / Downgrades
+                  </CardTitle>
+                  <CardDescription>Mudanças de viatura no período selecionado</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Contador */}
+                  <div className="flex items-center gap-4">
+                    <div className="text-4xl font-bold text-primary">{upgradeData.count}</div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">trocas de categoria</p>
+                      <p className="text-xs text-muted-foreground">registadas no calendário</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-1 border-t border-border">
-                    {upgradeData.rendaAnterior > 0 ? (
-                      <>
-                        {rendaDiff.up ? (
-                          <TrendingUp className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <TrendingDown className="h-4 w-4 text-red-500" />
-                        )}
-                        <span
-                          className={`text-sm font-semibold ${rendaDiff.up ? 'text-green-500' : 'text-red-500'}`}
-                        >
-                          {rendaDiff.up ? '+' : '-'}
-                          {rendaDiff.pct.toFixed(1)}%
+                  {/* Comparação de renda */}
+                  <div className="rounded-lg bg-muted/50 p-4 space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Renda de Viaturas
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Período Anterior</p>
+                        <p className="text-lg font-bold text-foreground">
+                          {formatCurrency(upgradeData.rendaAnterior)}
+                        </p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Período Atual</p>
+                        <p className="text-lg font-bold text-foreground">
+                          {formatCurrency(upgradeData.rendaAtual)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1 border-t border-border">
+                      {upgradeData.rendaAnterior > 0 ? (
+                        <>
+                          {rendaDiff.up ? (
+                            <TrendingUp className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 text-red-500" />
+                          )}
+                          <span
+                            className={`text-sm font-semibold ${rendaDiff.up ? 'text-green-500' : 'text-red-500'}`}
+                          >
+                            {rendaDiff.up ? '+' : '-'}
+                            {rendaDiff.pct.toFixed(1)}%
+                          </span>
+                          <span className="text-xs text-muted-foreground">vs período anterior</span>
+                          <span
+                            className={`text-sm font-medium ml-auto ${rendaDiff.up ? 'text-green-500' : 'text-red-500'}`}
+                          >
+                            {rendaDiff.up ? '+' : ''}
+                            {formatCurrency(upgradeData.rendaAtual - upgradeData.rendaAnterior)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          Sem dados do período anterior
                         </span>
-                        <span className="text-xs text-muted-foreground">vs período anterior</span>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Trocas */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 text-orange-500" />
+                    Trocas de Viatura
+                  </CardTitle>
+                  <CardDescription>Substituições de viatura no período selecionado</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Contador grande */}
+                  <div className="flex items-center gap-4">
+                    <div className="text-4xl font-bold text-orange-500">{trocasCount}</div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">substituições</p>
+                      <p className="text-xs text-muted-foreground">registadas no calendário</p>
+                    </div>
+                  </div>
+
+                  {/* Métricas complementares */}
+                  <div className="rounded-lg bg-muted/50 p-4 space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Atividade da Frota
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Alugadas</p>
+                        <p className="text-lg font-bold text-blue-500">{totalAlugadas}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Devolvidas</p>
+                        <p className="text-lg font-bold text-green-500">{totalDevolvidas}</p>
+                      </div>
+                    </div>
+                    <div className="pt-1 border-t border-border">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Saldo líquido</span>
                         <span
-                          className={`text-sm font-medium ml-auto ${rendaDiff.up ? 'text-green-500' : 'text-red-500'}`}
+                          className={`font-semibold ${totalAlugadas - totalDevolvidas >= 0 ? 'text-blue-500' : 'text-red-500'}`}
                         >
-                          {rendaDiff.up ? '+' : ''}
-                          {formatCurrency(upgradeData.rendaAtual - upgradeData.rendaAnterior)}
+                          {totalAlugadas - totalDevolvidas >= 0 ? '+' : ''}
+                          {totalAlugadas - totalDevolvidas} viaturas
                         </span>
-                      </>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        Sem dados do período anterior
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Trocas */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <RefreshCw className="h-4 w-4 text-orange-500" />
-                  Trocas de Viatura
-                </CardTitle>
-                <CardDescription>Substituições de viatura no período selecionado</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Contador grande */}
-                <div className="flex items-center gap-4">
-                  <div className="text-4xl font-bold text-orange-500">{trocasCount}</div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">substituições</p>
-                    <p className="text-xs text-muted-foreground">registadas no calendário</p>
-                  </div>
-                </div>
-
-                {/* Métricas complementares */}
-                <div className="rounded-lg bg-muted/50 p-4 space-y-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Atividade da Frota
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-muted-foreground">Alugadas</p>
-                      <p className="text-lg font-bold text-blue-500">{totalAlugadas}</p>
-                    </div>
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-muted-foreground">Devolvidas</p>
-                      <p className="text-lg font-bold text-green-500">{totalDevolvidas}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="pt-1 border-t border-border">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Saldo líquido</span>
-                      <span
-                        className={`font-semibold ${totalAlugadas - totalDevolvidas >= 0 ? 'text-blue-500' : 'text-red-500'}`}
-                      >
-                        {totalAlugadas - totalDevolvidas >= 0 ? '+' : ''}
-                        {totalAlugadas - totalDevolvidas} viaturas
-                      </span>
-                    </div>
-                  </div>
-                </div>
 
-                {trocasCount === 0 && (
-                  <p className="text-sm text-center text-muted-foreground py-2">
-                    Sem trocas registadas neste período
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+                  {trocasCount === 0 && (
+                    <p className="text-sm text-center text-muted-foreground py-2">
+                      Sem trocas registadas neste período
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           )}
         </>

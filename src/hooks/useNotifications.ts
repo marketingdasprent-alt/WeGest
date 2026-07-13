@@ -27,22 +27,14 @@ export interface UseNotificationsOptions {
 // ────────────────────────────────────────────────────────────
 
 export function useNotifications(options: UseNotificationsOptions = {}) {
-  const {
-    apenasNaoResolvidas = true,
-    page = 1,
-    limit = 20,
-    enabled = true,
-  } = options;
+  const { apenasNaoResolvidas = true, page = 1, limit = 20, enabled = true } = options;
 
   const clampedLimit = Math.min(limit, 100);
   const from = (page - 1) * clampedLimit;
   const to = from + clampedLimit - 1;
 
   return useQuery({
-    queryKey: [
-      ...QUERY_KEY_BASE,
-      { apenasNaoResolvidas, page, limit: clampedLimit },
-    ],
+    queryKey: [...QUERY_KEY_BASE, { apenasNaoResolvidas, page, limit: clampedLimit }],
     queryFn: async () => {
       let q = supabase
         .from('notificacoes')
@@ -88,8 +80,7 @@ export function useMarkNotificationRead() {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
     },
     onError: (error: unknown) => {
-      const message =
-        error instanceof Error ? error.message : 'Erro inesperado';
+      const message = error instanceof Error ? error.message : 'Erro inesperado';
       toast({
         title: 'Erro ao resolver notificação',
         description: message,

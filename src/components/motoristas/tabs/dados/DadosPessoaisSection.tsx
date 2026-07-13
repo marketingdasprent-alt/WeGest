@@ -4,13 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SectionCard } from '@/components/ui/section-card';
 import { PhoneInput } from '@/components/ui/phone-input';
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import {
   Command,
   CommandEmpty,
@@ -47,11 +41,7 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
                 <Briefcase className="h-4 w-4 text-primary" />
                 Gestor Responsável
               </FormLabel>
-              <Popover
-                open={gestorPopoverOpen}
-                onOpenChange={setGestorPopoverOpen}
-                modal={true}
-              >
+              <Popover open={gestorPopoverOpen} onOpenChange={setGestorPopoverOpen} modal={true}>
                 <PopoverTrigger asChild>
                   <FormControl>
                     <Button
@@ -122,7 +112,9 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           name="nif"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>NIF <span className="text-red-500">*</span></FormLabel>
+              <FormLabel>
+                NIF <span className="text-red-500">*</span>
+              </FormLabel>
               <FormControl>
                 <Input {...field} />
               </FormControl>
@@ -135,7 +127,9 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email <span className="text-red-500">*</span></FormLabel>
+              <FormLabel>
+                Email <span className="text-red-500">*</span>
+              </FormLabel>
               <FormControl>
                 <Input type="email" {...field} />
               </FormControl>
@@ -148,7 +142,9 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           name="iban"
           render={({ field }) => (
             <FormItem className="sm:col-span-2">
-              <FormLabel>IBAN <span className="text-red-500">*</span></FormLabel>
+              <FormLabel>
+                IBAN <span className="text-red-500">*</span>
+              </FormLabel>
               <FormControl>
                 <Input placeholder="PT50..." {...field} />
               </FormControl>
@@ -161,7 +157,9 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           name="telefone"
           render={({ field }) => (
             <FormItem className="sm:col-span-2">
-              <FormLabel>Telefone <span className="text-red-500">*</span></FormLabel>
+              <FormLabel>
+                Telefone <span className="text-red-500">*</span>
+              </FormLabel>
               <FormControl>
                 <PhoneInput
                   value={field.value || ''}

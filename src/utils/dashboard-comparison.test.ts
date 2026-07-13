@@ -112,13 +112,9 @@ describe('calcularPeriodoAnterior', () => {
     };
     const prev = calcularPeriodoAnterior(range);
     const actualDays =
-      Math.round(
-        (range.to.getTime() - range.from.getTime()) / (1000 * 60 * 60 * 24)
-      ) + 1;
+      Math.round((range.to.getTime() - range.from.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     const prevDays =
-      Math.round(
-        (prev.to.getTime() - prev.from.getTime()) / (1000 * 60 * 60 * 24)
-      ) + 1;
+      Math.round((prev.to.getTime() - prev.from.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     expect(prevDays).toBe(actualDays);
   });
 });

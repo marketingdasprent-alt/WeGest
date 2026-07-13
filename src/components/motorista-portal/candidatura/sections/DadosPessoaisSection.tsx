@@ -6,13 +6,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { DocumentUploader } from '@/components/motorista-portal/DocumentUploader';
-import { validarEmail, validarNIF, validarCodigoPostal, formatarCodigoPostal } from '@/lib/pt-validators';
+import {
+  validarEmail,
+  validarNIF,
+  validarCodigoPostal,
+  formatarCodigoPostal,
+} from '@/lib/pt-validators';
 import type { CandidaturaCampos } from '@/utils/candidatura';
 
 interface DadosPessoaisSectionProps {
   campos: Pick<
     CandidaturaCampos,
-    'nome' | 'email' | 'telefone' | 'nif' | 'morada' | 'cidade' | 'codigoPostal' | 'comprovativoMoradaUrl'
+    | 'nome'
+    | 'email'
+    | 'telefone'
+    | 'nif'
+    | 'morada'
+    | 'cidade'
+    | 'codigoPostal'
+    | 'comprovativoMoradaUrl'
   >;
   setNome: (v: string) => void;
   setEmail: (v: string) => void;
@@ -69,7 +81,10 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
           <Input
             id="nome"
             value={campos.nome}
-            onChange={(e) => { setNome(e.target.value); clearFieldError('nome'); }}
+            onChange={(e) => {
+              setNome(e.target.value);
+              clearFieldError('nome');
+            }}
             placeholder="O seu nome completo"
             aria-invalid={!!fieldErrors.nome}
             className={fieldErrors.nome ? 'border-destructive' : ''}
@@ -81,8 +96,13 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
             Email <span className="text-red-500">*</span>
           </Label>
           <Input
-            id="email" type="email" value={campos.email}
-            onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
+            id="email"
+            type="email"
+            value={campos.email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              clearFieldError('email');
+            }}
             onBlur={() => {
               if (campos.email) {
                 const r = validarEmail(campos.email);
@@ -99,8 +119,12 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
             Telefone <span className="text-red-500">*</span>
           </Label>
           <PhoneInput
-            id="telefone" value={campos.telefone}
-            onChange={(v) => { setTelefone(v); clearFieldError('telefone'); }}
+            id="telefone"
+            value={campos.telefone}
+            onChange={(v) => {
+              setTelefone(v);
+              clearFieldError('telefone');
+            }}
             defaultCountry="PT"
           />
           {renderError('telefone')}
@@ -110,7 +134,8 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
             NIF <span className="text-red-500">*</span>
           </Label>
           <Input
-            id="nif" value={campos.nif}
+            id="nif"
+            value={campos.nif}
             onChange={(e) => setNif(e.target.value.replace(/\D/g, '').slice(0, 9))}
             onBlur={() => {
               if (campos.nif.trim()) {
@@ -119,7 +144,9 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
                 else clearFieldError('nif');
               }
             }}
-            placeholder="123456789" maxLength={9} inputMode="numeric"
+            placeholder="123456789"
+            maxLength={9}
+            inputMode="numeric"
             aria-invalid={!!fieldErrors.nif}
             className={fieldErrors.nif ? 'border-destructive' : ''}
           />
@@ -130,8 +157,12 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
             Morada <span className="text-red-500">*</span>
           </Label>
           <Input
-            id="morada" value={campos.morada}
-            onChange={(e) => { setMorada(e.target.value); clearFieldError('morada'); }}
+            id="morada"
+            value={campos.morada}
+            onChange={(e) => {
+              setMorada(e.target.value);
+              clearFieldError('morada');
+            }}
             placeholder="Rua, número, andar..."
             aria-invalid={!!fieldErrors.morada}
             className={fieldErrors.morada ? 'border-destructive' : ''}
@@ -143,8 +174,12 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
             Cidade <span className="text-red-500">*</span>
           </Label>
           <Input
-            id="cidade" value={campos.cidade}
-            onChange={(e) => { setCidade(e.target.value); clearFieldError('cidade'); }}
+            id="cidade"
+            value={campos.cidade}
+            onChange={(e) => {
+              setCidade(e.target.value);
+              clearFieldError('cidade');
+            }}
             placeholder="Lisboa"
             aria-invalid={!!fieldErrors.cidade}
             className={fieldErrors.cidade ? 'border-destructive' : ''}
@@ -156,8 +191,12 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
             Código Postal <span className="text-red-500">*</span>
           </Label>
           <Input
-            id="codigoPostal" value={campos.codigoPostal}
-            onChange={(e) => { setCodigoPostal(formatarCodigoPostal(e.target.value)); clearFieldError('codigoPostal'); }}
+            id="codigoPostal"
+            value={campos.codigoPostal}
+            onChange={(e) => {
+              setCodigoPostal(formatarCodigoPostal(e.target.value));
+              clearFieldError('codigoPostal');
+            }}
             onBlur={() => {
               if (campos.codigoPostal.trim()) {
                 const r = validarCodigoPostal(campos.codigoPostal);
@@ -165,7 +204,9 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
                 else clearFieldError('codigoPostal');
               }
             }}
-            placeholder="0000-000" maxLength={8} inputMode="numeric"
+            placeholder="0000-000"
+            maxLength={8}
+            inputMode="numeric"
             aria-invalid={!!fieldErrors.codigoPostal}
             className={fieldErrors.codigoPostal ? 'border-destructive' : ''}
           />
@@ -179,7 +220,11 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
           <DocumentUploader
             folder="comprovativo-morada"
             currentUrl={campos.comprovativoMoradaUrl}
-            onUpload={(url) => { setComprovativoMoradaUrl(url); clearFieldError('comprovativoMoradaUrl'); void onUploadToDb('comprovativo_morada_url', url); }}
+            onUpload={(url) => {
+              setComprovativoMoradaUrl(url);
+              clearFieldError('comprovativoMoradaUrl');
+              void onUploadToDb('comprovativo_morada_url', url);
+            }}
             accept="application/pdf,image/jpeg,image/png"
           />
           <p className="text-xs text-muted-foreground">

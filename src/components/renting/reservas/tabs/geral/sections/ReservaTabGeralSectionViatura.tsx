@@ -27,7 +27,11 @@ import type { ViaturaBasic } from '@/hooks/useViaturas';
 import type { RentingGrupoMin, RentingTarifaPrecoModelo } from '@/hooks/useRentingGruposTarifas';
 
 const normalizeForSearch = (s: string) =>
-  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[-\s]/g, '');
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[-\s]/g, '');
 
 interface ViaturaSectionProps {
   form: UseFormReturn<ReservaFormValues>;
@@ -280,9 +284,9 @@ export function ReservaTabGeralSectionViatura({
               <AlertTitle>Viatura sem modelo associado</AlertTitle>
               <AlertDescription>
                 A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) não está
-                associada a nenhum modelo do catálogo — os preços por modelo não conseguem casar
-                com nenhuma tarifa, mesmo que estejam bem configurados. Associa o modelo em
-                Viaturas antes de continuar.
+                associada a nenhum modelo do catálogo — os preços por modelo não conseguem casar com
+                nenhuma tarifa, mesmo que estejam bem configurados. Associa o modelo em Viaturas
+                antes de continuar.
               </AlertDescription>
             </Alert>
           )}

@@ -12,11 +12,7 @@ interface FaturacaoResumoSectionProps {
 }
 
 /** Secção de KPIs de faturação (hoje, ontem, semana, mês). */
-export function FaturacaoResumoSection({
-  kpis,
-  loading,
-  scopeLabel,
-}: FaturacaoResumoSectionProps) {
+export function FaturacaoResumoSection({ kpis, loading, scopeLabel }: FaturacaoResumoSectionProps) {
   return (
     <FaturacaoStats
       hoje={kpis.hoje}

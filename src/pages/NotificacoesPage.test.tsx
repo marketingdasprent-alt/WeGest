@@ -51,14 +51,16 @@ const makeNotificacao = (overrides: Partial<Record<string, unknown>> = {}) => ({
   ...overrides,
 });
 
-function setInfiniteQueryResult(overrides: Partial<{
-  data: unknown;
-  isLoading: boolean;
-  error: Error | null;
-  fetchNextPage: () => void;
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
-}>) {
+function setInfiniteQueryResult(
+  overrides: Partial<{
+    data: unknown;
+    isLoading: boolean;
+    error: Error | null;
+    fetchNextPage: () => void;
+    hasNextPage: boolean;
+    isFetchingNextPage: boolean;
+  }>
+) {
   mockInfiniteQuery.mockReturnValue({
     data: { pages: [{ data: [], total: 0, totalPages: 0, page: 1 }] },
     isLoading: false,

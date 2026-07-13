@@ -1,13 +1,7 @@
 import { useEffect } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import {
   Select,
   SelectContent,
@@ -35,7 +29,7 @@ export function AquisicaoConfigSection() {
     custosOperacionais,
     custosAdicionais,
     impostosAquisicao,
-    ivaTipo,
+    ivaTipo
   );
 
   // Auto-calcular total_viatura quando os custos ou IVA mudam
@@ -226,7 +220,12 @@ export function AquisicaoConfigSection() {
                     />
                   </FormControl>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Cálculo automático: {totalCalculated.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    Cálculo automático:{' '}
+                    {totalCalculated.toLocaleString('pt-PT', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{' '}
+                    €
                   </p>
                   <FormMessage />
                 </FormItem>

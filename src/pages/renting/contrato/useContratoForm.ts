@@ -125,7 +125,9 @@ export interface UseContratoFormReturn {
   motoristaDialogOpen: boolean;
   setMotoristaDialogOpen: (open: boolean) => void;
   novaVersaoCtx: { alteracoes: AlteracaoMaterial[]; valores: ContratoFormValues } | null;
-  setNovaVersaoCtx: (ctx: { alteracoes: AlteracaoMaterial[]; valores: ContratoFormValues } | null) => void;
+  setNovaVersaoCtx: (
+    ctx: { alteracoes: AlteracaoMaterial[]; valores: ContratoFormValues } | null
+  ) => void;
   realizarDialog: { eventoId: string; tipo: 'entrega' | 'recolha' } | null;
   setRealizarDialog: (dialog: { eventoId: string; tipo: 'entrega' | 'recolha' } | null) => void;
   confirmarRealizacaoDireta: boolean;
@@ -137,7 +139,11 @@ export interface UseContratoFormReturn {
   // Computed
   viaturasParaSelecao: ReturnType<typeof useViaturas>['data'];
   realizacaoPendente: { id: string; tipo: 'entrega' | 'recolha' } | null;
-  condutoresRascunho: { motorista_id?: string | null; cliente_id?: string | null; is_principal?: boolean }[];
+  condutoresRascunho: {
+    motorista_id?: string | null;
+    cliente_id?: string | null;
+    is_principal?: boolean;
+  }[];
   temConflito: boolean;
   dataInicio: string;
   dataFim: string;
@@ -880,8 +886,7 @@ export function useContratoForm(): UseContratoFormReturn {
               : Math.max(
                   1,
                   Math.ceil(
-                    (new Date(values.data_fim).getTime() -
-                      new Date(values.data_inicio).getTime()) /
+                    (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) /
                       msDia
                   )
                 );

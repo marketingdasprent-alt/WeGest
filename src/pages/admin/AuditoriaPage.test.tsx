@@ -102,9 +102,7 @@ describe('AuditoriaPage', () => {
 
   it('mostra estado inicial antes de submeter', () => {
     renderPage();
-    expect(
-      screen.getByText(/Seleccione uma entidade e introduza o ID/i)
-    ).toBeTruthy();
+    expect(screen.getByText(/Seleccione uma entidade e introduza o ID/i)).toBeTruthy();
   });
 
   it('desabilita botão Auditar quando ID está vazio', () => {
@@ -118,9 +116,9 @@ describe('AuditoriaPage', () => {
     fireEvent.change(screen.getByLabelText(/ID do registo/i), {
       target: { value: 'test-uuid' },
     });
-    expect(
-      (screen.getByRole('button', { name: /Auditar/i }) as HTMLButtonElement).disabled
-    ).toBe(false);
+    expect((screen.getByRole('button', { name: /Auditar/i }) as HTMLButtonElement).disabled).toBe(
+      false
+    );
   });
 
   it('chama useAuditHistory com entidade e id após submeter', async () => {
@@ -217,9 +215,7 @@ describe('AuditoriaPage', () => {
     expect(screen.getByText(/1–10 de 15/i)).toBeTruthy();
 
     // Botão anterior desabilitado na página 1
-    expect(
-      (screen.getByLabelText(/Página anterior/i) as HTMLButtonElement).disabled
-    ).toBe(true);
+    expect((screen.getByLabelText(/Página anterior/i) as HTMLButtonElement).disabled).toBe(true);
 
     // Ir para página 2
     fireEvent.click(screen.getByLabelText(/Página seguinte/i));
@@ -228,9 +224,7 @@ describe('AuditoriaPage', () => {
       expect(screen.getByText('acao-10')).toBeTruthy();
     });
     expect(screen.getByText(/11–15 de 15/i)).toBeTruthy();
-    expect(
-      (screen.getByLabelText(/Página seguinte/i) as HTMLButtonElement).disabled
-    ).toBe(true);
+    expect((screen.getByLabelText(/Página seguinte/i) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('mostra estado de loading', async () => {
@@ -282,12 +276,10 @@ describe('AuditoriaPage', () => {
     const reservaOption = screen.getByRole('option', { name: 'Reserva' });
     fireEvent.click(reservaOption);
 
-    expect(
-      screen.getByText(/não tem tabelas de histórico dedicadas/i)
-    ).toBeTruthy();
-    expect(
-      (screen.getByRole('button', { name: /Auditar/i }) as HTMLButtonElement).disabled
-    ).toBe(true);
+    expect(screen.getByText(/não tem tabelas de histórico dedicadas/i)).toBeTruthy();
+    expect((screen.getByRole('button', { name: /Auditar/i }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
   });
 
   it('mostra estado vazio quando não há entradas', async () => {

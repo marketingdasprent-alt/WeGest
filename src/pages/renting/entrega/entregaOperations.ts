@@ -47,7 +47,14 @@ interface GerarFolhaParams {
 export async function gerarFolhaBloco(params: GerarFolhaParams): Promise<void> {
   const { modo, tmplId, bloco, assinaturasRef, observacoes, contexto, responsavelNome, info } =
     params;
-  const { matricula, viaturaId, isEntrega, km: kmBloco, combustivel: combustivelBloco, files: filesBloco } = bloco;
+  const {
+    matricula,
+    viaturaId,
+    isEntrega,
+    km: kmBloco,
+    combustivel: combustivelBloco,
+    files: filesBloco,
+  } = bloco;
 
   const fotosMomento =
     modo === 'preview' && filesBloco.length
@@ -140,7 +147,8 @@ interface UploadDanosParams {
  * de erro.
  */
 export async function uploadDanos(params: UploadDanosParams): Promise<string[]> {
-  const { files, filesAntiga, viaturaId, viaturaAntigaId, observacoes, info, userId, token } = params;
+  const { files, filesAntiga, viaturaId, viaturaAntigaId, observacoes, info, userId, token } =
+    params;
   const uploadedPaths: string[] = [];
   const isEntrega = info.tipo === 'entrega';
 
@@ -157,10 +165,7 @@ export async function uploadDanos(params: UploadDanosParams): Promise<string[]> 
   }
 
   // Agrupa todos os files (viatura actual + antiga, se troca)
-  const allFiles = [
-    ...(viaturaId ? [files] : []),
-    ...(viaturaAntigaId ? [filesAntiga] : []),
-  ];
+  const allFiles = [...(viaturaId ? [files] : []), ...(viaturaAntigaId ? [filesAntiga] : [])];
 
   for (let gi = 0; gi < allFiles.length; gi++) {
     const grupoFiles = allFiles[gi];

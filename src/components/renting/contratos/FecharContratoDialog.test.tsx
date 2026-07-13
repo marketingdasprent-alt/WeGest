@@ -84,9 +84,7 @@ vi.mock('@/components/assinatura/AssinaturasHandoverSection', () => ({
   AssinaturasHandoverSection: React.forwardRef<
     { getAssinaturas: () => { motorista: null; responsavel: null } },
     { motoristaNome: string; responsavelNome: string }
-  >((_props, _ref) => (
-    <div data-testid="assinaturas-mock">Assinaturas (mock)</div>
-  )),
+  >((_props, _ref) => <div data-testid="assinaturas-mock">Assinaturas (mock)</div>),
 }));
 
 vi.mock('@/utils/generateDocumentFromTemplate', () => ({
@@ -131,9 +129,7 @@ function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
-  );
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
 const baseProps = {
@@ -157,7 +153,7 @@ describe('FecharContratoDialog', () => {
         onOpenChange={onOpenChange}
         motoristaId={null}
         estacaoOrigemId="est-1"
-      />,
+      />
     );
 
     // Default tipoEvento = 'recolhido' (sem motorista → rent-a-car simples).
@@ -207,11 +203,7 @@ describe('FecharContratoDialog', () => {
 
   it('TVDE: pré-preenche "Devolvida" e mostra campos de recolha física (KM, combustível, assinatura)', async () => {
     renderWithProviders(
-      <FecharContratoDialog
-        {...baseProps}
-        motoristaId="mot-1"
-        estacaoOrigemId="est-2"
-      />,
+      <FecharContratoDialog {...baseProps} motoristaId="mot-1" estacaoOrigemId="est-2" />
     );
 
     // Default tipoEvento = 'devolvido' (com motorista → TVDE).
@@ -238,11 +230,7 @@ describe('FecharContratoDialog', () => {
 
   it('toggle "Registar a recolha agora" OFF → esconde campos de recolha e muda para "Agendar recolha"', async () => {
     renderWithProviders(
-      <FecharContratoDialog
-        {...baseProps}
-        motoristaId="mot-1"
-        estacaoOrigemId="est-1"
-      />,
+      <FecharContratoDialog {...baseProps} motoristaId="mot-1" estacaoOrigemId="est-1" />
     );
 
     // registarAgora = true por defeito → campos de recolha visíveis.

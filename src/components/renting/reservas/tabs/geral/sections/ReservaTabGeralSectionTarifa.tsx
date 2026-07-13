@@ -2,7 +2,13 @@ import type { UseFormReturn } from 'react-hook-form';
 import { AlertTriangle, CarTaxiFront, Coins, Euro } from 'lucide-react';
 
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import { SectionHeader } from '../../../SectionHeader';

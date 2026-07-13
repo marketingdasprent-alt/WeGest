@@ -24,7 +24,11 @@ import type { ReservaFormValues } from '../../../reservaDialog.schema';
 import type { ClienteComDocumentos } from '@/types/cliente';
 
 const normalizeForSearch = (s: string) =>
-  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[-\s]/g, '');
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[-\s]/g, '');
 
 interface DadosGeraisSectionProps {
   form: UseFormReturn<ReservaFormValues>;
@@ -205,9 +209,7 @@ export function ReservaTabGeralSectionDadosGerais({
                                 />
                                 {c.nome}
                                 {c.codigo && (
-                                  <span className="ml-1 text-muted-foreground">
-                                    (#{c.codigo})
-                                  </span>
+                                  <span className="ml-1 text-muted-foreground">(#{c.codigo})</span>
                                 )}
                               </CommandItem>
                             ))}

@@ -2,13 +2,7 @@ import { CreditCard } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { SectionCard } from '@/components/ui/section-card';
 import { DocumentUploader } from '@/components/motorista-portal/DocumentUploader';
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import {
   Select,
   SelectContent,
@@ -24,7 +18,10 @@ interface DocumentoIdentificacaoSectionProps {
   motorista: Motorista;
 }
 
-export function DocumentoIdentificacaoSection({ control, motorista }: DocumentoIdentificacaoSectionProps) {
+export function DocumentoIdentificacaoSection({
+  control,
+  motorista,
+}: DocumentoIdentificacaoSectionProps) {
   return (
     <SectionCard
       icon={<CreditCard className="h-4 w-4 text-violet-600 dark:text-violet-400" />}
@@ -37,7 +34,9 @@ export function DocumentoIdentificacaoSection({ control, motorista }: DocumentoI
           name="documento_tipo"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Tipo de Documento <span className="text-red-500">*</span></FormLabel>
+              <FormLabel>
+                Tipo de Documento <span className="text-red-500">*</span>
+              </FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
@@ -60,7 +59,9 @@ export function DocumentoIdentificacaoSection({ control, motorista }: DocumentoI
           name="documento_numero"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nº do Documento <span className="text-red-500">*</span></FormLabel>
+              <FormLabel>
+                Nº do Documento <span className="text-red-500">*</span>
+              </FormLabel>
               <FormControl>
                 <Input {...field} />
               </FormControl>
@@ -73,7 +74,9 @@ export function DocumentoIdentificacaoSection({ control, motorista }: DocumentoI
           name="documento_validade"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Validade <span className="text-red-500">*</span></FormLabel>
+              <FormLabel>
+                Validade <span className="text-red-500">*</span>
+              </FormLabel>
               <FormControl>
                 <Input type="date" {...field} />
               </FormControl>

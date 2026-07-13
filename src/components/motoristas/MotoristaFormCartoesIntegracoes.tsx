@@ -74,7 +74,12 @@ export function MotoristaFormCartoesIntegracoes({
             <FormItem>
               <FormLabel>Uber UUID</FormLabel>
               <FormControl>
-                <Input placeholder="ID da Uber" {...field} value={field.value ?? ''} className="h-11 bg-background" />
+                <Input
+                  placeholder="ID da Uber"
+                  {...field}
+                  value={field.value ?? ''}
+                  className="h-11 bg-background"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -87,7 +92,12 @@ export function MotoristaFormCartoesIntegracoes({
             <FormItem>
               <FormLabel>Bolt ID</FormLabel>
               <FormControl>
-                <Input placeholder="ID da Bolt" {...field} value={field.value ?? ''} className="h-11 bg-background" />
+                <Input
+                  placeholder="ID da Bolt"
+                  {...field}
+                  value={field.value ?? ''}
+                  className="h-11 bg-background"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

@@ -44,10 +44,7 @@ export async function renderAnexoDanos(
   startY: number,
   imagens?: Map<string, HTMLImageElement>
 ): Promise<number> {
-  const {
-    leftMargin, rightMargin, topMargin, pageWidth, pageHeight,
-    bottomMargin, maxWidth,
-  } = ctx;
+  const { leftMargin, rightMargin, topMargin, pageWidth, pageHeight, bottomMargin, maxWidth } = ctx;
   const blue: [number, number, number] = [43, 58, 107];
   const gray: [number, number, number] = [90, 90, 100];
   const borderColor: [number, number, number] = [200, 202, 210];
@@ -126,14 +123,18 @@ export async function renderAnexoDanos(
             }
             pdf.addImage(img, 'JPEG', nfx + (photoW - iw) / 2, nfy + (imgAreaH - ih) / 2, iw, ih);
           }
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
 
         const origemTexto = ad.fotos[fi].origem ?? '—';
         pdf.setFont('helvetica', 'italic');
         pdf.setFontSize(7);
         pdf.setTextColor(...gray);
         const captionFit = pdf.splitTextToSize(origemTexto, photoW - 3)[0] ?? origemTexto;
-        pdf.text(captionFit, nfx + photoW / 2, nfy + imgAreaH + captionH / 2 + 1.5, { align: 'center' });
+        pdf.text(captionFit, nfx + photoW / 2, nfy + imgAreaH + captionH / 2 + 1.5, {
+          align: 'center',
+        });
         pdf.setTextColor(0, 0, 0);
         continue;
       }
@@ -154,14 +155,18 @@ export async function renderAnexoDanos(
           }
           pdf.addImage(img, 'JPEG', fx + (photoW - iw) / 2, fy + (imgAreaH - ih) / 2, iw, ih);
         }
-      } catch { /* skip */ }
+      } catch {
+        /* skip */
+      }
 
       pdf.setFont('helvetica', 'italic');
       pdf.setFontSize(7);
       pdf.setTextColor(...gray);
       const origemTexto = ad.fotos[fi].origem ?? '—';
       const captionFit = pdf.splitTextToSize(origemTexto, photoW - 3)[0] ?? origemTexto;
-      pdf.text(captionFit, fx + photoW / 2, fy + imgAreaH + captionH / 2 + 1.5, { align: 'center' });
+      pdf.text(captionFit, fx + photoW / 2, fy + imgAreaH + captionH / 2 + 1.5, {
+        align: 'center',
+      });
       pdf.setTextColor(0, 0, 0);
     }
     ty += photoRows * (photoH + photoGap) + 6;
@@ -218,7 +223,9 @@ export async function renderAnexoDanos(
         ty = topMargin + 8;
       }
       const rowData = [
-        localizacaoLabels[dano.localizacao] ?? LOCALIZACAO_LABELS[dano.localizacao] ?? dano.localizacao,
+        localizacaoLabels[dano.localizacao] ??
+          LOCALIZACAO_LABELS[dano.localizacao] ??
+          dano.localizacao,
         dano.descricao,
         estadoLabels[dano.estado] ?? ESTADO_LABELS[dano.estado] ?? dano.estado,
         dano.data,

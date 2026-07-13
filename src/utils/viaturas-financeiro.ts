@@ -12,7 +12,7 @@ export function calculateTotalViatura(
   custosOperacionais?: string | null,
   custosAdicionais?: string | null,
   impostosAquisicao?: string | null,
-  ivaTipo?: string | null,
+  ivaTipo?: string | null
 ): number {
   const cv = parseFloat(custoViatura || '0');
   const co = parseFloat(custosOperacionais || '0');
@@ -37,7 +37,7 @@ export function calculateTotalViatura(
 export function calculateDepreciationSchedule(
   totalCost: number,
   years: number,
-  method: string = 'linear',
+  method: string = 'linear'
 ): DepreciationEntry[] {
   if (totalCost <= 0 || years <= 0) return [];
 
@@ -88,7 +88,7 @@ export function calculateDepreciationSchedule(
 export function calculateRestanteFinanciamento(
   tipo: string | null,
   dataInicioStr: string | null | undefined,
-  totalPrestacoes: number,
+  totalPrestacoes: number
 ): string {
   if (tipo === 'sem_financiamento' || !tipo) return 'N/A';
   if (!dataInicioStr || totalPrestacoes === 0) return '0';

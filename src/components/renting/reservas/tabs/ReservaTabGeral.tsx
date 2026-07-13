@@ -5,7 +5,13 @@ import { ClipboardList, Coins } from 'lucide-react';
 
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 import { usePermissions } from '@/hooks/usePermissions';
 import { useModules } from '@/hooks/useModules';
@@ -250,9 +256,7 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
         isSlot={isSlot}
         isTvde={isTvde}
         precosModelo={precosModelo}
-        onInvalidateViaturas={() =>
-          queryClient.invalidateQueries({ queryKey: ['viaturas'] })
-        }
+        onInvalidateViaturas={() => queryClient.invalidateQueries({ queryKey: ['viaturas'] })}
       />
 
       <ReservaTabGeralSectionTarifa
