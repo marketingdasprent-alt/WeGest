@@ -10,6 +10,8 @@ import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { useReservas } from '@/hooks/useReservas';
+import { useClientes } from '@/hooks/useClientes';
+import { useMotoristas } from '@/hooks/useMotoristas';
 import { useToast } from '@/hooks/use-toast';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
@@ -33,7 +35,6 @@ import {
 import { ESTADO_LABELS, type Reserva } from '@/types/reserva';
 
 const FILTROS_INICIAIS: ReservasFiltrosState = {
-  codigo: '',
   estacao: 'todas',
   dataInicio: '',
   dataFim: '',
@@ -48,8 +49,10 @@ const RentingReservas = () => {
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
 
   const { data: reservas = [], isLoading } = useReservas({ limit: HARD_LIMIT });
+  const { data: clientes = [] } = useClientes();
+  const { data: motoristas = [] } = useMotoristas();
 
-  const [matriculaSearch, setMatriculaSearch] = useState('');
+  const [search, setSearch] = useState('');
   const [filtros, setFiltros] = useState<ReservasFiltrosState>(FILTROS_INICIAIS);
   const [sortColumn, setSortColumn] = useState<SortColumn>('codigo');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -60,14 +63,33 @@ const RentingReservas = () => {
     return m;
   }, [estacoes]);
 
+  // NIF do cliente (empresa faturada) e do motorista (condutor) — pesquisáveis
+  // por contribuinte, tal como na lista de contratos.
+  const clienteNifById = useMemo(() => {
+    const m = new Map<string, string>();
+    clientes.forEach((c) => {
+      if (c.nif) m.set(c.id, c.nif);
+    });
+    return m;
+  }, [clientes]);
+
+  const motoristaNifById = useMemo(() => {
+    const m = new Map<string, string>();
+    motoristas.forEach((mot) => {
+      if (mot.nif) m.set(mot.id, mot.nif);
+    });
+    return m;
+  }, [motoristas]);
+
   const getEstacaoNome = useCallback(
     (id: string | null | undefined) => (id ? (estacaoNomeById.get(id) ?? '—') : '—'),
     [estacaoNomeById]
   );
 
   const filtered = useMemo(() => {
-    const matriculaNorm = normalizeMatricula(matriculaSearch.trim());
-    const codigoNorm = filtros.codigo.trim();
+    const searchRaw = search.trim();
+    const searchLower = searchRaw.toLowerCase();
+    const matriculaNorm = normalizeMatricula(searchRaw);
     const dataInicioMin = filtros.dataInicio
       ? new Date(`${filtros.dataInicio}T00:00:00`).getTime()
       : null;
@@ -76,11 +98,17 @@ const RentingReservas = () => {
       : null;
 
     const result = reservas.filter((r) => {
-      if (matriculaNorm) {
-        const m = normalizeMatricula(r.matricula ?? '');
-        if (!m.includes(matriculaNorm)) return false;
+      if (searchRaw) {
+        const condutorNif = r.condutor_id ? (motoristaNifById.get(r.condutor_id) ?? '') : '';
+        const clienteNif = r.cliente_id ? (clienteNifById.get(r.cliente_id) ?? '') : '';
+        const matches =
+          String(r.codigo).includes(searchRaw) ||
+          normalizeMatricula(r.matricula ?? '').includes(matriculaNorm) ||
+          (r.condutor_nome ?? '').toLowerCase().includes(searchLower) ||
+          condutorNif.includes(searchRaw) ||
+          clienteNif.includes(searchRaw);
+        if (!matches) return false;
       }
-      if (codigoNorm && !String(r.codigo).includes(codigoNorm)) return false;
       if (filtros.estacao !== 'todas') {
         if (r.estacao_entrega_id !== filtros.estacao && r.estacao_recolha_id !== filtros.estacao) {
           return false;
@@ -116,10 +144,19 @@ const RentingReservas = () => {
     });
 
     return result;
-  }, [reservas, matriculaSearch, filtros, sortColumn, sortDir, getEstacaoNome]);
+  }, [
+    reservas,
+    search,
+    filtros,
+    sortColumn,
+    sortDir,
+    getEstacaoNome,
+    motoristaNifById,
+    clienteNifById,
+  ]);
 
   const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
-    usePagination(filtered, 50, `${matriculaSearch}|${JSON.stringify(filtros)}`);
+    usePagination(filtered, 50, `${search}|${JSON.stringify(filtros)}`);
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
@@ -197,8 +234,17 @@ const RentingReservas = () => {
 
       <Card className="bg-card border-border">
         <CardContent className="p-0">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 border-b border-border/50">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 border-b border-border/50">
+            <div className="relative flex-1 sm:max-w-xl">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-primary" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Pesquisar por código, matrícula, motorista ou contribuinte..."
+                className="pl-10 h-11 text-base bg-primary/5 border-primary/30 focus-visible:ring-primary/40 focus-visible:border-primary"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
               <Button onClick={handleCreateClick} className="gap-2">
                 <Plus className="h-4 w-4" />
                 Criar Reserva
@@ -207,15 +253,6 @@ const RentingReservas = () => {
                 <Download className="h-4 w-4" />
                 Exportar
               </Button>
-            </div>
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={matriculaSearch}
-                onChange={(e) => setMatriculaSearch(e.target.value)}
-                placeholder="Pesquisar matrícula..."
-                className="pl-9 bg-background"
-              />
             </div>
           </div>
 

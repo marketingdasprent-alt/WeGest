@@ -71,7 +71,9 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
       };
     }
 
-    if (!dataInicio || !dataFim) {
+    // TVDE/slot não têm data de fim (contrato aberto) — não bloqueia o cálculo,
+    // já que nesses regimes o valor vem de valorTotalManual, não de dias×tarifa.
+    if (!dataInicio) {
       return {
         dias: 0,
         baseAluguer: 0,
@@ -86,7 +88,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
       };
     }
 
-    const dias = calcDias(dataInicio, dataFim);
+    const dias = dataFim ? calcDias(dataInicio, dataFim) : 0;
     const baseAluguer =
       valorTotalManual != null && valorTotalManual > 0
         ? valorTotalManual
@@ -96,11 +98,26 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
     const subtotalBruto = baseAluguer + custoCoberturas + custoExtras;
     const descontoPct = descontoPercentagem ?? 0;
     const desconto = subtotalBruto * (descontoPct / 100);
-    const subtotal = subtotalBruto - desconto;
-    const iva = subtotal * (taxaIva / 100);
-    // Taxas incidem sobre o subtotal e somam-se depois do IVA.
-    const custoTaxas = taxas.reduce((soma, t) => soma + calcTaxaValor(t, subtotal), 0);
-    const total = subtotal + iva + custoTaxas;
+    const subtotalBrutoComDesconto = subtotalBruto - desconto;
+    // Rent-a-Car: o preço da tarifa é SEM IVA — soma-se por cima. TVDE/slot:
+    // o preço já vem com IVA incluído — decompõe-se (divide), nunca soma
+    // (duplicaria o imposto). Mesma lógica da view contrato_renting_totais.
+    const isRentACar = regime === 'rent_a_car';
+    let subtotal: number;
+    let iva: number;
+    let totalComIva: number;
+    if (isRentACar) {
+      subtotal = subtotalBrutoComDesconto;
+      iva = taxaIva > 0 ? subtotal * (taxaIva / 100) : 0;
+      totalComIva = subtotal + iva;
+    } else {
+      totalComIva = subtotalBrutoComDesconto;
+      subtotal = taxaIva > 0 ? totalComIva / (1 + taxaIva / 100) : totalComIva;
+      iva = totalComIva - subtotal;
+    }
+    // Taxas incidem sobre o valor já com IVA e somam-se depois do IVA.
+    const custoTaxas = taxas.reduce((soma, t) => soma + calcTaxaValor(t, totalComIva), 0);
+    const total = totalComIva + custoTaxas;
 
     return {
       dias,
@@ -119,6 +136,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
     dataFim,
     tarifaDiaria,
     valorTotalManual,
+    regime,
     descontoPercentagem,
     taxaIva,
     coberturasPrecoDia,
@@ -156,10 +174,16 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
         </div>
 
         <div className="space-y-1.5 text-sm">
-          {!isFacturado && <Row label={`Dias`} value={String(calculo.dias)} muted />}
+          {!isFacturado && regime !== 'tvde' && regime !== 'slot' && (
+            <Row label={`Dias`} value={String(calculo.dias)} muted />
+          )}
 
           {showsManual ? (
-            <Row label="Valor manual" value={formatCurrency(valorTotalManual ?? 0)} muted />
+            <Row
+              label={regime === 'tvde' || regime === 'slot' ? 'Valor semanal' : 'Valor manual'}
+              value={formatCurrency(valorTotalManual ?? 0)}
+              muted
+            />
           ) : isFacturado ? (
             <Row label="Subtotal bruto" value={formatCurrency(calculo.subtotalBruto)} muted />
           ) : (

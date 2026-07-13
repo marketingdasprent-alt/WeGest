@@ -102,7 +102,11 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
         (p) =>
           p.tarifa_id === t.id &&
           p.modelo_id === modeloIdSel &&
-          (isTvde ? p.preco_semana != null : p.preco_dia != null)
+          // Rent-a-Car: o modelo tem preço nesta tarifa se tiver diário OU
+          // mensal (ex.: viaturas só vocacionadas para longa duração, como
+          // carrinhas de carga, costumam só ter preco_mes). modeloSemPreco,
+          // mais abaixo, é quem valida o campo certo consoante o modo actual.
+          (isTvde ? p.preco_semana != null : p.preco_dia != null || p.preco_mes != null)
       )
     );
   }, [tarifas, isTvde, modeloIdSel, precosModelo]);
@@ -123,12 +127,19 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   const precoModeloDiaRac = !isTvde ? (precoModeloSel?.preco_dia ?? null) : null;
   const precoModeloMesRac = !isTvde ? (precoModeloSel?.preco_mes ?? null) : null;
 
+  // Faturação automática: regime + ALD + duração + tarifa → valor_total.
+  // Viatura escolhida mas modelo sem preço na tarifa → bloquear/avisar (ambos os regimes).
+  // Em Rent-a-Car um modelo pode só ter preço diário OU só mensal (ex.: viaturas
+  // vocacionadas para longa duração) — o campo relevante depende do modo actual.
   const modeloSemPreco =
     !isSlot &&
     !!tarifaIdSel &&
     !!modeloIdSel &&
-    (isTvde ? precoModeloSemanaTvde == null : precoModeloDiaRac == null);
-
+    (isTvde
+      ? precoModeloSemanaTvde == null
+      : isLongaDuracao
+        ? precoModeloMesRac == null
+        : precoModeloDiaRac == null);
   const faturacao = useMemo(
     () =>
       calcularFaturacaoRenting(
@@ -207,6 +218,7 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
         form={form}
         clientes={clientes}
         isSlot={isSlot}
+        isTvde={isTvde}
         podeVerTodosRenting={podeVerTodosRenting}
         allowSlot={has('slot')}
       />

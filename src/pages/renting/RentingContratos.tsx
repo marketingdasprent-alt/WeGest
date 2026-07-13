@@ -10,6 +10,7 @@ import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 
 import { useClientes } from '@/hooks/useClientes';
 import { useContratosRenting } from '@/hooks/useContratosRenting';
+import { useContratoCondutoresPrincipais } from '@/hooks/useContratoCondutores';
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { useToast } from '@/hooks/use-toast';
 import { usePagination } from '@/hooks/usePagination';
@@ -39,7 +40,6 @@ import {
 } from '@/types/contratoRenting';
 
 const FILTROS_INICIAIS: ContratosFiltrosState = {
-  codigo: '',
   estacao: 'todas',
   dataInicio: '',
   dataFim: '',
@@ -55,8 +55,9 @@ const RentingContratos = () => {
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
   const { data: clientes = [] } = useClientes();
   const { data: contratos = [], isLoading } = useContratosRenting({ limit: HARD_LIMIT });
+  const { data: condutoresPrincipais = [] } = useContratoCondutoresPrincipais();
 
-  const [matriculaSearch, setMatriculaSearch] = useState('');
+  const [search, setSearch] = useState('');
   const [filtros, setFiltros] = useState<ContratosFiltrosState>(FILTROS_INICIAIS);
   const [sortColumn, setSortColumn] = useState<SortColumn>('codigo');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -74,6 +75,25 @@ const RentingContratos = () => {
     return m;
   }, [clientes]);
 
+  const clienteNifById = useMemo(() => {
+    const m = new Map<string, string>();
+    clientes.forEach((c) => {
+      if (c.nif) m.set(c.id, c.nif);
+    });
+    return m;
+  }, [clientes]);
+
+  const condutorInfoByContratoId = useMemo(() => {
+    const m = new Map<string, { nome: string; nif: string }>();
+    condutoresPrincipais.forEach((c) => {
+      m.set(c.contratoId, {
+        nome: (c.motoristaNome ?? '').toLowerCase(),
+        nif: c.motoristaNif ?? '',
+      });
+    });
+    return m;
+  }, [condutoresPrincipais]);
+
   const getEstacaoNome = useCallback(
     (id: string | null | undefined) => (id ? (estacaoNomeById.get(id) ?? '—') : '—'),
     [estacaoNomeById]
@@ -85,8 +105,9 @@ const RentingContratos = () => {
   );
 
   const filtered = useMemo(() => {
-    const matriculaNorm = normalizeMatricula(matriculaSearch.trim());
-    const codigoNorm = filtros.codigo.trim();
+    const searchRaw = search.trim();
+    const searchLower = searchRaw.toLowerCase();
+    const matriculaNorm = normalizeMatricula(searchRaw);
     const dataInicioMin = filtros.dataInicio
       ? new Date(`${filtros.dataInicio}T00:00:00`).getTime()
       : null;
@@ -95,11 +116,17 @@ const RentingContratos = () => {
       : null;
 
     const result = contratos.filter((c) => {
-      if (matriculaNorm) {
-        const m = normalizeMatricula(c.matricula ?? '');
-        if (!m.includes(matriculaNorm)) return false;
+      if (searchRaw) {
+        const condutor = condutorInfoByContratoId.get(c.id);
+        const clienteNif = clienteNifById.get(c.cliente_id ?? '') ?? '';
+        const matches =
+          String(c.codigo).includes(searchRaw) ||
+          normalizeMatricula(c.matricula ?? '').includes(matriculaNorm) ||
+          (condutor?.nome.includes(searchLower) ?? false) ||
+          (condutor?.nif.includes(searchRaw) ?? false) ||
+          clienteNif.includes(searchRaw);
+        if (!matches) return false;
       }
-      if (codigoNorm && !String(c.codigo).includes(codigoNorm)) return false;
       if (filtros.estacao !== 'todas') {
         if (c.estacao_entrega_id !== filtros.estacao && c.estacao_recolha_id !== filtros.estacao) {
           return false;
@@ -139,10 +166,19 @@ const RentingContratos = () => {
     });
 
     return result;
-  }, [contratos, matriculaSearch, filtros, sortColumn, sortDir, getClienteNome]);
+  }, [
+    contratos,
+    search,
+    filtros,
+    sortColumn,
+    sortDir,
+    getClienteNome,
+    condutorInfoByContratoId,
+    clienteNifById,
+  ]);
 
   const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
-    usePagination(filtered, 50, `${matriculaSearch}|${JSON.stringify(filtros)}`);
+    usePagination(filtered, 50, `${search}|${JSON.stringify(filtros)}`);
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
@@ -219,8 +255,17 @@ const RentingContratos = () => {
 
       <Card className="bg-card border-border">
         <CardContent className="p-0">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 border-b border-border/50">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 border-b border-border/50">
+            <div className="relative flex-1 sm:max-w-xl">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-primary" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Pesquisar por código, matrícula, motorista ou contribuinte..."
+                className="pl-10 h-11 text-base bg-primary/5 border-primary/30 focus-visible:ring-primary/40 focus-visible:border-primary"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
               <Button onClick={handleCreateClick} className="gap-2">
                 <Plus className="h-4 w-4" />
                 Criar Contrato
@@ -229,15 +274,6 @@ const RentingContratos = () => {
                 <Download className="h-4 w-4" />
                 Exportar
               </Button>
-            </div>
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={matriculaSearch}
-                onChange={(e) => setMatriculaSearch(e.target.value)}
-                placeholder="Pesquisar matrícula..."
-                className="pl-9 bg-background"
-              />
             </div>
           </div>
 

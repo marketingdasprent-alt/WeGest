@@ -240,6 +240,13 @@ export function ReservaTabFaturar({ reserva }: Props) {
 
   const jaFaturada = cobrancas.some((c) => c.estado === 'emitida' || c.estado === 'paga');
 
+  // Rent-a-Car: valor_total é SEM IVA — soma-se por cima para mostrar o total
+  // a cobrar. TVDE: valor_total já é o total (com IVA), mostra-se tal e qual.
+  const totalComIva =
+    reserva.regime === 'rent_a_car'
+      ? round2((reserva.valor_total ?? 0) * 1.23)
+      : (reserva.valor_total ?? 0);
+
   async function baixarPdf(inv: InvoiceMetadata) {
     setBaixandoId(inv.cobranca_id ?? inv.id);
     try {
@@ -332,7 +339,7 @@ export function ReservaTabFaturar({ reserva }: Props) {
                 {jaFaturada ? 'Reserva faturada' : 'Faturar reserva (pagamento antecipado)'}
               </p>
               <p className="text-xs text-muted-foreground">
-                Total: <span className="font-semibold">{formatCurrency(reserva.valor_total)}</span>
+                Total: <span className="font-semibold">{formatCurrency(totalComIva)}</span>
                 {jaFaturada ? ' · já faturada' : ' · IVA incluído'}
               </p>
               {jaFaturada && (

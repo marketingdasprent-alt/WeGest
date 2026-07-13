@@ -16,7 +16,12 @@ import {
   HandCoins,
   FileText,
   Pencil,
+  Repeat,
+  Pause,
+  Play,
+  Ban,
 } from 'lucide-react';
+import { descreverSemanaDoMes } from '@/lib/recorrenciaFinanceira';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -57,6 +62,20 @@ interface MovimentoFinanceiro {
   status: 'pendente' | 'pago' | 'cancelado';
   referencia: string | null;
   created_at: string;
+}
+
+interface RecorrenciaFinanceira {
+  id: string;
+  tipo: 'credito' | 'debito';
+  categoria: string | null;
+  descricao: string;
+  valor: number;
+  frequencia: 'semanal' | 'mensal';
+  semana_ancora: string;
+  data_fim: string | null;
+  max_ocorrencias: number | null;
+  ocorrencias_geradas: number;
+  status: 'ativa' | 'pausada' | 'cancelada' | 'concluida';
 }
 
 const CATEGORIAS = [
@@ -140,11 +159,25 @@ function NovoMovimentoOverlay({
       ? movimentoParaEditar.data_movimento
       : format(startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   );
+  // Repetição: 'parcelas' = lote fixo gerado já (comportamento antigo); 'semanal'/
+  // 'mensal' = regra de recorrência automática (motorista_financeiro_recorrencias),
+  // gerada progressivamente pelo cron gerar_movimentos_recorrentes.
+  const [repeticao, setRepeticao] = useState<'nenhuma' | 'parcelas' | 'semanal' | 'mensal'>(
+    isAcordo ? 'parcelas' : 'nenhuma'
+  );
+  const [duracaoTipo, setDuracaoTipo] = useState<'indefinida' | 'data' | 'ocorrencias'>(
+    'indefinida'
+  );
+  const [dataFim, setDataFim] = useState('');
+  const [maxOcorrencias, setMaxOcorrencias] = useState('4');
   const [faturaFile, setFaturaFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isRecurring = parseInt(numSemanas) > 1;
+  // 'parcelas' = lote fixo gerado já (comportamento antigo, usado também pelo
+  // acordo de reparação). 'semanal'/'mensal' = nova recorrência automática.
+  const isRecurring = repeticao === 'parcelas' && parseInt(numSemanas) > 1;
+  const isRecorrenciaAutomatica = repeticao === 'semanal' || repeticao === 'mensal';
   const valorNum = parseFloat(valor) || 0;
 
   const handleSubmit = async () => {
@@ -152,10 +185,22 @@ function NovoMovimentoOverlay({
       toast.error('Preencha a descrição e o valor');
       return;
     }
+    if (
+      isRecorrenciaAutomatica &&
+      duracaoTipo === 'ocorrencias' &&
+      !(parseInt(maxOcorrencias) > 0)
+    ) {
+      toast.error('Indique um número de ocorrências válido');
+      return;
+    }
+    if (isRecorrenciaAutomatica && duracaoTipo === 'data' && !dataFim) {
+      toast.error('Indique a data de fim');
+      return;
+    }
 
     try {
       setSubmitting(true);
-      const semanas = parseInt(numSemanas) || 1;
+      const semanas = repeticao === 'parcelas' ? parseInt(numSemanas) || 1 : 1;
 
       // Upload de fatura opcional (usa bucket já existente)
       let faturaRef = referencia.trim() || null;
@@ -199,7 +244,43 @@ function NovoMovimentoOverlay({
         return;
       }
 
-      if (semanas <= 1) {
+      if (isRecorrenciaAutomatica) {
+        // Cria a regra de recorrência + gera já a 1ª ocorrência (não esperar
+        // pelo cron de 2ª feira). O cron gerar_movimentos_recorrentes trata
+        // das semanas seguintes — ver 20260709100000_movimentos_financeiros_recorrentes.sql.
+        const { data: regra, error: regraError } = await (supabase as any)
+          .from('motorista_financeiro_recorrencias')
+          .insert({
+            motorista_id: motoristaId,
+            tipo,
+            categoria: categoria || null,
+            descricao: descricao.trim(),
+            valor: valorNum,
+            frequencia: repeticao,
+            semana_ancora: semanaInicio,
+            data_fim: duracaoTipo === 'data' ? dataFim : null,
+            max_ocorrencias: duracaoTipo === 'ocorrencias' ? parseInt(maxOcorrencias) : null,
+            referencia_base: faturaRef,
+          })
+          .select()
+          .single();
+        if (regraError) throw regraError;
+
+        const { error: primeiraError } = await (supabase as any)
+          .from('motorista_financeiro')
+          .insert({
+            motorista_id: motoristaId,
+            tipo,
+            categoria: categoria || null,
+            descricao: descricao.trim(),
+            valor: valorNum,
+            data_movimento: semanaInicio,
+            referencia: faturaRef,
+            status: 'pendente',
+            recorrencia_id: regra.id,
+          });
+        if (primeiraError) throw primeiraError;
+      } else if (semanas <= 1) {
         const { error } = await supabase.from('motorista_financeiro').insert({
           motorista_id: motoristaId,
           tipo,
@@ -243,9 +324,11 @@ function NovoMovimentoOverlay({
       }
 
       toast.success(
-        semanas > 1
-          ? `${semanas} parcelas criadas com sucesso!`
-          : 'Movimento adicionado com sucesso!'
+        isRecorrenciaAutomatica
+          ? 'Recorrência criada com sucesso!'
+          : semanas > 1
+            ? `${semanas} parcelas criadas com sucesso!`
+            : 'Movimento adicionado com sucesso!'
       );
       onSuccess();
     } catch (error: any) {
@@ -278,9 +361,13 @@ function NovoMovimentoOverlay({
               ? 'Correção de lançamento existente'
               : isAcordo
                 ? `Reparação · €${Number(reparacaoPendente!.valor).toFixed(2)} a parcelar`
-                : isRecurring
-                  ? `Gerar ${numSemanas} lançamentos semanais`
-                  : 'Lançamento único'}
+                : isRecorrenciaAutomatica
+                  ? repeticao === 'semanal'
+                    ? 'Recorrência semanal automática'
+                    : 'Recorrência mensal automática'
+                  : isRecurring
+                    ? `Gerar ${numSemanas} lançamentos semanais`
+                    : 'Lançamento único'}
           </p>
         </div>
         <Button onClick={handleSubmit} disabled={!canSubmit || submitting} className="shrink-0">
@@ -294,6 +381,8 @@ function NovoMovimentoOverlay({
             `Criar ${numSemanas} Parcelas`
           ) : isAcordo ? (
             'Confirmar Acordo'
+          ) : isRecorrenciaAutomatica ? (
+            'Criar Recorrência'
           ) : isRecurring ? (
             `Gerar ${numSemanas} Semanas`
           ) : (
@@ -501,16 +590,13 @@ function NovoMovimentoOverlay({
             </div>
           )}
 
-          {/* Parcelamento — só na criação */}
-          {!isEdicao && (
+          {/* Plano de parcelamento — exclusivo do fluxo de acordo de reparação */}
+          {!isEdicao && isAcordo && (
             <div className="space-y-4 rounded-lg border border-border p-4">
-              <h2 className="text-sm font-semibold">
-                {isAcordo ? 'Plano de Parcelamento Semanal' : 'Recorrência Semanal'}
-              </h2>
+              <h2 className="text-sm font-semibold">Plano de Parcelamento Semanal</h2>
               <p className="text-xs text-muted-foreground">
-                {isAcordo
-                  ? 'Defina em quantas semanas o motorista irá pagar. O valor total será dividido igualmente.'
-                  : 'Se este custo se repete semanalmente (ex: caução, seguros), defina o número de semanas.'}
+                Defina em quantas semanas o motorista irá pagar. O valor total será dividido
+                igualmente.
               </p>
 
               <div className="grid grid-cols-2 gap-4">
@@ -521,7 +607,7 @@ function NovoMovimentoOverlay({
                     min="1"
                     value={numSemanas}
                     onChange={(e) => setNumSemanas(e.target.value)}
-                    autoFocus={isAcordo}
+                    autoFocus
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -548,6 +634,138 @@ function NovoMovimentoOverlay({
               )}
             </div>
           )}
+
+          {/* Repetição — movimentos normais (não acordo) */}
+          {!isEdicao && !isAcordo && (
+            <div className="space-y-4 rounded-lg border border-border p-4">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <Repeat className="h-4 w-4 text-muted-foreground" />
+                Repetição
+              </h2>
+
+              <div className="space-y-1.5">
+                <Label>Este lançamento repete-se?</Label>
+                <Select
+                  value={repeticao}
+                  onValueChange={(v) => setRepeticao(v as typeof repeticao)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nenhuma">Não — lançamento único</SelectItem>
+                    <SelectItem value="parcelas">Parcelas fixas (gera já N semanas)</SelectItem>
+                    <SelectItem value="semanal">Recorrência semanal (automática)</SelectItem>
+                    <SelectItem value="mensal">Recorrência mensal (semana fixa do mês)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {repeticao === 'parcelas' && (
+                  <div className="space-y-1.5">
+                    <Label>Nº de Semanas / Parcelas</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={numSemanas}
+                      onChange={(e) => setNumSemanas(e.target.value)}
+                    />
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label>
+                    {repeticao === 'nenhuma' ? 'Data do Movimento' : 'Semana de início'}
+                  </Label>
+                  <Input
+                    type="date"
+                    value={semanaInicio}
+                    onChange={(e) => setSemanaInicio(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {repeticao === 'mensal' && semanaInicio && (
+                <p className="text-xs text-muted-foreground">
+                  Vai repetir {descreverSemanaDoMes(parseISO(semanaInicio))}.
+                </p>
+              )}
+
+              {isRecurring && valorNum > 0 && (
+                <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 p-3">
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                    {numSemanas}x parcelas de{' '}
+                    <strong>€{(valorNum / parseInt(numSemanas)).toFixed(2)}</strong> = €
+                    {valorNum.toFixed(2)} total
+                  </p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    Início: {format(parseISO(semanaInicio), 'dd/MM/yyyy', { locale: pt })}
+                  </p>
+                </div>
+              )}
+
+              {isRecorrenciaAutomatica && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Duração</Label>
+                    <Select
+                      value={duracaoTipo}
+                      onValueChange={(v) => setDuracaoTipo(v as typeof duracaoTipo)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="indefinida">Sem data de fim (até cancelar)</SelectItem>
+                        <SelectItem value="data">Até uma data</SelectItem>
+                        <SelectItem value="ocorrencias">Número de ocorrências</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {duracaoTipo === 'data' && (
+                    <div className="space-y-1.5">
+                      <Label>Data de fim</Label>
+                      <Input
+                        type="date"
+                        value={dataFim}
+                        min={semanaInicio}
+                        onChange={(e) => setDataFim(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  {duracaoTipo === 'ocorrencias' && (
+                    <div className="space-y-1.5">
+                      <Label>Número de ocorrências</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={maxOcorrencias}
+                        onChange={(e) => setMaxOcorrencias(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  {valorNum > 0 && semanaInicio && (
+                    <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 p-3">
+                      <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                        €{valorNum.toFixed(2)} / {repeticao === 'semanal' ? 'semana' : 'mês'}
+                      </p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        1ª cobrança: {format(parseISO(semanaInicio), 'dd/MM/yyyy', { locale: pt })}
+                        {duracaoTipo === 'data' && dataFim
+                          ? ` · até ${format(parseISO(dataFim), 'dd/MM/yyyy', { locale: pt })}`
+                          : ''}
+                        {duracaoTipo === 'ocorrencias'
+                          ? ` · ${maxOcorrencias || 0} ocorrências`
+                          : ''}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -565,11 +783,28 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   const [faturaUrlAcordo, setFaturaUrlAcordo] = useState<string | null>(null);
   // mapa: movimento.id → URL da fatura do ticket associado
   const [movimentoFaturaMap, setMovimentoFaturaMap] = useState<Map<string, string>>(new Map());
+  const [recorrencias, setRecorrencias] = useState<RecorrenciaFinanceira[]>([]);
   const { canEdit } = useCanEditFinanceiro();
 
   useEffect(() => {
     loadMovimentos();
+    loadRecorrencias();
   }, [motoristaId]);
+
+  const loadRecorrencias = async () => {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('motorista_financeiro_recorrencias')
+        .select('*')
+        .eq('motorista_id', motoristaId)
+        .neq('status', 'cancelada')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setRecorrencias((data as RecorrenciaFinanceira[]) || []);
+    } catch (error) {
+      console.error('Erro ao carregar recorrências:', error);
+    }
+  };
 
   const loadMovimentos = async () => {
     try {
@@ -686,6 +921,29 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
     }
   };
 
+  const handleAlterarRecorrencia = async (
+    id: string,
+    status: 'ativa' | 'pausada' | 'cancelada'
+  ) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('motorista_financeiro_recorrencias')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+      toast.success(
+        status === 'pausada'
+          ? 'Recorrência pausada'
+          : status === 'ativa'
+            ? 'Recorrência retomada'
+            : 'Recorrência cancelada'
+      );
+      loadRecorrencias();
+    } catch (error) {
+      toast.error('Erro ao atualizar recorrência');
+    }
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(value);
   };
@@ -729,6 +987,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
           onSuccess={() => {
             handleCloseOverlay();
             loadMovimentos();
+            loadRecorrencias();
           }}
         />
       )}
@@ -783,6 +1042,89 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
             </CardContent>
           </Card>
         </div>
+
+        {/* Recorrências ativas */}
+        {recorrencias.filter((r) => r.status === 'ativa' || r.status === 'pausada').length > 0 && (
+          <SectionCard
+            icon={<Repeat className="h-4 w-4" />}
+            title="Recorrências Ativas"
+            headerClassName="bg-purple-50 dark:bg-purple-950/30"
+          >
+            <div className="space-y-2">
+              {recorrencias
+                .filter((r) => r.status === 'ativa' || r.status === 'pausada')
+                .map((rec) => (
+                  <div
+                    key={rec.id}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg border p-3',
+                      rec.status === 'pausada' && 'opacity-60 bg-muted/30'
+                    )}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-sm">{rec.descricao}</p>
+                        <Badge variant={rec.tipo === 'credito' ? 'default' : 'secondary'}>
+                          {rec.tipo === 'credito' ? 'Crédito' : 'Débito'}
+                        </Badge>
+                        <Badge variant="outline">
+                          {rec.frequencia === 'semanal' ? 'Semanal' : 'Mensal'}
+                        </Badge>
+                        {rec.status === 'pausada' && (
+                          <Badge variant="outline" className="border-amber-500 text-amber-600">
+                            Pausada
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {formatCurrency(Number(rec.valor))} ·{' '}
+                        {rec.frequencia === 'mensal'
+                          ? descreverSemanaDoMes(parseISO(rec.semana_ancora))
+                          : `desde ${format(parseISO(rec.semana_ancora), 'dd/MM/yyyy', { locale: pt })}`}
+                        {rec.data_fim
+                          ? ` · até ${format(parseISO(rec.data_fim), 'dd/MM/yyyy', { locale: pt })}`
+                          : rec.max_ocorrencias
+                            ? ` · ${rec.ocorrencias_geradas}/${rec.max_ocorrencias} ocorrências`
+                            : ' · sem data de fim'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {rec.status === 'ativa' ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Pausar"
+                          onClick={() => handleAlterarRecorrencia(rec.id, 'pausada')}
+                          className="text-amber-600 hover:text-amber-700"
+                        >
+                          <Pause className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Retomar"
+                          onClick={() => handleAlterarRecorrencia(rec.id, 'ativa')}
+                          className="text-green-600 hover:text-green-700"
+                        >
+                          <Play className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Cancelar recorrência"
+                        onClick={() => handleAlterarRecorrencia(rec.id, 'cancelada')}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Ban className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </SectionCard>
+        )}
 
         {/* Histórico */}
         <SectionCard

@@ -111,14 +111,18 @@ interface RealizarFromTokenArgs {
   /** Entrega/recolha simples — grava km_saida/km_entrada no contrato dentro da RPC (SECURITY DEFINER, não exige permissão renting_contratos a quem confirma o token). */
   km?: number;
   combustivel?: string;
+  /** Nível de bateria (viaturas elétricas/híbridas) — paralelo a `combustivel`. */
+  eletricidade?: string;
   /** Só para tipo='troca' — dados físicos das duas viaturas envolvidas. */
   troca?: {
     viaturaAntigaId: string | null;
     kmAntiga: number | null;
     combustivelAntiga: string | null;
+    eletricidadeAntiga: string | null;
     viaturaNovaId: string | null;
     kmNova: number | null;
     combustivelNova: string | null;
+    eletricidadeNova: string | null;
   };
 }
 
@@ -138,6 +142,7 @@ export function useRealizarFromToken() {
       tipo,
       km,
       combustivel,
+      eletricidade,
       troca,
     }: RealizarFromTokenArgs): Promise<void> => {
       if (tipo === 'troca') {
@@ -156,9 +161,11 @@ export function useRealizarFromToken() {
           p_viatura_antiga_id: troca.viaturaAntigaId,
           p_km_antiga: troca.kmAntiga,
           p_combustivel_antiga: troca.combustivelAntiga,
+          p_eletricidade_antiga: troca?.eletricidadeAntiga ?? null,
           p_viatura_nova_id: troca.viaturaNovaId,
           p_km_nova: troca.kmNova,
           p_combustivel_nova: troca.combustivelNova,
+          p_eletricidade_nova: troca?.eletricidadeNova ?? null,
         });
         if (error) throw error;
         return;
@@ -167,8 +174,9 @@ export function useRealizarFromToken() {
       // o evento realizado), grava km/combustível e marca o token como usado.
       const { error } = await supabase.rpc('realizar_token_realizacao', {
         p_token: token,
-        p_km: km,
-        p_combustivel: combustivel,
+        p_km: km ?? null,
+        p_combustivel: combustivel ?? null,
+        p_eletricidade: eletricidade ?? null,
       });
       if (error) throw error;
     },

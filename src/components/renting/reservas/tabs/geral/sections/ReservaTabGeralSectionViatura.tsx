@@ -56,6 +56,14 @@ export function ReservaTabGeralSectionViatura({
 
   const viaturaIdSel = form.watch('viatura_id');
   const viaturaSelected = viaturas.find((x) => x.id === viaturaIdSel) ?? null;
+  const tarifaIdSel = form.watch('tarifa_id');
+  const modeloIdSel = viaturaSelected?.modelo_id ?? null;
+  // Viatura escolhida mas NUNCA associada a um modelo de catálogo
+  // (viaturas.modelo_id null — normalmente ficha antiga/importada só com os
+  // campos de texto marca/modelo). Os preços por modelo (renting_tarifa_
+  // precos_modelo) são sempre chave por modelo_id — sem essa ligação o preço
+  // nunca casa com NENHUMA tarifa, mesmo que exista e esteja bem configurada.
+  const viaturaSemModeloCatalogo = !isSlot && !!tarifaIdSel && !!viaturaSelected && !modeloIdSel;
 
   const aplicarDadosViatura = (v: ViaturaBasic) => {
     const grupo = v.grupo_id ? grupos.find((g) => g.id === v.grupo_id) : null;
@@ -73,7 +81,7 @@ export function ReservaTabGeralSectionViatura({
         (p) =>
           p.tarifa_id === tarifaAtualId &&
           p.modelo_id === v.modelo_id &&
-          (isTvde ? p.preco_semana != null : p.preco_dia != null)
+          (isTvde ? p.preco_semana != null : p.preco_dia != null || p.preco_mes != null)
       );
       if (!cobre) form.setValue('tarifa_id', null, { shouldDirty: true });
     }
@@ -262,6 +270,19 @@ export function ReservaTabGeralSectionViatura({
                 >
                   Definir grupo na ficha da viatura →
                 </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {viaturaSemModeloCatalogo && (
+            <Alert variant="destructive" className="mt-3">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Viatura sem modelo associado</AlertTitle>
+              <AlertDescription>
+                A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) não está
+                associada a nenhum modelo do catálogo — os preços por modelo não conseguem casar
+                com nenhuma tarifa, mesmo que estejam bem configurados. Associa o modelo em
+                Viaturas antes de continuar.
               </AlertDescription>
             </Alert>
           )}

@@ -123,14 +123,18 @@ export async function gerarRelatoriosIndividuaisPDF(params: {
       const receitaAjustada = motorista.recibo_verde
         ? motorista.total_faturado
         : motorista.total_faturado / 1.06;
+      // Inclui os débitos automáticos do financeiro (motorista.outros_custos, do
+      // motor de recorrências) além do legado motorista_custos_adicionais
+      // (extraCosts). Não duplicam: após a migração para o motor de recorrências,
+      // uma semana nunca tem o mesmo custo nas duas fontes.
+      const outrosCustosTotal =
+        extraCosts.outros + extraCosts.caucao + extraCosts.seguros + motorista.outros_custos;
       const totalDespesas =
         motorista.aluguer +
         motorista.combustivel +
         motorista.portagens +
         motorista.reparacoes +
-        extraCosts.outros +
-        extraCosts.caucao +
-        extraCosts.seguros;
+        outrosCustosTotal;
 
       const pdfData = {
         driver_name: motorista.driver_name,
@@ -149,7 +153,7 @@ export async function gerarRelatoriosIndividuaisPDF(params: {
           combustivel: motorista.combustivel,
           portagens: motorista.portagens,
           reparacoes: motorista.reparacoes,
-          outros: extraCosts.outros + extraCosts.caucao + extraCosts.seguros,
+          outros: outrosCustosTotal,
           total: totalDespesas,
         },
         resumo: {

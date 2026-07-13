@@ -4,7 +4,9 @@
  * no software de faturação configurado e regista a conta-corrente. Ao converter
  * a reserva em contrato, este herda a cobrança (trigger) — não refatura.
  *
- * Convenção: na reserva, `valor_total` é COM IVA incluído (ver ReservaTabCaixa).
+ * Convenção em `valor_total`: Rent-a-Car — SEM IVA (soma-se aqui). TVDE/slot —
+ * COM IVA incluído (decompõe-se aqui, sem alterar o total). Mesma regra do
+ * lado do contrato (ver ContratoTabFaturar / contrato_renting_totais).
  */
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -67,12 +69,24 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
   const [dataVenc, setDataVenc] = useState<string>(maisDias(30));
   const [submitting, setSubmitting] = useState(false);
 
-  // valor_total da reserva é COM IVA; em tvde/slot o IVA é 0.
+  // Rent-a-Car: valor_total é SEM IVA — soma-se por cima. TVDE/slot: valor_total
+  // já é COM IVA — decompõe-se (divide), nunca soma.
   const calc = useMemo(() => {
-    const totalComIva = round2(reserva.valor_total ?? 0);
+    const isRentACar = reserva.regime === 'rent_a_car';
     const taxaIva = reserva.regime === 'tvde' || reserva.regime === 'slot' ? 0 : 23;
-    const subtotal = taxaIva > 0 ? round2(totalComIva / (1 + taxaIva / 100)) : totalComIva;
-    const iva = round2(totalComIva - subtotal);
+    const rawTotal = round2(reserva.valor_total ?? 0);
+    let subtotal: number;
+    let iva: number;
+    let totalComIva: number;
+    if (isRentACar && taxaIva > 0) {
+      subtotal = rawTotal;
+      iva = round2(subtotal * (taxaIva / 100));
+      totalComIva = round2(subtotal + iva);
+    } else {
+      totalComIva = rawTotal;
+      subtotal = taxaIva > 0 ? round2(totalComIva / (1 + taxaIva / 100)) : totalComIva;
+      iva = round2(totalComIva - subtotal);
+    }
     return { totalComIva, taxaIva, subtotal, iva };
   }, [reserva.valor_total, reserva.regime]);
 

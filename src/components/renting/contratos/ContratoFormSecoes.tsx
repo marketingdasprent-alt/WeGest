@@ -124,7 +124,9 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         (p) =>
           p.tarifa_id === t.id &&
           p.modelo_id === modeloIdSel &&
-          (isTvde ? p.preco_semana != null : p.preco_dia != null)
+          // Rent-a-Car: diário OU mensal conta como "tem preço" (viaturas de
+          // longa duração, como carrinhas de carga, só têm preco_mes).
+          (isTvde ? p.preco_semana != null : p.preco_dia != null || p.preco_mes != null)
       )
     );
   }, [tarifas, isTvde, modeloIdSel, precosModelo]);
@@ -206,6 +208,7 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
       <SectionGeral
         form={form}
         tarifaReadOnly
+        estadoOperacionalReadOnly={!!contratoId}
         tarifaAction={
           contratoId ? (
             <BotaoPedirAlteracao

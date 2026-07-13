@@ -35,9 +35,9 @@ import { ContratoDocumentosDialog } from '@/components/renting/contratos/Contrat
 import { ContratoDeleteConfirm } from '@/components/renting/contratos/ContratoDeleteConfirm';
 import { ContratoEstadoActions } from '@/components/renting/contratos/ContratoEstadoActions';
 import {
-  ContratoNovaVersaoDialog,
+  FecharContratoDialog,
   type AlteracaoMaterial,
-} from '@/components/renting/contratos/ContratoNovaVersaoDialog';
+} from '@/components/renting/contratos/FecharContratoDialog';
 import { ContratoTabHistorico } from '@/components/renting/contratos/ContratoTabHistorico';
 import { RealizarEntregaDialog } from '@/components/renting/contratos/RealizarEntregaDialog';
 import { ContratoTabAnexos } from '@/components/renting/contratos/ContratoTabAnexos';
@@ -87,7 +87,10 @@ const ContratoForm = () => {
     novaVersaoCtx,
     setNovaVersaoCtx,
     realizarDialog,
+    setRealizarDialog,
     confirmarRealizacaoDireta,
+    setConfirmarRealizacaoDireta,
+    marcarRealizacaoDireta,
     docsDialogOpen,
     setDocsDialogOpen,
     viaturasParaSelecao,
@@ -113,6 +116,9 @@ const ContratoForm = () => {
     handleClienteCriado,
     handleMotoristaCriado,
   } = useContratoForm();
+
+  const motoristaIdPrincipal =
+    condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null;
 
   const abriuEntregaAoCriarRef = useRef(false);
 
@@ -242,10 +248,76 @@ const ContratoForm = () => {
         <div className="mb-3 flex flex-col gap-2 rounded-md border border-primary/40 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-2 text-sm">
             <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <p><strong>{realizacaoPendente.tipo === 'entrega' ? 'Entrega' : 'Recolha'} pendente</strong> — regista a {realizacaoPendente.tipo === 'entrega' ? 'entrega' : 'recolha'} da viatura (fotos, km e confirmação) quando estiver pronta.</p>
+            <p>
+              <strong>
+                {realizacaoPendente.tipo === 'entrega' ? 'Entrega' : 'Recolha'} pendente
+              </strong>{' '}
+              — regista a {realizacaoPendente.tipo === 'entrega' ? 'entrega' : 'recolha'} da viatura
+              (fotos, km e confirmação) quando estiver pronta.
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() =>
+                setRealizarDialog({
+                  eventoId: realizacaoPendente.id,
+                  tipo: realizacaoPendente.tipo,
+                })
+              }
+              className="gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Realizar {realizacaoPendente.tipo === 'entrega' ? 'entrega' : 'recolha'}
+            </Button>
+            {realizacaoPendente.tipo === 'entrega' && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmarRealizacaoDireta(true)}
+                disabled={marcarRealizacaoDireta.isPending}
+                title="Marca a entrega como realizada sem passar pelo check (fotos/km) — para contratos já existentes no Any Rent."
+              >
+                {marcarRealizacaoDireta.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Any Rent'
+                )}
+              </Button>
+            )}
           </div>
         </div>
       )}
+
+      {/* Confirmação do atalho "marcar entrega como já realizada" (sem check).
+          Recolha/fecho não têm atalho — passam sempre por "Fechar contrato",
+          pelo fluxo QR/Realizar recolha, ou por troca de viatura. */}
+      <AlertDialog open={confirmarRealizacaoDireta} onOpenChange={setConfirmarRealizacaoDireta}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Marcar entrega como já realizada?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O contrato passa a "Em curso" sem registar fotos, km ou confirmação no terreno. Usa
+              isto só para contratos já existentes no <strong>Any Rent</strong> — essa informação
+              nunca existiu porque foram migrados de outro sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!contrato || !realizacaoPendente) return;
+                marcarRealizacaoDireta.mutate({ contratoId: contrato.id });
+                setConfirmarRealizacaoDireta(false);
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
         <Card className="bg-card border-border">
@@ -373,13 +445,49 @@ const ContratoForm = () => {
         onMotoristaCreated={(m) => handleMotoristaCriado(m.id)}
       />
 
-      <ContratoNovaVersaoDialog
-        open={novaVersaoCtx !== null}
-        onOpenChange={(o) => { if (!o) setNovaVersaoCtx(null); }}
-        alteracoes={novaVersaoCtx?.alteracoes ?? []}
-        isPending={false}
-        onConfirmar={confirmarNovaVersao}
+      {/* Troca/upgrade/downgrade: alteração material detectada no submit
+          (ver detectarAlteracoesMateriais) abre o mesmo popup de fecho
+          normal, em modo troca — fecha o contrato actual a sério e só
+          depois cria a nova versão com os valores novos (confirmarNovaVersao,
+          chamado via onFechado). */}
+      {contrato && (
+        <FecharContratoDialog
+          open={novaVersaoCtx !== null}
+          onOpenChange={(o) => {
+            if (!o) setNovaVersaoCtx(null);
+          }}
+          contratoId={contrato.id}
+          contratoCodigo={contrato.codigo}
+          motoristaId={motoristaIdPrincipal}
+          matricula={contrato.matricula}
+          viaturaId={contrato.viatura_id}
+          alteracoesTroca={novaVersaoCtx?.alteracoes ?? []}
+          onFechado={confirmarNovaVersao}
+        />
+      )}
+
+      <RealizarEntregaDialog
+        open={!!realizarDialog}
+        onOpenChange={(o) => {
+          if (!o) setRealizarDialog(null);
+        }}
+        eventoId={realizarDialog?.eventoId ?? null}
+        tipo={realizarDialog?.tipo ?? 'entrega'}
+        resumo={contrato ? `Contrato #${contrato.codigo} · ${contrato.matricula ?? ''}` : undefined}
       />
+
+      {isEdit && contrato && (
+        <ContratoDocumentosDialog
+          open={docsDialogOpen}
+          onOpenChange={setDocsDialogOpen}
+          contrato={contrato}
+          condutores={condutoresDb ?? []}
+          clientes={clientes}
+          motoristas={motoristas}
+          viatura={viaturas.find((v) => v.id === contrato.viatura_id) ?? null}
+          empresas={empresas}
+        />
+      )}
     </div>
   );
 };

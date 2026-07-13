@@ -52,7 +52,7 @@ import type {
   TaxaFormItem,
 } from '@/types/contratoRenting';
 import type { CondutorFormItem } from '@/types/reserva';
-import type { AlteracaoMaterial } from '@/components/renting/contratos/ContratoNovaVersaoDialog';
+import type { AlteracaoMaterial } from '@/components/renting/contratos/FecharContratoDialog';
 import {
   DEFAULT_CONTRATO_VALUES,
   contratoFormSchema,
@@ -127,7 +127,10 @@ export interface UseContratoFormReturn {
   novaVersaoCtx: { alteracoes: AlteracaoMaterial[]; valores: ContratoFormValues } | null;
   setNovaVersaoCtx: (ctx: { alteracoes: AlteracaoMaterial[]; valores: ContratoFormValues } | null) => void;
   realizarDialog: { eventoId: string; tipo: 'entrega' | 'recolha' } | null;
+  setRealizarDialog: (dialog: { eventoId: string; tipo: 'entrega' | 'recolha' } | null) => void;
   confirmarRealizacaoDireta: boolean;
+  setConfirmarRealizacaoDireta: (open: boolean) => void;
+  marcarRealizacaoDireta: ReturnType<typeof useMarcarRealizacaoDireta>;
   docsDialogOpen: boolean;
   setDocsDialogOpen: (open: boolean) => void;
 
@@ -1006,7 +1009,10 @@ export function useContratoForm(): UseContratoFormReturn {
     novaVersaoCtx,
     setNovaVersaoCtx,
     realizarDialog,
+    setRealizarDialog,
     confirmarRealizacaoDireta,
+    setConfirmarRealizacaoDireta,
+    marcarRealizacaoDireta,
     docsDialogOpen,
     setDocsDialogOpen,
     viaturasParaSelecao,

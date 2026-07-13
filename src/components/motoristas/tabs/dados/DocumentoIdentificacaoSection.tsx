@@ -37,7 +37,7 @@ export function DocumentoIdentificacaoSection({ control, motorista }: DocumentoI
           name="documento_tipo"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Tipo de Documento</FormLabel>
+              <FormLabel>Tipo de Documento <span className="text-red-500">*</span></FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
@@ -60,7 +60,7 @@ export function DocumentoIdentificacaoSection({ control, motorista }: DocumentoI
           name="documento_numero"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nº do Documento</FormLabel>
+              <FormLabel>Nº do Documento <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <Input {...field} />
               </FormControl>
@@ -73,7 +73,7 @@ export function DocumentoIdentificacaoSection({ control, motorista }: DocumentoI
           name="documento_validade"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Validade</FormLabel>
+              <FormLabel>Validade <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <Input type="date" {...field} />
               </FormControl>

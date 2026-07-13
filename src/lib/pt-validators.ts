@@ -72,8 +72,8 @@ export function formatarCodigoPostal(value: string): string {
 
 const DOC_RULES: Record<string, { regex: RegExp; hint: string }> = {
   cc: {
-    regex: /^\d{8}([A-Z]{2}\d)?$/,
-    hint: '8 dígitos + 2 letras + 1 dígito (ex: 12345678ZZ4)',
+    regex: /^\d{8}(\d[A-Z]{2}\d)?$/,
+    hint: '8 dígitos + 1 dígito de controlo + 2 letras + 1 dígito de controlo (ex: 123456789ZZ4)',
   },
   bi: {
     regex: /^\d{8}$/,
@@ -211,7 +211,9 @@ export function validarNumeroDocumento(
   if (!numero.trim()) return { valid: false, message: 'Número do documento é obrigatório' };
   const rule = DOC_RULES[tipo?.toLowerCase()];
   if (!rule) return { valid: true };
-  const clean = numero.trim().toUpperCase();
+  // Remove espaços internos — o CC costuma escrever-se em blocos
+  // ("12345678 9 ZZ 4") tal como aparece impresso no cartão físico.
+  const clean = numero.replace(/\s/g, '').toUpperCase();
   if (!rule.regex.test(clean)) {
     return { valid: false, message: `Formato inválido — ${rule.hint}` };
   }

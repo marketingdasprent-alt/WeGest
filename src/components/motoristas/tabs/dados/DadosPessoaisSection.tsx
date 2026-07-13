@@ -122,7 +122,7 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           name="nif"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>NIF</FormLabel>
+              <FormLabel>NIF <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <Input {...field} />
               </FormControl>
@@ -135,7 +135,7 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>Email <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <Input type="email" {...field} />
               </FormControl>
@@ -148,7 +148,7 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           name="iban"
           render={({ field }) => (
             <FormItem className="sm:col-span-2">
-              <FormLabel>IBAN</FormLabel>
+              <FormLabel>IBAN <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <Input placeholder="PT50..." {...field} />
               </FormControl>
@@ -161,7 +161,7 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           name="telefone"
           render={({ field }) => (
             <FormItem className="sm:col-span-2">
-              <FormLabel>Telefone</FormLabel>
+              <FormLabel>Telefone <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <PhoneInput
                   value={field.value || ''}

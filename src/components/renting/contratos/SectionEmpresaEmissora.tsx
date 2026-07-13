@@ -16,6 +16,10 @@ interface SectionEmpresaEmissoraProps {
 
 export const SectionEmpresaEmissora: React.FC<SectionEmpresaEmissoraProps> = ({ form }) => {
   const { podeVerTodosRenting } = usePermissions();
+  // Gestor responsável só faz sentido em TVDE/slot (gestão de frota de
+  // motoristas) — em Rent-a-Car não há gestor a atribuir.
+  const regime = form.watch('regime');
+  const mostraGestor = podeVerTodosRenting && regime !== 'rent_a_car';
   return (
     <div>
       <SectionHeader
@@ -31,13 +35,13 @@ export const SectionEmpresaEmissora: React.FC<SectionEmpresaEmissoraProps> = ({ 
           name="emissor_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="sr-only">Empresa emissora</FormLabel>
+              <FormLabel>Empresa emissora</FormLabel>
               <EmissorSelect value={field.value} onChange={field.onChange} />
               <FormMessage />
             </FormItem>
           )}
         />
-        {podeVerTodosRenting && (
+        {mostraGestor && (
           <FormField
             control={form.control}
             name="gestor_id"
