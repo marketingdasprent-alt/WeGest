@@ -13,6 +13,12 @@ import { EmailResumoDialog } from './motorista-resumo/sections/EmailResumoDialog
 import { useMotoristaResumoData } from './motorista-resumo/useMotoristaResumoData';
 import { deriveResumoFinanceiro } from './motorista-resumo/resumoFinanceiro';
 import { generateResumoPrintHTML } from './motorista-resumo/generateResumoPrintHTML';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useOrgId } from '@/contexts/TenantContext';
+
+// Linha Gorjeta: dados sensíveis (rendimento pessoal do motorista) — só
+// visível para admins da org dona dos dados, nunca para motoristas.
+const DECADA_OUSADA_ORG_ID = '11111111-1111-1111-1111-111111111111';
 
 /* ───────── Exported types ───────── */
 
@@ -92,6 +98,9 @@ function saveSettings(s: PrintSettings) {
 
 export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange }: Props) {
   const logoSrc = useThemedLogo();
+  const { isAdmin } = usePermissions();
+  const orgId = useOrgId();
+  const showGorjeta = isAdmin && orgId === DECADA_OUSADA_ORG_ID;
   const {
     loading,
     matricula,
@@ -156,16 +165,17 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
 
   // Cálculo puro (testado em resumoFinanceiro.test.ts). A gorjeta entra uma
   // única vez, na receita ajustada — não voltar a somar no total a receber.
-  const { receitasExibidas, receitaAjustada, totalAReceber, liquido } = deriveResumoFinanceiro({
-    isImportado,
-    reciboVerde: motorista.recibo_verde,
-    receitas,
-    gorjetaBolt,
-    gorjetaUber,
-    totalDespesas,
-    valoresSemanaAnterior,
-    liquidoImportado: motorista.liquido,
-  });
+  const { receitasExibidas, receitaAjustada, totalAReceber, liquido, gorjeta } =
+    deriveResumoFinanceiro({
+      isImportado,
+      reciboVerde: motorista.recibo_verde,
+      receitas,
+      gorjetaBolt,
+      gorjetaUber,
+      totalDespesas,
+      valoresSemanaAnterior,
+      liquidoImportado: motorista.liquido,
+    });
 
   const fmt = (value: number) =>
     new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
@@ -363,6 +373,8 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             totalAReceber={totalAReceber}
             liquido={liquido}
             motoristaId={motorista.motorista_id}
+            gorjeta={gorjeta}
+            showGorjeta={showGorjeta}
           />
 
           <ResumoActionBar
