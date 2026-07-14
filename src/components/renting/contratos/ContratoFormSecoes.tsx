@@ -147,7 +147,9 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
 
   const precoModeloSel = useMemo(() => {
     if (!tarifaIdSel || !modeloIdSel) return null;
-    return precosModelo.find((p) => p.tarifa_id === tarifaIdSel && p.modelo_id === modeloIdSel) ?? null;
+    return (
+      precosModelo.find((p) => p.tarifa_id === tarifaIdSel && p.modelo_id === modeloIdSel) ?? null
+    );
   }, [tarifaIdSel, modeloIdSel, precosModelo]);
 
   const precoModeloSemanaTvde = isTvde ? (precoModeloSel?.preco_semana ?? null) : null;
@@ -178,7 +180,15 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         precoModeloDiaRac,
         precoModeloMesRac
       ),
-    [regime, isLongaDuracao, dias, tarifaAtual, precoModeloSemanaTvde, precoModeloDiaRac, precoModeloMesRac]
+    [
+      regime,
+      isLongaDuracao,
+      dias,
+      tarifaAtual,
+      precoModeloSemanaTvde,
+      precoModeloDiaRac,
+      precoModeloMesRac,
+    ]
   );
 
   const [dialogAberto, setDialogAberto] = useState<TipoPedidoAlteracao | null>(null);
@@ -275,11 +285,14 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                   { label: 'Tarifa', value: tarifaAtual.nome },
                   {
                     label: 'Modelo',
-                    value: viaturaSelected ? `${viaturaSelected.marca} ${viaturaSelected.modelo}` : '—',
+                    value: viaturaSelected
+                      ? `${viaturaSelected.marca} ${viaturaSelected.modelo}`
+                      : '—',
                   },
                   {
                     label: 'Preço / semana',
-                    value: precoModeloSemanaTvde != null ? `${precoModeloSemanaTvde} €` : 'Sem preço',
+                    value:
+                      precoModeloSemanaTvde != null ? `${precoModeloSemanaTvde} €` : 'Sem preço',
                   },
                   { label: 'Faturação', value: 'Semanal' },
                 ]
@@ -287,7 +300,9 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                   { label: 'Tarifa', value: tarifaAtual.nome },
                   {
                     label: 'Modelo',
-                    value: viaturaSelected ? `${viaturaSelected.marca} ${viaturaSelected.modelo}` : '—',
+                    value: viaturaSelected
+                      ? `${viaturaSelected.marca} ${viaturaSelected.modelo}`
+                      : '—',
                   },
                   {
                     label: 'Preço / dia',
