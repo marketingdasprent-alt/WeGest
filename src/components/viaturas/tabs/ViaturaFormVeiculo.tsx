@@ -43,6 +43,12 @@ interface ViaturaFormVeiculoProps {
     tarifa_nome: string;
     preco_semana: number;
   }>;
+  tarifasRacModelo: Array<{
+    modelo_id: string;
+    tarifa_nome: string;
+    preco_dia: number | null;
+    preco_mes: number | null;
+  }>;
   estacoes: Estacao[];
 }
 
@@ -56,6 +62,7 @@ export function ViaturaFormVeiculo({
   grupos,
   allTarifas,
   tarifasTvdeModelo,
+  tarifasRacModelo,
   estacoes,
 }: ViaturaFormVeiculoProps) {
   // is_slot deriva do TIPO: ao escolher o tipo "SLOT", is_slot é ligado
@@ -325,18 +332,61 @@ export function ViaturaFormVeiculo({
             );
           }
 
-          // Grupo sem tarifa ativa (allTarifas já vem filtrado por ativa=true) e
-          // sem tarifa TVDE por modelo: avisa que o aluguer não será cobrado no
-          // resumo do motorista.
+          // Rent-a-Car também precifica por MODELO (renting_tarifa_precos_modelo),
+          // não por grupo — o preço por grupo em `renting_tarifas` é um campo
+          // legado que a página de Tarifas já não preenche. Uma viatura com
+          // preço activo para o seu modelo não deve mostrar o aviso de "sem
+          // tarifa" só por o grupo em si não ter preço direto.
+          const tarifasRacDoModelo = !isTvde
+            ? tarifasRacModelo.filter((t) => t.modelo_id === modeloId)
+            : [];
+
+          if (tarifas.length === 0 && tarifasRacDoModelo.length > 0) {
+            const fmtRac = (v: number | null) =>
+              v != null
+                ? new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v)
+                : null;
+            return (
+              <div className="md:col-span-3 rounded-lg border bg-muted/20 p-4">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                  Tarifa Rent-a-Car (por modelo)
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {tarifasRacDoModelo.map((t) => (
+                    <div key={t.tarifa_nome} className="space-y-1">
+                      <p className="text-xs text-muted-foreground">{t.tarifa_nome}</p>
+                      {t.preco_dia != null && (
+                        <p className="text-sm font-medium">
+                          {fmtRac(t.preco_dia)}{' '}
+                          <span className="text-xs text-muted-foreground">/dia</span>
+                        </p>
+                      )}
+                      {t.preco_mes != null && (
+                        <p className="text-sm font-semibold text-primary">
+                          {fmtRac(t.preco_mes)}{' '}
+                          <span className="text-xs text-muted-foreground">/mês</span>
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+
+          // Grupo sem tarifa ativa (allTarifas já vem filtrado por ativa=true),
+          // sem tarifa TVDE por modelo e sem tarifa Rent-a-Car por modelo: avisa
+          // que o aluguer não será cobrado no resumo do motorista.
           if (tarifas.length === 0) {
             return (
               <div className="md:col-span-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/20">
                 <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                  ⚠ Este grupo não tem tarifa ativa configurada
+                  ⚠ Esta viatura não tem tarifa ativa configurada
                 </p>
                 <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">
-                  O aluguer aparecerá a 0€ no resumo do motorista. Configure uma tarifa em Renting →
-                  Tarifas para este grupo{isTvde ? ' (ou uma tarifa TVDE para este modelo)' : ''}.
+                  O aluguer aparecerá a 0€ no resumo do motorista. Configure em Renting → Tarifas um
+                  preço para o modelo desta viatura
+                  {isTvde ? ' (tarifa TVDE)' : ' (tarifa Rent-a-Car)'}.
                 </p>
               </div>
             );
