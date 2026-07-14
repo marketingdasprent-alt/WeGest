@@ -291,7 +291,9 @@ export function useContratoForm(): UseContratoFormReturn {
   };
 
   // ── Form ──────────────────────────────────────────────────────
-  const hidratadoDaReserva = useRef(false);
+  // Garante que a hidratação (contrato existente OU reserva) só corre UMA vez —
+  // senão um refetch (react-query) volta a fazer reset e apaga edições/condutores.
+  const hidratou = useRef(false);
 
   const form = useForm<ContratoFormValues>({
     resolver: zodResolver(contratoFormSchema),
@@ -306,8 +308,12 @@ export function useContratoForm(): UseContratoFormReturn {
   }, [isEdit, reservaIdFromQuery, navigate]);
 
   // Hydration: contrato existente OU pré-preenchimento via reserva_id
+  // Só corre UMA vez — depois disso o utilizador pode editar livremente
+  // sem que refetchs (react-query) lhe apaguem as alterações.
   useEffect(() => {
+    if (hidratou.current) return;
     if (isEdit && contrato) {
+      hidratou.current = true;
       form.reset({
         cliente_id: contrato.cliente_id,
         viatura_id: contrato.viatura_id,
@@ -364,8 +370,21 @@ export function useContratoForm(): UseContratoFormReturn {
         return;
       }
       if (condutoresDaReserva === undefined) return;
-      if (hidratadoDaReserva.current) return;
-      hidratadoDaReserva.current = true;
+      // Fallback do grupo (reserva antiga/sem `grupo` gravado) — resolve a
+      // partir da viatura. Se a viatura já carregou e tem grupo_id mas a
+      // lista `grupos` ainda não chegou, NÃO marca como hidratado: tenta de
+      // novo no próximo render, senão o grupo ficava vazio para sempre
+      // (bloqueia tarifa/preço) por uma corrida de carregamento.
+      let grupoResolvido = reservaFromQuery.grupo ?? '';
+      if (!grupoResolvido) {
+        const via = viaturas.find((v) => v.id === reservaFromQuery.viatura_id);
+        if (via?.grupo_id) {
+          const g = grupos.find((gr) => gr.id === via.grupo_id);
+          if (!g) return; // grupos ainda a carregar — tenta de novo
+          grupoResolvido = g.nome;
+        }
+      }
+      hidratou.current = true;
       form.reset({
         ...DEFAULT_CONTRATO_VALUES,
         reserva_id: reservaFromQuery.id,
@@ -374,7 +393,7 @@ export function useContratoForm(): UseContratoFormReturn {
         gestor_id: reservaFromQuery.gestor_id ?? null,
         viatura_id: reservaFromQuery.viatura_id ?? '',
         matricula: reservaFromQuery.matricula ?? '',
-        grupo: reservaFromQuery.grupo ?? '',
+        grupo: grupoResolvido,
         estacao_entrega_id: reservaFromQuery.estacao_entrega_id,
         estacao_recolha_id: reservaFromQuery.estacao_recolha_id,
         data_inicio: isoToLocalInput(reservaFromQuery.data_inicio),
@@ -402,7 +421,17 @@ export function useContratoForm(): UseContratoFormReturn {
           })),
       });
     }
-  }, [isEdit, contrato, reservaFromQuery, condutoresDaReserva, navigate, toast, form]);
+  }, [
+    isEdit,
+    contrato,
+    reservaFromQuery,
+    condutoresDaReserva,
+    viaturas,
+    grupos,
+    navigate,
+    toast,
+    form,
+  ]);
 
   // Hydration: condutores (separado — request separado)
   useEffect(() => {
@@ -497,7 +526,11 @@ export function useContratoForm(): UseContratoFormReturn {
     });
   }, [regime, orgDefinicoes, form]);
 
-  // Auto-preenchimento km/franquia/caução ao escolher tarifa+viatura
+  // Auto-preenchimento km/franquia/caução ao escolher tarifa+viatura. Só
+  // preenche campos ainda VAZIOS — nunca sobrescreve um valor já gravado ou
+  // editado manualmente. Sem esta guarda, este efeito também dispara quando
+  // `viaturas`/`precosModeloTvde` (listas assíncronas) chegam DEPOIS da
+  // hidratação inicial, apagando franquia/caução/kms negociados à parte.
   useEffect(() => {
     if (regime === 'slot' || !tarifaIdWatch || !viaturaId) return;
     const via = viaturas.find((v) => v.id === viaturaId);
@@ -511,10 +544,14 @@ export function useContratoForm(): UseContratoFormReturn {
     const kmExtra = isTvdeReg ? linha.km_adicional_valor : linha.km_adicional_valor_iva;
     const franquia = isTvdeReg ? linha.franquia_valor : linha.franquia_valor_iva;
     const caucao = isTvdeReg ? linha.caucao_valor : linha.caucao_valor_iva;
-    if (kmIncl != null) form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
-    if (kmExtra != null) form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
-    if (franquia != null) form.setValue('franquia_valor', franquia, { shouldDirty: true });
-    if (caucao != null) form.setValue('caucao_valor', caucao, { shouldDirty: true });
+    if (kmIncl != null && form.getValues('kms_incluidos') == null)
+      form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
+    if (kmExtra != null && form.getValues('km_adicional_valor') == null)
+      form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
+    if (franquia != null && form.getValues('franquia_valor') == null)
+      form.setValue('franquia_valor', franquia, { shouldDirty: true });
+    if (caucao != null && form.getValues('caucao_valor') == null)
+      form.setValue('caucao_valor', caucao, { shouldDirty: true });
   }, [tarifaIdWatch, viaturaId, regime, viaturas, precosModeloTvde, form]);
 
   // ── Viaturas disponíveis ──────────────────────────────────────

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -35,6 +35,7 @@ import { useViaturas } from '@/hooks/useViaturas';
 import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
 import {
   calcularBaseAluguerRenting,
+  useRentingGruposMin,
   useRentingTarifaPrecosModelo,
 } from '@/hooks/useRentingGruposTarifas';
 
@@ -131,6 +132,7 @@ const RentingReservaForm = () => {
     ? (motoristas.find((m) => m.id === condutorSecundarioId) ?? null)
     : null;
   const { data: viaturas = [] } = useViaturas({ apenasDisponiveis: !isEdit });
+  const { data: grupos = [] } = useRentingGruposMin();
   const { data: precosModeloTvde = [] } = useRentingTarifaPrecosModelo();
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
 
@@ -188,24 +190,40 @@ const RentingReservaForm = () => {
   });
 
   // Pré-preenchimento via URL (criar reserva a partir de viatura/cliente).
-  // Só corre uma vez quando os dados das listas (viaturas/clientes) chegam.
+  // Só corre uma vez — mas só marca como feito depois de resolver o grupo (se
+  // a viatura tiver um), senão a lista de grupos podia chegar depois da de
+  // viaturas e o campo `grupo` ficava `null` para sempre (bloqueia "Criar
+  // Contrato" mais tarde, mesmo a viatura já tendo grupo atribuído).
+  const prefilledFromUrlRef = useRef(false);
   useEffect(() => {
-    if (isEdit) return;
+    if (isEdit || prefilledFromUrlRef.current) return;
     if (!viaturaIdFromUrl && !clienteIdFromUrl) return;
 
     const viatura = viaturaIdFromUrl ? viaturas.find((v) => v.id === viaturaIdFromUrl) : null;
     const cliente = clienteIdFromUrl ? clientes.find((c) => c.id === clienteIdFromUrl) : null;
 
+    // Ainda a carregar a lista de onde vem o dado pedido pela URL — tenta de novo
+    // no próximo render em vez de desistir.
+    if ((viaturaIdFromUrl && !viatura) || (clienteIdFromUrl && !cliente)) return;
+
     if (viatura) {
       form.setValue('viatura_id', viatura.id, { shouldDirty: false });
       form.setValue('matricula', viatura.matricula ?? '', { shouldDirty: false });
+      // Resolve o grupo da viatura (necessário para criar contrato depois).
+      // Se a viatura tem grupo_id mas a lista de grupos ainda não chegou,
+      // não marca como concluído — tenta de novo quando `grupos` carregar.
+      if (viatura.grupo_id) {
+        const grupo = grupos.find((g) => g.id === viatura.grupo_id);
+        if (!grupo) return;
+        form.setValue('grupo', grupo.nome, { shouldDirty: false });
+      }
     }
     if (cliente) {
       form.setValue('cliente_id', cliente.id, { shouldDirty: false });
       form.setValue('cliente_nome', cliente.nome ?? '', { shouldDirty: false });
     }
-    // Ambos: só faz sentido validar uma vez quando as listas existem
-  }, [isEdit, viaturaIdFromUrl, clienteIdFromUrl, viaturas, clientes, form]);
+    prefilledFromUrlRef.current = true;
+  }, [isEdit, viaturaIdFromUrl, clienteIdFromUrl, viaturas, clientes, grupos, form]);
 
   /** Adiciona um cliente recém-criado à lista de condutores (rent-a-car). */
   const handleClienteCriado = (clienteId: string) => {
@@ -261,10 +279,17 @@ const RentingReservaForm = () => {
     );
   };
 
-  // Hidrata o formulário quando a reserva carrega (modo edição).
+  // Hidrata o formulário quando a reserva carrega (modo edição). Só corre UMA
+  // vez — senão um refetch (ex.: invalidação disparada pelo próprio guardar,
+  // ou por outra aba/acção que invalide a query da reserva) volta a fazer
+  // reset e apaga edições em curso (ver hidratou em useContratoForm.ts, mesmo
+  // padrão). As relações (condutores/coberturas/extras/taxas) são hidratadas
+  // à parte, logo a seguir, para poderem re-sincronizar em segurança sempre
+  // que a sua própria query refetch — sem arrastar o resto do formulário.
+  const hidratouRef = useRef(false);
   useEffect(() => {
-    if (!isEdit) return;
-    if (!reserva) return;
+    if (!isEdit || !reserva || hidratouRef.current) return;
+    hidratouRef.current = true;
     form.reset({
       viatura_id: reserva.viatura_id,
       matricula: reserva.matricula ?? '',
@@ -294,32 +319,71 @@ const RentingReservaForm = () => {
       renovacao_intervalo_dias: reserva.renovacao_intervalo_dias,
       observacoes: reserva.observacoes ?? '',
       observacoes_internas: reserva.observacoes_internas ?? '',
-      coberturas: coberturasAtuais.map((c) => ({
+      coberturas: [],
+      extras: [],
+      taxas: [],
+      condutores: [],
+    });
+  }, [isEdit, reserva, form]);
+
+  // Hidratação das relações m:n — em efeitos próprios (não no reset acima) para
+  // poderem re-sincronizar com segurança sempre que a respectiva query refetch
+  // (ex.: logo após guardar), sem apagar o resto do formulário entretanto editado.
+  useEffect(() => {
+    if (!isEdit || !reserva) return;
+    form.setValue(
+      'coberturas',
+      coberturasAtuais.map((c) => ({
         cobertura_id: c.cobertura_id,
         cobertura_nome: c.cobertura_nome,
         preco_dia: c.preco_dia,
         franquia_valor: c.franquia_valor,
       })),
-      extras: extrasAtuais.map((e) => ({
+      { shouldDirty: false }
+    );
+  }, [isEdit, reserva, coberturasAtuais, form]);
+
+  useEffect(() => {
+    if (!isEdit || !reserva) return;
+    form.setValue(
+      'extras',
+      extrasAtuais.map((e) => ({
         extra_id: e.extra_id,
         extra_nome: e.extra_nome,
         preco_unidade: e.preco_unidade,
         tipo_calculo: e.tipo_calculo,
         quantidade: e.quantidade,
       })),
-      taxas: taxasAtuais.map((t) => ({
+      { shouldDirty: false }
+    );
+  }, [isEdit, reserva, extrasAtuais, form]);
+
+  useEffect(() => {
+    if (!isEdit || !reserva) return;
+    form.setValue(
+      'taxas',
+      taxasAtuais.map((t) => ({
         taxa_id: t.taxa_id,
         taxa_nome: t.taxa_nome,
         percentagem: t.percentagem,
         valor_fixo: t.valor_fixo,
       })),
-      condutores: condutoresAtuais.map((c) => ({
+      { shouldDirty: false }
+    );
+  }, [isEdit, reserva, taxasAtuais, form]);
+
+  useEffect(() => {
+    if (!isEdit || !reserva) return;
+    form.setValue(
+      'condutores',
+      condutoresAtuais.map((c) => ({
         cliente_id: c.cliente_id,
         motorista_id: c.motorista_id,
         is_principal: c.is_principal,
       })),
-    });
-  }, [isEdit, reserva, condutoresAtuais, coberturasAtuais, extrasAtuais, taxasAtuais, form]);
+      { shouldDirty: false }
+    );
+  }, [isEdit, reserva, condutoresAtuais, form]);
 
   // Pré-check de conflito de datas (UX-only — o gate real é o EXCLUDE na BD).
   const viaturaId = form.watch('viatura_id');
@@ -506,7 +570,7 @@ const RentingReservaForm = () => {
         estacao_entrega_id: values.estacao_entrega_id || null,
         estacao_recolha_id: values.estacao_recolha_id || null,
         data_inicio: localInputToIso(values.data_inicio),
-        // Slot é aberto (sem data fim); restantes regimes exigem data_fim.
+        // Slot e TVDE são abertos (sem data fim); só rent-a-car exige data_fim.
         data_fim: values.data_fim ? localInputToIso(values.data_fim) : null,
         cliente_id: values.cliente_id || null,
         cliente_nome: values.cliente_nome || null,
