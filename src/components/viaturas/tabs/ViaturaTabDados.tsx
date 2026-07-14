@@ -26,6 +26,7 @@ import {
   useViaturaGrupos,
   useViaturaEstacoes,
   useViaturaTarifas,
+  useViaturaTarifasTvdeModelo,
 } from '@/hooks/useViaturaCatalogos';
 import {
   viaturaSchema,
@@ -107,6 +108,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   const grupos = useViaturaGrupos();
   const estacoes = useViaturaEstacoes();
   const allTarifas = useViaturaTarifas();
+  const tarifasTvdeModelo = useViaturaTarifasTvdeModelo();
 
   // Subscrição ao estado dirty (lida em render) — usada para o botão Guardar.
   const isFormDirty = form.formState.isDirty;
@@ -441,6 +443,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                 viaturasTipos={viaturasTipos}
                 grupos={grupos}
                 allTarifas={allTarifas}
+                tarifasTvdeModelo={tarifasTvdeModelo}
                 estacoes={estacoes}
               />
 
