@@ -180,10 +180,12 @@ export function RelatorioPagamentoDialog({
           .delete()
           .eq('motorista_id', id)
           .eq('semana_inicio', semana)
-      : await supabase.from('relatorio_pagamento_pagos').upsert(
-          { motorista_id: id, semana_inicio: semana },
-          { onConflict: 'org_id,motorista_id,semana_inicio', ignoreDuplicates: true }
-        );
+      : await supabase
+          .from('relatorio_pagamento_pagos')
+          .upsert(
+            { motorista_id: id, semana_inicio: semana },
+            { onConflict: 'org_id,motorista_id,semana_inicio', ignoreDuplicates: true }
+          );
 
     if (error) {
       setPagos((prev) => {
@@ -528,8 +530,8 @@ export function RelatorioPagamentoDialog({
                   const rowBg = pago
                     ? 'bg-emerald-100 dark:bg-emerald-950/50'
                     : idx % 2 === 0
-                    ? 'bg-background'
-                    : 'bg-muted/20';
+                      ? 'bg-background'
+                      : 'bg-muted/20';
                   return (
                     <tr
                       key={l.motorista_id}
@@ -579,8 +581,8 @@ export function RelatorioPagamentoDialog({
                           pago
                             ? 'text-emerald-800 dark:text-emerald-200'
                             : negativo
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-emerald-600 dark:text-emerald-400'
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-emerald-600 dark:text-emerald-400'
                         }`}
                       >
                         {fmtEur(l.liquido)}
