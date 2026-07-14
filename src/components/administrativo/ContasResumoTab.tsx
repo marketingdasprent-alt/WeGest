@@ -8,6 +8,7 @@ import { MotoristaResumoDialog } from './MotoristaResumoDialog';
 import { ImportarDadosWizard } from './ImportarDadosWizard';
 import { RelatorioPagamentoDialog } from './RelatorioPagamentoDialog';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useOrgId } from '@/contexts/TenantContext';
 import { RECURSOS } from '@/utils/permissions';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -35,6 +36,12 @@ import { ContasResumoBulkBar } from './ContasResumoBulkBar';
 // Semana: Segunda (1) a Domingo (0)
 const WEEK_STARTS_ON = 1;
 
+// Coluna Gorjeta: dados sensíveis (gorjeta é rendimento do motorista, não da
+// org) — só visível para admins da própria org (Década Ousada), nunca para
+// motoristas (a rota /administrativo já lhes está bloqueada) nem para outras
+// orgs do SaaS.
+const DECADA_OUSADA_ORG_ID = '11111111-1111-1111-1111-111111111111';
+
 // Atalhos rápidos para seleção de semanas
 const getWeekShortcuts = () => [
   { label: 'Esta semana', date: new Date() },
@@ -45,8 +52,10 @@ const getWeekShortcuts = () => [
 
 export function ContasResumoTab() {
   const isMobile = useIsMobile();
-  const { hasAccessToResource } = usePermissions();
+  const { hasAccessToResource, isAdmin } = usePermissions();
+  const orgId = useOrgId();
   const canImportar = hasAccessToResource(RECURSOS.ADMINISTRATIVO_IMPORTAR);
+  const showGorjeta = isAdmin && orgId === DECADA_OUSADA_ORG_ID;
   const [loading, setLoading] = useState(true);
   const [resumos, setResumos] = useState<MotoristaResumo[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,7 +105,8 @@ export function ContasResumoTab() {
     | 'combustivel'
     | 'portagens'
     | 'outros_custos'
-    | 'reparacoes';
+    | 'reparacoes'
+    | 'gorjeta';
   const [sortField, setSortField] = useState<SortField>('total_faturado');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -953,8 +963,18 @@ export function ContasResumoTab() {
       return true;
     });
     result = [...result].sort((a, b) => {
-      const av = sortField === 'driver_name' ? a.driver_name : ((a[sortField] as number) ?? 0);
-      const bv = sortField === 'driver_name' ? b.driver_name : ((b[sortField] as number) ?? 0);
+      const av =
+        sortField === 'driver_name'
+          ? a.driver_name
+          : sortField === 'gorjeta'
+            ? a.gorjeta_bolt + a.gorjeta_uber
+            : ((a[sortField] as number) ?? 0);
+      const bv =
+        sortField === 'driver_name'
+          ? b.driver_name
+          : sortField === 'gorjeta'
+            ? b.gorjeta_bolt + b.gorjeta_uber
+            : ((b[sortField] as number) ?? 0);
       if (typeof av === 'string')
         return sortDir === 'asc'
           ? av.localeCompare(bv as string)
@@ -1077,6 +1097,7 @@ export function ContasResumoTab() {
         onToggleSelectOne={toggleSelectOne}
         onRowClick={handleRowClick}
         formatCurrency={formatCurrency}
+        showGorjeta={showGorjeta}
       />
 
       {total > 0 && (
