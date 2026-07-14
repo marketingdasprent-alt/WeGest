@@ -6,6 +6,11 @@ verify_jwt = false
 [functions.send-folha-danos-email]
 verify_jwt = false
 
+# Envio de documento fiscal (fatura/FR/NC/recibo) por email ao cliente/condutor.
+# Iniciada sempre pela UI autenticada → exige JWT válido (evita relay anónimo de anexos).
+[functions.send-documento-fiscal-email]
+verify_jwt = true
+
 # Aviso de recibo anulado. Chamada pelo trigger SQL via pg_net com service key.
 [functions.send-recibo-anulado-email]
 verify_jwt = false

@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { usePageTracking } from '@/hooks/usePageTracking';
 import { RECURSOS } from '@/utils/permissions';
+import { REALIZE_ORG_IDS } from '@/config/realize';
 import { Loader2 } from 'lucide-react';
 
 const EntradaNativa = lazy(() => import('@/pages/EntradaNativa'));
@@ -28,15 +29,18 @@ const MotoristaCandidaturas = lazy(() => import('@/pages/MotoristaCandidaturas')
 const Calendario = lazy(() => import('@/pages/Calendario'));
 const Administrativo = lazy(() => import('@/pages/Administrativo'));
 const Marketing = lazy(() => import('@/pages/Marketing'));
+const Realize = lazy(() => import('@/pages/Realize'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const MeusTickets = lazy(() => import('@/pages/MeusTickets'));
 const AdminSettings = lazy(() => import('@/pages/AdminSettings'));
 const AdminInvites = lazy(() => import('@/pages/AdminInvites'));
 const AdminDocumentos = lazy(() => import('@/pages/AdminDocumentos'));
+const AuditoriaPage = lazy(() => import('@/pages/admin/AuditoriaPage'));
 // Renting + configuração de viaturas — mantidos em sincronia com WebAppRoutes
 // (sem isto, no Android estas rotas caíam no catch-all → dashboard).
 const RentingContratos = lazy(() => import('@/pages/renting/RentingContratos'));
 const ContratoForm = lazy(() => import('@/pages/renting/ContratoForm'));
+const PedidosTrocaKms = lazy(() => import('@/pages/renting/PedidosTrocaKms'));
 const RealizarEntregaPage = lazy(() => import('@/pages/renting/RealizarEntregaPage'));
 const DanosPublicosPage = lazy(() => import('@/pages/DanosPublicosPage'));
 const RentingReservas = lazy(() => import('@/pages/renting/RentingReservas'));
@@ -55,6 +59,7 @@ const RentingTaxas = lazy(() => import('@/pages/renting/RentingTaxas'));
 const ViaturaMarcasModelos = lazy(() => import('@/pages/viaturas/ViaturaMarcasModelos'));
 const ViaturaCombustiveis = lazy(() => import('@/pages/viaturas/ViaturaCombustiveis'));
 const ViaturaTipos = lazy(() => import('@/pages/viaturas/ViaturaTipos'));
+const NotificacoesPage = lazy(() => import('@/pages/NotificacoesPage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -236,6 +241,16 @@ const NativeAppRoutes = () => {
           }
         />
         <Route
+          path="/realize"
+          element={
+            <ProtectedRoute requireOrgIds={REALIZE_ORG_IDS}>
+              <DashboardLayout fullBleed>
+                <Realize />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/dashboard"
           element={
             <ProtectedRoute requiredResource={RECURSOS.MOTORISTAS_GESTAO}>
@@ -295,6 +310,16 @@ const NativeAppRoutes = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/admin/auditoria"
+          element={
+            <ProtectedRoute requireSupervisorTvde={true}>
+              <DashboardLayout>
+                <AuditoriaPage />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
 
         {/* ── Renting (sincronizado com WebAppRoutes) ── */}
         <Route
@@ -313,6 +338,16 @@ const NativeAppRoutes = () => {
             <ProtectedRoute requiredResource="renting_contratos">
               <DashboardLayout>
                 <ContratoForm />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/renting/pedidos-kms"
+          element={
+            <ProtectedRoute requiredResource="renting_contratos" requireSupervisorTvde>
+              <DashboardLayout>
+                <PedidosTrocaKms />
               </DashboardLayout>
             </ProtectedRoute>
           }
@@ -546,6 +581,17 @@ const NativeAppRoutes = () => {
             <ProtectedRoute requiredResource="viaturas_ver">
               <DashboardLayout>
                 <ViaturaTipos />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/notificacoes"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <NotificacoesPage />
               </DashboardLayout>
             </ProtectedRoute>
           }

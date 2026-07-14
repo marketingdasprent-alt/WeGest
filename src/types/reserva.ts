@@ -1,3 +1,5 @@
+import type { ExtraTipoCalculo } from './rentingExtra';
+
 export const RESERVA_ESTADOS = [
   'pendente',
   'confirmada',
@@ -92,6 +94,8 @@ export type Reserva = {
   /** Valor mensal BRUTO (IVA incl.) cobrado ao motorista no regime slot. */
   slot_valor_mensal: number | null;
   valor_total: number | null;
+  /** FK para renting_tarifas — usada em TVDE para associar a tarifa por modelo. */
+  tarifa_id: string | null;
   observacoes: string | null;
   observacoes_internas: string | null;
   // Longa duração / renovação
@@ -152,6 +156,58 @@ export type CondutorFormItem = {
   cliente_id: string | null;
   motorista_id: string | null;
   is_principal: boolean;
+};
+
+// ============================================================
+// Coberturas (m:n entre reservas e renting_coberturas)
+// ============================================================
+// Nota: o snapshot do formulário (CoberturaFormItem/ExtraFormItem/TaxaFormItem)
+// vive em contratoRenting.ts — a forma é igual em contrato e reserva, e um
+// segundo nome aqui colidiria no barrel de src/types/index.ts.
+export type ReservaCobertura = {
+  id: string;
+  org_id: string;
+  reserva_id: string;
+  cobertura_id: string;
+  cobertura_nome: string;
+  preco_dia: number;
+  franquia_valor: number | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+// ============================================================
+// Extras (m:n entre reservas e renting_extras)
+// ============================================================
+export type ReservaExtra = {
+  id: string;
+  org_id: string;
+  reserva_id: string;
+  extra_id: string;
+  extra_nome: string;
+  preco_unidade: number;
+  tipo_calculo: ExtraTipoCalculo;
+  quantidade: number;
+  total: number;
+  created_by: string | null;
+  created_at: string;
+};
+
+// ============================================================
+// Taxas (m:n entre reservas e renting_taxas)
+// ============================================================
+export type ReservaTaxa = {
+  id: string;
+  org_id: string;
+  reserva_id: string;
+  taxa_id: string;
+  taxa_nome: string;
+  percentagem: number | null;
+  valor_fixo: number | null;
+  base_calculo: number | null;
+  valor_calculado: number;
+  created_by: string | null;
+  created_at: string;
 };
 
 // ============================================================

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { InviteGenerationForm } from '@/components/admin/InviteGenerationForm';
 import { GeneratedInviteDisplay } from '@/components/admin/GeneratedInviteDisplay';
 import { MotoristaInviteLink } from '@/components/admin/MotoristaInviteLink';

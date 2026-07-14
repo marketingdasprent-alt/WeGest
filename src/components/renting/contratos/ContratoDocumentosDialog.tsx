@@ -25,7 +25,7 @@ import { useDocumentTemplates } from '@/hooks/useDocumentTemplates';
 
 import { generateContratoPdf, type CondutorPrincipal } from '@/utils/generateContratoPdf';
 import type { EmpresaConfig } from '@/config/empresas';
-import type { ContratoRenting } from '@/types/contratoRenting';
+import type { ContratoRenting, ContratoCondutor } from '@/types/contratoRenting';
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Motorista } from '@/types/motorista';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
@@ -34,7 +34,10 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contrato: ContratoRenting;
-  condutorPrincipal: CondutorPrincipal | null;
+  /** Todos os condutores do contrato (ex.: regime slot pode ter 2 motoristas
+   *  a partilhar a viatura). O principal vem pré-seleccionado; com mais do
+   *  que um condutor, o utilizador pode escolher para quem gerar. */
+  condutores: ContratoCondutor[];
   clientes: ClienteComDocumentos[];
   motoristas: Motorista[];
   viatura: ViaturaBasic | null;
@@ -55,7 +58,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
   open,
   onOpenChange,
   contrato,
-  condutorPrincipal,
+  condutores,
   clientes,
   motoristas,
   viatura,
@@ -73,6 +76,27 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
   const [empresaId, setEmpresaId] = useState(empresaPorDefeito);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gerando, setGerando] = useState(false);
+
+  // Chave estável de um condutor (cliente_id em rent-a-car, motorista_id em
+  // TVDE/slot) — usada para seleccionar para quem gerar os documentos.
+  const condutorKey = (c: ContratoCondutor) => c.cliente_id ?? c.motorista_id ?? '';
+  const nomeCondutor = (c: ContratoCondutor): string =>
+    (c.cliente_id
+      ? clientes.find((cl) => cl.id === c.cliente_id)?.nome
+      : motoristas.find((m) => m.id === c.motorista_id)?.nome) ?? 'Removido';
+
+  const [condutorId, setCondutorId] = useState<string | null>(null);
+
+  // Ao abrir, selecciona o condutor principal por defeito. Com regime slot
+  // (2 motoristas a partilhar a viatura) o utilizador pode trocar abaixo —
+  // antes só era possível gerar documentos para o principal.
+  useEffect(() => {
+    if (!open) return;
+    const principal = condutores.find((c) => c.is_principal) ?? condutores[0] ?? null;
+    setCondutorId(principal ? condutorKey(principal) : null);
+  }, [open, condutores]);
+
+  const condutorSelecionado = condutores.find((c) => condutorKey(c) === condutorId) ?? null;
 
   const { data: todosTemplates = [], isLoading: loading } = useDocumentTemplates(
     open ? empresaId : null
@@ -140,6 +164,12 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
 
     try {
       setGerando(true);
+      const condutorPrincipal: CondutorPrincipal | null = condutorSelecionado
+        ? {
+            cliente_id: condutorSelecionado.cliente_id,
+            motorista_id: condutorSelecionado.motorista_id,
+          }
+        : null;
       await generateContratoPdf({
         contrato,
         condutorPrincipal,
@@ -191,6 +221,29 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {condutores.length > 1 && (
+            <div className="space-y-2">
+              <Label>Condutor</Label>
+              <Select value={condutorId ?? ''} onValueChange={setCondutorId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o condutor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {condutores.map((c) => (
+                    <SelectItem key={condutorKey(c)} value={condutorKey(c)}>
+                      {nomeCondutor(c)}
+                      {c.is_principal ? ' (Principal)' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Regime {contrato.regime === 'slot' ? 'Slot' : 'TVDE'} com mais de um condutor — gera
+                os documentos para o condutor escolhido acima.
+              </p>
             </div>
           )}
 

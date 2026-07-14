@@ -25,8 +25,8 @@ interface Props {
   eventos: CalendarioEvento[];
   currentMonth: Date;
   onMonthChange: (d: Date) => void;
-  onEventClick: (e: CalendarioEvento) => void;
-  onDeleteEvent: (id: string) => void;
+  onEventClick?: (e: CalendarioEvento) => void;
+  onDeleteEvent?: (id: string) => void;
   onEventDetails: (e: CalendarioEvento) => void;
   onAbrirCheckin?: (e: CalendarioEvento) => void;
   onDaySelect?: (d: Date) => void;

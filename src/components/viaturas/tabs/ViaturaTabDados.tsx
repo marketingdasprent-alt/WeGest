@@ -1,21 +1,10 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useState, useRef } from 'react';
+import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
 import {
   Form,
   FormControl,
@@ -24,216 +13,49 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Save,
-  Loader2,
-  Upload,
-  FileText,
-  Eye,
-  Download,
-  Trash2,
-  AlertCircle,
-  CheckCircle2,
-  FolderUp,
-  Lock,
-} from 'lucide-react';
+import { Save, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import {
-  getCategoriaBadgeClass,
-  getStatusBadgeClass,
-  getStatusLabel,
-  getStatusColorClass,
-  deriveViaturaEstado,
-} from '@/lib/viaturas';
+import { deriveViaturaEstado } from '@/lib/viaturas';
 import { useViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
-
-const viaturaSchema = z.object({
-  matricula: z
-    .string()
-    .min(1, 'Matrícula é obrigatória')
-    .regex(/^[A-Z0-9]{2}-[A-Z0-9]{2}-[A-Z0-9]{2}$/, 'Formato inválido. Use XX-00-XX'),
-  marca: z.string().optional(),
-  modelo: z.string().optional(),
-  marca_id: z.string().min(1, 'Marca é obrigatória'),
-  modelo_id: z.string().min(1, 'Modelo é obrigatório'),
-  combustivel_id: z.string().optional(),
-  ano: z.string().optional(),
-  cor: z.string().optional(),
-  categoria: z.string().optional(),
-  combustivel: z.string().optional(),
-  status: z.string().optional(),
-  km_atual: z.string().optional(),
-  numero_motor: z.string().optional(),
-  numero_chassis: z.string().optional(),
-  data_matricula: z.string().optional(),
-  observacoes: z.string().optional(),
-  grupo_id: z.string().optional(),
-  is_slot: z.boolean().default(false),
-  habilitada_tvde: z.boolean().default(false),
-  estacao_id: z.string().optional(),
-  extintor_numero: z.string().optional(),
-  extintor_validade: z.string().optional(),
-  tipo_id: z.string().optional(),
-});
-
-type ViaturaFormData = z.infer<typeof viaturaSchema>;
-
-interface Viatura {
-  id: string;
-  matricula: string;
-  marca: string;
-  modelo: string;
-  marca_id?: string | null;
-  modelo_id?: string | null;
-  combustivel_id?: string | null;
-  ano?: number | null;
-  cor?: string | null;
-  categoria?: string | null;
-  combustivel?: string | null;
-  status?: string | null;
-  km_atual?: number | null;
-  numero_motor?: string | null;
-  numero_chassis?: string | null;
-  data_matricula?: string | null;
-  observacoes?: string | null;
-  grupo_id?: string | null;
-  is_slot?: boolean | null;
-  habilitada_tvde?: boolean | null;
-  estacao_id?: string | null;
-  extintor_numero?: string | null;
-  extintor_validade?: string | null;
-  tipo_id?: string | null;
-}
-
-interface ViaturaDocument {
-  id: string;
-  tipo_documento: string;
-  nome_ficheiro: string | null;
-  ficheiro_url: string;
-  data_validade: string | null;
-}
+import {
+  useViaturaMarcas,
+  useViaturaModelos,
+  useViaturaCombustiveis,
+  useViaturaTipos,
+  useViaturaGrupos,
+  useViaturaEstacoes,
+  useViaturaTarifas,
+  useViaturaTarifasTvdeModelo,
+} from '@/hooks/useViaturaCatalogos';
+import {
+  viaturaSchema,
+  DOCUMENTOS_VIATURA,
+  type ViaturaFormData,
+  type Viatura,
+  type ViaturaDocument,
+  type BatchViaturaEntry,
+} from './viaturaTabDados.types';
+import { viaturaToFormValues, VIATURA_FK_FIELDS } from './viaturaFormValues';
+import { detectViaturaTipoFromFilename } from './viaturaBatchDetect';
+import { ViaturaFormIdentificacao } from './ViaturaFormIdentificacao';
+import { ViaturaFormVeiculo } from './ViaturaFormVeiculo';
+import { ViaturaFormTecnico } from './ViaturaFormTecnico';
+import { ViaturaFormSeguranca } from './ViaturaFormSeguranca';
+import { ViaturaDocumentosCard } from './ViaturaDocumentosCard';
+import { ViaturaBatchUploadDialog } from './ViaturaBatchUploadDialog';
 
 interface ViaturaTabDadosProps {
   viatura: Viatura | null;
   isNew: boolean;
-  onSave: (data: Partial<Viatura>) => Promise<void>;
+  onSave: (data: Partial<Viatura>) => Promise<boolean>;
   saving: boolean;
-}
-
-const CATEGORIAS = [
-  { value: 'green', label: 'Green' },
-  { value: 'comfort', label: 'Comfort' },
-  { value: 'black', label: 'Black' },
-  { value: 'x-saver', label: 'X-Saver' },
-];
-
-interface ViaturaMarca {
-  id: string;
-  nome: string;
-}
-interface ViaturaModelo {
-  id: string;
-  nome: string;
-  marca_id: string;
-}
-interface ViaturaCombustivel {
-  id: string;
-  nome: string;
-}
-
-const STATUS_OPTIONS = [
-  { value: 'disponivel', label: 'Disponível' },
-  { value: 'em_uso', label: 'Em Uso' },
-  { value: 'manutencao', label: 'Manutenção' },
-  { value: 'inativo', label: 'Inativo' },
-];
-
-const DOCUMENTOS_VIATURA = [
-  { tipo: 'dua_frente', label: 'DUA - Frente', obrigatorio: true },
-  { tipo: 'dua_verso', label: 'DUA - Verso', obrigatorio: true },
-  { tipo: 'dav', label: 'DAV - Declaração Aduaneira de Veículo', obrigatorio: false },
-  { tipo: 'ac', label: 'AC - Certificado de Aprovação', obrigatorio: false },
-  { tipo: 'ipo', label: 'IPO - Inspeção Periódica Obrigatória', obrigatorio: true },
-];
-
-// Mapeamento de prefixo de ficheiro → tipo de documento de viatura
-const BATCH_VIATURA_PREFIX_MAP: Record<string, string> = {
-  DUAF: 'dua_frente',
-  DUAV: 'dua_verso',
-  IPO: 'ipo',
-  DAV: 'dav',
-  AC: 'ac',
-  CV: 'carta_verde',
-};
-
-function detectViaturaTipoFromFilename(filename: string): string {
-  const base = filename.split('.')[0].toUpperCase();
-  const prefixes = Object.keys(BATCH_VIATURA_PREFIX_MAP).sort((a, b) => b.length - a.length);
-  for (const prefix of prefixes) {
-    if (
-      base === prefix ||
-      base.startsWith(prefix + '_') ||
-      base.startsWith(prefix + '-') ||
-      base.startsWith(prefix + ' ')
-    ) {
-      return BATCH_VIATURA_PREFIX_MAP[prefix];
-    }
-  }
-  return '';
-}
-
-interface BatchViaturaEntry {
-  file: File;
-  tipoDetectado: string;
-  labelDetectado: string;
-  reconhecido: boolean;
-}
-
-interface Estacao {
-  id: string;
-  nome: string;
-  cidade: string | null;
-}
-
-interface ViaturasTipo {
-  id: string;
-  nome: string;
-  elegivel_tvde?: boolean;
-}
-
-interface RentingGrupo {
-  id: string;
-  nome: string;
 }
 
 export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDadosProps) {
   const [documents, setDocuments] = useState<ViaturaDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
-  const [estacoes, setEstacoes] = useState<Estacao[]>([]);
-  const [viaturasTipos, setViaturasTipos] = useState<ViaturasTipo[]>([]);
-  const [grupos, setGrupos] = useState<RentingGrupo[]>([]);
-  const [allTarifas, setAllTarifas] = useState<
-    Array<{
-      grupo_id: string;
-      nome: string;
-      preco_dia: number | null;
-      preco_semana: number | null;
-      preco_mes: number | null;
-      kms_incluidos: number | null;
-    }>
-  >([]);
-  const [marcas, setMarcas] = useState<ViaturaMarca[]>([]);
-  const [modelos, setModelos] = useState<ViaturaModelo[]>([]);
-  const [combustiveis, setCombustiveis] = useState<ViaturaCombustivel[]>([]);
 
   // Estado derivado da viatura (considera ocupações ativas: contrato, reserva, movimento)
   const { data: fontesMap } = useViaturasOcupacao();
@@ -246,62 +68,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   const [batchEntries, setBatchEntries] = useState<BatchViaturaEntry[]>([]);
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
   const [batchUploading, setBatchUploading] = useState(false);
-
-  useEffect(() => {
-    supabase
-      .from('estacoes')
-      .select('id, nome, cidade')
-      .eq('ativa', true)
-      .order('nome')
-      .then(
-        ({ data }) => setEstacoes(data || []),
-        (err) => console.error('Erro ao carregar estações:', err)
-      );
-    supabase
-      .from('viatura_tipos')
-      .select('id, nome, elegivel_tvde')
-      .eq('ativo', true)
-      .order('nome')
-      .then(
-        ({ data }) => setViaturasTipos(data || []),
-        (err) => console.error('Erro ao carregar tipos:', err)
-      );
-    supabase
-      .from('renting_grupos')
-      .select('id, nome')
-      .eq('ativo', true)
-      .order('nome')
-      .then(
-        ({ data }) => setGrupos(data || []),
-        (err) => console.error('Erro ao carregar grupos:', err)
-      );
-    supabase
-      .from('renting_tarifas')
-      .select('grupo_id, nome, preco_dia, preco_semana, preco_mes, kms_incluidos')
-      .eq('ativa', true)
-      .then(
-        ({ data }) => setAllTarifas((data as any) || []),
-        (err) => console.error('Erro ao carregar tarifas:', err)
-      );
-    supabase
-      .from('viatura_marcas')
-      .select('id, nome')
-      .eq('ativa', true)
-      .order('nome')
-      .then(
-        ({ data }) => setMarcas(data || []),
-        (err) => console.error('Erro ao carregar marcas:', err)
-      );
-    supabase
-      .from('viatura_combustiveis')
-      .select('id, nome')
-      .eq('ativo', true)
-      .order('nome')
-      .then(
-        ({ data }) => setCombustiveis(data || []),
-        (err) => console.error('Erro ao carregar combustíveis:', err)
-      );
-  }, []);
 
   const form = useForm<ViaturaFormData>({
     resolver: zodResolver(viaturaSchema),
@@ -332,69 +98,62 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
     },
   });
 
-  // Subscrição ao estado dirty (lida em render) para o guard do reset abaixo.
+  // Catálogos em cache (react-query): instantâneos a partir da 2ª abertura,
+  // sem re-fetch nem flicker ao trocar de aba / abrir outra viatura.
+  const watchedMarcaId = form.watch('marca_id');
+  const marcas = useViaturaMarcas();
+  const modelos = useViaturaModelos(watchedMarcaId);
+  const combustiveis = useViaturaCombustiveis();
+  const viaturasTipos = useViaturaTipos();
+  const grupos = useViaturaGrupos();
+  const estacoes = useViaturaEstacoes();
+  const allTarifas = useViaturaTarifas();
+  const tarifasTvdeModelo = useViaturaTarifasTvdeModelo();
+
+  // Subscrição ao estado dirty (lida em render) — usada para o botão Guardar.
   const isFormDirty = form.formState.isDirty;
 
-  // Sincroniza o formulário com a viatura. É reaplicado à medida que as listas de
-  // opções (marcas, modelos, combustíveis, tipos, grupos, estações) carregam,
-  // porque os <Select> ligados aos IDs (marca_id, modelo_id, …) só mostram o valor
-  // guardado se a respetiva <SelectItem> já estiver montada quando o valor é
-  // definido. Sem isto, ao reentrar numa viatura os dropdowns apareciam vazios
-  // (as opções chegavam depois do reset). O guard isFormDirty evita sobrepor
-  // edições do utilizador ainda por guardar.
+  // Hidratação do formulário a partir da viatura.
+  //
+  // Os <Select> por FK (marca, modelo, grupo, combustível, tipo, estação) só
+  // mostram o valor guardado quando a respetiva <SelectItem> já está montada — e
+  // os catálogos chegam de forma ASSÍNCRONA, depois da viatura. Por isso:
+  //  1) reset completo quando muda de viatura (baseline limpo);
+  //  2) reaplicação de cada FK à medida que o seu catálogo carrega (a opção já
+  //     está montada, portanto o Select passa a mostrar o valor), SEM sobrepor
+  //     campos que o utilizador tenha editado (guard por-campo via getFieldState).
+  //
+  // Antes usava-se um único reset com guard de dirty global: os IDs eram
+  // definidos antes de as opções existirem e nunca mais eram reaplicados, pelo
+  // que marca/modelo/grupo apareciam vazios apesar de estarem na BD.
+  const viaturaIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!viatura || isFormDirty) return;
-    form.reset({
-      matricula: viatura.matricula || '',
-      marca: viatura.marca || '',
-      modelo: viatura.modelo || '',
-      marca_id: viatura.marca_id || '',
-      modelo_id: viatura.modelo_id || '',
-      combustivel_id: viatura.combustivel_id || '',
-      ano: viatura.ano?.toString() || '',
-      cor: viatura.cor || '',
-      categoria: viatura.categoria || '',
-      combustivel: viatura.combustivel || '',
-      status: viatura.status === 'em_uso' ? 'disponivel' : viatura.status || 'disponivel',
-      km_atual: viatura.km_atual?.toString() || '',
-      numero_motor: viatura.numero_motor || '',
-      numero_chassis: viatura.numero_chassis || '',
-      data_matricula: viatura.data_matricula || '',
-      observacoes: viatura.observacoes || '',
-      grupo_id: viatura.grupo_id || '',
-      is_slot: viatura.is_slot || false,
-      habilitada_tvde: viatura.habilitada_tvde || false,
-      estacao_id: viatura.estacao_id || '',
-      extintor_numero: viatura.extintor_numero || '',
-      extintor_validade: viatura.extintor_validade || '',
-      tipo_id: viatura.tipo_id || '',
-    });
-  }, [viatura, form, isFormDirty, viaturasTipos, marcas, modelos, combustiveis, grupos, estacoes]);
+    if (!viatura) return;
+
+    if (viaturaIdRef.current !== viatura.id) {
+      viaturaIdRef.current = viatura.id;
+      form.reset(viaturaToFormValues(viatura));
+    }
+
+    const valores = viaturaToFormValues(viatura);
+    for (const name of VIATURA_FK_FIELDS) {
+      const alvo = valores[name];
+      const atual = form.getValues(name);
+      // Reaplica quando o campo não foi editado pelo utilizador OU quando está
+      // vazio mas a viatura tem valor (recupera um <Select> que perdeu o valor
+      // por a opção ainda não estar montada). Como o efeito só corre enquanto os
+      // catálogos carregam, isto não impede o utilizador de limpar o campo depois.
+      if (atual !== alvo && (!form.getFieldState(name).isDirty || (!atual && alvo))) {
+        form.setValue(name, alvo, { shouldDirty: false });
+      }
+    }
+  }, [viatura, form, viaturasTipos, marcas, modelos, combustiveis, grupos, estacoes]);
 
   // Documentos: carregar uma vez por viatura.
   useEffect(() => {
     if (viatura?.id) loadDocuments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viatura?.id]);
-
-  // Fetch modelos when marca_id changes
-  const watchedMarcaId = form.watch('marca_id');
-  useEffect(() => {
-    if (!watchedMarcaId) {
-      setModelos([]);
-      return;
-    }
-    supabase
-      .from('viatura_modelos')
-      .select('id, nome, marca_id')
-      .eq('marca_id', watchedMarcaId)
-      .eq('ativo', true)
-      .order('nome')
-      .then(
-        ({ data }) => setModelos(data || []),
-        (err) => console.error('Erro ao carregar modelos:', err)
-      );
-  }, [watchedMarcaId]);
 
   const loadDocuments = async () => {
     if (!viatura?.id) return;
@@ -420,11 +179,20 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   };
 
   const onSubmit = async (data: ViaturaFormData) => {
-    // Resolve text names from FK IDs
-    const marcaNome = marcas.find((m) => m.id === data.marca_id)?.nome || data.marca || '';
-    const modeloNome = modelos.find((m) => m.id === data.modelo_id)?.nome || data.modelo || '';
+    // Resolve text names from FK IDs. Preserva o valor existente na BD quando
+    // o catálogo não resolve (ex.: lista de modelos ainda a carregar após
+    // mudar a marca, ou marca/modelo inativos) — sem isto, o sync colapsava
+    // para '' e clobberava o texto correcto guardado, fazendo desaparecer a
+    // marca/modelo da listagem e do header.
+    const marcaNome =
+      marcas.find((m) => m.id === data.marca_id)?.nome || data.marca || viatura?.marca || '';
+    const modeloNome =
+      modelos.find((m) => m.id === data.modelo_id)?.nome || data.modelo || viatura?.modelo || '';
     const combustivelNome =
-      combustiveis.find((c) => c.id === data.combustivel_id)?.nome || data.combustivel || '';
+      combustiveis.find((c) => c.id === data.combustivel_id)?.nome ||
+      data.combustivel ||
+      viatura?.combustivel ||
+      '';
 
     const payload: Partial<Viatura> = {
       matricula: data.matricula.toUpperCase(),
@@ -452,7 +220,25 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       tipo_id: data.tipo_id || null,
     };
 
-    await onSave(payload);
+    const ok = await onSave(payload);
+    // Marca os valores atuais como novo baseline "limpo" — sem isto, isFormDirty
+    // (usado para desativar o botão Guardar) ficava preso em `true` após gravar,
+    // porque a hidratação a partir da `viatura` do pai é ignorada enquanto dirty.
+    if (ok) form.reset(data);
+  };
+
+  // Sem isto, uma validação falhada (ex.: marca/modelo obrigatórios ainda por
+  // escolher) fazia o handleSubmit não chamar o onSubmit E não dar feedback —
+  // o utilizador carregava em Guardar e "não acontecia nada". Mostra os campos
+  // em falta num toast.
+  const onInvalid = (errors: FieldErrors<ViaturaFormData>) => {
+    const msgs = Object.values(errors)
+      .map((e) => (e && typeof e.message === 'string' ? e.message : null))
+      .filter((m): m is string => !!m);
+    const unicas = Array.from(new Set(msgs)).slice(0, 5);
+    toast.error(
+      unicas.length ? unicas.join(' · ') : 'Verifica os campos obrigatórios assinalados a vermelho.'
+    );
   };
 
   const handleUploadDocument = async (tipoDoc: string, file: File) => {
@@ -643,519 +429,31 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* Identificação */}
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-4">Identificação</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="matricula"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          Matrícula <span className="text-red-500">*</span>
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="AA-00-BB"
-                            className="uppercase"
-                            value={field.value}
-                            onChange={(e) => {
-                              // Remove everything except alphanumeric, auto-insert dashes
-                              const raw = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-                              let formatted = raw;
-                              if (raw.length > 4)
-                                formatted =
-                                  raw.slice(0, 2) + '-' + raw.slice(2, 4) + '-' + raw.slice(4, 6);
-                              else if (raw.length > 2)
-                                formatted = raw.slice(0, 2) + '-' + raw.slice(2);
-                              field.onChange(formatted);
-                            }}
-                            onBlur={field.onBlur}
-                            maxLength={8}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estado</FormLabel>
-                        {estadoDerivedado && estadoDerivedado !== 'disponivel' ? (
-                          <div className="flex items-center gap-2.5 py-1.5">
-                            <Badge
-                              className={`${getStatusBadgeClass(estadoDerivedado)} whitespace-nowrap px-2.5 py-0.5 text-xs font-medium`}
-                            >
-                              {getStatusLabel(estadoDerivedado)}
-                            </Badge>
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground/60">
-                              <Lock className="h-3 w-3 shrink-0" />
-                              gerido automaticamente
-                            </span>
-                          </div>
-                        ) : (
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger
-                                className={`font-medium transition-all ${getStatusColorClass(field.value)}`}
-                              >
-                                <SelectValue placeholder="Selecionar estado" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="disponivel">Disponível</SelectItem>
-                              <SelectItem value="inativo">Inativo</SelectItem>
-                              <SelectItem
-                                value="manutencao"
-                                disabled={field.value !== 'manutencao'}
-                              >
-                                Manutenção{field.value !== 'manutencao' && ' (Automático)'}
-                              </SelectItem>
-                              <SelectItem value="vendida" disabled={field.value !== 'vendida'}>
-                                Vendida{field.value !== 'vendida' && ' (Apenas via Financeiro)'}
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="data_matricula"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Data da Matrícula</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
+            <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
+              <ViaturaFormIdentificacao form={form} estadoDerivedado={estadoDerivedado} />
 
               <Separator />
 
-              {/* Veículo */}
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-4">Veículo</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="marca_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          Marca <span className="text-red-500">*</span>
-                        </FormLabel>
-                        <Select
-                          onValueChange={(v) => {
-                            field.onChange(v);
-                            // Limpar modelo quando muda a marca
-                            form.setValue('modelo_id', '', { shouldDirty: true });
-                          }}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecionar marca" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {marcas.map((m) => (
-                              <SelectItem key={m.id} value={m.id}>
-                                {m.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="modelo_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          Modelo <span className="text-red-500">*</span>
-                        </FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                          disabled={!watchedMarcaId}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue
-                                placeholder={
-                                  watchedMarcaId
-                                    ? 'Selecionar modelo'
-                                    : 'Selecione a marca primeiro'
-                                }
-                              />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {modelos.map((m) => (
-                              <SelectItem key={m.id} value={m.id}>
-                                {m.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="ano"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ano</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="2024" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="cor"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Cor</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Branco" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="combustivel_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Combustível</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecionar" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {combustiveis.map((comb) => (
-                              <SelectItem key={comb.id} value={comb.id}>
-                                {comb.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="tipo_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tipo</FormLabel>
-                        <Select
-                          value={field.value || ''}
-                          onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecionar tipo..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="none">— Sem tipo —</SelectItem>
-                            {viaturasTipos.map((t) => (
-                              <SelectItem key={t.id} value={t.id}>
-                                {t.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {(() => {
-                    const tipoId = form.watch('tipo_id');
-                    const tipo = viaturasTipos.find((t) => t.id === tipoId);
-                    if (!tipo?.elegivel_tvde) return null;
-                    return (
-                      <FormField
-                        control={form.control}
-                        name="categoria"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Categoria</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecionar" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {CATEGORIAS.map((cat) => (
-                                  <SelectItem key={cat.value} value={cat.value}>
-                                    {cat.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    );
-                  })()}
-                  <FormField
-                    control={form.control}
-                    name="grupo_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Grupo</FormLabel>
-                        <Select
-                          value={field.value || ''}
-                          onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecionar grupo..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="none">— Sem grupo —</SelectItem>
-                            {grupos.map((g) => (
-                              <SelectItem key={g.id} value={g.id}>
-                                {g.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {/* Tarifas do grupo — leitura apenas */}
-                  {(() => {
-                    const grupoId = form.watch('grupo_id');
-                    if (!grupoId) return null;
-                    const tarifas = allTarifas.filter((t) => t.grupo_id === grupoId);
-                    if (tarifas.length === 0) return null;
-                    const fmt = (v: number | null) =>
-                      v != null
-                        ? new Intl.NumberFormat('pt-PT', {
-                            style: 'currency',
-                            currency: 'EUR',
-                          }).format(v)
-                        : '—';
-                    return (
-                      <div className="md:col-span-3 rounded-lg border bg-muted/20 p-4">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                          Tarifas do Grupo
-                        </p>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          {tarifas.map((t) => (
-                            <div key={t.nome} className="space-y-1">
-                              <p className="text-xs text-muted-foreground">{t.nome}</p>
-                              {t.preco_dia != null && (
-                                <p className="text-sm font-medium">
-                                  {fmt(t.preco_dia)}{' '}
-                                  <span className="text-xs text-muted-foreground">/dia</span>
-                                </p>
-                              )}
-                              {t.preco_semana != null && (
-                                <p className="text-sm font-semibold text-primary">
-                                  {fmt(t.preco_semana)}{' '}
-                                  <span className="text-xs text-muted-foreground">/semana</span>
-                                </p>
-                              )}
-                              {t.preco_mes != null && (
-                                <p className="text-sm font-medium">
-                                  {fmt(t.preco_mes)}{' '}
-                                  <span className="text-xs text-muted-foreground">/mês</span>
-                                </p>
-                              )}
-                              {t.kms_incluidos != null && (
-                                <p className="text-xs text-muted-foreground">
-                                  {t.kms_incluidos} km incl.
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  <FormField
-                    control={form.control}
-                    name="estacao_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estação</FormLabel>
-                        <Select
-                          value={field.value || ''}
-                          onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecionar estação..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="none">— Sem estação —</SelectItem>
-                            {estacoes.map((e) => (
-                              <SelectItem key={e.id} value={e.id}>
-                                {e.nome}
-                                {e.cidade ? ` (${e.cidade})` : ''}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                {/* Cards TVDE — só visíveis para tipos elegíveis a TVDE */}
-                {(() => {
-                  const tipoId = form.watch('tipo_id');
-                  const tipo = viaturasTipos.find((t) => t.id === tipoId);
-                  if (!tipo?.elegivel_tvde) return null;
-                  return (
-                    <div className="md:col-span-3 mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
-                        <div>
-                          <p className="font-medium">Elegível para TVDE?</p>
-                          <Badge variant={form.watch('habilitada_tvde') ? 'default' : 'secondary'}>
-                            {form.watch('habilitada_tvde') ? 'Sim' : 'Não'}
-                          </Badge>
-                        </div>
-                        <Switch
-                          checked={form.watch('habilitada_tvde')}
-                          onCheckedChange={(checked) => form.setValue('habilitada_tvde', checked)}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
-                        <div>
-                          <p className="font-medium">Viatura SLOT</p>
-                          <Badge variant={form.watch('is_slot') ? 'default' : 'secondary'}>
-                            {form.watch('is_slot') ? 'Ativo' : 'Inativo'}
-                          </Badge>
-                        </div>
-                        <Switch
-                          checked={form.watch('is_slot')}
-                          onCheckedChange={(checked) => form.setValue('is_slot', checked)}
-                        />
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
+              <ViaturaFormVeiculo
+                form={form}
+                watchedMarcaId={watchedMarcaId}
+                marcas={marcas}
+                modelos={modelos}
+                combustiveis={combustiveis}
+                viaturasTipos={viaturasTipos}
+                grupos={grupos}
+                allTarifas={allTarifas}
+                tarifasTvdeModelo={tarifasTvdeModelo}
+                estacoes={estacoes}
+              />
 
               <Separator />
 
-              {/* Técnico */}
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-4">Dados Técnicos</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="numero_motor"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nº Motor</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Número do motor" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="numero_chassis"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nº Chassis (VIN)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Número do chassis" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="km_atual"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Km Atual</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="0" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
+              <ViaturaFormTecnico form={form} />
 
               <Separator />
 
-              {/* Segurança / Extintor */}
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-4">
-                  Segurança / Extintor
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="extintor_numero"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nº Extintor</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Série ou identificação do extintor" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="extintor_validade"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Validade Extintor</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
+              <ViaturaFormSeguranca form={form} />
 
               <Separator />
 
@@ -1174,8 +472,11 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                 )}
               />
 
-              <div className="flex justify-end">
-                <Button type="submit" disabled={saving}>
+              <div className="flex items-center justify-end gap-3">
+                {isFormDirty && !saving && (
+                  <span className="text-xs text-muted-foreground">Alterações por gravar</span>
+                )}
+                <Button type="submit" disabled={saving || !isFormDirty}>
                   {saving ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
@@ -1189,187 +490,24 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
         </CardContent>
       </Card>
 
-      {/* Documentos da Viatura */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Documentos
-          </CardTitle>
-          {!isNew && (
-            <>
-              <input
-                type="file"
-                multiple
-                className="hidden"
-                ref={batchInputRef}
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={handleBatchSelect}
-              />
-              <Button variant="outline" size="sm" onClick={() => batchInputRef.current?.click()}>
-                <FolderUp className="h-4 w-4 mr-2" />
-                Carregar em Lote
-              </Button>
-            </>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isNew ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Guarde a viatura primeiro para anexar documentos.
-            </p>
-          ) : (
-            DOCUMENTOS_VIATURA.map((doc) => {
-              const existingDoc = getDocumentByType(doc.tipo);
-              const isUploading = uploadingDoc === doc.tipo;
+      <ViaturaDocumentosCard
+        isNew={isNew}
+        batchInputRef={batchInputRef}
+        onBatchSelect={handleBatchSelect}
+        getDocumentByType={getDocumentByType}
+        uploadingDoc={uploadingDoc}
+        onUpload={handleUploadDocument}
+        onView={handleViewDocument}
+        onDelete={handleDeleteDocument}
+      />
 
-              return (
-                <div key={doc.tipo} className="border rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {existingDoc ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      ) : doc.obrigatorio ? (
-                        <AlertCircle className="h-4 w-4 text-destructive" />
-                      ) : (
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <span className="text-sm font-medium">{doc.label}</span>
-                    </div>
-                    {doc.obrigatorio && !existingDoc && (
-                      <Badge variant="destructive" className="text-xs">
-                        Obrigatório
-                      </Badge>
-                    )}
-                  </div>
-
-                  {existingDoc ? (
-                    <div className="flex items-center justify-between bg-muted/50 rounded px-2 py-1.5">
-                      <span className="text-xs text-muted-foreground truncate flex-1">
-                        {existingDoc.nome_ficheiro || 'Documento anexado'}
-                      </span>
-                      <div className="flex gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={() => handleViewDocument(existingDoc)}
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-destructive"
-                          onClick={() => handleDeleteDocument(existingDoc)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleUploadDocument(doc.tipo, file);
-                        }}
-                        disabled={isUploading}
-                      />
-                      <div className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg py-2 hover:bg-muted/50 transition-colors">
-                        {isUploading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Upload className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">Anexar documento</span>
-                          </>
-                        )}
-                      </div>
-                    </label>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Dialog de carregamento em lote */}
-      <Dialog
+      <ViaturaBatchUploadDialog
         open={batchDialogOpen}
-        onOpenChange={(open) => {
-          if (!batchUploading) setBatchDialogOpen(open);
-        }}
-      >
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FolderUp className="h-5 w-5" />
-              Carregar Documentos em Lote
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2 max-h-[400px] overflow-y-auto">
-            {batchEntries.map((entry, i) => (
-              <div
-                key={i}
-                className={`flex items-center gap-3 p-3 border rounded-lg ${
-                  entry.reconhecido ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
-                }`}
-              >
-                <FileText
-                  className={`h-5 w-5 shrink-0 ${entry.reconhecido ? 'text-green-600' : 'text-red-400'}`}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{entry.file.name}</p>
-                  <p className={`text-xs ${entry.reconhecido ? 'text-green-600' : 'text-red-500'}`}>
-                    {entry.reconhecido
-                      ? `→ ${entry.labelDetectado}`
-                      : 'Tipo não reconhecido — será ignorado'}
-                  </p>
-                </div>
-                {entry.reconhecido && (
-                  <Badge
-                    variant="outline"
-                    className="text-xs shrink-0 border-green-300 text-green-700"
-                  >
-                    {entry.labelDetectado}
-                  </Badge>
-                )}
-              </div>
-            ))}
-          </div>
-          {batchEntries.some((e) => !e.reconhecido) && (
-            <p className="text-xs text-muted-foreground">
-              Prefixos reconhecidos: DUAF, DUAV, IPO, DAV, AC, CV
-            </p>
-          )}
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setBatchDialogOpen(false)}
-              disabled={batchUploading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleBatchUpload}
-              disabled={batchUploading || !batchEntries.some((e) => e.reconhecido)}
-            >
-              {batchUploading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />A carregar...
-                </>
-              ) : (
-                `Carregar ${batchEntries.filter((e) => e.reconhecido).length} ficheiro(s)`
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setBatchDialogOpen}
+        batchEntries={batchEntries}
+        batchUploading={batchUploading}
+        onUpload={handleBatchUpload}
+      />
     </div>
   );
 }

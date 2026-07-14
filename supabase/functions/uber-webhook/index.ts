@@ -1548,6 +1548,7 @@ const parseAmountValue = (value: string): number | null => {
 const processCsvImport = async ({
   supabase,
   integracaoId,
+  orgId,
   csvText,
   origem,
   nomeOriginal,
@@ -1557,6 +1558,7 @@ const processCsvImport = async ({
 }: {
   supabase: ReturnType<typeof createClient>;
   integracaoId: string;
+  orgId: string;
   csvText: string;
   origem: string;
   nomeOriginal: string;
@@ -1586,6 +1588,7 @@ const processCsvImport = async ({
   // Log the import event in uber_webhook_events
   await supabase.from("uber_webhook_events").insert({
     integracao_id: integracaoId,
+    org_id: orgId,
     event_id: `csv-import-${Date.now()}`,
     event_type: "csv_import",
     signature: null,
@@ -1718,6 +1721,7 @@ const processCsvImport = async ({
         const lastName = mapped.driver_last_name || `(CSV ${nomeOriginal ? nomeOriginal.slice(0, 15) : "Import"})`;
         driverRowsMap.set(uberDriverId, {
           integracao_id: integracaoId,
+          org_id: orgId,
           uber_driver_id: uberDriverId,
           first_name: firstName,
           last_name: lastName,
@@ -1735,6 +1739,7 @@ const processCsvImport = async ({
 
     rows.push({
       integracao_id: integracaoId,
+      org_id: orgId,
       uber_transaction_id: transactionId,
       trip_reference: mapped.trip_reference || mapped.uber_transaction_id || null,
       motorista_id: motoristaId,
@@ -1794,6 +1799,7 @@ const processCsvImport = async ({
   // Log to uber_sync_logs
   await supabase.from("uber_sync_logs").insert({
     integracao_id: integracaoId,
+    org_id: orgId,
     executado_por: null,
     tipo: "csv_import",
     status: parseErrors > 0 ? "error" : "success",
@@ -2049,21 +2055,25 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: "integracao_id é obrigatório para importação CSV" }, 400);
     }
 
+    // org_id da integração: necessário para gravar as linhas com a org certa
+    // (o service-role client não tem auth.uid(), get_current_org_id() ficaria NULL).
+    const { data: csvIntCfg } = await supabase
+      .from("plataformas_configuracao")
+      .select("org_id")
+      .eq("id", csvIntegracaoId)
+      .single();
+    if (!csvIntCfg) {
+      return jsonResponse({ success: false, error: "Integração Uber não encontrada" }, 404);
+    }
+    const csvOrgId = csvIntCfg.org_id;
+
     // Utilizador autenticado: tem de ser admin da org dona da integração.
     if (csvCallerUserId) {
-      const { data: csvIntCfg } = await supabase
-        .from("plataformas_configuracao")
-        .select("org_id")
-        .eq("id", csvIntegracaoId)
-        .single();
-      if (!csvIntCfg) {
-        return jsonResponse({ success: false, error: "Integração Uber não encontrada" }, 404);
-      }
       const { data: csvMembership } = await supabase
         .from("user_organizacoes")
         .select("is_admin")
         .eq("user_id", csvCallerUserId)
-        .eq("org_id", csvIntCfg.org_id)
+        .eq("org_id", csvOrgId)
         .maybeSingle();
       if (!csvMembership?.is_admin) {
         return jsonResponse(
@@ -2085,6 +2095,7 @@ Deno.serve(async (req) => {
       const csvResult = await processCsvImport({
         supabase,
         integracaoId: csvIntegracaoId,
+        orgId: csvOrgId,
         csvText: csvBruto,
         origem: asTrimmedString(parsedBody.origem) ?? "apify",
         nomeOriginal: asTrimmedString(parsedBody.nome_original) ?? "unknown.csv",

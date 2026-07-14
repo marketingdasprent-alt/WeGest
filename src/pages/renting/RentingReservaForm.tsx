@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Form } from '@/components/ui/form';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { useClientes } from '@/hooks/useClientes';
 import { useMotoristas } from '@/hooks/useMotoristas';
@@ -24,10 +23,20 @@ import {
   useUpdateReserva,
 } from '@/hooks/useReservas';
 import { useReservaCondutores, useSyncReservaCondutores } from '@/hooks/useReservaCondutores';
+import { useReservaCoberturas, useSyncReservaCoberturas } from '@/hooks/useReservaCoberturas';
+import { useReservaExtras, useSyncReservaExtras, calcExtraTotal } from '@/hooks/useReservaExtras';
+import { useReservaTaxas, useSyncReservaTaxas } from '@/hooks/useReservaTaxas';
 import { useContratoIdByReserva } from '@/hooks/useContratosRenting';
 import { uploadReservaAnexoSync } from '@/hooks/useReservaAnexos';
+import { useRentingCoberturas } from '@/hooks/useRentingCoberturas';
+import { useRentingExtras } from '@/hooks/useRentingExtras';
+import { useRentingTaxas } from '@/hooks/useRentingTaxas';
 import { useViaturas } from '@/hooks/useViaturas';
 import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
+import {
+  calcularBaseAluguerRenting,
+  useRentingTarifaPrecosModelo,
+} from '@/hooks/useRentingGruposTarifas';
 
 import { ClienteDialog } from '@/components/renting/ClienteDialog';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
@@ -35,11 +44,16 @@ import { CondutorProvisiorioDialog } from '@/components/motoristas/CondutorProvi
 import { ReservaDeleteConfirm } from '@/components/renting/reservas/ReservaDeleteConfirm';
 import { GenerateDocumentsDialog } from '@/components/motoristas/GenerateDocumentsDialog';
 import { ReservaResumoSidebar } from '@/components/renting/reservas/ReservaResumoSidebar';
+import { ReservaTabsPlaceholder } from '@/components/renting/reservas/ReservaTabsPlaceholder';
 import {
   ReservaTabAnexos,
   type AnexoPendente,
 } from '@/components/renting/reservas/tabs/ReservaTabAnexos';
-import { ReservaTabCondutores } from '@/components/renting/reservas/tabs/ReservaTabCondutores';
+import { ReservaTabCobertura } from '@/components/renting/reservas/tabs/ReservaTabCobertura';
+import { ReservaTabExtras } from '@/components/renting/reservas/tabs/ReservaTabExtras';
+import { ReservaTabTaxas } from '@/components/renting/reservas/tabs/ReservaTabTaxas';
+import { ReservaTabDanos } from '@/components/renting/reservas/tabs/ReservaTabDanos';
+import { ReservaTabHistorico } from '@/components/renting/reservas/tabs/ReservaTabHistorico';
 import { ReservaTabFaturar } from '@/components/renting/reservas/tabs/ReservaTabFaturar';
 import { ReservaTabGeral } from '@/components/renting/reservas/tabs/ReservaTabGeral';
 import {
@@ -50,6 +64,7 @@ import {
 } from '@/components/renting/reservas/reservaDialog.schema';
 
 import type { CondutorFormItem, ReservaInsert } from '@/types/reserva';
+import type { CoberturaFormItem, ExtraFormItem, TaxaFormItem } from '@/types/contratoRenting';
 
 const DEFAULT_VALUES: ReservaFormValues = {
   viatura_id: null,
@@ -67,6 +82,7 @@ const DEFAULT_VALUES: ReservaFormValues = {
   gestor_id: null,
   estado: 'pendente',
   regime: 'rent_a_car',
+  tarifa_id: null,
   valor_total: null,
   franquia_valor: null,
   caucao_valor: null,
@@ -79,6 +95,9 @@ const DEFAULT_VALUES: ReservaFormValues = {
   renovacao_intervalo_dias: null,
   observacoes: '',
   observacoes_internas: '',
+  coberturas: [],
+  extras: [],
+  taxas: [],
   condutores: [],
 };
 
@@ -93,17 +112,35 @@ const RentingReservaForm = () => {
 
   const { data: reserva, isLoading: loadingReserva } = useReserva(isEdit ? id : null);
   const { data: condutoresAtuais = [] } = useReservaCondutores(isEdit ? id : null);
+  const { data: coberturasAtuais = [] } = useReservaCoberturas(isEdit ? id : null);
+  const { data: extrasAtuais = [] } = useReservaExtras(isEdit ? id : null);
+  const { data: taxasAtuais = [] } = useReservaTaxas(isEdit ? id : null);
   const { data: contratoExistente } = useContratoIdByReserva(isEdit ? id : null);
+
+  const { data: coberturasCatalogo = [] } = useRentingCoberturas({ apenasAtivas: true });
+  const { data: extrasCatalogo = [] } = useRentingExtras({ apenasAtivos: true });
+  const { data: taxasCatalogo = [] } = useRentingTaxas({ apenasAtivas: true });
 
   const { data: clientes = [] } = useClientes();
   const { data: motoristas = [] } = useMotoristas({ apenasAtivos: true });
+  // Segundo condutor da reserva (regime slot, 2 motoristas a partilhar a
+  // viatura) — alimenta o seletor de condutor no dialog "Gerar Documentos".
+  const condutorSecundarioId =
+    condutoresAtuais.find((c) => !c.is_principal && c.motorista_id)?.motorista_id ?? null;
+  const motoristaSecundario = condutorSecundarioId
+    ? (motoristas.find((m) => m.id === condutorSecundarioId) ?? null)
+    : null;
   const { data: viaturas = [] } = useViaturas({ apenasDisponiveis: !isEdit });
+  const { data: precosModeloTvde = [] } = useRentingTarifaPrecosModelo();
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
 
   const createMutation = useCreateReserva();
   const updateMutation = useUpdateReserva();
   const deleteMutation = useDeleteReserva();
   const syncCondutoresMutation = useSyncReservaCondutores();
+  const syncCoberturasMutation = useSyncReservaCoberturas();
+  const syncExtrasMutation = useSyncReservaExtras();
+  const syncTaxasMutation = useSyncReservaTaxas();
 
   const [activeTab, setActiveTab] = useState('geral');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -138,7 +175,12 @@ const RentingReservaForm = () => {
   };
 
   const isPending =
-    createMutation.isPending || updateMutation.isPending || syncCondutoresMutation.isPending;
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    syncCondutoresMutation.isPending ||
+    syncCoberturasMutation.isPending ||
+    syncExtrasMutation.isPending ||
+    syncTaxasMutation.isPending;
 
   const form = useForm<ReservaFormValues>({
     resolver: zodResolver(reservaDialogSchema),
@@ -239,6 +281,7 @@ const RentingReservaForm = () => {
       gestor_id: reserva.gestor_id ?? null,
       estado: reserva.estado,
       regime: reserva.regime,
+      tarifa_id: reserva.tarifa_id ?? null,
       slot_valor_semanal: reserva.slot_valor_semanal,
       slot_valor_mensal: reserva.slot_valor_mensal,
       valor_total: reserva.valor_total,
@@ -251,13 +294,32 @@ const RentingReservaForm = () => {
       renovacao_intervalo_dias: reserva.renovacao_intervalo_dias,
       observacoes: reserva.observacoes ?? '',
       observacoes_internas: reserva.observacoes_internas ?? '',
+      coberturas: coberturasAtuais.map((c) => ({
+        cobertura_id: c.cobertura_id,
+        cobertura_nome: c.cobertura_nome,
+        preco_dia: c.preco_dia,
+        franquia_valor: c.franquia_valor,
+      })),
+      extras: extrasAtuais.map((e) => ({
+        extra_id: e.extra_id,
+        extra_nome: e.extra_nome,
+        preco_unidade: e.preco_unidade,
+        tipo_calculo: e.tipo_calculo,
+        quantidade: e.quantidade,
+      })),
+      taxas: taxasAtuais.map((t) => ({
+        taxa_id: t.taxa_id,
+        taxa_nome: t.taxa_nome,
+        percentagem: t.percentagem,
+        valor_fixo: t.valor_fixo,
+      })),
       condutores: condutoresAtuais.map((c) => ({
         cliente_id: c.cliente_id,
         motorista_id: c.motorista_id,
         is_principal: c.is_principal,
       })),
     });
-  }, [isEdit, reserva, condutoresAtuais, form]);
+  }, [isEdit, reserva, condutoresAtuais, coberturasAtuais, extrasAtuais, taxasAtuais, form]);
 
   // Pré-check de conflito de datas (UX-only — o gate real é o EXCLUDE na BD).
   const viaturaId = form.watch('viatura_id');
@@ -363,6 +425,30 @@ const RentingReservaForm = () => {
       const viaturaSelecionada = viaturas.find((v) => v.id === values.viatura_id);
       const matriculaFinal = values.matricula || viaturaSelecionada?.matricula || null;
 
+      // Bloqueia guardar se o modelo da viatura não tem preço na tarifa
+      // escolhida (o preço é definido por modelo na tarifa, tanto TVDE como
+      // Rent-a-Car). TVDE valida preco_semana; Rent-a-Car valida preco_dia.
+      const isTvdeSubmit = values.regime === 'tvde';
+      if (values.regime !== 'slot' && values.tarifa_id && viaturaSelecionada?.modelo_id) {
+        const linha = precosModeloTvde.find(
+          (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaSelecionada.modelo_id
+        );
+        const temPreco = isTvdeSubmit
+          ? linha?.preco_semana != null
+          : linha?.preco_dia != null || linha?.preco_mes != null;
+        if (!temPreco) {
+          toast({
+            title: isTvdeSubmit
+              ? 'Modelo sem preço na tarifa TVDE'
+              : 'Modelo sem preço na tarifa Rent-a-Car',
+            description:
+              'A viatura escolhida não tem preço definido na tarifa selecionada. Define o preço do modelo na tarifa ou escolhe outra viatura/tarifa.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
       // Condutor principal — derivado da lista para snapshot legado em reservas.
       // Pode ser cliente (rent-a-car) ou motorista (TVDE).
       const condutorPrincipal = values.condutores.find((c) => c.is_principal) ?? null;
@@ -374,6 +460,44 @@ const RentingReservaForm = () => {
         : null;
       const condutorPrincipalNome =
         condutorPrincipalCliente?.nome ?? condutorPrincipalMotorista?.nome ?? null;
+
+      // Linha de preço por modelo da tarifa escolhida (TVDE ou Rent-a-Car).
+      const precoModeloLinha =
+        values.tarifa_id && viaturaSelecionada?.modelo_id
+          ? (precosModeloTvde.find(
+              (p) =>
+                p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaSelecionada.modelo_id
+            ) ?? null)
+          : null;
+
+      const baseAluguer = calcularBaseAluguerRenting({
+        regime: values.regime,
+        isLongaDuracao: values.is_longa_duracao,
+        dias:
+          values.data_fim && values.data_inicio
+            ? Math.max(
+                1,
+                Math.ceil(
+                  (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) /
+                    86400000
+                )
+              )
+            : null,
+        tarifa: null,
+        valorTotalManual: values.valor_total,
+        precoModeloSemana:
+          isTvdeSubmit && values.tarifa_id && viaturaSelecionada?.modelo_id
+            ? (precoModeloLinha?.preco_semana ?? null)
+            : null,
+        precoModeloDia:
+          !isTvdeSubmit && values.tarifa_id && viaturaSelecionada?.modelo_id
+            ? (precoModeloLinha?.preco_dia ?? null)
+            : null,
+        precoModeloMes:
+          !isTvdeSubmit && values.tarifa_id && viaturaSelecionada?.modelo_id
+            ? (precoModeloLinha?.preco_mes ?? null)
+            : null,
+      });
 
       const payload: ReservaInsert = {
         viatura_id: values.viatura_id || null,
@@ -393,10 +517,11 @@ const RentingReservaForm = () => {
         emissor_id: values.emissor_id ?? null,
         estado: values.estado,
         regime: values.regime,
+        tarifa_id: values.tarifa_id ?? null,
         // Valor semanal só no regime slot (cobrado por carro).
         slot_valor_semanal: values.regime === 'slot' ? (values.slot_valor_semanal ?? null) : null,
         slot_valor_mensal: values.regime === 'slot' ? (values.slot_valor_mensal ?? null) : null,
-        valor_total: values.valor_total,
+        valor_total: baseAluguer ?? values.valor_total,
         franquia_valor: values.franquia_valor,
         caucao_valor: values.caucao_valor,
         kms_incluidos: values.kms_incluidos,
@@ -423,6 +548,33 @@ const RentingReservaForm = () => {
         });
       };
 
+      // Persiste coberturas/extras/taxas (m:n com os catálogos) — mesmo padrão
+      // do ContratoForm. Nº de dias para os extras periódicos/coberturas: TVDE
+      // ou slot (sem data fim) usa o intervalo de renovação, tal como no contrato.
+      const coberturasFinal = values.coberturas as CoberturaFormItem[];
+      const extrasFinal = values.extras as ExtraFormItem[];
+      const taxasFinal = values.taxas as TaxaFormItem[];
+      const diasRelacoes =
+        values.regime === 'tvde' || !values.data_fim
+          ? Math.max(1, values.renovacao_intervalo_dias ?? 30)
+          : Math.max(
+              1,
+              Math.ceil(
+                (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) /
+                  86400000
+              )
+            );
+      const custoCoberturas =
+        coberturasFinal.reduce((s, c) => s + (c.preco_dia ?? 0), 0) * diasRelacoes;
+      const custoExtras = extrasFinal.reduce((s, e) => s + calcExtraTotal(e, diasRelacoes), 0);
+      const subtotalTaxas =
+        (baseAluguer ?? values.valor_total ?? 0) + custoCoberturas + custoExtras;
+      const syncRelacoesExtra = (reservaId: string) => {
+        syncCoberturasMutation.mutate({ reservaId, desejadas: coberturasFinal });
+        syncExtrasMutation.mutate({ reservaId, desejados: extrasFinal, dias: diasRelacoes });
+        syncTaxasMutation.mutate({ reservaId, desejadas: taxasFinal, subtotal: subtotalTaxas });
+      };
+
       if (isEdit && reserva) {
         // Editar: ficar na própria página (utilizador vê toast e continua a trabalhar).
         // gestor_id (reatribuição por superior) vai só no update — na criação o
@@ -430,7 +582,12 @@ const RentingReservaForm = () => {
         // hidratado (sem efeito).
         updateMutation.mutate(
           { id: reserva.id, ...payload, gestor_id: values.gestor_id ?? null },
-          { onSuccess: () => syncCondutores(reserva.id) }
+          {
+            onSuccess: () => {
+              syncCondutores(reserva.id);
+              syncRelacoesExtra(reserva.id);
+            },
+          }
         );
       } else {
         // Criar: navegar para modo edição da nova reserva.
@@ -438,6 +595,7 @@ const RentingReservaForm = () => {
         createMutation.mutate(payload, {
           onSuccess: async (created) => {
             syncCondutores(created.id);
+            syncRelacoesExtra(created.id);
             // Upload em batch dos anexos pendentes — best-effort.
             if (anexosPendentes.length > 0) {
               for (const p of anexosPendentes) {
@@ -476,9 +634,7 @@ const RentingReservaForm = () => {
     };
     collect(errors);
 
-    // Campo de condutores vive na tab "Condutores"/"Motoristas".
-    if (errors.condutores) setActiveTab('condutores');
-    else setActiveTab('geral');
+    setActiveTab('geral');
 
     const unicas = Array.from(new Set(messages)).slice(0, 4);
     toast({
@@ -658,16 +814,10 @@ const RentingReservaForm = () => {
               <div className="grid grid-cols-1 xl:grid-cols-[1fr_240px] gap-4 items-start">
                 <Card className="bg-card border-border">
                   <CardContent className="p-4 sm:p-6">
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                      <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-flex">
-                        <TabsTrigger value="geral">Geral</TabsTrigger>
-                        <TabsTrigger value="condutores">
-                          {regimeWatched === 'rent_a_car' ? 'Condutores' : 'Motoristas'}
-                        </TabsTrigger>
-                        <TabsTrigger value="anexos">Anexos</TabsTrigger>
-                      </TabsList>
-
-                      <TabsContent value="geral" className="pt-4">
+                    <ReservaTabsPlaceholder
+                      value={activeTab}
+                      onValueChange={setActiveTab}
+                      geralContent={
                         <ReservaTabGeral
                           form={form}
                           viaturas={viaturasParaSelecao}
@@ -675,22 +825,35 @@ const RentingReservaForm = () => {
                           clientes={clientes}
                           motoristas={motoristas}
                           onCriarMotorista={() => setMotoristaDialogOpen(true)}
-                        />
-                      </TabsContent>
-
-                      <TabsContent value="condutores" className="pt-4">
-                        <ReservaTabCondutores
-                          form={form}
-                          regime={regimeWatched}
-                          clientes={clientes}
-                          motoristas={motoristas}
                           onCriarNovoCliente={() => setClienteDialogOpen(true)}
-                          onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
                           onCriarCondutorProvisorio={() => setCondutorProvisorioOpen(true)}
                         />
-                      </TabsContent>
-
-                      <TabsContent value="anexos" className="pt-4">
+                      }
+                      coberturasContent={
+                        <ReservaTabCobertura form={form} coberturas={coberturasCatalogo} />
+                      }
+                      extrasContent={<ReservaTabExtras form={form} extras={extrasCatalogo} />}
+                      taxasContent={<ReservaTabTaxas form={form} taxas={taxasCatalogo} />}
+                      faturarContent={
+                        mostrarFaturacao && reserva ? (
+                          <ReservaTabFaturar reserva={reserva} />
+                        ) : undefined
+                      }
+                      historicoContent={
+                        isEdit && reserva ? (
+                          <ReservaTabHistorico
+                            reserva={reserva}
+                            contratoExistente={contratoExistente}
+                            onAbrirContrato={
+                              contratoExistente
+                                ? () => navigate(`/renting/contratos/${contratoExistente.id}`)
+                                : undefined
+                            }
+                          />
+                        ) : undefined
+                      }
+                      danosContent={<ReservaTabDanos contratoId={contratoExistente?.id ?? null} />}
+                      anexosContent={
                         <ReservaTabAnexos
                           reservaId={isEdit ? (id ?? null) : null}
                           pendentes={anexosPendentes}
@@ -698,8 +861,8 @@ const RentingReservaForm = () => {
                           onRenomearPendente={renomearAnexoPendente}
                           onRemoverPendente={removerAnexoPendente}
                         />
-                      </TabsContent>
-                    </Tabs>
+                      }
+                    />
                   </CardContent>
                 </Card>
 
@@ -754,6 +917,7 @@ const RentingReservaForm = () => {
           open={documentosDialogOpen}
           onOpenChange={setDocumentosDialogOpen}
           motorista={motoristas.find((m) => m.id === reserva.condutor_id) ?? null}
+          motoristaSecundario={motoristaSecundario}
           viaturaId={reserva.viatura_id}
         />
       )}

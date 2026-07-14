@@ -11,6 +11,45 @@ function chaveCondutor(c: { cliente_id: string | null; motorista_id: string | nu
   return (c.cliente_id ?? c.motorista_id) as string;
 }
 
+export interface CondutorPrincipalInfo {
+  contratoId: string;
+  motoristaNome: string | null;
+  motoristaNif: string | null;
+}
+
+/**
+ * Condutor principal (motorista) de cada contrato — usado pela pesquisa da
+ * lista de contratos (nome/contribuinte do motorista). Só TVDE tem
+ * motorista_id preenchido; rent-a-car usa cliente_id (já pesquisável por
+ * nome/NIF do cliente, que a lista já tem carregado à parte).
+ */
+export function useContratoCondutoresPrincipais() {
+  return useQuery({
+    queryKey: [...QUERY_KEY_BASE, 'principais'],
+    queryFn: async (): Promise<CondutorPrincipalInfo[]> => {
+      const { data, error } = await supabase
+        .from('contrato_condutores')
+        .select('contrato_id, motoristas_ativos(nome, nif)')
+        .eq('is_principal', true)
+        .is('data_fim', null)
+        .not('motorista_id', 'is', null);
+      if (error) throw error;
+      return (data ?? []).map((c) => {
+        const motorista = c.motoristas_ativos as unknown as {
+          nome: string | null;
+          nif: string | null;
+        } | null;
+        return {
+          contratoId: c.contrato_id as string,
+          motoristaNome: motorista?.nome ?? null,
+          motoristaNif: motorista?.nif ?? null,
+        };
+      });
+    },
+    staleTime: 30_000,
+  });
+}
+
 /** Carrega os condutores de um contrato. */
 export function useContratoCondutores(contratoId: string | null | undefined) {
   return useQuery({

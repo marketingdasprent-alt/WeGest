@@ -74,6 +74,7 @@ const maisDias = (n: number) => {
   d.setDate(d.getDate() + n);
   return d.toISOString().slice(0, 10);
 };
+const round2 = (v: number) => Math.round(v * 100) / 100;
 
 export function ContratoFaturarDialog({
   open,
@@ -179,9 +180,11 @@ export function ContratoFaturarDialog({
         return;
       }
 
-      // TVDE e Slot já têm IVA incluído no preço — fatura sem IVA adicional
-      const taxaIva =
-        contrato.regime === 'tvde' || contrato.regime === 'slot' ? 0 : (contrato.taxa_iva ?? 23);
+      // fatura.subtotal já vem correctamente calculado (ver ContratoTabFaturar
+      // — soma IVA em Rent-a-Car, decompõe em TVDE/slot). Reaproveita a mesma
+      // taxa/valor em vez de os recalcular aqui, para não desalinhar os dois.
+      const taxaIva = fatura.taxaIva;
+      const isRentACar = contrato.regime === 'rent_a_car';
       // As taxas somam-se DEPOIS do IVA e a cobrança não as modela; o movimento WeGest
       // regista subtotal + IVA. A fatura fiscal (com taxas) é emitida pelo programa externo.
       const valorSemIva = fatura.subtotal;
@@ -263,13 +266,22 @@ export function ContratoFaturarDialog({
         try {
           // Itens fiscais = linhas brutas (sem a linha sintética de desconto);
           // o desconto vai como % por linha, p/ o total bater certo sem linhas negativas.
+          // O emissor soma sempre taxa_iva por cima do preco_unitario enviado.
+          // Rent-a-Car: it.valor já é o preço SEM IVA (a tarifa vem assim) —
+          // envia-se tal e qual. TVDE/slot: it.valor é o preço final (já com
+          // IVA) — decompõe-se para o preço unitário sem IVA, senão o
+          // emissor duplicava o imposto ao somar por cima outra vez.
           const itensFatura: ItemFatura[] = fatura.itens
             .filter((it) => !it.descricao.startsWith('Desconto'))
             .map((it) => ({
               descricao: it.descricao,
               quantidade: 1,
-              preco_unitario: it.valor,
-              taxa_iva: fatura.taxaIva,
+              preco_unitario: isRentACar
+                ? it.valor
+                : taxaIva > 0
+                  ? round2(it.valor / (1 + taxaIva / 100))
+                  : it.valor,
+              taxa_iva: taxaIva,
               desconto: contrato.desconto_percentagem ?? 0,
             }));
           const cliente = await fetchClienteFatura();

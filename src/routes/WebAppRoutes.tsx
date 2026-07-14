@@ -5,6 +5,7 @@ import { DashboardLayout } from '@/components/DashboardLayout';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { usePageTracking } from '@/hooks/usePageTracking';
 import { RECURSOS } from '@/utils/permissions';
+import { REALIZE_ORG_IDS } from '@/config/realize';
 import { Loader2 } from 'lucide-react';
 
 // Recursos do módulo Administrativo — acesso à página com QUALQUER um deles.
@@ -31,6 +32,7 @@ const DasprentFuncionarios = lazy(() => import('@/pages/DasprentFuncionarios'));
 const AdminInvites = lazy(() => import('@/pages/AdminInvites'));
 const AdminSettings = lazy(() => import('@/pages/AdminSettings'));
 const AdminDocumentos = lazy(() => import('@/pages/AdminDocumentos'));
+const AuditoriaPage = lazy(() => import('@/pages/admin/AuditoriaPage'));
 const MotoristaCandidaturas = lazy(() => import('@/pages/MotoristaCandidaturas'));
 const MyAccount = lazy(() => import('@/pages/MyAccount'));
 const Login = lazy(() => import('@/pages/Login'));
@@ -59,6 +61,7 @@ const FaturacaoPage = lazy(() => import('@/pages/administrativo/FaturacaoPage'))
 const Instalar = lazy(() => import('@/pages/Instalar'));
 const Calendario = lazy(() => import('@/pages/Calendario'));
 const Marketing = lazy(() => import('@/pages/Marketing'));
+const Realize = lazy(() => import('@/pages/Realize'));
 const MotoristaDetalhe = lazy(() => import('@/pages/MotoristaDetalhe'));
 const Index = lazy(() => import('@/pages/Index'));
 const EliminarConta = lazy(() => import('@/pages/EliminarConta'));
@@ -66,6 +69,7 @@ const SelecionarOrg = lazy(() => import('@/pages/SelecionarOrg'));
 const RegistarOrg = lazy(() => import('@/pages/RegistarOrg'));
 const RentingContratos = lazy(() => import('@/pages/renting/RentingContratos'));
 const ContratoForm = lazy(() => import('@/pages/renting/ContratoForm'));
+const PedidosTrocaKms = lazy(() => import('@/pages/renting/PedidosTrocaKms'));
 const RealizarEntregaPage = lazy(() => import('@/pages/renting/RealizarEntregaPage'));
 const RentingReservas = lazy(() => import('@/pages/renting/RentingReservas'));
 const RentingReservaForm = lazy(() => import('@/pages/renting/RentingReservaForm'));
@@ -83,6 +87,7 @@ const RentingTaxas = lazy(() => import('@/pages/renting/RentingTaxas'));
 const ViaturaMarcasModelos = lazy(() => import('@/pages/viaturas/ViaturaMarcasModelos'));
 const ViaturaCombustiveis = lazy(() => import('@/pages/viaturas/ViaturaCombustiveis'));
 const ViaturaTipos = lazy(() => import('@/pages/viaturas/ViaturaTipos'));
+const NotificacoesPage = lazy(() => import('@/pages/NotificacoesPage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -279,6 +284,16 @@ const WebAppRoutes = () => {
             }
           />
           <Route
+            path="/admin/auditoria"
+            element={
+              <ProtectedRoute requireSupervisorTvde={true}>
+                <DashboardLayout>
+                  <AuditoriaPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/formularios"
             element={
               <ProtectedRoute requiredResource={RECURSOS.ADMIN_FORMULARIOS}>
@@ -409,6 +424,16 @@ const WebAppRoutes = () => {
             }
           />
           <Route
+            path="/realize"
+            element={
+              <ProtectedRoute requireOrgIds={REALIZE_ORG_IDS}>
+                <DashboardLayout fullBleed>
+                  <Realize />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/my-account"
             element={
               <ProtectedRoute>
@@ -434,6 +459,16 @@ const WebAppRoutes = () => {
               <ProtectedRoute requiredResource="renting_contratos">
                 <DashboardLayout>
                   <ContratoForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/renting/pedidos-kms"
+            element={
+              <ProtectedRoute requiredResource="renting_contratos" requireSupervisorTvde>
+                <DashboardLayout>
+                  <PedidosTrocaKms />
                 </DashboardLayout>
               </ProtectedRoute>
             }
@@ -668,6 +703,16 @@ const WebAppRoutes = () => {
             }
           />
           <Route path="/instalar" element={<Instalar />} />
+          <Route
+            path="/notificacoes"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <NotificacoesPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

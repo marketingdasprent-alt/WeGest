@@ -57,7 +57,9 @@ export const contratoFormSchema = z
 
     // Recolha
     estacao_recolha_id: z.string().uuid().nullable().optional(),
-    data_fim: datetimeLocal,
+    // TVDE não tem data de fim (renovação automática) — obrigatória só fora
+    // desse regime (validado no superRefine abaixo).
+    data_fim: z.string().optional().nullable(),
 
     // Estação origem da viatura
     estacao_origem_viatura_id: z.string().uuid().nullable().optional(),
@@ -70,6 +72,9 @@ export const contratoFormSchema = z
 
     // Tarifário simples
     tarifa_diaria: optionalNonNegativeNumber,
+    // Tarifa aplicada (herdada da reserva). Em TVDE é a tarifa tipo='tvde'
+    // escolhida na reserva; usada para o preço semanal por modelo.
+    tarifa_id: z.string().uuid().nullable().optional(),
     desconto_percentagem: optionalPercentage,
     taxa_iva: z
       .union([z.number(), z.string()])
@@ -180,9 +185,25 @@ export const contratoFormSchema = z
         message: 'Apenas um condutor pode ser principal.',
       }),
   })
-  .refine((d) => new Date(d.data_fim).getTime() > new Date(d.data_inicio).getTime(), {
-    message: 'Data fim tem que ser posterior à data início',
-    path: ['data_fim'],
+  .superRefine((d, ctx) => {
+    // TVDE: sem data de fim — o contrato é aberto, renovado automaticamente
+    // (ver is_longa_duracao/renovacao_opcao). Fora de TVDE, é obrigatória.
+    if (d.regime === 'tvde') return;
+    if (!d.data_fim || Number.isNaN(new Date(d.data_fim).getTime())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['data_fim'],
+        message: 'Data fim obrigatória',
+      });
+      return;
+    }
+    if (new Date(d.data_fim).getTime() <= new Date(d.data_inicio).getTime()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['data_fim'],
+        message: 'Data fim tem que ser posterior à data início',
+      });
+    }
   });
 
 export type ContratoFormValues = z.infer<typeof contratoFormSchema>;
@@ -205,6 +226,7 @@ export const DEFAULT_CONTRATO_VALUES: ContratoFormValues = {
   origem: 'sistema',
   regime: 'rent_a_car',
   tarifa_diaria: null,
+  tarifa_id: null,
   desconto_percentagem: null,
   taxa_iva: 23,
   valor_total_manual: null,

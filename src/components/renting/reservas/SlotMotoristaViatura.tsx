@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
-import { Car, Check, ChevronsUpDown, Plus, User, UserPlus } from 'lucide-react';
+import { Car, Check, ChevronsUpDown, Plus, User, UserPlus, X } from 'lucide-react';
 
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
@@ -64,7 +64,12 @@ export const SlotMotoristaViatura: React.FC<Props> = ({ form, motoristas, onCria
 
   const selecionarMotorista = (id: string) => {
     const m = motoristasSlot.find((x) => x.id === id) ?? motoristas.find((x) => x.id === id);
-    form.setValue('condutores', [{ cliente_id: null, motorista_id: id, is_principal: true }], {
+    const secundarioAtual = condutores.find((c) => !c.is_principal) ?? null;
+    const novaLista =
+      secundarioAtual && secundarioAtual.motorista_id !== id
+        ? [{ cliente_id: null, motorista_id: id, is_principal: true }, secundarioAtual]
+        : [{ cliente_id: null, motorista_id: id, is_principal: true }];
+    form.setValue('condutores', novaLista, {
       shouldDirty: true,
       shouldValidate: true,
     });
@@ -78,6 +83,29 @@ export const SlotMotoristaViatura: React.FC<Props> = ({ form, motoristas, onCria
     form.setValue('viatura_id', null, { shouldDirty: true });
     form.setValue('matricula', '', { shouldDirty: true });
     setMotoristaOpen(false);
+  };
+
+  const secundario = condutores.find((c) => !c.is_principal && c.motorista_id) ?? null;
+  const secundarioId = secundario?.motorista_id ?? null;
+  const [secundarioOpen, setSecundarioOpen] = useState(false);
+
+  const motoristasParaSecundario = motoristas.filter((m) => m.id !== slotMotoristaId);
+
+  const selecionarSecundario = (id: string) => {
+    const principal = condutores.find((c) => c.is_principal) ?? null;
+    const novos = principal
+      ? [principal, { cliente_id: null, motorista_id: id, is_principal: false }]
+      : [{ cliente_id: null, motorista_id: id, is_principal: false }];
+    form.setValue('condutores', novos, { shouldDirty: true, shouldValidate: true });
+    setSecundarioOpen(false);
+  };
+
+  const removerSecundario = () => {
+    form.setValue(
+      'condutores',
+      condutores.filter((c) => c.is_principal),
+      { shouldDirty: true, shouldValidate: true }
+    );
   };
 
   const selecionarViatura = (v: { id: string; matricula: string }) => {
@@ -161,6 +189,81 @@ export const SlotMotoristaViatura: React.FC<Props> = ({ form, motoristas, onCria
         </div>
         <FormField control={form.control} name="condutores" render={() => <FormMessage />} />
       </div>
+
+      {/* === Condutor secundário (opcional) === */}
+      {slotMotoristaId && (
+        <div className="space-y-3">
+          <SectionHeader icon={User} title="Condutor secundário" accent="amber" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Popover open={secundarioOpen} onOpenChange={setSecundarioOpen} modal={false}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={secundarioOpen}
+                  aria-label="Condutor secundário"
+                  className="min-w-[280px] justify-between font-normal bg-background"
+                >
+                  {secundarioId
+                    ? (motoristas.find((m) => m.id === secundarioId)?.nome ?? 'Condutor secundário')
+                    : 'Adicionar condutor secundário...'}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[360px] p-0" align="start">
+                <Command
+                  filter={(value, search) =>
+                    normalizeForSearch(value).includes(normalizeForSearch(search)) ? 1 : 0
+                  }
+                >
+                  <CommandInput placeholder="Pesquisar por nome, NIF..." className="h-9" />
+                  <CommandList>
+                    <CommandEmpty>Nenhum motorista encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {motoristasParaSecundario.map((m) => (
+                        <CommandItem
+                          key={m.id}
+                          value={`${m.nome} ${m.nif ?? ''}`}
+                          onSelect={() => selecionarSecundario(m.id)}
+                          className="cursor-pointer flex items-center gap-2"
+                        >
+                          <Check
+                            className={cn(
+                              'h-4 w-4',
+                              secundarioId === m.id ? 'opacity-100' : 'opacity-0'
+                            )}
+                          />
+                          <span className="font-medium">{m.nome}</span>
+                          {m.nif && (
+                            <span className="text-xs text-muted-foreground">NIF {m.nif}</span>
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+
+            {secundarioId && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-2 text-muted-foreground"
+                onClick={removerSecundario}
+              >
+                <X className="h-4 w-4" />
+                Remover
+              </Button>
+            )}
+          </div>
+          <span data-testid="condutores-debug" className="hidden">
+            {JSON.stringify(condutores)}
+          </span>
+        </div>
+      )}
 
       {/* === Viatura (do motorista) === */}
       <div className="space-y-3">

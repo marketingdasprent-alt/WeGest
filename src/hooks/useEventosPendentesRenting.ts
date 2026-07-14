@@ -18,26 +18,46 @@ export interface EventoPendenteRenting {
 interface UseOptions {
   tipo: 'entrega' | 'recolha';
   enabled?: boolean;
+  /** Ignora eventos agendados para o futuro (data_inicio > agora) — evita
+   *  mostrar como "pendente" uma recolha que só vai acontecer daqui a
+   *  semanas/meses (ex.: a recolha final de um contrato Rent-a-Car em
+   *  curso, agendada para a data_fim). */
+  ignorarFuturos?: boolean;
 }
 
 const QUERY_KEY_BASE = ['calendario', 'eventos-pendentes-renting'] as const;
+
+// Conta "Marketing" (marketing@dasprent.pt) foi usada para gerar em lote 150
+// contratos de teste/demo (import directo na BD, mesmo timestamp ao
+// microssegundo). Não são operações reais — não devem poluir as filas de
+// Entrega/Recolha que os gestores usam a sério.
+const CRIADOR_EXCLUIDO_ID = '290a09b7-3e8a-4032-a9e2-d1bc41a75ad7';
 
 /**
  * Lista eventos de renting que ainda não foram realizados, com data
  * de abertura do contrato e nome de quem o abriu.
  */
-export function useEventosPendentesRenting({ tipo, enabled = true }: UseOptions) {
+export function useEventosPendentesRenting({
+  tipo,
+  enabled = true,
+  ignorarFuturos = false,
+}: UseOptions) {
   return useQuery({
-    queryKey: [...QUERY_KEY_BASE, tipo],
+    queryKey: [...QUERY_KEY_BASE, tipo, ignorarFuturos],
     queryFn: async (): Promise<EventoPendenteRenting[]> => {
       // 1) Eventos pendentes (entrega ou recolha)
-      const { data: eventos, error } = await supabase
+      let eventosQuery = supabase
         .from('calendario_eventos')
         .select('id, titulo, cidade, data_inicio, matricula_devolver, origem_id')
         .eq('origem_tipo', 'contrato_renting')
         .eq('tipo', tipo)
-        .is('realizado_em', null)
-        .order('data_inicio', { ascending: true });
+        .is('realizado_em', null);
+      if (ignorarFuturos) {
+        eventosQuery = eventosQuery.lte('data_inicio', new Date().toISOString());
+      }
+      const { data: eventos, error } = await eventosQuery.order('data_inicio', {
+        ascending: true,
+      });
       if (error) throw error;
       if (!eventos || eventos.length === 0) return [];
 
@@ -87,20 +107,22 @@ export function useEventosPendentesRenting({ tipo, enabled = true }: UseOptions)
         }
       }
 
-      return eventos.map((e) => {
-        const c = contratosMap[e.origem_id as string];
-        return {
-          id: e.id as string,
-          titulo: e.titulo as string,
-          cidade: (e.cidade as string | null) ?? null,
-          data_inicio: e.data_inicio as string,
-          matricula_devolver: (e.matricula_devolver as string | null) ?? null,
-          origem_id: e.origem_id as string,
-          contrato_codigo: c?.codigo ?? null,
-          aberto_em: c?.created_at ?? null,
-          aberto_por: c?.created_by ? profilesMap[c.created_by] || null : null,
-        };
-      });
+      return eventos
+        .filter((e) => contratosMap[e.origem_id as string]?.created_by !== CRIADOR_EXCLUIDO_ID)
+        .map((e) => {
+          const c = contratosMap[e.origem_id as string];
+          return {
+            id: e.id as string,
+            titulo: e.titulo as string,
+            cidade: (e.cidade as string | null) ?? null,
+            data_inicio: e.data_inicio as string,
+            matricula_devolver: (e.matricula_devolver as string | null) ?? null,
+            origem_id: e.origem_id as string,
+            contrato_codigo: c?.codigo ?? null,
+            aberto_em: c?.created_at ?? null,
+            aberto_por: c?.created_by ? profilesMap[c.created_by] || null : null,
+          };
+        });
     },
     enabled,
     staleTime: 30_000,

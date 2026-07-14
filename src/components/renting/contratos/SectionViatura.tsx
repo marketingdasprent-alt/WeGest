@@ -136,10 +136,7 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
                       align="start"
                     >
                       <Command>
-                        <CommandInput
-                          placeholder="Pesquisar matrícula, marca, modelo..."
-                          className="h-9"
-                        />
+                        <CommandInput placeholder="Pesquisar por matrícula..." className="h-9" />
                         <CommandList>
                           <CommandEmpty>Nenhuma viatura encontrada.</CommandEmpty>
                           {semAgrupamento ? (
@@ -147,7 +144,7 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
                               {viaturasComGrupo.map((v) => (
                                 <CommandItem
                                   key={v.id}
-                                  value={`${v.matricula} ${v.marca} ${v.modelo}`}
+                                  value={v.matricula}
                                   onSelect={() => selecionarViatura(v.id, field.onChange)}
                                   className="cursor-pointer"
                                 >
@@ -168,7 +165,7 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
                                   {mesmoGrupo.map((v) => (
                                     <CommandItem
                                       key={v.id}
-                                      value={`${v.matricula} ${v.marca} ${v.modelo}`}
+                                      value={v.matricula}
                                       onSelect={() => selecionarViatura(v.id, field.onChange)}
                                       className="cursor-pointer"
                                     >
@@ -188,7 +185,7 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
                                   {outrosGrupos.map((v) => (
                                     <CommandItem
                                       key={v.id}
-                                      value={`${v.matricula} ${v.marca} ${v.modelo}`}
+                                      value={v.matricula}
                                       onSelect={() => selecionarViatura(v.id, field.onChange)}
                                       className="cursor-pointer"
                                     >

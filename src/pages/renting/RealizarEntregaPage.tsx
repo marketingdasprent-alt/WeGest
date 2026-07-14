@@ -1,99 +1,60 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
-import { pt } from 'date-fns/locale';
-import {
-  ArrowLeft,
-  Camera,
-  CheckCircle2,
-  Eye,
-  FileText,
-  Loader2,
-  Save,
-  TriangleAlert,
-  Upload,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2, TriangleAlert } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Textarea } from '@/components/ui/textarea';
-import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-
 import { useConsumirTokenRealizacao, useRealizarFromToken } from '@/hooks/useRealizacaoToken';
 import { formatMatricula } from '@/components/calendario/calendarioUtils';
-import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
-import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
-import {
-  AssinaturasHandoverSection,
-  type AssinaturasHandoverHandle,
-} from '@/components/assinatura/AssinaturasHandoverSection';
+import { errorMessage } from '@/utils/errorMessage';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  type FilePreview,
+  tipoLabel,
+  cacheKey,
+  fileToDataUrl,
+  dataUrlToFile,
+  validarDadosObrigatorios,
+  type RascunhoCache,
+} from '@/utils/entrega';
+import { gerarFolhaBloco, uploadDanos } from './entrega/entregaOperations';
+import {
+  StepDadosIniciais,
+  StepKmCombustivelFotos,
+  StepCondutorDuaObservacoes,
+  StepConfirmacaoFolha,
+} from './entrega/steps';
+import type { AssinaturasHandoverHandle } from '@/components/assinatura/AssinaturasHandoverSection';
 
-interface FilePreview {
-  id: string;
-  file: File;
-  url: string;
-  localizacao: string;
-  descricao: string;
-  valor: string;
-}
+// ── Helpers de ficheiros (puros, extraídos para reuso) ──────────────────────
 
-const LOCALIZACOES = [
-  { value: 'frente', label: 'Frente' },
-  { value: 'traseira', label: 'Traseira' },
-  { value: 'lateral_esq', label: 'Lateral Esquerda' },
-  { value: 'lateral_dir', label: 'Lateral Direita' },
-  { value: 'teto', label: 'Teto' },
-  { value: 'interior', label: 'Interior' },
-  { value: 'motor', label: 'Motor' },
-  { value: 'outro', label: 'Outro' },
-];
-const LOCALIZACAO_LABEL: Record<string, string> = Object.fromEntries(
-  LOCALIZACOES.map((l) => [l.value, l.label])
-);
+const makeFileHandlers = (setter: React.Dispatch<React.SetStateAction<FilePreview[]>>) => ({
+  addFiles(list: FileList | null) {
+    if (!list) return;
+    setter((prev) => [
+      ...prev,
+      ...Array.from(list).map((file) => ({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file,
+        url: URL.createObjectURL(file),
+        localizacao: '',
+        descricao: '',
+        valor: '',
+      })),
+    ]);
+  },
+  updateFoto(id: string, campo: 'localizacao' | 'descricao' | 'valor', valor: string) {
+    setter((prev) => prev.map((f) => (f.id === id ? { ...f, [campo]: valor } : f)));
+  },
+  removeFile(id: string) {
+    setter((prev) => prev.filter((f) => f.id !== id));
+  },
+});
 
-// ── Cache local (rascunho) ─────────────────────────────────────────────────
-// Permite ao gestor preencher, pré-visualizar a folha e, se algo estiver
-// errado, recarregar/voltar sem perder o trabalho. Fotos guardadas em base64.
-interface RascunhoCache {
-  km: string;
-  combustivel: string;
-  observacoes: string;
-  fotos: {
-    name: string;
-    type: string;
-    dataUrl: string;
-    localizacao: string;
-    descricao: string;
-    valor: string;
-  }[];
-}
-
-const cacheKey = (token: string) => `realizar-rascunho-${token}`;
-
-const tipoLabel = (tipo: 'entrega' | 'recolha' | 'troca' | undefined): string =>
-  tipo === 'entrega' ? 'Entrega' : tipo === 'troca' ? 'Troca' : 'Recolha';
-
-const fileToDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-
-const dataUrlToFile = async (dataUrl: string, name: string, type: string): Promise<File> => {
-  const res = await fetch(dataUrl);
-  const blob = await res.blob();
-  return new File([blob], name, { type: type || blob.type });
-};
+// ── Componente principal ─────────────────────────────────────────────────────
 
 const RealizarEntregaPage = () => {
   const { token } = useParams<{ token: string }>();
@@ -101,26 +62,30 @@ const RealizarEntregaPage = () => {
   const { toast } = useToast();
   const { data: info, isLoading, error } = useConsumirTokenRealizacao(token ?? null);
   const realizar = useRealizarFromToken();
-
-  const [km, setKm] = useState('');
-  const [combustivel, setCombustivel] = useState<string>('');
-  const [observacoes, setObservacoes] = useState('');
-  const [files, setFiles] = useState<FilePreview[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [done, setDone] = useState(false);
-  const [gerandoFolha, setGerandoFolha] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const restauradoRef = useRef(false);
-  const assinaturasRef = useRef<AssinaturasHandoverHandle>(null);
   const { user } = useAuth();
   const responsavelNome =
     (user?.user_metadata?.nome as string | undefined) ?? user?.email ?? 'Responsável';
 
-  // Contexto da folha (viatura, condutor, empresa emissora, cliente, km/comb.
-  // de saída) resolvido no servidor a partir do token, via RPC SECURITY
-  // DEFINER. Assim NÃO depende de o utilizador ter permissão de renting/
-  // contratos — quem faz o check no terreno normalmente não a tem.
+  // Estado do formulário
+  const [km, setKm] = useState('');
+  const [combustivel, setCombustivel] = useState<string>('');
+  const [observacoes, setObservacoes] = useState('');
+  const [files, setFiles] = useState<FilePreview[]>([]);
+  const [kmAntiga, setKmAntiga] = useState('');
+  const [combustivelAntiga, setCombustivelAntiga] = useState<string>('');
+  const [filesAntiga, setFilesAntiga] = useState<FilePreview[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [gerandoFolha, setGerandoFolha] = useState(false);
+  const restauradoRef = useRef(false);
+  const assinaturasRef = useRef<AssinaturasHandoverHandle>(null);
+
+  const filesH = makeFileHandlers(setFiles);
+  const filesAntigaH = makeFileHandlers(setFilesAntiga);
+  const isTroca = info?.tipo === 'troca';
+  const isDevolucao = info?.tipo === 'recolha';
+
+  // Contexto da folha de danos
   const { data: contexto } = useQuery({
     queryKey: ['folha-danos-contexto', token],
     enabled: !!token,
@@ -136,9 +101,7 @@ const RealizarEntregaPage = () => {
         combustivelSaida: null as string | null,
       };
       if (!token) return empty;
-      const { data, error } = await supabase.rpc('contexto_folha_por_token', {
-        p_token: token,
-      });
+      const { data, error } = await supabase.rpc('contexto_folha_por_token', { p_token: token });
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       if (!row) return empty;
@@ -165,21 +128,30 @@ const RealizarEntregaPage = () => {
     },
   });
 
-  // Devolução = recolha (entrega/troca dão saída da viatura; recolha traz a
-  // viatura de volta). Só na devolução se confirma a entrega do DUA.
-  const isDevolucao = info?.tipo === 'recolha';
+  // Troca: id da viatura antiga
+  const { data: viaturaAntigaId } = useQuery({
+    queryKey: ['viatura-por-matricula', info?.matricula_devolver],
+    enabled: isTroca && !!info?.matricula_devolver,
+    queryFn: async (): Promise<string | null> => {
+      const m = info!.matricula_devolver!.replace(/[\s-]/g, '').toUpperCase();
+      const { data } = await supabase
+        .from('viaturas')
+        .select('id')
+        .eq('matricula', m)
+        .maybeSingle();
+      return (data?.id as string | undefined) ?? null;
+    },
+  });
 
-  // A viatura devolvida "tem DUA dentro"? — existe pelo menos um documento DUA
-  // (frente/verso/único) registado. Se sim, exige-se confirmar a sua devolução.
-  const viaturaIdContexto = contexto?.viaturaId ?? null;
+  // DUA: verificar se viatura tem documentos associados
   const { data: viaturaTemDua = false } = useQuery({
-    queryKey: ['viatura-tem-dua', viaturaIdContexto],
-    enabled: isDevolucao && !!viaturaIdContexto,
+    queryKey: ['viatura-tem-dua', contexto?.viaturaId],
+    enabled: isDevolucao && !!contexto?.viaturaId,
     queryFn: async () => {
       const { count } = await supabase
         .from('viatura_documentos')
         .select('id', { count: 'exact', head: true })
-        .eq('viatura_id', viaturaIdContexto!)
+        .eq('viatura_id', contexto!.viaturaId!)
         .in('tipo_documento', ['dua_frente', 'dua_verso', 'dua']);
       return (count ?? 0) > 0;
     },
@@ -187,7 +159,7 @@ const RealizarEntregaPage = () => {
   const [duaDevolvido, setDuaDevolvido] = useState(false);
   const exigeDua = isDevolucao && viaturaTemDua;
 
-  // Restaurar rascunho do cache uma vez, quando o token resolve.
+  // Restaurar rascunho do cache
   useEffect(() => {
     if (!token || restauradoRef.current) return;
     restauradoRef.current = true;
@@ -199,28 +171,21 @@ const RealizarEntregaPage = () => {
       setCombustivel(c.combustivel ?? '');
       setObservacoes(c.observacoes ?? '');
       if (c.fotos?.length) {
-        Promise.all(
-          c.fotos.map(async (f) => ({
-            file: await dataUrlToFile(f.dataUrl, f.name, f.type),
-            localizacao: f.localizacao ?? '',
-            descricao: f.descricao ?? '',
-            valor: f.valor ?? '',
-          }))
-        ).then((restored) =>
+        Promise.all(c.fotos.map((f) => dataUrlToFile(f.dataUrl, f.name, f.type))).then((restored) =>
           setFiles(
-            restored.map((r) => ({
+            restored.map((file) => ({
               id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-              file: r.file,
-              url: URL.createObjectURL(r.file),
-              localizacao: r.localizacao,
-              descricao: r.descricao,
-              valor: r.valor,
+              file,
+              url: URL.createObjectURL(file),
+              localizacao: '',
+              descricao: '',
+              valor: '',
             }))
           )
         );
       }
     } catch {
-      /* cache corrompido — ignora */
+      /* cache corrompido */
     }
   }, [token]);
 
@@ -237,308 +202,164 @@ const RealizarEntregaPage = () => {
           valor: f.valor,
         }))
       );
-      const cache: RascunhoCache = { km, combustivel, observacoes, fotos };
-      localStorage.setItem(cacheKey(token), JSON.stringify(cache));
+      localStorage.setItem(
+        cacheKey(token),
+        JSON.stringify({ km, combustivel, observacoes, fotos })
+      );
       toast({ title: 'Rascunho guardado', description: 'Podes recarregar sem perder os dados.' });
     } catch (err) {
-      toast({
-        title: 'Erro ao guardar',
-        description: err instanceof Error ? err.message : 'Limite de armazenamento atingido?',
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao guardar', description: errorMessage(err), variant: 'destructive' });
     }
   };
 
-  // Gera a folha de danos com os dados actuais. modo 'preview' abre em nova
-  // aba; 'print' envia para impressão.
-  const gerarFolha = async (modo: 'preview' | 'print') => {
-    if (!info) return;
-    if (!km.trim() || !combustivel) {
-      toast({
-        title: 'Campos obrigatórios',
-        description: 'Preenche o km e o nível de combustível antes de gerar a folha.',
-        variant: 'destructive',
-      });
+  const gerarFolhaPreview = async () => {
+    if (!info || !token) return;
+    const err = validarDadosObrigatorios(km, combustivel, isTroca, kmAntiga, combustivelAntiga);
+    if (err) {
+      toast({ title: err, variant: 'destructive' });
       return;
     }
     setGerandoFolha(true);
     try {
-      // Folha de Danos única e partilhada por org (RLS filtra a org).
-      const { data: tmplRows } = await supabase
-        .from('document_templates')
-        .select('id')
-        .eq('tipo', 'anexo_danos')
-        .eq('ativo', true)
-        .limit(1);
-      const tmplId = tmplRows?.[0]?.id ?? null;
-      if (!tmplId) {
-        toast({
-          title: 'Sem template',
-          description: 'Não existe uma Folha de Danos activa. Cria uma em Documentos.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      const tmpl = { id: tmplId };
-      // Troca trata-se como entrega para efeitos de folha/km/combustível — é
-      // a viatura nova que fica com o motorista, dados dela é que interessa
-      // registar (a antiga já teve a sua própria entrega no passado).
-      const isEntrega = info.tipo === 'entrega' || info.tipo === 'troca';
-      // Na pré-visualização, as fotos ainda não estão na BD — passa-as como
-      // data URLs para aparecerem na folha. No print (após confirmar) já estão
-      // gravadas como dano, por isso não as duplicamos aqui.
-      const fotosMomento =
-        modo === 'preview' && files.length
-          ? await Promise.all(files.map((f) => fileToDataUrl(f.file)))
-          : undefined;
-      // Danos locais (preview): cada foto com descrição/localização vira linha.
-      const danosMomento =
-        modo === 'preview'
-          ? files
-              .filter((f) => f.descricao.trim() || f.localizacao)
-              .map((f) => ({
-                localizacao: f.localizacao || '—',
-                descricao: f.descricao.trim() || '—',
-                estado: 'existente',
-                data: format(new Date(), 'dd/MM/yyyy'),
-                valor: f.valor.trim() ? `${Number(f.valor).toFixed(2)} €` : undefined,
-                origem: 'Nesta recolha/entrega',
-              }))
-          : undefined;
-      const hoje = new Date().toISOString().slice(0, 10);
-      const sigs = assinaturasRef.current?.getAssinaturas() ?? {
-        motorista: null,
-        responsavel: null,
+      const tmplId = 'folha_danos';
+      const matricula = formatMatricula(info.matricula);
+      const params = {
+        modo: 'preview' as const,
+        tmplId,
+        assinaturasRef,
+        observacoes,
+        contexto,
+        responsavelNome,
+        info,
       };
-      const pdf = await generateDocumentFromTemplate({
-        templateId: tmpl.id,
-        motoristaData: { nome: contexto?.condutorNome ?? '' },
-        documentData: {
-          viatura_matricula: info.matricula,
-          data_assinatura: hoje,
-          cidade_assinatura: info.cidade ?? '',
-          clienteData: { nome: contexto?.clienteNome ?? '' },
-          assinatura_motorista: sigs.motorista ?? '',
-          assinatura_responsavel: sigs.responsavel ?? '',
-          responsavel_nome: responsavelNome,
-          momento_responsavel: isEntrega ? 'Entregue por' : 'Recolhido por',
-          ...(contexto?.empresaData ? { empresaData: contexto.empresaData } : {}),
+      await gerarFolhaBloco({
+        ...params,
+        bloco: {
+          matricula,
+          viaturaId: contexto?.viaturaId,
+          isEntrega: info.tipo !== 'recolha',
+          km,
+          combustivel,
+          files,
         },
-        viaturaId: contexto?.viaturaId ?? undefined,
-        contratoId: info.contrato_id,
-        momentoFolha: isEntrega ? 'ENTREGA' : 'RECOLHA',
-        observacoesMomento: observacoes,
-        ...(isEntrega
-          ? { km_saida: km, combustivel_saida: combustivel }
-          : {
-              km_entrada: km,
-              combustivel_entrada: combustivel,
-              km_saida: contexto?.kmSaida?.toString() ?? '',
-              combustivel_saida: contexto?.combustivelSaida ?? '',
-            }),
-        ...(fotosMomento ? { fotosMomento } : {}),
-        ...(danosMomento?.length ? { danosMomento } : {}),
-        action: modo === 'print' ? 'print' : 'download',
-        skipOutput: modo === 'preview',
       });
-      if (modo === 'preview' && pdf) {
-        window.open(pdf.output('bloburl'), '_blank');
-      }
-      if (modo === 'print' && pdf) {
-        void emailFolhaDanos({
-          pdf,
-          to: contexto?.condutorEmail,
-          toNome: contexto?.condutorNome,
-          matricula: info.matricula,
-          momento: isEntrega ? 'ENTREGA' : 'RECOLHA',
+      if (isTroca && info.matricula_devolver && contexto?.viaturaId) {
+        await gerarFolhaBloco({
+          ...params,
+          bloco: {
+            matricula: formatMatricula(info.matricula_devolver),
+            viaturaId: viaturaAntigaId,
+            isEntrega: false,
+            km: kmAntiga,
+            combustivel: combustivelAntiga,
+            files: filesAntiga,
+          },
         });
       }
-    } catch (err) {
-      toast({
-        title: 'Erro ao gerar folha',
-        description: err instanceof Error ? err.message : 'Erro inesperado',
-        variant: 'destructive',
-      });
     } finally {
       setGerandoFolha(false);
     }
   };
 
-  const handleAddFiles = (list: FileList | null) => {
-    if (!list) return;
-    const novos: FilePreview[] = Array.from(list).map((f) => ({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      file: f,
-      url: URL.createObjectURL(f),
-      localizacao: '',
-      descricao: '',
-      valor: '',
-    }));
-    setFiles((prev) => [...prev, ...novos]);
-  };
-
-  const updateFoto = (id: string, campo: 'localizacao' | 'descricao' | 'valor', valor: string) => {
-    setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, [campo]: valor } : f)));
-  };
-
-  const removeFile = (id: string) => {
-    setFiles((prev) => {
-      const found = prev.find((f) => f.id === id);
-      if (found) URL.revokeObjectURL(found.url);
-      return prev.filter((f) => f.id !== id);
-    });
-  };
-
   const handleConfirmar = async () => {
-    if (!token || !info) return;
-    if (!km.trim() || !combustivel) {
-      toast({
-        title: 'Campos obrigatórios',
-        description: 'Preenche o km e o nível de combustível.',
-        variant: 'destructive',
-      });
+    if (!info || !token || !contexto) return;
+    const err = validarDadosObrigatorios(km, combustivel, isTroca, kmAntiga, combustivelAntiga);
+    if (err) {
+      toast({ title: err, variant: 'destructive' });
       return;
     }
-    // A viatura tem DUA registado — na devolução tem de vir com o DUA.
-    if (exigeDua && !duaDevolvido) {
-      toast({
-        title: 'DUA em falta',
-        description: 'Esta viatura tem DUA. Confirma que o DUA foi devolvido antes de continuar.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     setUploading(true);
-    // Paths já enviados ao storage — para limpar em caso de falha e não
-    // deixar ficheiros órfãos (upload a meio falhou ou o insert rebentou).
     const uploadedPaths: string[] = [];
-    const isEntrega = info.tipo === 'entrega' || info.tipo === 'troca';
     try {
-      // km/combustível NÃO são gravados aqui: a query direta ao contrato exigia
-      // permissão de renting (que o operador de terreno não tem). O RPC
-      // realizar_token_realizacao grava-os no contrato de forma atómica,
-      // autorizado pelo token (ver p_km/p_combustivel abaixo).
-
-      if (files.length > 0) {
-        const { data: auth } = await supabase.auth.getUser();
-        const userId = auth.user?.id ?? null;
-
-        // Viatura resolvida pelo contexto (RPC do token, SECURITY DEFINER) —
-        // sem ela não há onde pendurar os danos.
-        const vId = contexto?.viaturaId ?? null;
-        if (!vId) throw new Error('Viatura do contrato não encontrada.');
-        // Fotos que o gestor descreveu individualmente (localização, descrição
-        // ou valor) viram cada uma o seu registo de dano. As fotos genéricas —
-        // sem qualquer detalhe — juntam-se todas num único registo "Registo
-        // entrega/recolha", para aparecerem como uma galeria de fotos em vez de
-        // um cartão por foto. Ligado ao contrato → tabela da folha e página do
-        // veículo. As observações gerais vão no campo observacoes.
-        const temDetalhe = (fp: (typeof files)[number]) =>
-          !!(fp.localizacao || fp.descricao.trim() || fp.valor.trim());
-        const detalhados = files.filter(temDetalhe);
-        const genericos = files.filter((fp) => !temDetalhe(fp));
-
-        // Cada grupo de fotos partilha um único registo de dano.
-        const grupos: Array<{
-          localizacao: string | null;
-          descricao: string;
-          valor: number | null;
-          fotos: (typeof files)[number][];
-        }> = detalhados.map((fp) => {
-          const valorNum = fp.valor.trim() ? Number(fp.valor) : null;
-          return {
-            localizacao: fp.localizacao || null,
-            descricao: fp.descricao.trim() || `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
-            valor: valorNum != null && !Number.isNaN(valorNum) ? valorNum : null,
-            fotos: [fp],
-          };
-        });
-        if (genericos.length > 0) {
-          grupos.push({
-            localizacao: null,
-            descricao: `Registo ${isEntrega ? 'entrega' : 'recolha'}`,
-            valor: null,
-            fotos: genericos,
-          });
-        }
-
-        for (const grupo of grupos) {
-          const { data: dano, error: dErr } = await supabase
-            .from('viatura_danos')
-            .insert({
-              viatura_id: vId,
-              localizacao: grupo.localizacao,
-              descricao: grupo.descricao,
-              valor: grupo.valor,
-              observacoes: observacoes.trim() || null,
-              estado: 'existente',
-              contrato_renting_id: info.contrato_id,
-              registado_por: userId,
-            })
-            .select('id')
-            .single();
-          if (dErr) throw dErr;
-
-          for (const fp of grupo.fotos) {
-            const ext = fp.file.name.split('.').pop() || 'bin';
-            const path = `${dano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-            const { error: upErr } = await supabase.storage
-              .from('viatura-danos')
-              .upload(path, fp.file, { contentType: fp.file.type });
-            if (upErr) throw upErr;
-            uploadedPaths.push(path);
-            const { error: fErr } = await supabase.from('viatura_dano_fotos').insert({
-              dano_id: dano.id,
-              ficheiro_url: path,
-              nome_ficheiro: fp.file.name,
-              uploaded_by: userId,
-            });
-            if (fErr) throw fErr;
-          }
-        }
-      }
-
-      realizar.mutate(
-        {
-          token,
-          eventoId: info.evento_id,
-          contratoId: info.contrato_id,
-          tipo: info.tipo,
-          km: Number(km),
-          combustivel,
-        },
-        {
-          onSuccess: () => {
-            setDone(true);
-            // Imprime a folha de danos do momento e limpa o rascunho.
-            void gerarFolha('print');
-            try {
-              localStorage.removeItem(cacheKey(token));
-            } catch {
-              /* ignore */
-            }
-          },
-        }
-      );
+      const allPaths = await uploadDanos({
+        files,
+        filesAntiga,
+        viaturaId: contexto.viaturaId,
+        viaturaAntigaId,
+        observacoes,
+        info,
+        userId: user!.id,
+        token,
+      });
+      uploadedPaths.push(...allPaths);
     } catch (err: unknown) {
-      // Limpa ficheiros já enviados para não ficarem órfãos no bucket.
       if (uploadedPaths.length > 0) {
         try {
           await supabase.storage.from('viatura-danos').remove(uploadedPaths);
         } catch {
-          /* limpeza best-effort — não mascarar o erro original */
+          /* best-effort */
         }
       }
       toast({
-        title: 'Erro no upload',
-        description: err instanceof Error ? err.message : 'Erro inesperado',
+        title: 'Erro ao guardar os danos',
+        description: errorMessage(err),
         variant: 'destructive',
       });
-    } finally {
       setUploading(false);
+      return;
     }
+    realizar.mutate(
+      {
+        token,
+        eventoId: info.evento_id,
+        contratoId: info.contrato_id,
+        tipo: info.tipo,
+        km: Number(km),
+        combustivel,
+      },
+      {
+        onSuccess: () => {
+          const tmplId = 'folha_danos';
+          const matricula = formatMatricula(info.matricula);
+          const params = {
+            modo: 'print' as const,
+            tmplId,
+            assinaturasRef,
+            observacoes,
+            contexto,
+            responsavelNome,
+            info,
+          };
+          gerarFolhaBloco({
+            ...params,
+            bloco: {
+              matricula,
+              viaturaId: contexto?.viaturaId,
+              isEntrega: info.tipo !== 'recolha',
+              km,
+              combustivel,
+              files,
+            },
+          }).catch(() => {});
+          if (isTroca && info.matricula_devolver) {
+            gerarFolhaBloco({
+              ...params,
+              bloco: {
+                matricula: formatMatricula(info.matricula_devolver),
+                viaturaId: viaturaAntigaId,
+                isEntrega: false,
+                km: kmAntiga,
+                combustivel: combustivelAntiga,
+                files: filesAntiga,
+              },
+            }).catch(() => {});
+          }
+          try {
+            localStorage.removeItem(cacheKey(token));
+          } catch {
+            /* ignore */
+          }
+          setDone(true);
+          setUploading(false);
+        },
+        onError: () => {
+          setUploading(false);
+        },
+      }
+    );
   };
+
+  // ── Estados Early-return ───────────────────────────────────────────────────
 
   if (isLoading) {
     return (
@@ -548,10 +369,6 @@ const RealizarEntregaPage = () => {
     );
   }
 
-  // Verificar `done` ANTES de error/missing info — após a mutation o token
-  // fica `used_at` preenchido e qualquer refetch da RPC consumir_token
-  // dá erro. Sem este check, o sucesso seria mascarado pela página de
-  // "Token expirado".
   if (done) {
     return (
       <div className="max-w-md mx-auto p-6 mt-12">
@@ -563,8 +380,7 @@ const RealizarEntregaPage = () => {
               O evento ficou marcado como realizado. Já podes fechar esta janela.
             </p>
             <Button type="button" onClick={() => navigate('/')} className="gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              Voltar ao início
+              <ArrowLeft className="h-4 w-4" /> Voltar ao início
             </Button>
           </CardContent>
         </Card>
@@ -580,9 +396,7 @@ const RealizarEntregaPage = () => {
             <TriangleAlert className="h-10 w-10 mx-auto text-destructive" />
             <h2 className="font-semibold text-lg">Token inválido ou expirado</h2>
             <p className="text-sm text-muted-foreground">
-              {error instanceof Error
-                ? error.message
-                : 'Este link já foi usado ou expirou. Pede um novo QR no laptop.'}
+              {error instanceof Error ? error.message : 'Este link já foi usado ou expirou.'}
             </p>
             <Button
               type="button"
@@ -590,8 +404,7 @@ const RealizarEntregaPage = () => {
               onClick={() => window.history.back()}
               className="gap-2"
             >
-              <ArrowLeft className="h-4 w-4" />
-              Voltar
+              <ArrowLeft className="h-4 w-4" /> Voltar
             </Button>
           </CardContent>
         </Card>
@@ -599,262 +412,76 @@ const RealizarEntregaPage = () => {
     );
   }
 
+  // ── Render principal ───────────────────────────────────────────────────────
+
+  const isPending = uploading || realizar.isPending;
   const matricula = formatMatricula(info.matricula);
   const matriculaDevolver = info.matricula_devolver
     ? formatMatricula(info.matricula_devolver)
     : null;
-  const isPending = uploading || realizar.isPending;
 
   return (
     <div className="max-w-2xl mx-auto px-4 pt-4">
-      <StickyPageHeader
-        title={`Realizar ${tipoLabel(info.tipo)}`}
-        description={`${info.tipo === 'troca' && matriculaDevolver ? `${matriculaDevolver} ↔ ${matricula}` : matricula}${info.cidade ? ` · ${info.cidade}` : ''} · ${format(
-          new Date(info.data_inicio),
-          "dd/MM 'às' HH:mm",
-          { locale: pt }
-        )}`}
-        icon={CheckCircle2}
-      >
-        <Button
-          type="button"
-          onClick={handleConfirmar}
-          disabled={isPending || (exigeDua && !duaDevolvido)}
-          className="gap-2"
-        >
-          {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-          Confirmar
-        </Button>
-      </StickyPageHeader>
+      <StepDadosIniciais
+        info={info}
+        isPending={isPending}
+        acaoBotao={
+          <Button
+            type="button"
+            onClick={handleConfirmar}
+            disabled={isPending || (exigeDua && !duaDevolvido)}
+            className="gap-2"
+          >
+            {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Confirmar
+          </Button>
+        }
+      />
 
-      <div className="space-y-4 pb-4">
-        {info.tipo === 'troca' && matriculaDevolver && (
-          <Card className="border-amber-500/40 bg-amber-500/5">
-            <CardContent className="p-4 text-sm">
-              <span className="font-medium">Troca de viatura:</span> devolver{' '}
-              <span className="font-semibold">{matriculaDevolver}</span> e entregar{' '}
-              <span className="font-semibold">{matricula}</span>. Os dados abaixo (km, combustível,
-              danos) referem-se à viatura entregue ({matricula}).
-            </CardContent>
-          </Card>
-        )}
-        <Card>
-          <CardContent className="p-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="km">
-                KM Actual <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="km"
-                type="number"
-                inputMode="numeric"
-                value={km}
-                onChange={(e) => setKm(e.target.value)}
-                placeholder="Ex: 45120"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>
-                Combustível <span className="text-red-500">*</span>
-              </Label>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                {['Reserva', '1/4', '1/2', '3/4', 'Cheio'].map((nivel) => (
-                  <button
-                    key={nivel}
-                    type="button"
-                    onClick={() => setCombustivel(nivel)}
-                    className={`rounded-md border-2 py-2 text-sm font-medium transition-colors ${
-                      combustivel === nivel
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border hover:border-primary/40'
-                    }`}
-                  >
-                    {nivel}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="obs">Observações</Label>
-              <Textarea
-                id="obs"
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-                rows={2}
-                placeholder="Ex: pequeno risco no para-choques direito"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {exigeDua && (
-          <Card className="border-amber-500/50 bg-amber-500/5">
-            <CardContent className="p-4">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <Checkbox
-                  checked={duaDevolvido}
-                  onCheckedChange={(c) => setDuaDevolvido(!!c)}
-                  className="mt-0.5"
-                />
-                <span className="text-sm">
-                  <span className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
-                    <FileText className="h-4 w-4" />
-                    DUA devolvido
-                  </span>
-                  <span className="text-muted-foreground">
-                    Esta viatura tem DUA associado. Confirma que o documento foi devolvido com a
-                    viatura.
-                  </span>
-                </span>
-              </label>
-            </CardContent>
-          </Card>
+      <div className="space-y-4 pb-4 -mt-4">
+        {isTroca && matriculaDevolver && (
+          <StepKmCombustivelFotos
+            titulo={`Viatura devolvida (${matriculaDevolver})`}
+            km={kmAntiga}
+            onKmChange={setKmAntiga}
+            combustivel={combustivelAntiga}
+            onCombustivelChange={setCombustivelAntiga}
+            files={filesAntiga}
+            onAddFiles={filesAntigaH.addFiles}
+            onUpdateFoto={filesAntigaH.updateFoto}
+            onRemoveFile={filesAntigaH.removeFile}
+          />
         )}
 
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <Label>Fotos / Vídeos</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => cameraInputRef.current?.click()}
-                className="gap-2"
-              >
-                <Camera className="h-4 w-4" />
-                Câmara
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                className="gap-2"
-              >
-                <Upload className="h-4 w-4" />
-                Ficheiros
-              </Button>
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                multiple
-                hidden
-                onChange={(e) => handleAddFiles(e.target.files)}
-              />
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,video/*"
-                multiple
-                hidden
-                onChange={(e) => handleAddFiles(e.target.files)}
-              />
-            </div>
+        <StepKmCombustivelFotos
+          titulo={isTroca ? `Viatura entregue (${matricula})` : 'Dados da viatura'}
+          km={km}
+          onKmChange={setKm}
+          combustivel={combustivel}
+          onCombustivelChange={setCombustivel}
+          files={files}
+          onAddFiles={filesH.addFiles}
+          onUpdateFoto={filesH.updateFoto}
+          onRemoveFile={filesH.removeFile}
+        />
 
-            {files.length > 0 && (
-              <div className="space-y-3 mt-3">
-                <p className="text-xs text-muted-foreground">
-                  Descreve cada foto (localização, descrição e valor) — vai para a tabela de danos
-                  da folha.
-                </p>
-                {files.map((f) => (
-                  <div key={f.id} className="flex flex-col gap-3 rounded-md border p-2 sm:flex-row">
-                    <div className="relative mx-auto shrink-0 sm:mx-0">
-                      <img
-                        src={f.url}
-                        alt={f.file.name}
-                        className="h-24 w-24 rounded border object-cover sm:h-20 sm:w-20"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeFile(f.id)}
-                        className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-white"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                    <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
-                      <select
-                        value={f.localizacao}
-                        onChange={(e) => updateFoto(f.id, 'localizacao', e.target.value)}
-                        className="h-9 min-w-0 rounded-md border border-input bg-background px-2 text-sm"
-                      >
-                        <option value="">Localização…</option>
-                        {LOCALIZACOES.map((l) => (
-                          <option key={l.value} value={l.value}>
-                            {l.label}
-                          </option>
-                        ))}
-                      </select>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        placeholder="Valor (€)"
-                        value={f.valor}
-                        onChange={(e) => updateFoto(f.id, 'valor', e.target.value)}
-                        className="h-9 min-w-0"
-                      />
-                      <Input
-                        placeholder="Descrição do dano"
-                        value={f.descricao}
-                        onChange={(e) => updateFoto(f.id, 'descricao', e.target.value)}
-                        className="col-span-2 h-9 min-w-0"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <StepCondutorDuaObservacoes
+          exigeDua={exigeDua}
+          duaDevolvido={duaDevolvido}
+          onDuaChange={setDuaDevolvido}
+          observacoes={observacoes}
+          onObservacoesChange={setObservacoes}
+          assinaturasRef={assinaturasRef}
+          condutorNome={contexto?.condutorNome ?? ''}
+          responsavelNome={responsavelNome}
+        />
 
-        {/* Assinaturas — motorista assina digitalmente; sai na folha de danos */}
-        <Card>
-          <CardContent className="p-4">
-            <AssinaturasHandoverSection
-              ref={assinaturasRef}
-              motoristaNome={contexto?.condutorNome ?? ''}
-              responsavelNome={responsavelNome}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Folha de Danos — guardar rascunho + pré-visualizar antes de confirmar */}
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <Label className="m-0">Folha de Danos ({tipoLabel(info.tipo)})</Label>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Guarda o rascunho e pré-visualiza a folha. Se algo estiver errado, ajusta e
-              pré-visualiza de novo. Ao confirmar, a folha é impressa automaticamente.
-            </p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Button type="button" variant="outline" onClick={guardarRascunho} className="gap-2">
-                <Save className="h-4 w-4" />
-                Guardar rascunho
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => gerarFolha('preview')}
-                disabled={gerandoFolha}
-                className="gap-2"
-              >
-                {gerandoFolha ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-                Pré-visualizar folha
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <StepConfirmacaoFolha
+          tipo={info.tipo}
+          onGuardarRascunho={guardarRascunho}
+          onPreview={gerarFolhaPreview}
+          gerandoFolha={gerandoFolha}
+        />
       </div>
     </div>
   );

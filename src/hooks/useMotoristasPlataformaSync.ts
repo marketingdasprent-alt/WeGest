@@ -85,8 +85,9 @@ export function useUnmappedBoltDrivers(enabled: boolean) {
       if (error) throw error;
 
       const unique = (data || []).reduce((acc: { name: string; id: string }[], current) => {
-        if (!acc.find((i) => i.id === current.identificador_motorista)) {
-          acc.push({ name: current.motorista_nome, id: current.identificador_motorista });
+        const id = current.identificador_motorista;
+        if (id && !acc.find((i) => i.id === id)) {
+          acc.push({ name: current.motorista_nome ?? '', id });
         }
         return acc;
       }, []);

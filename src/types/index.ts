@@ -11,3 +11,7 @@ export * from './contratoRenting';
 export * from './rentingCobertura';
 export * from './rentingExtra';
 export * from './rentingTaxa';
+export * from './dateRange';
+export * from './audit';
+export * from './dashboard';
+export * from './financeiro';

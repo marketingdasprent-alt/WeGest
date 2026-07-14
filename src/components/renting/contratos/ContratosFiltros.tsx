@@ -1,4 +1,4 @@
-import { Search, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,7 +15,6 @@ export type EstadoOpFilter = 'todos' | ContratoEstadoOperacional;
 export type EstadoFinFilter = 'todos' | ContratoEstadoFinanceiro;
 
 export interface ContratosFiltrosState {
-  codigo: string;
   estacao: string;
   dataInicio: string;
   dataFim: string;
@@ -37,7 +36,6 @@ export const ContratosFiltros: React.FC<ContratosFiltrosProps> = ({
   onClear,
 }) => {
   const hasActive =
-    !!state.codigo ||
     state.estacao !== 'todas' ||
     !!state.dataInicio ||
     !!state.dataFim ||
@@ -48,22 +46,7 @@ export const ContratosFiltros: React.FC<ContratosFiltrosProps> = ({
     onChange({ ...state, [key]: value });
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 p-3 border-b border-border/50 items-end">
-      <div className="space-y-1">
-        <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Código
-        </label>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            value={state.codigo}
-            onChange={(e) => update('codigo', e.target.value.replace(/\D/g, ''))}
-            inputMode="numeric"
-            className="pl-8 h-9 bg-background"
-          />
-        </div>
-      </div>
-
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 p-3 border-b border-border/50 items-end">
       <div className="space-y-1">
         <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           Estação

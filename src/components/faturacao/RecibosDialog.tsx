@@ -168,6 +168,7 @@ export function RecibosDialog({
                 taxa_iva: 0,
               },
             ],
+            contrato_id: cobranca.contrato_id ?? undefined,
             cobranca_id: cobranca.id,
             documento_referencia: cobranca.documento_externo_ref,
             referencia_externa: cobranca.documento_externo_ref,

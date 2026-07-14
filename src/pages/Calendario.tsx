@@ -13,6 +13,7 @@ import { RelatorioDialog } from '@/components/calendario/RelatorioDialog';
 import { RecolhasPendentesDrawer } from '@/components/calendario/RecolhasPendentesDrawer';
 import { CheckOutPendentesDrawer } from '@/components/calendario/CheckOutPendentesDrawer';
 import { ListaEsperaDrawer } from '@/components/calendario/ListaEsperaDrawer';
+import { useEventosPendentesRenting } from '@/hooks/useEventosPendentesRenting';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -105,36 +106,14 @@ const Calendario: React.FC = () => {
     staleTime: 30_000,
   });
 
-  // Contagem combinada (legacy + renting) para os badges nos botões.
-  const { data: rentingEntregaPendentesCount = 0 } = useQuery({
-    queryKey: ['calendario', 'eventos-pendentes-renting', 'entrega', 'count'],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('calendario_eventos')
-        .select('id', { count: 'exact', head: true })
-        .eq('origem_tipo', 'contrato_renting')
-        .eq('tipo', 'entrega')
-        .is('realizado_em', null);
-      if (error) throw error;
-      return count ?? 0;
-    },
-    staleTime: 30_000,
-  });
-
-  const { data: rentingRecolhaPendentesCount = 0 } = useQuery({
-    queryKey: ['calendario', 'eventos-pendentes-renting', 'recolha', 'count'],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('calendario_eventos')
-        .select('id', { count: 'exact', head: true })
-        .eq('origem_tipo', 'contrato_renting')
-        .eq('tipo', 'recolha')
-        .is('realizado_em', null);
-      if (error) throw error;
-      return count ?? 0;
-    },
-    staleTime: 30_000,
-  });
+  // Contagem combinada (legacy + renting) para os badges nos botões. Reaproveita
+  // o mesmo hook usado pelas listas (RentingPendentesSection) — mesma query,
+  // mesmo filtro (exclui contratos de teste), sem duplicar lógica nem arriscar
+  // o badge dessincronizar da lista real.
+  const { data: rentingEntregaPendentes = [] } = useEventosPendentesRenting({ tipo: 'entrega' });
+  const { data: rentingRecolhaPendentes = [] } = useEventosPendentesRenting({ tipo: 'recolha' });
+  const rentingEntregaPendentesCount = rentingEntregaPendentes.length;
+  const rentingRecolhaPendentesCount = rentingRecolhaPendentes.length;
 
   const canManageListaEspera = isAdmin || !!cargo?.toLowerCase().includes('supervisor');
 
@@ -250,17 +229,19 @@ const Calendario: React.FC = () => {
           .maybeSingle();
 
         if (contrato) {
-          await supabase
-            .from('motorista_viaturas')
-            .update({ status: 'encerrado', data_fim: today })
-            .eq('motorista_id', contrato.motorista_id)
-            .eq('viatura_id', contrato.viatura_id)
-            .eq('status', 'ativo');
+          if (contrato.viatura_id) {
+            await supabase
+              .from('motorista_viaturas')
+              .update({ status: 'encerrado', data_fim: today })
+              .eq('motorista_id', contrato.motorista_id)
+              .eq('viatura_id', contrato.viatura_id)
+              .eq('status', 'ativo');
 
-          await supabase
-            .from('viaturas')
-            .update({ status: 'disponivel' })
-            .eq('id', contrato.viatura_id);
+            await supabase
+              .from('viaturas')
+              .update({ status: 'disponivel' })
+              .eq('id', contrato.viatura_id);
+          }
 
           if (contrato.status === 'ativo') {
             await supabase.from('contratos').update({ status: 'encerrado' }).eq('id', contrato.id);

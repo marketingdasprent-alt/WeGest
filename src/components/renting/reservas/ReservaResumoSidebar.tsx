@@ -6,9 +6,12 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
+import { calcExtraTotal } from '@/hooks/useReservaExtras';
+import { calcTaxaValor } from '@/hooks/useReservaTaxas';
 import type { ReservaFormValues } from './reservaDialog.schema';
 import type { Estacao } from '@/hooks/useEstacoes';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
+import type { CoberturaFormItem, ExtraFormItem, TaxaFormItem } from '@/types/contratoRenting';
 
 interface ReservaResumoSidebarProps {
   form: UseFormReturn<ReservaFormValues>;
@@ -18,7 +21,8 @@ interface ReservaResumoSidebarProps {
 }
 
 function ivaRate(regime: string): number {
-  // TVDE e Slot já têm IVA incluído no preço — não aplica IVA adicional
+  // TVDE já tem IVA incluído no preço (decompõe-se mais abaixo, não soma).
+  // Slot tem tratamento próprio (ver isSlot, mais abaixo).
   return regime === 'tvde' || regime === 'slot' ? 0 : 0.23;
 }
 
@@ -68,6 +72,7 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
   const regime = form.watch('regime');
   const slotValorMensal = form.watch('slot_valor_mensal');
   const isSlot = regime === 'slot';
+  const isTvde = regime === 'tvde';
 
   const estacaoEntrega = useMemo(
     () => estacoes.find((e) => e.id === estacaoEntregaId),
@@ -80,12 +85,55 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
   const viatura = useMemo(() => viaturas.find((v) => v.id === viaturaId), [viaturas, viaturaId]);
 
   const dias = diferencaDias(dataInicio, dataFim);
-  // Slot é cobrado ao mês (valor BRUTO com IVA) e é aberto (sem data fim/dias).
-  // O resumo reparte 23% só para mostrar a base/IVA da futura fatura.
-  const total = isSlot ? (slotValorMensal ?? 0) : (valorTotal ?? 0);
+  // Valor guardado no formulário — Rent-a-Car: preço SEM IVA (o que se
+  // digita). Slot/TVDE: preço já com IVA incluído (inalterado).
+  const rawTotal = isSlot ? (slotValorMensal ?? 0) : (valorTotal ?? 0);
+  const isRentACar = regime === 'rent_a_car';
   const taxaIVA = isSlot ? 0.23 : ivaRate(regime);
-  const subtotal = taxaIVA > 0 && total > 0 ? total / (1 + taxaIVA) : total;
-  const iva = total - subtotal;
+
+  // Coberturas/extras somam-se ao valor base antes do IVA (mesmo bruto que
+  // se decompõe/soma consoante o regime) — taxas somam-se depois do IVA.
+  // Mesma lógica do ResumoContrato.tsx, agora também na reserva.
+  const coberturas = (form.watch('coberturas') as CoberturaFormItem[]) ?? [];
+  const extras = (form.watch('extras') as ExtraFormItem[]) ?? [];
+  const taxas = (form.watch('taxas') as TaxaFormItem[]) ?? [];
+  const custoCoberturas = coberturas.reduce((s, c) => s + (c.preco_dia ?? 0), 0) * (dias ?? 0);
+  const custoExtras = extras.reduce((s, e) => s + calcExtraTotal(e, dias ?? 0), 0);
+  const brutoComExtras = rawTotal + custoCoberturas + custoExtras;
+
+  // Preço base (sem coberturas/extras) — só para as linhas "Preço/dia",
+  // "Preço/semana" e "Valor mensal" (o valor unitário editável/tarifário).
+  let subtotalBase: number;
+  let ivaBase: number;
+  let totalBase: number;
+  if (isRentACar && taxaIVA > 0) {
+    subtotalBase = rawTotal;
+    ivaBase = subtotalBase * taxaIVA;
+    totalBase = subtotalBase + ivaBase;
+  } else {
+    totalBase = rawTotal;
+    subtotalBase = taxaIVA > 0 && totalBase > 0 ? totalBase / (1 + taxaIVA) : totalBase;
+    ivaBase = totalBase - subtotalBase;
+  }
+
+  // Rent-a-Car: soma-se o IVA por cima do bruto (líquido, já com coberturas/
+  // extras) — "Total" aqui é maior que o campo editável. TVDE/slot: o bruto
+  // já é o total (com IVA) — decompõe-se (divide) só para mostrar Subtotal/
+  // IVA, sem alterar o total. Taxas somam-se por fim, já depois do IVA.
+  let subtotal: number;
+  let iva: number;
+  let totalComIva: number;
+  if (isRentACar && taxaIVA > 0) {
+    subtotal = brutoComExtras;
+    iva = subtotal * taxaIVA;
+    totalComIva = subtotal + iva;
+  } else {
+    totalComIva = brutoComExtras;
+    subtotal = taxaIVA > 0 && totalComIva > 0 ? totalComIva / (1 + taxaIVA) : totalComIva;
+    iva = totalComIva - subtotal;
+  }
+  const custoTaxas = taxas.reduce((s, t) => s + calcTaxaValor(t, totalComIva), 0);
+  const total = totalComIva + custoTaxas;
 
   const horaEntrega = formatHora(dataInicio);
   const horaRecolha = formatHora(dataFim);
@@ -96,9 +144,9 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
   // Só sincroniza quando o input não está em foco (mudança externa, ex: carregar dados)
   useEffect(() => {
     if (inputFocused.current) return;
-    const novo = dias && dias > 0 && total > 0 ? (total / dias).toFixed(2) : '';
+    const novo = dias && dias > 0 && rawTotal > 0 ? (rawTotal / dias).toFixed(2) : '';
     setPrecoUnitInput(novo);
-  }, [total, dias]);
+  }, [rawTotal, dias]);
 
   const handlePrecoUnitarioChange = (raw: string) => {
     const normalized = raw.replace(',', '.').replace(/[^0-9.]/g, '');
@@ -255,13 +303,31 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
                 <span className="text-sm text-muted-foreground shrink-0">
                   Valor mensal (IVA inc.)
                 </span>
-                <span className="text-sm font-medium tabular-nums">{formatEur(total)}</span>
+                <span className="text-sm font-medium tabular-nums">{formatEur(totalBase)}</span>
               </div>
+            ) : isTvde ? (
+              // TVDE: o preço/semana vem do modelo na tarifa — é fixo e não
+              // depende das datas. Mostra só leitura, sem input nem aviso.
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-muted-foreground shrink-0">
+                    Preço/semana (IVA inc.)
+                  </span>
+                  <span className="text-sm font-medium tabular-nums">{formatEur(totalBase)}</span>
+                </div>
+                {totalBase > 0 ? (
+                  <p className="text-xs text-muted-foreground text-right">× 1 semana</p>
+                ) : (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 text-right flex items-center justify-end gap-1">
+                    <AlertTriangle className="h-3 w-3" /> Escolhe a tarifa e a viatura
+                  </p>
+                )}
+              </>
             ) : (
               <>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm text-muted-foreground shrink-0">
-                    Preço/dia (IVA inc.)
+                    Preço/dia (sem IVA)
                   </span>
                   <Input
                     type="text"
@@ -275,7 +341,11 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
                     disabled={!dias}
                     placeholder="0,00"
                     className="h-8 w-24 text-right tabular-nums text-sm"
-                    title={!dias ? 'Define primeiro as datas' : 'Preço por dia (IVA incluído)'}
+                    title={
+                      !dias
+                        ? 'Define primeiro as datas'
+                        : 'Preço por dia (sem IVA) — o IVA soma-se no total'
+                    }
                   />
                 </div>
                 {dias ? (
@@ -290,6 +360,18 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
               </>
             )}
           </div>
+          {custoCoberturas > 0 && (
+            <div className="px-4 py-1.5 grid grid-cols-2 text-sm border-t">
+              <span className="text-muted-foreground">Coberturas</span>
+              <span className="text-right tabular-nums">{formatEur(custoCoberturas)}</span>
+            </div>
+          )}
+          {custoExtras > 0 && (
+            <div className="px-4 py-1.5 grid grid-cols-2 text-sm border-t">
+              <span className="text-muted-foreground">Extras</span>
+              <span className="text-right tabular-nums">{formatEur(custoExtras)}</span>
+            </div>
+          )}
           <div className="px-4 py-1.5 grid grid-cols-2 text-sm border-t">
             <span className="text-muted-foreground">Sub-total</span>
             <span className="text-right tabular-nums">{formatEur(subtotal)}</span>
@@ -298,6 +380,12 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
             <span className="text-muted-foreground">IVA ({(taxaIVA * 100).toFixed(0)}%)</span>
             <span className="text-right tabular-nums">{formatEur(iva)}</span>
           </div>
+          {custoTaxas > 0 && (
+            <div className="px-4 py-1.5 grid grid-cols-2 text-sm border-t">
+              <span className="text-muted-foreground">Taxas</span>
+              <span className="text-right tabular-nums">{formatEur(custoTaxas)}</span>
+            </div>
+          )}
           <div className="px-4 py-2 grid grid-cols-2 text-sm border-t font-semibold">
             <span>Total</span>
             <span className="text-right tabular-nums">{formatEur(total)}</span>

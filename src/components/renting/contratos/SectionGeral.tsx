@@ -1,7 +1,6 @@
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
-import { Check, ChevronsUpDown } from 'lucide-react';
 
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -12,166 +11,60 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import { cn } from '@/lib/utils';
-import { EmissorSelect } from '@/components/renting/EmissorSelect';
-import { GestorSelect } from '@/components/renting/GestorSelect';
-import { usePermissions } from '@/hooks/usePermissions';
 
-import type { ClienteComDocumentos } from '@/types/cliente';
 import type { ContratoFormValues } from './contratoForm.schema';
 import { SectionTitle } from './SectionTitle';
-import {
-  ESTADO_OP_OPTIONS,
-  ESTADO_FIN_OPTIONS,
-  DEFAULT_IVA_PERCENTAGE,
-} from './contratoFormConstants';
+import { ESTADO_OP_OPTIONS, ESTADO_FIN_OPTIONS } from './contratoFormConstants';
 
 interface SectionGeralProps {
   form: UseFormReturn<ContratoFormValues>;
-  clientes: ClienteComDocumentos[];
+  tarifaReadOnly?: boolean;
+  /** Slot para acção extra junto ao campo — ex.: botão "Pedir alteração de tarifa". */
+  tarifaAction?: React.ReactNode;
+  /** Em edição, o estado operacional só muda através das acções dedicadas
+   *  (Fechar contrato, Any Rent, troca de viatura, Reverter abertura/fecho)
+   *  — nunca por edição directa aqui, para garantir que as cascatas
+   *  (calendário, reserva, disponibilidade da viatura) correm sempre. */
+  estadoOperacionalReadOnly?: boolean;
 }
 
-const normalizeForSearch = (s: string) =>
-  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[-\s]/g, '');
+export const SectionGeral: React.FC<SectionGeralProps> = ({
+  form,
+  tarifaReadOnly = false,
+  tarifaAction,
+  estadoOperacionalReadOnly = false,
+}) => {
+  const regime = form.watch('regime');
+  // TVDE/slot não usam tarifa diária — TVDE fatura por semana (por modelo),
+  // slot tem valor fixo mensal. O campo só faz sentido em rent-a-car.
+  const mostraTarifaDiaria = regime !== 'tvde' && regime !== 'slot';
 
-export const SectionGeral: React.FC<SectionGeralProps> = ({ form, clientes }) => {
-  const [clientePopoverOpen, setClientePopoverOpen] = useState(false);
-  const { podeVerTodosRenting } = usePermissions();
-  const clienteLabel = 'Cliente';
-  const clientePlaceholder = 'Clique ou escreva para procurar cliente...';
-  const clienteEmpty = 'Nenhum cliente encontrado.';
+  // Limpa o valor órfão se o utilizador mudar de regime a meio do form.
+  useEffect(() => {
+    if (!mostraTarifaDiaria && form.getValues('tarifa_diaria') != null) {
+      form.setValue('tarifa_diaria', null, { shouldDirty: true });
+    }
+  }, [mostraTarifaDiaria, form]);
+
   return (
     <div>
-      <SectionTitle>Geral</SectionTitle>
+      <SectionTitle>Tarifa & Faturação</SectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FormField
-          control={form.control}
-          name="cliente_id"
-          render={({ field }) => {
-            const selected = field.value
-              ? (clientes.find((c) => c.id === field.value) ?? null)
-              : null;
-            return (
-              <FormItem>
-                <FormLabel>
-                  {clienteLabel} <span className="text-red-500">*</span>
-                </FormLabel>
-                <Popover
-                  open={clientePopoverOpen}
-                  onOpenChange={setClientePopoverOpen}
-                  modal={false}
-                >
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={clientePopoverOpen}
-                        className="w-full justify-between font-normal bg-background"
-                      >
-                        {selected
-                          ? `${selected.nome}${selected.codigo ? ` (#${selected.codigo})` : ''}`
-                          : clientePlaceholder}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] p-0"
-                    align="start"
-                  >
-                    <Command
-                      filter={(value, search) => {
-                        const v = normalizeForSearch(value);
-                        const s = normalizeForSearch(search);
-                        return s === '' || v.includes(s) ? 1 : 0;
-                      }}
-                    >
-                      <CommandInput placeholder="Pesquisar por nome, NIF..." className="h-9" />
-                      <CommandList>
-                        <CommandEmpty>{clienteEmpty}</CommandEmpty>
-                        <CommandGroup>
-                          {clientes.map((c) => (
-                            <CommandItem
-                              key={c.id}
-                              value={`${c.nome} ${c.nif ?? ''} ${c.codigo ?? ''}`}
-                              onSelect={() => {
-                                field.onChange(c.id);
-                                setClientePopoverOpen(false);
-                              }}
-                              className="cursor-pointer"
-                            >
-                              <Check
-                                className={cn(
-                                  'mr-2 h-4 w-4',
-                                  field.value === c.id ? 'opacity-100' : 'opacity-0'
-                                )}
-                              />
-                              {c.nome}
-                              {c.codigo && (
-                                <span className="ml-1 text-muted-foreground">(#{c.codigo})</span>
-                              )}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            );
-          }}
-        />
-
-        <FormField
-          control={form.control}
-          name="emissor_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Empresa emissora <span className="text-red-500">*</span>
-              </FormLabel>
-              <EmissorSelect value={field.value} onChange={field.onChange} />
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {podeVerTodosRenting && (
-          <FormField
-            control={form.control}
-            name="gestor_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Gestor responsável</FormLabel>
-                <GestorSelect value={field.value} onChange={field.onChange} />
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-
         <FormField
           control={form.control}
           name="estado_operacional"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Estado Operacional</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={estadoOperacionalReadOnly}
+              >
                 <FormControl>
-                  <SelectTrigger className="bg-background">
+                  <SelectTrigger
+                    className={estadoOperacionalReadOnly ? 'bg-muted' : 'bg-background'}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                 </FormControl>
@@ -183,6 +76,12 @@ export const SectionGeral: React.FC<SectionGeralProps> = ({ form, clientes }) =>
                   ))}
                 </SelectContent>
               </Select>
+              {estadoOperacionalReadOnly && (
+                <p className="text-xs text-muted-foreground">
+                  Só muda via "Fechar contrato", Any Rent, troca de viatura ou reverter
+                  abertura/fecho.
+                </p>
+              )}
               <FormMessage />
             </FormItem>
           )}
@@ -213,35 +112,43 @@ export const SectionGeral: React.FC<SectionGeralProps> = ({ form, clientes }) =>
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="tarifa_diaria"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Tarifa diária (€)</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  className="bg-background"
-                  value={field.value ?? ''}
-                  onChange={(e) =>
-                    field.onChange(e.target.value === '' ? null : Number(e.target.value))
-                  }
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {mostraTarifaDiaria && (
+          <FormField
+            control={form.control}
+            name="tarifa_diaria"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tarifa diária (€)</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    readOnly={tarifaReadOnly}
+                    className={tarifaReadOnly ? 'bg-muted' : 'bg-background'}
+                    value={field.value ?? ''}
+                    onChange={(e) =>
+                      field.onChange(e.target.value === '' ? null : Number(e.target.value))
+                    }
+                  />
+                </FormControl>
+                {tarifaAction && <div className="pt-1">{tarifaAction}</div>}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <FormField
           control={form.control}
           name="valor_total_manual"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Valor total manual (€)</FormLabel>
+              <FormLabel>
+                {regime === 'tvde' || regime === 'slot'
+                  ? 'Valor semanal (€)'
+                  : 'Valor total manual (€)'}
+              </FormLabel>
               <FormControl>
                 <Input
                   type="number"
@@ -284,28 +191,9 @@ export const SectionGeral: React.FC<SectionGeralProps> = ({ form, clientes }) =>
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="taxa_iva"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>IVA (%)</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  readOnly
-                  tabIndex={-1}
-                  className="bg-muted/50 cursor-not-allowed"
-                  value={field.value ?? DEFAULT_IVA_PERCENTAGE}
-                />
-              </FormControl>
-              <p className="text-xs text-muted-foreground">
-                Definido pelo regime e pelas taxas da organização (Definições › Fiscal).
-              </p>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {/* IVA (%) — oculto do formulário (o valor é sempre derivado do regime +
+            taxas da org, nunca editável), mas o campo `taxa_iva` continua a ser
+            calculado e gravado normalmente (ver useEffect em ContratoForm.tsx). */}
 
         <FormField
           control={form.control}

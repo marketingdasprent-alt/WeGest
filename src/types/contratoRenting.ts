@@ -109,7 +109,8 @@ export type ContratoRenting = {
   data_inicio: string;
 
   estacao_recolha_id: string | null;
-  data_fim: string;
+  /** NULL em contratos TVDE — sem data de fim, renovação automática. */
+  data_fim: string | null;
 
   estacao_origem_viatura_id: string | null;
 
@@ -121,6 +122,8 @@ export type ContratoRenting = {
 
   // Tarifário simples (MVP)
   tarifa_diaria: number | null;
+  /** FK para renting_tarifas — usada em TVDE para associar a tarifa por modelo. */
+  tarifa_id: string | null;
   desconto_percentagem: number | null;
   /** Taxa de IVA aplicada — derivada da modalidade + config da org. */
   taxa_iva: number;
@@ -131,6 +134,11 @@ export type ContratoRenting = {
   total_iva: number | null;
   total_final: number | null;
   facturado_em: string | null;
+
+  /** Total calculado em tempo real (view contrato_renting_totais): tarifa +
+   *  coberturas + extras + taxas + IVA. Mergeado no hook de listagem; NÃO é
+   *  coluna da tabela. Para contratos facturados coincide com total_final. */
+  total_calculado?: number | null;
 
   // Longa duração / renovação (espelha reserva)
   is_longa_duracao: boolean;
@@ -170,6 +178,7 @@ export type ContratoRentingInsert = Omit<
   | 'total_subtotal'
   | 'total_iva'
   | 'total_final'
+  | 'total_calculado'
   | 'facturado_em'
   | 'versao'
   | 'contrato_anterior_id'
@@ -180,9 +189,6 @@ export type ContratoRentingInsert = Omit<
   | 'updated_by'
   | 'created_at'
   | 'updated_at'
-  // gestor_id é preenchido por DEFAULT na BD (= quem cria); fica de fora do
-  // payload de criação e é reatribuível via Update (só superiores).
-  | 'gestor_id'
 >;
 
 export type ContratoRentingUpdate = Partial<ContratoRentingInsert> & {
