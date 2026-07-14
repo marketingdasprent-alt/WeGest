@@ -690,6 +690,9 @@ export function useContratoForm(): UseContratoFormReturn {
     : null;
 
   // ── detectarAlteracoesMateriais ─────────────────────────────────
+  // Só a troca de viatura justifica uma nova versão (fecho formal +
+  // contrato novo) — preço/desconto/IVA/valor total são só uma correção
+  // do MESMO contrato e devem gravar direto por UPDATE, sem versionar.
   const detectarAlteracoesMateriais = (values: ContratoFormValues): AlteracaoMaterial[] => {
     if (!contrato) return [];
     const result: AlteracaoMaterial[] = [];
@@ -717,19 +720,6 @@ export function useContratoForm(): UseContratoFormReturn {
         });
       }
     }
-
-    const numPair = (label: string, antes: number | null, depois: number | null, sufixo = '') => {
-      if (antes === depois) return;
-      result.push({
-        label,
-        valorAntes: antes != null ? `${antes}${sufixo}` : '—',
-        valorDepois: depois != null ? `${depois}${sufixo}` : '—',
-      });
-    };
-    numPair('Tarifa diária', contrato.tarifa_diaria, values.tarifa_diaria, ' €');
-    numPair('Valor total', contrato.valor_total_manual, values.valor_total_manual, ' €');
-    numPair('Desconto', contrato.desconto_percentagem, values.desconto_percentagem, '%');
-    numPair('IVA', contrato.taxa_iva, values.taxa_iva, '%');
 
     return result;
   };
