@@ -69,6 +69,7 @@ interface Viatura {
   cor: string | null;
   categoria: string | null;
   status: string;
+  is_slot?: boolean | null;
   extintor_numero?: string | null;
   extintor_validade?: string | null;
 }
@@ -90,6 +91,7 @@ interface MotoristaTabViaturasProps {
 
 export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
   const navigate = useNavigate();
+  const motoristaSlot = motorista.is_slot === true || (motorista.slot_valor_semanal ?? 0) > 0;
   const [associacoes, setAssociacoes] = useState<MotoristaViatura[]>([]);
   const [viaturasDisponiveis, setViaturasDisponiveis] = useState<Viatura[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,7 +169,7 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
         supabase
           .from('viaturas')
           .select(
-            'id, matricula, marca, modelo, ano, cor, categoria, status, extintor_numero, extintor_validade'
+            'id, matricula, marca, modelo, ano, cor, categoria, status, extintor_numero, extintor_validade, is_slot'
           )
           .order('matricula'),
         supabase.from('motorista_viaturas').select('viatura_id').eq('status', 'ativo'),
@@ -193,9 +195,11 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '');
         if (s === 'vendida' || s === 'inativo' || s === 'em_reparacao') return false;
-        // J\u00e1 est\u00e1 com um motorista (independente do status \u2014 carros slot
-        // ficam 'disponivel' mesmo associados): n\u00e3o pode ser re-associada.
+        // Já está com um motorista (independente do status — carros slot
+        // ficam 'disponivel' mesmo associados): não pode ser re-associada.
         if (activeViaturaIds.has(v.id)) return false;
+        // Motoristas slot só podem ter viaturas slot associadas.
+        if (motoristaSlot && !v.is_slot) return false;
         return true;
       });
       setViaturasDisponiveis(disponiveis);
@@ -257,6 +261,10 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
   };
 
   const handleAssociar = async () => {
+    if (!motoristaSlot) {
+      toast.error('Atribuição directa só disponível para motoristas slot.');
+      return;
+    }
     if (!formData.viatura_id) {
       toast.error('Selecione uma viatura');
       return;
@@ -290,7 +298,6 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
       // Motorista slot: o carro é do próprio motorista — a associação não
       // ocupa a viatura. Fica 'disponivel'; o estado só muda por
       // reserva/contrato. Nos restantes regimes mantém-se o comportamento.
-      const motoristaSlot = motorista.is_slot === true || (motorista.slot_valor_semanal ?? 0) > 0;
       if (!motoristaSlot) {
         const { error: updateError } = await supabase
           .from('viaturas')
@@ -436,7 +443,7 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
         title="Viatura Atual"
         headerClassName="bg-green-50 dark:bg-green-950/30"
       >
-        {!viaturaAtual && (
+        {!viaturaAtual && motoristaSlot && (
           <div className="flex justify-end mb-4">
             <Button
               size="sm"
@@ -578,8 +585,16 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
           <div className="text-center text-muted-foreground py-4">
             <Car className="h-12 w-12 mx-auto mb-2 opacity-30" />
             <p>Nenhuma viatura associada</p>
-            {viaturasDisponiveis.length === 0 && (
-              <p className="text-xs mt-1">Não existem viaturas disponíveis para associar.</p>
+            {motoristaSlot ? (
+              viaturasDisponiveis.length === 0 ? (
+                <p className="text-xs mt-1">Não existem viaturas disponíveis para associar.</p>
+              ) : null
+            ) : (
+              <p className="text-xs mt-1 max-w-sm mx-auto">
+                Motoristas não-slot só recebem viatura através de{' '}
+                <strong>reserva/contrato de renting</strong>. Cria uma reserva para associar uma
+                viatura.
+              </p>
             )}
           </div>
         )}
