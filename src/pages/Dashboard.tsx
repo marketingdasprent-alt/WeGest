@@ -9,15 +9,12 @@ import {
   TrendingUp,
   TrendingDown,
   RefreshCw,
-  Loader2,
   Euro,
   LayoutDashboard,
-  AlertTriangle,
-  AlertCircle,
-  ClipboardList,
   UserCheck,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { AlertListCard } from '@/components/ui/alert-list-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -49,8 +46,11 @@ import {
 import { pt } from 'date-fns/locale';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useDashboardVariant } from '@/hooks/useDashboardVariant';
 import { useOrgId } from '@/contexts/TenantContext';
 import { CheckinCheckoutHistoricoCard } from '@/components/dashboard/CheckinCheckoutHistoricoCard';
+import { KpiCard } from '@/components/dashboard/KpiCard';
+import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { fetchViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 import { deriveViaturaEstado, ESTADOS_EM_USO } from '@/lib/viaturas';
@@ -119,6 +119,7 @@ const Dashboard = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { hasPermission, isAdmin } = usePermissions();
+  const { isExecutivo } = useDashboardVariant();
   const orgId = useOrgId();
   const canSeeCheckinHistorico = hasPermission('dashboard_checkin_historico') || isAdmin;
 
@@ -531,88 +532,62 @@ const Dashboard = () => {
       </StickyPageHeader>
 
       {loading ? (
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <DashboardSkeleton />
       ) : (
         <>
           {/* ── Linha 1: Viaturas + Candidaturas ─────────────────────── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Disponíveis */}
-            <Card
-              className="cursor-pointer hover:bg-accent/50 transition-colors border-l-4 border-l-green-500"
+          <div
+            className={`grid grid-cols-2 gap-4 ${isExecutivo ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}
+          >
+            <KpiCard
+              label="Disponíveis"
+              value={fleet.disponiveis}
+              icon={Car}
+              color="green"
               onClick={() => navigate('/viaturas?status=disponivel')}
-            >
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Disponíveis
-                  </span>
-                  <Car className="h-4 w-4 text-green-500" />
-                </div>
-                <div className="text-3xl font-bold text-green-500">{fleet.disponiveis}</div>
+              footer={
                 <p className="text-xs text-muted-foreground mt-1">de {fleet.total} viaturas</p>
-              </CardContent>
-            </Card>
+              }
+            />
 
-            {/* Ocupadas */}
-            <Card
-              className="cursor-pointer hover:bg-accent/50 transition-colors border-l-4 border-l-blue-500"
+            <KpiCard
+              label="Ocupadas"
+              value={fleet.ocupadas}
+              icon={Car}
+              color="blue"
               onClick={() => navigate('/viaturas?status=em_uso')}
-            >
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Ocupadas
-                  </span>
-                  <Car className="h-4 w-4 text-blue-500" />
-                </div>
-                <div className="text-3xl font-bold text-blue-500">{fleet.ocupadas}</div>
-                <p className="text-xs text-muted-foreground mt-1">em circulação</p>
-              </CardContent>
-            </Card>
+              footer={<p className="text-xs text-muted-foreground mt-1">em circulação</p>}
+            />
 
-            {/* Em Reparação */}
-            <Card
-              className="cursor-pointer hover:bg-accent/50 transition-colors border-l-4 border-l-amber-500"
+            <KpiCard
+              label="Em Reparação"
+              value={fleet.manutencao}
+              icon={Wrench}
+              color="amber"
               onClick={() => navigate('/viaturas?status=manutencao')}
-            >
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Em Reparação
-                  </span>
-                  <Wrench className="h-4 w-4 text-amber-500" />
-                </div>
-                <div className="text-3xl font-bold text-amber-500">{fleet.manutencao}</div>
-                <p className="text-xs text-muted-foreground mt-1">em manutenção</p>
-              </CardContent>
-            </Card>
+              footer={<p className="text-xs text-muted-foreground mt-1">em manutenção</p>}
+            />
 
-            {/* Candidatos Pendentes */}
-            <Card
-              className="cursor-pointer hover:bg-accent/50 transition-colors border-l-4 border-l-violet-500"
-              onClick={() => navigate('/motoristas/candidaturas')}
-            >
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Candidatos
-                  </span>
-                  <ClipboardCheck className="h-4 w-4 text-violet-500" />
-                </div>
-                <div className="text-3xl font-bold text-violet-500">{candidaturasPendentes}</div>
-                <div className="flex items-center gap-1 mt-1">
-                  {candidaturasPendentes > 0 ? (
-                    <Badge variant="destructive" className="text-xs px-1.5 py-0">
-                      Pendentes
-                    </Badge>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">sem pendentes</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            {isExecutivo && (
+              <KpiCard
+                label="Candidatos"
+                value={candidaturasPendentes}
+                icon={ClipboardCheck}
+                color="violet"
+                onClick={() => navigate('/motoristas/candidaturas')}
+                footer={
+                  <div className="flex items-center gap-1 mt-1">
+                    {candidaturasPendentes > 0 ? (
+                      <Badge variant="destructive" className="text-xs px-1.5 py-0">
+                        Pendentes
+                      </Badge>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">sem pendentes</p>
+                    )}
+                  </div>
+                }
+              />
+            )}
           </div>
 
           {/* ── Linha 2: Atividade & Rentabilidade + Alertas ────── */}
@@ -622,18 +597,22 @@ const Dashboard = () => {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div>
-                    <CardTitle className="text-base">Atividade & Rentabilidade</CardTitle>
+                    <CardTitle className="text-base">
+                      {isExecutivo ? 'Atividade & Rentabilidade' : 'Atividade'}
+                    </CardTitle>
                     <CardDescription>
                       Evolução de novas entregas de viaturas no período
                     </CardDescription>
                   </div>
                   <div className="flex gap-4 text-sm">
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-primary">
-                        {formatCurrency(totalRentabilidade)}
+                    {isExecutivo && (
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-primary">
+                          {formatCurrency(totalRentabilidade)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">nova renda contratada</p>
                       </div>
-                      <p className="text-xs text-muted-foreground">nova renda contratada</p>
-                    </div>
+                    )}
                     <div className="flex flex-col items-end text-xs text-muted-foreground">
                       <span>
                         Alugadas <strong className="text-foreground">{totalAlugadas}</strong>
@@ -659,356 +638,245 @@ const Dashboard = () => {
                       </div>
                     }
                   >
-                    <AtividadeChart data={atividadeData} formatCurrency={formatCurrency} />
+                    <AtividadeChart
+                      data={atividadeData}
+                      formatCurrency={formatCurrency}
+                      showRentabilidade={isExecutivo}
+                    />
                   </Suspense>
                 )}
               </CardContent>
             </Card>
 
             {/* Extintores a Expirar */}
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-orange-500" />
-                      Extintores a Expirar
-                    </CardTitle>
-                    <CardDescription>Expiração nos próximos 15 dias</CardDescription>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="font-mono text-orange-500 border-orange-500/20 bg-orange-500/10"
-                  >
-                    {extintoresAPrazo.length} Pendentes
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {extintoresAPrazo.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-                    <AlertCircle className="h-10 w-10 mb-2 opacity-20 text-green-500" />
-                    <p className="text-sm">Sem extintores a expirar em breve</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 mt-1 max-h-[200px] overflow-y-auto pr-1">
-                    {extintoresAPrazo.map((ext) => {
-                      const isExpired = new Date(ext.extintor_validade) < new Date();
-                      return (
-                        <div
-                          key={ext.id}
-                          className="flex flex-col p-2.5 rounded-lg border border-border bg-muted/40 transition-colors hover:bg-muted"
-                        >
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className="font-semibold text-sm tracking-tight">
-                              {ext.matricula}
-                            </span>
-                            <Badge
-                              variant={isExpired ? 'destructive' : 'outline'}
-                              className={
-                                !isExpired
-                                  ? 'text-orange-500 border-orange-500/30 bg-orange-500/10 text-[10px]'
-                                  : 'text-[10px]'
-                              }
-                            >
-                              {format(new Date(ext.extintor_validade), 'dd MMM', { locale: pt })}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span className="truncate pr-2">👤 {ext.motorista_nome}</span>
-                            <span
-                              className={
-                                isExpired ? 'text-destructive font-medium shrink-0' : 'shrink-0'
-                              }
-                            >
-                              {isExpired ? 'Expirado' : 'A expirar'}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <AlertListCard
+              titulo="Extintores a Expirar"
+              descricao="Expiração nos próximos 15 dias"
+              badge={
+                <Badge
+                  variant="outline"
+                  className="font-mono text-orange-500 border-orange-500/20 bg-orange-500/10"
+                >
+                  {extintoresAPrazo.length} Pendentes
+                </Badge>
+              }
+              emptyMessage="Sem extintores a expirar em breve"
+              items={extintoresAPrazo.map((ext) => {
+                const isExpired = new Date(ext.extintor_validade) < new Date();
+                return {
+                  id: ext.id,
+                  label: ext.matricula,
+                  sublabel: `👤 ${ext.motorista_nome}`,
+                  valor: format(new Date(ext.extintor_validade), 'dd MMM', { locale: pt }),
+                  severity: isExpired ? 'critical' : 'high',
+                };
+              })}
+            />
 
             {/* Contratos a Renovar */}
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <ClipboardList className="h-4 w-4 text-blue-500" />
-                      Contratos a Renovar
-                    </CardTitle>
-                    <CardDescription>Renovação nos próximos 60 dias</CardDescription>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="font-mono text-blue-500 border-blue-500/20 bg-blue-500/10"
-                  >
-                    {contratosAPrazo.length} Pendentes
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {contratosAPrazo.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-                    <AlertCircle className="h-10 w-10 mb-2 opacity-20 text-green-500" />
-                    <p className="text-sm">Sem contratos a renovar em breve</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 mt-1 max-h-[200px] overflow-y-auto pr-1">
-                    {contratosAPrazo.map((ct: any) => {
-                      const renovacao = addMonths(
-                        new Date(ct.data_inicio + 'T00:00:00'),
-                        ct.duracao_meses ?? 12
-                      );
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      const isExpired = renovacao < today;
-                      const viaturaStr = ct.viaturas?.matricula || '—';
-
-                      return (
-                        <div
-                          key={ct.id}
-                          className="flex flex-col p-2.5 rounded-lg border border-border bg-muted/40 transition-colors hover:bg-muted"
-                        >
-                          <div className="flex items-center justify-between mb-1.5">
-                            <div className="flex items-center gap-2">
-                              {ct.numero_contrato != null && (
-                                <span className="font-mono text-[10px] text-muted-foreground">
-                                  CT-{String(ct.numero_contrato).padStart(4, '0')}
-                                </span>
-                              )}
-                              <span className="font-semibold text-sm tracking-tight truncate">
-                                {ct.motorista_nome}
-                              </span>
-                            </div>
-                            <Badge
-                              variant={isExpired ? 'destructive' : 'outline'}
-                              className={
-                                !isExpired
-                                  ? 'text-blue-500 border-blue-500/30 bg-blue-500/10 text-[10px] shrink-0'
-                                  : 'text-[10px] shrink-0'
-                              }
-                            >
-                              {format(renovacao, 'dd MMM yyyy', { locale: pt })}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span className="truncate pr-2">🚗 {viaturaStr}</span>
-                            <span
-                              className={
-                                isExpired ? 'text-destructive font-medium shrink-0' : 'shrink-0'
-                              }
-                            >
-                              {isExpired ? 'Expirado' : 'A renovar'}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <AlertListCard
+              titulo="Contratos a Renovar"
+              descricao="Renovação nos próximos 60 dias"
+              badge={
+                <Badge
+                  variant="outline"
+                  className="font-mono text-blue-500 border-blue-500/20 bg-blue-500/10"
+                >
+                  {contratosAPrazo.length} Pendentes
+                </Badge>
+              }
+              emptyMessage="Sem contratos a renovar em breve"
+              items={contratosAPrazo.map((ct: any) => {
+                const renovacao = addMonths(
+                  new Date(ct.data_inicio + 'T00:00:00'),
+                  ct.duracao_meses ?? 12
+                );
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const isExpired = renovacao < today;
+                const viaturaStr = ct.viaturas?.matricula || '—';
+                const codigo =
+                  ct.numero_contrato != null
+                    ? `CT-${String(ct.numero_contrato).padStart(4, '0')} `
+                    : '';
+                return {
+                  id: ct.id,
+                  label: `${codigo}${ct.motorista_nome}`,
+                  sublabel: `🚗 ${viaturaStr}`,
+                  valor: format(renovacao, 'dd MMM yyyy', { locale: pt }),
+                  severity: isExpired ? 'critical' : 'medium',
+                };
+              })}
+            />
           </div>
 
           {/* ── Contratos Expirados ──────────────────── */}
           {contratosExpirados.length > 0 && (
-            <Card className="border-destructive/30">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-destructive" />
-                      Contratos Expirados
-                    </CardTitle>
-                    <CardDescription>Contratos ativos com prazo ultrapassado</CardDescription>
-                  </div>
-                  <Badge variant="destructive" className="font-mono">
-                    {contratosExpirados.length} Expirado{contratosExpirados.length !== 1 ? 's' : ''}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 mt-1 max-h-[250px] overflow-y-auto pr-1">
-                  {contratosExpirados.map((ct: any) => {
-                    const renovacao =
-                      ct._renovacao ||
-                      addMonths(new Date(ct.data_inicio + 'T00:00:00'), ct.duracao_meses ?? 12);
-                    const diasExpirado = Math.abs(
-                      ct._diffDays ||
-                        Math.ceil(
-                          (new Date().getTime() - renovacao.getTime()) / (1000 * 60 * 60 * 24)
-                        )
-                    );
-                    const viaturaStr = ct.viaturas?.matricula || '—';
-
-                    return (
-                      <div
-                        key={ct.id}
-                        className="flex flex-col p-2.5 rounded-lg border border-destructive/20 bg-destructive/5 transition-colors hover:bg-destructive/10"
-                      >
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex items-center gap-2">
-                            {ct.numero_contrato != null && (
-                              <span className="font-mono text-[10px] text-muted-foreground">
-                                CT-{String(ct.numero_contrato).padStart(4, '0')}
-                              </span>
-                            )}
-                            <span className="font-semibold text-sm tracking-tight truncate">
-                              {ct.motorista_nome}
-                            </span>
-                          </div>
-                          <Badge variant="destructive" className="text-[10px] shrink-0">
-                            {format(renovacao, 'dd MMM yyyy', { locale: pt })}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span className="truncate pr-2">🚗 {viaturaStr}</span>
-                          <span className="text-destructive font-medium shrink-0">
-                            Expirado há {diasExpirado} dia{diasExpirado !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+            <AlertListCard
+              className="border-destructive/30"
+              titulo="Contratos Expirados"
+              descricao="Contratos ativos com prazo ultrapassado"
+              badge={
+                <Badge variant="destructive" className="font-mono">
+                  {contratosExpirados.length} Expirado{contratosExpirados.length !== 1 ? 's' : ''}
+                </Badge>
+              }
+              emptyMessage=""
+              items={contratosExpirados.map((ct: any) => {
+                const renovacao =
+                  ct._renovacao ||
+                  addMonths(new Date(ct.data_inicio + 'T00:00:00'), ct.duracao_meses ?? 12);
+                const diasExpirado = Math.abs(
+                  ct._diffDays ||
+                    Math.ceil((new Date().getTime() - renovacao.getTime()) / (1000 * 60 * 60 * 24))
+                );
+                const viaturaStr = ct.viaturas?.matricula || '—';
+                const codigo =
+                  ct.numero_contrato != null
+                    ? `CT-${String(ct.numero_contrato).padStart(4, '0')} `
+                    : '';
+                return {
+                  id: ct.id,
+                  label: `${codigo}${ct.motorista_nome}`,
+                  sublabel: `🚗 ${viaturaStr} · Expirado há ${diasExpirado} dia${diasExpirado !== 1 ? 's' : ''}`,
+                  valor: format(renovacao, 'dd MMM yyyy', { locale: pt }),
+                  severity: 'critical',
+                };
+              })}
+            />
           )}
 
-          {/* ── Linha 4: Upgrade/Downgrade + Trocas ──────────────────── */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Upgrade / Downgrade */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                  Upgrades / Downgrades
-                </CardTitle>
-                <CardDescription>Mudanças de viatura no período selecionado</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Contador */}
-                <div className="flex items-center gap-4">
-                  <div className="text-4xl font-bold text-primary">{upgradeData.count}</div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">trocas de categoria</p>
-                    <p className="text-xs text-muted-foreground">registadas no calendário</p>
-                  </div>
-                </div>
-
-                {/* Comparação de renda */}
-                <div className="rounded-lg bg-muted/50 p-4 space-y-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Renda de Viaturas
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-muted-foreground">Período Anterior</p>
-                      <p className="text-lg font-bold text-foreground">
-                        {formatCurrency(upgradeData.rendaAnterior)}
-                      </p>
-                    </div>
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-muted-foreground">Período Atual</p>
-                      <p className="text-lg font-bold text-foreground">
-                        {formatCurrency(upgradeData.rendaAtual)}
-                      </p>
+          {/* ── Linha 4: Upgrade/Downgrade + Trocas (só executivo) ──── */}
+          {isExecutivo && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Upgrade / Downgrade */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    Upgrades / Downgrades
+                  </CardTitle>
+                  <CardDescription>Mudanças de viatura no período selecionado</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Contador */}
+                  <div className="flex items-center gap-4">
+                    <div className="text-4xl font-bold text-primary">{upgradeData.count}</div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">trocas de categoria</p>
+                      <p className="text-xs text-muted-foreground">registadas no calendário</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-1 border-t border-border">
-                    {upgradeData.rendaAnterior > 0 ? (
-                      <>
-                        {rendaDiff.up ? (
-                          <TrendingUp className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <TrendingDown className="h-4 w-4 text-red-500" />
-                        )}
-                        <span
-                          className={`text-sm font-semibold ${rendaDiff.up ? 'text-green-500' : 'text-red-500'}`}
-                        >
-                          {rendaDiff.up ? '+' : '-'}
-                          {rendaDiff.pct.toFixed(1)}%
+                  {/* Comparação de renda */}
+                  <div className="rounded-lg bg-muted/50 p-4 space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Renda de Viaturas
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Período Anterior</p>
+                        <p className="text-lg font-bold text-foreground">
+                          {formatCurrency(upgradeData.rendaAnterior)}
+                        </p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Período Atual</p>
+                        <p className="text-lg font-bold text-foreground">
+                          {formatCurrency(upgradeData.rendaAtual)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1 border-t border-border">
+                      {upgradeData.rendaAnterior > 0 ? (
+                        <>
+                          {rendaDiff.up ? (
+                            <TrendingUp className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 text-red-500" />
+                          )}
+                          <span
+                            className={`text-sm font-semibold ${rendaDiff.up ? 'text-green-500' : 'text-red-500'}`}
+                          >
+                            {rendaDiff.up ? '+' : '-'}
+                            {rendaDiff.pct.toFixed(1)}%
+                          </span>
+                          <span className="text-xs text-muted-foreground">vs período anterior</span>
+                          <span
+                            className={`text-sm font-medium ml-auto ${rendaDiff.up ? 'text-green-500' : 'text-red-500'}`}
+                          >
+                            {rendaDiff.up ? '+' : ''}
+                            {formatCurrency(upgradeData.rendaAtual - upgradeData.rendaAnterior)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          Sem dados do período anterior
                         </span>
-                        <span className="text-xs text-muted-foreground">vs período anterior</span>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Trocas */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 text-orange-500" />
+                    Trocas de Viatura
+                  </CardTitle>
+                  <CardDescription>Substituições de viatura no período selecionado</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Contador grande */}
+                  <div className="flex items-center gap-4">
+                    <div className="text-4xl font-bold text-orange-500">{trocasCount}</div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">substituições</p>
+                      <p className="text-xs text-muted-foreground">registadas no calendário</p>
+                    </div>
+                  </div>
+
+                  {/* Métricas complementares */}
+                  <div className="rounded-lg bg-muted/50 p-4 space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Atividade da Frota
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Alugadas</p>
+                        <p className="text-lg font-bold text-blue-500">{totalAlugadas}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">Devolvidas</p>
+                        <p className="text-lg font-bold text-green-500">{totalDevolvidas}</p>
+                      </div>
+                    </div>
+                    <div className="pt-1 border-t border-border">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Saldo líquido</span>
                         <span
-                          className={`text-sm font-medium ml-auto ${rendaDiff.up ? 'text-green-500' : 'text-red-500'}`}
+                          className={`font-semibold ${totalAlugadas - totalDevolvidas >= 0 ? 'text-blue-500' : 'text-red-500'}`}
                         >
-                          {rendaDiff.up ? '+' : ''}
-                          {formatCurrency(upgradeData.rendaAtual - upgradeData.rendaAnterior)}
+                          {totalAlugadas - totalDevolvidas >= 0 ? '+' : ''}
+                          {totalAlugadas - totalDevolvidas} viaturas
                         </span>
-                      </>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        Sem dados do período anterior
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Trocas */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <RefreshCw className="h-4 w-4 text-orange-500" />
-                  Trocas de Viatura
-                </CardTitle>
-                <CardDescription>Substituições de viatura no período selecionado</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Contador grande */}
-                <div className="flex items-center gap-4">
-                  <div className="text-4xl font-bold text-orange-500">{trocasCount}</div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">substituições</p>
-                    <p className="text-xs text-muted-foreground">registadas no calendário</p>
-                  </div>
-                </div>
-
-                {/* Métricas complementares */}
-                <div className="rounded-lg bg-muted/50 p-4 space-y-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Atividade da Frota
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-muted-foreground">Alugadas</p>
-                      <p className="text-lg font-bold text-blue-500">{totalAlugadas}</p>
-                    </div>
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-muted-foreground">Devolvidas</p>
-                      <p className="text-lg font-bold text-green-500">{totalDevolvidas}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="pt-1 border-t border-border">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Saldo líquido</span>
-                      <span
-                        className={`font-semibold ${totalAlugadas - totalDevolvidas >= 0 ? 'text-blue-500' : 'text-red-500'}`}
-                      >
-                        {totalAlugadas - totalDevolvidas >= 0 ? '+' : ''}
-                        {totalAlugadas - totalDevolvidas} viaturas
-                      </span>
-                    </div>
-                  </div>
-                </div>
 
-                {trocasCount === 0 && (
-                  <p className="text-sm text-center text-muted-foreground py-2">
-                    Sem trocas registadas neste período
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                  {trocasCount === 0 && (
+                    <p className="text-sm text-center text-muted-foreground py-2">
+                      Sem trocas registadas neste período
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </>
       )}
 

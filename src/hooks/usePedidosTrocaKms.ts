@@ -177,7 +177,7 @@ export function useResponderPedidoTrocaKms() {
       const { error } = await supabase.rpc('responder_pedido_troca_kms', {
         p_pedido_id: pedidoId,
         p_aceite: aceite,
-        p_resposta_motivo: respostaMotivo ?? null,
+        p_resposta_motivo: respostaMotivo,
       });
       if (error) throw error;
     },

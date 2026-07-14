@@ -135,6 +135,11 @@ export type ContratoRenting = {
   total_final: number | null;
   facturado_em: string | null;
 
+  /** Total calculado em tempo real (view contrato_renting_totais): tarifa +
+   *  coberturas + extras + taxas + IVA. Mergeado no hook de listagem; NÃO é
+   *  coluna da tabela. Para contratos facturados coincide com total_final. */
+  total_calculado?: number | null;
+
   // Longa duração / renovação (espelha reserva)
   is_longa_duracao: boolean;
   renovacao_opcao: ContratoRenovacaoOpcao | null;
@@ -173,6 +178,7 @@ export type ContratoRentingInsert = Omit<
   | 'total_subtotal'
   | 'total_iva'
   | 'total_final'
+  | 'total_calculado'
   | 'facturado_em'
   | 'versao'
   | 'contrato_anterior_id'

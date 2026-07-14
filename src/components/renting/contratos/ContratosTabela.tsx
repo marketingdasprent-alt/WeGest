@@ -8,10 +8,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { useEventosPendentesRenting } from '@/hooks/useEventosPendentesRenting';
 import type { ContratoRenting } from '@/types/contratoRenting';
 import { EstadoOperacionalBadge } from './EstadoOperacionalBadge';
 import { EstadoFinanceiroBadge } from './EstadoFinanceiroBadge';
-import { formatCurrency, formatDateTime } from './contratosUtils';
+import { formatCurrency, formatDateTime, getContratoTotal } from './contratosUtils';
 
 export type SortColumn =
   | 'codigo'
@@ -20,6 +21,7 @@ export type SortColumn =
   | 'data_inicio'
   | 'data_fim'
   | 'cliente_nome'
+  | 'condutor_nome'
   | 'estado_operacional'
   | 'estado_financeiro'
   | 'total_final';
@@ -36,6 +38,7 @@ interface ContratosTabelaProps {
   onRowClick: (c: ContratoRenting) => void;
   getClienteNome: (id: string | null | undefined) => string;
   getEstacaoNome: (id: string | null | undefined) => string;
+  getCondutorNome: (contratoId: string) => string;
 }
 
 interface SortableHeadProps {
@@ -87,8 +90,20 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
   onRowClick,
   getClienteNome,
   getEstacaoNome,
+  getCondutorNome,
 }) => {
   const headProps = { current: sortColumn, dir: sortDir, onSort };
+
+  // Contratos com recolha agendada mas ainda não confirmada — mostra-se um
+  // indicador extra no badge de estado (ver EstadoOperacionalBadge).
+  // ignorarFuturos: só conta como pendente quando a data já chegou — senão
+  // todo o contrato em curso com data_fim no futuro mostrava "Recolha
+  // agendada" desde o dia 1, semanas/meses antes de ser preciso.
+  const { data: recolhasPendentes = [] } = useEventosPendentesRenting({
+    tipo: 'recolha',
+    ignorarFuturos: true,
+  });
+  const idsComRecolhaPendente = new Set(recolhasPendentes.map((e) => e.origem_id));
 
   return (
     <div className="overflow-x-auto">
@@ -104,6 +119,7 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
             <SortableHead column="data_inicio" label="Data Início" {...headProps} />
             <SortableHead column="data_fim" label="Data Fim" {...headProps} />
             <SortableHead column="cliente_nome" label="Cliente" {...headProps} />
+            <SortableHead column="condutor_nome" label="Condutor" {...headProps} />
             <SortableHead column="estado_operacional" label="Estado" {...headProps} />
             <SortableHead column="estado_financeiro" label="Faturação" {...headProps} />
             <SortableHead
@@ -117,7 +133,7 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
         <TableBody>
           {isLoading ? (
             <TableRow className="border-border hover:bg-transparent">
-              <TableCell colSpan={10} className="py-16">
+              <TableCell colSpan={11} className="py-16">
                 <div className="flex items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
@@ -125,7 +141,7 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
             </TableRow>
           ) : contratos.length === 0 ? (
             <TableRow className="border-border hover:bg-transparent">
-              <TableCell colSpan={10} className="py-16">
+              <TableCell colSpan={11} className="py-16">
                 <div className="flex flex-col items-center justify-center gap-2 text-center">
                   <FileText className="h-10 w-10 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
@@ -170,14 +186,18 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
                 <TableCell className="text-muted-foreground">
                   {getClienteNome(c.cliente_id)}
                 </TableCell>
+                <TableCell className="text-muted-foreground">{getCondutorNome(c.id)}</TableCell>
                 <TableCell>
-                  <EstadoOperacionalBadge estado={c.estado_operacional} />
+                  <EstadoOperacionalBadge
+                    estado={c.estado_operacional}
+                    recolhaPendente={idsComRecolhaPendente.has(c.id)}
+                  />
                 </TableCell>
                 <TableCell>
                   <EstadoFinanceiroBadge estado={c.estado_financeiro} />
                 </TableCell>
                 <TableCell className="text-right text-foreground whitespace-nowrap">
-                  {formatCurrency(c.total_final ?? c.valor_total_manual)}
+                  {formatCurrency(getContratoTotal(c))}
                 </TableCell>
               </TableRow>
             ))

@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import {
+  ArrowRightLeft,
   Calendar,
+  CalendarClock,
   Camera,
   Car,
   Euro,
@@ -36,7 +38,8 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { COMBUSTIVEL_NIVEL_OPTS } from '@/utils/combustivel';
-import { useFecharContratoTVDE } from '@/hooks/useContratosRenting';
+import { useFecharContrato } from '@/hooks/useContratosRenting';
+import { computeFechoRapidoDefaults } from './fecharContratoDefaults';
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -71,7 +74,13 @@ interface SelectedFile {
   preview: string | null;
 }
 
-interface FecharContratoTVDEDialogProps {
+export interface AlteracaoMaterial {
+  label: string;
+  valorAntes: string;
+  valorDepois: string;
+}
+
+interface FecharContratoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contratoId: string;
@@ -79,9 +88,19 @@ interface FecharContratoTVDEDialogProps {
   motoristaId?: string | null;
   matricula?: string | null;
   viaturaId?: string | null;
+  /** Estação "casa" da viatura — usada para pré-preencher a estação de recolha. */
+  estacaoOrigemId?: string | null;
+  /** Presente quando este fecho faz parte de uma troca/upgrade/downgrade:
+   *  mostra o resumo das alterações e, se alguma for de viatura, exige
+   *  motivo. O contrato fecha-se sempre a sério primeiro (este dialog) —
+   *  onFechado é quem cria a seguir a nova versão com os valores novos. */
+  alteracoesTroca?: AlteracaoMaterial[];
+  /** Chamado depois do fecho ter sucesso, com o motivo introduzido. Usado
+   *  em modo troca para encadear a criação da nova versão do contrato. */
+  onFechado?: (motivo: string | undefined) => void | Promise<void>;
 }
 
-export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> = ({
+export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   open,
   onOpenChange,
   contratoId,
@@ -89,8 +108,13 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   motoristaId,
   matricula,
   viaturaId,
+  estacaoOrigemId,
+  alteracoesTroca,
+  onFechado,
 }) => {
-  const fecharMutation = useFecharContratoTVDE();
+  const emModoTroca = !!alteracoesTroca && alteracoesTroca.length > 0;
+  const motivoObrigatorioTroca = emModoTroca && alteracoesTroca.some((a) => a.label === 'Viatura');
+  const fecharMutation = useFecharContrato();
   const { data: estacoes = [] } = useEstacoes();
   const { user } = useAuth();
   const responsavelNome =
@@ -126,7 +150,7 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   // Registar a recolha (km/combustível/fotos) já no fecho — evita ter de ir
   // depois ao Calendário para o check-in. Estado próprio (fora do zod) pelo
   // mesmo padrão usado em RealizarEntregaPage/CheckOutPendentesDrawer.
-  const [registarAgora, setRegistarAgora] = useState(false);
+  const [registarAgora, setRegistarAgora] = useState(true);
   const [km, setKm] = useState('');
   const [combustivel, setCombustivel] = useState('');
   const [files, setFiles] = useState<SelectedFile[]>([]);
@@ -135,6 +159,28 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const assinaturasRef = useRef<AssinaturasHandoverHandle>(null);
   const [gerandoFolha, setGerandoFolha] = useState(false);
+
+  // Ao abrir o dialog, pré-preenche tipo/estação/data — o fecho rápido fica
+  // pronto a submeter sem obrigar a passar por todos os campos manualmente.
+  // Nenhum campo deixa de ser obrigatório, só deixam de vir vazios por omissão.
+  useEffect(() => {
+    if (!open) return;
+    const defaults = computeFechoRapidoDefaults({
+      motoristaId,
+      estacaoOrigemViaturaId: estacaoOrigemId ?? null,
+      estacoesDisponiveisIds: estacoes.map((e) => e.id),
+      agoraIso: new Date().toISOString(),
+    });
+    form.reset({
+      tipoEvento: defaults.tipoEvento,
+      estacaoId: defaults.estacaoId,
+      dataEvento: defaults.dataEvento,
+      motivo: '',
+      valorDivida: '',
+    });
+    setRegistarAgora(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, motoristaId, estacaoOrigemId, estacoes]);
 
   // Contexto para a Folha de Danos (condutor, cliente, empresa emissora, km/
   // combustível de saída) — mesma query/chave usada em RealizarEntregaPage,
@@ -275,7 +321,7 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
   };
 
   const resetRecolhaState = () => {
-    setRegistarAgora(false);
+    setRegistarAgora(true);
     setKm('');
     setCombustivel('');
     setDuaDevolvido(false);
@@ -394,6 +440,13 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
       return;
     }
 
+    // Troca de viatura precisa sempre de motivo explícito (avaria, pedido do
+    // cliente, etc.) — mesma regra que existia no antigo dialog de nova versão.
+    if (motivoObrigatorioTroca && !values.motivo?.trim()) {
+      toast.error('Indica o motivo da troca de viatura antes de continuar.');
+      return;
+    }
+
     if (registarAgora) {
       if (!km.trim() || Number.isNaN(Number(km))) {
         toast.error('Indica o KM actual para registar a recolha.');
@@ -428,6 +481,7 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
     form.reset();
     resetRecolhaState();
     onOpenChange(false);
+    await onFechado?.(values.motivo);
   };
 
   const isPending = fecharMutation.isPending || gerandoFolha;
@@ -449,19 +503,48 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
       }}
     >
       <DialogContent className="max-w-6xl w-[96vw] h-[92vh] p-0 gap-0 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b bg-gradient-to-r from-destructive/10 via-destructive/5 to-transparent shrink-0">
+        {/* Header — muda consoante "Registar a recolha agora": só fecha o
+            contrato de facto quando a recolha é confirmada já aqui; caso
+            contrário isto agenda a recolha e o contrato mantém-se em curso
+            (ver resolveFechoContratoToast em useContratosRenting). */}
+        <div
+          className={cn(
+            'px-6 py-4 border-b bg-gradient-to-r shrink-0',
+            registarAgora
+              ? 'from-destructive/10 via-destructive/5 to-transparent'
+              : 'from-amber-500/10 via-amber-500/5 to-transparent'
+          )}
+        >
           <div className="flex items-center gap-3">
-            <div className="rounded-full bg-destructive/15 p-2">
-              <XCircle className="h-5 w-5 text-destructive" />
+            <div
+              className={cn(
+                'rounded-full p-2',
+                registarAgora ? 'bg-destructive/15' : 'bg-amber-500/15'
+              )}
+            >
+              {registarAgora ? (
+                <XCircle className="h-5 w-5 text-destructive" />
+              ) : (
+                <CalendarClock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              )}
             </div>
             <div>
               <h2 className="text-lg font-semibold leading-tight">
-                Fechar contrato #{contratoCodigo}
+                {registarAgora
+                  ? `Fechar contrato #${contratoCodigo}`
+                  : `Agendar recolha do contrato #${contratoCodigo}`}
               </h2>
               <p className="text-sm text-muted-foreground">
-                Indica o que foi feito com a viatura e, se quiseres, regista a recolha já aqui.
+                {registarAgora
+                  ? 'A recolha fica registada agora — o contrato fecha ao confirmar.'
+                  : 'O contrato mantém-se em curso até a recolha ser confirmada (agora ou via Calendário).'}
               </p>
+              {emModoTroca && (
+                <p className="text-sm text-violet-700 dark:text-violet-400 mt-0.5">
+                  Isto faz parte de uma troca — a seguir abre automaticamente o novo contrato com a
+                  viatura nova.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -476,6 +559,24 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             {/* Coluna esquerda: o que aconteceu + valor em dívida */}
             <div className="space-y-4">
+              {emModoTroca && (
+                <section className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-2 dark:border-violet-900/50 dark:bg-violet-950/20">
+                  <h3 className="text-sm font-semibold text-violet-900 dark:text-violet-300 flex items-center gap-2">
+                    <ArrowRightLeft className="h-4 w-4" />
+                    Alterações desta troca
+                  </h3>
+                  <ul className="space-y-1 rounded-md border bg-background/70 p-3">
+                    {alteracoesTroca!.map((a, i) => (
+                      <li key={i} className="text-sm flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">{a.label}:</span>
+                        <span className="text-muted-foreground line-through">{a.valorAntes}</span>
+                        <span>→</span>
+                        <span className="font-semibold">{a.valorDepois}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               {/* ── Secção azul: o que aconteceu ── */}
               <section className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 space-y-4 dark:border-blue-900/50 dark:bg-blue-950/20">
                 <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-300 flex items-center gap-2">
@@ -583,15 +684,34 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
                 <div className="space-y-2">
                   <Label htmlFor="motivo" className="flex items-center gap-1.5">
                     <MessageSquareText className="h-3.5 w-3.5" />
-                    Motivo (opcional)
+                    Motivo{' '}
+                    {motivoObrigatorioTroca ? (
+                      <span className="text-red-500">*</span>
+                    ) : (
+                      '(opcional)'
+                    )}
                   </Label>
                   <Textarea
                     id="motivo"
-                    placeholder="Ex: fim de contrato, rescisão por acordo, ..."
+                    placeholder={
+                      motivoObrigatorioTroca
+                        ? 'Ex: avaria, pedido do cliente...'
+                        : emModoTroca
+                          ? alteracoesTroca!
+                              .map((a) => `${a.label}: ${a.valorAntes} → ${a.valorDepois}`)
+                              .join('; ')
+                          : 'Ex: fim de contrato, rescisão por acordo, ...'
+                    }
                     rows={3}
                     className="bg-background resize-none"
                     {...form.register('motivo')}
                   />
+                  {motivoObrigatorioTroca && (
+                    <p className="text-xs text-muted-foreground">
+                      Obrigatório porque a viatura vai mudar — fica registado na nova versão do
+                      contrato.
+                    </p>
+                  )}
                 </div>
               </section>
 
@@ -859,13 +979,13 @@ export const FecharContratoTVDEDialog: React.FC<FecharContratoTVDEDialogProps> =
           </Button>
           <Button
             type="button"
-            variant="destructive"
+            variant={registarAgora ? 'destructive' : 'default'}
             disabled={isPending || exigeDua}
             title={exigeDua ? 'Confirma primeiro que o DUA foi devolvido' : undefined}
             onClick={form.handleSubmit(onSubmit)}
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-            Fechar contrato
+            {registarAgora ? 'Fechar contrato' : 'Agendar recolha'}
           </Button>
         </DialogFooter>
       </DialogContent>

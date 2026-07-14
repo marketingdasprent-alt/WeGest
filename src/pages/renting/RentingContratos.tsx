@@ -30,8 +30,10 @@ import {
   csvEscape,
   formatCurrency,
   formatDateTime,
+  getContratoTotal,
   normalizeMatricula,
 } from '@/components/renting/contratos/contratosUtils';
+import { RenovacoesBanner } from '@/components/renting/contratos/RenovacoesBanner';
 
 import {
   CONTRATO_ESTADO_FIN_LABELS,
@@ -87,7 +89,7 @@ const RentingContratos = () => {
     const m = new Map<string, { nome: string; nif: string }>();
     condutoresPrincipais.forEach((c) => {
       m.set(c.contratoId, {
-        nome: (c.motoristaNome ?? '').toLowerCase(),
+        nome: c.motoristaNome ?? '',
         nif: c.motoristaNif ?? '',
       });
     });
@@ -102,6 +104,11 @@ const RentingContratos = () => {
   const getClienteNome = useCallback(
     (id: string | null | undefined) => (id ? (clienteNomeById.get(id) ?? '—') : '—'),
     [clienteNomeById]
+  );
+
+  const getCondutorNome = useCallback(
+    (contratoId: string) => condutorInfoByContratoId.get(contratoId)?.nome || '—',
+    [condutorInfoByContratoId]
   );
 
   const filtered = useMemo(() => {
@@ -122,7 +129,7 @@ const RentingContratos = () => {
         const matches =
           String(c.codigo).includes(searchRaw) ||
           normalizeMatricula(c.matricula ?? '').includes(matriculaNorm) ||
-          (condutor?.nome.includes(searchLower) ?? false) ||
+          (condutor?.nome.toLowerCase().includes(searchLower) ?? false) ||
           (condutor?.nif.includes(searchRaw) ?? false) ||
           clienteNif.includes(searchRaw);
         if (!matches) return false;
@@ -151,9 +158,12 @@ const RentingContratos = () => {
       if (sortColumn === 'cliente_nome') {
         av = getClienteNome(a.cliente_id);
         bv = getClienteNome(b.cliente_id);
+      } else if (sortColumn === 'condutor_nome') {
+        av = getCondutorNome(a.id);
+        bv = getCondutorNome(b.id);
       } else if (sortColumn === 'total_final') {
-        av = a.total_final ?? a.valor_total_manual ?? 0;
-        bv = b.total_final ?? b.valor_total_manual ?? 0;
+        av = getContratoTotal(a) ?? 0;
+        bv = getContratoTotal(b) ?? 0;
       } else {
         av = (a[sortColumn] ?? '') as string | number;
         bv = (b[sortColumn] ?? '') as string | number;
@@ -173,6 +183,7 @@ const RentingContratos = () => {
     sortColumn,
     sortDir,
     getClienteNome,
+    getCondutorNome,
     condutorInfoByContratoId,
     clienteNifById,
   ]);
@@ -214,6 +225,7 @@ const RentingContratos = () => {
       'Data Início',
       'Data Fim',
       'Cliente',
+      'Condutor',
       'Estado Operacional',
       'Estado Financeiro',
       'Total',
@@ -227,9 +239,10 @@ const RentingContratos = () => {
       formatDateTime(c.data_inicio),
       formatDateTime(c.data_fim),
       getClienteNome(c.cliente_id),
+      getCondutorNome(c.id),
       CONTRATO_ESTADO_OP_LABELS[c.estado_operacional],
       CONTRATO_ESTADO_FIN_LABELS[c.estado_financeiro],
-      formatCurrency(c.total_final ?? c.valor_total_manual),
+      formatCurrency(getContratoTotal(c)),
     ]);
     const csv = [headers, ...rows].map((row) => row.map(csvEscape).join(',')).join('\n');
     const blob = new Blob([String.fromCharCode(0xfeff) + csv], {
@@ -251,6 +264,12 @@ const RentingContratos = () => {
         title="Contratos"
         description="Lista de contratos de renting"
         icon={FileText}
+      />
+
+      <RenovacoesBanner
+        contratos={contratos}
+        getClienteNome={getClienteNome}
+        getCondutorNome={getCondutorNome}
       />
 
       <Card className="bg-card border-border">
@@ -300,6 +319,7 @@ const RentingContratos = () => {
             onRowClick={handleRowClick}
             getClienteNome={getClienteNome}
             getEstacaoNome={getEstacaoNome}
+            getCondutorNome={getCondutorNome}
           />
 
           <TablePagination

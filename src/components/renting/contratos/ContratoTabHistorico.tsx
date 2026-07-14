@@ -49,11 +49,15 @@ export const ContratoTabHistorico: React.FC<ContratoTabHistoricoProps> = ({
         <ul className="space-y-2">
           {versoes.map((v) => {
             const isActual = v.substituido_em === null;
+            const isCurrent = v.id === contratoId;
+            const isRenovacao = (v.motivo_versao ?? '').startsWith('Renovação');
             return (
               <li
                 key={v.id}
                 className={`border rounded-md p-3 ${
-                  isActual ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20'
+                  isActual || isCurrent
+                    ? 'border-primary/40 bg-primary/5'
+                    : 'border-border bg-muted/20'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -64,9 +68,18 @@ export const ContratoTabHistorico: React.FC<ContratoTabHistoricoProps> = ({
                         <span className="text-xs px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">
                           actual
                         </span>
+                      ) : isRenovacao ? (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30 font-medium">
+                          Fechado · renovado em {fmtData(v.substituido_em)}
+                        </span>
                       ) : (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                           substituída em {fmtData(v.substituido_em)}
+                        </span>
+                      )}
+                      {isCurrent && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-primary text-primary-foreground font-medium">
+                          visualização atual
                         </span>
                       )}
                     </div>
@@ -77,7 +90,7 @@ export const ContratoTabHistorico: React.FC<ContratoTabHistoricoProps> = ({
                       Criada {fmtData(v.created_at)} · #{v.codigo}
                     </p>
                   </div>
-                  {!isActual && (
+                  {!isCurrent && (
                     <Button
                       type="button"
                       variant="ghost"

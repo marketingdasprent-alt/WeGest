@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Receipt, FileText, Download, Loader2, Send, RotateCcw } from 'lucide-react';
+import { Receipt, FileText, Download, Loader2, Send, RotateCcw, Mail } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +43,10 @@ import {
 } from '@/components/faturacao/FaturacaoActionsToolbar';
 import { ReservaFaturarDialog } from '@/components/faturacao/ReservaFaturarDialog';
 import { NovaFaturaDialog } from '@/components/faturacao/NovaFaturaDialog';
+import { EnviarDocumentoEmailDialog } from '@/components/faturacao/EnviarDocumentoEmailDialog';
+import { DocumentosEmitidosExtra } from '@/components/faturacao/DocumentosEmitidosExtra';
+import { useContactosDocumento } from '@/hooks/useContactosDocumento';
+import { useReservaCondutores } from '@/hooks/useReservaCondutores';
 import type { Reserva } from '@/types/reserva';
 
 const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
@@ -81,6 +85,7 @@ export function ReservaTabFaturar({ reserva }: Props) {
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
   const [anularOpen, setAnularOpen] = useState(false);
   const [anularBusy, setAnularBusy] = useState(false);
+  const [enviarInvoice, setEnviarInvoice] = useState<InvoiceMetadata | null>(null);
 
   const { empresas } = useClientesEmpresas();
   const emitente: FaturacaoDocEmitente | null = useMemo(() => {
@@ -91,6 +96,19 @@ export function ReservaTabFaturar({ reserva }: Props) {
   }, [empresas, reserva.emissor_id]);
 
   const emitirMut = useEmitirEEscreverFatura();
+
+  // Condutor principal (cliente OU motorista) — para pré-preencher o envio por email.
+  const { data: reservaCondutores } = useReservaCondutores(reserva.id);
+  const principalCond = useMemo(
+    () => (reservaCondutores ?? []).find((c) => c.is_principal) ?? null,
+    [reservaCondutores]
+  );
+  const { data: contactosEnvio = [] } = useContactosDocumento({
+    clienteId: reserva.cliente_id,
+    condutor: principalCond
+      ? { cliente_id: principalCond.cliente_id, motorista_id: principalCond.motorista_id }
+      : null,
+  });
 
   const { data: cobrancas = [], refetch: refetchCobrancas } = useQuery({
     queryKey: ['reserva-cobrancas', reserva.id],
@@ -240,6 +258,13 @@ export function ReservaTabFaturar({ reserva }: Props) {
 
   const jaFaturada = cobrancas.some((c) => c.estado === 'emitida' || c.estado === 'paga');
 
+  // Rent-a-Car: valor_total é SEM IVA — soma-se por cima para mostrar o total
+  // a cobrar. TVDE: valor_total já é o total (com IVA), mostra-se tal e qual.
+  const totalComIva =
+    reserva.regime === 'rent_a_car'
+      ? round2((reserva.valor_total ?? 0) * 1.23)
+      : (reserva.valor_total ?? 0);
+
   async function baixarPdf(inv: InvoiceMetadata) {
     setBaixandoId(inv.cobranca_id ?? inv.id);
     try {
@@ -332,7 +357,7 @@ export function ReservaTabFaturar({ reserva }: Props) {
                 {jaFaturada ? 'Reserva faturada' : 'Faturar reserva (pagamento antecipado)'}
               </p>
               <p className="text-xs text-muted-foreground">
-                Total: <span className="font-semibold">{formatCurrency(reserva.valor_total)}</span>
+                Total: <span className="font-semibold">{formatCurrency(totalComIva)}</span>
                 {jaFaturada ? ' · já faturada' : ' · IVA incluído'}
               </p>
               {jaFaturada && (
@@ -409,21 +434,33 @@ export function ReservaTabFaturar({ reserva }: Props) {
                           <div className="flex items-center gap-1.5">
                             <span>{c.documento_externo_ref}</span>
                             {inv && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 shrink-0"
-                                title="Descarregar PDF"
-                                onClick={() => baixarPdf(inv)}
-                                disabled={baixandoId === c.id}
-                              >
-                                {baixandoId === c.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <Download className="h-3.5 w-3.5" />
-                                )}
-                              </Button>
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0"
+                                  title="Descarregar PDF"
+                                  onClick={() => baixarPdf(inv)}
+                                  disabled={baixandoId === c.id}
+                                >
+                                  {baixandoId === c.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Download className="h-3.5 w-3.5" />
+                                  )}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0"
+                                  title="Enviar por email"
+                                  onClick={() => setEnviarInvoice(inv)}
+                                >
+                                  <Mail className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
                             )}
                           </div>
                         ) : porEmitir ? (
@@ -480,12 +517,24 @@ export function ReservaTabFaturar({ reserva }: Props) {
         </div>
       </div>
 
+      <DocumentosEmitidosExtra invoices={invoices} onEnviar={setEnviarInvoice} />
+
       <ReservaFaturarDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         reserva={reserva}
         emitente={emitente}
         onFaturado={refetchAll}
+      />
+
+      <EnviarDocumentoEmailDialog
+        open={!!enviarInvoice}
+        onOpenChange={(o) => {
+          if (!o) setEnviarInvoice(null);
+        }}
+        invoice={enviarInvoice}
+        contextoLabel={`Reserva #${reserva.codigo}`}
+        entidades={contactosEnvio}
       />
 
       {reserva.cliente_id && (

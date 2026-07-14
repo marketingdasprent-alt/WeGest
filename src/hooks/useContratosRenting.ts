@@ -31,7 +31,7 @@ const SELECT_COLUMNS = `
   estacao_recolha_id, data_fim,
   estacao_origem_viatura_id,
   estado_operacional, estado_financeiro, origem, regime,
-  tarifa_diaria, desconto_percentagem, taxa_iva, valor_total_manual,
+  tarifa_diaria, tarifa_id, desconto_percentagem, taxa_iva, valor_total_manual,
   total_subtotal, total_iva, total_final, facturado_em,
   is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias,
   franquia_valor, caucao_valor, kms_incluidos, km_adicional_valor,
@@ -81,7 +81,24 @@ export function useContratosRenting(options: UseContratosRentingOptions = {}) {
 
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as unknown as ContratoRenting[];
+      const contratos = (data ?? []) as unknown as ContratoRenting[];
+      if (contratos.length === 0) return contratos;
+
+      // Merge do total calculado (view contrato_renting_totais) para que a
+      // listagem mostre tarifa + extras + coberturas + taxas + IVA em tempo
+      // real, e não apenas o valor_total_manual (base sem extras/IVA).
+      const ids = contratos.map((c) => c.id);
+      const { data: totais, error: errTotais } = await supabase
+        .from('contrato_renting_totais')
+        .select('contrato_id, total')
+        .in('contrato_id', ids);
+      if (errTotais) throw errTotais;
+      const totalById = new Map<string, number | null>();
+      (totais ?? []).forEach((t) => {
+        const row = t as { contrato_id: string | null; total: number | null };
+        if (row.contrato_id) totalById.set(row.contrato_id, row.total);
+      });
+      return contratos.map((c) => ({ ...c, total_calculado: totalById.get(c.id) ?? null }));
     },
     placeholderData: keepPreviousData,
     staleTime: 30_000,
@@ -320,7 +337,7 @@ export function useUpdateContratoRenting() {
 }
 
 // ────────────────────────────────────────────────────────────
-// Fechar contrato TVDE
+// Fechar contrato (TVDE e rent-a-car — mesmo fluxo para ambos)
 // ────────────────────────────────────────────────────────────
 
 /** Dados da recolha (KM/combustível/fotos) preenchidos já no fecho do
@@ -331,7 +348,7 @@ export interface FecharContratoRecolhaInfo {
   fotos: File[];
 }
 
-export interface FecharContratoTVDEArgs {
+export interface FecharContratoArgs {
   contratoId: string;
   contratoCodigo: number;
   tipoEvento: 'recolhido' | 'devolvido';
@@ -345,7 +362,21 @@ export interface FecharContratoTVDEArgs {
   recolha?: FecharContratoRecolhaInfo;
 }
 
-export function useFecharContratoTVDE() {
+/** Título/descrição do toast final — depende de a recolha ter sido
+ *  confirmada já aqui (`fechouAgora`) ou só agendada para mais tarde. */
+export function resolveFechoContratoToast(fechouAgora: boolean): {
+  title: string;
+  description?: string;
+} {
+  return fechouAgora
+    ? { title: 'Contrato fechado' }
+    : {
+        title: 'Recolha agendada',
+        description: 'O contrato mantém-se em curso até a recolha ser confirmada.',
+      };
+}
+
+export function useFecharContrato() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -362,7 +393,7 @@ export function useFecharContratoTVDE() {
       matricula,
       viaturaId,
       recolha,
-    }: FecharContratoTVDEArgs): Promise<void> => {
+    }: FecharContratoArgs): Promise<{ fechouAgora: boolean }> => {
       const { data: estacao, error: errEstacao } = await supabase
         .from('estacoes')
         .select('nome, cidade')
@@ -371,17 +402,17 @@ export function useFecharContratoTVDE() {
       if (errEstacao) throw errEstacao;
       const cidadeEvento = estacao.cidade?.trim() || estacao.nome;
 
-      // O contrato só fecha (estado_operacional) quando a recolha física é
-      // confirmada de facto — ou já aqui (km/combustível/fotos preenchidos,
-      // `recolha` presente) ou mais tarde via QR/Calendário
-      // (realizar_token_realizacao). Sem `recolha`, isto só regista a estação
-      // e cria o evento pendente — o contrato mantém-se em_curso até alguém
-      // confirmar a recolha física.
+      // Fechar o contrato é uma decisão explícita do gestor: passa sempre a
+      // 'cancelado' (fechado), quer a recolha física seja registada já aqui
+      // (km/combustível/fotos, `recolha` presente) quer fique para confirmar
+      // depois via QR/Calendário. Antes, sem `recolha`, o estado não mudava e
+      // o contrato ficava preso (parecia que não fechava) à espera de uma
+      // confirmação que muitas vezes nunca chegava.
       const { error: errUpdate } = await supabase
         .from('contratos_renting')
         .update({
           estacao_recolha_id: estacaoId,
-          ...(recolha ? { estado_operacional: 'cancelado' as const } : {}),
+          estado_operacional: 'cancelado' as const,
         })
         .eq('id', contratoId);
       if (errUpdate) throw errUpdate;
@@ -391,6 +422,7 @@ export function useFecharContratoTVDE() {
         data: { session },
       } = await supabase.auth.getSession();
       const userId = session?.user?.id ?? null;
+      if (!userId) throw new Error('Sessão não encontrada');
 
       // Sempre 'recolha' no calendário — é o único tipo que o fluxo de
       // renting (useEventosPendentesRenting, realizar_token_realizacao)
@@ -514,11 +546,14 @@ export function useFecharContratoTVDE() {
           .eq('id', motoristaId);
         if (errMotorista) throw errMotorista;
       }
+
+      return { fechouAgora: !!recolha };
     },
-    onSuccess: () => {
+    onSuccess: ({ fechouAgora }) => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
       qc.invalidateQueries({ queryKey: ['motoristas'] });
-      toast({ title: 'Contrato fechado' });
+      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+      toast(resolveFechoContratoToast(fechouAgora));
     },
     onError: (error: unknown) => {
       const { title, description } = contratoErrorMessage(error);
@@ -528,14 +563,17 @@ export function useFecharContratoTVDE() {
 }
 
 // ────────────────────────────────────────────────────────────
-// Marcar entrega/recolha como já realizada, sem o fluxo de check
-// (fotos/km/QR) — atalho para contratos antigos/legado (ex.: migrados de
-// outro sistema) onde a informação de check-in nunca existiu.
+// Marcar ENTREGA como já realizada, sem o fluxo de check (fotos/km/QR) —
+// atalho para contratos antigos/legado (ex.: migrados de outro sistema)
+// onde a informação de check-in nunca existiu. Só entrega: recolha/fecho
+// têm sempre de passar por "Fechar contrato", pelo fluxo QR ou por troca
+// de viatura — um clique aqui não pode encerrar um contrato sozinho (foi
+// exactamente isso que aconteceu por engano ao contrato #587, quando o
+// banner de recolha apareceu cedo demais).
 // ────────────────────────────────────────────────────────────
 
 export interface MarcarRealizacaoDiretaArgs {
   contratoId: string;
-  tipo: 'entrega' | 'recolha';
 }
 
 export function useMarcarRealizacaoDireta() {
@@ -543,32 +581,280 @@ export function useMarcarRealizacaoDireta() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ contratoId, tipo }: MarcarRealizacaoDiretaArgs): Promise<void> => {
-      const novoEstado = tipo === 'entrega' ? 'em_curso' : 'devolvido';
+    mutationFn: async ({ contratoId }: MarcarRealizacaoDiretaArgs): Promise<void> => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
       // Muda estado_operacional — dispara trg_contrato_renting_cascata_realizacao,
-      // que marca o evento de calendário (entrega/recolha) pendente como
-      // realizado, sem passar pelo fluxo de check (fotos/km/QR).
+      // que marca o evento de calendário de entrega pendente como realizado,
+      // sem passar pelo fluxo de check (fotos/km/QR). Guard no estado de
+      // origem: só avança agendado→em_curso.
       const { error } = await supabase
         .from('contratos_renting')
-        .update({ estado_operacional: novoEstado, updated_by: user?.id ?? null })
-        .eq('id', contratoId);
+        .update({ estado_operacional: 'em_curso', updated_by: user?.id ?? null })
+        .eq('id', contratoId)
+        .eq('estado_operacional', 'agendado');
       if (error) throw error;
     },
-    onSuccess: (_, vars) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
       qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
       qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
       toast({
-        title:
-          vars.tipo === 'entrega'
-            ? 'Entrega marcada como realizada'
-            : 'Recolha marcada como realizada',
+        title: 'Entrega marcada como realizada',
         description: 'Sem fotos/km — apenas o estado do contrato foi actualizado.',
+      });
+    },
+    onError: (error: unknown) => {
+      const { title, description } = contratoErrorMessage(error);
+      toast({ title, description, variant: 'destructive' });
+    },
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// Reverter abertura / reverter fecho — corrige um estado_operacional
+// indevido (ex.: clique em falso no Any Rent) sem editar a BD à mão.
+// As cascatas (trg_contrato_renting_cascata_realizacao,
+// contrato_renting_cascata_estado, contrato_renting_inativar_motorista_
+// na_devolucao) só reconhecem as transições "para a frente" — nenhuma
+// delas desfaz nada ao andar para trás. Por isso estes hooks repõem à mão
+// exactamente o que essas cascatas teriam desfeito: o evento de
+// calendário pendente, o estado da reserva e a activação do motorista.
+// A disponibilidade da viatura (recalcular_disponibilidade_viatura) não
+// precisa de ajuda — recalcula sempre do zero a partir dos contratos/
+// reservas activos, por isso corrige-se sozinha em qualquer sentido.
+// ────────────────────────────────────────────────────────────
+
+/** em_curso → agendado. A entrega volta a ficar pendente. */
+export function useReverterAbertura() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (contratoId: string): Promise<void> => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const { data: updated, error } = await supabase
+        .from('contratos_renting')
+        .update({ estado_operacional: 'agendado', updated_by: user?.id ?? null })
+        .eq('id', contratoId)
+        .eq('estado_operacional', 'em_curso')
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!updated) return;
+
+      const { error: errEvento } = await supabase
+        .from('calendario_eventos')
+        .update({ realizado_em: null, realizado_por_id: null })
+        .eq('origem_tipo', 'contrato_renting')
+        .eq('origem_id', contratoId)
+        .eq('tipo', 'entrega')
+        .not('realizado_em', 'is', null);
+      if (errEvento) throw errEvento;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
+      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+      qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
+      toast({
+        title: 'Abertura revertida',
+        description: 'O contrato voltou a "Agendado" — a entrega volta a ficar pendente.',
+      });
+    },
+    onError: (error: unknown) => {
+      const { title, description } = contratoErrorMessage(error);
+      toast({ title, description, variant: 'destructive' });
+    },
+  });
+}
+
+export type ReverterFechoArgs = Pick<
+  ContratoRenting,
+  'id' | 'codigo' | 'regime' | 'matricula' | 'data_fim' | 'estacao_recolha_id' | 'reserva_id'
+>;
+
+/** devolvido OU cancelado → em_curso. A recolha volta a ficar pendente. */
+export function useReverterFecho() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (contrato: ReverterFechoArgs): Promise<void> => {
+      const {
+        id: contratoId,
+        codigo,
+        regime,
+        matricula,
+        data_fim,
+        estacao_recolha_id,
+        reserva_id,
+      } = contrato;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const userId = user?.id ?? null;
+
+      const { data: updated, error } = await supabase
+        .from('contratos_renting')
+        .update({ estado_operacional: 'em_curso', updated_by: userId })
+        .eq('id', contratoId)
+        .in('estado_operacional', ['devolvido', 'cancelado'])
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!updated) return;
+
+      // contrato_renting_cascata_estado só cascateia AO fechar — não desfaz
+      // nada ao reabrir. Repomos a reserva ao estado que a abertura
+      // original lhe deu (contrato_renting_cascata_open).
+      if (reserva_id) {
+        const { error: errReserva } = await supabase
+          .from('reservas')
+          .update({ estado: 'em_curso' })
+          .eq('id', reserva_id);
+        if (errReserva) throw errReserva;
+      }
+
+      // Reabre o evento de recolha se ainda existir marcado como realizado
+      // (caso 'devolvido' — a cascata de fecho preserva-o). Se não existir
+      // nenhuma linha para reabrir, foi apagado pela cascata de 'cancelado'
+      // — recria-se, excepto em TVDE (nunca teve este evento; fecha sempre
+      // via "Fechar contrato").
+      const { data: reaberto, error: errReabrir } = await supabase
+        .from('calendario_eventos')
+        .update({ realizado_em: null, realizado_por_id: null })
+        .eq('origem_tipo', 'contrato_renting')
+        .eq('origem_id', contratoId)
+        .eq('tipo', 'recolha')
+        .not('realizado_em', 'is', null)
+        .select('id');
+      if (errReabrir) throw errReabrir;
+
+      if ((reaberto?.length ?? 0) === 0 && regime !== 'tvde' && data_fim) {
+        let cidadeRecolha: string | null = null;
+        if (estacao_recolha_id) {
+          const { data: estacao } = await supabase
+            .from('estacoes')
+            .select('nome, cidade')
+            .eq('id', estacao_recolha_id)
+            .maybeSingle();
+          cidadeRecolha = estacao ? estacao.cidade?.trim() || estacao.nome : null;
+        }
+        const matriculaNorm = matricula ? matricula.replace(/[\s-]/g, '').toUpperCase() : null;
+        const { error: errInsert } = await supabase.from('calendario_eventos').insert({
+          tipo: 'recolha',
+          titulo: matriculaNorm ?? '?',
+          descricao: `Reaberto automaticamente — reversão do fecho do contrato #${codigo}`,
+          cidade: cidadeRecolha,
+          data_inicio: data_fim,
+          data_fim: data_fim,
+          dia_todo: false,
+          matricula_devolver: matriculaNorm,
+          origem_tipo: 'contrato_renting',
+          origem_id: contratoId,
+          criado_por: userId,
+        });
+        if (errInsert) throw errInsert;
+      }
+
+      // Espelha (ao contrário) a desactivação automática do motorista no
+      // fecho (contrato_renting_inativar_motorista_na_devolucao) — senão o
+      // condutor ficava preso a "inactivo" com o contrato outra vez em curso.
+      const { data: condutores } = await supabase
+        .from('contrato_condutores')
+        .select('motorista_id')
+        .eq('contrato_id', contratoId)
+        .not('motorista_id', 'is', null);
+      const motoristaIds = (condutores ?? [])
+        .map((c) => c.motorista_id as string | null)
+        .filter((id): id is string => !!id);
+      if (motoristaIds.length > 0) {
+        const { error: errMotorista } = await supabase
+          .from('motoristas_ativos')
+          .update({ status_ativo: true })
+          .in('id', motoristaIds);
+        if (errMotorista) throw errMotorista;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      qc.invalidateQueries({ queryKey: ['motoristas'] });
+      qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
+      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+      qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
+      toast({
+        title: 'Fecho revertido',
+        description: 'O contrato voltou a "Em curso" — a recolha volta a ficar pendente.',
+      });
+    },
+    onError: (error: unknown) => {
+      const { title, description } = contratoErrorMessage(error);
+      toast({ title, description, variant: 'destructive' });
+    },
+  });
+}
+
+export type ReverterParaReservaArgs = Pick<ContratoRenting, 'id' | 'reserva_id'>;
+
+/** agendado → apaga o contrato (soft-delete) e devolve a reserva de origem
+ *  ao estado activo — desfaz a conversão reserva→contrato por completo, não
+ *  só o estado_operacional. Só faz sentido antes de a viatura ser entregue
+ *  (agendado): depois disso já não é "só uma reserva outra vez" — é para
+ *  isso que existem "Reverter abertura"/"Reverter fecho". */
+export function useReverterParaReserva() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id: contratoId, reserva_id }: ReverterParaReservaArgs): Promise<void> => {
+      if (!reserva_id) throw new Error('Este contrato não tem reserva de origem.');
+
+      const { data: updated, error } = await supabase
+        .from('contratos_renting')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', contratoId)
+        .eq('estado_operacional', 'agendado')
+        .is('deleted_at', null)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!updated) return;
+
+      // Devolve a reserva ao estado que tinha antes de virar contrato — o
+      // mesmo valor que contrato_renting_cascata_estado usa para "cancelado
+      // vindo de agendado" (cliente continua com reserva válida).
+      const { error: errReserva } = await supabase
+        .from('reservas')
+        .update({ estado: 'confirmada' })
+        .eq('id', reserva_id);
+      if (errReserva) throw errReserva;
+
+      // O contrato deixou de existir — os eventos de entrega/recolha que
+      // contrato_renting_cascata_open criou ao abri-lo ficariam órfãos,
+      // ainda pendentes, nas listas do Calendário. Mesma limpeza que a
+      // cascata de 'cancelado' já faz para contratos que chegam a abrir.
+      const { error: errEventos } = await supabase
+        .from('calendario_eventos')
+        .delete()
+        .eq('origem_tipo', 'contrato_renting')
+        .eq('origem_id', contratoId);
+      if (errEventos) throw errEventos;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      qc.invalidateQueries({ queryKey: ['renting', 'reservas'] });
+      qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
+      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+      toast({
+        title: 'Contrato revertido para reserva',
+        description: 'O contrato foi removido — volta a ser só uma reserva.',
       });
     },
     onError: (error: unknown) => {
@@ -610,29 +896,89 @@ export function useCriarVersaoContrato() {
   });
 }
 
-/** Carrega a cadeia de versões anteriores de um contrato (mais recente primeiro). */
+/**
+ * Renova um contrato rent-a-car de longa duração (RPC renovar_contrato_renting):
+ * fecha o mês actual (passa a histórico) e cria o mês seguinte por faturar, com
+ * código novo. Devolve o id do novo contrato (para navegar). O feedback (toast /
+ * navegação) é tratado no diálogo de confirmação.
+ */
+export function useRenovarContrato() {
+  const qc = useQueryClient();
+
+  return useMutation<string, Error, { contratoId: string }>({
+    mutationFn: async ({ contratoId }): Promise<string> => {
+      // A RPC ainda não consta dos tipos gerados — cast controlado.
+      const { data, error } = await (
+        supabase.rpc as unknown as (
+          fn: string,
+          args: Record<string, unknown>
+        ) => Promise<{ data: string | null; error: { message: string } | null }>
+      )('renovar_contrato_renting', { p_contrato_id: contratoId });
+      if (error) throw new Error(error.message);
+      return data as string;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      qc.invalidateQueries({ queryKey: ['renting'] });
+      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+    },
+  });
+}
+
+/** Carrega toda a cadeia de versões de um contrato (mais recente primeiro),
+ *  a partir de qualquer ponto da cadeia — inclui tanto as versões
+ *  anteriores como as seguintes. Isto garante que abrir uma versão antiga
+ *  (ex.: um contrato fechado por uma troca) também mostra a versão nova
+ *  que a substituiu, e não só o caminho para trás. */
 export function useContratoVersoes(contratoId: string | null | undefined) {
   return useQuery({
     queryKey: [...QUERY_KEY_BASE, 'versoes', contratoId ?? null],
     queryFn: async (): Promise<ContratoRenting[]> => {
       if (!contratoId) return [];
-      // Sobe a cadeia via contrato_anterior_id usando WITH RECURSIVE via RPC.
-      // Mais simples: pega o contrato actual, navega para trás iterativamente.
-      const versoes: ContratoRenting[] = [];
-      let cursor: string | null = contratoId;
-      while (cursor) {
+
+      const buscarPorId = async (id: string): Promise<ContratoRenting | null> => {
         const { data, error } = await supabase
           .from('contratos_renting')
           .select(SELECT_COLUMNS)
-          .eq('id', cursor)
+          .eq('id', id)
+          .maybeSingle();
+        if (error) throw error;
+        return data as unknown as ContratoRenting | null;
+      };
+
+      // Sobe a cadeia via contrato_anterior_id, a partir da própria versão
+      // (inclui-a) até à mais antiga.
+      const anteriores: ContratoRenting[] = [];
+      let cursorAtras: string | null = contratoId;
+      while (cursorAtras) {
+        const linha = await buscarPorId(cursorAtras);
+        if (!linha) break;
+        anteriores.push(linha);
+        cursorAtras = linha.contrato_anterior_id;
+      }
+      if (anteriores.length === 0) return [];
+
+      // Desce a cadeia para a frente (quem tem contrato_anterior_id = esta
+      // versão), da própria até à mais recente. Cada versão só pode ter no
+      // máximo uma seguinte (criar_versao_contrato_renting bloqueia
+      // versionar um contrato já substituído), por isso .limit(1) é seguro.
+      const seguintes: ContratoRenting[] = [];
+      let cursorFrente: string = contratoId;
+      for (;;) {
+        const { data, error } = await supabase
+          .from('contratos_renting')
+          .select(SELECT_COLUMNS)
+          .eq('contrato_anterior_id', cursorFrente)
+          .limit(1)
           .maybeSingle();
         if (error) throw error;
         if (!data) break;
         const linha = data as unknown as ContratoRenting;
-        versoes.push(linha);
-        cursor = linha.contrato_anterior_id;
+        seguintes.push(linha);
+        cursorFrente = linha.id;
       }
-      return versoes;
+
+      return [...seguintes.reverse(), ...anteriores];
     },
     enabled: !!contratoId,
     staleTime: 30_000,
@@ -699,8 +1045,8 @@ export function useContratoConflito(args: UseContratoConflitoArgs) {
         p_viatura_id: viaturaId!,
         p_data_inicio: dataInicio!.toISOString(),
         p_data_fim: dataFim!.toISOString(),
-        p_excluir_id: excluirId ?? null,
-        p_reserva_id: reservaId ?? null,
+        p_excluir_id: excluirId ?? undefined,
+        p_reserva_id: reservaId ?? undefined,
       });
       if (error) throw error;
       return Boolean(data);

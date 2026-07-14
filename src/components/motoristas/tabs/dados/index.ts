@@ -1,0 +1,9 @@
+export { DadosPessoaisSection } from './DadosPessoaisSection';
+export { ContactosSection } from './ContactosSection';
+export { DocumentoIdentificacaoSection } from './DocumentoIdentificacaoSection';
+export { CartaConducaoSection } from './CartaConducaoSection';
+export { LicencaTvdeSection } from './LicencaTvdeSection';
+export { DocumentacaoAdicionalSection } from './DocumentacaoAdicionalSection';
+export { IntegracoesSection } from './IntegracoesSection';
+export { EstadoConfiguracaoSection } from './EstadoConfiguracaoSection';
+export { ObservacoesSection } from './ObservacoesSection';

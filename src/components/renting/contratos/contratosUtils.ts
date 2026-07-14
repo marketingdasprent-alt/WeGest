@@ -1,8 +1,19 @@
 import { format } from 'date-fns';
+import type { ContratoRenting } from '@/types/contratoRenting';
 
 /** Normaliza matrícula: lowercase + ignora hífens e espaços */
 export function normalizeMatricula(m: string): string {
   return m.toLowerCase().replace(/[-\s]/g, '');
+}
+
+/** Total visível de um contrato: prioriza o total calculado em tempo real
+ *  (view contrato_renting_totais — tarifa + extras + coberturas + taxas +
+ *  IVA), depois o snapshot imutável (facturado), e por fim o valor base
+ *  manual. Sem isto a listagem mostrava apenas a tarifa (sem extras/IVA). */
+export function getContratoTotal(
+  c: Pick<ContratoRenting, 'total_calculado' | 'total_final' | 'valor_total_manual'>
+): number | null {
+  return c.total_calculado ?? c.total_final ?? c.valor_total_manual ?? null;
 }
 
 export function formatDateTime(iso: string): string {

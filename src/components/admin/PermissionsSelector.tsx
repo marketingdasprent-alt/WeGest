@@ -107,6 +107,7 @@ const RECURSO_LABELS: Record<string, string> = {
   contratos_ver: 'Ver contratos',
   contratos_criar: 'Criar novos contratos',
   contratos_reimprimir: 'Reimprimir contratos',
+  contratos_reverter_reserva: 'Reverter contrato para reserva',
   motoristas_contratos: 'Gestão completa de contratos',
   motoristas_editar_data_contrato: 'Editar data do 1.º contrato',
   // Administrativo
@@ -252,8 +253,7 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
 
       const mapped: Permission[] = (data || []).map((p: any) => ({
         recurso_id: p.recurso_id,
-        // Tenta tem_acesso primeiro, depois pode_ver (retrocompatibilidade)
-        tem_acesso: p.tem_acesso ?? p.pode_ver ?? false,
+        tem_acesso: p.tem_acesso ?? false,
         pode_editar: p.pode_editar ?? false,
       }));
       setPermissions(mapped);

@@ -44,6 +44,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { SectionCard } from '@/components/ui/section-card';
+import { FinanceiroSection } from '@/components/ui/financeiro-section';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Motorista } from '@/pages/Motoristas';
@@ -184,7 +185,11 @@ function NovoMovimentoOverlay({
       toast.error('Preencha a descrição e o valor');
       return;
     }
-    if (isRecorrenciaAutomatica && duracaoTipo === 'ocorrencias' && !(parseInt(maxOcorrencias) > 0)) {
+    if (
+      isRecorrenciaAutomatica &&
+      duracaoTipo === 'ocorrencias' &&
+      !(parseInt(maxOcorrencias) > 0)
+    ) {
       toast.error('Indique um número de ocorrências válido');
       return;
     }
@@ -651,9 +656,7 @@ function NovoMovimentoOverlay({
                     <SelectItem value="nenhuma">Não — lançamento único</SelectItem>
                     <SelectItem value="parcelas">Parcelas fixas (gera já N semanas)</SelectItem>
                     <SelectItem value="semanal">Recorrência semanal (automática)</SelectItem>
-                    <SelectItem value="mensal">
-                      Recorrência mensal (semana fixa do mês)
-                    </SelectItem>
+                    <SelectItem value="mensal">Recorrência mensal (semana fixa do mês)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -771,7 +774,7 @@ function NovoMovimentoOverlay({
 
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
 
-export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProps) {
+export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: string }) {
   const [movimentos, setMovimentos] = useState<MovimentoFinanceiro[]>([]);
   const [loading, setLoading] = useState(true);
   const [novoMovimentoOpen, setNovoMovimentoOpen] = useState(false);
@@ -786,14 +789,14 @@ export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProp
   useEffect(() => {
     loadMovimentos();
     loadRecorrencias();
-  }, [motorista.id]);
+  }, [motoristaId]);
 
   const loadRecorrencias = async () => {
     try {
       const { data, error } = await (supabase as any)
         .from('motorista_financeiro_recorrencias')
         .select('*')
-        .eq('motorista_id', motorista.id)
+        .eq('motorista_id', motoristaId)
         .neq('status', 'cancelada')
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -809,7 +812,7 @@ export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProp
       const { data, error } = await supabase
         .from('motorista_financeiro')
         .select('*')
-        .eq('motorista_id', motorista.id)
+        .eq('motorista_id', motoristaId)
         .order('data_movimento', { ascending: false });
 
       if (error) throw error;
@@ -976,7 +979,7 @@ export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProp
     <>
       {novoMovimentoOpen && (
         <NovoMovimentoOverlay
-          motoristaId={motorista.id}
+          motoristaId={motoristaId}
           reparacaoPendente={reparacaoParaAcordo ?? undefined}
           movimentoParaEditar={movimentoParaEditar ?? undefined}
           faturaUrlExterna={faturaUrlAcordo}
@@ -1041,8 +1044,7 @@ export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProp
         </div>
 
         {/* Recorrências ativas */}
-        {recorrencias.filter((r) => r.status === 'ativa' || r.status === 'pausada').length >
-          0 && (
+        {recorrencias.filter((r) => r.status === 'ativa' || r.status === 'pausada').length > 0 && (
           <SectionCard
             icon={<Repeat className="h-4 w-4" />}
             title="Recorrências Ativas"
@@ -1318,4 +1320,12 @@ export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProp
       </div>
     </>
   );
+}
+
+/**
+ * Wrapper público — mantém a API original (<MotoristaTabFinanceiro motorista={m} />)
+ * para páginas que já a importam. Delega para o componente partilhado FinanceiroSection.
+ */
+export function MotoristaTabFinanceiro({ motorista }: MotoristaTabFinanceiroProps) {
+  return <FinanceiroSection entidade="motorista" id={motorista.id} />;
 }

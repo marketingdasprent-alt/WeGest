@@ -21,12 +21,18 @@ interface SectionGeralProps {
   tarifaReadOnly?: boolean;
   /** Slot para acção extra junto ao campo — ex.: botão "Pedir alteração de tarifa". */
   tarifaAction?: React.ReactNode;
+  /** Em edição, o estado operacional só muda através das acções dedicadas
+   *  (Fechar contrato, Any Rent, troca de viatura, Reverter abertura/fecho)
+   *  — nunca por edição directa aqui, para garantir que as cascatas
+   *  (calendário, reserva, disponibilidade da viatura) correm sempre. */
+  estadoOperacionalReadOnly?: boolean;
 }
 
 export const SectionGeral: React.FC<SectionGeralProps> = ({
   form,
   tarifaReadOnly = false,
   tarifaAction,
+  estadoOperacionalReadOnly = false,
 }) => {
   const regime = form.watch('regime');
   // TVDE/slot não usam tarifa diária — TVDE fatura por semana (por modelo),
@@ -50,9 +56,15 @@ export const SectionGeral: React.FC<SectionGeralProps> = ({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Estado Operacional</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={estadoOperacionalReadOnly}
+              >
                 <FormControl>
-                  <SelectTrigger className="bg-background">
+                  <SelectTrigger
+                    className={estadoOperacionalReadOnly ? 'bg-muted' : 'bg-background'}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                 </FormControl>
@@ -64,6 +76,12 @@ export const SectionGeral: React.FC<SectionGeralProps> = ({
                   ))}
                 </SelectContent>
               </Select>
+              {estadoOperacionalReadOnly && (
+                <p className="text-xs text-muted-foreground">
+                  Só muda via "Fechar contrato", Any Rent, troca de viatura ou reverter
+                  abertura/fecho.
+                </p>
+              )}
               <FormMessage />
             </FormItem>
           )}

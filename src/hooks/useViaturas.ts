@@ -18,6 +18,8 @@ export interface ViaturaBasic {
   is_slot: boolean | null;
   grupo_id: string | null;
   modelo_id: string | null;
+  /** Tipo de viatura (frota) — usado para derivar elegibilidade TVDE via viatura_tipos.elegivel_tvde. */
+  tipo_id: string | null;
   habilitada_tvde: boolean;
   emissor_id: string | null;
 }
@@ -46,7 +48,7 @@ export function useViaturas(options: UseViaturasOptions = {}) {
       let q = supabase
         .from('viaturas')
         .select(
-          'id, matricula, data_matricula, marca, modelo, status, categoria, km_atual, combustivel, combustivel_id, is_vendida, is_slot, grupo_id, modelo_id, habilitada_tvde, emissor_id'
+          'id, matricula, data_matricula, marca, modelo, status, categoria, km_atual, combustivel, combustivel_id, is_vendida, is_slot, grupo_id, marca_id, modelo_id, tipo_id, habilitada_tvde, emissor_id'
         )
         .order('matricula');
 
