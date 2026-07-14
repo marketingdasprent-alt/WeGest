@@ -44,6 +44,10 @@ vi.mock('@/components/ui/theme-toggle', () => ({
 // Supabase mock: chainable + thenable. Cada método retorna o próprio proxy
 // (para encadear .select().eq().neq()...) e o proxy é thenable (resolve com
 // { data: null, error: null, count: 0 }).
+// NOTA: os métodos de cadeia (select, eq, ...) usam funções reais em vez de
+// vi.fn() porque vi.clearAllMocks() quebra o encadeamento (limpa a resposta
+// do vi.fn fazendo-o retornar undefined). from/rpc precisam de vi.fn() para
+// que o import.meta.vitest consiga fazer spy.
 vi.mock('@/integrations/supabase/client', () => {
   const result = { data: null, error: null, count: 0 };
   const proxy: Record<string, unknown> = {};
@@ -64,7 +68,7 @@ vi.mock('@/integrations/supabase/client', () => {
     'like',
   ];
   for (const m of methods) {
-    proxy[m] = vi.fn(() => proxy);
+    proxy[m] = () => proxy;
   }
   proxy.then = (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
     Promise.resolve(result).then(resolve, reject);

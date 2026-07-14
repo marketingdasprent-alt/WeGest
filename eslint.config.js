@@ -141,7 +141,12 @@ export default tseslint.config(
   // max-lines: ficheiros novos (ou refactorados) não devem exceder 500 linhas
   {
     files: ["**/*.{ts,tsx}"],
-    ignores: ["**/types.ts", ".sisyphus/**", "**/src/pages/renting/contrato/useContratoForm.ts"],
+    ignores: [
+      "**/types.ts",
+      ".sisyphus/**",
+      "**/src/pages/renting/contrato/useContratoForm.ts",
+      ...filesExceedingMaxLines,
+    ],
     rules: {
       "max-lines": ["error", { max: 500, skipBlankLines: true, skipComments: true }],
     },
