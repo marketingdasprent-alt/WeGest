@@ -33,6 +33,7 @@ export function useViaturaVinculosAtivos(viaturaId?: string | null) {
           .select('id')
           .eq('viatura_id', viaturaId!)
           .is('deleted_at', null)
+          .is('substituido_em', null)
           .in('estado_operacional', ['agendado', 'em_curso'])
           .limit(1),
         supabase

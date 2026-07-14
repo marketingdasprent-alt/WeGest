@@ -13,6 +13,9 @@
 // Fontes consideradas (as mesmas que ocupam uma viatura no renting):
 //   - reservas: estado em ('pendente','confirmada','em_curso'), não soft-deleted
 //   - contratos_renting: estado_operacional em ('agendado','em_curso'), não soft-deleted
+//     e substituido_em IS NULL (uma versão substituída por troca de viatura
+//     nunca muda de estado_operacional — sem este filtro, a viatura trocada
+//     ficava presa como "ocupada" para sempre, mesmo já disponível)
 //
 // Nota: o overbooking JÁ é bloqueado ao gravar (constraints/RPC na BD). Este hook
 // é a camada de UX que esconde as viaturas em conflito ANTES de o utilizador as
@@ -82,6 +85,7 @@ export function useViaturasOcupadasPeriodo(args: UseViaturasOcupadasPeriodoArgs)
         .from('contratos_renting')
         .select('viatura_id, data_inicio, data_fim, id')
         .is('deleted_at', null)
+        .is('substituido_em', null)
         .not('viatura_id', 'is', null)
         .in('estado_operacional', ['agendado', 'em_curso']);
       if (fimPedidoIso) {
