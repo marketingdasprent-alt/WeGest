@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
-import { Gauge, Coins, CircleDollarSign } from 'lucide-react';
+import { Gauge, Coins, Euro, CarTaxiFront, AlertTriangle } from 'lucide-react';
 
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Motorista } from '@/types/motorista';
@@ -11,7 +11,9 @@ import type { RentingGrupoMin } from '@/hooks/useRentingGruposTarifas';
 import {
   useRentingTarifasMin,
   useRentingTarifaPrecosModelo,
+  calcularFaturacaoRenting,
 } from '@/hooks/useRentingGruposTarifas';
+import { diferencaDias } from '@/utils/reserva-formatters';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import {
   Select,
@@ -20,6 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { SectionHeader } from '@/components/renting/reservas/SectionHeader';
 import { ALDFields } from '@/components/renting/shared/ALDFields';
 import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
@@ -33,7 +37,6 @@ import { SectionInfoAdicional } from './SectionInfoAdicional';
 import { SectionGeral } from './SectionGeral';
 import { SectionRegime } from './SectionRegime';
 import { SectionViatura } from './SectionViatura';
-import { SectionTitle } from './SectionTitle';
 
 /** Link "Pedir alteração de X" sob o campo travado — trava enquanto já há um pedido pendente desse tipo. */
 const BotaoPedirAlteracao: React.FC<{
@@ -131,6 +134,53 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
     );
   }, [tarifas, isTvde, modeloIdSel, precosModelo]);
 
+  const tarifaIdSel = form.watch('tarifa_id');
+  const dataInicio = form.watch('data_inicio');
+  const dataFim = form.watch('data_fim');
+  const isLongaDuracao = form.watch('is_longa_duracao');
+  const dias = useMemo(() => diferencaDias(dataInicio ?? '', dataFim ?? ''), [dataInicio, dataFim]);
+
+  const tarifaAtual = useMemo(
+    () => tarifas.find((t) => t.id === tarifaIdSel) ?? null,
+    [tarifaIdSel, tarifas]
+  );
+
+  const precoModeloSel = useMemo(() => {
+    if (!tarifaIdSel || !modeloIdSel) return null;
+    return precosModelo.find((p) => p.tarifa_id === tarifaIdSel && p.modelo_id === modeloIdSel) ?? null;
+  }, [tarifaIdSel, modeloIdSel, precosModelo]);
+
+  const precoModeloSemanaTvde = isTvde ? (precoModeloSel?.preco_semana ?? null) : null;
+  const precoModeloDiaRac = !isTvde ? (precoModeloSel?.preco_dia ?? null) : null;
+  const precoModeloMesRac = !isTvde ? (precoModeloSel?.preco_mes ?? null) : null;
+
+  // Faturação-preview (igual à da reserva) — meramente informativa: o valor
+  // que fica realmente gravado obedece a `valor_total_manual` quando
+  // preenchido (ver calcularBaseAluguerRenting no submit).
+  const modeloSemPreco =
+    regime !== 'slot' &&
+    !!tarifaIdSel &&
+    !!modeloIdSel &&
+    (isTvde
+      ? precoModeloSemanaTvde == null
+      : isLongaDuracao
+        ? precoModeloMesRac == null
+        : precoModeloDiaRac == null);
+
+  const faturacao = useMemo(
+    () =>
+      calcularFaturacaoRenting(
+        regime,
+        isLongaDuracao,
+        dias,
+        tarifaAtual,
+        precoModeloSemanaTvde,
+        precoModeloDiaRac,
+        precoModeloMesRac
+      ),
+    [regime, isLongaDuracao, dias, tarifaAtual, precoModeloSemanaTvde, precoModeloDiaRac, precoModeloMesRac]
+  );
+
   const [dialogAberto, setDialogAberto] = useState<TipoPedidoAlteracao | null>(null);
   const kmsIncluidos = form.watch('kms_incluidos');
   const kmAdicionalValor = form.watch('km_adicional_valor');
@@ -160,26 +210,19 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         onViaturaChange={onViaturaChange}
       />
 
-      {/* Seleção de Tarifa — o regime filtra primeiro (TVDE / Rent-a-Car) e só
-          aparecem as tarifas cujo preço cobre o modelo da viatura escolhida.
-          O preço vem por modelo da própria tarifa. */}
-      <div className="space-y-4">
-        <SectionTitle>Tarifa</SectionTitle>
-        <FormField
-          control={form.control}
-          name="tarifa_id"
-          render={({ field }) => (
-            <FormItem className="max-w-xs">
-              <FormLabel>{isTvde ? 'Tarifa TVDE' : 'Tarifa Rent-a-Car'}</FormLabel>
-              {tarifasDoRegime.length === 0 ? (
-                <div className="text-sm text-muted-foreground p-2 border rounded">
-                  {modeloIdSel
-                    ? 'Nenhuma tarifa cobre o modelo desta viatura. Define o preço do modelo na tarifa em Renting → Tarifas.'
-                    : isTvde
-                      ? 'Nenhuma tarifa TVDE. Cria uma em Renting → Tarifas.'
-                      : 'Nenhuma tarifa Rent-a-Car. Cria uma em Renting → Tarifas.'}
-                </div>
-              ) : (
+      {/* Tarifa & Faturação — mesmo layout da reserva (cartão de preços por
+          modelo + caixa "Faturar ao Cliente"), seguido dos campos próprios do
+          contrato (estado operacional/financeiro, tarifa diária, voucher...). */}
+      <div>
+        <SectionHeader icon={Coins} title="Tarifa & Faturação" accent="emerald" />
+
+        <div className="mb-3">
+          <FormField
+            control={form.control}
+            name="tarifa_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{isTvde ? 'Tarifa TVDE' : 'Tarifa Rent-a-Car'}</FormLabel>
                 <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || null)}>
                   <FormControl>
                     <SelectTrigger>
@@ -191,6 +234,15 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
+                    {tarifasDoRegime.length === 0 && (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        {modeloIdSel
+                          ? 'Nenhuma tarifa cobre o modelo desta viatura.'
+                          : isTvde
+                            ? 'Nenhuma tarifa TVDE. Cria uma em Renting → Tarifas.'
+                            : 'Nenhuma tarifa Rent-a-Car. Cria uma em Renting → Tarifas.'}
+                      </div>
+                    )}
                     {tarifasDoRegime.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
                         {t.nome}
@@ -198,29 +250,106 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                     ))}
                   </SelectContent>
                 </Select>
-              )}
-              <FormMessage />
-            </FormItem>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {modeloSemPreco && (
+            <Alert variant="destructive" className="mt-3">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Modelo sem preço nesta tarifa</AlertTitle>
+              <AlertDescription>
+                A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) não tem
+                preço definido na tarifa selecionada. Define o preço deste modelo na tarifa ou
+                escolhe outra viatura/tarifa.
+              </AlertDescription>
+            </Alert>
           )}
-        />
+        </div>
+
+        {tarifaAtual ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {(isTvde
+              ? [
+                  { label: 'Tarifa', value: tarifaAtual.nome },
+                  {
+                    label: 'Modelo',
+                    value: viaturaSelected ? `${viaturaSelected.marca} ${viaturaSelected.modelo}` : '—',
+                  },
+                  {
+                    label: 'Preço / semana',
+                    value: precoModeloSemanaTvde != null ? `${precoModeloSemanaTvde} €` : 'Sem preço',
+                  },
+                  { label: 'Faturação', value: 'Semanal' },
+                ]
+              : [
+                  { label: 'Tarifa', value: tarifaAtual.nome },
+                  {
+                    label: 'Modelo',
+                    value: viaturaSelected ? `${viaturaSelected.marca} ${viaturaSelected.modelo}` : '—',
+                  },
+                  {
+                    label: 'Preço / dia',
+                    value: precoModeloDiaRac != null ? `${precoModeloDiaRac} €` : 'Sem preço',
+                  },
+                  {
+                    label: 'Preço / mês',
+                    value: precoModeloMesRac != null ? `${precoModeloMesRac} €` : '—',
+                  },
+                ]
+            ).map((cell) => (
+              <div key={cell.label} className="rounded-lg border bg-muted/20 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
+                  {cell.label}
+                </p>
+                <p className="mt-0.5 font-semibold truncate">{cell.value}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed bg-muted/10 p-4 text-sm text-muted-foreground">
+            {isTvde
+              ? 'Seleciona a tarifa TVDE e uma viatura para ver o preço semanal do modelo.'
+              : 'Seleciona uma viatura e a tarifa Rent-a-Car para ver o preço do modelo.'}
+          </div>
+        )}
+
+        {faturacao && (
+          <div className="mt-3 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-brand-navy/10 p-4">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                  <Euro className="h-3.5 w-3.5" />
+                  Faturar ao cliente
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {faturacao.modo} · {faturacao.descricao}
+                  {form.watch('valor_total_manual') != null && ' · substituído por valor manual'}
+                </p>
+              </div>
+              <p className="shrink-0 text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+                {(form.watch('valor_total_manual') ?? faturacao.valor).toFixed(2)} €
+              </p>
+            </div>
+            {isTvde && (
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-emerald-500/20 pt-3">
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <CarTaxiFront className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  Condutor · conta-corrente semanal
+                </p>
+                <p className="shrink-0 text-sm font-semibold tabular-nums">
+                  {faturacao.semanalCondutor != null
+                    ? `${faturacao.semanalCondutor.toFixed(2)} €/sem`
+                    : '— sem preço/semana'}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      <SectionGeral
-        form={form}
-        tarifaReadOnly
-        estadoOperacionalReadOnly={!!contratoId}
-        tarifaAction={
-          contratoId ? (
-            <BotaoPedirAlteracao
-              contratoId={contratoId}
-              tipo="tarifa"
-              label="Pedir alteração de tarifa"
-              icon={CircleDollarSign}
-              onClick={() => setDialogAberto('tarifa')}
-            />
-          ) : null
-        }
-      />
+      <SectionGeral form={form} />
       <FranquiaKmsFields
         franquiaReadOnly
         kmsReadOnly
