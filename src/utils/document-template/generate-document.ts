@@ -52,7 +52,7 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     }
 
     const templateData = templateDataRaw as unknown as DocumentTemplate;
-    const documentData = {
+    const documentData: Record<string, any> = {
       ...inputDocumentData,
       ...(km_saida != null ? { km_saida } : {}),
       ...(km_entrada != null ? { km_entrada } : {}),

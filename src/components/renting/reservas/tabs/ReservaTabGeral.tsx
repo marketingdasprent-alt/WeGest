@@ -151,10 +151,10 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   // vem sempre do modelo da viatura, não da escolha da tarifa, por isso não
   // faz sentido obrigar a seleção manual.
   useEffect(() => {
-    if (isTvde && tarifasTvde.length > 0 && !tarifaIdSel) {
-      form.setValue('tarifa_id', tarifasTvde[0].id, { shouldDirty: true });
+    if (isTvde && tarifasDoRegime.length > 0 && !tarifaIdSel) {
+      form.setValue('tarifa_id', tarifasDoRegime[0].id, { shouldDirty: true });
     }
-  }, [isTvde, tarifasTvde, tarifaIdSel, form]);
+  }, [isTvde, tarifasDoRegime, tarifaIdSel, form]);
 
   // Faturação automática: regime + ALD + duração + tarifa → valor_total.
   // Viatura escolhida mas modelo sem preço na tarifa → bloquear/avisar (ambos os regimes).
