@@ -385,6 +385,36 @@ const RentingReservaForm = () => {
     );
   }, [isEdit, reserva, condutoresAtuais, form]);
 
+  // Reservas com `grupo` vazio mas cuja viatura já tem grupo_id atribuído (ex.:
+  // criadas antes do grupo ficar preenchido, ou a viatura só recebeu grupo
+  // depois) ficavam bloqueadas em "Criar Contrato" para sempre: "Criar
+  // Contrato" lê a reserva PERSISTIDA (não o form), e só a troca ACTIVA de
+  // viatura preenche `grupo` (aplicarDadosViatura) — a hidratação de uma
+  // reserva já existente nunca o fazia, e um "Guardar" sem tocar em mais nada
+  // não bastava para desbloquear. Reconcilia a BD silenciosamente ao abrir.
+  const grupoBackfillRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isEdit || !reserva || reserva.grupo) return;
+    if (grupoBackfillRef.current === reserva.id) return;
+    const viatura = viaturas.find((v) => v.id === reserva.viatura_id);
+    if (!viatura?.grupo_id) return;
+    const grupo = grupos.find((g) => g.id === viatura.grupo_id);
+    if (!grupo) return;
+    grupoBackfillRef.current = reserva.id;
+    form.setValue('grupo', grupo.nome, { shouldDirty: false });
+    supabase
+      .from('reservas')
+      .update({ grupo: grupo.nome })
+      .eq('id', reserva.id)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[RentingReservaForm] Falha a reconciliar grupo:', error);
+          return;
+        }
+        queryClient.invalidateQueries({ queryKey: ['renting', 'reservas'] });
+      });
+  }, [isEdit, reserva, viaturas, grupos, form, queryClient]);
+
   // Pré-check de conflito de datas (UX-only — o gate real é o EXCLUDE na BD).
   const viaturaId = form.watch('viatura_id');
   const dataInicio = form.watch('data_inicio');
