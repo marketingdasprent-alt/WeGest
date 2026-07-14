@@ -126,12 +126,20 @@ export function useMotoristaResumoData(
           supabase
             .from('motorista_viaturas')
             .select(
-              'viatura_id, data_inicio, data_fim, viaturas(matricula, grupo_id, renting_grupos(renting_tarifas(preco_semana, ativa)))'
+              'viatura_id, data_inicio, data_fim, viaturas(matricula, grupo_id, modelo_id, renting_grupos(renting_tarifas(preco_semana, ativa)))'
             )
             .eq('motorista_id', resolvedMotoristaId)
             .lte('data_inicio', format(dateRange.to, 'yyyy-MM-dd'))
             .or(`data_fim.is.null,data_fim.gte.${format(dateRange.from, 'yyyy-MM-dd')}`)
             .order('data_inicio', { ascending: true }),
+          // TVDE não tem preço por grupo — é por MODELO (renting_tarifa_precos_
+          // modelo). Sem isto, o aluguer de viaturas TVDE aparecia sempre a 0€
+          // porque o grupo em si não tem tarifa direta.
+          supabase
+            .from('renting_tarifa_precos_modelo')
+            .select('modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
+            .eq('renting_tarifas.tipo', 'tvde')
+            .eq('renting_tarifas.ativa', true),
         ]);
 
         const viaturaData = results[0].data;
@@ -144,11 +152,17 @@ export function useMotoristaResumoData(
           viaturas: {
             matricula: string;
             grupo_id: string | null;
+            modelo_id: string | null;
             renting_grupos: {
               renting_tarifas: Array<{ preco_semana: number | null; ativa: boolean }>;
             } | null;
           } | null;
         }>;
+        const tvdeModeloPrecoMap = new Map<string, number>(
+          ((results[4].data ?? []) as Array<{ modelo_id: string; preco_semana: number }>).map(
+            (r) => [r.modelo_id, Number(r.preco_semana)]
+          )
+        );
 
         if (viaturaData?.viaturas) {
           setMatricula((viaturaData.viaturas as any).matricula);
@@ -157,7 +171,7 @@ export function useMotoristaResumoData(
         // Aviso "sem tarifa": tem viatura ativa mas o grupo não tem tarifa
         // ativa com preço semanal > 0 (aluguer aparece a 0€ por falta de
         // configuração, não por ser grátis).
-        setAluguerSemTarifa(deriveAluguerSemTarifa(viaturasPeriodoData));
+        setAluguerSemTarifa(deriveAluguerSemTarifa(viaturasPeriodoData, tvdeModeloPrecoMap));
 
         if (motoristaData) {
           const m = motoristaData as any;
@@ -180,7 +194,10 @@ export function useMotoristaResumoData(
             .map((mv) => {
               const tarifas = mv.viaturas?.renting_grupos?.renting_tarifas || [];
               const tarifa = tarifas.find((t) => t.ativa);
-              const valorSemanal = Number(tarifa?.preco_semana ?? 0);
+              const modeloId = mv.viaturas?.modelo_id;
+              const valorSemanal =
+                Number(tarifa?.preco_semana ?? 0) ||
+                (modeloId ? (tvdeModeloPrecoMap.get(modeloId) ?? 0) : 0);
               if (!valorSemanal) return null;
               const periodStart = max([parseISO(mv.data_inicio), weekStart]);
               const periodEnd = mv.data_fim ? min([parseISO(mv.data_fim), weekEnd]) : weekEnd;

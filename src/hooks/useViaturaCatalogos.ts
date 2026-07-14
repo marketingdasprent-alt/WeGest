@@ -18,12 +18,18 @@ import type {
 } from '@/components/viaturas/tabs/viaturaTabDados.types';
 
 export interface ViaturaTarifaCatalogo {
-  grupo_id: string;
+  grupo_id: string | null;
   nome: string;
   preco_dia: number | null;
   preco_semana: number | null;
   preco_mes: number | null;
   kms_incluidos: number | null;
+}
+
+export interface ViaturaTarifaTvdeModeloCatalogo {
+  modelo_id: string;
+  tarifa_nome: string;
+  preco_semana: number;
 }
 
 // Referência vazia estável — evita re-execuções de efeitos que dependem destes
@@ -147,6 +153,31 @@ export function useViaturaTarifas(): ViaturaTarifaCatalogo[] {
         .eq('ativa', true);
       if (error) throw error;
       return (data ?? []) as ViaturaTarifaCatalogo[];
+    },
+  });
+  return data ?? EMPTY;
+}
+
+// Tarifas TVDE (renting_tarifas.tipo = 'tvde') não têm preço por grupo — o
+// preço é por MODELO, em renting_tarifa_precos_modelo. Sem isto, uma viatura
+// TVDE com tarifa ativa e configurada aparecia como "sem tarifa" só porque o
+// grupo em si não tem preço direto.
+export function useViaturaTarifasTvdeModelo(): ViaturaTarifaTvdeModeloCatalogo[] {
+  const { data } = useQuery({
+    queryKey: ['viatura-catalogo', 'tarifas-tvde-modelo'],
+    staleTime: STALE,
+    queryFn: async (): Promise<ViaturaTarifaTvdeModeloCatalogo[]> => {
+      const { data, error } = await supabase
+        .from('renting_tarifa_precos_modelo')
+        .select('modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa, nome)')
+        .eq('renting_tarifas.tipo', 'tvde')
+        .eq('renting_tarifas.ativa', true);
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        modelo_id: r.modelo_id,
+        tarifa_nome: (r.renting_tarifas as unknown as { nome: string }).nome,
+        preco_semana: Number(r.preco_semana),
+      }));
     },
   });
   return data ?? EMPTY;

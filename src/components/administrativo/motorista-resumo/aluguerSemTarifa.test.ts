@@ -42,4 +42,20 @@ describe('deriveAluguerSemTarifa', () => {
     const viaturas = [viaturaCom(null), viaturaCom([{ preco_semana: 90, ativa: true }])];
     expect(deriveAluguerSemTarifa(viaturas)).toBe(false);
   });
+
+  it('devolve false quando o grupo não tem tarifa mas o modelo tem tarifa TVDE ativa', () => {
+    const viaturas: ViaturaPeriodoTarifa[] = [
+      { viaturas: { modelo_id: 'modelo-1', renting_grupos: null } },
+    ];
+    const tvdeModeloPrecoMap = new Map([['modelo-1', 375]]);
+    expect(deriveAluguerSemTarifa(viaturas, tvdeModeloPrecoMap)).toBe(false);
+  });
+
+  it('devolve true quando o modelo não consta do mapa de tarifas TVDE', () => {
+    const viaturas: ViaturaPeriodoTarifa[] = [
+      { viaturas: { modelo_id: 'modelo-2', renting_grupos: null } },
+    ];
+    const tvdeModeloPrecoMap = new Map([['modelo-1', 375]]);
+    expect(deriveAluguerSemTarifa(viaturas, tvdeModeloPrecoMap)).toBe(true);
+  });
 });
