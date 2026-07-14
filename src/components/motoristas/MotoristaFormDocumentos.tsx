@@ -93,7 +93,7 @@ export function MotoristaFormDocumentos({ form, motoristaId }: MotoristaFormDocu
                   <DocumentUploader
                     folder="documentos"
                     motoristaId={motoristaId}
-                    currentUrl={field.value}
+                    currentUrl={field.value ?? null}
                     onUpload={field.onChange}
                   />
                 </FormControl>
@@ -111,7 +111,7 @@ export function MotoristaFormDocumentos({ form, motoristaId }: MotoristaFormDocu
                   <DocumentUploader
                     folder="documentos"
                     motoristaId={motoristaId}
-                    currentUrl={field.value}
+                    currentUrl={field.value ?? null}
                     onUpload={field.onChange}
                   />
                 </FormControl>
@@ -170,7 +170,7 @@ export function MotoristaFormDocumentos({ form, motoristaId }: MotoristaFormDocu
                   <DocumentUploader
                     folder="cartas"
                     motoristaId={motoristaId}
-                    currentUrl={field.value}
+                    currentUrl={field.value ?? null}
                     onUpload={field.onChange}
                   />
                 </FormControl>
@@ -188,7 +188,7 @@ export function MotoristaFormDocumentos({ form, motoristaId }: MotoristaFormDocu
                   <DocumentUploader
                     folder="cartas"
                     motoristaId={motoristaId}
-                    currentUrl={field.value}
+                    currentUrl={field.value ?? null}
                     onUpload={field.onChange}
                   />
                 </FormControl>
@@ -281,7 +281,7 @@ export function MotoristaFormDocumentos({ form, motoristaId }: MotoristaFormDocu
                 <DocumentUploader
                   folder="tvde"
                   motoristaId={motoristaId}
-                  currentUrl={field.value}
+                  currentUrl={field.value ?? null}
                   onUpload={field.onChange}
                 />
               </FormControl>
@@ -308,7 +308,7 @@ export function MotoristaFormDocumentos({ form, motoristaId }: MotoristaFormDocu
                   <DocumentUploader
                     folder="documentos"
                     motoristaId={motoristaId}
-                    currentUrl={field.value}
+                    currentUrl={field.value ?? null}
                     onUpload={field.onChange}
                   />
                 </FormControl>
@@ -326,7 +326,7 @@ export function MotoristaFormDocumentos({ form, motoristaId }: MotoristaFormDocu
                   <DocumentUploader
                     folder="documentos"
                     motoristaId={motoristaId}
-                    currentUrl={field.value}
+                    currentUrl={field.value ?? null}
                     onUpload={field.onChange}
                   />
                 </FormControl>
@@ -344,7 +344,7 @@ export function MotoristaFormDocumentos({ form, motoristaId }: MotoristaFormDocu
                   <DocumentUploader
                     folder="documentos"
                     motoristaId={motoristaId}
-                    currentUrl={field.value}
+                    currentUrl={field.value ?? null}
                     onUpload={field.onChange}
                   />
                 </FormControl>

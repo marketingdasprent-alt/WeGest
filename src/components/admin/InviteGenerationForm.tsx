@@ -79,7 +79,7 @@ export const InviteGenerationForm = ({ onInviteGenerated }: InviteGenerationForm
       await supabase.from('convites').delete().eq('email', email.toLowerCase().trim());
 
       // Inserir novo convite COM cargo_id e org_id
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('convites')
         .insert({
           email: email.toLowerCase().trim(),

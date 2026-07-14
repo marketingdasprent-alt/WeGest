@@ -846,18 +846,17 @@ export function ContasResumoTab() {
         const passaReciboVerde = m.motorista_id ? (reciboVerdeMap[m.motorista_id] ?? true) : true;
 
         // Gorjeta (Bolt + Uber) nunca passa pela divisão de recibo verde
-        // (÷1.06) — soma-se por PLATAFORMA, depois de cada uma já ter sido
-        // ajustada: bolt_final = bolt/1.06 + gorjeta_bolt (idem uber), só
-        // depois soma-se as duas. Sem coluna própria na tabela (a gorjeta
-        // já fica embutida no líquido).
+        // (÷1.06). O faturado_bolt e faturado_uber já incluem a gorjeta, por
+        // isso extraímos a gorjeta antes de aplicar ÷1.06 e somamo-la de
+        // volta. Sem coluna própria na tabela (a gorjeta já fica embutida).
         const gorjetaBolt = m.motorista_id ? gorjetaBoltById[m.motorista_id] || 0 : 0;
         const gorjetaUber = m.gorjeta || 0;
-        const receita = passaReciboVerde
-          ? totalFaturado + gorjetaBolt + gorjetaUber
-          : m.faturado_bolt / 1.06 +
-            gorjetaBolt +
-            (m.faturado_uber / 1.06 + gorjetaUber) +
-            extrasValor;
+        const ajustarBase = (total: number, gorjetaPlataforma: number) =>
+          passaReciboVerde ? total : (total - gorjetaPlataforma) / 1.06 + gorjetaPlataforma;
+        const receita =
+          ajustarBase(m.faturado_bolt, gorjetaBolt) +
+          ajustarBase(m.faturado_uber, gorjetaUber) +
+          extrasValor;
         const combustivelValor = m.motorista_id ? combustivelByMotorista[m.motorista_id] || 0 : 0;
         const portagensValor = m.motorista_id ? portagensByMotorista[m.motorista_id] || 0 : 0;
         const aluguerValor = m.motorista_id ? aluguerByMotorista[m.motorista_id] || 0 : 0;

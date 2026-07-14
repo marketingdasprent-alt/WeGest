@@ -422,6 +422,7 @@ export function useFecharContrato() {
         data: { session },
       } = await supabase.auth.getSession();
       const userId = session?.user?.id ?? null;
+      if (!userId) throw new Error('Sessão não encontrada');
 
       // Sempre 'recolha' no calendário — é o único tipo que o fluxo de
       // renting (useEventosPendentesRenting, realizar_token_realizacao)
@@ -1044,8 +1045,8 @@ export function useContratoConflito(args: UseContratoConflitoArgs) {
         p_viatura_id: viaturaId!,
         p_data_inicio: dataInicio!.toISOString(),
         p_data_fim: dataFim!.toISOString(),
-        p_excluir_id: excluirId ?? null,
-        p_reserva_id: reservaId ?? null,
+        p_excluir_id: excluirId ?? undefined,
+        p_reserva_id: reservaId ?? undefined,
       });
       if (error) throw error;
       return Boolean(data);

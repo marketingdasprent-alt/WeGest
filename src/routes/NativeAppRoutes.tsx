@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { usePageTracking } from '@/hooks/usePageTracking';
 import { RECURSOS } from '@/utils/permissions';
+import { REALIZE_ORG_IDS } from '@/config/realize';
 import { Loader2 } from 'lucide-react';
 
 const EntradaNativa = lazy(() => import('@/pages/EntradaNativa'));
@@ -34,6 +35,7 @@ const MeusTickets = lazy(() => import('@/pages/MeusTickets'));
 const AdminSettings = lazy(() => import('@/pages/AdminSettings'));
 const AdminInvites = lazy(() => import('@/pages/AdminInvites'));
 const AdminDocumentos = lazy(() => import('@/pages/AdminDocumentos'));
+const AuditoriaPage = lazy(() => import('@/pages/admin/AuditoriaPage'));
 // Renting + configuração de viaturas — mantidos em sincronia com WebAppRoutes
 // (sem isto, no Android estas rotas caíam no catch-all → dashboard).
 const RentingContratos = lazy(() => import('@/pages/renting/RentingContratos'));
@@ -57,6 +59,7 @@ const RentingTaxas = lazy(() => import('@/pages/renting/RentingTaxas'));
 const ViaturaMarcasModelos = lazy(() => import('@/pages/viaturas/ViaturaMarcasModelos'));
 const ViaturaCombustiveis = lazy(() => import('@/pages/viaturas/ViaturaCombustiveis'));
 const ViaturaTipos = lazy(() => import('@/pages/viaturas/ViaturaTipos'));
+const NotificacoesPage = lazy(() => import('@/pages/NotificacoesPage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -240,7 +243,7 @@ const NativeAppRoutes = () => {
         <Route
           path="/realize"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requireOrgIds={REALIZE_ORG_IDS}>
               <DashboardLayout fullBleed>
                 <Realize />
               </DashboardLayout>
@@ -303,6 +306,16 @@ const NativeAppRoutes = () => {
             <ProtectedRoute requiredResource={RECURSOS.ADMIN_DOCUMENTOS}>
               <DashboardLayout>
                 <AdminDocumentos />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/auditoria"
+          element={
+            <ProtectedRoute requireSupervisorTvde={true}>
+              <DashboardLayout>
+                <AuditoriaPage />
               </DashboardLayout>
             </ProtectedRoute>
           }
@@ -568,6 +581,17 @@ const NativeAppRoutes = () => {
             <ProtectedRoute requiredResource="viaturas_ver">
               <DashboardLayout>
                 <ViaturaTipos />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/notificacoes"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <NotificacoesPage />
               </DashboardLayout>
             </ProtectedRoute>
           }

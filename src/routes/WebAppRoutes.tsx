@@ -5,6 +5,7 @@ import { DashboardLayout } from '@/components/DashboardLayout';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { usePageTracking } from '@/hooks/usePageTracking';
 import { RECURSOS } from '@/utils/permissions';
+import { REALIZE_ORG_IDS } from '@/config/realize';
 import { Loader2 } from 'lucide-react';
 
 // Recursos do módulo Administrativo — acesso à página com QUALQUER um deles.
@@ -31,6 +32,7 @@ const DasprentFuncionarios = lazy(() => import('@/pages/DasprentFuncionarios'));
 const AdminInvites = lazy(() => import('@/pages/AdminInvites'));
 const AdminSettings = lazy(() => import('@/pages/AdminSettings'));
 const AdminDocumentos = lazy(() => import('@/pages/AdminDocumentos'));
+const AuditoriaPage = lazy(() => import('@/pages/admin/AuditoriaPage'));
 const MotoristaCandidaturas = lazy(() => import('@/pages/MotoristaCandidaturas'));
 const MyAccount = lazy(() => import('@/pages/MyAccount'));
 const Login = lazy(() => import('@/pages/Login'));
@@ -85,6 +87,7 @@ const RentingTaxas = lazy(() => import('@/pages/renting/RentingTaxas'));
 const ViaturaMarcasModelos = lazy(() => import('@/pages/viaturas/ViaturaMarcasModelos'));
 const ViaturaCombustiveis = lazy(() => import('@/pages/viaturas/ViaturaCombustiveis'));
 const ViaturaTipos = lazy(() => import('@/pages/viaturas/ViaturaTipos'));
+const NotificacoesPage = lazy(() => import('@/pages/NotificacoesPage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -281,6 +284,16 @@ const WebAppRoutes = () => {
             }
           />
           <Route
+            path="/admin/auditoria"
+            element={
+              <ProtectedRoute requireSupervisorTvde={true}>
+                <DashboardLayout>
+                  <AuditoriaPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/formularios"
             element={
               <ProtectedRoute requiredResource={RECURSOS.ADMIN_FORMULARIOS}>
@@ -413,7 +426,7 @@ const WebAppRoutes = () => {
           <Route
             path="/realize"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireOrgIds={REALIZE_ORG_IDS}>
                 <DashboardLayout fullBleed>
                   <Realize />
                 </DashboardLayout>
@@ -690,6 +703,16 @@ const WebAppRoutes = () => {
             }
           />
           <Route path="/instalar" element={<Instalar />} />
+          <Route
+            path="/notificacoes"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <NotificacoesPage />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

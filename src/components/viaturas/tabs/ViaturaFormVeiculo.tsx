@@ -287,7 +287,21 @@ export function ViaturaFormVeiculo({
           const grupoId = form.watch('grupo_id');
           if (!grupoId) return null;
           const tarifas = allTarifas.filter((t) => t.grupo_id === grupoId);
-          if (tarifas.length === 0) return null;
+          // Grupo sem tarifa ativa (allTarifas já vem filtrado por ativa=true):
+          // avisa que o aluguer não será cobrado no resumo do motorista.
+          if (tarifas.length === 0) {
+            return (
+              <div className="md:col-span-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/20">
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                  ⚠ Este grupo não tem tarifa ativa configurada
+                </p>
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">
+                  O aluguer aparecerá a 0€ no resumo do motorista. Configure uma tarifa em Renting →
+                  Tarifas para este grupo.
+                </p>
+              </div>
+            );
+          }
           const fmt = (v: number | null) =>
             v != null
               ? new Intl.NumberFormat('pt-PT', {

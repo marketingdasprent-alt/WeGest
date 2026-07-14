@@ -19,6 +19,8 @@ interface ProtectedRouteProps {
   requiredModule?: Modulo;
   /** Mesma regra usada para mostrar o item no menu — admin ou cargo Supervisor Gestor TVDE. */
   requireSupervisorTvde?: boolean;
+  /** Restringe a rota a orgs específicas (ex.: ferramentas internas que não fazem sentido para outros tenants). */
+  requireOrgIds?: string[];
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
@@ -27,6 +29,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredResource,
   requiredModule,
   requireSupervisorTvde = false,
+  requireOrgIds,
 }) => {
   const { user, loading: authLoading } = useAuth();
   const { orgId, orgs, loading: tenantLoading } = useTenant();
@@ -137,6 +140,28 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           <h2 className="mb-2 text-xl font-bold text-foreground">Acesso restrito</h2>
           <p className="mb-4 text-muted-foreground">
             Esta página está reservada a administradores e Supervisores Gestor TVDE.
+          </p>
+          <Button
+            onClick={() => defaultRoute && navigate(defaultRoute)}
+            className="auth-primary-button"
+          >
+            Voltar ao painel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (requireOrgIds && (!orgId || !requireOrgIds.includes(orgId))) {
+    return (
+      <div className="auth-screen auth-screen-safe">
+        <div className="auth-screen__background" aria-hidden="true" />
+        <div className="auth-screen__pattern" aria-hidden="true" />
+        <div className="relative z-10 max-w-md text-center">
+          <Shield className="mx-auto mb-4 h-12 w-12 text-primary" />
+          <h2 className="mb-2 text-xl font-bold text-foreground">Acesso restrito</h2>
+          <p className="mb-4 text-muted-foreground">
+            Esta página não está disponível para a tua organização.
           </p>
           <Button
             onClick={() => defaultRoute && navigate(defaultRoute)}

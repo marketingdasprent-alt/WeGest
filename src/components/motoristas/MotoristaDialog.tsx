@@ -29,6 +29,19 @@ import { MotoristaFormCartoesIntegracoes } from './MotoristaFormCartoesIntegraco
 import { MotoristaFormDocumentos } from './MotoristaFormDocumentos';
 import { MotoristaFormObservacoesSlot } from './MotoristaFormObservacoesSlot';
 
+// Rascunho local do formulário de criação — sobrevive a fechar a aba/dialog
+// por engano. Só para criação (não edição, para nunca arriscar sobrepor
+// dados já guardados) e nunca restaura sozinho: mostra sempre um banner a
+// pedir confirmação, para não misturar dados de um motorista anterior
+// abandonado com o que está a ser criado agora.
+const DRAFT_KEY = 'motorista-form-draft-v1';
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+
+interface MotoristaDraft {
+  savedAt: number;
+  values: FormValues;
+}
+
 interface MotoristaDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -53,10 +66,11 @@ export function MotoristaDialog({
   // O ref bloqueia o 2º submit já, sem depender de re-render nem do NIF.
   const submittingRef = useRef(false);
   // Encadeamento slot: após criar um motorista slot, abre o ViaturaDialog
-  // para criar o carro próprio (obrigatório). pendingSlotMotorista guarda o
-  // motorista recém-criado; cancelCountRef permite escape no 2º cancelamento.
+  // para criar o carro próprio. pendingSlotMotorista guarda o motorista
+  // recém-criado enquanto esse segundo passo está por decidir.
   const [pendingSlotMotorista, setPendingSlotMotorista] = useState<Motorista | null>(null);
-  const cancelCountRef = useRef(0);
+  const [draftDisponivel, setDraftDisponivel] = useState<MotoristaDraft | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const orgId = useOrgId();
   const gestores = useGestoresTvde(orgId);
   const [gestorPopoverOpen, setGestorPopoverOpen] = useState(false);
@@ -175,6 +189,74 @@ export function MotoristaDialog({
     }
   }, [motorista, prefill, form]);
 
+  // Ao abrir em modo criação, oferece um rascunho recente (se houver) — nunca
+  // restaura sozinho.
+  useEffect(() => {
+    if (!open || motorista) {
+      setDraftDisponivel(null);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as MotoristaDraft;
+      if (!parsed?.savedAt || Date.now() - parsed.savedAt > DRAFT_TTL_MS) {
+        localStorage.removeItem(DRAFT_KEY);
+        return;
+      }
+      // Ignora rascunhos vazios (nada além do prefill/estado por defeito).
+      const temConteudo = Object.entries(parsed.values).some(
+        ([campo, valor]) => campo !== 'status_ativo' && campo !== 'is_slot' && !!valor
+      );
+      if (temConteudo) setDraftDisponivel(parsed);
+    } catch {
+      localStorage.removeItem(DRAFT_KEY);
+    }
+  }, [open, motorista]);
+
+  // Auto-guarda o rascunho enquanto se cria um motorista — debounced, só
+  // depois de o utilizador decidir sobre um rascunho anterior (senão o save
+  // pisava-o antes de ele poder escolher "Restaurar").
+  useEffect(() => {
+    if (!open || motorista || draftDisponivel) return;
+    const subscription = form.watch((values) => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        try {
+          localStorage.setItem(
+            DRAFT_KEY,
+            JSON.stringify({ savedAt: Date.now(), values } satisfies MotoristaDraft)
+          );
+        } catch {
+          /* localStorage cheio/indisponível — auto-save best-effort */
+        }
+      }, 800);
+    });
+    return () => {
+      subscription.unsubscribe();
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [open, motorista, draftDisponivel, form]);
+
+  const limparRascunho = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleRestaurarRascunho = () => {
+    if (!draftDisponivel) return;
+    form.reset(draftDisponivel.values);
+    setDraftDisponivel(null);
+  };
+
+  const handleDescartarRascunho = () => {
+    limparRascunho();
+    setDraftDisponivel(null);
+  };
+
   const onSubmit = async (values: FormValues) => {
     // Prevenir duplo clique (lock síncrono — ver submittingRef acima)
     if (submittingRef.current) return;
@@ -236,17 +318,17 @@ export function MotoristaDialog({
 
         // Sync cartões frota
         if (newMotorista) await syncCartoes(newMotorista.id);
+        limparRascunho();
 
         toast({
           title: 'Motorista criado',
           description: 'O motorista foi criado com sucesso.',
         });
 
-        // Slot: NÃO fecha já — abre o ViaturaDialog para criar o carro próprio
-        // (obrigatório). Só fecha e notifica quando o carro for criado (ou no
-        // escape do 2º cancelamento).
+        // Slot: NÃO fecha já — abre o ViaturaDialog para criar o carro próprio.
+        // Fecha e notifica quando o carro for criado, ou logo ao cancelar
+        // (motorista fica criado na mesma, sem carro).
         if (newMotorista && values.is_slot) {
-          cancelCountRef.current = 0;
           setPendingSlotMotorista(newMotorista as Motorista);
         } else {
           onOpenChange(false);
@@ -297,6 +379,28 @@ export function MotoristaDialog({
           <div className="flex-1 overflow-y-auto">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-8">
+                {draftDisponivel && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+                    <span>
+                      Encontrámos um rascunho de{' '}
+                      {new Date(draftDisponivel.savedAt).toLocaleString('pt-PT')} — continuar de
+                      onde ficaste?
+                    </span>
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleDescartarRascunho}
+                      >
+                        Descartar
+                      </Button>
+                      <Button type="button" size="sm" onClick={handleRestaurarRascunho}>
+                        Restaurar
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <section className="space-y-4">
                   <div className="flex items-center gap-2 pb-2 border-b">
                     <div className="h-8 w-1 bg-primary rounded-full" />
@@ -307,6 +411,7 @@ export function MotoristaDialog({
                     gestores={gestores}
                     gestorPopoverOpen={gestorPopoverOpen}
                     setGestorPopoverOpen={setGestorPopoverOpen}
+                    verificarNifDuplicado={!motorista}
                   />
                   <MotoristaFormCartoesIntegracoes
                     form={form}
@@ -359,28 +464,18 @@ export function MotoristaDialog({
           slotMotoristaId={pendingSlotMotorista.id}
           onOpenChange={(o) => {
             if (o) return;
-            // Cancelamento sem criar carro: obrigatório → 1º avisa e reabre,
-            // 2º permite sair com motorista incompleto.
-            cancelCountRef.current += 1;
-            if (cancelCountRef.current >= 2) {
-              toast({
-                title: 'Motorista sem carro',
-                description:
-                  'O motorista de slot ficou sem carro associado. Adiciona o carro mais tarde.',
-                variant: 'destructive',
-              });
-              const m = pendingSlotMotorista;
-              setPendingSlotMotorista(null);
-              onOpenChange(false);
-              onMotoristaCreated?.(m);
-            } else {
-              toast({
-                title: 'Carro obrigatório',
-                description: 'Um motorista de slot precisa de um carro próprio associado.',
-                variant: 'destructive',
-              });
-              // Mantém pendingSlotMotorista → ViaturaDialog reabre (open={true}).
-            }
+            // Cancelar aqui não é obrigatório de preencher — o motorista já
+            // está criado; o carro pode ser adicionado depois na ficha dele.
+            // Um único cancelamento sai, sem forçar reabrir o dialog.
+            toast({
+              title: 'Motorista criado sem carro',
+              description:
+                'É um motorista de slot mas ficou sem carro associado — adiciona um mais tarde na ficha do motorista.',
+            });
+            const m = pendingSlotMotorista;
+            setPendingSlotMotorista(null);
+            onOpenChange(false);
+            onMotoristaCreated?.(m);
           }}
           onSuccess={() => {
             /* fecho tratado em onCreated */

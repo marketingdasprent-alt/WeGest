@@ -14,7 +14,8 @@ import { PhoneInput } from '@/components/ui/phone-input';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { FormValues } from './motoristaDialog.schema';
+import { supabase } from '@/integrations/supabase/client';
+import { normalizeNif, type FormValues } from './motoristaDialog.schema';
 import type { GestorTvde } from './useGestoresTvde';
 
 interface MotoristaFormDadosPessoaisProps {
@@ -22,6 +23,8 @@ interface MotoristaFormDadosPessoaisProps {
   gestores: GestorTvde[];
   gestorPopoverOpen: boolean;
   setGestorPopoverOpen: (open: boolean) => void;
+  /** Só em criação — avisa de NIF duplicado ao sair do campo, em vez de só no submit. */
+  verificarNifDuplicado?: boolean;
 }
 
 export function MotoristaFormDadosPessoais({
@@ -29,7 +32,26 @@ export function MotoristaFormDadosPessoais({
   gestores,
   gestorPopoverOpen,
   setGestorPopoverOpen,
+  verificarNifDuplicado = false,
 }: MotoristaFormDadosPessoaisProps) {
+  const handleNifBlur = async (rawValue: string) => {
+    if (!verificarNifDuplicado) return;
+    const nif = normalizeNif(rawValue);
+    if (!nif || nif.length < 9) return;
+    const { data: existing } = await supabase
+      .from('motoristas_ativos')
+      .select('id, nome, codigo')
+      .eq('nif', nif)
+      .maybeSingle();
+    if (existing) {
+      form.setError('nif', {
+        type: 'manual',
+        message: `Já existe um motorista com este NIF: ${existing.nome} (Cód. ${existing.codigo})`,
+      });
+    } else if (form.formState.errors.nif?.type === 'manual') {
+      form.clearErrors('nif');
+    }
+  };
   return (
     <>
       <FormField
@@ -134,7 +156,15 @@ export function MotoristaFormDadosPessoais({
                 NIF <span className="text-red-500">*</span>
               </FormLabel>
               <FormControl>
-                <Input placeholder="123456789" {...field} className="h-11" />
+                <Input
+                  placeholder="123456789"
+                  {...field}
+                  onBlur={(e) => {
+                    field.onBlur();
+                    void handleNifBlur(e.target.value);
+                  }}
+                  className="h-11"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
