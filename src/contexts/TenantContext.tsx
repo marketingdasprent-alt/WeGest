@@ -93,6 +93,24 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     loadOrgs();
   }, [user?.id, authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A lista de orgs só era recarregada ao montar (login/refresh). Se um admin
+  // associava o mesmo email a uma segunda organização enquanto o utilizador
+  // já tinha a app aberta noutra, o seletor de organizações não aparecia até
+  // um reload manual — só "desbloqueava" ao trocar de org a partir da outra
+  // sessão (o que força reload). Reforça ao voltar à aba/janela, para refletir
+  // associações criadas entretanto sem precisar de um refresh manual.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadOrgs();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [loadOrgs]);
+
   const switchOrg = useCallback(
     async (newOrgId: string) => {
       if (!user) return;
