@@ -440,7 +440,8 @@ export default function Viaturas() {
               (v) => !v.is_slot && matchesVendaScope(v, statusFilter)
             ).length;
             const todosDisponiveis = viaturas.filter(
-              (v) => !v.is_slot && matchesVendaScope(v, statusFilter) && v.status === 'disponivel'
+              (v) =>
+                !v.is_slot && matchesVendaScope(v, statusFilter) && estadoDe(v) === 'disponivel'
             ).length;
             const items = [
               {
