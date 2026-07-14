@@ -172,7 +172,7 @@ export function ReservaTabGeralSectionPeriodos({
               title="Recolha"
               accent="violet"
               right={
-                <div className="flex items-center gap-2">
+                <div className="flex h-8 items-center gap-2">
                   <span className="text-xs font-medium text-muted-foreground">
                     {modoMensal && renovacaoOpcao === 'intervalo_dias'
                       ? 'Intervalo (dias)'
@@ -192,7 +192,7 @@ export function ReservaTabGeralSectionPeriodos({
                         : handleDiasManualChange(e.target.value)
                     }
                     disabled={!dataInicio || (modoMensal && renovacaoOpcao !== 'intervalo_dias')}
-                    className="h-9 w-16 text-center bg-background text-base font-semibold disabled:bg-muted"
+                    className="h-8 w-16 text-center bg-background text-base font-semibold disabled:bg-muted"
                     placeholder="—"
                     title={
                       modoMensal && renovacaoOpcao !== 'intervalo_dias'
@@ -247,27 +247,33 @@ export function ReservaTabGeralSectionPeriodos({
                 )}
               />
             )}
-            <FormField
-              control={form.control}
-              name="data_fim"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    Data Fim <span className="text-red-500">*</span>
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      type="datetime-local"
-                      className={modoMensal ? 'bg-muted' : 'bg-background'}
-                      disabled={modoMensal}
-                      {...field}
-                      value={field.value ?? ''}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {isTvde ? (
+              <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 p-3 text-xs text-muted-foreground">
+                Reservas TVDE não têm data de fim — o contrato é aberto e renovado automaticamente.
+              </div>
+            ) : (
+              <FormField
+                control={form.control}
+                name="data_fim"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Data Fim <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="datetime-local"
+                        className={modoMensal ? 'bg-muted' : 'bg-background'}
+                        disabled={modoMensal}
+                        {...field}
+                        value={field.value ?? ''}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
           </div>
         </div>
       )}
