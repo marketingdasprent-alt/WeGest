@@ -14,6 +14,129 @@ export type Database = {
   }
   public: {
     Tables: {
+      _backup_viaturas_20260710: {
+        Row: {
+          combustivel: string | null
+          id: string | null
+          marca: string | null
+          marca_id: string | null
+          matricula: string | null
+          modelo: string | null
+          modelo_id: string | null
+          org_id: string | null
+        }
+        Insert: {
+          combustivel?: string | null
+          id?: string | null
+          marca?: string | null
+          marca_id?: string | null
+          matricula?: string | null
+          modelo?: string | null
+          modelo_id?: string | null
+          org_id?: string | null
+        }
+        Update: {
+          combustivel?: string | null
+          id?: string | null
+          marca?: string | null
+          marca_id?: string | null
+          matricula?: string | null
+          modelo?: string | null
+          modelo_id?: string | null
+          org_id?: string | null
+        }
+        Relationships: []
+      }
+      _backup_viaturas_20260710_b: {
+        Row: {
+          combustivel: string | null
+          id: string | null
+          marca: string | null
+          marca_id: string | null
+          matricula: string | null
+          modelo: string | null
+          modelo_id: string | null
+        }
+        Insert: {
+          combustivel?: string | null
+          id?: string | null
+          marca?: string | null
+          marca_id?: string | null
+          matricula?: string | null
+          modelo?: string | null
+          modelo_id?: string | null
+        }
+        Update: {
+          combustivel?: string | null
+          id?: string | null
+          marca?: string | null
+          marca_id?: string | null
+          matricula?: string | null
+          modelo?: string | null
+          modelo_id?: string | null
+        }
+        Relationships: []
+      }
+      _backup_viaturas_20260710_c: {
+        Row: {
+          combustivel: string | null
+          id: string | null
+          marca: string | null
+          marca_id: string | null
+          matricula: string | null
+          modelo: string | null
+          modelo_id: string | null
+        }
+        Insert: {
+          combustivel?: string | null
+          id?: string | null
+          marca?: string | null
+          marca_id?: string | null
+          matricula?: string | null
+          modelo?: string | null
+          modelo_id?: string | null
+        }
+        Update: {
+          combustivel?: string | null
+          id?: string | null
+          marca?: string | null
+          marca_id?: string | null
+          matricula?: string | null
+          modelo?: string | null
+          modelo_id?: string | null
+        }
+        Relationships: []
+      }
+      _backup_viaturas_20260710_d: {
+        Row: {
+          combustivel: string | null
+          id: string | null
+          marca: string | null
+          marca_id: string | null
+          matricula: string | null
+          modelo: string | null
+          modelo_id: string | null
+        }
+        Insert: {
+          combustivel?: string | null
+          id?: string | null
+          marca?: string | null
+          marca_id?: string | null
+          matricula?: string | null
+          modelo?: string | null
+          modelo_id?: string | null
+        }
+        Update: {
+          combustivel?: string | null
+          id?: string | null
+          marca?: string | null
+          marca_id?: string | null
+          matricula?: string | null
+          modelo?: string | null
+          modelo_id?: string | null
+        }
+        Relationships: []
+      }
       assinaturas_handover: {
         Row: {
           assinado_em: string
@@ -2894,6 +3017,8 @@ export type Database = {
           data_inicio: string
           deleted_at: string | null
           desconto_percentagem: number | null
+          eletricidade_entrada: string | null
+          eletricidade_saida: string | null
           emissor_id: string | null
           estacao_entrega_id: string | null
           estacao_origem_viatura_id: string | null
@@ -2965,6 +3090,8 @@ export type Database = {
           data_inicio: string
           deleted_at?: string | null
           desconto_percentagem?: number | null
+          eletricidade_entrada?: string | null
+          eletricidade_saida?: string | null
           emissor_id?: string | null
           estacao_entrega_id?: string | null
           estacao_origem_viatura_id?: string | null
@@ -3036,6 +3163,8 @@ export type Database = {
           data_inicio?: string
           deleted_at?: string | null
           desconto_percentagem?: number | null
+          eletricidade_entrada?: string | null
+          eletricidade_saida?: string | null
           emissor_id?: string | null
           estacao_entrega_id?: string | null
           estacao_origem_viatura_id?: string | null
@@ -3537,6 +3666,536 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_anexos: {
+        Row: {
+          content_id: string | null
+          content_type: string | null
+          created_at: string
+          data_b64: string | null
+          filename: string | null
+          id: string
+          inline: boolean
+          mensagem_id: string
+          org_id: string
+          part_id: string | null
+          size: number | null
+          storage_path: string | null
+        }
+        Insert: {
+          content_id?: string | null
+          content_type?: string | null
+          created_at?: string
+          data_b64?: string | null
+          filename?: string | null
+          id?: string
+          inline?: boolean
+          mensagem_id: string
+          org_id: string
+          part_id?: string | null
+          size?: number | null
+          storage_path?: string | null
+        }
+        Update: {
+          content_id?: string | null
+          content_type?: string | null
+          created_at?: string
+          data_b64?: string | null
+          filename?: string | null
+          id?: string
+          inline?: boolean
+          mensagem_id?: string
+          org_id?: string
+          part_id?: string | null
+          size?: number | null
+          storage_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_anexos_mensagem_id_fkey"
+            columns: ["mensagem_id"]
+            isOneToOne: false
+            referencedRelation: "email_mensagens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_anexos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_caixas: {
+        Row: {
+          assinatura_nova: string | null
+          assinatura_resposta: string | null
+          assinaturas: Json
+          ativo: boolean
+          auth_tipo: string
+          cor: string | null
+          created_at: string
+          email_address: string
+          id: string
+          imap_login: string | null
+          imap_port: number
+          imap_server: string
+          imap_ssl: boolean
+          label: string
+          org_id: string
+          resposta_ferias: Json
+          smtp_login: string | null
+          smtp_port: number
+          smtp_server: string
+          smtp_ssl: boolean
+          updated_at: string
+          utilizadores_permitidos: string[] | null
+        }
+        Insert: {
+          assinatura_nova?: string | null
+          assinatura_resposta?: string | null
+          assinaturas?: Json
+          ativo?: boolean
+          auth_tipo?: string
+          cor?: string | null
+          created_at?: string
+          email_address: string
+          id?: string
+          imap_login?: string | null
+          imap_port?: number
+          imap_server: string
+          imap_ssl?: boolean
+          label: string
+          org_id: string
+          resposta_ferias?: Json
+          smtp_login?: string | null
+          smtp_port?: number
+          smtp_server: string
+          smtp_ssl?: boolean
+          updated_at?: string
+          utilizadores_permitidos?: string[] | null
+        }
+        Update: {
+          assinatura_nova?: string | null
+          assinatura_resposta?: string | null
+          assinaturas?: Json
+          ativo?: boolean
+          auth_tipo?: string
+          cor?: string | null
+          created_at?: string
+          email_address?: string
+          id?: string
+          imap_login?: string | null
+          imap_port?: number
+          imap_server?: string
+          imap_ssl?: boolean
+          label?: string
+          org_id?: string
+          resposta_ferias?: Json
+          smtp_login?: string | null
+          smtp_port?: number
+          smtp_server?: string
+          smtp_ssl?: boolean
+          updated_at?: string
+          utilizadores_permitidos?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_caixas_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_caixas_credenciais: {
+        Row: {
+          caixa_id: string
+          imap_password: string | null
+          oauth_client_id: string | null
+          oauth_client_secret: string | null
+          oauth_tenant_id: string | null
+          smtp_password: string | null
+          updated_at: string
+        }
+        Insert: {
+          caixa_id: string
+          imap_password?: string | null
+          oauth_client_id?: string | null
+          oauth_client_secret?: string | null
+          oauth_tenant_id?: string | null
+          smtp_password?: string | null
+          updated_at?: string
+        }
+        Update: {
+          caixa_id?: string
+          imap_password?: string | null
+          oauth_client_id?: string | null
+          oauth_client_secret?: string | null
+          oauth_tenant_id?: string | null
+          smtp_password?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_caixas_credenciais_caixa_id_fkey"
+            columns: ["caixa_id"]
+            isOneToOne: true
+            referencedRelation: "email_caixas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_comandos: {
+        Row: {
+          caixa_id: string
+          created_at: string
+          created_by: string | null
+          error: string | null
+          id: string
+          org_id: string
+          payload: Json
+          processed_at: string | null
+          status: string
+          tipo: string
+        }
+        Insert: {
+          caixa_id: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          org_id: string
+          payload?: Json
+          processed_at?: string | null
+          status?: string
+          tipo: string
+        }
+        Update: {
+          caixa_id?: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          org_id?: string
+          payload?: Json
+          processed_at?: string | null
+          status?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_comandos_caixa_id_fkey"
+            columns: ["caixa_id"]
+            isOneToOne: false
+            referencedRelation: "email_caixas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_comandos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_ferias_log: {
+        Row: {
+          caixa_id: string
+          id: string
+          sent_at: string
+          to_address: string
+        }
+        Insert: {
+          caixa_id: string
+          id?: string
+          sent_at?: string
+          to_address: string
+        }
+        Update: {
+          caixa_id?: string
+          id?: string
+          sent_at?: string
+          to_address?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_ferias_log_caixa_id_fkey"
+            columns: ["caixa_id"]
+            isOneToOne: false
+            referencedRelation: "email_caixas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_mensagens: {
+        Row: {
+          answered: boolean
+          bcc_addresses: Json
+          body_fetched: boolean
+          caixa_id: string
+          cc_addresses: Json
+          created_at: string
+          date: string | null
+          draft: boolean
+          email_references: string[] | null
+          flagged: boolean
+          from_address: string | null
+          from_name: string | null
+          has_attachments: boolean
+          html_body: string | null
+          id: string
+          in_reply_to: string | null
+          message_id: string | null
+          org_id: string
+          pasta_id: string
+          reply_to: Json | null
+          seen: boolean
+          size: number | null
+          snippet: string | null
+          subject: string | null
+          text_body: string | null
+          thread_id: string | null
+          to_addresses: Json
+          uid: number
+          updated_at: string
+        }
+        Insert: {
+          answered?: boolean
+          bcc_addresses?: Json
+          body_fetched?: boolean
+          caixa_id: string
+          cc_addresses?: Json
+          created_at?: string
+          date?: string | null
+          draft?: boolean
+          email_references?: string[] | null
+          flagged?: boolean
+          from_address?: string | null
+          from_name?: string | null
+          has_attachments?: boolean
+          html_body?: string | null
+          id?: string
+          in_reply_to?: string | null
+          message_id?: string | null
+          org_id: string
+          pasta_id: string
+          reply_to?: Json | null
+          seen?: boolean
+          size?: number | null
+          snippet?: string | null
+          subject?: string | null
+          text_body?: string | null
+          thread_id?: string | null
+          to_addresses?: Json
+          uid: number
+          updated_at?: string
+        }
+        Update: {
+          answered?: boolean
+          bcc_addresses?: Json
+          body_fetched?: boolean
+          caixa_id?: string
+          cc_addresses?: Json
+          created_at?: string
+          date?: string | null
+          draft?: boolean
+          email_references?: string[] | null
+          flagged?: boolean
+          from_address?: string | null
+          from_name?: string | null
+          has_attachments?: boolean
+          html_body?: string | null
+          id?: string
+          in_reply_to?: string | null
+          message_id?: string | null
+          org_id?: string
+          pasta_id?: string
+          reply_to?: Json | null
+          seen?: boolean
+          size?: number | null
+          snippet?: string | null
+          subject?: string | null
+          text_body?: string | null
+          thread_id?: string | null
+          to_addresses?: Json
+          uid?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_mensagens_caixa_id_fkey"
+            columns: ["caixa_id"]
+            isOneToOne: false
+            referencedRelation: "email_caixas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_mensagens_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_mensagens_pasta_id_fkey"
+            columns: ["pasta_id"]
+            isOneToOne: false
+            referencedRelation: "email_pastas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_pastas: {
+        Row: {
+          caixa_id: string
+          created_at: string
+          id: string
+          last_synced_at: string | null
+          nome: string
+          ordem: number
+          org_id: string
+          parent_path: string | null
+          path: string
+          role: string
+          special_use: string | null
+          subscrita: boolean
+          total_count: number
+          uidnext: number | null
+          uidvalidity: number | null
+          unread_count: number
+          updated_at: string
+        }
+        Insert: {
+          caixa_id: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          nome: string
+          ordem?: number
+          org_id: string
+          parent_path?: string | null
+          path: string
+          role?: string
+          special_use?: string | null
+          subscrita?: boolean
+          total_count?: number
+          uidnext?: number | null
+          uidvalidity?: number | null
+          unread_count?: number
+          updated_at?: string
+        }
+        Update: {
+          caixa_id?: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          nome?: string
+          ordem?: number
+          org_id?: string
+          parent_path?: string | null
+          path?: string
+          role?: string
+          special_use?: string | null
+          subscrita?: boolean
+          total_count?: number
+          uidnext?: number | null
+          uidvalidity?: number | null
+          unread_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_pastas_caixa_id_fkey"
+            columns: ["caixa_id"]
+            isOneToOne: false
+            referencedRelation: "email_caixas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_pastas_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_rascunhos: {
+        Row: {
+          attachments: Json
+          autor_id: string | null
+          bcc_addresses: Json
+          body_html: string | null
+          caixa_id: string
+          cc_addresses: Json
+          created_at: string
+          id: string
+          in_reply_to: string | null
+          org_id: string
+          reply_mensagem_id: string | null
+          subject: string | null
+          to_addresses: Json
+          updated_at: string
+        }
+        Insert: {
+          attachments?: Json
+          autor_id?: string | null
+          bcc_addresses?: Json
+          body_html?: string | null
+          caixa_id: string
+          cc_addresses?: Json
+          created_at?: string
+          id?: string
+          in_reply_to?: string | null
+          org_id: string
+          reply_mensagem_id?: string | null
+          subject?: string | null
+          to_addresses?: Json
+          updated_at?: string
+        }
+        Update: {
+          attachments?: Json
+          autor_id?: string | null
+          bcc_addresses?: Json
+          body_html?: string | null
+          caixa_id?: string
+          cc_addresses?: Json
+          created_at?: string
+          id?: string
+          in_reply_to?: string | null
+          org_id?: string
+          reply_mensagem_id?: string | null
+          subject?: string | null
+          to_addresses?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_rascunhos_caixa_id_fkey"
+            columns: ["caixa_id"]
+            isOneToOne: false
+            referencedRelation: "email_caixas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_rascunhos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_rascunhos_reply_mensagem_id_fkey"
+            columns: ["reply_mensagem_id"]
+            isOneToOne: false
+            referencedRelation: "email_mensagens"
             referencedColumns: ["id"]
           },
         ]
@@ -4660,6 +5319,7 @@ export type Database = {
           id: string
           motorista_id: string
           org_id: string | null
+          recorrencia_id: string | null
           referencia: string | null
           reparacao_id: string | null
           status: string | null
@@ -4679,6 +5339,7 @@ export type Database = {
           id?: string
           motorista_id: string
           org_id?: string | null
+          recorrencia_id?: string | null
           referencia?: string | null
           reparacao_id?: string | null
           status?: string | null
@@ -4698,6 +5359,7 @@ export type Database = {
           id?: string
           motorista_id?: string
           org_id?: string | null
+          recorrencia_id?: string | null
           referencia?: string | null
           reparacao_id?: string | null
           status?: string | null
@@ -4734,10 +5396,99 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "motorista_financeiro_recorrencia_id_fkey"
+            columns: ["recorrencia_id"]
+            isOneToOne: false
+            referencedRelation: "motorista_financeiro_recorrencias"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "motorista_financeiro_reparacao_id_fkey"
             columns: ["reparacao_id"]
             isOneToOne: false
             referencedRelation: "viatura_reparacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      motorista_financeiro_recorrencias: {
+        Row: {
+          categoria: string | null
+          created_at: string
+          criado_por: string | null
+          data_fim: string | null
+          descricao: string
+          frequencia: string
+          id: string
+          max_ocorrencias: number | null
+          motorista_id: string
+          ocorrencias_geradas: number
+          org_id: string
+          referencia_base: string | null
+          semana_ancora: string
+          status: string
+          tipo: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string
+          criado_por?: string | null
+          data_fim?: string | null
+          descricao: string
+          frequencia: string
+          id?: string
+          max_ocorrencias?: number | null
+          motorista_id: string
+          ocorrencias_geradas?: number
+          org_id?: string
+          referencia_base?: string | null
+          semana_ancora: string
+          status?: string
+          tipo: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string
+          criado_por?: string | null
+          data_fim?: string | null
+          descricao?: string
+          frequencia?: string
+          id?: string
+          max_ocorrencias?: number | null
+          motorista_id?: string
+          ocorrencias_geradas?: number
+          org_id?: string
+          referencia_base?: string | null
+          semana_ancora?: string
+          status?: string
+          tipo?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motorista_financeiro_recorrencias_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_financeiro_recorrencias_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_financeiro_recorrencias_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
             referencedColumns: ["id"]
           },
         ]
@@ -7644,6 +8395,8 @@ export type Database = {
           combustivel_nova: string | null
           contrato_id: string
           created_at: string
+          eletricidade_antiga: string | null
+          eletricidade_nova: string | null
           evento_id: string
           id: string
           km_antiga: number | null
@@ -7658,6 +8411,8 @@ export type Database = {
           combustivel_nova?: string | null
           contrato_id: string
           created_at?: string
+          eletricidade_antiga?: string | null
+          eletricidade_nova?: string | null
           evento_id: string
           id?: string
           km_antiga?: number | null
@@ -7672,6 +8427,8 @@ export type Database = {
           combustivel_nova?: string | null
           contrato_id?: string
           created_at?: string
+          eletricidade_antiga?: string | null
+          eletricidade_nova?: string | null
           evento_id?: string
           id?: string
           km_antiga?: number | null
@@ -9130,6 +9887,7 @@ export type Database = {
           motorista_id: string | null
           observacoes: string | null
           org_id: string | null
+          realizacao_token_id: string | null
           registado_por: string | null
           registo_fotografico: boolean
           ticket_id: string | null
@@ -9154,6 +9912,7 @@ export type Database = {
           motorista_id?: string | null
           observacoes?: string | null
           org_id?: string | null
+          realizacao_token_id?: string | null
           registado_por?: string | null
           registo_fotografico?: boolean
           ticket_id?: string | null
@@ -9178,6 +9937,7 @@ export type Database = {
           motorista_id?: string | null
           observacoes?: string | null
           org_id?: string | null
+          realizacao_token_id?: string | null
           registado_por?: string | null
           registo_fotografico?: boolean
           ticket_id?: string | null
@@ -9241,6 +10001,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "viatura_danos_realizacao_token_id_fkey"
+            columns: ["realizacao_token_id"]
+            isOneToOne: false
+            referencedRelation: "realizacao_tokens"
             referencedColumns: ["id"]
           },
           {
@@ -10114,7 +10881,32 @@ export type Database = {
         Returns: string
       }
       current_user_cargo: { Args: never; Returns: string }
+      email_caixa_tem_credenciais: {
+        Args: { _caixa_id: string }
+        Returns: boolean
+      }
+      email_caixa_visivel: { Args: { _caixa_id: string }; Returns: boolean }
+      email_definir_credenciais: {
+        Args: {
+          p_caixa_id: string
+          p_imap_password?: string
+          p_oauth_client_id?: string
+          p_oauth_client_secret?: string
+          p_oauth_tenant_id?: string
+          p_smtp_password?: string
+        }
+        Returns: undefined
+      }
+      email_pode_gerir: { Args: never; Returns: boolean }
       ensure_base_cargos: { Args: { _org_id: string }; Returns: undefined }
+      ensure_default_viatura_combustiveis: {
+        Args: { _org_id: string }
+        Returns: undefined
+      }
+      ensure_default_viatura_tipos: {
+        Args: { _org_id: string }
+        Returns: undefined
+      }
       ensure_lista_motoristas: {
         Args: never
         Returns: {
@@ -10225,6 +11017,10 @@ export type Database = {
           numero_contrato: number
           status: string
         }[]
+      }
+      gerar_movimentos_recorrentes: {
+        Args: { p_semanas_a_frente?: number }
+        Returns: number
       }
       gerar_seguros_semanais: {
         Args: { p_semanas_a_frente?: number }
@@ -10352,6 +11148,7 @@ export type Database = {
       is_current_user_admin: { Args: never; Returns: boolean }
       is_decada_ousada_admin: { Args: never; Returns: boolean }
       is_storage_admin: { Args: never; Returns: boolean }
+      limpar_danos_token: { Args: { p_token: string }; Returns: undefined }
       listar_colaboradores: {
         Args: never
         Returns: {
@@ -10386,14 +11183,25 @@ export type Database = {
       normalize_plate: { Args: { input_plate: string }; Returns: string }
       notificacao_dispensada: { Args: { p_id: string }; Returns: boolean }
       org_privacidade_por_gestor: { Args: never; Returns: boolean }
+      proxima_data_renovacao: {
+        Args: { p_inicio: string; p_intervalo: number; p_opcao: string }
+        Returns: string
+      }
       realizar_token_realizacao: {
-        Args: { p_combustivel?: string; p_km?: number; p_token: string }
+        Args: {
+          p_combustivel: string
+          p_eletricidade?: string
+          p_km: number
+          p_token: string
+        }
         Returns: undefined
       }
       realizar_token_troca: {
         Args: {
           p_combustivel_antiga: string
           p_combustivel_nova: string
+          p_eletricidade_antiga?: string
+          p_eletricidade_nova?: string
           p_km_antiga: number
           p_km_nova: number
           p_token: string
@@ -10409,6 +11217,10 @@ export type Database = {
       rejeitar_candidatura_motorista: {
         Args: { p_candidatura_id: string; p_motivo?: string }
         Returns: boolean
+      }
+      renovar_contrato_renting: {
+        Args: { p_contrato_id: string }
+        Returns: string
       }
       reserva_tem_conflito: {
         Args: {
