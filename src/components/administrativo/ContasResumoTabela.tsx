@@ -20,7 +20,8 @@ export type SortField =
   | 'combustivel'
   | 'portagens'
   | 'outros_custos'
-  | 'reparacoes';
+  | 'reparacoes'
+  | 'gorjeta';
 
 interface ContasResumoTabelaProps {
   filteredResumos: MotoristaResumo[];
@@ -33,6 +34,8 @@ interface ContasResumoTabelaProps {
   onToggleSelectOne: (id: string) => void;
   onRowClick: (resumo: MotoristaResumo) => void;
   formatCurrency: (value: number) => string;
+  /** Coluna Gorjeta — dados sensíveis, só para admins da org dona dos dados. */
+  showGorjeta?: boolean;
 }
 
 function SortTh({
@@ -83,6 +86,7 @@ export function ContasResumoTabela({
   onToggleSelectOne,
   onRowClick,
   formatCurrency,
+  showGorjeta = false,
 }: ContasResumoTabelaProps) {
   return (
     <>
@@ -110,6 +114,17 @@ export function ContasResumoTabela({
               >
                 Faturado
               </SortTh>
+              {showGorjeta && (
+                <SortTh
+                  field="gorjeta"
+                  right
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={onSort}
+                >
+                  Gorjeta
+                </SortTh>
+              )}
               <SortTh field="liquido" right sortField={sortField} sortDir={sortDir} onSort={onSort}>
                 Líquido
               </SortTh>
@@ -157,7 +172,10 @@ export function ContasResumoTabela({
           <TableBody>
             {filteredResumos.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell
+                  colSpan={showGorjeta ? 10 : 9}
+                  className="text-center py-8 text-muted-foreground"
+                >
                   Nenhum dado encontrado para o período selecionado
                 </TableCell>
               </TableRow>
@@ -198,6 +216,17 @@ export function ContasResumoTabela({
                         </div>
                       )}
                     </TableCell>
+                    {showGorjeta && (
+                      <TableCell className="text-right" onClick={() => onRowClick(resumo)}>
+                        {resumo.gorjeta_bolt + resumo.gorjeta_uber > 0 ? (
+                          <span className="font-medium text-emerald-600">
+                            {formatCurrency(resumo.gorjeta_bolt + resumo.gorjeta_uber)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">€0,00</span>
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell
                       className={cn('text-right font-bold', resumo.liquido < 0 && 'text-red-500')}
                       onClick={() => onRowClick(resumo)}
@@ -311,6 +340,14 @@ export function ContasResumoTabela({
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Bolt: {formatCurrency(resumo.faturado_bolt)}</span>
                         <span>Uber: {formatCurrency(resumo.faturado_uber)}</span>
+                      </div>
+                    )}
+                    {showGorjeta && resumo.gorjeta_bolt + resumo.gorjeta_uber > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Gorjeta</span>
+                        <span className="font-medium text-emerald-600">
+                          {formatCurrency(resumo.gorjeta_bolt + resumo.gorjeta_uber)}
+                        </span>
                       </div>
                     )}
                   </div>
