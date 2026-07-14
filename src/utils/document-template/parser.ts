@@ -270,6 +270,8 @@ export const replaceDynamicFields = (
     'km_entrada',
     'combustivel_saida',
     'combustivel_entrada',
+    'eletricidade_saida',
+    'eletricidade_entrada',
     'momento_folha',
     'observacoes_momento',
     'responsavel_nome',

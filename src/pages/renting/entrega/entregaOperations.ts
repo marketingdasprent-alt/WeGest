@@ -15,6 +15,7 @@ interface BlocoFolha {
   isEntrega: boolean;
   km: string;
   combustivel: string;
+  eletricidade: string;
   files: FilePreview[];
 }
 
@@ -53,6 +54,7 @@ export async function gerarFolhaBloco(params: GerarFolhaParams): Promise<void> {
     isEntrega,
     km: kmBloco,
     combustivel: combustivelBloco,
+    eletricidade: eletricidadeBloco,
     files: filesBloco,
   } = bloco;
 
@@ -100,10 +102,15 @@ export async function gerarFolhaBloco(params: GerarFolhaParams): Promise<void> {
     momentoFolha: isEntrega ? 'ENTREGA' : 'RECOLHA',
     observacoesMomento: observacoes,
     ...(isEntrega
-      ? { km_saida: kmBloco, combustivel_saida: combustivelBloco }
+      ? {
+          km_saida: kmBloco,
+          combustivel_saida: combustivelBloco,
+          eletricidade_saida: eletricidadeBloco,
+        }
       : {
           km_entrada: kmBloco,
           combustivel_entrada: combustivelBloco,
+          eletricidade_entrada: eletricidadeBloco,
           km_saida: contexto?.kmSaida?.toString() ?? '',
           combustivel_saida: contexto?.combustivelSaida ?? '',
         }),

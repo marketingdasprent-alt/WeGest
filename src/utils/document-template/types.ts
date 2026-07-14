@@ -67,6 +67,9 @@ export interface GenerateDocumentParams {
   km_entrada?: string;
   combustivel_saida?: string;
   combustivel_entrada?: string;
+  /** Nível de bateria (%) — viaturas elétricas/híbridas. Paralelo a combustivel_saida/entrada. */
+  eletricidade_saida?: string;
+  eletricidade_entrada?: string;
   momentoFolha?: string;
   fotosMomento?: string[];
   danosMomento?: AnexoDanoItem[];
