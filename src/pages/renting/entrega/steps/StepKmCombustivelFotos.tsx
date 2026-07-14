@@ -6,7 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { LOCALIZACOES, type FilePreview } from '@/utils/entrega';
-import { COMBUSTIVEL_NIVEL_OPTS, ELETRICO_OPTS, precisaCombustivel, precisaEletrico } from '@/utils/combustivel';
+import {
+  COMBUSTIVEL_NIVEL_OPTS,
+  ELETRICO_OPTS,
+  precisaCombustivel,
+  precisaEletrico,
+} from '@/utils/combustivel';
 
 interface StepKmCombustivelFotosProps {
   titulo: string;
