@@ -324,10 +324,10 @@ export function ContasResumoTab() {
         .lte('transaction_date', weekEndUtc)
         .not('motorista_id', 'is', null);
 
-      // 4d-bis. Buscar viaturas ativas e respetivo grupo para cruzar com tarifa
+      // 4d-bis. Buscar viaturas ativas e respetivo grupo/modelo para cruzar com tarifa
       const viaturasQuery = supabase
         .from('motorista_viaturas')
-        .select('motorista_id, viaturas(matricula, grupo_id)')
+        .select('motorista_id, viaturas(matricula, grupo_id, modelo_id)')
         .eq('status', 'ativo');
 
       // 4e. Buscar resumos semanais Bolt (dados CSV) cujo intervalo intersecte a semana seleccionada
@@ -339,6 +339,14 @@ export function ContasResumoTab() {
         .from('renting_tarifas')
         .select('grupo_id, preco_semana')
         .eq('ativa', true);
+
+      // 4g-bis. TVDE não tem preço por grupo — é por MODELO. Sem isto, o
+      // aluguer de motoristas TVDE ficava sempre a 0€ (grupo sem tarifa direta).
+      const tarifasTvdeModeloQuery = supabase
+        .from('renting_tarifa_precos_modelo')
+        .select('modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
+        .eq('renting_tarifas.tipo', 'tvde')
+        .eq('renting_tarifas.ativa', true);
 
       // 4f. Buscar movimentos financeiros unificados para a semana.
       // Contam TODOS os movimentos da semana excepto cancelados — um débito
@@ -372,6 +380,7 @@ export function ContasResumoTab() {
         viaturasResult,
         viaVerdeResult,
         tarifasResult,
+        tarifasTvdeModeloResult,
       ] = await Promise.all([
         boltQuery,
         uberQuery,
@@ -385,6 +394,7 @@ export function ContasResumoTab() {
         viaturasQuery,
         viaVerdeQuery,
         tarifasQuery,
+        tarifasTvdeModeloQuery,
       ]);
 
       if (boltResult.error) throw boltResult.error;
@@ -446,12 +456,25 @@ export function ContasResumoTab() {
         }
       });
 
-      // Mapa: motorista_id → preco_semana via grupo da viatura ativa
+      // Mapa: modelo_id → preco_semana da tarifa TVDE ativa (preço por modelo,
+      // não por grupo — ver comentário na query acima).
+      const modeloTvdeTarifaMap: Record<string, number> = {};
+      (tarifasTvdeModeloResult.data || []).forEach((t: any) => {
+        if (t.modelo_id && t.preco_semana != null) {
+          modeloTvdeTarifaMap[t.modelo_id] = Number(t.preco_semana) || 0;
+        }
+      });
+
+      // Mapa: motorista_id → preco_semana via grupo da viatura ativa, com
+      // fallback para a tarifa TVDE do modelo quando o grupo não tem preço.
       const aluguerByMotorista: Record<string, number> = {};
       (viaturasResult.data || []).forEach((mv: any) => {
         if (mv.motorista_id) {
           const grupoId = (mv.viaturas as any)?.grupo_id;
-          const preco = grupoId ? grupoTarifaMap[grupoId] : undefined;
+          const modeloId = (mv.viaturas as any)?.modelo_id;
+          const preco =
+            (grupoId ? grupoTarifaMap[grupoId] : undefined) ??
+            (modeloId ? modeloTvdeTarifaMap[modeloId] : undefined);
           if (preco != null && preco > 0) {
             aluguerByMotorista[mv.motorista_id] = preco;
           }

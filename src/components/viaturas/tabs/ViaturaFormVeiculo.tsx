@@ -31,12 +31,17 @@ interface ViaturaFormVeiculoProps {
   viaturasTipos: ViaturasTipo[];
   grupos: RentingGrupo[];
   allTarifas: Array<{
-    grupo_id: string;
+    grupo_id: string | null;
     nome: string;
     preco_dia: number | null;
     preco_semana: number | null;
     preco_mes: number | null;
     kms_incluidos: number | null;
+  }>;
+  tarifasTvdeModelo: Array<{
+    modelo_id: string;
+    tarifa_nome: string;
+    preco_semana: number;
   }>;
   estacoes: Estacao[];
 }
@@ -50,6 +55,7 @@ export function ViaturaFormVeiculo({
   viaturasTipos,
   grupos,
   allTarifas,
+  tarifasTvdeModelo,
   estacoes,
 }: ViaturaFormVeiculoProps) {
   // is_slot deriva do TIPO: ao escolher o tipo "SLOT", is_slot é ligado
@@ -287,8 +293,41 @@ export function ViaturaFormVeiculo({
           const grupoId = form.watch('grupo_id');
           if (!grupoId) return null;
           const tarifas = allTarifas.filter((t) => t.grupo_id === grupoId);
-          // Grupo sem tarifa ativa (allTarifas já vem filtrado por ativa=true):
-          // avisa que o aluguer não será cobrado no resumo do motorista.
+
+          // TVDE não tem preço por grupo — o preço é por MODELO (renting_tarifa_
+          // precos_modelo). Uma viatura TVDE com tarifa ativa configurada para o
+          // seu modelo NÃO deve mostrar o aviso de "sem tarifa" só porque o grupo
+          // em si não tem preço direto.
+          const tipoId = form.watch('tipo_id');
+          const modeloId = form.watch('modelo_id');
+          const isTvde = viaturasTipos.find((t) => t.id === tipoId)?.elegivel_tvde ?? false;
+          const tarifaTvdeModelo = isTvde
+            ? tarifasTvdeModelo.find((t) => t.modelo_id === modeloId)
+            : undefined;
+
+          if (tarifas.length === 0 && tarifaTvdeModelo) {
+            const fmtTvde = new Intl.NumberFormat('pt-PT', {
+              style: 'currency',
+              currency: 'EUR',
+            }).format(tarifaTvdeModelo.preco_semana);
+            return (
+              <div className="md:col-span-3 rounded-lg border bg-muted/20 p-4">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                  Tarifa TVDE (por modelo)
+                </p>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">{tarifaTvdeModelo.tarifa_nome}</p>
+                  <p className="text-sm font-semibold text-primary">
+                    {fmtTvde} <span className="text-xs text-muted-foreground">/semana</span>
+                  </p>
+                </div>
+              </div>
+            );
+          }
+
+          // Grupo sem tarifa ativa (allTarifas já vem filtrado por ativa=true) e
+          // sem tarifa TVDE por modelo: avisa que o aluguer não será cobrado no
+          // resumo do motorista.
           if (tarifas.length === 0) {
             return (
               <div className="md:col-span-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/20">
@@ -297,7 +336,7 @@ export function ViaturaFormVeiculo({
                 </p>
                 <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">
                   O aluguer aparecerá a 0€ no resumo do motorista. Configure uma tarifa em Renting →
-                  Tarifas para este grupo.
+                  Tarifas para este grupo{isTvde ? ' (ou uma tarifa TVDE para este modelo)' : ''}.
                 </p>
               </div>
             );
