@@ -45,6 +45,7 @@ const SELECT_COLUMNS = `
   total_subtotal, total_iva, total_final, facturado_em,
   is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias,
   franquia_valor, caucao_valor, kms_incluidos, km_adicional_valor,
+  km_saida, km_entrada,
   voucher_codigo,
   numero_processo, voo_referencia,
   local_entrega, local_recolha,
@@ -923,15 +924,23 @@ export function useCriarVersaoContrato() {
 export function useRenovarContrato() {
   const qc = useQueryClient();
 
-  return useMutation<string, Error, { contratoId: string }>({
-    mutationFn: async ({ contratoId }): Promise<string> => {
+  return useMutation<
+    string,
+    Error,
+    { contratoId: string; kmInicio?: number | null; kmFim?: number | null }
+  >({
+    mutationFn: async ({ contratoId, kmInicio, kmFim }): Promise<string> => {
       // A RPC ainda não consta dos tipos gerados — cast controlado.
       const { data, error } = await (
         supabase.rpc as unknown as (
           fn: string,
           args: Record<string, unknown>
         ) => Promise<{ data: string | null; error: { message: string } | null }>
-      )('renovar_contrato_renting', { p_contrato_id: contratoId });
+      )('renovar_contrato_renting', {
+        p_contrato_id: contratoId,
+        p_km_inicio: kmInicio ?? null,
+        p_km_fim: kmFim ?? null,
+      });
       if (error) throw new Error(error.message);
       return data as string;
     },
