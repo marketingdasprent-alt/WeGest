@@ -10,6 +10,9 @@
 -- edge function uber-webhook já define org_id explicitamente desde
 -- 20260713150000 (fix da mesma sessão), este trigger é a rede de
 -- segurança contra regressão futura, não a correcção principal.
+-- Nota: em UPDATE, só rejeita se org_id estava preenchido e passaria a
+-- NULL (regressão activa); uma linha histórica já com org_id NULL pode
+-- continuar a ser actualizada noutras colunas sem ficar presa.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.fn_reject_null_org_id()
@@ -17,7 +20,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF NEW.org_id IS NULL THEN
+  IF NEW.org_id IS NULL AND (TG_OP = 'INSERT' OR OLD.org_id IS NOT NULL) THEN
     RAISE EXCEPTION
       '% : org_id não pode ser NULL (linha rejeitada — evita fuga silenciosa de RLS)',
       TG_TABLE_NAME;
