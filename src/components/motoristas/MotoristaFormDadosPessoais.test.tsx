@@ -12,7 +12,11 @@ vi.mock('@/lib/leadMatch', () => ({ findLeadMatch: findLeadMatchMock }));
 // with a bare `from: vi.fn()`. verificarNifDuplicado is not passed in these tests, so
 // handleNifBlur's supabase call never fires — no extra override needed here.
 
-function Wrapper({ children }: { children: (form: ReturnType<typeof useForm<FormValues>>) => React.ReactNode }) {
+function Wrapper({
+  children,
+}: {
+  children: (form: ReturnType<typeof useForm<FormValues>>) => React.ReactNode;
+}) {
   const form = useForm<FormValues>({
     defaultValues: {
       nome: '',

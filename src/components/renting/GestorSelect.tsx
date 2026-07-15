@@ -18,7 +18,7 @@ interface GestorSelectProps {
 /**
  * Seletor do gestor responsável (cargo "Gestor TVDE") de uma reserva/contrato.
  * Base da privacidade por gestor — reatribuição feita por superiores. Mostra
- * por nome/email; guarda o profiles.id. Inclui "Nenhum" (só superiores veem).
+ * por nome; guarda o profiles.id. Inclui "Nenhum" (só superiores veem).
  */
 export const GestorSelect: React.FC<GestorSelectProps> = ({ value, onChange, disabled }) => {
   const { data: gestores = [], isLoading } = useGestoresTvde();
@@ -50,7 +50,6 @@ export const GestorSelect: React.FC<GestorSelectProps> = ({ value, onChange, dis
         {gestores.map((g) => (
           <SelectItem key={g.id} value={g.id}>
             {g.nome}
-            {g.email ? ` · ${g.email}` : ''}
           </SelectItem>
         ))}
       </SelectContent>

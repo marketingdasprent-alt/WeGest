@@ -156,8 +156,7 @@ export const SectionEntregaRecolha: React.FC<SectionEntregaRecolhaProps> = ({ fo
                   </FormControl>
                   {isLongaDuracao && (
                     <p className="text-xs text-muted-foreground">
-                      Calculado automaticamente a partir da Data Início e do intervalo de
-                      renovação.
+                      Calculado automaticamente a partir da Data Início e do intervalo de renovação.
                     </p>
                   )}
                   <FormMessage />

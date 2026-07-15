@@ -365,7 +365,10 @@ export function MotoristaFormDadosPessoais({
         )}
       />
 
-      <AlertDialog open={!!leadEncontrado} onOpenChange={(open) => !open && setLeadEncontrado(null)}>
+      <AlertDialog
+        open={!!leadEncontrado}
+        onOpenChange={(open) => !open && setLeadEncontrado(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Encontrámos um lead correspondente</AlertDialogTitle>
