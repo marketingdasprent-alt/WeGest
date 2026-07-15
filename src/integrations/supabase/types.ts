@@ -3037,6 +3037,9 @@ export type Database = {
           km_entrada: number | null
           km_saida: number | null
           kms_incluidos: number | null
+          dua_original_com_motorista: boolean
+          dua_devolvida_em: string | null
+          dua_observacoes: string | null
           local_entrega: string | null
           local_recolha: string | null
           matricula: string | null
@@ -3110,6 +3113,9 @@ export type Database = {
           km_entrada?: number | null
           km_saida?: number | null
           kms_incluidos?: number | null
+          dua_original_com_motorista?: boolean
+          dua_devolvida_em?: string | null
+          dua_observacoes?: string | null
           local_entrega?: string | null
           local_recolha?: string | null
           matricula?: string | null
@@ -3183,6 +3189,9 @@ export type Database = {
           km_entrada?: number | null
           km_saida?: number | null
           kms_incluidos?: number | null
+          dua_original_com_motorista?: boolean
+          dua_devolvida_em?: string | null
+          dua_observacoes?: string | null
           local_entrega?: string | null
           local_recolha?: string | null
           matricula?: string | null

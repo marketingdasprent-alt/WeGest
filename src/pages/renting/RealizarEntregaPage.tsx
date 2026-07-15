@@ -197,7 +197,23 @@ const RealizarEntregaPage = () => {
     },
   });
   const [duaDevolvido, setDuaDevolvido] = useState(false);
-  const exigeDua = isDevolucao && viaturaTemDua;
+  // Entrega: o gestor marca se o motorista leva a DUA ORIGINAL consigo.
+  const [duaOriginalLevada, setDuaOriginalLevada] = useState(false);
+  // Recolha: o contrato já marcou que o motorista tinha levado a DUA original e
+  // ainda não foi devolvida → exige confirmar a devolução ao receber a viatura.
+  const { data: duaOriginalContrato = false } = useQuery({
+    queryKey: ['contrato-dua-original', info?.contrato_id],
+    enabled: isDevolucao && !!info?.contrato_id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contratos_renting')
+        .select('dua_original_com_motorista, dua_devolvida_em')
+        .eq('id', info!.contrato_id)
+        .maybeSingle();
+      return !!data?.dua_original_com_motorista && !data?.dua_devolvida_em;
+    },
+  });
+  const exigeDua = isDevolucao && (viaturaTemDua || duaOriginalContrato);
 
   // Restaurar rascunho do cache
   useEffect(() => {
@@ -508,6 +524,24 @@ const RealizarEntregaPage = () => {
       },
       {
         onSuccess: () => {
+          // Persiste o estado da DUA no contrato (best-effort — não bloqueia o
+          // handover): na ENTREGA marca que o motorista levou a DUA original;
+          // na RECOLHA marca a devolução se o contrato a tinha em falta.
+          const duaPatch =
+            info.tipo === 'entrega' && duaOriginalLevada
+              ? { dua_original_com_motorista: true }
+              : isDevolucao && duaDevolvido && duaOriginalContrato
+                ? { dua_devolvida_em: new Date().toISOString() }
+                : null;
+          if (duaPatch) {
+            void supabase
+              .from('contratos_renting')
+              .update(duaPatch)
+              .eq('id', info.contrato_id)
+              .then(({ error }) => {
+                if (error) console.warn('Falha a gravar estado da DUA:', error);
+              });
+          }
           const tmplId = 'folha_danos';
           const matricula = formatMatricula(info.matricula);
           const params = {
@@ -674,6 +708,9 @@ const RealizarEntregaPage = () => {
           exigeDua={exigeDua}
           duaDevolvido={duaDevolvido}
           onDuaChange={setDuaDevolvido}
+          mostraLevaDua={info.tipo === 'entrega'}
+          duaOriginalLevada={duaOriginalLevada}
+          onDuaOriginalChange={setDuaOriginalLevada}
           observacoes={observacoes}
           onObservacoesChange={setObservacoes}
           assinaturasRef={assinaturasRef}
