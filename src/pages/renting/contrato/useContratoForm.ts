@@ -45,6 +45,8 @@ import { useReservaCondutores } from '@/hooks/useReservaCondutores';
 import { useViaturas } from '@/hooks/useViaturas';
 import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
 
+import { fillEmptyFormFields } from '@/lib/fillEmptyFormFields';
+
 import type {
   CoberturaFormItem,
   ContratoRentingInsert,
@@ -540,18 +542,12 @@ export function useContratoForm(): UseContratoFormReturn {
     );
     if (!linha) return;
     const isTvdeReg = regime === 'tvde';
-    const kmIncl = isTvdeReg ? linha.km_mensal : linha.km_mensal_iva;
-    const kmExtra = isTvdeReg ? linha.km_adicional_valor : linha.km_adicional_valor_iva;
-    const franquia = isTvdeReg ? linha.franquia_valor : linha.franquia_valor_iva;
-    const caucao = isTvdeReg ? linha.caucao_valor : linha.caucao_valor_iva;
-    if (kmIncl != null && form.getValues('kms_incluidos') == null)
-      form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
-    if (kmExtra != null && form.getValues('km_adicional_valor') == null)
-      form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
-    if (franquia != null && form.getValues('franquia_valor') == null)
-      form.setValue('franquia_valor', franquia, { shouldDirty: true });
-    if (caucao != null && form.getValues('caucao_valor') == null)
-      form.setValue('caucao_valor', caucao, { shouldDirty: true });
+    fillEmptyFormFields(form, {
+      kms_incluidos: isTvdeReg ? linha.km_mensal : linha.km_mensal_iva,
+      km_adicional_valor: isTvdeReg ? linha.km_adicional_valor : linha.km_adicional_valor_iva,
+      franquia_valor: isTvdeReg ? linha.franquia_valor : linha.franquia_valor_iva,
+      caucao_valor: isTvdeReg ? linha.caucao_valor : linha.caucao_valor_iva,
+    });
   }, [tarifaIdWatch, viaturaId, regime, viaturas, precosModeloTvde, form]);
 
   // ── Viaturas disponíveis ──────────────────────────────────────

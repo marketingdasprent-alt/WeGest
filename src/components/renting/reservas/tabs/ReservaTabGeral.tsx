@@ -46,6 +46,7 @@ import {
   addOneMonthSameDayToLocalInput,
   firstDayNextMonthToLocalInput,
 } from '@/utils/reserva-formatters';
+import { fillEmptyFormFields } from '@/lib/fillEmptyFormFields';
 
 interface ReservaTabGeralProps {
   form: UseFormReturn<ReservaFormValues>;
@@ -205,20 +206,14 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   // apagando franquia/caução/kms negociados à parte da reserva.
   useEffect(() => {
     if (isSlot || !precoModeloSel) return;
-    const kmIncl = isTvde ? precoModeloSel.km_mensal : precoModeloSel.km_mensal_iva;
-    const kmExtra = isTvde
-      ? precoModeloSel.km_adicional_valor
-      : precoModeloSel.km_adicional_valor_iva;
-    const franquia = isTvde ? precoModeloSel.franquia_valor : precoModeloSel.franquia_valor_iva;
-    const caucao = isTvde ? precoModeloSel.caucao_valor : precoModeloSel.caucao_valor_iva;
-    if (kmIncl != null && form.getValues('kms_incluidos') == null)
-      form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
-    if (kmExtra != null && form.getValues('km_adicional_valor') == null)
-      form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
-    if (franquia != null && form.getValues('franquia_valor') == null)
-      form.setValue('franquia_valor', franquia, { shouldDirty: true });
-    if (caucao != null && form.getValues('caucao_valor') == null)
-      form.setValue('caucao_valor', caucao, { shouldDirty: true });
+    fillEmptyFormFields(form, {
+      kms_incluidos: isTvde ? precoModeloSel.km_mensal : precoModeloSel.km_mensal_iva,
+      km_adicional_valor: isTvde
+        ? precoModeloSel.km_adicional_valor
+        : precoModeloSel.km_adicional_valor_iva,
+      franquia_valor: isTvde ? precoModeloSel.franquia_valor : precoModeloSel.franquia_valor_iva,
+      caucao_valor: isTvde ? precoModeloSel.caucao_valor : precoModeloSel.caucao_valor_iva,
+    });
   }, [precoModeloSel, isTvde, isSlot, form]);
 
   // Lista de viaturas filtrada por regime.
