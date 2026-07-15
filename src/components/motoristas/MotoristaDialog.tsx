@@ -418,6 +418,7 @@ export function MotoristaDialog({
                     gestorPopoverOpen={gestorPopoverOpen}
                     setGestorPopoverOpen={setGestorPopoverOpen}
                     verificarNifDuplicado={!motorista}
+                    verificarLead={!motorista}
                   />
                   <MotoristaFormCartoesIntegracoes
                     form={form}
