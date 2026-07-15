@@ -86,11 +86,17 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     const leftMargin = 20;
     const rightMargin = 20;
 
-    // Carregar papel timbrado (background) se existir
+    // Papel timbrado (background): a empresa manda sempre; só cai para o
+    // timbre gravado no próprio template se a empresa não tiver nenhum
+    // definido (compatibilidade com templates configurados antes de o timbre
+    // passar a viver na empresa).
+    const papelTimbradoUrl: string | null =
+      (documentData?.empresaData as { papelTimbrado?: string | null } | undefined)?.papelTimbrado ||
+      templateData.papel_timbrado_url ||
+      null;
+
     const bg: HTMLImageElement | null =
-      templateData.papel_timbrado_url && !existingPdf
-        ? await loadImage(templateData.papel_timbrado_url).catch(() => null)
-        : null;
+      papelTimbradoUrl && !existingPdf ? await loadImage(papelTimbradoUrl).catch(() => null) : null;
 
     const hasLetterhead = !!bg;
 
@@ -233,7 +239,7 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     // Numeração de páginas
     const endPage = pdf.getNumberOfPages();
     const docTotalPages = endPage - startPage + 1;
-    const usarFooterEmpresa = !!params.footerText && !templateData.papel_timbrado_url;
+    const usarFooterEmpresa = !!params.footerText && !hasLetterhead;
 
     for (let i = startPage; i <= endPage && !params.skipFooter; i++) {
       pdf.setPage(i);

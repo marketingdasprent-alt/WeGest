@@ -3,6 +3,7 @@ import { DocumentTemplateList } from '@/components/admin/DocumentTemplateList';
 import { DocumentTemplateEditor } from '@/components/admin/DocumentTemplateEditor';
 import { DocumentTemplatePreviewDialog } from '@/components/admin/DocumentTemplatePreviewDialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -10,11 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
-import type { DocumentTemplate } from '@/types/documentTemplate';
+import { TIPO_TEMPLATE_OPTIONS, type DocumentTemplate } from '@/types/documentTemplate';
 
 export const DocumentosTab = () => {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -22,6 +23,8 @@ export const DocumentosTab = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [filtroEmpresa, setFiltroEmpresa] = useState<string>('todas');
+  const [filtroTipo, setFiltroTipo] = useState<string>('todos');
+  const [busca, setBusca] = useState('');
   const [previewTemplate, setPreviewTemplate] = useState<DocumentTemplate | null>(null);
   const { empresas } = useClientesEmpresas();
 
@@ -111,10 +114,11 @@ export const DocumentosTab = () => {
   const nomePorEmpresa: Record<string, string> = Object.fromEntries(
     empresas.map((e) => [e.id, e.nome])
   );
-  const templatesFiltrados =
-    filtroEmpresa === 'todas'
-      ? templates
-      : templates.filter((t) => t.cliente_empresa_id === filtroEmpresa);
+  const buscaNormalizada = busca.trim().toLowerCase();
+  const templatesFiltrados = templates
+    .filter((t) => filtroEmpresa === 'todas' || t.cliente_empresa_id === filtroEmpresa)
+    .filter((t) => filtroTipo === 'todos' || t.tipo === filtroTipo)
+    .filter((t) => !buscaNormalizada || t.nome.toLowerCase().includes(buscaNormalizada));
 
   return (
     <div className="space-y-6">
@@ -136,7 +140,29 @@ export const DocumentosTab = () => {
                 Gerir templates de contratos e outros documentos
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative w-full sm:w-56">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Pesquisar por nome..."
+                  className="pl-8"
+                />
+              </div>
+              <Select value={filtroTipo} onValueChange={setFiltroTipo}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os tipos</SelectItem>
+                  {TIPO_TEMPLATE_OPTIONS.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Select value={filtroEmpresa} onValueChange={setFiltroEmpresa}>
                 <SelectTrigger className="w-full sm:w-56">
                   <SelectValue placeholder="Empresa" />

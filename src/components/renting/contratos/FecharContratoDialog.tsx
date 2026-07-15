@@ -196,7 +196,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         .maybeSingle();
       const empty = {
         viaturaId: null as string | null,
-        empresaData: null as Record<string, string> | null,
+        empresaData: null as Record<string, string | null> | null,
         condutorNome: '',
         condutorEmail: '',
         clienteNome: '',
@@ -205,12 +205,12 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       };
       if (!data) return empty;
 
-      let empresaData: Record<string, string> | null = null;
+      let empresaData: Record<string, string | null> | null = null;
       if (data.emissor_id) {
         const { data: emp } = await supabase
           .from('clientes')
           .select(
-            'nome, nome_comercial, nif, sede, representante, cargo_representante, licenca_tvde, licenca_validade'
+            'nome, nome_comercial, nif, sede, representante, cargo_representante, licenca_tvde, licenca_validade, papel_timbrado, logo_url'
           )
           .eq('id', data.emissor_id)
           .maybeSingle();
@@ -223,6 +223,8 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
             licencaValidade: emp.licenca_validade ?? '',
             representante: emp.representante ?? '',
             cargoRepresentante: emp.cargo_representante ?? '',
+            papelTimbrado: emp.papel_timbrado ?? null,
+            logoUrl: emp.logo_url ?? null,
           };
         }
       }

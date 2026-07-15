@@ -24,7 +24,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCamposDinamicos } from '@/hooks/useCamposDinamicos';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { categoriasOrdenadas, labelCategoria, type BaseCategoria } from '@/lib/camposDinamicos';
-import type { DocumentTemplate } from '@/types/documentTemplate';
+import { TIPO_TEMPLATE_OPTIONS, type DocumentTemplate } from '@/types/documentTemplate';
 
 const CATEGORIA_EMOJI: Record<BaseCategoria, string> = {
   motorista: '👤',
@@ -34,20 +34,6 @@ const CATEGORIA_EMOJI: Record<BaseCategoria, string> = {
   contrato: '📄',
   danos: '🛠️',
 };
-
-// Tipos de template (coluna `tipo`, TEXT livre). Os de contrato têm semântica
-// no gerador (escolha por regime); os restantes são documentos genéricos que
-// aparecem no checklist "Gerar Documentos".
-const TIPO_TEMPLATE_OPTIONS = [
-  { value: 'contrato_aluguer', label: 'Contrato de Aluguer' },
-  { value: 'contrato_prestacao', label: 'Contrato de Prestação' },
-  { value: 'contrato_tvde', label: 'Contrato TVDE' },
-  { value: 'declaracao', label: 'Declaração' },
-  { value: 'procedimentos', label: 'Procedimentos' },
-  { value: 'recibo', label: 'Recibo' },
-  { value: 'anexo_danos', label: 'Folha de Danos' },
-  { value: 'outro', label: 'Outro documento' },
-] as const;
 
 interface DocumentTemplateEditorProps {
   template: DocumentTemplate | null;
@@ -513,12 +499,13 @@ export const DocumentTemplateEditor = ({
             </CardContent>
           </Card>
 
-          {/* Gestão de Papel Timbrado */}
+          {/* Gestão de Papel Timbrado (legado) */}
           <Card className="bg-card/50 border-border">
             <CardHeader>
-              <CardTitle className="text-foreground text-lg">Papel Timbrado</CardTitle>
+              <CardTitle className="text-foreground text-lg">Papel Timbrado (legado)</CardTitle>
               <CardDescription className="text-muted-foreground text-xs">
-                Formato A4 (210x297mm)
+                Formato A4 (210x297mm). Só é usado se a empresa do template não tiver papel timbrado
+                definido — configura o timbre da empresa em Configurações → Empresas.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
