@@ -284,13 +284,30 @@ const Dashboard = () => {
         return { ...ct, _renovacao: renovacao, _diffDays: diffDays };
       });
 
+      // De-duplicar contratos repetidos: a mesma prestação aparece por vezes 2x
+      // na BD (ex.: CT-0551 e CT-0552 são o mesmo motorista/viatura/data) e a
+      // mesma pessoa surgia duas vezes no card. Chave = motorista+viatura+início;
+      // mantém-se o número de contrato mais alto (o mais recente).
+      const contratosUnicos = Array.from(
+        allContratos
+          .reduce((map: Map<string, any>, ct: any) => {
+            const key = `${ct.motorista_id ?? ''}|${ct.viatura_id ?? ''}|${ct.data_inicio ?? ''}`;
+            const existente = map.get(key);
+            if (!existente || (ct.numero_contrato ?? 0) > (existente.numero_contrato ?? 0)) {
+              map.set(key, ct);
+            }
+            return map;
+          }, new Map<string, any>())
+          .values()
+      );
+
       // Contratos a renovar: expiram nos próximos 60 dias
-      const contratosRenovar = allContratos
+      const contratosRenovar = contratosUnicos
         .filter((ct: any) => ct._diffDays >= 0 && ct._diffDays <= 60)
         .sort((a: any, b: any) => a._renovacao.getTime() - b._renovacao.getTime());
 
       // Contratos já expirados (data de fim no passado)
-      const expirados = allContratos
+      const expirados = contratosUnicos
         .filter((ct: any) => ct._diffDays < 0)
         .sort((a: any, b: any) => a._renovacao.getTime() - b._renovacao.getTime());
 
@@ -651,7 +668,7 @@ const Dashboard = () => {
             {/* Extintores a Expirar */}
             <AlertListCard
               titulo="Extintores a Expirar"
-              descricao="Expiração nos próximos 15 dias"
+              descricao="Vencidos ou a expirar (próximos 15 dias)"
               badge={
                 <Badge
                   variant="outline"
@@ -666,8 +683,8 @@ const Dashboard = () => {
                 return {
                   id: ext.id,
                   label: ext.matricula,
-                  sublabel: `👤 ${ext.motorista_nome}`,
-                  valor: format(new Date(ext.extintor_validade), 'dd MMM', { locale: pt }),
+                  sublabel: `👤 ${ext.motorista_nome}${isExpired ? ' · vencido' : ''}`,
+                  valor: format(new Date(ext.extintor_validade), 'dd MMM yyyy', { locale: pt }),
                   severity: isExpired ? 'critical' : 'high',
                 };
               })}
