@@ -22,6 +22,9 @@ export interface GenerateContratoPrestacaoPdfParams {
   numeroContrato?: number | null;
   empresa: EmpresaConfig | null;
   action?: 'print' | 'download';
+  /** Cidade de assinatura escolhida no dialog (normalmente a cidade de uma
+   *  estação). Manda sobre o fallback (sede da empresa / cidade do motorista). */
+  cidadeAssinatura?: string;
 }
 
 /**
@@ -38,6 +41,7 @@ export const generateContratoPrestacaoPdf = async ({
   numeroContrato,
   empresa,
   action = 'print',
+  cidadeAssinatura,
 }: GenerateContratoPrestacaoPdfParams): Promise<void> => {
   if (!empresa) {
     throw new Error('Empresa não definida — impossível gerar o contrato de prestação.');
@@ -78,6 +82,7 @@ export const generateContratoPrestacaoPdf = async ({
     email: motorista.email ?? '',
     telefone: motorista.telefone ?? '',
     cidade: motorista.cidade ?? '',
+    iban: motorista.iban ?? '',
   };
 
   // 3) Dados do contrato (slot).
@@ -91,7 +96,8 @@ export const generateContratoPrestacaoPdf = async ({
   const documentData = {
     data_inicio: dataInicio ?? today,
     data_assinatura: today,
-    cidade_assinatura: empresa.sede || (motoristaData.cidade as string) || 'Leiria',
+    cidade_assinatura:
+      cidadeAssinatura || empresa.sede || (motoristaData.cidade as string) || 'Leiria',
     numero_contrato: numeroContrato != null ? String(numeroContrato) : '',
     viatura_matricula: viatura?.matricula ?? '—',
     viatura_data_matricula: viatura?.data_matricula ?? '',

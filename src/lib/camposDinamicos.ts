@@ -93,6 +93,7 @@ export const CAMPOS_CATALOGO: CampoDinamico[] = [
   { chave: 'motorista_morada', label: 'Morada', categoria: 'motorista' },
   { chave: 'motorista_email', label: 'Email', categoria: 'motorista' },
   { chave: 'motorista_telefone', label: 'Telefone', categoria: 'motorista' },
+  { chave: 'motorista_iban', label: 'IBAN', categoria: 'motorista' },
   { chave: 'carta_conducao', label: 'Carta de condução', categoria: 'motorista' },
   { chave: 'carta_categorias', label: 'Categorias da carta', categoria: 'motorista' },
   { chave: 'carta_validade', label: 'Validade da carta', categoria: 'motorista' },
