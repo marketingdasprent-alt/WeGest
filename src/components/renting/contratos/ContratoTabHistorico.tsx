@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { ArrowRight, History, Loader2 } from 'lucide-react';
+import { ArrowRight, Gauge, History, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
@@ -85,6 +85,19 @@ export const ContratoTabHistorico: React.FC<ContratoTabHistoricoProps> = ({
                     </div>
                     {v.motivo_versao && (
                       <p className="text-sm text-muted-foreground mt-1">{v.motivo_versao}</p>
+                    )}
+                    {(v.km_saida != null || v.km_entrada != null) && (
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                        <Gauge className="h-3 w-3 shrink-0" />
+                        Km {v.km_saida != null ? v.km_saida.toLocaleString('pt-PT') : '—'} →{' '}
+                        {v.km_entrada != null ? v.km_entrada.toLocaleString('pt-PT') : '—'}
+                        {v.km_saida != null && v.km_entrada != null && (
+                          <span className="font-medium">
+                            {' '}
+                            ({(v.km_entrada - v.km_saida).toLocaleString('pt-PT')} km)
+                          </span>
+                        )}
+                      </p>
                     )}
                     <p className="text-xs text-muted-foreground mt-1">
                       Criada {fmtData(v.created_at)} · #{v.codigo}

@@ -86,11 +86,26 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     const leftMargin = 20;
     const rightMargin = 20;
 
-    // Carregar papel timbrado (background) se existir
-    const bg: HTMLImageElement | null =
-      templateData.papel_timbrado_url && !existingPdf
-        ? await loadImage(templateData.papel_timbrado_url).catch(() => null)
-        : null;
+    // Papel timbrado (background): a empresa manda sempre; só cai para o timbre
+    // gravado no próprio template se a empresa não tiver nenhum definido
+    // (compatibilidade com templates configurados antes de o timbre passar a
+    // viver na empresa).
+    //
+    // NÃO condicionar a `!existingPdf`: em documentos COMBINADOS (ex.: TVDE =
+    // Prestação + Aluguer, via generateDocumentosCombinados) todos os docs a
+    // seguir ao primeiro recebem `existingPdf` — com essa guarda o `bg` ficava
+    // null e ESSES documentos saíam sem timbrado em nenhuma página (só o 1.º
+    // vinha timbrado). Carregar sempre que houver URL faz o bloco abaixo
+    // carimbar a 1.ª página do doc de continuação e o renderHtmlBlock/render
+    // Table re-aplicá-lo nas páginas seguintes.
+    const papelTimbradoUrl: string | null =
+      (documentData?.empresaData as { papelTimbrado?: string | null } | undefined)?.papelTimbrado ||
+      templateData.papel_timbrado_url ||
+      null;
+
+    const bg: HTMLImageElement | null = papelTimbradoUrl
+      ? await loadImage(papelTimbradoUrl).catch(() => null)
+      : null;
 
     const hasLetterhead = !!bg;
 
@@ -105,11 +120,12 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     // Com papel timbrado a área útil é menor; comprimir entrelinha.
     const lineFactor = hasLetterhead ? 1.24 : 1.5;
 
-    // Se este PDF é uma continuação (existingPdf), desenhar bg da 1ª página
-    if (existingPdf && bg) {
-      pdf.addPage();
-      pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
-    } else if (!existingPdf && bg) {
+    // Carimba o papel timbrado na 1ª página deste documento. Num documento de
+    // continuação (existingPdf) NÃO se adiciona página aqui — o
+    // generateDocumentosCombinados já criou a página separadora (pdf.addPage())
+    // antes de nos chamar; carimbamos o timbrado SOBRE essa página. Adicionar
+    // outra página aqui gerava uma folha em branco a mais por documento.
+    if (bg) {
       pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
     }
 
@@ -233,7 +249,7 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     // Numeração de páginas
     const endPage = pdf.getNumberOfPages();
     const docTotalPages = endPage - startPage + 1;
-    const usarFooterEmpresa = !!params.footerText && !templateData.papel_timbrado_url;
+    const usarFooterEmpresa = !!params.footerText && !hasLetterhead;
 
     for (let i = startPage; i <= endPage && !params.skipFooter; i++) {
       pdf.setPage(i);

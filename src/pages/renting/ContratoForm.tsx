@@ -283,6 +283,17 @@ const ContratoForm = () => {
         </div>
       )}
 
+      {isEdit && contrato?.dua_original_com_motorista && !contrato?.dua_devolvida_em && (
+        <div className="mb-3 flex items-start gap-2 p-3 rounded-md border border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <p className="text-sm">
+            Este motorista saiu com a <strong>DUA original</strong> da viatura. Tem de ser{' '}
+            <strong>devolvida quando o contrato for fechado</strong>.
+            {contrato?.dua_observacoes ? ` (${contrato.dua_observacoes})` : ''}
+          </p>
+        </div>
+      )}
+
       {realizacaoPendente && (
         <div className="mb-3 flex flex-col gap-2 rounded-md border border-primary/40 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-2 text-sm">
@@ -505,6 +516,9 @@ const ContratoForm = () => {
           motoristaId={motoristaIdPrincipal}
           matricula={contrato.matricula}
           viaturaId={contrato.viatura_id}
+          duaOriginalComMotorista={
+            contrato.dua_original_com_motorista && !contrato.dua_devolvida_em
+          }
           alteracoesTroca={novaVersaoCtx?.alteracoes ?? []}
           onFechado={confirmarNovaVersao}
         />

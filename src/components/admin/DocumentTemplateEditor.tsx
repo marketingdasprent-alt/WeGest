@@ -19,12 +19,12 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Save, X, Upload, Trash2, Image as ImageIcon } from 'lucide-react';
+import { Save, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCamposDinamicos } from '@/hooks/useCamposDinamicos';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { categoriasOrdenadas, labelCategoria, type BaseCategoria } from '@/lib/camposDinamicos';
-import type { DocumentTemplate } from '@/types/documentTemplate';
+import { TIPO_TEMPLATE_OPTIONS, type DocumentTemplate } from '@/types/documentTemplate';
 
 const CATEGORIA_EMOJI: Record<BaseCategoria, string> = {
   motorista: '👤',
@@ -34,20 +34,6 @@ const CATEGORIA_EMOJI: Record<BaseCategoria, string> = {
   contrato: '📄',
   danos: '🛠️',
 };
-
-// Tipos de template (coluna `tipo`, TEXT livre). Os de contrato têm semântica
-// no gerador (escolha por regime); os restantes são documentos genéricos que
-// aparecem no checklist "Gerar Documentos".
-const TIPO_TEMPLATE_OPTIONS = [
-  { value: 'contrato_aluguer', label: 'Contrato de Aluguer' },
-  { value: 'contrato_prestacao', label: 'Contrato de Prestação' },
-  { value: 'contrato_tvde', label: 'Contrato TVDE' },
-  { value: 'declaracao', label: 'Declaração' },
-  { value: 'procedimentos', label: 'Procedimentos' },
-  { value: 'recibo', label: 'Recibo' },
-  { value: 'anexo_danos', label: 'Folha de Danos' },
-  { value: 'outro', label: 'Outro documento' },
-] as const;
 
 interface DocumentTemplateEditorProps {
   template: DocumentTemplate | null;
@@ -82,7 +68,6 @@ export const DocumentTemplateEditor = ({
       : 38
   );
   const [saving, setSaving] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
   const editorRef = useRef<RichTextEditorRef>(null);
 
   // Se for novo template e ainda não tiver empresa seleccionada, usar a primeira disponível.
@@ -169,116 +154,6 @@ export const DocumentTemplateEditor = ({
   const insertField = (field: string) => {
     if (editorRef.current) {
       editorRef.current.insertContent(field);
-    }
-  };
-
-  const handleImageUpload = async () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      setUploadingImage(true);
-      try {
-        // Verificar se usuário é admin
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          toast.error('Usuário não autenticado');
-          return;
-        }
-
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('is_admin')
-          .eq('id', user.id)
-          .single();
-
-        if (!profile?.is_admin) {
-          toast.error('Apenas administradores podem fazer upload de imagens');
-          return;
-        }
-
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${crypto.randomUUID()}.${fileExt}`;
-
-        const { data, error } = await supabase.storage
-          .from('document-templates')
-          .upload(fileName, file);
-
-        if (error) {
-          // Log detalhado do erro
-          const errorObj = error as any;
-          console.error('Erro detalhado do upload:', {
-            message: error.message,
-            statusCode: errorObj.statusCode,
-            error: errorObj.error,
-            hint: errorObj.hint,
-            details: errorObj.details,
-            fullError: JSON.stringify(error, null, 2),
-          });
-
-          // Mensagens específicas baseadas no tipo de erro
-          if (error.message?.includes('row-level security') || error.message?.includes('policy')) {
-            toast.error('Erro de permissão RLS. Verifique se você é administrador.');
-          } else if (errorObj.statusCode === '400' || errorObj.statusCode === 400) {
-            toast.error(`Erro 400: ${error.message || 'Requisição inválida ao servidor'}`);
-          } else if (error.message?.includes('bucket')) {
-            toast.error('Bucket de armazenamento não configurado corretamente');
-          } else if (
-            error.message?.includes('permission') ||
-            error.message?.includes('unauthorized')
-          ) {
-            toast.error('Sem permissão para fazer upload. Verifique as políticas RLS.');
-          } else {
-            toast.error(`Erro ao fazer upload: ${error.message || 'Erro desconhecido'}`);
-          }
-          throw error;
-        }
-
-        const { data: urlData } = supabase.storage
-          .from('document-templates')
-          .getPublicUrl(fileName);
-
-        setPapelTimbradoUrl(urlData.publicUrl);
-        toast.success('Imagem carregada com sucesso!');
-      } catch (error) {
-        console.error('Erro ao fazer upload:', error);
-        if (
-          !(error as any)?.message?.includes('bucket') &&
-          !(error as any)?.message?.includes('policy')
-        ) {
-          toast.error('Erro ao fazer upload da imagem');
-        }
-      } finally {
-        setUploadingImage(false);
-      }
-    };
-
-    input.click();
-  };
-
-  const handleImageRemove = async () => {
-    if (!papelTimbradoUrl) return;
-
-    try {
-      // Extrair nome do arquivo da URL
-      const urlParts = papelTimbradoUrl.split('/');
-      const fileName = urlParts[urlParts.length - 1];
-
-      if (fileName && !fileName.includes('lovable-uploads')) {
-        await supabase.storage.from('document-templates').remove([fileName]);
-      }
-
-      setPapelTimbradoUrl('');
-      toast.success('Imagem removida');
-    } catch (error) {
-      console.error('Erro ao remover imagem:', error);
-      toast.error('Erro ao remover imagem');
     }
   };
 
@@ -513,96 +388,42 @@ export const DocumentTemplateEditor = ({
             </CardContent>
           </Card>
 
-          {/* Gestão de Papel Timbrado */}
+          {/* Margens do papel timbrado — o timbre em si vive na empresa
+              (Configurações → Empresas); isto só ajusta o espaço reservado
+              para ele quando o documento é gerado. */}
           <Card className="bg-card/50 border-border">
             <CardHeader>
-              <CardTitle className="text-foreground text-lg">Papel Timbrado</CardTitle>
+              <CardTitle className="text-foreground text-lg">Margens (mm)</CardTitle>
               <CardDescription className="text-muted-foreground text-xs">
-                Formato A4 (210x297mm)
+                Só relevantes quando a empresa deste template tem papel timbrado configurado. Ajusta
+                a distância ao topo e ao fundo se o conteúdo bater na logo ou na faixa do timbrado.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {papelTimbradoUrl ? (
-                <div className="space-y-3">
-                  <div className="relative w-full max-h-[400px] border border-border rounded bg-card overflow-y-auto">
-                    <img
-                      src={papelTimbradoUrl}
-                      alt="Papel timbrado"
-                      className="w-full object-contain"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleImageUpload}
-                      disabled={uploadingImage}
-                      className="flex-1"
-                    >
-                      <Upload className="mr-2 h-3 w-3" />
-                      Alterar
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={handleImageRemove}
-                      className="flex-1"
-                    >
-                      <Trash2 className="mr-2 h-3 w-3" />
-                      Remover
-                    </Button>
-                  </div>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Topo</Label>
+                  <Input
+                    type="number"
+                    min={10}
+                    max={120}
+                    value={topMargin}
+                    onChange={(e) => setTopMargin(Number(e.target.value) || 50)}
+                    className="bg-card border-border text-foreground"
+                  />
                 </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleImageUpload}
-                  disabled={uploadingImage}
-                >
-                  <ImageIcon className="mr-2 h-4 w-4" />
-                  {uploadingImage ? 'A carregar...' : 'Fazer upload de imagem'}
-                </Button>
-              )}
-              <p className="text-xs text-gray-500">
-                A imagem será usada como fundo do documento ao gerar contratos
-              </p>
-
-              {papelTimbradoUrl && (
-                <div className="space-y-3 border-t border-border pt-3">
-                  <div>
-                    <Label className="text-foreground text-sm">Margens (mm)</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Ajusta a distância ao topo e ao fundo se o conteúdo bater na logo ou na faixa
-                      do timbrado.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Topo</Label>
-                      <Input
-                        type="number"
-                        min={10}
-                        max={120}
-                        value={topMargin}
-                        onChange={(e) => setTopMargin(Number(e.target.value) || 50)}
-                        className="bg-card border-border text-foreground"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Fundo</Label>
-                      <Input
-                        type="number"
-                        min={10}
-                        max={120}
-                        value={bottomMargin}
-                        onChange={(e) => setBottomMargin(Number(e.target.value) || 38)}
-                        className="bg-card border-border text-foreground"
-                      />
-                    </div>
-                  </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Fundo</Label>
+                  <Input
+                    type="number"
+                    min={10}
+                    max={120}
+                    value={bottomMargin}
+                    onChange={(e) => setBottomMargin(Number(e.target.value) || 38)}
+                    className="bg-card border-border text-foreground"
+                  />
                 </div>
-              )}
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -169,6 +169,7 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
         matricula={contrato.matricula}
         viaturaId={contrato.viatura_id}
         estacaoOrigemId={contrato.estacao_origem_viatura_id}
+        duaOriginalComMotorista={contrato.dua_original_com_motorista && !contrato.dua_devolvida_em}
       />
 
       {podeRenovar && (

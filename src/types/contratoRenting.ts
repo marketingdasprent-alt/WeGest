@@ -151,6 +151,20 @@ export type ContratoRenting = {
   kms_incluidos: number | null;
   km_adicional_valor: number | null;
 
+  /** Odómetro no início do mês (rent-a-car longa duração). Registado na
+   *  renovação: km_saida = km com que o mês arrancou; km_entrada = km ao
+   *  fechar/renovar. O mês seguinte arranca com este km_entrada. */
+  km_saida: number | null;
+  km_entrada: number | null;
+
+  /** DUA original — o motorista levou a DUA física da viatura. A flag e a nota
+   *  vêm do formulário; `dua_devolvida_em` é escrito só no fecho (quando o
+   *  gestor confirma a devolução). Aviso de devolução ativo enquanto
+   *  dua_original_com_motorista && !dua_devolvida_em. */
+  dua_original_com_motorista: boolean;
+  dua_devolvida_em: string | null;
+  dua_observacoes: string | null;
+
   voucher_codigo: string | null;
 
   observacoes: string | null;
@@ -184,6 +198,15 @@ export type ContratoRentingInsert = Omit<
   | 'contrato_anterior_id'
   | 'substituido_em'
   | 'motivo_versao'
+  // km_saida/km_entrada só são escritos server-side pela RPC de renovação
+  // (renovar_contrato_renting), nunca pelo formulário de criar/editar.
+  | 'km_saida'
+  | 'km_entrada'
+  // Os campos DUA são escritos no fluxo de entrega/recolha da viatura
+  // (RealizarEntregaPage) e no fecho, nunca no formulário do contrato.
+  | 'dua_original_com_motorista'
+  | 'dua_devolvida_em'
+  | 'dua_observacoes'
   | 'deleted_at'
   | 'created_by'
   | 'updated_by'

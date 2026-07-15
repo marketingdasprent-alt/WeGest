@@ -27,6 +27,8 @@ import { formatMatricula } from './calendarioUtils';
 import type { PendingEventoData } from './NovoEventoPage';
 import jsPDF from 'jspdf';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import { empresaDocData } from '@/config/empresas';
+import { resolveCartaoFrota } from '@/utils/document-template/resolveCartaoFrota';
 import { useOrgId } from '@/contexts/TenantContext';
 import {
   uploadDocumentToStorage,
@@ -401,22 +403,17 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
       // Generate selected documents (mesma lógica do GenerateDocumentsDialog)
       if (selectedTemplates.size > 0 && motoristaFull) {
         const empresa = empresas[0];
+        const cartaoFrota = await resolveCartaoFrota(motoristaId ?? null);
         const docData = {
           data_assinatura: dataInicio,
           data_inicio: dataInicio,
           cidade_assinatura: cidadeAssinatura,
           duracao_meses: 12,
-          empresaData: empresa
-            ? {
-                nomeCompleto: empresa.nomeCompleto,
-                nif: empresa.nif,
-                sede: empresa.sede,
-                licencaTVDE: empresa.licencaTVDE,
-                licencaValidade: empresa.licencaValidade,
-                representante: empresa.representante,
-                cargoRepresentante: empresa.cargoRepresentante,
-              }
-            : undefined,
+          cartao_frota_marca: cartaoFrota.marca,
+          cartao_frota_numero: cartaoFrota.numero,
+          cartao_frota_validade: cartaoFrota.validade,
+          cartao_frota_limite: cartaoFrota.limite,
+          empresaData: empresa ? empresaDocData(empresa) : undefined,
         };
 
         const templateIds = Array.from(selectedTemplates);

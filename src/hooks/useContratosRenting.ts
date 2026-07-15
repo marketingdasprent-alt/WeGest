@@ -11,6 +11,16 @@ import type {
 
 const QUERY_KEY_BASE = ['renting', 'contratos'] as const;
 
+// Ocupação de viaturas (badge de Frota + seletor de viaturas por período).
+// Um contrato ocupa a viatura, por isso qualquer mutação de contrato tem de
+// invalidar estas queries — senão o seletor continua a mostrar a viatura como
+// ocupada depois de o contrato ser fechado/cancelado (a query fica em cache
+// com a data pedida como chave e só refrescava ao mudar a data). Ver Erro 4.
+function invalidarOcupacaoViaturas(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['viaturas-ocupadas-periodo'] });
+  qc.invalidateQueries({ queryKey: ['viaturas-ocupacao-atual'] });
+}
+
 export interface UseContratosRentingOptions {
   estadoOperacional?: ContratoEstadoOperacional;
   estadoFinanceiro?: ContratoEstadoFinanceiro;
@@ -35,6 +45,8 @@ const SELECT_COLUMNS = `
   total_subtotal, total_iva, total_final, facturado_em,
   is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias,
   franquia_valor, caucao_valor, kms_incluidos, km_adicional_valor,
+  km_saida, km_entrada,
+  dua_original_com_motorista, dua_devolvida_em, dua_observacoes,
   voucher_codigo,
   numero_processo, voo_referencia,
   local_entrega, local_recolha,
@@ -297,6 +309,7 @@ export function useCreateContratoRenting() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       toast({ title: 'Contrato criado', description: 'O contrato foi aberto com sucesso.' });
     },
     onError: (error: unknown) => {
@@ -326,6 +339,7 @@ export function useUpdateContratoRenting() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['contrato-historico'] });
       toast({ title: 'Contrato actualizado', description: 'As alterações foram guardadas.' });
     },
@@ -360,6 +374,9 @@ export interface FecharContratoArgs {
   matricula?: string | null;
   viaturaId?: string | null;
   recolha?: FecharContratoRecolhaInfo;
+  /** true quando o motorista tinha levado a DUA original e o gestor confirma a
+   *  devolução no fecho — grava dua_devolvida_em = now() no contrato. */
+  marcarDuaDevolvida?: boolean;
 }
 
 /** Título/descrição do toast final — depende de a recolha ter sido
@@ -393,6 +410,7 @@ export function useFecharContrato() {
       matricula,
       viaturaId,
       recolha,
+      marcarDuaDevolvida,
     }: FecharContratoArgs): Promise<{ fechouAgora: boolean }> => {
       const { data: estacao, error: errEstacao } = await supabase
         .from('estacoes')
@@ -413,6 +431,9 @@ export function useFecharContrato() {
         .update({
           estacao_recolha_id: estacaoId,
           estado_operacional: 'cancelado' as const,
+          // Fecha o ciclo da DUA original: se o motorista a tinha levado e o
+          // gestor confirmou a devolução, regista o momento.
+          ...(marcarDuaDevolvida ? { dua_devolvida_em: new Date().toISOString() } : {}),
         })
         .eq('id', contratoId);
       if (errUpdate) throw errUpdate;
@@ -551,6 +572,7 @@ export function useFecharContrato() {
     },
     onSuccess: ({ fechouAgora }) => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['motoristas'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
       toast(resolveFechoContratoToast(fechouAgora));
@@ -599,6 +621,7 @@ export function useMarcarRealizacaoDireta() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
       qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
@@ -660,6 +683,7 @@ export function useReverterAbertura() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
       qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
@@ -785,6 +809,7 @@ export function useReverterFecho() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['motoristas'] });
       qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
@@ -849,6 +874,7 @@ export function useReverterParaReserva() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['renting', 'reservas'] });
       qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
@@ -884,6 +910,7 @@ export function useCriarVersaoContrato() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       toast({
         title: 'Nova versão criada',
         description: 'O contrato anterior foi marcado como substituído.',
@@ -905,20 +932,29 @@ export function useCriarVersaoContrato() {
 export function useRenovarContrato() {
   const qc = useQueryClient();
 
-  return useMutation<string, Error, { contratoId: string }>({
-    mutationFn: async ({ contratoId }): Promise<string> => {
+  return useMutation<
+    string,
+    Error,
+    { contratoId: string; kmInicio?: number | null; kmFim?: number | null }
+  >({
+    mutationFn: async ({ contratoId, kmInicio, kmFim }): Promise<string> => {
       // A RPC ainda não consta dos tipos gerados — cast controlado.
       const { data, error } = await (
         supabase.rpc as unknown as (
           fn: string,
           args: Record<string, unknown>
         ) => Promise<{ data: string | null; error: { message: string } | null }>
-      )('renovar_contrato_renting', { p_contrato_id: contratoId });
+      )('renovar_contrato_renting', {
+        p_contrato_id: contratoId,
+        p_km_inicio: kmInicio ?? null,
+        p_km_fim: kmFim ?? null,
+      });
       if (error) throw new Error(error.message);
       return data as string;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['renting'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
     },
@@ -1000,6 +1036,7 @@ export function useDeleteContratoRenting() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       toast({ title: 'Contrato eliminado', description: 'O contrato foi removido.' });
     },
     onError: (error: unknown) => {

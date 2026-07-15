@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { UseFormReturn } from 'react-hook-form';
+import { useFieldArray, type UseFormReturn } from 'react-hook-form';
 import { Car, Check, ChevronsUpDown, Plus, User, UserPlus, X } from 'lucide-react';
 
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -42,6 +42,15 @@ export const SlotMotoristaViatura: React.FC<Props> = ({ form, motoristas, onCria
   const [viaturaOpen, setViaturaOpen] = useState(false);
   const [viaturaDialogOpen, setViaturaDialogOpen] = useState(false);
 
+  // Partilha o mesmo control+name que o `useFieldArray` de CondutoresFields
+  // (renderizado a par, também para o regime slot) — os dois sincronizam
+  // pela mesma cópia interna do react-hook-form. Só `replace()` (não
+  // `form.setValue('condutores', ...)`) garante que essa tabela reflete de
+  // imediato a escolha feita aqui.
+  const { replace: replaceCondutores } = useFieldArray({
+    control: form.control,
+    name: 'condutores',
+  });
   const condutores = form.watch('condutores') ?? [];
   const slotMotoristaId =
     condutores.find((c) => c.is_principal)?.motorista_id ?? condutores[0]?.motorista_id ?? null;
@@ -69,10 +78,7 @@ export const SlotMotoristaViatura: React.FC<Props> = ({ form, motoristas, onCria
       secundarioAtual && secundarioAtual.motorista_id !== id
         ? [{ cliente_id: null, motorista_id: id, is_principal: true }, secundarioAtual]
         : [{ cliente_id: null, motorista_id: id, is_principal: true }];
-    form.setValue('condutores', novaLista, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
+    replaceCondutores(novaLista);
     form.setValue('condutor_id', id, { shouldDirty: true });
     form.setValue('condutor_nome', m?.nome ?? null, { shouldDirty: true });
     if (m?.slot_valor_semanal != null && !form.getValues('slot_valor_mensal')) {
@@ -96,16 +102,12 @@ export const SlotMotoristaViatura: React.FC<Props> = ({ form, motoristas, onCria
     const novos = principal
       ? [principal, { cliente_id: null, motorista_id: id, is_principal: false }]
       : [{ cliente_id: null, motorista_id: id, is_principal: false }];
-    form.setValue('condutores', novos, { shouldDirty: true, shouldValidate: true });
+    replaceCondutores(novos);
     setSecundarioOpen(false);
   };
 
   const removerSecundario = () => {
-    form.setValue(
-      'condutores',
-      condutores.filter((c) => c.is_principal),
-      { shouldDirty: true, shouldValidate: true }
-    );
+    replaceCondutores(condutores.filter((c) => c.is_principal));
   };
 
   const selecionarViatura = (v: { id: string; matricula: string }) => {

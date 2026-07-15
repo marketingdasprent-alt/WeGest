@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Building2, Plus, Pencil, Trash2, Loader2, RefreshCw } from 'lucide-react';
 import { validarNIF } from '@/lib/pt-validators';
+import { EmpresaImagemUpload } from './EmpresaImagemUpload';
 
 // Empresa EMISSORA = cliente de tipo='empresa' com is_emissora=true (as empresas
 // do grupo que emitem reservas/contratos/documentos). O sistema usa clientes.id
@@ -40,6 +41,7 @@ interface Empresa {
   representante: string | null;
   cargo_representante: string | null;
   papel_timbrado: string | null;
+  logo_url: string | null;
 }
 
 const EMPTY: Empresa = {
@@ -53,6 +55,7 @@ const EMPTY: Empresa = {
   representante: '',
   cargo_representante: '',
   papel_timbrado: '',
+  logo_url: '',
 };
 
 export const EmpresasTab: React.FC = () => {
@@ -69,7 +72,7 @@ export const EmpresasTab: React.FC = () => {
     const { data, error } = await supabase
       .from('clientes')
       .select(
-        'id, nome, nome_comercial, nif, sede, licenca_tvde, licenca_validade, representante, cargo_representante, papel_timbrado'
+        'id, nome, nome_comercial, nif, sede, licenca_tvde, licenca_validade, representante, cargo_representante, papel_timbrado, logo_url'
       )
       .eq('is_emissora', true)
       .is('deleted_at', null)
@@ -128,6 +131,7 @@ export const EmpresasTab: React.FC = () => {
         representante: form.representante || null,
         cargo_representante: form.cargo_representante || null,
         papel_timbrado: form.papel_timbrado || null,
+        logo_url: form.logo_url || null,
       };
 
       if (editingId) {
@@ -313,25 +317,37 @@ export const EmpresasTab: React.FC = () => {
               {field('Licença TVDE', 'licenca_tvde', { placeholder: '87314/2021' })}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Validade da Licença</Label>
-                <Input
-                  type="date"
-                  value={form.licenca_validade ?? ''}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, licenca_validade: e.target.value }))
-                  }
-                />
-              </div>
-              {field('Papel Timbrado (URL imagem)', 'papel_timbrado', {
-                placeholder: '/images/papel-timbrado.png',
-              })}
+            <div className="space-y-1.5">
+              <Label>Validade da Licença</Label>
+              <Input
+                type="date"
+                value={form.licenca_validade ?? ''}
+                onChange={(e) => setForm((prev) => ({ ...prev, licenca_validade: e.target.value }))}
+              />
             </div>
 
             {field('Sede (morada completa)', 'sede', {
               placeholder: 'Rua Exemplo, Nº1, 1000-001 Lisboa',
             })}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-border">
+              <EmpresaImagemUpload
+                label="Papel Timbrado"
+                description="Fundo A4 usado nos PDFs gerados para esta empresa."
+                value={form.papel_timbrado ?? ''}
+                onChange={(url) => setForm((prev) => ({ ...prev, papel_timbrado: url }))}
+                prefix="empresa-timbrado"
+                variant="wide"
+              />
+              <EmpresaImagemUpload
+                label="Logótipo"
+                description="Imagem pequena da marca da empresa."
+                value={form.logo_url ?? ''}
+                onChange={(url) => setForm((prev) => ({ ...prev, logo_url: url }))}
+                prefix="empresa-logo"
+                variant="square"
+              />
+            </div>
           </div>
 
           <DialogFooter>

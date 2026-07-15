@@ -32,6 +32,13 @@ export interface ViaturaTarifaTvdeModeloCatalogo {
   preco_semana: number;
 }
 
+export interface ViaturaTarifaRacModeloCatalogo {
+  modelo_id: string;
+  tarifa_nome: string;
+  preco_dia: number | null;
+  preco_mes: number | null;
+}
+
 // Referência vazia estável — evita re-execuções de efeitos que dependem destes
 // arrays enquanto a query ainda não devolveu dados.
 const EMPTY: never[] = [];
@@ -178,6 +185,35 @@ export function useViaturaTarifasTvdeModelo(): ViaturaTarifaTvdeModeloCatalogo[]
         tarifa_nome: (r.renting_tarifas as unknown as { nome: string }).nome,
         preco_semana: Number(r.preco_semana),
       }));
+    },
+  });
+  return data ?? EMPTY;
+}
+
+// Tarifas Rent-a-Car (tipo != 'tvde') também precificam por MODELO, não por
+// grupo — o preço por grupo em `renting_tarifas` (grupo_id/preco_dia/...) é um
+// campo legado que já não é preenchido ao criar tarifas (RentingTarifaForm só
+// tem preço por modelo). Sem isto, TODAS as viaturas apareciam como "grupo sem
+// tarifa" mesmo tendo preço por modelo activo e configurado.
+export function useViaturaTarifasRacModelo(): ViaturaTarifaRacModeloCatalogo[] {
+  const { data } = useQuery({
+    queryKey: ['viatura-catalogo', 'tarifas-rac-modelo'],
+    staleTime: STALE,
+    queryFn: async (): Promise<ViaturaTarifaRacModeloCatalogo[]> => {
+      const { data, error } = await supabase
+        .from('renting_tarifa_precos_modelo')
+        .select('modelo_id, preco_dia, preco_mes, renting_tarifas!inner(tipo, ativa, nome)')
+        .neq('renting_tarifas.tipo', 'tvde')
+        .eq('renting_tarifas.ativa', true);
+      if (error) throw error;
+      return (data ?? [])
+        .filter((r) => r.preco_dia != null || r.preco_mes != null)
+        .map((r) => ({
+          modelo_id: r.modelo_id,
+          tarifa_nome: (r.renting_tarifas as unknown as { nome: string }).nome,
+          preco_dia: r.preco_dia != null ? Number(r.preco_dia) : null,
+          preco_mes: r.preco_mes != null ? Number(r.preco_mes) : null,
+        }));
     },
   });
   return data ?? EMPTY;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useForm, type FieldErrors } from 'react-hook-form';
+import { useForm, useFieldArray, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -189,6 +189,15 @@ const RentingReservaForm = () => {
     defaultValues: DEFAULT_VALUES,
   });
 
+  // Instância-pai de useFieldArray para os handlers "criar cliente/motorista"
+  // (append) e o fluxo slot (replace). A HIDRATAÇÃO das listas é feita com
+  // `form.reset` (mais abaixo) — um `replace()`/`setValue` de instância-pai NÃO
+  // chega ao useFieldArray-filho que desenha a tabela de condutores.
+  const { append: appendCondutor, replace: replaceCondutores } = useFieldArray({
+    control: form.control,
+    name: 'condutores',
+  });
+
   // Pré-preenchimento via URL (criar reserva a partir de viatura/cliente).
   // Só corre uma vez — mas só marca como feito depois de resolver o grupo (se
   // a viatura tiver um), senão a lista de grupos podia chegar depois da de
@@ -233,14 +242,11 @@ const RentingReservaForm = () => {
       is_principal: boolean;
     }>;
     if (existentes.some((c) => c.cliente_id === clienteId)) return;
-    form.setValue(
-      'condutores',
-      [
-        ...existentes,
-        { cliente_id: clienteId, motorista_id: null, is_principal: existentes.length === 0 },
-      ],
-      { shouldDirty: true, shouldValidate: true }
-    );
+    appendCondutor({
+      cliente_id: clienteId,
+      motorista_id: null,
+      is_principal: existentes.length === 0,
+    });
   };
 
   /** Adiciona um motorista recém-criado à lista de condutores (TVDE/slot). */
@@ -254,11 +260,7 @@ const RentingReservaForm = () => {
         .eq('id', motoristaId)
         .then(() => queryClient.invalidateQueries({ queryKey: ['motoristas'] }));
       const m = motoristas.find((x) => x.id === motoristaId);
-      form.setValue(
-        'condutores',
-        [{ cliente_id: null, motorista_id: motoristaId, is_principal: true }],
-        { shouldDirty: true, shouldValidate: true }
-      );
+      replaceCondutores([{ cliente_id: null, motorista_id: motoristaId, is_principal: true }]);
       form.setValue('condutor_id', motoristaId, { shouldDirty: true });
       if (m?.nome) form.setValue('condutor_nome', m.nome, { shouldDirty: true });
       return;
@@ -269,14 +271,11 @@ const RentingReservaForm = () => {
       is_principal: boolean;
     }>;
     if (existentes.some((c) => c.motorista_id === motoristaId)) return;
-    form.setValue(
-      'condutores',
-      [
-        ...existentes,
-        { cliente_id: null, motorista_id: motoristaId, is_principal: existentes.length === 0 },
-      ],
-      { shouldDirty: true, shouldValidate: true }
-    );
+    appendCondutor({
+      cliente_id: null,
+      motorista_id: motoristaId,
+      is_principal: existentes.length === 0,
+    });
   };
 
   // Hidrata o formulário quando a reserva carrega (modo edição). Só corre UMA
@@ -326,64 +325,113 @@ const RentingReservaForm = () => {
     });
   }, [isEdit, reserva, form]);
 
-  // Hidratação das relações m:n — em efeitos próprios (não no reset acima) para
-  // poderem re-sincronizar com segurança sempre que a respectiva query refetch
-  // (ex.: logo após guardar), sem apagar o resto do formulário entretanto editado.
+  // Hidratação das relações m:n — em efeitos próprios (não no reset principal)
+  // para poderem re-sincronizar sempre que a respectiva query refetch (ex.:
+  // logo após guardar), sem apagar o resto do formulário entretanto editado.
+  //
+  // TEM de ser `form.reset(...)` (com keepDirtyValues), NÃO um `replace()` de
+  // uma instância-pai de useFieldArray nem um `setValue`: os componentes que
+  // desenham estas listas (CondutoresFields / ReservaTab{Cobertura,Extras,
+  // Taxas}) têm o SEU PRÓPRIO useFieldArray com o mesmo nome. Duas instâncias
+  // de useFieldArray no mesmo campo NÃO sincronizam entre si — um replace()
+  // no pai atualiza o valor do form mas a cópia interna do filho (o que é
+  // desenhado) fica vazia; o item existia mas ficava invisível, e só reaparecia
+  // (a par do novo) ao adicionar um manualmente. Só `form.reset` re-inicializa
+  // TODAS as instâncias de useFieldArray de uma vez. keepDirtyValues preserva
+  // os campos que o utilizador já alterou, incluindo a própria lista.
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    form.setValue(
-      'coberturas',
-      coberturasAtuais.map((c) => ({
-        cobertura_id: c.cobertura_id,
-        cobertura_nome: c.cobertura_nome,
-        preco_dia: c.preco_dia,
-        franquia_valor: c.franquia_valor,
-      })),
-      { shouldDirty: false }
+    form.reset(
+      {
+        ...form.getValues(),
+        coberturas: coberturasAtuais.map((c) => ({
+          cobertura_id: c.cobertura_id,
+          cobertura_nome: c.cobertura_nome,
+          preco_dia: c.preco_dia,
+          franquia_valor: c.franquia_valor,
+        })),
+      },
+      { keepDirtyValues: true }
     );
   }, [isEdit, reserva, coberturasAtuais, form]);
 
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    form.setValue(
-      'extras',
-      extrasAtuais.map((e) => ({
-        extra_id: e.extra_id,
-        extra_nome: e.extra_nome,
-        preco_unidade: e.preco_unidade,
-        tipo_calculo: e.tipo_calculo,
-        quantidade: e.quantidade,
-      })),
-      { shouldDirty: false }
+    form.reset(
+      {
+        ...form.getValues(),
+        extras: extrasAtuais.map((e) => ({
+          extra_id: e.extra_id,
+          extra_nome: e.extra_nome,
+          preco_unidade: e.preco_unidade,
+          tipo_calculo: e.tipo_calculo,
+          quantidade: e.quantidade,
+        })),
+      },
+      { keepDirtyValues: true }
     );
   }, [isEdit, reserva, extrasAtuais, form]);
 
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    form.setValue(
-      'taxas',
-      taxasAtuais.map((t) => ({
-        taxa_id: t.taxa_id,
-        taxa_nome: t.taxa_nome,
-        percentagem: t.percentagem,
-        valor_fixo: t.valor_fixo,
-      })),
-      { shouldDirty: false }
+    form.reset(
+      {
+        ...form.getValues(),
+        taxas: taxasAtuais.map((t) => ({
+          taxa_id: t.taxa_id,
+          taxa_nome: t.taxa_nome,
+          percentagem: t.percentagem,
+          valor_fixo: t.valor_fixo,
+        })),
+      },
+      { keepDirtyValues: true }
     );
   }, [isEdit, reserva, taxasAtuais, form]);
 
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    form.setValue(
-      'condutores',
-      condutoresAtuais.map((c) => ({
-        cliente_id: c.cliente_id,
-        motorista_id: c.motorista_id,
-        is_principal: c.is_principal,
-      })),
-      { shouldDirty: false }
+    form.reset(
+      {
+        ...form.getValues(),
+        condutores: condutoresAtuais.map((c) => ({
+          cliente_id: c.cliente_id,
+          motorista_id: c.motorista_id,
+          is_principal: c.is_principal,
+        })),
+      },
+      { keepDirtyValues: true }
     );
   }, [isEdit, reserva, condutoresAtuais, form]);
+
+  // Reservas com `grupo` vazio mas cuja viatura já tem grupo_id atribuído (ex.:
+  // criadas antes do grupo ficar preenchido, ou a viatura só recebeu grupo
+  // depois) ficavam bloqueadas em "Criar Contrato" para sempre: "Criar
+  // Contrato" lê a reserva PERSISTIDA (não o form), e só a troca ACTIVA de
+  // viatura preenche `grupo` (aplicarDadosViatura) — a hidratação de uma
+  // reserva já existente nunca o fazia, e um "Guardar" sem tocar em mais nada
+  // não bastava para desbloquear. Reconcilia a BD silenciosamente ao abrir.
+  const grupoBackfillRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isEdit || !reserva || reserva.grupo) return;
+    if (grupoBackfillRef.current === reserva.id) return;
+    const viatura = viaturas.find((v) => v.id === reserva.viatura_id);
+    if (!viatura?.grupo_id) return;
+    const grupo = grupos.find((g) => g.id === viatura.grupo_id);
+    if (!grupo) return;
+    grupoBackfillRef.current = reserva.id;
+    form.setValue('grupo', grupo.nome, { shouldDirty: false });
+    supabase
+      .from('reservas')
+      .update({ grupo: grupo.nome })
+      .eq('id', reserva.id)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[RentingReservaForm] Falha a reconciliar grupo:', error);
+          return;
+        }
+        queryClient.invalidateQueries({ queryKey: ['renting', 'reservas'] });
+      });
+  }, [isEdit, reserva, viaturas, grupos, form, queryClient]);
 
   // Pré-check de conflito de datas (UX-only — o gate real é o EXCLUDE na BD).
   const viaturaId = form.watch('viatura_id');
@@ -443,22 +491,29 @@ const RentingReservaForm = () => {
   // remove manualmente os que não interessam ao novo regime.
   const regimeWatched = form.watch('regime');
 
-  // Auto‑activa longa duração + intervalo 30d para TVDE/slot;
-  // desmarca ao voltar a rent-a-car.
+  // Auto‑activa longa duração + intervalo 30d para TVDE/slot; desmarca ao
+  // voltar a rent-a-car. SÓ quando o UTILIZADOR troca de regime de facto — o
+  // ref-guard salta a primeira corrida (mount) e a hidratação, senão a
+  // primeira montagem forçava is_longa_duracao=false e apagava o valor
+  // guardado de um rent-a-car de longa duração (a "caixa que saía sozinha").
+  const regimeAnteriorRef = useRef<string | null>(null);
   useEffect(() => {
+    const anterior = regimeAnteriorRef.current;
+    regimeAnteriorRef.current = regimeWatched;
+    // Mount/hidratação (anterior === null) ou sem mudança real: não mexer.
+    if (anterior === null || anterior === regimeWatched) return;
+
     if (regimeWatched === 'tvde' || regimeWatched === 'slot') {
-      const jaEstaActivo = form.getValues('is_longa_duracao');
-      if (!jaEstaActivo) {
-        form.setValue('is_longa_duracao', true);
-        form.setValue('renovacao_opcao', 'intervalo_dias');
-        form.setValue('renovacao_intervalo_dias', 30);
+      if (!form.getValues('is_longa_duracao')) {
+        form.setValue('is_longa_duracao', true, { shouldDirty: true });
+        form.setValue('renovacao_opcao', 'intervalo_dias', { shouldDirty: true });
+        form.setValue('renovacao_intervalo_dias', 30, { shouldDirty: true });
       }
     } else if (regimeWatched === 'rent_a_car') {
-      form.setValue('is_longa_duracao', false);
-      form.setValue('renovacao_opcao', null);
-      form.setValue('renovacao_intervalo_dias', null);
+      form.setValue('is_longa_duracao', false, { shouldDirty: true });
+      form.setValue('renovacao_opcao', null, { shouldDirty: true });
+      form.setValue('renovacao_intervalo_dias', null, { shouldDirty: true });
     }
-    // Só dispara quando o regime muda, não quando o user mexe manualmente no checkbox
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regimeWatched]);
 

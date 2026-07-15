@@ -128,7 +128,7 @@ const RealizarEntregaPage = () => {
       const empty = {
         viaturaId: null as string | null,
         emissorId: null as string | null,
-        empresaData: null as Record<string, string> | null,
+        empresaData: null as Record<string, string | null> | null,
         condutorNome: '',
         condutorEmail: '',
         clienteNome: '',
@@ -152,6 +152,8 @@ const RealizarEntregaPage = () => {
               licencaValidade: row.empresa_licenca_validade ?? '',
               representante: row.empresa_representante ?? '',
               cargoRepresentante: row.empresa_cargo_representante ?? '',
+              papelTimbrado: row.empresa_papel_timbrado ?? null,
+              logoUrl: row.empresa_logo_url ?? null,
             }
           : null,
         condutorNome: row.condutor_nome ?? '',
@@ -197,7 +199,23 @@ const RealizarEntregaPage = () => {
     },
   });
   const [duaDevolvido, setDuaDevolvido] = useState(false);
-  const exigeDua = isDevolucao && viaturaTemDua;
+  // Entrega: o gestor marca se o motorista leva a DUA ORIGINAL consigo.
+  const [duaOriginalLevada, setDuaOriginalLevada] = useState(false);
+  // Recolha: o contrato já marcou que o motorista tinha levado a DUA original e
+  // ainda não foi devolvida → exige confirmar a devolução ao receber a viatura.
+  const { data: duaOriginalContrato = false } = useQuery({
+    queryKey: ['contrato-dua-original', info?.contrato_id],
+    enabled: isDevolucao && !!info?.contrato_id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contratos_renting')
+        .select('dua_original_com_motorista, dua_devolvida_em')
+        .eq('id', info!.contrato_id)
+        .maybeSingle();
+      return !!data?.dua_original_com_motorista && !data?.dua_devolvida_em;
+    },
+  });
+  const exigeDua = isDevolucao && (viaturaTemDua || duaOriginalContrato);
 
   // Restaurar rascunho do cache
   useEffect(() => {
@@ -505,6 +523,11 @@ const RealizarEntregaPage = () => {
         km: Number(km),
         combustivel: combustivel || undefined,
         eletricidade: eletrico || undefined,
+        // DUA: gravada dentro da RPC SECURITY DEFINER (robusto p/ quem confirma
+        // pelo QR sem permissão renting). Entrega: motorista levou a original;
+        // recolha: confirmou a devolução (só conta se o contrato a tinha em falta).
+        duaOriginalLevada: info.tipo === 'entrega' ? duaOriginalLevada : undefined,
+        duaDevolvida: isDevolucao ? duaDevolvido && duaOriginalContrato : undefined,
       },
       {
         onSuccess: () => {
@@ -674,6 +697,9 @@ const RealizarEntregaPage = () => {
           exigeDua={exigeDua}
           duaDevolvido={duaDevolvido}
           onDuaChange={setDuaDevolvido}
+          mostraLevaDua={info.tipo === 'entrega'}
+          duaOriginalLevada={duaOriginalLevada}
+          onDuaOriginalChange={setDuaOriginalLevada}
           observacoes={observacoes}
           onObservacoesChange={setObservacoes}
           assinaturasRef={assinaturasRef}
