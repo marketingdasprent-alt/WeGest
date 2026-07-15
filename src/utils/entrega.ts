@@ -2,6 +2,7 @@
  * Helpers e tipos para o fluxo de realizar entrega/recolha/troca.
  * Lógica pura, sem dependências React.
  */
+import { precisaCombustivel, precisaEletrico } from './combustivel';
 
 // ── Localizações de fotos ────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ export interface FilePreview {
 export interface RascunhoCache {
   km: string;
   combustivel: string;
+  eletricidade?: string;
   observacoes: string;
   fotos: {
     name: string;
@@ -76,18 +78,38 @@ export async function dataUrlToFile(dataUrl: string, name: string, type: string)
 
 // ── Validação ────────────────────────────────────────────────────────────────
 
+/** Valida se os níveis exigidos por este tipo de viatura estão preenchidos —
+ *  combustível para combustão/híbrido, bateria para elétrico/híbrido. */
+export function nivelPreenchido(
+  tipoCombustivel: string | null | undefined,
+  combustivel: string,
+  eletricidade: string
+): boolean {
+  const okCombustivel = !precisaCombustivel(tipoCombustivel) || !!combustivel;
+  const okEletrico = !precisaEletrico(tipoCombustivel) || !!eletricidade;
+  return okCombustivel && okEletrico;
+}
+
 export function validarDadosObrigatorios(
   km: string,
   combustivel: string,
   isTroca: boolean,
   kmAntiga?: string,
-  combustivelAntiga?: string
+  combustivelAntiga?: string,
+  tipoCombustivel?: string | null,
+  eletricidade?: string,
+  tipoCombustivelAntiga?: string | null,
+  eletricidadeAntiga?: string
 ): string | null {
-  if (!km.trim() || !combustivel) {
-    return 'Preenche o km e o nível de combustível antes de continuar.';
+  if (!km.trim() || !nivelPreenchido(tipoCombustivel, combustivel, eletricidade ?? '')) {
+    return 'Preenche o km e o nível de combustível/bateria antes de continuar.';
   }
-  if (isTroca && (!kmAntiga?.trim() || !combustivelAntiga)) {
-    return 'Preenche também o km e combustível da viatura devolvida.';
+  if (
+    isTroca &&
+    (!kmAntiga?.trim() ||
+      !nivelPreenchido(tipoCombustivelAntiga, combustivelAntiga ?? '', eletricidadeAntiga ?? ''))
+  ) {
+    return 'Preenche também o km e combustível/bateria da viatura devolvida.';
   }
   return null;
 }

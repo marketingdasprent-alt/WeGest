@@ -6,6 +6,17 @@ import type { Reserva, ReservaEstado, ReservaInsert, ReservaUpdate } from '@/typ
 
 const QUERY_KEY_BASE = ['renting', 'reservas'] as const;
 
+// Queries de ocupação de viaturas: o badge de estado na Frota
+// (viaturas-ocupacao-atual) e o seletor de viaturas por período
+// (viaturas-ocupadas-periodo). Têm de ser invalidadas sempre que uma reserva
+// muda de estado — senão o seletor continua a mostrar a viatura como ocupada
+// depois de a reserva ser cancelada/eliminada (a query fica em cache com a
+// data pedida como chave, e só refrescava quando o utilizador mudava a data).
+function invalidarOcupacaoViaturas(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['viaturas-ocupadas-periodo'] });
+  qc.invalidateQueries({ queryKey: ['viaturas-ocupacao-atual'] });
+}
+
 export interface UseReservasOptions {
   /** Filtra reservas que tocam no intervalo [from, to). Omitir = sem filtro de data */
   from?: Date;
@@ -134,6 +145,7 @@ export function useCreateReserva() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       toast({ title: 'Reserva criada', description: 'A reserva foi criada com sucesso.' });
     },
     onError: (error: unknown) => {
@@ -160,6 +172,7 @@ export function useUpdateReserva() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       toast({ title: 'Reserva actualizada', description: 'As alterações foram guardadas.' });
     },
     onError: (error: unknown) => {
@@ -184,6 +197,7 @@ export function useDeleteReserva() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       toast({ title: 'Reserva eliminada', description: 'A reserva foi removida.' });
     },
     onError: (error: unknown) => {

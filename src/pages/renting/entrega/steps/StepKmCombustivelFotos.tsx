@@ -6,6 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { LOCALIZACOES, type FilePreview } from '@/utils/entrega';
+import {
+  COMBUSTIVEL_NIVEL_OPTS,
+  ELETRICO_OPTS,
+  precisaCombustivel,
+  precisaEletrico,
+} from '@/utils/combustivel';
 
 interface StepKmCombustivelFotosProps {
   titulo: string;
@@ -13,6 +19,12 @@ interface StepKmCombustivelFotosProps {
   onKmChange: (v: string) => void;
   combustivel: string;
   onCombustivelChange: (v: string) => void;
+  eletricidade: string;
+  onEletricidadeChange: (v: string) => void;
+  /** Tipo de combustível da viatura (nome do catálogo) — decide que
+   *  seletor(es) mostrar. null/undefined = ainda a carregar ou desconhecido,
+   *  mostra combustível por omissão (comportamento anterior). */
+  tipoCombustivel: string | null | undefined;
   files: FilePreview[];
   onAddFiles: (list: FileList | null) => void;
   onUpdateFoto: (id: string, campo: 'localizacao' | 'descricao' | 'valor', valor: string) => void;
@@ -20,7 +32,7 @@ interface StepKmCombustivelFotosProps {
 }
 
 /**
- * Step de registo de KM, nível de combustível e fotos/danos.
+ * Step de registo de KM, nível de combustível/bateria e fotos/danos.
  * Reaproveitado para entrega/recolha simples e, na troca, uma vez para cada viatura.
  */
 export const StepKmCombustivelFotos: React.FC<StepKmCombustivelFotosProps> = ({
@@ -29,6 +41,9 @@ export const StepKmCombustivelFotos: React.FC<StepKmCombustivelFotosProps> = ({
   onKmChange,
   combustivel,
   onCombustivelChange,
+  eletricidade,
+  onEletricidadeChange,
+  tipoCombustivel,
   files,
   onAddFiles,
   onUpdateFoto,
@@ -36,6 +51,11 @@ export const StepKmCombustivelFotos: React.FC<StepKmCombustivelFotosProps> = ({
 }) => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mostraEletrico = precisaEletrico(tipoCombustivel);
+  // Combustão por omissão enquanto o tipo não é conhecido — espelha o
+  // comportamento anterior (só combustível) para não regredir a UI a meio do
+  // carregamento.
+  const mostraCombustivel = tipoCombustivel == null || precisaCombustivel(tipoCombustivel);
 
   return (
     <Card>
@@ -55,27 +75,53 @@ export const StepKmCombustivelFotos: React.FC<StepKmCombustivelFotosProps> = ({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label>
-            Combustível <span className="text-red-500">*</span>
-          </Label>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-            {['Reserva', '1/4', '1/2', '3/4', 'Cheio'].map((nivel) => (
-              <button
-                key={nivel}
-                type="button"
-                onClick={() => onCombustivelChange(nivel)}
-                className={`rounded-md border-2 py-2 text-sm font-medium transition-colors ${
-                  combustivel === nivel
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border hover:border-primary/40'
-                }`}
-              >
-                {nivel}
-              </button>
-            ))}
+        {mostraCombustivel && (
+          <div className="space-y-2">
+            <Label>
+              Combustível <span className="text-red-500">*</span>
+            </Label>
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+              {COMBUSTIVEL_NIVEL_OPTS.map((nivel) => (
+                <button
+                  key={nivel}
+                  type="button"
+                  onClick={() => onCombustivelChange(nivel)}
+                  className={`rounded-md border-2 py-2 text-sm font-medium transition-colors ${
+                    combustivel === nivel
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:border-primary/40'
+                  }`}
+                >
+                  {nivel}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+
+        {mostraEletrico && (
+          <div className="space-y-2">
+            <Label>
+              Nível da Bateria <span className="text-red-500">*</span>
+            </Label>
+            <div className="grid grid-cols-5 gap-2">
+              {ELETRICO_OPTS.map((nivel) => (
+                <button
+                  key={nivel}
+                  type="button"
+                  onClick={() => onEletricidadeChange(nivel)}
+                  className={`rounded-md border-2 py-2 text-sm font-medium transition-colors ${
+                    eletricidade === nivel
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:border-primary/40'
+                  }`}
+                >
+                  {nivel}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-3">
           <Label>Fotos / Vídeos</Label>

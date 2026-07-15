@@ -84,6 +84,34 @@ const PainelMotorista: React.FC = () => {
 
     setLoading(true);
     try {
+      // Alinhar a org ativa com a org onde o utilizador é motorista.
+      // Sem isto, um utilizador com múltiplas organizações (ex.: staff que
+      // também é motorista) pode ter a org ativa noutra org; a RLS RESTRICTIVE
+      // de `motoristas_ativos` (org_id = get_current_org_id()) bloqueia então a
+      // leitura do próprio registo e o painel cairia no formulário de
+      // candidatura em branco. A RPC devolve a org do motorista ignorando a RLS.
+      const { data: orgMotorista } = await (supabase as any).rpc('get_minha_org_motorista');
+      if (orgMotorista) {
+        const { data: orgAtiva } = await supabase
+          .from('user_org_ativa')
+          .select('org_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (orgAtiva?.org_id !== orgMotorista) {
+          const { error: switchError } = await supabase
+            .from('user_org_ativa')
+            .upsert({ user_id: user.id, org_id: orgMotorista }, { onConflict: 'user_id' });
+
+          if (!switchError) {
+            // Recarregar para que a RLS passe a usar a org correta.
+            window.location.reload();
+            return;
+          }
+          console.error('[PainelMotorista] Falha ao alinhar org do motorista:', switchError);
+        }
+      }
+
       const { data: motoristaData } = await supabase
         .from('motoristas_ativos')
         .select('id, nome, foto_url, status_ativo')

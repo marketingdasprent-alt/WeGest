@@ -93,7 +93,7 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
   const clienteId = form.watch('cliente_id');
   const cliente = clienteId ? (clientes.find((c) => c.id === clienteId) ?? null) : null;
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, replace } = useFieldArray({
     control: form.control,
     name: 'condutores',
   });
@@ -169,13 +169,13 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
     handleAdicionar(cliente.id);
   };
 
+  // `replace()` (não `form.setValue`) — só os métodos do próprio useFieldArray
+  // resincronizam a cópia interna que desenha esta tabela (`fields`); um
+  // setValue isolado no array deixava a lista visualmente desactualizada até
+  // outra mutação (append/remove) forçar o resync.
   const handleDefinirPrincipal = (idx: number) => {
     const todos = form.getValues('condutores');
-    form.setValue(
-      'condutores',
-      todos.map((c, i) => ({ ...c, is_principal: i === idx })),
-      { shouldDirty: true, shouldValidate: true }
-    );
+    replace(todos.map((c, i) => ({ ...c, is_principal: i === idx })));
   };
 
   const handleRemover = (idx: number) => {
@@ -185,11 +185,7 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
       setTimeout(() => {
         const restantes = form.getValues('condutores');
         if (restantes.length > 0 && !restantes.some((c) => c.is_principal)) {
-          form.setValue(
-            'condutores',
-            restantes.map((c, i) => ({ ...c, is_principal: i === 0 })),
-            { shouldDirty: true }
-          );
+          replace(restantes.map((c, i) => ({ ...c, is_principal: i === 0 })));
         }
       }, 0);
     }

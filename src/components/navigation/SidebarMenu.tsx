@@ -30,6 +30,7 @@ import {
   Banknote,
   Gauge,
   ExternalLink,
+  Ticket,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
@@ -135,18 +136,6 @@ const MENU_ITEMS: MenuItem[] = [
       },
     ],
   },
-  { label: 'CRM', url: '/crm', icon: BarChart3, recurso: 'motoristas_crm' },
-  { label: 'Meus Tickets', url: '/meus-tickets', icon: Wrench, recurso: 'motoristas_crm' },
-  {
-    label: 'Motoristas',
-    icon: User,
-    recurso: 'motoristas_gestao',
-    subItems: [
-      { label: 'Todos Motoristas', url: '/motoristas', icon: User },
-      { label: 'Aprovação', url: '/motoristas/candidaturas', icon: ClipboardCheck },
-      { label: 'Contratos', url: '/contratos', icon: FileText },
-    ],
-  },
   {
     label: 'Frota',
     icon: Car,
@@ -157,6 +146,16 @@ const MENU_ITEMS: MenuItem[] = [
       { label: 'Marcas / Modelos', url: '/viaturas/marcas-modelos', icon: CarFront },
       { label: 'Combustíveis', url: '/viaturas/combustiveis', icon: Fuel },
       { label: 'Tipos', url: '/viaturas/tipos', icon: Tag },
+    ],
+  },
+  {
+    label: 'Motoristas',
+    icon: User,
+    recurso: 'motoristas_gestao',
+    subItems: [
+      { label: 'Todos Motoristas', url: '/motoristas', icon: User },
+      { label: 'Aprovação', url: '/motoristas/candidaturas', icon: ClipboardCheck },
+      { label: 'Contratos', url: '/contratos', icon: FileText },
     ],
   },
   {
@@ -198,9 +197,11 @@ const MENU_ITEMS: MenuItem[] = [
       },
     ],
   },
-  { label: 'Assistência', url: '/assistencia', icon: Wrench, recurso: 'assistencia_tickets' },
   { label: 'Movimentações', url: '/calendario', icon: CalendarDays, recurso: 'calendario_ver' },
+  { label: 'Assistência', url: '/assistencia', icon: Wrench, recurso: 'assistencia_tickets' },
+  { label: 'Meus Tickets', url: '/meus-tickets', icon: Ticket, recurso: 'motoristas_crm' },
   { label: 'Marketing', url: '/marketing', icon: Mail, recurso: 'marketing_ver' },
+  { label: 'CRM', url: '/crm', icon: BarChart3, recurso: 'motoristas_crm' },
   { label: 'Realize', url: '/realize', icon: ExternalLink, orgIds: REALIZE_ORG_IDS },
 ];
 

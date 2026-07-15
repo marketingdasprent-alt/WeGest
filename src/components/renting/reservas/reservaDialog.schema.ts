@@ -162,8 +162,9 @@ export const reservaDialogSchema = z
       });
     }
 
-    // data_fim: obrigatória e válida fora do regime slot (slot é aberto).
-    if (!isSlot) {
+    // data_fim: obrigatória e válida fora dos regimes slot/tvde (ambos abertos,
+    // sem data de fim fixa — TVDE renova automaticamente).
+    if (!isSlot && d.regime !== 'tvde') {
       if (!d.data_fim || Number.isNaN(new Date(d.data_fim).getTime())) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

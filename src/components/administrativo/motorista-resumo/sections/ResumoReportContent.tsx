@@ -61,6 +61,9 @@ interface ResumoReportContentProps {
   totalAReceber: number;
   liquido: number;
   motoristaId?: string;
+  gorjeta?: number;
+  /** Linha Gorjeta — dados sensíveis, só para admins da org dona dos dados. */
+  showGorjeta?: boolean;
 }
 
 export function ResumoReportContent({
@@ -81,6 +84,8 @@ export function ResumoReportContent({
   totalAReceber,
   liquido,
   motoristaId,
+  gorjeta = 0,
+  showGorjeta = false,
 }: ResumoReportContentProps) {
   return (
     <div
@@ -185,9 +190,17 @@ export function ResumoReportContent({
               value={fmt(receitas.outras_receitas)}
               colored="text-green-700 dark:text-green-300"
             />
-            {/* Gorjeta não tem linha própria: já está embutida no TOTAL RECEITAS
-                (receita ajustada). Mostrá-la separada dava a ideia de dupla
-                contagem. Ver resumoFinanceiro.ts. */}
+            {/* Informativa — a gorjeta já está embutida no Bolt/Uber acima
+                (ver resumoFinanceiro.ts), por isso não soma ao total: é só
+                para o admin ver quanto disso é gorjeta. Só para quem tem
+                permissão de ver dados sensíveis do motorista (org + admin). */}
+            {showGorjeta && gorjeta > 0 && (
+              <Row
+                label="— da qual, Gorjeta (já incluída acima)"
+                value={fmt(gorjeta)}
+                colored="text-green-700/70 dark:text-green-300/70 italic"
+              />
+            )}
             <Separator className="bg-green-200 dark:bg-green-800" />
             <Row
               label="TOTAL RECEITAS"

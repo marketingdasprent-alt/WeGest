@@ -136,6 +136,42 @@ export default tseslint.config(
       "react-hooks/exhaustive-deps": "warn",
       // warn em vez de error: violações existem em produção a funcionar; corrigir gradualmente
       "react-hooks/rules-of-hooks": "warn",
+
+      // Bloqueia a reincidência do bug de reserva/contrato #56 (fix a5c928d):
+      // 'condutores'/'coberturas'/'extras'/'taxas' são SEMPRE desenhados por
+      // useFieldArray — um form.setValue(...) isolado nessas listas atualiza o
+      // valor em bruto mas não a cópia interna do useFieldArray que a tabela
+      // lê, e a lista fica vazia/desatualizada até outra mutação (append/
+      // remove/replace) sincronizar por acaso. Usa sempre append()/replace()/
+      // update() da própria instância de useFieldArray (partilhando o
+      // `control`, se precisares de o fazer noutro componente).
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.property.name='setValue'][arguments.0.value='condutores']",
+          message:
+            "Não uses form.setValue('condutores', ...) — usa append()/replace()/update() do useFieldArray (ver fix a5c928d).",
+        },
+        {
+          selector:
+            "CallExpression[callee.property.name='setValue'][arguments.0.value='coberturas']",
+          message:
+            "Não uses form.setValue('coberturas', ...) — usa append()/replace()/update() do useFieldArray (ver fix a5c928d).",
+        },
+        {
+          selector:
+            "CallExpression[callee.property.name='setValue'][arguments.0.value='extras']",
+          message:
+            "Não uses form.setValue('extras', ...) — usa append()/replace()/update() do useFieldArray (ver fix a5c928d).",
+        },
+        {
+          selector:
+            "CallExpression[callee.property.name='setValue'][arguments.0.value='taxas']",
+          message:
+            "Não uses form.setValue('taxas', ...) — usa append()/replace()/update() do useFieldArray (ver fix a5c928d).",
+        },
+      ],
     },
   },
   // max-lines: ficheiros novos (ou refactorados) não devem exceder 500 linhas

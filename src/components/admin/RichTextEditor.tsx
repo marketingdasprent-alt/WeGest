@@ -186,7 +186,10 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       },
       editorProps: {
         attributes: {
-          class: 'prose prose-sm focus:outline-none bg-white',
+          // bg-white simula a folha de papel — o texto tem de ficar sempre
+          // escuro (independente do tema da app), senão herda a cor clara de
+          // --foreground do tema escuro e fica ilegível sobre o fundo branco.
+          class: 'prose prose-sm focus:outline-none bg-white text-gray-900',
           style:
             'width: 210mm; min-height: 297mm; margin: 0 auto; padding: 30mm; box-shadow: 0 0 10px rgba(0,0,0,0.1);',
         },

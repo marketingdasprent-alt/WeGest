@@ -270,6 +270,8 @@ export const replaceDynamicFields = (
     'km_entrada',
     'combustivel_saida',
     'combustivel_entrada',
+    'eletricidade_saida',
+    'eletricidade_entrada',
     'momento_folha',
     'observacoes_momento',
     'responsavel_nome',
@@ -450,12 +452,34 @@ export const htmlToText = (html: string): DocEl[] => {
       if (text && text.length > 0) {
         if (text.trim().length > 0 || !parentIsBlock) {
           const last = elements[elements.length - 1];
-          if (last && last.type === 'text' && last.style?.bold === inheritedStyle.bold) {
+          // Só junta ao elemento anterior se tiverem o MESMO estilo (bold E
+          // alinhamento) — dois runs com bold igual mas alinhamentos
+          // diferentes pertencem a blocos distintos e nunca se devem colar
+          // (ver bug do parágrafo em branco logo abaixo). Nunca junta a um
+          // marcador de quebra de parágrafo ('\n') — é um sentinela, não um
+          // run de texto real, e coincide facilmente em bold/align (ambos
+          // undefined) com o texto simples do parágrafo seguinte.
+          if (
+            last &&
+            last.type === 'text' &&
+            last.text !== '\n' &&
+            last.style?.bold === inheritedStyle.bold &&
+            last.style?.align === inheritedStyle.align
+          ) {
             last.text += text;
           } else if (text.trim().length > 0) {
             elements.push({
               type: 'text',
               text: text,
+              style: { ...inheritedStyle },
+            });
+          } else if (/\s/.test(text)) {
+            // Nó só com espaço/nbsp entre dois runs de estilo diferente (ex.:
+            // "PARA " normal + "INSCRIÇÃO" bold) — preserva-o como espaço
+            // simples, senão as duas palavras coladas ficam ilegíveis.
+            elements.push({
+              type: 'text',
+              text: ' ',
               style: { ...inheritedStyle },
             });
           }
@@ -533,7 +557,6 @@ export const htmlToText = (html: string): DocEl[] => {
           });
           break;
         }
-        case 'div':
         case 'p':
         case 'h1':
         case 'h2':
@@ -541,7 +564,22 @@ export const htmlToText = (html: string): DocEl[] => {
         case 'h4':
         case 'h5':
         case 'h6':
-        case 'li':
+        case 'li': {
+          // Parágrafo/heading/item de lista vazio (ex.: "&nbsp;" usado só como
+          // espaçador) — não gera texto, só a quebra de linha mais abaixo.
+          const isBlankSpacer = (el.textContent ?? '').trim() === '';
+          if (!isBlankSpacer) {
+            Array.from(el.childNodes).forEach((child) => processNode(child, style, true));
+          }
+          // Marca sempre o fim do bloco — sem isto, um parágrafo em branco
+          // (que não gera nenhum elemento) faz o próximo parágrafo colar-se
+          // directamente ao elemento de texto anterior (ex.: título), porque
+          // a condição de merge acima só olha para bold/align, não para se
+          // pertencem ao mesmo parágrafo de origem.
+          elements.push({ type: 'text', text: '\n', style: {} });
+          break;
+        }
+        case 'div':
         case 'span':
         case 'section':
         case 'header':

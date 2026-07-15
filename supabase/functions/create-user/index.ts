@@ -154,11 +154,22 @@ serve(async (req) => {
         is_admin: isCargoAdmin,
       }, { onConflict: "user_id,org_id" });
 
-      // Org ativa apenas se ainda não tiver
-      await supabaseAdmin.from("user_org_ativa").upsert({
-        user_id: existingUserId,
-        org_id: targetOrgId,
-      }, { onConflict: "user_id" });
+      // Org ativa apenas se ainda não tiver — um upsert incondicional aqui
+      // trocava silenciosamente a org ativa de um utilizador que já estava a
+      // trabalhar noutra organização, só por ter sido associado a uma segunda
+      // (o comentário já dizia a intenção certa, mas o código fazia sempre o upsert).
+      const { data: orgAtivaExistente } = await supabaseAdmin
+        .from("user_org_ativa")
+        .select("user_id")
+        .eq("user_id", existingUserId)
+        .maybeSingle();
+
+      if (!orgAtivaExistente) {
+        await supabaseAdmin.from("user_org_ativa").upsert({
+          user_id: existingUserId,
+          org_id: targetOrgId,
+        }, { onConflict: "user_id" });
+      }
 
       return new Response(
         JSON.stringify({

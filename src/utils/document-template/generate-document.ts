@@ -28,6 +28,14 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     skipFooter = false,
     headerLogoUrl,
     footerText,
+    km_saida,
+    km_entrada,
+    combustivel_saida,
+    combustivel_entrada,
+    eletricidade_saida,
+    eletricidade_entrada,
+    momentoFolha,
+    observacoesMomento,
   } = params;
 
   try {
@@ -44,7 +52,17 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     }
 
     const templateData = templateDataRaw as unknown as DocumentTemplate;
-    const documentData = { ...inputDocumentData };
+    const documentData: Record<string, any> = {
+      ...inputDocumentData,
+      ...(km_saida != null ? { km_saida } : {}),
+      ...(km_entrada != null ? { km_entrada } : {}),
+      ...(combustivel_saida != null ? { combustivel_saida } : {}),
+      ...(combustivel_entrada != null ? { combustivel_entrada } : {}),
+      ...(eletricidade_saida != null ? { eletricidade_saida } : {}),
+      ...(eletricidade_entrada != null ? { eletricidade_entrada } : {}),
+      ...(momentoFolha != null ? { momento_folha: momentoFolha } : {}),
+      ...(observacoesMomento != null ? { observacoes_momento: observacoesMomento } : {}),
+    };
 
     // Substituir placeholders no conteúdo HTML do template
     const conteudo = replaceDynamicFields(

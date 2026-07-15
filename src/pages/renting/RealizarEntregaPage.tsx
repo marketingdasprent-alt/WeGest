@@ -54,6 +54,34 @@ const makeFileHandlers = (setter: React.Dispatch<React.SetStateAction<FilePrevie
   },
 });
 
+/** Tipo de combustível da viatura (nome do catálogo, com fallback ao texto
+ *  legado) — decide se se mostra o nível de combustível, de bateria, ou ambos
+ *  (híbridos). Mesma resolução usada em useViaturas.ts. */
+function useTipoCombustivel(viaturaId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['viatura-tipo-combustivel', viaturaId],
+    enabled: !!viaturaId,
+    queryFn: async (): Promise<string | null> => {
+      const { data } = await supabase
+        .from('viaturas')
+        .select('combustivel, combustivel_id')
+        .eq('id', viaturaId!)
+        .maybeSingle();
+      if (!data) return null;
+      if (data.combustivel_id) {
+        const { data: cat } = await supabase
+          .from('viatura_combustiveis')
+          .select('nome')
+          .eq('id', data.combustivel_id as string)
+          .maybeSingle();
+        if (cat?.nome) return cat.nome as string;
+      }
+      return (data.combustivel as string | null) ?? null;
+    },
+    staleTime: 60_000,
+  });
+}
+
 // ── Componente principal ─────────────────────────────────────────────────────
 
 const RealizarEntregaPage = () => {
@@ -69,10 +97,14 @@ const RealizarEntregaPage = () => {
   // Estado do formulário
   const [km, setKm] = useState('');
   const [combustivel, setCombustivel] = useState<string>('');
+  const [eletrico, setEletrico] = useState<string>('');
   const [observacoes, setObservacoes] = useState('');
   const [files, setFiles] = useState<FilePreview[]>([]);
+  // Troca (mesmo grupo): bloco extra para a viatura que sai do contrato —
+  // km/combustível/fotos próprios, associados a viatura_antiga_id.
   const [kmAntiga, setKmAntiga] = useState('');
   const [combustivelAntiga, setCombustivelAntiga] = useState<string>('');
+  const [eletricoAntiga, setEletricoAntiga] = useState<string>('');
   const [filesAntiga, setFilesAntiga] = useState<FilePreview[]>([]);
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
@@ -85,7 +117,10 @@ const RealizarEntregaPage = () => {
   const isTroca = info?.tipo === 'troca';
   const isDevolucao = info?.tipo === 'recolha';
 
-  // Contexto da folha de danos
+  // Contexto da folha de danos (viatura, condutor, empresa emissora, cliente,
+  // km/comb. de saída) resolvido no servidor a partir do token, via RPC
+  // SECURITY DEFINER. Assim NÃO depende de o utilizador ter permissão de
+  // renting/contratos — quem faz o check no terreno normalmente não a tem.
   const { data: contexto } = useQuery({
     queryKey: ['folha-danos-contexto', token],
     enabled: !!token,
@@ -145,6 +180,11 @@ const RealizarEntregaPage = () => {
     },
   });
 
+  // Tipo de combustível de cada viatura envolvida — decide se se mostra o
+  // seletor de combustível, de bateria, ou ambos (híbridos).
+  const { data: tipoCombustivel } = useTipoCombustivel(contexto?.viaturaId);
+  const { data: tipoCombustivelAntiga } = useTipoCombustivel(isTroca ? viaturaAntigaId : null);
+
   // DUA: verificar se viatura tem documentos associados
   const { data: viaturaTemDua = false } = useQuery({
     queryKey: ['viatura-tem-dua', contexto?.viaturaId],
@@ -171,6 +211,7 @@ const RealizarEntregaPage = () => {
       const c = JSON.parse(raw) as RascunhoCache;
       setKm(c.km ?? '');
       setCombustivel(c.combustivel ?? '');
+      setEletrico(c.eletricidade ?? '');
       setObservacoes(c.observacoes ?? '');
       if (c.fotos?.length) {
         Promise.all(c.fotos.map((f) => dataUrlToFile(f.dataUrl, f.name, f.type))).then((restored) =>
@@ -204,10 +245,8 @@ const RealizarEntregaPage = () => {
           valor: f.valor,
         }))
       );
-      localStorage.setItem(
-        cacheKey(token),
-        JSON.stringify({ km, combustivel, observacoes, fotos })
-      );
+      const cache: RascunhoCache = { km, combustivel, eletricidade: eletrico, observacoes, fotos };
+      localStorage.setItem(cacheKey(token), JSON.stringify(cache));
       toast({ title: 'Rascunho guardado', description: 'Podes recarregar sem perder os dados.' });
     } catch (err) {
       toast({ title: 'Erro ao guardar', description: errorMessage(err), variant: 'destructive' });
@@ -216,7 +255,17 @@ const RealizarEntregaPage = () => {
 
   const gerarFolhaPreview = async () => {
     if (!info || !token) return;
-    const err = validarDadosObrigatorios(km, combustivel, isTroca, kmAntiga, combustivelAntiga);
+    const err = validarDadosObrigatorios(
+      km,
+      combustivel,
+      isTroca,
+      kmAntiga,
+      combustivelAntiga,
+      tipoCombustivel,
+      eletrico,
+      tipoCombustivelAntiga,
+      eletricoAntiga
+    );
     if (err) {
       toast({ title: err, variant: 'destructive' });
       return;
@@ -242,6 +291,7 @@ const RealizarEntregaPage = () => {
           isEntrega: info.tipo !== 'recolha',
           km,
           combustivel,
+          eletricidade: eletrico,
           files,
         },
       });
@@ -254,6 +304,7 @@ const RealizarEntregaPage = () => {
             isEntrega: false,
             km: kmAntiga,
             combustivel: combustivelAntiga,
+            eletricidade: eletricoAntiga,
             files: filesAntiga,
           },
         });
@@ -263,9 +314,156 @@ const RealizarEntregaPage = () => {
     }
   };
 
+  /**
+   * Confirmação da troca: usa a RPC dedicada `realizar_token_troca`, que
+   * grava os dados físicos das DUAS viaturas (devolvida + entregue) antes de
+   * marcar o evento — por isso não reaproveita handleConfirmar (tipo simples,
+   * uma só viatura).
+   */
+  const handleConfirmarTroca = async () => {
+    if (!token || !info || !contexto) return;
+    const err = validarDadosObrigatorios(
+      km,
+      combustivel,
+      true,
+      kmAntiga,
+      combustivelAntiga,
+      tipoCombustivel,
+      eletrico,
+      tipoCombustivelAntiga,
+      eletricoAntiga
+    );
+    if (err) {
+      toast({ title: err, variant: 'destructive' });
+      return;
+    }
+
+    setUploading(true);
+    const uploadedPaths: string[] = [];
+    try {
+      // Contexto pode não ter resolvido a viatura nova ainda (RPC do token) —
+      // fallback ao contrato directamente.
+      let vNovaId = contexto.viaturaId;
+      if (!vNovaId) {
+        const { data: cr } = await supabase
+          .from('contratos_renting')
+          .select('viatura_id')
+          .eq('id', info.contrato_id)
+          .maybeSingle();
+        vNovaId = (cr?.viatura_id as string | undefined) ?? null;
+      }
+      if (!vNovaId) throw new Error('Viatura nova do contrato não encontrada.');
+
+      const allPaths = await uploadDanos({
+        files,
+        filesAntiga,
+        viaturaId: vNovaId,
+        viaturaAntigaId: viaturaAntigaId ?? null,
+        observacoes,
+        info,
+        userId: user!.id,
+        token,
+      });
+      uploadedPaths.push(...allPaths);
+
+      realizar.mutate(
+        {
+          token,
+          eventoId: info.evento_id,
+          contratoId: info.contrato_id,
+          tipo: info.tipo,
+          troca: {
+            viaturaAntigaId: viaturaAntigaId ?? null,
+            kmAntiga: Number(kmAntiga),
+            combustivelAntiga: combustivelAntiga || null,
+            eletricidadeAntiga: eletricoAntiga || null,
+            viaturaNovaId: vNovaId,
+            kmNova: Number(km),
+            combustivelNova: combustivel || null,
+            eletricidadeNova: eletrico || null,
+          },
+        },
+        {
+          onSuccess: () => {
+            const tmplId = 'folha_danos';
+            const params = {
+              modo: 'print' as const,
+              tmplId,
+              assinaturasRef,
+              observacoes,
+              contexto,
+              responsavelNome,
+              info,
+            };
+            gerarFolhaBloco({
+              ...params,
+              bloco: {
+                matricula: formatMatricula(info.matricula_devolver ?? info.matricula),
+                viaturaId: viaturaAntigaId,
+                isEntrega: false,
+                km: kmAntiga,
+                combustivel: combustivelAntiga,
+                eletricidade: eletricoAntiga,
+                files: filesAntiga,
+              },
+            }).catch(() => {});
+            gerarFolhaBloco({
+              ...params,
+              bloco: {
+                matricula: formatMatricula(info.matricula),
+                viaturaId: vNovaId,
+                isEntrega: true,
+                km,
+                combustivel,
+                eletricidade: eletrico,
+                files,
+              },
+            }).catch(() => {});
+            try {
+              localStorage.removeItem(cacheKey(token));
+            } catch {
+              /* ignore */
+            }
+            setDone(true);
+            setUploading(false);
+          },
+          onError: () => {
+            setUploading(false);
+          },
+        }
+      );
+    } catch (err: unknown) {
+      if (uploadedPaths.length > 0) {
+        try {
+          await supabase.storage.from('viatura-danos').remove(uploadedPaths);
+        } catch {
+          /* best-effort */
+        }
+      }
+      toast({
+        title: 'Erro ao guardar os danos',
+        description: errorMessage(err),
+        variant: 'destructive',
+      });
+      setUploading(false);
+    }
+  };
+
   const handleConfirmar = async () => {
     if (!info || !token || !contexto) return;
-    const err = validarDadosObrigatorios(km, combustivel, isTroca, kmAntiga, combustivelAntiga);
+    if (isTroca) {
+      await handleConfirmarTroca();
+      return;
+    }
+    const err = validarDadosObrigatorios(
+      km,
+      combustivel,
+      isTroca,
+      kmAntiga,
+      combustivelAntiga,
+      tipoCombustivel,
+      eletrico
+    );
     if (err) {
       toast({ title: err, variant: 'destructive' });
       return;
@@ -307,7 +505,8 @@ const RealizarEntregaPage = () => {
         contratoId: info.contrato_id,
         tipo: info.tipo,
         km: Number(km),
-        combustivel,
+        combustivel: combustivel || undefined,
+        eletricidade: eletrico || undefined,
       },
       {
         onSuccess: () => {
@@ -330,22 +529,10 @@ const RealizarEntregaPage = () => {
               isEntrega: info.tipo !== 'recolha',
               km,
               combustivel,
+              eletricidade: eletrico,
               files,
             },
           }).catch(() => {});
-          if (isTroca && info.matricula_devolver) {
-            gerarFolhaBloco({
-              ...params,
-              bloco: {
-                matricula: formatMatricula(info.matricula_devolver),
-                viaturaId: viaturaAntigaId,
-                isEntrega: false,
-                km: kmAntiga,
-                combustivel: combustivelAntiga,
-                files: filesAntiga,
-              },
-            }).catch(() => {});
-          }
           try {
             localStorage.removeItem(cacheKey(token));
           } catch {
@@ -428,15 +615,27 @@ const RealizarEntregaPage = () => {
         info={info}
         isPending={isPending}
         acaoBotao={
-          <Button
-            type="button"
-            onClick={handleConfirmar}
-            disabled={isPending || (exigeDua && !duaDevolvido)}
-            className="gap-2"
-          >
-            {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Confirmar
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => window.history.back()}
+              disabled={isPending}
+              className="gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmar}
+              disabled={isPending || (exigeDua && !duaDevolvido)}
+              className="gap-2"
+            >
+              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Confirmar
+            </Button>
+          </>
         }
       />
 
@@ -448,6 +647,9 @@ const RealizarEntregaPage = () => {
             onKmChange={setKmAntiga}
             combustivel={combustivelAntiga}
             onCombustivelChange={setCombustivelAntiga}
+            eletricidade={eletricoAntiga}
+            onEletricidadeChange={setEletricoAntiga}
+            tipoCombustivel={tipoCombustivelAntiga}
             files={filesAntiga}
             onAddFiles={filesAntigaH.addFiles}
             onUpdateFoto={filesAntigaH.updateFoto}
@@ -461,6 +663,9 @@ const RealizarEntregaPage = () => {
           onKmChange={setKm}
           combustivel={combustivel}
           onCombustivelChange={setCombustivel}
+          eletricidade={eletrico}
+          onEletricidadeChange={setEletrico}
+          tipoCombustivel={tipoCombustivel}
           files={files}
           onAddFiles={filesH.addFiles}
           onUpdateFoto={filesH.updateFoto}

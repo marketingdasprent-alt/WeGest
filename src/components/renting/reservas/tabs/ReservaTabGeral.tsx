@@ -133,6 +133,29 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   const precoModeloDiaRac = !isTvde ? (precoModeloSel?.preco_dia ?? null) : null;
   const precoModeloMesRac = !isTvde ? (precoModeloSel?.preco_mes ?? null) : null;
 
+  // TVDE: km/franquia vêm do modelo da viatura na tarifa escolhida — puxa-os
+  // automaticamente sempre que a tarifa ou a viatura mudam (mesma fonte do
+  // preço/semana). Não sobrepõe rent-a-car/slot, que têm as suas próprias regras.
+  useEffect(() => {
+    if (!isTvde || !tarifaIdSel || !viaturaSelected?.modelo_id) return;
+    const preco = precosModelo.find(
+      (p) => p.tarifa_id === tarifaIdSel && p.modelo_id === viaturaSelected.modelo_id
+    );
+    if (!preco) return;
+    form.setValue('kms_incluidos', preco.km_mensal, { shouldDirty: true });
+    form.setValue('km_adicional_valor', preco.km_adicional_valor, { shouldDirty: true });
+    form.setValue('franquia_valor', preco.franquia_valor, { shouldDirty: true });
+  }, [isTvde, tarifaIdSel, viaturaSelected, precosModelo, form]);
+
+  // Auto-selecciona a tarifa TVDE quando só há uma (o normal) — o preço real
+  // vem sempre do modelo da viatura, não da escolha da tarifa, por isso não
+  // faz sentido obrigar a seleção manual.
+  useEffect(() => {
+    if (isTvde && tarifasDoRegime.length > 0 && !tarifaIdSel) {
+      form.setValue('tarifa_id', tarifasDoRegime[0].id, { shouldDirty: true });
+    }
+  }, [isTvde, tarifasDoRegime, tarifaIdSel, form]);
+
   // Faturação automática: regime + ALD + duração + tarifa → valor_total.
   // Viatura escolhida mas modelo sem preço na tarifa → bloquear/avisar (ambos os regimes).
   // Em Rent-a-Car um modelo pode só ter preço diário OU só mensal (ex.: viaturas
@@ -175,7 +198,11 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
     }
   }, [faturacao, isSlot, form]);
 
-  // Ao escolher tarifa+viatura, copia km / km extra / franquia do modelo na tarifa.
+  // Ao escolher tarifa+viatura, copia km / km extra / franquia do modelo na
+  // tarifa — só para campos ainda VAZIOS, nunca sobrescrevendo um valor já
+  // gravado/editado. Sem esta guarda, este efeito também dispara quando
+  // `precosModelo` (lista assíncrona) chega DEPOIS da hidratação inicial,
+  // apagando franquia/caução/kms negociados à parte da reserva.
   useEffect(() => {
     if (isSlot || !precoModeloSel) return;
     const kmIncl = isTvde ? precoModeloSel.km_mensal : precoModeloSel.km_mensal_iva;
@@ -184,10 +211,14 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
       : precoModeloSel.km_adicional_valor_iva;
     const franquia = isTvde ? precoModeloSel.franquia_valor : precoModeloSel.franquia_valor_iva;
     const caucao = isTvde ? precoModeloSel.caucao_valor : precoModeloSel.caucao_valor_iva;
-    if (kmIncl != null) form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
-    if (kmExtra != null) form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
-    if (franquia != null) form.setValue('franquia_valor', franquia, { shouldDirty: true });
-    if (caucao != null) form.setValue('caucao_valor', caucao, { shouldDirty: true });
+    if (kmIncl != null && form.getValues('kms_incluidos') == null)
+      form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
+    if (kmExtra != null && form.getValues('km_adicional_valor') == null)
+      form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
+    if (franquia != null && form.getValues('franquia_valor') == null)
+      form.setValue('franquia_valor', franquia, { shouldDirty: true });
+    if (caucao != null && form.getValues('caucao_valor') == null)
+      form.setValue('caucao_valor', caucao, { shouldDirty: true });
   }, [precoModeloSel, isTvde, isSlot, form]);
 
   // Lista de viaturas filtrada por regime.
