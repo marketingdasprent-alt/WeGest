@@ -1,14 +1,32 @@
 -- ============================================================
 -- Alerta: gerar_cobrancas_tvde_semanais() gerou 0 cobranças
+-- + constraint em falta que o ON CONFLICT da função já assumia existir
 -- ============================================================
 -- Item 1 do "Sprint desta semana" da auditoria de produto: foi assim que o
 -- bug de preço por-modelo passou 6 dias sem ninguém notar — a função corria
 -- toda semana, encontrava preço nulo, não gerava nada, sem erro nenhum.
 -- Agora: por organização, se houver contratos TVDE elegíveis (agendado/
 -- em_curso) mas nenhuma cobrança foi criada NESTA execução, cria uma
--- notificação urgente. Segue o padrão já usado (public.notificacoes) por
--- outros fluxos deste projecto (motorista_pendente, pedido_troca_kms, etc).
+-- notificação urgente (padrão já usado em public.notificacoes).
+--
+-- Achado ao testar em ROLLBACK antes de aplicar: a função já tinha
+-- `ON CONFLICT (contrato_id, destinatario_id, periodo_de, periodo_ate)`,
+-- mas NENHUM constraint/índice único com essas colunas existe na tabela —
+-- só a PK em `id`. Qualquer execução que chegasse a essa INSERT rebentava
+-- com "no unique or exclusion constraint matching". O histórico do cron
+-- mostra só "succeeded" nas últimas semanas — esta versão da função (com o
+-- ON CONFLICT) ainda não tinha corrido de verdade contra um caso real.
+--
+-- Índice único tem de ser PARCIAL (`WHERE estado <> 'anulada'`), não total:
+-- já existe um par legítimo no mesmo contrato/destinatário/período — uma
+-- linha 'anulada' e a factura corrigida 'emitida' 20s depois (fluxo de
+-- anular+reemitir já existente, ver recibo_anulado_avisos). Um UNIQUE total
+-- teria quebrado essa correcção.
 -- ============================================================
+
+CREATE UNIQUE INDEX IF NOT EXISTS contrato_cobrancas_periodo_activo_unico
+  ON public.contrato_cobrancas (contrato_id, destinatario_id, periodo_de, periodo_ate)
+  WHERE estado <> 'anulada';
 
 ALTER TABLE public.notificacoes DROP CONSTRAINT IF EXISTS notificacoes_tipo_check;
 ALTER TABLE public.notificacoes ADD CONSTRAINT notificacoes_tipo_check
@@ -51,9 +69,6 @@ BEGIN
 
     v_proximo_de := COALESCE(v_ultima + 1, v_contrato.data_inicio::date);
 
-    -- Tarifa do contrato. Se não tiver preço direto (caso das tarifas tvde,
-    -- que são por modelo), resolve via renting_tarifa_precos_modelo usando
-    -- o modelo da viatura do contrato.
     SELECT * INTO v_tarifa
     FROM public.renting_tarifas WHERE id = v_contrato.tarifa_id;
 
@@ -98,6 +113,7 @@ BEGIN
           false, 'pendente'
         )
         ON CONFLICT (contrato_id, destinatario_id, periodo_de, periodo_ate)
+          WHERE estado <> 'anulada'
         DO NOTHING;
 
         GET DIAGNOSTICS v_rowcount = ROW_COUNT;
