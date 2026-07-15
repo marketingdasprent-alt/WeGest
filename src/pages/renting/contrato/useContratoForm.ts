@@ -798,7 +798,10 @@ export function useContratoForm(): UseContratoFormReturn {
       estacao_entrega_id: values.estacao_entrega_id || null,
       data_inicio: localInputToIso(values.data_inicio),
       estacao_recolha_id: values.estacao_recolha_id || null,
-      data_fim: values.regime === 'tvde' ? null : localInputToIso(values.data_fim ?? ''),
+      data_fim:
+        values.regime === 'tvde' && !values.is_longa_duracao
+          ? null
+          : localInputToIso(values.data_fim ?? ''),
       estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
       estado_operacional: values.estado_operacional,
       estado_financeiro: values.estado_financeiro,
@@ -966,7 +969,10 @@ export function useContratoForm(): UseContratoFormReturn {
               estacao_entrega_id: values.estacao_entrega_id || null,
               data_inicio: localInputToIso(values.data_inicio),
               estacao_recolha_id: values.estacao_recolha_id || null,
-              data_fim: values.regime === 'tvde' ? null : localInputToIso(values.data_fim ?? ''),
+              data_fim:
+                values.regime === 'tvde' && !values.is_longa_duracao
+                  ? null
+                  : localInputToIso(values.data_fim ?? ''),
               estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
               estado_operacional: values.estado_operacional,
               estado_financeiro: values.estado_financeiro,
