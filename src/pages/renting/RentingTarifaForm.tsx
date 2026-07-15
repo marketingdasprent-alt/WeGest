@@ -210,14 +210,14 @@ const RentingTarifaForm = () => {
   });
 
   /**
-   * Sincroniza renting_tarifa_precos_modelo com o mapa em memória:
-   * apaga tudo e reinsere as linhas com preço válido. As colunas gravadas
-   * dependem do tipo da tarifa:
-   *   TVDE       → preco_semana + km_mensal/km_adicional_valor/franquia_valor
-   *   Rent-a-Car → preco_dia/preco_mes + km_mensal_iva/km_adicional_valor_iva/franquia_valor_iva
-   * Os campos dos dois regimes são independentes (colunas separadas) — editar
-   * um não afeta o outro. O "preço-chave" (preco_semana no TVDE, preco_dia no
-   * RaC) tem de estar preenchido para a linha ser gravada.
+   * Sincroniza renting_tarifa_precos_modelo com o mapa em memória: apaga tudo
+   * e reinsere as linhas via `buildPrecosModeloLinhas` (./precosModeloBuilder.ts),
+   * que grava SEMPRE as colunas dos dois regimes (TVDE e Rent-a-Car), qualquer
+   * que seja o `tipo` seleccionado no momento de gravar. Isto é deliberado:
+   * antes desta função, o código só persistia as colunas do regime actual e
+   * trocar `tipo` + gravar apagava silenciosamente os preços do outro regime
+   * (incidente de 2026-07-14: 34 linhas TVDE substituídas por lixo). Não voltar
+   * a filtrar por `form.para_tvde` aqui.
    */
   const savePrecosModelo = async (tarifaId: string) => {
     await supabase.from('renting_tarifa_precos_modelo').delete().eq('tarifa_id', tarifaId);
