@@ -86,11 +86,17 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     const leftMargin = 20;
     const rightMargin = 20;
 
-    // Carregar papel timbrado (background) se existir
-    const bg: HTMLImageElement | null =
-      templateData.papel_timbrado_url && !existingPdf
-        ? await loadImage(templateData.papel_timbrado_url).catch(() => null)
-        : null;
+    // Carregar papel timbrado (background) se existir.
+    // NÃO condicionar a `!existingPdf`: em documentos COMBINADOS (ex.: TVDE =
+    // Prestação + Aluguer, via generateDocumentosCombinados) todos os docs a
+    // seguir ao primeiro recebem `existingPdf` — com a guarda antiga o `bg`
+    // ficava null e ESSES documentos saíam sem timbrado em nenhuma página (só
+    // o 1.º documento vinha timbrado). Carregar sempre que houver URL faz o
+    // bloco abaixo (existingPdf && bg) carimbar a 1.ª página do doc de
+    // continuação e o renderHtmlBlock/renderTable re-aplicá-lo nas seguintes.
+    const bg: HTMLImageElement | null = templateData.papel_timbrado_url
+      ? await loadImage(templateData.papel_timbrado_url).catch(() => null)
+      : null;
 
     const hasLetterhead = !!bg;
 
@@ -105,11 +111,12 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     // Com papel timbrado a área útil é menor; comprimir entrelinha.
     const lineFactor = hasLetterhead ? 1.24 : 1.5;
 
-    // Se este PDF é uma continuação (existingPdf), desenhar bg da 1ª página
-    if (existingPdf && bg) {
-      pdf.addPage();
-      pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
-    } else if (!existingPdf && bg) {
+    // Carimba o papel timbrado na 1ª página deste documento. Num documento de
+    // continuação (existingPdf) NÃO se adiciona página aqui — o
+    // generateDocumentosCombinados já criou a página separadora (pdf.addPage())
+    // antes de nos chamar; carimbamos o timbrado SOBRE essa página. Adicionar
+    // outra página aqui gerava uma folha em branco a mais por documento.
+    if (bg) {
       pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
     }
 
