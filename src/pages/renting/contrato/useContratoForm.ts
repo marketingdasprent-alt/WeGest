@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useForm, type FieldErrors } from 'react-hook-form';
+import { useForm, useFieldArray, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -248,14 +248,11 @@ export function useContratoForm(): UseContratoFormReturn {
       is_principal: boolean;
     }>;
     if (existentes.some((c) => c.cliente_id === clienteId)) return;
-    form.setValue(
-      'condutores',
-      [
-        ...existentes,
-        { cliente_id: clienteId, motorista_id: null, is_principal: existentes.length === 0 },
-      ],
-      { shouldDirty: true, shouldValidate: true }
-    );
+    appendCondutor({
+      cliente_id: clienteId,
+      motorista_id: null,
+      is_principal: existentes.length === 0,
+    });
   };
 
   const handleMotoristaCriado = (motoristaId: string) => {
@@ -265,14 +262,11 @@ export function useContratoForm(): UseContratoFormReturn {
       is_principal: boolean;
     }>;
     if (existentes.some((c) => c.motorista_id === motoristaId)) return;
-    form.setValue(
-      'condutores',
-      [
-        ...existentes,
-        { cliente_id: null, motorista_id: motoristaId, is_principal: existentes.length === 0 },
-      ],
-      { shouldDirty: true, shouldValidate: true }
-    );
+    appendCondutor({
+      cliente_id: null,
+      motorista_id: motoristaId,
+      is_principal: existentes.length === 0,
+    });
   };
 
   const handleDelete = () => {
@@ -299,6 +293,11 @@ export function useContratoForm(): UseContratoFormReturn {
     resolver: zodResolver(contratoFormSchema),
     defaultValues: DEFAULT_CONTRATO_VALUES,
   });
+
+  // Partilha o control+name com o `useFieldArray` de CondutoresFields —
+  // `append` sincroniza a cópia interna que desenha essa tabela; um
+  // `form.setValue('condutores', ...)` isolado não o faz.
+  const { append: appendCondutor } = useFieldArray({ control: form.control, name: 'condutores' });
 
   // Guard: criar contrato sem reserva_id na URL → redirecionar
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useForm, type FieldErrors } from 'react-hook-form';
+import { useForm, useFieldArray, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -189,6 +189,14 @@ const RentingReservaForm = () => {
     defaultValues: DEFAULT_VALUES,
   });
 
+  // Partilha o control+name com o `useFieldArray` de CondutoresFields/
+  // SlotMotoristaViatura — `append` sincroniza a cópia interna que desenha
+  // essas tabelas; um `form.setValue('condutores', ...)` isolado não o faz.
+  const { append: appendCondutor, replace: replaceCondutores } = useFieldArray({
+    control: form.control,
+    name: 'condutores',
+  });
+
   // Pré-preenchimento via URL (criar reserva a partir de viatura/cliente).
   // Só corre uma vez — mas só marca como feito depois de resolver o grupo (se
   // a viatura tiver um), senão a lista de grupos podia chegar depois da de
@@ -233,14 +241,11 @@ const RentingReservaForm = () => {
       is_principal: boolean;
     }>;
     if (existentes.some((c) => c.cliente_id === clienteId)) return;
-    form.setValue(
-      'condutores',
-      [
-        ...existentes,
-        { cliente_id: clienteId, motorista_id: null, is_principal: existentes.length === 0 },
-      ],
-      { shouldDirty: true, shouldValidate: true }
-    );
+    appendCondutor({
+      cliente_id: clienteId,
+      motorista_id: null,
+      is_principal: existentes.length === 0,
+    });
   };
 
   /** Adiciona um motorista recém-criado à lista de condutores (TVDE/slot). */
@@ -254,11 +259,7 @@ const RentingReservaForm = () => {
         .eq('id', motoristaId)
         .then(() => queryClient.invalidateQueries({ queryKey: ['motoristas'] }));
       const m = motoristas.find((x) => x.id === motoristaId);
-      form.setValue(
-        'condutores',
-        [{ cliente_id: null, motorista_id: motoristaId, is_principal: true }],
-        { shouldDirty: true, shouldValidate: true }
-      );
+      replaceCondutores([{ cliente_id: null, motorista_id: motoristaId, is_principal: true }]);
       form.setValue('condutor_id', motoristaId, { shouldDirty: true });
       if (m?.nome) form.setValue('condutor_nome', m.nome, { shouldDirty: true });
       return;
@@ -269,14 +270,11 @@ const RentingReservaForm = () => {
       is_principal: boolean;
     }>;
     if (existentes.some((c) => c.motorista_id === motoristaId)) return;
-    form.setValue(
-      'condutores',
-      [
-        ...existentes,
-        { cliente_id: null, motorista_id: motoristaId, is_principal: existentes.length === 0 },
-      ],
-      { shouldDirty: true, shouldValidate: true }
-    );
+    appendCondutor({
+      cliente_id: null,
+      motorista_id: motoristaId,
+      is_principal: existentes.length === 0,
+    });
   };
 
   // Hidrata o formulário quando a reserva carrega (modo edição). Só corre UMA
