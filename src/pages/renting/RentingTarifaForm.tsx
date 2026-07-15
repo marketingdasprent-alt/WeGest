@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getTarifaFormValidationError, type PrecoModeloForm } from './tarifaFormValidation';
+import type { Json } from '@/integrations/supabase/types';
 import { buildPrecosModeloLinhas } from './precosModeloBuilder';
 import { Tag, Save, Trash2, ChevronRight, Calendar, Clock, ShieldCheck, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -210,22 +211,22 @@ const RentingTarifaForm = () => {
   });
 
   /**
-   * Sincroniza renting_tarifa_precos_modelo com o mapa em memória: apaga tudo
-   * e reinsere as linhas via `buildPrecosModeloLinhas` (./precosModeloBuilder.ts),
-   * que grava SEMPRE as colunas dos dois regimes (TVDE e Rent-a-Car), qualquer
-   * que seja o `tipo` seleccionado no momento de gravar. Isto é deliberado:
-   * antes desta função, o código só persistia as colunas do regime actual e
-   * trocar `tipo` + gravar apagava silenciosamente os preços do outro regime
-   * (incidente de 2026-07-14: 34 linhas TVDE substituídas por lixo). Não voltar
-   * a filtrar por `form.para_tvde` aqui.
+   * Sincroniza renting_tarifa_precos_modelo com o mapa em memória. As linhas
+   * vêm de `buildPrecosModeloLinhas` (./precosModeloBuilder.ts), que grava
+   * SEMPRE as colunas dos dois regimes (TVDE e Rent-a-Car), qualquer que seja
+   * o `tipo` seleccionado no momento de gravar — não voltar a filtrar por
+   * `form.para_tvde` aqui (incidente de 2026-07-14: 34 linhas TVDE
+   * substituídas por lixo). O delete+insert corre atomicamente dentro da RPC
+   * `salvar_precos_modelo_tarifa` (uma única transacção de função Postgres),
+   * para não repetir esse incidente se o insert falhasse a meio.
    */
   const savePrecosModelo = async (tarifaId: string) => {
-    await supabase.from('renting_tarifa_precos_modelo').delete().eq('tarifa_id', tarifaId);
     const linhas = buildPrecosModeloLinhas(precosModelo, orgId!, tarifaId);
-    if (linhas.length) {
-      const { error } = await supabase.from('renting_tarifa_precos_modelo').insert(linhas);
-      if (error) throw error;
-    }
+    const { error } = await supabase.rpc('salvar_precos_modelo_tarifa', {
+      p_tarifa_id: tarifaId,
+      p_linhas: linhas as unknown as Json,
+    });
+    if (error) throw error;
   };
 
   const validate = () => {

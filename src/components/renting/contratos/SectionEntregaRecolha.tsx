@@ -151,7 +151,6 @@ export const SectionEntregaRecolha: React.FC<SectionEntregaRecolhaProps> = ({ fo
                       className="bg-background"
                       {...field}
                       value={field.value ?? ''}
-                      readOnly={!!isLongaDuracao}
                       disabled={!!isLongaDuracao}
                     />
                   </FormControl>

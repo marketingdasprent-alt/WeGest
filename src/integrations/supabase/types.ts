@@ -11240,6 +11240,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      salvar_precos_modelo_tarifa: {
+        Args: { p_linhas: Json; p_tarifa_id: string }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       trocar_condutor: {

@@ -1,16 +1,7 @@
-export interface PrecoModeloFormValues {
-  preco_semana: string;
-  km_mensal: string;
-  km_adicional_valor: string;
-  franquia_valor: string;
-  caucao_valor: string;
-  preco_dia: string;
-  preco_mes: string;
-  km_mensal_iva: string;
-  km_adicional_valor_iva: string;
-  franquia_valor_iva: string;
-  caucao_valor_iva: string;
-}
+import type { PrecoModeloForm } from './tarifaFormValidation';
+
+/** Alias — mesma shape que `PrecoModeloForm` (`tarifaFormValidation.ts`), única fonte de verdade. */
+export type PrecoModeloFormValues = PrecoModeloForm;
 
 export interface PrecoModeloRow {
   org_id: string;
