@@ -196,6 +196,19 @@ const RentingReservaForm = () => {
     control: form.control,
     name: 'condutores',
   });
+  // Instâncias-pai de useFieldArray para as restantes listas m:n. Servem para
+  // HIDRATAR via `replace()` (sincroniza a cópia interna que as tabelas filhas
+  // desenham) sem tocar em mais nenhum campo do formulário. Antes a hidratação
+  // usava `form.reset({...getValues(), lista})`, que — mesmo com
+  // keepDirtyValues — reescrevia o formulário todo e, em certas ordens de
+  // render, deixava cair campos irmãos acabados de escolher (empresa emissora,
+  // longa duração). `replace()` é cirúrgico: mexe só na própria lista.
+  const { replace: replaceCoberturas } = useFieldArray({
+    control: form.control,
+    name: 'coberturas',
+  });
+  const { replace: replaceExtras } = useFieldArray({ control: form.control, name: 'extras' });
+  const { replace: replaceTaxas } = useFieldArray({ control: form.control, name: 'taxas' });
 
   // Pré-preenchimento via URL (criar reserva a partir de viatura/cliente).
   // Só corre uma vez — mas só marca como feito depois de resolver o grupo (se
@@ -340,67 +353,51 @@ const RentingReservaForm = () => {
   // depois de adicionar manualmente um item novo (que já passa por `append`).
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    form.reset(
-      {
-        ...form.getValues(),
-        coberturas: coberturasAtuais.map((c) => ({
-          cobertura_id: c.cobertura_id,
-          cobertura_nome: c.cobertura_nome,
-          preco_dia: c.preco_dia,
-          franquia_valor: c.franquia_valor,
-        })),
-      },
-      { keepDirtyValues: true }
+    replaceCoberturas(
+      coberturasAtuais.map((c) => ({
+        cobertura_id: c.cobertura_id,
+        cobertura_nome: c.cobertura_nome,
+        preco_dia: c.preco_dia,
+        franquia_valor: c.franquia_valor,
+      }))
     );
-  }, [isEdit, reserva, coberturasAtuais, form]);
+  }, [isEdit, reserva, coberturasAtuais, replaceCoberturas]);
 
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    form.reset(
-      {
-        ...form.getValues(),
-        extras: extrasAtuais.map((e) => ({
-          extra_id: e.extra_id,
-          extra_nome: e.extra_nome,
-          preco_unidade: e.preco_unidade,
-          tipo_calculo: e.tipo_calculo,
-          quantidade: e.quantidade,
-        })),
-      },
-      { keepDirtyValues: true }
+    replaceExtras(
+      extrasAtuais.map((e) => ({
+        extra_id: e.extra_id,
+        extra_nome: e.extra_nome,
+        preco_unidade: e.preco_unidade,
+        tipo_calculo: e.tipo_calculo,
+        quantidade: e.quantidade,
+      }))
     );
-  }, [isEdit, reserva, extrasAtuais, form]);
+  }, [isEdit, reserva, extrasAtuais, replaceExtras]);
 
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    form.reset(
-      {
-        ...form.getValues(),
-        taxas: taxasAtuais.map((t) => ({
-          taxa_id: t.taxa_id,
-          taxa_nome: t.taxa_nome,
-          percentagem: t.percentagem,
-          valor_fixo: t.valor_fixo,
-        })),
-      },
-      { keepDirtyValues: true }
+    replaceTaxas(
+      taxasAtuais.map((t) => ({
+        taxa_id: t.taxa_id,
+        taxa_nome: t.taxa_nome,
+        percentagem: t.percentagem,
+        valor_fixo: t.valor_fixo,
+      }))
     );
-  }, [isEdit, reserva, taxasAtuais, form]);
+  }, [isEdit, reserva, taxasAtuais, replaceTaxas]);
 
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    form.reset(
-      {
-        ...form.getValues(),
-        condutores: condutoresAtuais.map((c) => ({
-          cliente_id: c.cliente_id,
-          motorista_id: c.motorista_id,
-          is_principal: c.is_principal,
-        })),
-      },
-      { keepDirtyValues: true }
+    replaceCondutores(
+      condutoresAtuais.map((c) => ({
+        cliente_id: c.cliente_id,
+        motorista_id: c.motorista_id,
+        is_principal: c.is_principal,
+      }))
     );
-  }, [isEdit, reserva, condutoresAtuais, form]);
+  }, [isEdit, reserva, condutoresAtuais, replaceCondutores]);
 
   // Reservas com `grupo` vazio mas cuja viatura já tem grupo_id atribuído (ex.:
   // criadas antes do grupo ficar preenchido, ou a viatura só recebeu grupo
@@ -490,22 +487,29 @@ const RentingReservaForm = () => {
   // remove manualmente os que não interessam ao novo regime.
   const regimeWatched = form.watch('regime');
 
-  // Auto‑activa longa duração + intervalo 30d para TVDE/slot;
-  // desmarca ao voltar a rent-a-car.
+  // Auto‑activa longa duração + intervalo 30d para TVDE/slot; desmarca ao
+  // voltar a rent-a-car. SÓ quando o UTILIZADOR troca de regime de facto — o
+  // ref-guard salta a primeira corrida (mount) e a hidratação, senão a
+  // primeira montagem forçava is_longa_duracao=false e apagava o valor
+  // guardado de um rent-a-car de longa duração (a "caixa que saía sozinha").
+  const regimeAnteriorRef = useRef<string | null>(null);
   useEffect(() => {
+    const anterior = regimeAnteriorRef.current;
+    regimeAnteriorRef.current = regimeWatched;
+    // Mount/hidratação (anterior === null) ou sem mudança real: não mexer.
+    if (anterior === null || anterior === regimeWatched) return;
+
     if (regimeWatched === 'tvde' || regimeWatched === 'slot') {
-      const jaEstaActivo = form.getValues('is_longa_duracao');
-      if (!jaEstaActivo) {
-        form.setValue('is_longa_duracao', true);
-        form.setValue('renovacao_opcao', 'intervalo_dias');
-        form.setValue('renovacao_intervalo_dias', 30);
+      if (!form.getValues('is_longa_duracao')) {
+        form.setValue('is_longa_duracao', true, { shouldDirty: true });
+        form.setValue('renovacao_opcao', 'intervalo_dias', { shouldDirty: true });
+        form.setValue('renovacao_intervalo_dias', 30, { shouldDirty: true });
       }
     } else if (regimeWatched === 'rent_a_car') {
-      form.setValue('is_longa_duracao', false);
-      form.setValue('renovacao_opcao', null);
-      form.setValue('renovacao_intervalo_dias', null);
+      form.setValue('is_longa_duracao', false, { shouldDirty: true });
+      form.setValue('renovacao_opcao', null, { shouldDirty: true });
+      form.setValue('renovacao_intervalo_dias', null, { shouldDirty: true });
     }
-    // Só dispara quando o regime muda, não quando o user mexe manualmente no checkbox
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regimeWatched]);
 

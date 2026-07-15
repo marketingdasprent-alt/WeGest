@@ -297,7 +297,18 @@ export function useContratoForm(): UseContratoFormReturn {
   // Partilha o control+name com o `useFieldArray` de CondutoresFields —
   // `append` sincroniza a cópia interna que desenha essa tabela; um
   // `form.setValue('condutores', ...)` isolado não o faz.
-  const { append: appendCondutor } = useFieldArray({ control: form.control, name: 'condutores' });
+  const { append: appendCondutor, replace: replaceCondutores } = useFieldArray({
+    control: form.control,
+    name: 'condutores',
+  });
+  // Instâncias-pai para hidratar as restantes listas m:n via `replace()`
+  // (cirúrgico — só toca na própria lista, não reescreve o formulário todo).
+  const { replace: replaceCoberturas } = useFieldArray({
+    control: form.control,
+    name: 'coberturas',
+  });
+  const { replace: replaceExtras } = useFieldArray({ control: form.control, name: 'extras' });
+  const { replace: replaceTaxas } = useFieldArray({ control: form.control, name: 'taxas' });
 
   // Guard: criar contrato sem reserva_id na URL → redirecionar
   useEffect(() => {
@@ -444,70 +455,54 @@ export function useContratoForm(): UseContratoFormReturn {
   // utilizador já tenha alterado entretanto, incluindo esta mesma lista.
   useEffect(() => {
     if (!isEdit || !contrato || !condutoresDb) return;
-    form.reset(
-      {
-        ...form.getValues(),
-        condutores: condutoresDb.map((c) => ({
-          cliente_id: c.cliente_id,
-          motorista_id: c.motorista_id,
-          is_principal: c.is_principal,
-        })),
-      },
-      { keepDirtyValues: true }
+    replaceCondutores(
+      condutoresDb.map((c) => ({
+        cliente_id: c.cliente_id,
+        motorista_id: c.motorista_id,
+        is_principal: c.is_principal,
+      }))
     );
-  }, [isEdit, contrato, condutoresDb, form]);
+  }, [isEdit, contrato, condutoresDb, replaceCondutores]);
 
   // Hydration: coberturas
   useEffect(() => {
     if (!isEdit || !contrato || !coberturasDb) return;
-    form.reset(
-      {
-        ...form.getValues(),
-        coberturas: coberturasDb.map((c) => ({
-          cobertura_id: c.cobertura_id,
-          cobertura_nome: c.cobertura_nome,
-          preco_dia: c.preco_dia,
-          franquia_valor: c.franquia_valor,
-        })),
-      },
-      { keepDirtyValues: true }
+    replaceCoberturas(
+      coberturasDb.map((c) => ({
+        cobertura_id: c.cobertura_id,
+        cobertura_nome: c.cobertura_nome,
+        preco_dia: c.preco_dia,
+        franquia_valor: c.franquia_valor,
+      }))
     );
-  }, [isEdit, contrato, coberturasDb, form]);
+  }, [isEdit, contrato, coberturasDb, replaceCoberturas]);
 
   // Hydration: extras
   useEffect(() => {
     if (!isEdit || !contrato || !extrasDb) return;
-    form.reset(
-      {
-        ...form.getValues(),
-        extras: extrasDb.map((e) => ({
-          extra_id: e.extra_id,
-          extra_nome: e.extra_nome,
-          preco_unidade: e.preco_unidade,
-          tipo_calculo: e.tipo_calculo,
-          quantidade: e.quantidade,
-        })),
-      },
-      { keepDirtyValues: true }
+    replaceExtras(
+      extrasDb.map((e) => ({
+        extra_id: e.extra_id,
+        extra_nome: e.extra_nome,
+        preco_unidade: e.preco_unidade,
+        tipo_calculo: e.tipo_calculo,
+        quantidade: e.quantidade,
+      }))
     );
-  }, [isEdit, contrato, extrasDb, form]);
+  }, [isEdit, contrato, extrasDb, replaceExtras]);
 
   // Hydration: taxas
   useEffect(() => {
     if (!isEdit || !contrato || !taxasDb) return;
-    form.reset(
-      {
-        ...form.getValues(),
-        taxas: taxasDb.map((t) => ({
-          taxa_id: t.taxa_id,
-          taxa_nome: t.taxa_nome,
-          percentagem: t.percentagem,
-          valor_fixo: t.valor_fixo,
-        })),
-      },
-      { keepDirtyValues: true }
+    replaceTaxas(
+      taxasDb.map((t) => ({
+        taxa_id: t.taxa_id,
+        taxa_nome: t.taxa_nome,
+        percentagem: t.percentagem,
+        valor_fixo: t.valor_fixo,
+      }))
     );
-  }, [isEdit, contrato, taxasDb, form]);
+  }, [isEdit, contrato, taxasDb, replaceTaxas]);
 
   // ── Reactive values ───────────────────────────────────────────
   const viaturaId = form.watch('viatura_id');

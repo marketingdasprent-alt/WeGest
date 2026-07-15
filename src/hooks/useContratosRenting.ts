@@ -11,6 +11,16 @@ import type {
 
 const QUERY_KEY_BASE = ['renting', 'contratos'] as const;
 
+// Ocupação de viaturas (badge de Frota + seletor de viaturas por período).
+// Um contrato ocupa a viatura, por isso qualquer mutação de contrato tem de
+// invalidar estas queries — senão o seletor continua a mostrar a viatura como
+// ocupada depois de o contrato ser fechado/cancelado (a query fica em cache
+// com a data pedida como chave e só refrescava ao mudar a data). Ver Erro 4.
+function invalidarOcupacaoViaturas(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['viaturas-ocupadas-periodo'] });
+  qc.invalidateQueries({ queryKey: ['viaturas-ocupacao-atual'] });
+}
+
 export interface UseContratosRentingOptions {
   estadoOperacional?: ContratoEstadoOperacional;
   estadoFinanceiro?: ContratoEstadoFinanceiro;
@@ -297,6 +307,7 @@ export function useCreateContratoRenting() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       toast({ title: 'Contrato criado', description: 'O contrato foi aberto com sucesso.' });
     },
     onError: (error: unknown) => {
@@ -326,6 +337,7 @@ export function useUpdateContratoRenting() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['contrato-historico'] });
       toast({ title: 'Contrato actualizado', description: 'As alterações foram guardadas.' });
     },
@@ -551,6 +563,7 @@ export function useFecharContrato() {
     },
     onSuccess: ({ fechouAgora }) => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['motoristas'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
       toast(resolveFechoContratoToast(fechouAgora));
@@ -599,6 +612,7 @@ export function useMarcarRealizacaoDireta() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
       qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
@@ -660,6 +674,7 @@ export function useReverterAbertura() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
       qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
@@ -785,6 +800,7 @@ export function useReverterFecho() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['motoristas'] });
       qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
@@ -849,6 +865,7 @@ export function useReverterParaReserva() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['renting', 'reservas'] });
       qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
@@ -884,6 +901,7 @@ export function useCriarVersaoContrato() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       toast({
         title: 'Nova versão criada',
         description: 'O contrato anterior foi marcado como substituído.',
@@ -919,6 +937,7 @@ export function useRenovarContrato() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['renting'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
     },
@@ -1000,6 +1019,7 @@ export function useDeleteContratoRenting() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
       toast({ title: 'Contrato eliminado', description: 'O contrato foi removido.' });
     },
     onError: (error: unknown) => {
