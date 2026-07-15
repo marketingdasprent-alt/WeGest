@@ -2679,6 +2679,7 @@ export type Database = {
           criado_por: string | null
           data_assinatura: string
           data_inicio: string
+          data_fim: string | null
           documento_url: string | null
           duracao_meses: number | null
           eletricidade_checkin: string | null
@@ -2716,6 +2717,7 @@ export type Database = {
           criado_por?: string | null
           data_assinatura: string
           data_inicio: string
+          data_fim?: string | null
           documento_url?: string | null
           duracao_meses?: number | null
           eletricidade_checkin?: string | null
@@ -2753,6 +2755,7 @@ export type Database = {
           criado_por?: string | null
           data_assinatura?: string
           data_inicio?: string
+          data_fim?: string | null
           documento_url?: string | null
           duracao_meses?: number | null
           eletricidade_checkin?: string | null
@@ -3037,6 +3040,9 @@ export type Database = {
           km_entrada: number | null
           km_saida: number | null
           kms_incluidos: number | null
+          dua_original_com_motorista: boolean
+          dua_devolvida_em: string | null
+          dua_observacoes: string | null
           local_entrega: string | null
           local_recolha: string | null
           matricula: string | null
@@ -3110,6 +3116,9 @@ export type Database = {
           km_entrada?: number | null
           km_saida?: number | null
           kms_incluidos?: number | null
+          dua_original_com_motorista?: boolean
+          dua_devolvida_em?: string | null
+          dua_observacoes?: string | null
           local_entrega?: string | null
           local_recolha?: string | null
           matricula?: string | null
@@ -3183,6 +3192,9 @@ export type Database = {
           km_entrada?: number | null
           km_saida?: number | null
           kms_incluidos?: number | null
+          dua_original_com_motorista?: boolean
+          dua_devolvida_em?: string | null
+          dua_observacoes?: string | null
           local_entrega?: string | null
           local_recolha?: string | null
           matricula?: string | null

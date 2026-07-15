@@ -46,6 +46,7 @@ const SELECT_COLUMNS = `
   is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias,
   franquia_valor, caucao_valor, kms_incluidos, km_adicional_valor,
   km_saida, km_entrada,
+  dua_original_com_motorista, dua_devolvida_em, dua_observacoes,
   voucher_codigo,
   numero_processo, voo_referencia,
   local_entrega, local_recolha,
@@ -373,6 +374,9 @@ export interface FecharContratoArgs {
   matricula?: string | null;
   viaturaId?: string | null;
   recolha?: FecharContratoRecolhaInfo;
+  /** true quando o motorista tinha levado a DUA original e o gestor confirma a
+   *  devolução no fecho — grava dua_devolvida_em = now() no contrato. */
+  marcarDuaDevolvida?: boolean;
 }
 
 /** Título/descrição do toast final — depende de a recolha ter sido
@@ -406,6 +410,7 @@ export function useFecharContrato() {
       matricula,
       viaturaId,
       recolha,
+      marcarDuaDevolvida,
     }: FecharContratoArgs): Promise<{ fechouAgora: boolean }> => {
       const { data: estacao, error: errEstacao } = await supabase
         .from('estacoes')
@@ -426,6 +431,9 @@ export function useFecharContrato() {
         .update({
           estacao_recolha_id: estacaoId,
           estado_operacional: 'cancelado' as const,
+          // Fecha o ciclo da DUA original: se o motorista a tinha levado e o
+          // gestor confirmou a devolução, regista o momento.
+          ...(marcarDuaDevolvida ? { dua_devolvida_em: new Date().toISOString() } : {}),
         })
         .eq('id', contratoId);
       if (errUpdate) throw errUpdate;

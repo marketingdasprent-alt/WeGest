@@ -265,7 +265,7 @@ const Dashboard = () => {
       const { data: contratosAtivos, error: contratosErr } = await supabase
         .from('contratos')
         .select(
-          'id, numero_contrato, data_inicio, duracao_meses, motorista_nome, motorista_id, viatura_id, viaturas:viatura_id(matricula)'
+          'id, numero_contrato, data_inicio, data_fim, duracao_meses, motorista_nome, motorista_id, viatura_id, viaturas:viatura_id(matricula)'
         )
         .eq('status', 'ativo')
         .not('data_inicio', 'is', null);
@@ -278,19 +278,40 @@ const Dashboard = () => {
       now.setHours(0, 0, 0, 0); // Normalizar para meia-noite local
 
       const allContratos = (contratosAtivos || []).map((ct: any) => {
-        const inicio = new Date(ct.data_inicio + 'T00:00:00');
-        const renovacao = addMonths(inicio, ct.duracao_meses ?? 12);
-        const diffDays = Math.ceil((renovacao.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        return { ...ct, _renovacao: renovacao, _diffDays: diffDays };
+        // Usa a data de fim REAL (contratos.data_fim, preenchida por trigger a
+        // partir de data_inicio + duracao_meses e editável). Fallback derivado
+        // só por robustez, caso algum contrato antigo ainda não tenha data_fim.
+        const fim = ct.data_fim
+          ? new Date(ct.data_fim + 'T00:00:00')
+          : addMonths(new Date(ct.data_inicio + 'T00:00:00'), ct.duracao_meses ?? 12);
+        const diffDays = Math.ceil((fim.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return { ...ct, _renovacao: fim, _diffDays: diffDays };
       });
 
+      // De-duplicar contratos repetidos: a mesma prestação aparece por vezes 2x
+      // na BD (ex.: CT-0551 e CT-0552 são o mesmo motorista/viatura/data) e a
+      // mesma pessoa surgia duas vezes no card. Chave = motorista+viatura+início;
+      // mantém-se o número de contrato mais alto (o mais recente).
+      const contratosUnicos = Array.from(
+        allContratos
+          .reduce((map: Map<string, any>, ct: any) => {
+            const key = `${ct.motorista_id ?? ''}|${ct.viatura_id ?? ''}|${ct.data_inicio ?? ''}`;
+            const existente = map.get(key);
+            if (!existente || (ct.numero_contrato ?? 0) > (existente.numero_contrato ?? 0)) {
+              map.set(key, ct);
+            }
+            return map;
+          }, new Map<string, any>())
+          .values()
+      );
+
       // Contratos a renovar: expiram nos próximos 60 dias
-      const contratosRenovar = allContratos
+      const contratosRenovar = contratosUnicos
         .filter((ct: any) => ct._diffDays >= 0 && ct._diffDays <= 60)
         .sort((a: any, b: any) => a._renovacao.getTime() - b._renovacao.getTime());
 
       // Contratos já expirados (data de fim no passado)
-      const expirados = allContratos
+      const expirados = contratosUnicos
         .filter((ct: any) => ct._diffDays < 0)
         .sort((a: any, b: any) => a._renovacao.getTime() - b._renovacao.getTime());
 
@@ -651,7 +672,7 @@ const Dashboard = () => {
             {/* Extintores a Expirar */}
             <AlertListCard
               titulo="Extintores a Expirar"
-              descricao="Expiração nos próximos 15 dias"
+              descricao="Vencidos ou a expirar (próximos 15 dias)"
               badge={
                 <Badge
                   variant="outline"
@@ -666,8 +687,8 @@ const Dashboard = () => {
                 return {
                   id: ext.id,
                   label: ext.matricula,
-                  sublabel: `👤 ${ext.motorista_nome}`,
-                  valor: format(new Date(ext.extintor_validade), 'dd MMM', { locale: pt }),
+                  sublabel: `👤 ${ext.motorista_nome}${isExpired ? ' · vencido' : ''}`,
+                  valor: format(new Date(ext.extintor_validade), 'dd MMM yyyy', { locale: pt }),
                   severity: isExpired ? 'critical' : 'high',
                 };
               })}
@@ -687,10 +708,7 @@ const Dashboard = () => {
               }
               emptyMessage="Sem contratos a renovar em breve"
               items={contratosAPrazo.map((ct: any) => {
-                const renovacao = addMonths(
-                  new Date(ct.data_inicio + 'T00:00:00'),
-                  ct.duracao_meses ?? 12
-                );
+                const renovacao = ct._renovacao as Date;
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 const isExpired = renovacao < today;
@@ -723,9 +741,7 @@ const Dashboard = () => {
               }
               emptyMessage=""
               items={contratosExpirados.map((ct: any) => {
-                const renovacao =
-                  ct._renovacao ||
-                  addMonths(new Date(ct.data_inicio + 'T00:00:00'), ct.duracao_meses ?? 12);
+                const renovacao = ct._renovacao as Date;
                 const diasExpirado = Math.abs(
                   ct._diffDays ||
                     Math.ceil((new Date().getTime() - renovacao.getTime()) / (1000 * 60 * 60 * 24))
