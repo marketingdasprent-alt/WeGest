@@ -113,6 +113,10 @@ interface RealizarFromTokenArgs {
   combustivel?: string;
   /** Nível de bateria (viaturas elétricas/híbridas) — paralelo a `combustivel`. */
   eletricidade?: string;
+  /** ENTREGA: o motorista sai com a DUA original da viatura. */
+  duaOriginalLevada?: boolean;
+  /** RECOLHA: a DUA original foi devolvida com a viatura. */
+  duaDevolvida?: boolean;
   /** Só para tipo='troca' — dados físicos das duas viaturas envolvidas. */
   troca?: {
     viaturaAntigaId: string | null;
@@ -143,6 +147,8 @@ export function useRealizarFromToken() {
       km,
       combustivel,
       eletricidade,
+      duaOriginalLevada,
+      duaDevolvida,
       troca,
     }: RealizarFromTokenArgs): Promise<void> => {
       if (tipo === 'troca') {
@@ -177,6 +183,8 @@ export function useRealizarFromToken() {
         p_km: km ?? null,
         p_combustivel: combustivel ?? null,
         p_eletricidade: eletricidade ?? null,
+        p_dua_original_levada: duaOriginalLevada ?? null,
+        p_dua_devolvida: duaDevolvida ?? null,
       });
       if (error) throw error;
     },

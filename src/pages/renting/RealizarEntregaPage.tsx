@@ -521,27 +521,14 @@ const RealizarEntregaPage = () => {
         km: Number(km),
         combustivel: combustivel || undefined,
         eletricidade: eletrico || undefined,
+        // DUA: gravada dentro da RPC SECURITY DEFINER (robusto p/ quem confirma
+        // pelo QR sem permissão renting). Entrega: motorista levou a original;
+        // recolha: confirmou a devolução (só conta se o contrato a tinha em falta).
+        duaOriginalLevada: info.tipo === 'entrega' ? duaOriginalLevada : undefined,
+        duaDevolvida: isDevolucao ? duaDevolvido && duaOriginalContrato : undefined,
       },
       {
         onSuccess: () => {
-          // Persiste o estado da DUA no contrato (best-effort — não bloqueia o
-          // handover): na ENTREGA marca que o motorista levou a DUA original;
-          // na RECOLHA marca a devolução se o contrato a tinha em falta.
-          const duaPatch =
-            info.tipo === 'entrega' && duaOriginalLevada
-              ? { dua_original_com_motorista: true }
-              : isDevolucao && duaDevolvido && duaOriginalContrato
-                ? { dua_devolvida_em: new Date().toISOString() }
-                : null;
-          if (duaPatch) {
-            void supabase
-              .from('contratos_renting')
-              .update(duaPatch)
-              .eq('id', info.contrato_id)
-              .then(({ error }) => {
-                if (error) console.warn('Falha a gravar estado da DUA:', error);
-              });
-          }
           const tmplId = 'folha_danos';
           const matricula = formatMatricula(info.matricula);
           const params = {
