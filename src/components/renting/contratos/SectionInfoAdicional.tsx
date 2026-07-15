@@ -3,7 +3,6 @@ import type { UseFormReturn } from 'react-hook-form';
 import { EyeOff, FileText } from 'lucide-react';
 
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
 import type { ContratoFormValues } from './contratoForm.schema';

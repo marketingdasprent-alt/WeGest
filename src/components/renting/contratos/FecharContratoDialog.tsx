@@ -90,6 +90,10 @@ interface FecharContratoDialogProps {
   viaturaId?: string | null;
   /** Estação "casa" da viatura — usada para pré-preencher a estação de recolha. */
   estacaoOrigemId?: string | null;
+  /** true quando o contrato marcou que o motorista levou a DUA ORIGINAL da
+   *  viatura — reforça a exigência de confirmar a devolução ao fechar e grava
+   *  dua_devolvida_em no contrato. */
+  duaOriginalComMotorista?: boolean;
   /** Presente quando este fecho faz parte de uma troca/upgrade/downgrade:
    *  mostra o resumo das alterações e, se alguma for de viatura, exige
    *  motivo. O contrato fecha-se sempre a sério primeiro (este dialog) —
@@ -109,6 +113,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   matricula,
   viaturaId,
   estacaoOrigemId,
+  duaOriginalComMotorista = false,
   alteracoesTroca,
   onFechado,
 }) => {
@@ -135,6 +140,9 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     },
   });
   const [duaDevolvido, setDuaDevolvido] = useState(false);
+  // Exige confirmar a devolução da DUA quer a viatura tenha DUA registado, quer
+  // o contrato tenha marcado que o motorista levou a DUA original.
+  const duaAplicavel = viaturaTemDua || duaOriginalComMotorista;
 
   const form = useForm<FormInput>({
     resolver: zodResolver(schema),
@@ -437,8 +445,12 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     // devolução do documento antes de fechar.
     const eventoDeRetornoSubmit =
       values.tipoEvento === 'recolhido' || values.tipoEvento === 'devolvido';
-    if (eventoDeRetornoSubmit && viaturaTemDua && !duaDevolvido) {
-      toast.error('Esta viatura tem DUA. Confirma que o DUA foi devolvido antes de fechar.');
+    if (eventoDeRetornoSubmit && duaAplicavel && !duaDevolvido) {
+      toast.error(
+        duaOriginalComMotorista
+          ? 'O motorista levou a DUA ORIGINAL. Confirma que foi devolvida antes de fechar.'
+          : 'Esta viatura tem DUA. Confirma que o DUA foi devolvido antes de fechar.'
+      );
       return;
     }
 
@@ -476,6 +488,9 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       motivo: values.motivo,
       valorDivida: values.valorDivida,
       recolha: registarAgora ? { km, combustivel, fotos: files.map((f) => f.file) } : undefined,
+      // Se o motorista tinha levado a DUA original e o gestor confirma a
+      // devolução, regista dua_devolvida_em no contrato (fecha o ciclo do aviso).
+      marcarDuaDevolvida: duaOriginalComMotorista && duaDevolvido,
     });
     if (registarAgora) {
       await gerarFolha('print');
@@ -493,7 +508,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   // devolvida pelo motorista) — em ambos o DUA físico regressa e tem de ser
   // confirmado. Só exigimos quando a viatura tem DUA e já se escolheu o evento.
   const eventoDeRetorno = tipoEvento === 'recolhido' || tipoEvento === 'devolvido';
-  const exigeDua = eventoDeRetorno && viaturaTemDua && !duaDevolvido;
+  const exigeDua = eventoDeRetorno && duaAplicavel && !duaDevolvido;
 
   return (
     <Dialog
@@ -616,7 +631,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                   )}
                 </div>
 
-                {eventoDeRetorno && viaturaTemDua && (
+                {eventoDeRetorno && duaAplicavel && (
                   <label className="flex items-start gap-3 rounded-md border border-amber-500/50 bg-amber-500/5 p-3 cursor-pointer">
                     <Checkbox
                       checked={duaDevolvido}
@@ -627,12 +642,16 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                       <span className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
                         <FileText className="h-4 w-4" />
                         {/* Declaração na 1ª pessoa — clique consciente, não só para desbloquear */}
-                        {tipoEvento === 'recolhido'
-                          ? 'Confirmo que recolhi o DUA físico com a viatura'
-                          : 'Confirmo que recebi o DUA físico do motorista'}
+                        {duaOriginalComMotorista
+                          ? 'Confirmo que o motorista devolveu a DUA ORIGINAL da viatura'
+                          : tipoEvento === 'recolhido'
+                            ? 'Confirmo que recolhi o DUA físico com a viatura'
+                            : 'Confirmo que recebi o DUA físico do motorista'}
                       </span>
                       <span className="text-muted-foreground">
-                        Esta viatura tem DUA associado — obrigatório para poder fechar o contrato.
+                        {duaOriginalComMotorista
+                          ? 'Este contrato marcou que o motorista levou a DUA original — obrigatório confirmar a devolução para fechar.'
+                          : 'Esta viatura tem DUA associado — obrigatório para poder fechar o contrato.'}
                       </span>
                     </span>
                   </label>

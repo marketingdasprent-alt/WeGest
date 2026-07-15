@@ -157,6 +157,14 @@ export type ContratoRenting = {
   km_saida: number | null;
   km_entrada: number | null;
 
+  /** DUA original — o motorista levou a DUA física da viatura. A flag e a nota
+   *  vêm do formulário; `dua_devolvida_em` é escrito só no fecho (quando o
+   *  gestor confirma a devolução). Aviso de devolução ativo enquanto
+   *  dua_original_com_motorista && !dua_devolvida_em. */
+  dua_original_com_motorista: boolean;
+  dua_devolvida_em: string | null;
+  dua_observacoes: string | null;
+
   voucher_codigo: string | null;
 
   observacoes: string | null;
@@ -194,6 +202,11 @@ export type ContratoRentingInsert = Omit<
   // (renovar_contrato_renting), nunca pelo formulário de criar/editar.
   | 'km_saida'
   | 'km_entrada'
+  // Os campos DUA são escritos no fluxo de entrega/recolha da viatura
+  // (RealizarEntregaPage) e no fecho, nunca no formulário do contrato.
+  | 'dua_original_com_motorista'
+  | 'dua_devolvida_em'
+  | 'dua_observacoes'
   | 'deleted_at'
   | 'created_by'
   | 'updated_by'
