@@ -46,6 +46,7 @@ interface Lead {
   created_at: string;
   formulario_id?: string;
   gestor_responsavel?: string;
+  caucao_valor?: number | null;
 }
 
 interface LeadDetailsDialogProps {
@@ -367,7 +368,7 @@ export const LeadDetailsDialog: React.FC<LeadDetailsDialogProps> = ({
                 </div>
 
                 {/* Additional Details */}
-                {(lead.data_aluguer || lead.tipo_viatura) && (
+                {(lead.data_aluguer || lead.tipo_viatura || lead.caucao_valor != null) && (
                   <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
                     <h3 className="text-sm font-semibold text-white mb-3">Detalhes</h3>
                     <div className="space-y-2 text-sm">
@@ -385,6 +386,13 @@ export const LeadDetailsDialog: React.FC<LeadDetailsDialogProps> = ({
                         <div className="flex items-center gap-2">
                           <Car className="h-3 w-3 text-gray-400" />
                           <span className="text-gray-300">{lead.tipo_viatura}</span>
+                        </div>
+                      )}
+                      {lead.caucao_valor != null && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-300">
+                            Caução: {lead.caucao_valor.toFixed(2)} €
+                          </span>
                         </div>
                       )}
                     </div>
