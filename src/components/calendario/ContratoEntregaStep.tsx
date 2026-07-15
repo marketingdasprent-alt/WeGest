@@ -252,6 +252,11 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
       return;
     }
 
+    if (selectedTemplates.size > 0 && !cidadeAssinatura.trim()) {
+      toast.error('Indique a cidade de assinatura');
+      return;
+    }
+
     setSaving(true);
     try {
       // 1. Create the calendar event
@@ -627,7 +632,11 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
                 onChange={(e) => setDataInicio(e.target.value)}
               />
             </div>
-            <CidadeAssinaturaField value={cidadeAssinatura} onChange={setCidadeAssinatura} />
+            <CidadeAssinaturaField
+              value={cidadeAssinatura}
+              onChange={setCidadeAssinatura}
+              required={selectedTemplates.size > 0}
+            />
           </div>
 
           {templates.length > 0 && (

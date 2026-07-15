@@ -15,6 +15,10 @@ interface CidadeAssinaturaFieldProps {
   value: string;
   onChange: (value: string) => void;
   label?: string;
+  /** Mostra o "*" e destaca a borda quando vazio — o chamador ainda tem de
+   *  bloquear a submissão (ver validação em cada dialog). Default true, já
+   *  que este campo é sempre obrigatório antes de gerar documentos. */
+  required?: boolean;
 }
 
 /** Campo "Cidade de Assinatura" para {{cidade_assinatura}} — escolhe a
@@ -25,14 +29,19 @@ export function CidadeAssinaturaField({
   value,
   onChange,
   label = 'Cidade de Assinatura',
+  required = true,
 }: CidadeAssinaturaFieldProps) {
   const { data: estacoes = [] } = useEstacoes();
   const estacaoAtual = estacoes.find((e) => e.cidade === value);
   const modoLivre = !estacaoAtual && !!value;
+  const vazio = required && !value.trim();
 
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
+      <Label className={vazio ? 'text-destructive' : undefined}>
+        {label}
+        {required && <span className="text-destructive"> *</span>}
+      </Label>
       {estacoes.length > 0 && (
         <Select
           value={estacaoAtual ? estacaoAtual.id : modoLivre ? OUTRA : ''}
@@ -42,7 +51,7 @@ export function CidadeAssinaturaField({
             if (e) onChange(e.cidade || e.nome);
           }}
         >
-          <SelectTrigger>
+          <SelectTrigger className={vazio ? 'border-destructive' : undefined}>
             <SelectValue placeholder="Selecionar estação..." />
           </SelectTrigger>
           <SelectContent>
@@ -57,7 +66,12 @@ export function CidadeAssinaturaField({
         </Select>
       )}
       {(modoLivre || estacoes.length === 0) && (
-        <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Ex: Lisboa" />
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Ex: Lisboa"
+          className={vazio ? 'border-destructive' : undefined}
+        />
       )}
     </div>
   );

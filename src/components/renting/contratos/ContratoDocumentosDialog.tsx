@@ -164,6 +164,10 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
       toast({ title: 'Selecione pelo menos um documento', variant: 'destructive' });
       return;
     }
+    if (!cidadeAssinatura.trim()) {
+      toast({ title: 'Indique a cidade de assinatura', variant: 'destructive' });
+      return;
+    }
 
     try {
       setGerando(true);
@@ -299,7 +303,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
           <Button
             variant="outline"
             onClick={() => gerar('download')}
-            disabled={gerando || loading || count === 0}
+            disabled={gerando || loading || count === 0 || !cidadeAssinatura.trim()}
             className="gap-2"
           >
             {gerando ? (
@@ -311,7 +315,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
           </Button>
           <Button
             onClick={() => gerar('print')}
-            disabled={gerando || loading || count === 0}
+            disabled={gerando || loading || count === 0 || !cidadeAssinatura.trim()}
             className="gap-2"
           >
             {gerando ? (

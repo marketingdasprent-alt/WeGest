@@ -184,6 +184,10 @@ export const TrocaCheckinStep: React.FC<{
       toast.error('Nenhuma empresa configurada');
       return;
     }
+    if (!cidadeAssinatura.trim()) {
+      toast.error('Indique a cidade de assinatura');
+      return;
+    }
 
     setSaving(true);
     try {
