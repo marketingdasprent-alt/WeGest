@@ -93,7 +93,7 @@ const RealizarEntregaPage = () => {
       const empty = {
         viaturaId: null as string | null,
         emissorId: null as string | null,
-        empresaData: null as Record<string, string> | null,
+        empresaData: null as Record<string, string | null> | null,
         condutorNome: '',
         condutorEmail: '',
         clienteNome: '',
@@ -117,6 +117,8 @@ const RealizarEntregaPage = () => {
               licencaValidade: row.empresa_licenca_validade ?? '',
               representante: row.empresa_representante ?? '',
               cargoRepresentante: row.empresa_cargo_representante ?? '',
+              papelTimbrado: row.empresa_papel_timbrado ?? null,
+              logoUrl: row.empresa_logo_url ?? null,
             }
           : null,
         condutorNome: row.condutor_nome ?? '',

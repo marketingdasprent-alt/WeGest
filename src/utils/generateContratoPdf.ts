@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { empresaDocData, empresaFooterText, type EmpresaConfig } from '@/config/empresas';
+import { resolveCartaoFrota } from './document-template/resolveCartaoFrota';
 
 import {
   generateDocumentosCombinados,
@@ -290,6 +291,9 @@ export const generateContratoPdf = async ({
   const num = (n: number | null | undefined) =>
     n != null && !Number.isNaN(Number(n)) ? String(n) : '—';
 
+  // Cartão de combustível do motorista (placeholders {{cartao_frota_*}}).
+  const cartaoFrota = await resolveCartaoFrota(mo?.id ?? null);
+
   const documentData = {
     data_inicio: contrato.data_inicio,
     data_fim: contrato.data_fim,
@@ -320,6 +324,10 @@ export const generateContratoPdf = async ({
     iva: eur(contrato.total_iva),
     total: contrato.total_final != null ? eur(contrato.total_final) : 'A facturar',
     observacoes: contrato.observacoes ?? '',
+    cartao_frota_marca: cartaoFrota.marca,
+    cartao_frota_numero: cartaoFrota.numero,
+    cartao_frota_validade: cartaoFrota.validade,
+    cartao_frota_limite: cartaoFrota.limite,
     empresaData: empresaDocData(empresa),
     // Cliente do contrato (locatário) — alimenta os placeholders {{cliente_*}}.
     // É sempre o contrato.cliente_id, NÃO o condutor principal. Em TVDE, o

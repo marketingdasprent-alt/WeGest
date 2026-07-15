@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { empresaDocData, empresaFooterText, type EmpresaConfig } from '@/config/empresas';
+import { resolveCartaoFrota } from './document-template/resolveCartaoFrota';
 
 import {
   generateDocumentosCombinados,
@@ -84,6 +85,9 @@ export const generateContratoPrestacaoPdf = async ({
   const eur = (n: number | null | undefined) =>
     n != null && !Number.isNaN(Number(n)) ? `${Number(n).toFixed(2)} €` : '—';
 
+  // Cartão de combustível do motorista (placeholders {{cartao_frota_*}}).
+  const cartaoFrota = await resolveCartaoFrota(motorista.id ?? null);
+
   const documentData = {
     data_inicio: dataInicio ?? today,
     data_assinatura: today,
@@ -93,6 +97,10 @@ export const generateContratoPrestacaoPdf = async ({
     viatura_data_matricula: viatura?.data_matricula ?? '',
     viatura_marca_modelo: viatura ? `${viatura.marca} ${viatura.modelo}`.trim() : '—',
     valor_semanal: eur(valorSemanal),
+    cartao_frota_marca: cartaoFrota.marca,
+    cartao_frota_numero: cartaoFrota.numero,
+    cartao_frota_validade: cartaoFrota.validade,
+    cartao_frota_limite: cartaoFrota.limite,
     empresaData: empresaDocData(empresa),
   };
 

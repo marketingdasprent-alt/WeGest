@@ -54,7 +54,7 @@ export const empresaFooterText = (e: EmpresaConfig): string =>
   [e.nomeCompleto, e.nif ? `NIF ${e.nif}` : null, e.sede].filter(Boolean).join('   ·   ');
 
 /** Dados da empresa no formato esperado por `documentData.empresaData`
- *  (placeholders {{empresa_*}}). */
+ *  (placeholders {{empresa_*}} + papel timbrado/logo usados como fundo do PDF). */
 export const empresaDocData = (e: EmpresaConfig) => ({
   nomeCompleto: e.nomeCompleto,
   nif: e.nif,
@@ -63,4 +63,6 @@ export const empresaDocData = (e: EmpresaConfig) => ({
   licencaValidade: e.licencaValidade,
   representante: e.representante,
   cargoRepresentante: e.cargoRepresentante,
+  papelTimbrado: e.papelTimbrado || null,
+  logoUrl: e.logoUrl ?? null,
 });

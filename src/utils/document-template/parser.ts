@@ -323,8 +323,15 @@ export const replaceDynamicFields = (
     });
     const marca = documentData['cartao_frota_marca'] || cards[0]?.marca || '';
     const numero = documentData['cartao_frota_numero'] || cards[0]?.num || '';
+    // Validade/limite não têm equivalente em motoristaData (nunca foram
+    // sincronizados para lá) — só resolvem via documentData, preenchido por
+    // resolveCartaoFrota() nos pontos de geração de documentos.
+    const validade = documentData['cartao_frota_validade'] || '';
+    const limite = documentData['cartao_frota_limite'] || '';
     result = result.replace(/\{\{cartao_frota_marca\}\}/g, marca);
     result = result.replace(/\{\{cartao_frota_numero\}\}/g, numero);
+    result = result.replace(/\{\{cartao_frota_validade\}\}/g, validade);
+    result = result.replace(/\{\{cartao_frota_limite\}\}/g, limite);
   }
 
   // Datas especiais
