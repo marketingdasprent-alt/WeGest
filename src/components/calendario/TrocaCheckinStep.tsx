@@ -20,6 +20,7 @@ import {
 } from './CheckinDadosSection';
 import type { CheckinDadosState } from './CheckinDadosSection';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
 import { useOrgId } from '@/contexts/TenantContext';
 
 interface SelectedFile {
@@ -514,15 +515,11 @@ export const TrocaCheckinStep: React.FC<{
                   className="h-8 text-sm"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Cidade Assinatura</Label>
-                <Input
-                  value={cidadeAssinatura}
-                  onChange={(e) => setCidadeAssinatura(e.target.value)}
-                  className="h-8 text-sm"
-                  placeholder="Ex: Leiria"
-                />
-              </div>
+              <CidadeAssinaturaField
+                value={cidadeAssinatura}
+                onChange={setCidadeAssinatura}
+                label="Cidade Assinatura"
+              />
             </div>
 
             <CheckinDadosSection

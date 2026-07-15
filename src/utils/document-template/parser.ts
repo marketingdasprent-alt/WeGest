@@ -118,6 +118,7 @@ export const replaceDynamicFields = (
     motorista_documento_tipo: 'documento_tipo',
     motorista_documento_numero: 'documento_numero',
     motorista_documento_validade: 'documento_validade',
+    motorista_iban: 'iban',
   };
 
   const motoristaFieldMapLegacy: Record<string, string> = {

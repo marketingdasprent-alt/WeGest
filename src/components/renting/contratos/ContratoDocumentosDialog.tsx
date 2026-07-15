@@ -29,6 +29,7 @@ import type { ContratoRenting, ContratoCondutor } from '@/types/contratoRenting'
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Motorista } from '@/types/motorista';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
+import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
 
 interface Props {
   open: boolean;
@@ -76,6 +77,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
   const [empresaId, setEmpresaId] = useState(empresaPorDefeito);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gerando, setGerando] = useState(false);
+  const [cidadeAssinatura, setCidadeAssinatura] = useState('');
 
   // Chave estável de um condutor (cliente_id em rent-a-car, motorista_id em
   // TVDE/slot) — usada para seleccionar para quem gerar os documentos.
@@ -120,6 +122,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
     if (open) setEmpresaId(empresaPorDefeito);
     else {
       setSelected(new Set());
+      setCidadeAssinatura('');
       preSelectKey.current = null;
     }
   }, [open, empresaPorDefeito]);
@@ -179,6 +182,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
         empresa,
         action,
         templateIds,
+        cidadeAssinatura,
       });
       onOpenChange(false);
     } catch (err) {
@@ -246,6 +250,8 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
               </p>
             </div>
           )}
+
+          <CidadeAssinaturaField value={cidadeAssinatura} onChange={setCidadeAssinatura} />
 
           <div className="space-y-2">
             <Label>Documentos a Gerar</Label>

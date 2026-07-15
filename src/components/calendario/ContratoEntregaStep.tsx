@@ -29,6 +29,7 @@ import jsPDF from 'jspdf';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { empresaDocData } from '@/config/empresas';
 import { resolveCartaoFrota } from '@/utils/document-template/resolveCartaoFrota';
+import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
 import { useOrgId } from '@/contexts/TenantContext';
 import {
   uploadDocumentToStorage,
@@ -128,7 +129,7 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
       const { data, error } = await supabase
         .from('motoristas_ativos')
         .select(
-          'id, nome, nif, email, telefone, morada, documento_tipo, documento_numero, data_contratacao, cidade'
+          'id, nome, nif, email, telefone, morada, documento_tipo, documento_numero, data_contratacao, cidade, iban'
         )
         .eq('id', motoristaId)
         .single();
@@ -626,14 +627,7 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
                 onChange={(e) => setDataInicio(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Cidade de Assinatura</Label>
-              <Input
-                value={cidadeAssinatura}
-                onChange={(e) => setCidadeAssinatura(e.target.value)}
-                placeholder="Ex: Leiria"
-              />
-            </div>
+            <CidadeAssinaturaField value={cidadeAssinatura} onChange={setCidadeAssinatura} />
           </div>
 
           {templates.length > 0 && (

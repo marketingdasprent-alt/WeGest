@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { generateContratoPrestacaoPdf } from '@/utils/generateContratoPrestacaoPdf';
+import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
 
 import type { Reserva } from '@/types/reserva';
 import type { Motorista } from '@/types/motorista';
@@ -40,6 +41,7 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
   const { toast } = useToast();
   const { empresas } = useClientesEmpresas();
   const [loading, setLoading] = useState(false);
+  const [cidadeAssinatura, setCidadeAssinatura] = useState('');
 
   const motorista = reserva.condutor_id
     ? (motoristas.find((m) => m.id === reserva.condutor_id) ?? null)
@@ -101,6 +103,7 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
         numeroContrato: inserted?.codigo ?? null,
         empresa,
         action: 'print',
+        cidadeAssinatura,
       });
 
       toast({
@@ -163,6 +166,7 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
               <p className="font-medium">{fmtEur(reserva.slot_valor_mensal)}</p>
             </div>
           </div>
+          <CidadeAssinaturaField value={cidadeAssinatura} onChange={setCidadeAssinatura} />
         </div>
 
         <DialogFooter>
