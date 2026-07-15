@@ -189,26 +189,14 @@ const RentingReservaForm = () => {
     defaultValues: DEFAULT_VALUES,
   });
 
-  // Partilha o control+name com o `useFieldArray` de CondutoresFields/
-  // SlotMotoristaViatura — `append` sincroniza a cópia interna que desenha
-  // essas tabelas; um `form.setValue('condutores', ...)` isolado não o faz.
+  // Instância-pai de useFieldArray para os handlers "criar cliente/motorista"
+  // (append) e o fluxo slot (replace). A HIDRATAÇÃO das listas é feita com
+  // `form.reset` (mais abaixo) — um `replace()`/`setValue` de instância-pai NÃO
+  // chega ao useFieldArray-filho que desenha a tabela de condutores.
   const { append: appendCondutor, replace: replaceCondutores } = useFieldArray({
     control: form.control,
     name: 'condutores',
   });
-  // Instâncias-pai de useFieldArray para as restantes listas m:n. Servem para
-  // HIDRATAR via `replace()` (sincroniza a cópia interna que as tabelas filhas
-  // desenham) sem tocar em mais nenhum campo do formulário. Antes a hidratação
-  // usava `form.reset({...getValues(), lista})`, que — mesmo com
-  // keepDirtyValues — reescrevia o formulário todo e, em certas ordens de
-  // render, deixava cair campos irmãos acabados de escolher (empresa emissora,
-  // longa duração). `replace()` é cirúrgico: mexe só na própria lista.
-  const { replace: replaceCoberturas } = useFieldArray({
-    control: form.control,
-    name: 'coberturas',
-  });
-  const { replace: replaceExtras } = useFieldArray({ control: form.control, name: 'extras' });
-  const { replace: replaceTaxas } = useFieldArray({ control: form.control, name: 'taxas' });
 
   // Pré-preenchimento via URL (criar reserva a partir de viatura/cliente).
   // Só corre uma vez — mas só marca como feito depois de resolver o grupo (se
@@ -338,66 +326,82 @@ const RentingReservaForm = () => {
   }, [isEdit, reserva, form]);
 
   // Hidratação das relações m:n — em efeitos próprios (não no reset principal)
-  // para poderem re-sincronizar com segurança sempre que a respectiva query
-  // refetch (ex.: logo após guardar), sem apagar o resto do formulário
-  // entretanto editado (`keepDirtyValues` preserva qualquer campo que o
-  // utilizador já tenha alterado, incluindo esta mesma lista).
+  // para poderem re-sincronizar sempre que a respectiva query refetch (ex.:
+  // logo após guardar), sem apagar o resto do formulário entretanto editado.
   //
-  // `form.setValue(nomeDoArray, ...)` NÃO chega a quem usa `useFieldArray`
-  // para esse mesmo nome (CondutoresFields/ReservaTab{Cobertura,Extras,Taxas}):
-  // o valor bruto do form fica correcto, mas o array interno do
-  // `useFieldArray` (o que é realmente desenhado, via `fields.map(...)`) só
-  // resincroniza com métodos próprios (append/remove/replace) ou com um
-  // `reset()` — nunca com um `setValue` isolado. Resultado: a lista aparecia
-  // vazia ao abrir uma reserva existente, e só "reaparecia" (a par do novo)
-  // depois de adicionar manualmente um item novo (que já passa por `append`).
+  // TEM de ser `form.reset(...)` (com keepDirtyValues), NÃO um `replace()` de
+  // uma instância-pai de useFieldArray nem um `setValue`: os componentes que
+  // desenham estas listas (CondutoresFields / ReservaTab{Cobertura,Extras,
+  // Taxas}) têm o SEU PRÓPRIO useFieldArray com o mesmo nome. Duas instâncias
+  // de useFieldArray no mesmo campo NÃO sincronizam entre si — um replace()
+  // no pai atualiza o valor do form mas a cópia interna do filho (o que é
+  // desenhado) fica vazia; o item existia mas ficava invisível, e só reaparecia
+  // (a par do novo) ao adicionar um manualmente. Só `form.reset` re-inicializa
+  // TODAS as instâncias de useFieldArray de uma vez. keepDirtyValues preserva
+  // os campos que o utilizador já alterou, incluindo a própria lista.
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    replaceCoberturas(
-      coberturasAtuais.map((c) => ({
-        cobertura_id: c.cobertura_id,
-        cobertura_nome: c.cobertura_nome,
-        preco_dia: c.preco_dia,
-        franquia_valor: c.franquia_valor,
-      }))
+    form.reset(
+      {
+        ...form.getValues(),
+        coberturas: coberturasAtuais.map((c) => ({
+          cobertura_id: c.cobertura_id,
+          cobertura_nome: c.cobertura_nome,
+          preco_dia: c.preco_dia,
+          franquia_valor: c.franquia_valor,
+        })),
+      },
+      { keepDirtyValues: true }
     );
-  }, [isEdit, reserva, coberturasAtuais, replaceCoberturas]);
+  }, [isEdit, reserva, coberturasAtuais, form]);
 
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    replaceExtras(
-      extrasAtuais.map((e) => ({
-        extra_id: e.extra_id,
-        extra_nome: e.extra_nome,
-        preco_unidade: e.preco_unidade,
-        tipo_calculo: e.tipo_calculo,
-        quantidade: e.quantidade,
-      }))
+    form.reset(
+      {
+        ...form.getValues(),
+        extras: extrasAtuais.map((e) => ({
+          extra_id: e.extra_id,
+          extra_nome: e.extra_nome,
+          preco_unidade: e.preco_unidade,
+          tipo_calculo: e.tipo_calculo,
+          quantidade: e.quantidade,
+        })),
+      },
+      { keepDirtyValues: true }
     );
-  }, [isEdit, reserva, extrasAtuais, replaceExtras]);
+  }, [isEdit, reserva, extrasAtuais, form]);
 
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    replaceTaxas(
-      taxasAtuais.map((t) => ({
-        taxa_id: t.taxa_id,
-        taxa_nome: t.taxa_nome,
-        percentagem: t.percentagem,
-        valor_fixo: t.valor_fixo,
-      }))
+    form.reset(
+      {
+        ...form.getValues(),
+        taxas: taxasAtuais.map((t) => ({
+          taxa_id: t.taxa_id,
+          taxa_nome: t.taxa_nome,
+          percentagem: t.percentagem,
+          valor_fixo: t.valor_fixo,
+        })),
+      },
+      { keepDirtyValues: true }
     );
-  }, [isEdit, reserva, taxasAtuais, replaceTaxas]);
+  }, [isEdit, reserva, taxasAtuais, form]);
 
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    replaceCondutores(
-      condutoresAtuais.map((c) => ({
-        cliente_id: c.cliente_id,
-        motorista_id: c.motorista_id,
-        is_principal: c.is_principal,
-      }))
+    form.reset(
+      {
+        ...form.getValues(),
+        condutores: condutoresAtuais.map((c) => ({
+          cliente_id: c.cliente_id,
+          motorista_id: c.motorista_id,
+          is_principal: c.is_principal,
+        })),
+      },
+      { keepDirtyValues: true }
     );
-  }, [isEdit, reserva, condutoresAtuais, replaceCondutores]);
+  }, [isEdit, reserva, condutoresAtuais, form]);
 
   // Reservas com `grupo` vazio mas cuja viatura já tem grupo_id atribuído (ex.:
   // criadas antes do grupo ficar preenchido, ou a viatura só recebeu grupo

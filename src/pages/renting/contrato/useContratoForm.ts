@@ -294,21 +294,11 @@ export function useContratoForm(): UseContratoFormReturn {
     defaultValues: DEFAULT_CONTRATO_VALUES,
   });
 
-  // Partilha o control+name com o `useFieldArray` de CondutoresFields —
-  // `append` sincroniza a cópia interna que desenha essa tabela; um
-  // `form.setValue('condutores', ...)` isolado não o faz.
-  const { append: appendCondutor, replace: replaceCondutores } = useFieldArray({
-    control: form.control,
-    name: 'condutores',
-  });
-  // Instâncias-pai para hidratar as restantes listas m:n via `replace()`
-  // (cirúrgico — só toca na própria lista, não reescreve o formulário todo).
-  const { replace: replaceCoberturas } = useFieldArray({
-    control: form.control,
-    name: 'coberturas',
-  });
-  const { replace: replaceExtras } = useFieldArray({ control: form.control, name: 'extras' });
-  const { replace: replaceTaxas } = useFieldArray({ control: form.control, name: 'taxas' });
+  // Instância-pai de useFieldArray só para os handlers "criar cliente/motorista"
+  // (usam `append`, que sincroniza a cópia interna do useFieldArray-filho que
+  // desenha a tabela). A HIDRATAÇÃO das listas é feita com `form.reset` (mais
+  // abaixo) — um `replace()`/`setValue` de instância-pai NÃO chega ao filho.
+  const { append: appendCondutor } = useFieldArray({ control: form.control, name: 'condutores' });
 
   // Guard: criar contrato sem reserva_id na URL → redirecionar
   useEffect(() => {
@@ -443,66 +433,81 @@ export function useContratoForm(): UseContratoFormReturn {
     form,
   ]);
 
-  // Hydration das relações m:n — `form.setValue(nomeDoArray, ...)` não chega a
-  // quem usa `useFieldArray` para esse mesmo nome (CondutoresFields/
-  // ContratoTab{Cobertura,Extras,Taxas}): o valor bruto do form fica
-  // correcto, mas o array interno do `useFieldArray` (o que é realmente
-  // desenhado) só resincroniza com métodos próprios (append/remove/replace)
-  // ou com um `reset()` — nunca com um `setValue` isolado. Resultado: a
-  // lista aparecia vazia ao abrir um contrato existente, e só "reaparecia"
-  // (a par do novo) depois de adicionar manualmente um item novo (que já
-  // passa por `append`). `keepDirtyValues` preserva qualquer campo que o
-  // utilizador já tenha alterado entretanto, incluindo esta mesma lista.
+  // Hydration das relações m:n — TEM de ser `form.reset(...)` (keepDirtyValues),
+  // NÃO um `replace()` de instância-pai de useFieldArray nem `setValue`. Os
+  // componentes que desenham estas listas (CondutoresFields / ContratoTab
+  // {Cobertura,Extras,Taxas}) têm o SEU PRÓPRIO useFieldArray com o mesmo nome;
+  // duas instâncias de useFieldArray no mesmo campo NÃO sincronizam entre si —
+  // um replace() no pai atualiza o valor do form mas a cópia interna do filho
+  // (o que é desenhado) fica vazia (o item existia mas invisível, só reaparecia
+  // ao adicionar um manualmente). Só `form.reset` re-inicializa TODAS as
+  // instâncias de uma vez. keepDirtyValues preserva o que já foi editado.
   useEffect(() => {
     if (!isEdit || !contrato || !condutoresDb) return;
-    replaceCondutores(
-      condutoresDb.map((c) => ({
-        cliente_id: c.cliente_id,
-        motorista_id: c.motorista_id,
-        is_principal: c.is_principal,
-      }))
+    form.reset(
+      {
+        ...form.getValues(),
+        condutores: condutoresDb.map((c) => ({
+          cliente_id: c.cliente_id,
+          motorista_id: c.motorista_id,
+          is_principal: c.is_principal,
+        })),
+      },
+      { keepDirtyValues: true }
     );
-  }, [isEdit, contrato, condutoresDb, replaceCondutores]);
+  }, [isEdit, contrato, condutoresDb, form]);
 
   // Hydration: coberturas
   useEffect(() => {
     if (!isEdit || !contrato || !coberturasDb) return;
-    replaceCoberturas(
-      coberturasDb.map((c) => ({
-        cobertura_id: c.cobertura_id,
-        cobertura_nome: c.cobertura_nome,
-        preco_dia: c.preco_dia,
-        franquia_valor: c.franquia_valor,
-      }))
+    form.reset(
+      {
+        ...form.getValues(),
+        coberturas: coberturasDb.map((c) => ({
+          cobertura_id: c.cobertura_id,
+          cobertura_nome: c.cobertura_nome,
+          preco_dia: c.preco_dia,
+          franquia_valor: c.franquia_valor,
+        })),
+      },
+      { keepDirtyValues: true }
     );
-  }, [isEdit, contrato, coberturasDb, replaceCoberturas]);
+  }, [isEdit, contrato, coberturasDb, form]);
 
   // Hydration: extras
   useEffect(() => {
     if (!isEdit || !contrato || !extrasDb) return;
-    replaceExtras(
-      extrasDb.map((e) => ({
-        extra_id: e.extra_id,
-        extra_nome: e.extra_nome,
-        preco_unidade: e.preco_unidade,
-        tipo_calculo: e.tipo_calculo,
-        quantidade: e.quantidade,
-      }))
+    form.reset(
+      {
+        ...form.getValues(),
+        extras: extrasDb.map((e) => ({
+          extra_id: e.extra_id,
+          extra_nome: e.extra_nome,
+          preco_unidade: e.preco_unidade,
+          tipo_calculo: e.tipo_calculo,
+          quantidade: e.quantidade,
+        })),
+      },
+      { keepDirtyValues: true }
     );
-  }, [isEdit, contrato, extrasDb, replaceExtras]);
+  }, [isEdit, contrato, extrasDb, form]);
 
   // Hydration: taxas
   useEffect(() => {
     if (!isEdit || !contrato || !taxasDb) return;
-    replaceTaxas(
-      taxasDb.map((t) => ({
-        taxa_id: t.taxa_id,
-        taxa_nome: t.taxa_nome,
-        percentagem: t.percentagem,
-        valor_fixo: t.valor_fixo,
-      }))
+    form.reset(
+      {
+        ...form.getValues(),
+        taxas: taxasDb.map((t) => ({
+          taxa_id: t.taxa_id,
+          taxa_nome: t.taxa_nome,
+          percentagem: t.percentagem,
+          valor_fixo: t.valor_fixo,
+        })),
+      },
+      { keepDirtyValues: true }
     );
-  }, [isEdit, contrato, taxasDb, replaceTaxas]);
+  }, [isEdit, contrato, taxasDb, form]);
 
   // ── Reactive values ───────────────────────────────────────────
   const viaturaId = form.watch('viatura_id');
