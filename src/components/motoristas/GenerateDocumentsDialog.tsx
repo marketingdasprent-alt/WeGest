@@ -29,6 +29,8 @@ import {
   uploadDocumentToStorage,
 } from '@/utils/generateDocumentFromTemplate';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import { empresaDocData } from '@/config/empresas';
+import { resolveCartaoFrota } from '@/utils/document-template/resolveCartaoFrota';
 import { matchesSearch, cn } from '@/lib/utils';
 import { printPdf } from '@/lib/printPdf';
 
@@ -371,6 +373,11 @@ export const GenerateDocumentsDialog = ({
         }
       };
 
+      // Cartão de combustível (placeholders {{cartao_frota_*}}) — upgrade da
+      // fonte anterior (motoristaData.cartao_bp/repsol/edp acima) para também
+      // trazer validade/limite, vindos diretamente de cartoes_frota.
+      const cartaoFrota = await resolveCartaoFrota(activeMotorista.id ?? null);
+
       const dataAssinaturaEfetiva = dataAssinatura || activeMotorista.data_contratacao || today;
       const docParams = {
         data_inicio: dataAssinaturaEfetiva,
@@ -385,17 +392,11 @@ export const GenerateDocumentsDialog = ({
               viatura_kms: viaturaDoc.km_atual != null ? String(viaturaDoc.km_atual) : '',
             }
           : {}),
-        empresaData: empresa
-          ? {
-              nomeCompleto: empresa.nomeCompleto,
-              nif: empresa.nif,
-              sede: empresa.sede,
-              licencaTVDE: empresa.licencaTVDE,
-              licencaValidade: empresa.licencaValidade,
-              representante: empresa.representante,
-              cargoRepresentante: empresa.cargoRepresentante,
-            }
-          : undefined,
+        cartao_frota_marca: cartaoFrota.marca,
+        cartao_frota_numero: cartaoFrota.numero,
+        cartao_frota_validade: cartaoFrota.validade,
+        cartao_frota_limite: cartaoFrota.limite,
+        empresaData: empresa ? empresaDocData(empresa) : undefined,
       };
 
       // Criar/reutilizar contrato UMA vez (não por template)

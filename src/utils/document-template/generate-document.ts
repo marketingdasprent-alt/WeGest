@@ -86,16 +86,25 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     const leftMargin = 20;
     const rightMargin = 20;
 
-    // Carregar papel timbrado (background) se existir.
+    // Papel timbrado (background): a empresa manda sempre; só cai para o timbre
+    // gravado no próprio template se a empresa não tiver nenhum definido
+    // (compatibilidade com templates configurados antes de o timbre passar a
+    // viver na empresa).
+    //
     // NÃO condicionar a `!existingPdf`: em documentos COMBINADOS (ex.: TVDE =
     // Prestação + Aluguer, via generateDocumentosCombinados) todos os docs a
-    // seguir ao primeiro recebem `existingPdf` — com a guarda antiga o `bg`
-    // ficava null e ESSES documentos saíam sem timbrado em nenhuma página (só
-    // o 1.º documento vinha timbrado). Carregar sempre que houver URL faz o
-    // bloco abaixo (existingPdf && bg) carimbar a 1.ª página do doc de
-    // continuação e o renderHtmlBlock/renderTable re-aplicá-lo nas seguintes.
-    const bg: HTMLImageElement | null = templateData.papel_timbrado_url
-      ? await loadImage(templateData.papel_timbrado_url).catch(() => null)
+    // seguir ao primeiro recebem `existingPdf` — com essa guarda o `bg` ficava
+    // null e ESSES documentos saíam sem timbrado em nenhuma página (só o 1.º
+    // vinha timbrado). Carregar sempre que houver URL faz o bloco abaixo
+    // carimbar a 1.ª página do doc de continuação e o renderHtmlBlock/render
+    // Table re-aplicá-lo nas páginas seguintes.
+    const papelTimbradoUrl: string | null =
+      (documentData?.empresaData as { papelTimbrado?: string | null } | undefined)?.papelTimbrado ||
+      templateData.papel_timbrado_url ||
+      null;
+
+    const bg: HTMLImageElement | null = papelTimbradoUrl
+      ? await loadImage(papelTimbradoUrl).catch(() => null)
       : null;
 
     const hasLetterhead = !!bg;
@@ -240,7 +249,7 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     // Numeração de páginas
     const endPage = pdf.getNumberOfPages();
     const docTotalPages = endPage - startPage + 1;
-    const usarFooterEmpresa = !!params.footerText && !templateData.papel_timbrado_url;
+    const usarFooterEmpresa = !!params.footerText && !hasLetterhead;
 
     for (let i = startPage; i <= endPage && !params.skipFooter; i++) {
       pdf.setPage(i);

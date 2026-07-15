@@ -10860,8 +10860,10 @@ export type Database = {
           empresa_cargo_representante: string
           empresa_licenca_tvde: string
           empresa_licenca_validade: string
+          empresa_logo_url: string | null
           empresa_nif: string
           empresa_nome: string
+          empresa_papel_timbrado: string | null
           empresa_representante: string
           empresa_sede: string
           km_saida: number

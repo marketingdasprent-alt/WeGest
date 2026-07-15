@@ -23,3 +23,18 @@ export interface DocumentTemplate {
   created_at: string;
   updated_at: string;
 }
+
+// Tipos de template (coluna `tipo`, TEXT livre). Os de contrato têm semântica
+// no gerador (escolha por regime); os restantes são documentos genéricos que
+// aparecem no checklist "Gerar Documentos". Partilhado entre o editor e o
+// filtro da tab de documentos.
+export const TIPO_TEMPLATE_OPTIONS = [
+  { value: 'contrato_aluguer', label: 'Contrato de Aluguer' },
+  { value: 'contrato_prestacao', label: 'Contrato de Prestação' },
+  { value: 'contrato_tvde', label: 'Contrato TVDE' },
+  { value: 'declaracao', label: 'Declaração' },
+  { value: 'procedimentos', label: 'Procedimentos' },
+  { value: 'recibo', label: 'Recibo' },
+  { value: 'anexo_danos', label: 'Folha de Danos' },
+  { value: 'outro', label: 'Outro documento' },
+] as const;
