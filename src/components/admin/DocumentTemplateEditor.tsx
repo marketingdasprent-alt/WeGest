@@ -504,8 +504,8 @@ export const DocumentTemplateEditor = ({
             <CardHeader>
               <CardTitle className="text-foreground text-lg">Papel Timbrado (legado)</CardTitle>
               <CardDescription className="text-muted-foreground text-xs">
-                Formato A4 (210x297mm). Só é usado se a empresa do template não tiver papel
-                timbrado definido — configura o timbre da empresa em Configurações → Empresas.
+                Formato A4 (210x297mm). Só é usado se a empresa do template não tiver papel timbrado
+                definido — configura o timbre da empresa em Configurações → Empresas.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

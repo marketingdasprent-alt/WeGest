@@ -322,9 +322,7 @@ export const EmpresasTab: React.FC = () => {
               <Input
                 type="date"
                 value={form.licenca_validade ?? ''}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, licenca_validade: e.target.value }))
-                }
+                onChange={(e) => setForm((prev) => ({ ...prev, licenca_validade: e.target.value }))}
               />
             </div>
 

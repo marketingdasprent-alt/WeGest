@@ -91,13 +91,12 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     // definido (compatibilidade com templates configurados antes de o timbre
     // passar a viver na empresa).
     const papelTimbradoUrl: string | null =
-      (documentData?.empresaData as { papelTimbrado?: string | null } | undefined)
-        ?.papelTimbrado || templateData.papel_timbrado_url || null;
+      (documentData?.empresaData as { papelTimbrado?: string | null } | undefined)?.papelTimbrado ||
+      templateData.papel_timbrado_url ||
+      null;
 
     const bg: HTMLImageElement | null =
-      papelTimbradoUrl && !existingPdf
-        ? await loadImage(papelTimbradoUrl).catch(() => null)
-        : null;
+      papelTimbradoUrl && !existingPdf ? await loadImage(papelTimbradoUrl).catch(() => null) : null;
 
     const hasLetterhead = !!bg;
 
