@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useForm, type FieldErrors } from 'react-hook-form';
+import { useForm, useFieldArray, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -248,14 +248,11 @@ export function useContratoForm(): UseContratoFormReturn {
       is_principal: boolean;
     }>;
     if (existentes.some((c) => c.cliente_id === clienteId)) return;
-    form.setValue(
-      'condutores',
-      [
-        ...existentes,
-        { cliente_id: clienteId, motorista_id: null, is_principal: existentes.length === 0 },
-      ],
-      { shouldDirty: true, shouldValidate: true }
-    );
+    appendCondutor({
+      cliente_id: clienteId,
+      motorista_id: null,
+      is_principal: existentes.length === 0,
+    });
   };
 
   const handleMotoristaCriado = (motoristaId: string) => {
@@ -265,14 +262,11 @@ export function useContratoForm(): UseContratoFormReturn {
       is_principal: boolean;
     }>;
     if (existentes.some((c) => c.motorista_id === motoristaId)) return;
-    form.setValue(
-      'condutores',
-      [
-        ...existentes,
-        { cliente_id: null, motorista_id: motoristaId, is_principal: existentes.length === 0 },
-      ],
-      { shouldDirty: true, shouldValidate: true }
-    );
+    appendCondutor({
+      cliente_id: null,
+      motorista_id: motoristaId,
+      is_principal: existentes.length === 0,
+    });
   };
 
   const handleDelete = () => {
@@ -299,6 +293,22 @@ export function useContratoForm(): UseContratoFormReturn {
     resolver: zodResolver(contratoFormSchema),
     defaultValues: DEFAULT_CONTRATO_VALUES,
   });
+
+  // Partilha o control+name com o `useFieldArray` de CondutoresFields —
+  // `append` sincroniza a cópia interna que desenha essa tabela; um
+  // `form.setValue('condutores', ...)` isolado não o faz.
+  const { append: appendCondutor, replace: replaceCondutores } = useFieldArray({
+    control: form.control,
+    name: 'condutores',
+  });
+  // Instâncias-pai para hidratar as restantes listas m:n via `replace()`
+  // (cirúrgico — só toca na própria lista, não reescreve o formulário todo).
+  const { replace: replaceCoberturas } = useFieldArray({
+    control: form.control,
+    name: 'coberturas',
+  });
+  const { replace: replaceExtras } = useFieldArray({ control: form.control, name: 'extras' });
+  const { replace: replaceTaxas } = useFieldArray({ control: form.control, name: 'taxas' });
 
   // Guard: criar contrato sem reserva_id na URL → redirecionar
   useEffect(() => {
@@ -433,65 +443,66 @@ export function useContratoForm(): UseContratoFormReturn {
     form,
   ]);
 
-  // Hydration: condutores (separado — request separado)
+  // Hydration das relações m:n — `form.setValue(nomeDoArray, ...)` não chega a
+  // quem usa `useFieldArray` para esse mesmo nome (CondutoresFields/
+  // ContratoTab{Cobertura,Extras,Taxas}): o valor bruto do form fica
+  // correcto, mas o array interno do `useFieldArray` (o que é realmente
+  // desenhado) só resincroniza com métodos próprios (append/remove/replace)
+  // ou com um `reset()` — nunca com um `setValue` isolado. Resultado: a
+  // lista aparecia vazia ao abrir um contrato existente, e só "reaparecia"
+  // (a par do novo) depois de adicionar manualmente um item novo (que já
+  // passa por `append`). `keepDirtyValues` preserva qualquer campo que o
+  // utilizador já tenha alterado entretanto, incluindo esta mesma lista.
   useEffect(() => {
     if (!isEdit || !contrato || !condutoresDb) return;
-    form.setValue(
-      'condutores',
+    replaceCondutores(
       condutoresDb.map((c) => ({
         cliente_id: c.cliente_id,
         motorista_id: c.motorista_id,
         is_principal: c.is_principal,
-      })),
-      { shouldDirty: false }
+      }))
     );
-  }, [isEdit, contrato, condutoresDb, form]);
+  }, [isEdit, contrato, condutoresDb, replaceCondutores]);
 
   // Hydration: coberturas
   useEffect(() => {
     if (!isEdit || !contrato || !coberturasDb) return;
-    form.setValue(
-      'coberturas',
+    replaceCoberturas(
       coberturasDb.map((c) => ({
         cobertura_id: c.cobertura_id,
         cobertura_nome: c.cobertura_nome,
         preco_dia: c.preco_dia,
         franquia_valor: c.franquia_valor,
-      })),
-      { shouldDirty: false }
+      }))
     );
-  }, [isEdit, contrato, coberturasDb, form]);
+  }, [isEdit, contrato, coberturasDb, replaceCoberturas]);
 
   // Hydration: extras
   useEffect(() => {
     if (!isEdit || !contrato || !extrasDb) return;
-    form.setValue(
-      'extras',
+    replaceExtras(
       extrasDb.map((e) => ({
         extra_id: e.extra_id,
         extra_nome: e.extra_nome,
         preco_unidade: e.preco_unidade,
         tipo_calculo: e.tipo_calculo,
         quantidade: e.quantidade,
-      })),
-      { shouldDirty: false }
+      }))
     );
-  }, [isEdit, contrato, extrasDb, form]);
+  }, [isEdit, contrato, extrasDb, replaceExtras]);
 
   // Hydration: taxas
   useEffect(() => {
     if (!isEdit || !contrato || !taxasDb) return;
-    form.setValue(
-      'taxas',
+    replaceTaxas(
       taxasDb.map((t) => ({
         taxa_id: t.taxa_id,
         taxa_nome: t.taxa_nome,
         percentagem: t.percentagem,
         valor_fixo: t.valor_fixo,
-      })),
-      { shouldDirty: false }
+      }))
     );
-  }, [isEdit, contrato, taxasDb, form]);
+  }, [isEdit, contrato, taxasDb, replaceTaxas]);
 
   // ── Reactive values ───────────────────────────────────────────
   const viaturaId = form.watch('viatura_id');
@@ -690,6 +701,9 @@ export function useContratoForm(): UseContratoFormReturn {
     : null;
 
   // ── detectarAlteracoesMateriais ─────────────────────────────────
+  // Só a troca de viatura justifica uma nova versão (fecho formal +
+  // contrato novo) — preço/desconto/IVA/valor total são só uma correção
+  // do MESMO contrato e devem gravar direto por UPDATE, sem versionar.
   const detectarAlteracoesMateriais = (values: ContratoFormValues): AlteracaoMaterial[] => {
     if (!contrato) return [];
     const result: AlteracaoMaterial[] = [];
@@ -717,19 +731,6 @@ export function useContratoForm(): UseContratoFormReturn {
         });
       }
     }
-
-    const numPair = (label: string, antes: number | null, depois: number | null, sufixo = '') => {
-      if (antes === depois) return;
-      result.push({
-        label,
-        valorAntes: antes != null ? `${antes}${sufixo}` : '—',
-        valorDepois: depois != null ? `${depois}${sufixo}` : '—',
-      });
-    };
-    numPair('Tarifa diária', contrato.tarifa_diaria, values.tarifa_diaria, ' €');
-    numPair('Valor total', contrato.valor_total_manual, values.valor_total_manual, ' €');
-    numPair('Desconto', contrato.desconto_percentagem, values.desconto_percentagem, '%');
-    numPair('IVA', contrato.taxa_iva, values.taxa_iva, '%');
 
     return result;
   };

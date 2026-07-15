@@ -151,6 +151,12 @@ export type ContratoRenting = {
   kms_incluidos: number | null;
   km_adicional_valor: number | null;
 
+  /** Odómetro no início do mês (rent-a-car longa duração). Registado na
+   *  renovação: km_saida = km com que o mês arrancou; km_entrada = km ao
+   *  fechar/renovar. O mês seguinte arranca com este km_entrada. */
+  km_saida: number | null;
+  km_entrada: number | null;
+
   voucher_codigo: string | null;
 
   observacoes: string | null;
@@ -184,6 +190,10 @@ export type ContratoRentingInsert = Omit<
   | 'contrato_anterior_id'
   | 'substituido_em'
   | 'motivo_versao'
+  // km_saida/km_entrada só são escritos server-side pela RPC de renovação
+  // (renovar_contrato_renting), nunca pelo formulário de criar/editar.
+  | 'km_saida'
+  | 'km_entrada'
   | 'deleted_at'
   | 'created_by'
   | 'updated_by'
