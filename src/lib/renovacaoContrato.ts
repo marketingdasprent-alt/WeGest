@@ -1,5 +1,5 @@
 /**
- * Lógica pura de renovação de contratos de renting (Rent-a-Car, longa duração).
+ * Lógica pura de renovação de contratos de renting de longa duração (Rent-a-Car e TVDE).
  * A renovação em si corre server-side (RPC renovar_contrato_renting); aqui vive
  * só o cálculo da próxima data de renovação e a deteção de contratos por renovar,
  * usados pelo banner de avisos e pelo diálogo de confirmação.
