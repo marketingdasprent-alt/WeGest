@@ -2679,6 +2679,7 @@ export type Database = {
           criado_por: string | null
           data_assinatura: string
           data_inicio: string
+          data_fim: string | null
           documento_url: string | null
           duracao_meses: number | null
           eletricidade_checkin: string | null
@@ -2716,6 +2717,7 @@ export type Database = {
           criado_por?: string | null
           data_assinatura: string
           data_inicio: string
+          data_fim?: string | null
           documento_url?: string | null
           duracao_meses?: number | null
           eletricidade_checkin?: string | null
@@ -2753,6 +2755,7 @@ export type Database = {
           criado_por?: string | null
           data_assinatura?: string
           data_inicio?: string
+          data_fim?: string | null
           documento_url?: string | null
           duracao_meses?: number | null
           eletricidade_checkin?: string | null

@@ -28,8 +28,17 @@ interface Contrato {
   data_assinatura: string;
   cidade_assinatura: string;
   duracao_meses: number;
+  data_fim?: string | null;
   status: string;
 }
+
+/** Data de fim = início + duração (meses). Editável pelo gestor a seguir. */
+const calcDataFim = (dataInicio: string, meses: number): string => {
+  if (!dataInicio || !meses) return '';
+  const d = new Date(dataInicio + 'T00:00:00');
+  d.setMonth(d.getMonth() + meses);
+  return d.toISOString().slice(0, 10);
+};
 
 interface EditContractDialogProps {
   contrato: Contrato;
@@ -49,6 +58,7 @@ export function EditContractDialog({
     data_assinatura: contrato.data_assinatura,
     cidade_assinatura: contrato.cidade_assinatura,
     duracao_meses: contrato.duracao_meses,
+    data_fim: contrato.data_fim ?? calcDataFim(contrato.data_inicio, contrato.duracao_meses),
     status: contrato.status,
   });
   const [observacoes, setObservacoes] = useState('');
@@ -94,6 +104,13 @@ export function EditContractDialog({
         };
       }
 
+      if (formData.data_fim !== (contrato.data_fim ?? '')) {
+        camposAlterados['Data de Fim'] = {
+          antes: contrato.data_fim ?? '—',
+          depois: formData.data_fim || '—',
+        };
+      }
+
       if (formData.status !== contrato.status) {
         camposAlterados['Status'] = {
           antes: contrato.status,
@@ -106,10 +123,11 @@ export function EditContractDialog({
         return;
       }
 
-      // Atualizar contrato
+      // Atualizar contrato (data_fim vazia → null; o trigger recalcula se ficar
+      // NULL, caso contrário respeita o valor definido pelo gestor).
       const { error: updateError } = await supabase
         .from('contratos')
-        .update(formData)
+        .update({ ...formData, data_fim: formData.data_fim || null })
         .eq('id', contrato.id);
 
       if (updateError) throw updateError;
@@ -148,7 +166,14 @@ export function EditContractDialog({
             <Input
               type="date"
               value={formData.data_inicio}
-              onChange={(e) => setFormData({ ...formData, data_inicio: e.target.value })}
+              onChange={(e) => {
+                const v = e.target.value;
+                setFormData((f) => ({
+                  ...f,
+                  data_inicio: v,
+                  data_fim: calcDataFim(v, f.duracao_meses),
+                }));
+              }}
               required
             />
           </div>
@@ -177,11 +202,28 @@ export function EditContractDialog({
             <Input
               type="number"
               value={formData.duracao_meses}
-              onChange={(e) =>
-                setFormData({ ...formData, duracao_meses: parseInt(e.target.value) })
-              }
+              onChange={(e) => {
+                const m = parseInt(e.target.value);
+                setFormData((f) => ({
+                  ...f,
+                  duracao_meses: m,
+                  data_fim: calcDataFim(f.data_inicio, Number.isNaN(m) ? 0 : m),
+                }));
+              }}
               required
             />
+          </div>
+
+          <div>
+            <Label>Data de Fim</Label>
+            <Input
+              type="date"
+              value={formData.data_fim}
+              onChange={(e) => setFormData({ ...formData, data_fim: e.target.value })}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Calculada de início + duração — ajusta se o contrato terminar noutra data.
+            </p>
           </div>
 
           <div>

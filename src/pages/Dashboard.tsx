@@ -265,7 +265,7 @@ const Dashboard = () => {
       const { data: contratosAtivos, error: contratosErr } = await supabase
         .from('contratos')
         .select(
-          'id, numero_contrato, data_inicio, duracao_meses, motorista_nome, motorista_id, viatura_id, viaturas:viatura_id(matricula)'
+          'id, numero_contrato, data_inicio, data_fim, duracao_meses, motorista_nome, motorista_id, viatura_id, viaturas:viatura_id(matricula)'
         )
         .eq('status', 'ativo')
         .not('data_inicio', 'is', null);
@@ -278,10 +278,14 @@ const Dashboard = () => {
       now.setHours(0, 0, 0, 0); // Normalizar para meia-noite local
 
       const allContratos = (contratosAtivos || []).map((ct: any) => {
-        const inicio = new Date(ct.data_inicio + 'T00:00:00');
-        const renovacao = addMonths(inicio, ct.duracao_meses ?? 12);
-        const diffDays = Math.ceil((renovacao.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        return { ...ct, _renovacao: renovacao, _diffDays: diffDays };
+        // Usa a data de fim REAL (contratos.data_fim, preenchida por trigger a
+        // partir de data_inicio + duracao_meses e editável). Fallback derivado
+        // só por robustez, caso algum contrato antigo ainda não tenha data_fim.
+        const fim = ct.data_fim
+          ? new Date(ct.data_fim + 'T00:00:00')
+          : addMonths(new Date(ct.data_inicio + 'T00:00:00'), ct.duracao_meses ?? 12);
+        const diffDays = Math.ceil((fim.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return { ...ct, _renovacao: fim, _diffDays: diffDays };
       });
 
       // De-duplicar contratos repetidos: a mesma prestação aparece por vezes 2x
@@ -704,10 +708,7 @@ const Dashboard = () => {
               }
               emptyMessage="Sem contratos a renovar em breve"
               items={contratosAPrazo.map((ct: any) => {
-                const renovacao = addMonths(
-                  new Date(ct.data_inicio + 'T00:00:00'),
-                  ct.duracao_meses ?? 12
-                );
+                const renovacao = ct._renovacao as Date;
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 const isExpired = renovacao < today;
@@ -740,9 +741,7 @@ const Dashboard = () => {
               }
               emptyMessage=""
               items={contratosExpirados.map((ct: any) => {
-                const renovacao =
-                  ct._renovacao ||
-                  addMonths(new Date(ct.data_inicio + 'T00:00:00'), ct.duracao_meses ?? 12);
+                const renovacao = ct._renovacao as Date;
                 const diasExpirado = Math.abs(
                   ct._diffDays ||
                     Math.ceil((new Date().getTime() - renovacao.getTime()) / (1000 * 60 * 60 * 24))
