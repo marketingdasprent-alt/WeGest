@@ -326,62 +326,81 @@ const RentingReservaForm = () => {
     });
   }, [isEdit, reserva, form]);
 
-  // Hidratação das relações m:n — em efeitos próprios (não no reset acima) para
-  // poderem re-sincronizar com segurança sempre que a respectiva query refetch
-  // (ex.: logo após guardar), sem apagar o resto do formulário entretanto editado.
+  // Hidratação das relações m:n — em efeitos próprios (não no reset principal)
+  // para poderem re-sincronizar com segurança sempre que a respectiva query
+  // refetch (ex.: logo após guardar), sem apagar o resto do formulário
+  // entretanto editado (`keepDirtyValues` preserva qualquer campo que o
+  // utilizador já tenha alterado, incluindo esta mesma lista).
+  //
+  // `form.setValue(nomeDoArray, ...)` NÃO chega a quem usa `useFieldArray`
+  // para esse mesmo nome (CondutoresFields/ReservaTab{Cobertura,Extras,Taxas}):
+  // o valor bruto do form fica correcto, mas o array interno do
+  // `useFieldArray` (o que é realmente desenhado, via `fields.map(...)`) só
+  // resincroniza com métodos próprios (append/remove/replace) ou com um
+  // `reset()` — nunca com um `setValue` isolado. Resultado: a lista aparecia
+  // vazia ao abrir uma reserva existente, e só "reaparecia" (a par do novo)
+  // depois de adicionar manualmente um item novo (que já passa por `append`).
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    form.setValue(
-      'coberturas',
-      coberturasAtuais.map((c) => ({
-        cobertura_id: c.cobertura_id,
-        cobertura_nome: c.cobertura_nome,
-        preco_dia: c.preco_dia,
-        franquia_valor: c.franquia_valor,
-      })),
-      { shouldDirty: false }
+    form.reset(
+      {
+        ...form.getValues(),
+        coberturas: coberturasAtuais.map((c) => ({
+          cobertura_id: c.cobertura_id,
+          cobertura_nome: c.cobertura_nome,
+          preco_dia: c.preco_dia,
+          franquia_valor: c.franquia_valor,
+        })),
+      },
+      { keepDirtyValues: true }
     );
   }, [isEdit, reserva, coberturasAtuais, form]);
 
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    form.setValue(
-      'extras',
-      extrasAtuais.map((e) => ({
-        extra_id: e.extra_id,
-        extra_nome: e.extra_nome,
-        preco_unidade: e.preco_unidade,
-        tipo_calculo: e.tipo_calculo,
-        quantidade: e.quantidade,
-      })),
-      { shouldDirty: false }
+    form.reset(
+      {
+        ...form.getValues(),
+        extras: extrasAtuais.map((e) => ({
+          extra_id: e.extra_id,
+          extra_nome: e.extra_nome,
+          preco_unidade: e.preco_unidade,
+          tipo_calculo: e.tipo_calculo,
+          quantidade: e.quantidade,
+        })),
+      },
+      { keepDirtyValues: true }
     );
   }, [isEdit, reserva, extrasAtuais, form]);
 
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    form.setValue(
-      'taxas',
-      taxasAtuais.map((t) => ({
-        taxa_id: t.taxa_id,
-        taxa_nome: t.taxa_nome,
-        percentagem: t.percentagem,
-        valor_fixo: t.valor_fixo,
-      })),
-      { shouldDirty: false }
+    form.reset(
+      {
+        ...form.getValues(),
+        taxas: taxasAtuais.map((t) => ({
+          taxa_id: t.taxa_id,
+          taxa_nome: t.taxa_nome,
+          percentagem: t.percentagem,
+          valor_fixo: t.valor_fixo,
+        })),
+      },
+      { keepDirtyValues: true }
     );
   }, [isEdit, reserva, taxasAtuais, form]);
 
   useEffect(() => {
     if (!isEdit || !reserva) return;
-    form.setValue(
-      'condutores',
-      condutoresAtuais.map((c) => ({
-        cliente_id: c.cliente_id,
-        motorista_id: c.motorista_id,
-        is_principal: c.is_principal,
-      })),
-      { shouldDirty: false }
+    form.reset(
+      {
+        ...form.getValues(),
+        condutores: condutoresAtuais.map((c) => ({
+          cliente_id: c.cliente_id,
+          motorista_id: c.motorista_id,
+          is_principal: c.is_principal,
+        })),
+      },
+      { keepDirtyValues: true }
     );
   }, [isEdit, reserva, condutoresAtuais, form]);
 
