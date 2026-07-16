@@ -980,7 +980,8 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                   <Zap className="mr-2 h-4 w-4" /> Testar Conexão
                 </Button>
               )}
-              {SINCRONIZACAO_ATIVA && integracao.plataforma === 'robot' && (
+              {(SINCRONIZACAO_ATIVA || integracao.plataforma === 'via_verde') &&
+                (integracao.plataforma === 'robot' || integracao.plataforma === 'via_verde') && (
                 <Button variant="outline" onClick={handleExecuteRobot} disabled={executingRobot}>
                   {executingRobot ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
