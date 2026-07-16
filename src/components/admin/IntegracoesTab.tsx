@@ -285,23 +285,11 @@ export const IntegracoesTab: React.FC = () => {
         });
       });
 
-    // Via Verde contas
-    vvContas.forEach((conta) => {
-      const contaActiva = conta.ftp_ativo || conta.sync_ativo;
-      result.push({
-        id: `vv-${conta.id}`,
-        type: 'via_verde',
-        nome: conta.nome_conta,
-        ativo: contaActiva,
-        ultimoSync: null,
-        username: conta.ftp_utilizador,
-        password: conta.ftp_password,
-        connectionMode: 'ftp',
-        subLabel: `${conta.ftp_protocolo.toUpperCase()} · RAC: ${conta.codigo_rac}`,
-        rawData: conta,
-        logoUrl: conta.logo_url,
-      });
-    });
+    // Via Verde contas: NÃO geram card próprio. Toda conta em via_verde_contas
+    // pertence à integração via_verde já renderizada acima (integracao_id é sempre
+    // preenchido, tanto pelo wizard como pelo ViaVerdeContaDialog) — é apenas o
+    // armazenamento das credenciais, editado dentro do IntegracaoDetailModal dessa
+    // integração. Renderizar aqui duplicava o card como um falso "FTP Activo".
 
     // Brevo (email) — integração da própria empresa (plataforma='email', email_provider='brevo')
     integracoes
