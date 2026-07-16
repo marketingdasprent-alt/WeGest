@@ -64,6 +64,11 @@ export function MotoristaViaturaCard({ motoristaId }: MotoristaViaturaCardProps)
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loadingDocs, setLoadingDocs] = useState(false);
+  // Documentos do CONTRATO (aluguer/prestação) gerados na entrega — guardados
+  // no bucket privado 'documentos' em '{contrato_id}/'. Vêm via RPC (contrato
+  // activo do motorista) + listagem do storage. Ver migration 20260716210000.
+  const [contratoDocs, setContratoDocs] = useState<{ name: string; path: string }[]>([]);
+  const [loadingContratoDocs, setLoadingContratoDocs] = useState(true);
 
   useEffect(() => {
     loadViatura();
@@ -74,6 +79,63 @@ export function MotoristaViaturaCard({ motoristaId }: MotoristaViaturaCardProps)
       loadDocumentos();
     }
   }, [viaturaAtual]);
+
+  useEffect(() => {
+    loadContratoDocs();
+  }, [motoristaId]);
+
+  async function loadContratoDocs() {
+    setLoadingContratoDocs(true);
+    try {
+      // A RPC ainda não consta dos tipos gerados — cast controlado. Devolve um
+      // set (TABLE), por isso lê-se como array e usa-se a 1ª linha.
+      const { data, error: rpcErr } = await (
+        supabase.rpc as unknown as (
+          fn: string
+        ) => Promise<{ data: { contrato_id: string }[] | null; error: { message: string } | null }>
+      )('get_motorista_contrato_ativo');
+      if (rpcErr) throw new Error(rpcErr.message);
+      const contratoId = data?.[0]?.contrato_id;
+      if (!contratoId) {
+        setContratoDocs([]);
+        return;
+      }
+      const { data: ficheiros, error: listErr } = await supabase.storage
+        .from('documentos')
+        .list(contratoId, { sortBy: { column: 'created_at', order: 'desc' } });
+      if (listErr) throw listErr;
+      setContratoDocs(
+        (ficheiros || [])
+          .filter((f) => f.name && f.name.toLowerCase().endsWith('.pdf'))
+          .map((f) => ({ name: f.name, path: `${contratoId}/${f.name}` }))
+      );
+    } catch (error) {
+      console.error('Erro ao carregar documentos do contrato:', error);
+      setContratoDocs([]);
+    } finally {
+      setLoadingContratoDocs(false);
+    }
+  }
+
+  async function handleViewContratoDoc(path: string) {
+    try {
+      const { data, error } = await supabase.storage.from('documentos').createSignedUrl(path, 3600);
+      if (error) throw error;
+      window.open(data.signedUrl, '_blank');
+    } catch (error) {
+      console.error('Erro ao abrir documento do contrato:', error);
+      toast.error('Erro ao abrir documento');
+    }
+  }
+
+  // Nome amigável do ficheiro: tira o contrato_id/, o timestamp final e os _.
+  function nomeAmigavelDoc(name: string): string {
+    return name
+      .replace(/\.pdf$/i, '')
+      .replace(/_\d{8}_\d{6}$/, '')
+      .replace(/_/g, ' ')
+      .trim();
+  }
 
   async function loadDocumentos() {
     if (!viaturaAtual?.viatura.id) return;
@@ -493,6 +555,58 @@ export function MotoristaViaturaCard({ motoristaId }: MotoristaViaturaCardProps)
                 </Card>
               );
             })()}
+          </div>
+
+          {/* Documentos do contrato (aluguer/prestação) gerados na entrega */}
+          <div className="mt-8 md:mt-12">
+            <div className="flex items-center gap-3 mb-4 md:mb-6">
+              <div className="p-2 md:p-3 bg-primary/10 rounded-2xl">
+                <FileText className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-lg md:text-xl font-black tracking-tight">
+                  Documentos do Contrato
+                </h3>
+                <p className="text-xs md:text-sm text-muted-foreground font-medium">
+                  Contrato de aluguer e prestação de serviços da entrega
+                </p>
+              </div>
+            </div>
+
+            {loadingContratoDocs ? (
+              <Skeleton className="h-16 w-full rounded-2xl" />
+            ) : contratoDocs.length === 0 ? (
+              <div className="flex items-center gap-2 text-muted-foreground text-xs font-bold bg-muted/30 border border-dashed border-border p-4 rounded-2xl">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                Sem documentos de contrato disponíveis.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {contratoDocs.map((doc) => (
+                  <div
+                    key={doc.path}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-muted/20 p-4"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 bg-background rounded-xl border border-border shrink-0">
+                        <FileText className="h-4 w-4 text-primary" />
+                      </div>
+                      <p className="text-sm font-bold text-foreground truncate">
+                        {nomeAmigavelDoc(doc.name)}
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => handleViewContratoDoc(doc.path)}
+                      variant="outline"
+                      className="rounded-xl font-bold shrink-0 gap-2"
+                    >
+                      <Eye className="h-4 w-4" />
+                      Ver / Imprimir
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </DialogContent>
