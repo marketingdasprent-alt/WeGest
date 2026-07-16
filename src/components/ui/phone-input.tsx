@@ -64,6 +64,7 @@ interface PhoneInputProps {
   error?: boolean;
   className?: string;
   id?: string;
+  onBlur?: () => void;
 }
 
 // Parse phone number string to extract country code and number
@@ -144,7 +145,7 @@ export function validatePhoneNumber(fullNumber: string): boolean {
 
 const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
   (
-    { value, onChange, defaultCountry = 'PT', placeholder, disabled, error, className, id },
+    { value, onChange, defaultCountry = 'PT', placeholder, disabled, error, className, id, onBlur },
     ref
   ) => {
     const [open, setOpen] = React.useState(false);
@@ -242,6 +243,7 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
           type="tel"
           value={displayNumber}
           onChange={handleNumberChange}
+          onBlur={onBlur}
           placeholder={placeholder || (countryCode === 'PT' ? '912 345 678' : 'Número de telefone')}
           disabled={disabled}
           className={cn('rounded-l-none flex-1', error && 'border-destructive')}

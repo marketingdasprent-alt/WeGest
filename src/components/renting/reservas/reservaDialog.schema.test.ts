@@ -55,6 +55,15 @@ describe('reservaDialogSchema — slot', () => {
     const r = reservaDialogSchema.safeParse({ ...baseSlot, estado: 'em_curso' });
     expect(r.success).toBe(true);
   });
+
+  it('slot NUNCA exige empresa emissora (em_curso sem ela é válido)', () => {
+    const r = reservaDialogSchema.safeParse({
+      ...baseSlot,
+      estado: 'em_curso',
+      emissor_id: null,
+    });
+    expect(r.success).toBe(true);
+  });
 });
 
 describe('reservaDialogSchema — rent_a_car não regrediu', () => {
@@ -79,6 +88,31 @@ describe('reservaDialogSchema — rent_a_car não regrediu', () => {
       const paths = r.error.issues.flatMap((i) => i.path);
       expect(paths).toContain('cliente_id');
       expect(paths).toContain('estacao_entrega_id');
+    }
+  });
+
+  it('rent_a_car confirmada sem empresa emissora é inválida', () => {
+    const r = reservaDialogSchema.safeParse({
+      data_inicio: '2026-07-01T10:00',
+      data_fim: '2026-07-05T10:00',
+      estado: 'confirmada',
+      regime: 'rent_a_car',
+      emissor_id: null,
+      viatura_id: '22222222-2222-2222-2222-222222222222',
+      cliente_id: '44444444-4444-4444-4444-444444444444',
+      estacao_entrega_id: '55555555-5555-5555-5555-555555555555',
+      estacao_recolha_id: '55555555-5555-5555-5555-555555555555',
+      condutores: [
+        {
+          cliente_id: '44444444-4444-4444-4444-444444444444',
+          motorista_id: null,
+          is_principal: true,
+        },
+      ],
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues.some((i) => i.path.includes('emissor_id'))).toBe(true);
     }
   });
 });

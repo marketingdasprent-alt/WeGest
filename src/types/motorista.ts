@@ -41,6 +41,8 @@ export type Motorista = {
   uber_uuid: string | null;
   bolt_id: string | null;
   gestor_responsavel: string | null;
+  caucao_valor: number | null;
+  lead_id: string | null;
   perfil_rascunho: boolean | null;
   created_at: string;
   updated_at: string;

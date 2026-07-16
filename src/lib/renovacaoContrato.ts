@@ -1,5 +1,5 @@
 /**
- * Lógica pura de renovação de contratos de renting (Rent-a-Car, longa duração).
+ * Lógica pura de renovação de contratos de renting de longa duração (Rent-a-Car e TVDE).
  * A renovação em si corre server-side (RPC renovar_contrato_renting); aqui vive
  * só o cálculo da próxima data de renovação e a deteção de contratos por renovar,
  * usados pelo banner de avisos e pelo diálogo de confirmação.
@@ -48,10 +48,26 @@ export function proximaDataRenovacao(
   return new Date(d.getTime() + dias * 24 * 60 * 60 * 1000);
 }
 
-/** Um contrato é renovável se for rent-a-car de longa duração, versão actual e activo. */
+/**
+ * Data de "próxima renovação" a gravar em `data_fim` quando o contrato é de
+ * longa duração — null caso contrário (comportamento inalterado). Aplica-se
+ * a qualquer regime: um TVDE de longa duração não tem "fim de contrato" real
+ * (o motorista decide quando encerra), mas tem um ciclo de renovação/papelada
+ * que precisa de uma data de referência, exactamente como o Rent-a-Car.
+ */
+export function calcularDataFimLongaDuracao(
+  dataInicio: string,
+  isLongaDuracao: boolean | null | undefined,
+  renovacaoOpcao: string | null | undefined,
+  renovacaoIntervaloDias: number | null | undefined
+): Date | null {
+  if (!isLongaDuracao) return null;
+  return proximaDataRenovacao(dataInicio, renovacaoOpcao, renovacaoIntervaloDias);
+}
+
+/** Um contrato é renovável se for de longa duração, versão actual e activo. */
 export function contratoRenovavel(c: ContratoRenovavelInput): boolean {
   return (
-    c.regime === 'rent_a_car' &&
     !!c.is_longa_duracao &&
     !c.substituido_em &&
     !c.deleted_at &&

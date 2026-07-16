@@ -152,9 +152,10 @@ export const reservaDialogSchema = z
     const isSlot = d.regime === 'slot';
     const exigeCompleto = d.estado === 'confirmada' || d.estado === 'em_curso';
 
-    // Emissor: obrigatório a partir de confirmada, em qualquer regime —
-    // é a empresa cujos templates assinam os documentos da reserva.
-    if (exigeCompleto && !d.emissor_id) {
+    // Emissor: obrigatório a partir de confirmada, em rent-a-car/tvde — é a
+    // empresa cujos templates assinam os documentos da reserva. Slot não tem
+    // empresa emissora (carro do motorista, sem contrato/documentos formais).
+    if (!isSlot && exigeCompleto && !d.emissor_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['emissor_id'],
@@ -223,13 +224,6 @@ export const reservaDialogSchema = z
             code: z.ZodIssueCode.custom,
             path: ['slot_valor_mensal'],
             message: 'Define o valor mensal antes de avançar o estado',
-          });
-        }
-        if (!d.emissor_id) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['emissor_id'],
-            message: 'Empresa emissora obrigatória para avançar o slot',
           });
         }
       }

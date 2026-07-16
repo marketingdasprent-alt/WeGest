@@ -72,6 +72,8 @@ export const formSchema = z.object({
       (v) => !v || validarIBAN(v).valid,
       (v) => ({ message: (v ? validarIBAN(v).message : '') || 'IBAN inválido' })
     ),
+  caucao_valor: z.number().nullable().optional(),
+  lead_id: z.string().nullable().optional(),
   gestor_responsavel: z.string().optional().nullable(),
   bolt_id: z.string().optional().nullable(),
   uber_uuid: z.string().optional().nullable(),
@@ -131,6 +133,8 @@ export interface MotoristaPayload {
   is_slot: boolean;
   observacoes: string | null;
   iban: string | null;
+  caucao_valor: number | null;
+  lead_id: string | null;
   gestor_responsavel: string | null;
   bolt_id: string | null;
   uber_uuid: string | null;
@@ -171,6 +175,8 @@ export function buildMotoristaPayload(values: FormValues): MotoristaPayload {
     is_slot: values.is_slot ?? false,
     observacoes: values.observacoes || null,
     iban: ibanNormalizado || null,
+    caucao_valor: values.caucao_valor ?? null,
+    lead_id: values.lead_id || null,
     gestor_responsavel:
       values.gestor_responsavel === 'none' ? null : values.gestor_responsavel || null,
     bolt_id: values.bolt_id || null,

@@ -128,6 +128,7 @@ const RealizarEntregaPage = () => {
       const empty = {
         viaturaId: null as string | null,
         emissorId: null as string | null,
+        anexoDanosTemplateId: null as string | null,
         empresaData: null as Record<string, string | null> | null,
         condutorNome: '',
         condutorEmail: '',
@@ -143,6 +144,7 @@ const RealizarEntregaPage = () => {
       return {
         viaturaId: row.viatura_id ?? null,
         emissorId: row.emissor_id ?? null,
+        anexoDanosTemplateId: row.anexo_danos_template_id ?? null,
         empresaData: row.emissor_id
           ? {
               nomeCompleto: row.empresa_nome ?? '',
@@ -288,11 +290,9 @@ const RealizarEntregaPage = () => {
     }
     setGerandoFolha(true);
     try {
-      const tmplId = 'folha_danos';
       const matricula = formatMatricula(info.matricula);
       const params = {
         modo: 'preview' as const,
-        tmplId,
         assinaturasRef,
         observacoes,
         contexto,
@@ -401,10 +401,8 @@ const RealizarEntregaPage = () => {
         },
         {
           onSuccess: () => {
-            const tmplId = 'folha_danos';
             const params = {
               modo: 'print' as const,
-              tmplId,
               assinaturasRef,
               observacoes,
               contexto,
@@ -531,11 +529,9 @@ const RealizarEntregaPage = () => {
       },
       {
         onSuccess: () => {
-          const tmplId = 'folha_danos';
           const matricula = formatMatricula(info.matricula);
           const params = {
             modo: 'print' as const,
-            tmplId,
             assinaturasRef,
             observacoes,
             contexto,

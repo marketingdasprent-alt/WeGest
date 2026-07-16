@@ -77,44 +77,53 @@ export function ReservaTabGeralSectionDadosGerais({
         />
       </div>
 
-      {/* === Empresa Emissora (todos os regimes — slot incluído) === */}
-      <div>
-        <SectionHeader
-          icon={Building2}
-          title="Empresa Emissora"
-          accent="sky"
-          required
-          hint="Os documentos da reserva usam os templates desta empresa"
-        />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
-          <FormField
-            control={form.control}
-            name="emissor_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Empresa emissora</FormLabel>
-                <EmissorSelect value={field.value} onChange={field.onChange} />
-                <FormMessage />
-              </FormItem>
-            )}
+      {/* === Empresa Emissora (rent-a-car/tvde — slot não tem, carro do
+          motorista sem documentos formais) + Gestor (TVDE/slot) === */}
+      {(!isSlot || (podeVerTodosRenting && isSlot)) && (
+        <div>
+          <SectionHeader
+            icon={Building2}
+            title={isSlot ? 'Gestor Responsável' : 'Empresa Emissora'}
+            accent="sky"
+            required={!isSlot}
+            hint={
+              isSlot
+                ? 'Gestor de frota responsável por este slot'
+                : 'Os documentos da reserva usam os templates desta empresa'
+            }
           />
-          {/* Gestor responsável só faz sentido em TVDE/slot (gestão de frota
-              de motoristas) — em Rent-a-Car não há gestor a atribuir. */}
-          {podeVerTodosRenting && (isTvde || isSlot) && (
-            <FormField
-              control={form.control}
-              name="gestor_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Gestor responsável</FormLabel>
-                  <GestorSelect value={field.value} onChange={field.onChange} />
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
+            {!isSlot && (
+              <FormField
+                control={form.control}
+                name="emissor_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Empresa emissora</FormLabel>
+                    <EmissorSelect value={field.value} onChange={field.onChange} />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {/* Gestor responsável só faz sentido em TVDE/slot (gestão de frota
+                de motoristas) — em Rent-a-Car não há gestor a atribuir. */}
+            {podeVerTodosRenting && (isTvde || isSlot) && (
+              <FormField
+                control={form.control}
+                name="gestor_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Gestor responsável</FormLabel>
+                    <GestorSelect value={field.value} onChange={field.onChange} />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* === Cliente da Reserva (não aplicável a slot) === */}
       {!isSlot && (

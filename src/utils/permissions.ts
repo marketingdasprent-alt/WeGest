@@ -57,6 +57,7 @@ export const RECURSOS = {
   ADMINISTRATIVO_IMPORTAR: 'administrativo_importar',
   ADMINISTRATIVO_PLATAFORMAS: 'administrativo_plataformas',
   ADMINISTRATIVO_CARTOES: 'administrativo_cartoes',
+  ADMINISTRATIVO_VER_GORJETA: 'administrativo_ver_gorjeta',
 
   // Marketing
   MARKETING_VER: 'marketing_ver',
