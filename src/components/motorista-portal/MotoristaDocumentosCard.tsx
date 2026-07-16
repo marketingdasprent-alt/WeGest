@@ -226,14 +226,12 @@ export function MotoristaDocumentosCard({ motoristaId }: Props) {
         if (error) throw error;
         await supabase.storage.from('motorista-documentos').remove([existente.ficheiro_url]);
       } else {
-        const { error } = await supabase
-          .from('motorista_documentos')
-          .insert({
-            motorista_id: motoristaId,
-            tipo_documento: tipo.value,
-            ficheiro_url: path,
-            nome_ficheiro: file.name,
-          });
+        const { error } = await supabase.from('motorista_documentos').insert({
+          motorista_id: motoristaId,
+          tipo_documento: tipo.value,
+          ficheiro_url: path,
+          nome_ficheiro: file.name,
+        });
         if (error) throw error;
       }
       toast.success(`${tipo.label} anexado.`);
