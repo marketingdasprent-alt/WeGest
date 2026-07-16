@@ -4714,6 +4714,7 @@ export type Database = {
       leads_dasprent: {
         Row: {
           campaign_tags: string[] | null
+          caucao_valor: number | null
           created_at: string | null
           data_aluguer: string | null
           email: string
@@ -4734,6 +4735,7 @@ export type Database = {
         }
         Insert: {
           campaign_tags?: string[] | null
+          caucao_valor?: number | null
           created_at?: string | null
           data_aluguer?: string | null
           email: string
@@ -4754,6 +4756,7 @@ export type Database = {
         }
         Update: {
           campaign_tags?: string[] | null
+          caucao_valor?: number | null
           created_at?: string | null
           data_aluguer?: string | null
           email?: string
@@ -5780,6 +5783,7 @@ export type Database = {
           cartao_edp: string | null
           cartao_frota: string | null
           cartao_repsol: string | null
+          caucao_valor: number | null
           cidade: string | null
           cidade_assinatura: string | null
           cliente_id: string | null
@@ -5800,6 +5804,7 @@ export type Database = {
           iban: string | null
           id: string
           is_slot: boolean | null
+          lead_id: string | null
           licenca_tvde_ficheiro_url: string | null
           licenca_tvde_numero: string | null
           licenca_tvde_validade: string | null
@@ -5830,6 +5835,7 @@ export type Database = {
           cartao_edp?: string | null
           cartao_frota?: string | null
           cartao_repsol?: string | null
+          caucao_valor?: number | null
           cidade?: string | null
           cidade_assinatura?: string | null
           cliente_id?: string | null
@@ -5850,6 +5856,7 @@ export type Database = {
           iban?: string | null
           id?: string
           is_slot?: boolean | null
+          lead_id?: string | null
           licenca_tvde_ficheiro_url?: string | null
           licenca_tvde_numero?: string | null
           licenca_tvde_validade?: string | null
@@ -5880,6 +5887,7 @@ export type Database = {
           cartao_edp?: string | null
           cartao_frota?: string | null
           cartao_repsol?: string | null
+          caucao_valor?: number | null
           cidade?: string | null
           cidade_assinatura?: string | null
           cliente_id?: string | null
@@ -5900,6 +5908,7 @@ export type Database = {
           iban?: string | null
           id?: string
           is_slot?: boolean | null
+          lead_id?: string | null
           licenca_tvde_ficheiro_url?: string | null
           licenca_tvde_numero?: string | null
           licenca_tvde_validade?: string | null
@@ -5925,6 +5934,13 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motoristas_ativos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_dasprent"
             referencedColumns: ["id"]
           },
           {
