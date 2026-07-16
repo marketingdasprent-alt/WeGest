@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
-import { contratosPorRenovar, prazoRenovacao } from '@/lib/renovacaoContrato';
+import { contratosPorRenovar } from '@/lib/renovacaoContrato';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 interface Props {
@@ -71,8 +71,8 @@ export function RenovacoesBanner({ contratos, getClienteNome, getCondutorNome }:
               <RefreshCw className="h-5 w-5 text-amber-600" /> Contratos por renovar
             </DialogTitle>
             <DialogDescription>
-              Contratos de longa duração (Rent-a-Car e TVDE) cuja renovação chegou ou está em
-              atraso. Clica num contrato para o abrir e renovar.
+              Contratos de longa duração (Rent-a-Car e TVDE com data de fim) cuja renovação chegou
+              ou está em atraso. Clica num contrato para o abrir e renovar.
             </DialogDescription>
           </DialogHeader>
 
@@ -108,8 +108,7 @@ export function RenovacoesBanner({ contratos, getClienteNome, getCondutorNome }:
                       </p>
                     </div>
                     <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">
-                      {/* TVDE em aberto: prazo virtual (início + ciclo); senão a data_fim. */}
-                      Renova {formatDate((prazoRenovacao(c) ?? new Date()).toISOString())}
+                      Renova {formatDate(c.data_fim)}
                     </span>
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </button>

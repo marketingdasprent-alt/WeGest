@@ -15,10 +15,7 @@ export type ContratoRenovavelInput = Pick<
   | 'is_longa_duracao'
   | 'substituido_em'
   | 'estado_operacional'
-  | 'data_inicio'
   | 'data_fim'
-  | 'renovacao_opcao'
-  | 'renovacao_intervalo_dias'
   | 'deleted_at'
 >;
 
@@ -70,29 +67,15 @@ export function contratoRenovavel(c: ContratoRenovavelInput): boolean {
  * Estado de renovação de um contrato face a uma data de referência:
  * 'hoje' (renova hoje), 'atraso' (renovação já passou) ou null (ainda não / N/A).
  */
-/**
- * Prazo de renovação efectivo de um contrato:
- *   · com data_fim → a própria data_fim (rent-a-car e TVDE já ciclados);
- *   · TVDE em aberto (sem data_fim, nunca renovado) → prazo VIRTUAL = fim do
- *     1.º ciclo (data_inicio + opção de renovação, default 30 dias) — um TVDE
- *     aberto há meses com ciclo de 30 dias está objectivamente em atraso.
- */
-export function prazoRenovacao(c: ContratoRenovavelInput): Date | null {
-  if (c.data_fim) return new Date(c.data_fim);
-  if (c.regime === 'tvde' && c.data_inicio) {
-    return proximaDataRenovacao(c.data_inicio, c.renovacao_opcao, c.renovacao_intervalo_dias);
-  }
-  return null;
-}
-
 export function estadoRenovacaoContrato(
   c: ContratoRenovavelInput,
   hoje: Date = new Date()
 ): EstadoRenovacao | null {
   if (!contratoRenovavel(c)) return null;
-  const prazo = prazoRenovacao(c);
-  if (!prazo) return null;
-  const fim = inicioDoDia(prazo);
+  // TVDE sem data_fim (em aberto): renovável mas sem prazo — não há "hoje"
+  // nem "atraso" até a 1.ª renovação arrancar o ciclo mensal.
+  if (!c.data_fim) return null;
+  const fim = inicioDoDia(new Date(c.data_fim as string));
   const ref = inicioDoDia(hoje);
   if (fim.getTime() > ref.getTime()) return null;
   return fim.getTime() === ref.getTime() ? 'hoje' : 'atraso';
@@ -105,8 +88,7 @@ export interface ContratoPorRenovar<T> {
 
 /**
  * Filtra e ordena os contratos por renovar (hoje + em atraso). Em atraso primeiro
- * e, dentro de cada grupo, por prazo ascendente (o mais antigo no topo). O prazo
- * é a data_fim ou, em TVDE aberto, o prazo virtual (ver prazoRenovacao).
+ * e, dentro de cada grupo, por data_fim ascendente (o mais antigo no topo).
  */
 export function contratosPorRenovar<T extends ContratoRenovavelInput>(
   contratos: T[],
@@ -120,7 +102,8 @@ export function contratosPorRenovar<T extends ContratoRenovavelInput>(
   return res.sort((a, b) => {
     if (a.estado !== b.estado) return a.estado === 'atraso' ? -1 : 1;
     return (
-      (prazoRenovacao(a.contrato)?.getTime() ?? 0) - (prazoRenovacao(b.contrato)?.getTime() ?? 0)
+      new Date(a.contrato.data_fim as string).getTime() -
+      new Date(b.contrato.data_fim as string).getTime()
     );
   });
 }
