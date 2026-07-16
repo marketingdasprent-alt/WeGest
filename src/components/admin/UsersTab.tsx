@@ -149,9 +149,7 @@ export const UsersTab = () => {
         .eq('status', 'ativo')
         .in('gestor_id', userIds);
 
-      const periodoAtivoMap = new Map(
-        (periodosAtivos || []).map((p) => [p.gestor_id, p.data_fim])
-      );
+      const periodoAtivoMap = new Map((periodosAtivos || []).map((p) => [p.gestor_id, p.data_fim]));
 
       const membershipMap = Object.fromEntries(memberships.map((m) => [m.user_id, m]));
 

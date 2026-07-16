@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarOff, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { validarNovoPeriodo, type PeriodoExistente } from '@/lib/gestorInatividade';
 import type { DateRange } from '@/types/dateRange';
@@ -112,13 +112,19 @@ export function PeriodoInatividadeSection() {
       if (error) throw error;
 
       if (dataInicio <= hoje) {
-        const { error: invokeError } = await supabase.functions.invoke('process-gestor-inatividade', {
-          body: { periodoId: data.id, forcar: 'ativar' },
-        });
+        const { error: invokeError } = await supabase.functions.invoke(
+          'process-gestor-inatividade',
+          {
+            body: { periodoId: data.id, forcar: 'ativar' },
+          }
+        );
         if (invokeError) throw invokeError;
       }
 
-      toast({ title: 'Período agendado', description: 'Período de inatividade guardado com sucesso.' });
+      toast({
+        title: 'Período agendado',
+        description: 'Período de inatividade guardado com sucesso.',
+      });
       setRange({ from: undefined, to: undefined });
       setOpen(false);
       fetchPeriodos();
@@ -184,35 +190,37 @@ export function PeriodoInatividadeSection() {
   };
 
   return (
-    <div className="border-t pt-6 space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <CalendarOff className="h-5 w-5 text-primary" />
-          Período de Inatividade
-        </h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          Agende um período em que vai estar indisponível como transferista. No dia de início os
-          seus motoristas são avisados por email e fica bloqueado para novas atribuições até ao
-          fim do período.
-        </p>
-      </div>
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Agende um período em que vai estar indisponível como transferista. Se for gestor, os seus
+        motoristas são avisados por email no início e no fim; fica sempre bloqueado para novas
+        atribuições até ao fim do período.
+      </p>
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline">Agendar novo período</Button>
+          <Button variant="outline">Agendar indisponibilidade</Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-3" align="start">
           <Calendar
             mode="range"
             selected={range.from ? { from: range.from, to: range.to } : undefined}
-            onSelect={(value) => setRange(value ? { from: value.from, to: value.to } : { from: undefined, to: undefined })}
+            onSelect={(value) =>
+              setRange(
+                value ? { from: value.from, to: value.to } : { from: undefined, to: undefined }
+              )
+            }
             numberOfMonths={2}
             defaultMonth={new Date()}
             disabled={{ before: new Date() }}
             initialFocus
           />
           <div className="flex justify-end pt-2">
-            <Button onClick={handleCriar} disabled={submitting || !range.from || !range.to} size="sm">
+            <Button
+              onClick={handleCriar}
+              disabled={submitting || !range.from || !range.to}
+              size="sm"
+            >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Confirmar
             </Button>

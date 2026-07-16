@@ -42,5 +42,6 @@ docs/**/*.md
 
 # Skills locais do Claude Code — ferramentas de apoio, não fazem parte do produto.
 .claude/skills/
+.claude/settings.local.json
 
 .sisyphus/
