@@ -265,19 +265,21 @@ export const IntegracoesTab: React.FC = () => {
       });
     }
 
-    // Via Verde — integrations created via IntegracaoDialog (plataforma='viaverde', manual upload)
+    // Via Verde — integrações via wizard (plataforma='via_verde' OU legacy 'viaverde'),
+    // com robot Apify dedicado. Card recebe botão Play (handleExecuteRobot).
     integracoes
-      .filter((i) => i.plataforma === ('viaverde' as any))
+      .filter((i) => i.plataforma === 'via_verde' || i.plataforma === ('viaverde' as any))
       .forEach((i) => {
+        const isRobotBacked = i.plataforma === 'via_verde';
         result.push({
           id: i.id,
           type: 'via_verde',
           nome: i.nome,
           ativo: i.ativo,
           ultimoSync: i.ultimo_sync,
-          username: null,
-          password: null,
-          connectionMode: 'upload',
+          username: i.client_id,
+          password: i.client_secret,
+          connectionMode: isRobotBacked ? 'api' : 'upload',
           rawData: i,
           logoUrl: i.logo_url || '/images/logo-via-verde.png',
         });
@@ -328,9 +330,18 @@ export const IntegracoesTab: React.FC = () => {
       setFaturacaoRow((card.rawData as FaturacaoConfigRow | null) ?? null);
       setFaturacaoDialogOpen(true);
     } else if (card.type === 'via_verde') {
-      const conta = card.rawData as ViaVerdeConta;
-      setSelectedViaVerdeConta(conta);
-      setViaVerdeDialogOpen(true);
+      // Distinguir: rawData é ViaVerdeConta (legado FTP) OU IntegracaoConfig (novo wizard via_verde).
+      // Integração nova (com robot Apify) → abrir IntegracaoDetailModal.
+      // Conta antiga (FTP/sync) → abrir ViaVerdeContaDialog.
+      const raw = card.rawData as { integracao_id?: string } | null | undefined;
+      const isContaLegada = !!raw && typeof raw === 'object' && 'integracao_id' in raw && !('plataforma' in raw);
+      if (isContaLegada) {
+        setSelectedViaVerdeConta(raw as ViaVerdeConta);
+        setViaVerdeDialogOpen(true);
+      } else {
+        setSelectedIntegracao(card.rawData as IntegracaoConfig);
+        setDetailModalOpen(true);
+      }
     } else {
       const integracao = card.rawData as IntegracaoConfig;
       setSelectedIntegracao(integracao);
@@ -656,9 +667,9 @@ export const IntegracoesTab: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {cards.map((card) => {
             const rawPlataforma = (card.rawData as IntegracaoConfig)?.plataforma;
-            const isRobotBacked = rawPlataforma === 'robot';
+            const isRobotBacked = rawPlataforma === 'robot' || rawPlataforma === 'via_verde';
             const isUberBacked = rawPlataforma === 'uber';
-            const hasImport = isRobotBacked || isUberBacked;
+            const hasImport = rawPlataforma === 'robot' || isUberBacked;
             return (
               <IntegracaoCard
                 key={card.id}

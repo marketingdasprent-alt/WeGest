@@ -92,8 +92,14 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
     integracao.plataforma === 'robot' && integracao.robot_target_platform === 'repsol';
   const isEdpSimplified =
     integracao.plataforma === 'robot' && integracao.robot_target_platform === 'edp';
+  const isViaVerde = integracao.plataforma === 'via_verde';
   const isSimplified =
-    isUberSimplified || isBoltSimplified || isBpSimplified || isRepsolSimplified || isEdpSimplified;
+    isUberSimplified ||
+    isBoltSimplified ||
+    isBpSimplified ||
+    isRepsolSimplified ||
+    isEdpSimplified ||
+    isViaVerde;
 
   const displayIcon = isUberSimplified
     ? Car
@@ -120,11 +126,13 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
           ? 'Repsol'
           : isEdpSimplified
             ? 'EDP'
-            : integracao.plataforma === 'bolt'
-              ? 'Bolt'
-              : integracao.plataforma === 'robot'
-                ? 'Robot (Apify)'
-                : 'Uber';
+            : isViaVerde
+              ? 'Via Verde'
+              : integracao.plataforma === 'bolt'
+                ? 'Bolt'
+                : integracao.plataforma === 'robot'
+                  ? 'Robot (Apify)'
+                  : 'Uber';
 
   const [formData, setFormData] = useState({
     nome: integracao.nome,
@@ -303,13 +311,16 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
         isBoltSimplified ||
         isBpSimplified ||
         isRepsolSimplified ||
-        isEdpSimplified
+        isEdpSimplified ||
+        isViaVerde
       ) {
-        // Simplified integrations (Uber/Bolt/BP/Repsol/EDP): login + password
         updatePayload.client_id = formData.client_id || null;
         updatePayload.client_secret = formData.client_secret || null;
         updatePayload.cookies_json = null;
         updatePayload.auth_mode = 'password';
+        if (isViaVerde) {
+          updatePayload.sync_automatico = formData.sync_automatico;
+        }
       } else if (integracao.plataforma === 'uber') {
         // Native Uber integration (webhook + direct API)
         updatePayload.client_id = formData.client_id || null;
@@ -347,6 +358,28 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
         .single();
 
       if (error) throw error;
+
+      // Via Verde: propagar credenciais + sync_automatico para via_verde_contas,
+      // que é de onde o robot-execute lê as credenciais reais.
+      if (isViaVerde) {
+        const supabaseAny = supabase as any;
+        const { error: contaErr } = await supabaseAny
+          .from('via_verde_contas')
+          .update({
+            sync_email: formData.client_id || '',
+            sync_password: formData.client_secret || '',
+            sync_ativo: formData.sync_automatico,
+          })
+          .eq('integracao_id', integracao.id);
+        if (contaErr) {
+          console.error('Erro ao actualizar via_verde_contas:', contaErr);
+          toast({
+            title: 'Aviso',
+            description: 'Configuração guardada, mas a conta Via Verde pode não ter sido actualizada.',
+            variant: 'destructive',
+          });
+        }
+      }
 
       // Handle cron scheduling for robot integrations
       if (integracao.plataforma === 'robot') {
@@ -495,12 +528,13 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
               </div>
             )}
 
-            {/* Login + Password — shown for all simplified integrations (Uber/Bolt/BP/Repsol/EDP) */}
+            {/* Login + Password — shown for all simplified integrations (Uber/Bolt/BP/Repsol/EDP/Via Verde) */}
             {(isUberSimplified ||
               isBoltSimplified ||
               isBpSimplified ||
               isRepsolSimplified ||
-              isEdpSimplified) && (
+              isEdpSimplified ||
+              isViaVerde) && (
               <>
                 <div className="space-y-2">
                   <Label>Login (Email)</Label>
@@ -534,6 +568,25 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                   </div>
                 </div>
               </>
+            )}
+
+            {/* Toggle de sync automático — só Via Verde */}
+            {isViaVerde && (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
+                <div>
+                  <p className="text-sm font-medium">Sync automático (semanal)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Activa o robô para correr todas as segundas-feiras às 04h00 (Lisboa) e importar
+                    a semana anterior.
+                  </p>
+                </div>
+                <Switch
+                  checked={formData.sync_automatico}
+                  onCheckedChange={(checked) =>
+                    setFormData((prev) => ({ ...prev, sync_automatico: checked }))
+                  }
+                />
+              </div>
             )}
 
             {/* === UBER NATIVE FIELDS === */}

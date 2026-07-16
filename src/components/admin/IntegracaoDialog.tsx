@@ -28,6 +28,7 @@ import {
   BP_DEFAULTS,
   REPSOL_DEFAULTS,
   EDP_DEFAULTS,
+  VIAVERDE_DEFAULTS,
   type PlataformaOperacional,
 } from './integracoes/types';
 import { presetToCronExpression } from '@/lib/cronPresets';
@@ -143,13 +144,14 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
         ? REPSOL_DEFAULTS
         : isEdp
           ? EDP_DEFAULTS
-          : UBER_DEFAULTS;
-  const needsLoginPassword = isUber || isBolt || isBp || isRepsol || isEdp;
+          : isViaVerde
+            ? VIAVERDE_DEFAULTS
+            : UBER_DEFAULTS;
+  const needsLoginPassword = isUber || isBolt || isBp || isRepsol || isEdp || isViaVerde;
   const selectedPlatform = PLATFORMS.find((p) => p.id === formData.plataforma);
 
   const canProceedStep1 = !!formData.plataforma;
-  // Via Verde é manual (sem credenciais) → basta ter nome.
-  const canProceedStep2 = isViaVerde ? !!formData.nome : !!(formData.login && formData.password);
+  const canProceedStep2 = !!(formData.login && formData.password);
 
   const handleNext = () => {
     if (step === 1 && !canProceedStep1) {
@@ -185,21 +187,6 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
     try {
       setSaving(true);
 
-      // Via Verde: integração manual (sem robot/Apify/credenciais).
-      if (isViaVerde) {
-        const { error: vvError } = await supabase.from('plataformas_configuracao').insert({
-          nome: formData.nome,
-          plataforma: 'viaverde',
-          ativo: true,
-        });
-        if (vvError) throw vvError;
-        toast({ title: 'Integração criada', description: `Via Verde "${formData.nome}" criada.` });
-        setSaving(false);
-        onOpenChange(false);
-        onSuccess();
-        return;
-      }
-
       let apifyApiToken: string | null = null;
       const { data: existingIntegrations } = await supabase
         .from('plataformas_configuracao')
@@ -212,21 +199,23 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
         apifyApiToken = (existingIntegrations[0] as any).apify_api_token;
       }
 
-      // Fallback to hardcoded token from defaults if still null
       if (!apifyApiToken) {
         apifyApiToken = (defaults as any).apify_api_token || null;
       }
 
       const insertData: Record<string, any> = {
         nome: formData.nome,
-        plataforma: 'robot',
+        plataforma: isViaVerde ? 'via_verde' : 'robot',
         ativo: true,
-        webhook_url: defaults.site_url,
         apify_actor_id: defaults.apify_actor_id,
         apify_api_token: apifyApiToken,
-        auth_mode: defaults.auth_mode,
+        auth_mode: (defaults as any).auth_mode || 'password',
         robot_target_platform: defaults.robot_target_platform,
       };
+
+      if (!isViaVerde) {
+        insertData.webhook_url = defaults.site_url;
+      }
 
       insertData.client_id = formData.login;
       insertData.client_secret = formData.password;
@@ -239,6 +228,32 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
         .single();
 
       if (error) throw error;
+
+      // Via Verde: criar também a conta em via_verde_contas com as credenciais
+      // do portal — o robot-execute lê sync_email/sync_password desta tabela.
+      if (isViaVerde && insertedRows?.id) {
+        const { error: contaError } = await supabase.from('via_verde_contas').insert({
+          integracao_id: insertedRows.id,
+          nome_conta: formData.nome,
+          codigo_rac: 'IMPORTAR',
+          ftp_host: '',
+          ftp_utilizador: '',
+          ftp_password: '',
+          ftp_ativo: false,
+          sync_email: formData.login,
+          sync_password: formData.password,
+          sync_ativo: true,
+        });
+        if (contaError) {
+          console.error('Erro ao criar via_verde_contas:', contaError);
+          toast({
+            title: 'Aviso',
+            description:
+              'Integração criada mas a configuração da conta Via Verde falhou. Edite-a manualmente.',
+            variant: 'destructive',
+          });
+        }
+      }
 
       if (formData.cron_schedule !== 'disabled' && insertedRows?.id) {
         const cronExpr = presetToCronExpression(formData.cron_schedule, formData.cron_custom);
@@ -345,73 +360,53 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
 
             {/* Right: Form */}
             <div className="flex-1 space-y-4">
-              {isViaVerde ? (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    A Via Verde é uma integração <strong>manual</strong> — sem credenciais nem robô.
-                    Os dados são importados a partir do extrato (Excel/CSV) no separador
-                    <em> Contas › Importar Dados</em>.
-                  </p>
-                  <div className="space-y-2">
-                    <Label htmlFor="nome-vv">
-                      Nome da integração <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="nome-vv"
-                      placeholder="Ex: Via Verde Frota"
-                      value={formData.nome}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))}
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    Introduza as credenciais da sua conta {selectedPlatform.name}.
-                  </p>
-                  <div className="space-y-2">
-                    <Label htmlFor="login">
-                      Email <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="login"
-                      type="email"
-                      placeholder="email@empresa.com"
-                      value={formData.login}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, login: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">
-                      Password <span className="text-red-500">*</span>
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="password"
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
-                        value={formData.password}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, password: e.target.value }))
-                        }
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              )}
+              <p className="text-sm text-muted-foreground">
+                {isViaVerde ? (
+                  <>
+                    Introduza as credenciais do <strong>portal Via Verde</strong>. O robô usará
+                    este login para extrair automaticamente os extratos semanais.
+                  </>
+                ) : (
+                  <>Introduza as credenciais da sua conta {selectedPlatform.name}.</>
+                )}
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="login">
+                  Email <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="login"
+                  type="email"
+                  placeholder="email@empresa.com"
+                  value={formData.login}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, login: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">
+                  Password <span className="text-red-500">*</span>
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, password: e.target.value }))
+                    }
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         )}
