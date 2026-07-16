@@ -178,13 +178,14 @@ Deno.serve(async (req) => {
         });
       }
 
-      const { data: callerProfile } = await supabase
-        .from('profiles')
+      const { data: callerMembership } = await supabase
+        .from('user_organizacoes')
         .select('is_admin')
-        .eq('id', user.id)
-        .single();
+        .eq('user_id', user.id)
+        .eq('org_id', periodo.org_id)
+        .maybeSingle();
       const isOwner = periodo.gestor_id === user.id;
-      const isAdmin = !!callerProfile?.is_admin;
+      const isAdmin = !!callerMembership?.is_admin;
       if (!isOwner && !isAdmin) {
         return new Response(JSON.stringify({ success: false, error: 'Sem permissão' }), {
           status: 403,
