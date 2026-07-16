@@ -267,16 +267,24 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
 
       // Via Verde segue o fluxo de robot Apify abaixo (mesmo caminho de
       // Uber/Bolt/BP/Repsol/EDP), incluindo a criação da via_verde_contas.
+      //
+      // Via Verde usa uma conta Apify própria e dedicada (actor + token só
+      // seus) — nunca deve herdar o token partilhado das outras plataformas
+      // robot (Uber/Bolt/BP/Repsol/EDP), ao contrário delas. Reutilizar esse
+      // token partilhado já causou 403 "Monthly usage hard limit exceeded"
+      // por vir de uma conta Apify diferente e sem crédito.
       let apifyApiToken: string | null = null;
-      const { data: existingIntegrations } = await supabase
-        .from('plataformas_configuracao')
-        .select('apify_api_token')
-        .eq('plataforma', 'robot')
-        .not('apify_api_token', 'is', null)
-        .limit(1);
+      if (!isViaVerde) {
+        const { data: existingIntegrations } = await supabase
+          .from('plataformas_configuracao')
+          .select('apify_api_token')
+          .eq('plataforma', 'robot')
+          .not('apify_api_token', 'is', null)
+          .limit(1);
 
-      if (existingIntegrations && existingIntegrations.length > 0) {
-        apifyApiToken = (existingIntegrations[0] as any).apify_api_token;
+        if (existingIntegrations && existingIntegrations.length > 0) {
+          apifyApiToken = (existingIntegrations[0] as any).apify_api_token;
+        }
       }
 
       if (!apifyApiToken) {
