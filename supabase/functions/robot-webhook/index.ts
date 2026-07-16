@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
       .from('plataformas_configuracao')
       .select('id, nome, plataforma, robot_target_platform')
       .eq('id', integracaoId)
-      .eq('plataforma', 'robot')
+      .in('plataforma', ['robot', 'via_verde'])
       .single();
 
     if (configError || !config) {

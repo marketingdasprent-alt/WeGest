@@ -10,7 +10,12 @@
 CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
 CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
 
-SELECT cron.unschedule('via-verde-weekly-sync');
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'via-verde-weekly-sync') THEN
+    PERFORM cron.unschedule('via-verde-weekly-sync');
+  END IF;
+END $$;
 
 SELECT cron.schedule(
   'via-verde-weekly-sync',

@@ -363,15 +363,42 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
       // que é de onde o robot-execute lê as credenciais reais.
       if (isViaVerde) {
         const supabaseAny = supabase as any;
-        const { error: contaErr } = await supabaseAny
+        const { data: updatedContas, error: contaErr } = await supabaseAny
           .from('via_verde_contas')
           .update({
             sync_email: formData.client_id || '',
             sync_password: formData.client_secret || '',
             sync_ativo: formData.sync_automatico,
           })
-          .eq('integracao_id', integracao.id);
-        if (contaErr) {
+          .eq('integracao_id', integracao.id)
+          .select('id');
+
+        // Nenhuma linha existente para este integracao_id (ex: integração antiga
+        // criada antes da conta ser auto-gerada) — criar agora, senão o robot-execute
+        // fica sem credenciais para ler.
+        if (!contaErr && (!updatedContas || updatedContas.length === 0)) {
+          const { error: insertErr } = await supabaseAny.from('via_verde_contas').insert({
+            integracao_id: integracao.id,
+            nome_conta: formData.nome,
+            codigo_rac: 'IMPORTAR',
+            ftp_host: '',
+            ftp_utilizador: '',
+            ftp_password: '',
+            ftp_ativo: false,
+            sync_email: formData.client_id || '',
+            sync_password: formData.client_secret || '',
+            sync_ativo: formData.sync_automatico,
+          });
+          if (insertErr) {
+            console.error('Erro ao criar via_verde_contas:', insertErr);
+            toast({
+              title: 'Aviso',
+              description:
+                'Configuração guardada, mas a conta Via Verde não foi criada. Tente novamente.',
+              variant: 'destructive',
+            });
+          }
+        } else if (contaErr) {
           console.error('Erro ao actualizar via_verde_contas:', contaErr);
           toast({
             title: 'Aviso',
