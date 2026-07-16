@@ -195,8 +195,14 @@ describe('Dashboard — variantes por papel', () => {
       expect(screen.getByText('Disponíveis')).toBeTruthy();
     });
 
-    // O título deve ser "Atividade" e não "Atividade & Rentabilidade"
-    expect(screen.queryByText('Atividade & Rentabilidade')).toBeNull();
-    expect(screen.getByText('Atividade')).toBeTruthy();
+    // O título deve ser "Atividade" e não "Atividade & Rentabilidade" — em
+    // waitFor porque este título depende de isExecutivo assentar no mesmo
+    // commit que "Disponíveis" (mesma fonte, mas React pode ainda re-render
+    // entre os dois em CI mais lento); os outros testes já ficam estáveis
+    // porque "Disponíveis" e a sua própria asserção partilham o commit inicial.
+    await waitFor(() => {
+      expect(screen.queryByText('Atividade & Rentabilidade')).toBeNull();
+      expect(screen.getByText('Atividade')).toBeTruthy();
+    });
   });
 });
