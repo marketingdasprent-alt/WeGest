@@ -93,17 +93,23 @@ Deno.serve(async (req) => {
     }
   };
 
+  const isGestor = (cargo: string | null) => !!cargo && cargo.toLowerCase().includes('gestor');
+
   const buscarGestorEOrg = async (periodo: Periodo) => {
     const [{ data: gestor }, { data: org }] = await Promise.all([
-      supabase.from('profiles').select('nome').eq('id', periodo.gestor_id).single(),
+      supabase.from('profiles').select('nome, cargo').eq('id', periodo.gestor_id).single(),
       supabase.from('organizacoes').select('nome').eq('id', periodo.org_id).single(),
     ]);
     if (!gestor || !org) throw new Error('Gestor ou organização não encontrados');
-    return { gestorNome: gestor.nome as string, orgNome: org.nome as string };
+    return {
+      gestorNome: gestor.nome as string,
+      gestorCargo: (gestor.cargo as string | null) ?? null,
+      orgNome: org.nome as string,
+    };
   };
 
   const ativar = async (periodo: Periodo) => {
-    const { gestorNome, orgNome } = await buscarGestorEOrg(periodo);
+    const { gestorNome, gestorCargo, orgNome } = await buscarGestorEOrg(periodo);
 
     await supabase
       .from('profiles')
@@ -115,18 +121,20 @@ Deno.serve(async (req) => {
       .update({ status: 'ativo', notificado_inicio_em: new Date().toISOString() })
       .eq('id', periodo.id);
 
-    const dataFimFmt = new Date(periodo.data_fim).toLocaleDateString('pt-PT');
-    await notificarMotoristas(
-      periodo.org_id,
-      gestorNome,
-      orgNome,
-      `${gestorNome} está inativo até ${dataFimFmt}`,
-      `O seu gestor, <strong>${gestorNome}</strong>, está inativo até <strong>${dataFimFmt}</strong>. Para assuntos urgentes, contacte o administrador da organização.`
-    );
+    if (isGestor(gestorCargo)) {
+      const dataFimFmt = new Date(periodo.data_fim).toLocaleDateString('pt-PT');
+      await notificarMotoristas(
+        periodo.org_id,
+        gestorNome,
+        orgNome,
+        `${gestorNome} está inativo até ${dataFimFmt}`,
+        `O seu gestor, <strong>${gestorNome}</strong>, está inativo até <strong>${dataFimFmt}</strong>. Para assuntos urgentes, contacte o administrador da organização.`
+      );
+    }
   };
 
   const concluir = async (periodo: Periodo) => {
-    const { gestorNome, orgNome } = await buscarGestorEOrg(periodo);
+    const { gestorNome, gestorCargo, orgNome } = await buscarGestorEOrg(periodo);
 
     await supabase
       .from('profiles')
@@ -138,13 +146,15 @@ Deno.serve(async (req) => {
       .update({ status: 'concluido', notificado_fim_em: new Date().toISOString() })
       .eq('id', periodo.id);
 
-    await notificarMotoristas(
-      periodo.org_id,
-      gestorNome,
-      orgNome,
-      `${gestorNome} está novamente disponível`,
-      `O seu gestor, <strong>${gestorNome}</strong>, está novamente disponível.`
-    );
+    if (isGestor(gestorCargo)) {
+      await notificarMotoristas(
+        periodo.org_id,
+        gestorNome,
+        orgNome,
+        `${gestorNome} está novamente disponível`,
+        `O seu gestor, <strong>${gestorNome}</strong>, está novamente disponível.`
+      );
+    }
   };
 
   try {
