@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { MotoristaViaturaCard } from './MotoristaViaturaCard';
+import { MotoristaHistoricoViaturasCard } from './MotoristaHistoricoViaturasCard';
 import { MotoristaDocumentosCard } from './MotoristaDocumentosCard';
 import { MotoristaMovimentosCard } from './MotoristaMovimentosCard';
 import { MotoristaRecibosCard } from './MotoristaRecibosCard';
@@ -776,6 +777,8 @@ export function MotoristaDashboard() {
 
       <div className="space-y-8">
         <MotoristaViaturaCard motoristaId={motorista.id} />
+
+        <MotoristaHistoricoViaturasCard motoristaId={motorista.id} />
 
         <div id="motorista-documentos-card">
           <MotoristaDocumentosCard motorista={motorista} />
