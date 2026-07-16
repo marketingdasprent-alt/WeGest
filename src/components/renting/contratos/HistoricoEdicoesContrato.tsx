@@ -2,6 +2,7 @@ import { History, CalendarPlus, FileSignature, PackageCheck, Receipt, PenLine } 
 
 import { Card, CardContent } from '@/components/ui/card';
 import {
+  isAberturaReal,
   useContratoHistorico,
   type ContratoHistoricoEvento,
   type ContratoHistoricoEventoTipo,
@@ -42,19 +43,6 @@ const ORDEM_MARCOS: Array<keyof typeof MARCO_META> = [
  * Mostra "<Marco> por: Nome - DD/MM/AAAA HH:MM" e um bloco destacado com a
  * última alteração (qualquer modificação ao contrato).
  */
-/** O trigger de INSERT regista 'contrato_aberto' na CRIAÇÃO do contrato, com
- *  detalhe "estado inicial: <estado>". Isso só é uma abertura real se o
- *  contrato já tiver nascido 'em_curso' — nascido 'agendado', a abertura
- *  acontece (e é registada com "agendado → em_curso") quando a entrega for
- *  confirmada. Sem essa confirmação, o marco fica honestamente "sem registo"
- *  em vez de fingir que o contrato foi aberto (ex.: #611 dizia "aberto" com
- *  o estado ainda em Agendado). */
-function isAberturaReal(ev: ContratoHistoricoEvento): boolean {
-  const d = ev.detalhe ?? '';
-  if (!d.startsWith('estado inicial:')) return true; // transição real (ex.: "agendado → em_curso")
-  return d.includes('em_curso'); // nasceu já em curso — abertura na criação
-}
-
 export function HistoricoEdicoesContrato({ contratoId }: Props) {
   const { data: eventos, isLoading } = useContratoHistorico(contratoId);
 

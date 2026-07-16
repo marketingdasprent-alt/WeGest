@@ -16,6 +16,19 @@ export interface ContratoHistoricoEvento {
   criado_em: string;
 }
 
+/** O trigger de INSERT regista 'contrato_aberto' na CRIAÇÃO do contrato, com
+ *  detalhe "estado inicial: <estado>". Isso só é uma abertura real se o
+ *  contrato já tiver nascido 'em_curso' — nascido 'agendado', a abertura
+ *  acontece (e é registada com "agendado → em_curso") quando a entrega for
+ *  confirmada. Sem essa confirmação, o marco "Contrato aberto por" deve ficar
+ *  honestamente "sem registo" em vez de fingir que o contrato foi aberto
+ *  (ex.: #611 dizia "aberto" com o estado ainda em Agendado). */
+export function isAberturaReal(ev: ContratoHistoricoEvento): boolean {
+  const d = ev.detalhe ?? '';
+  if (!d.startsWith('estado inicial:')) return true; // transição real (ex.: "agendado → em_curso")
+  return d.includes('em_curso'); // nasceu já em curso — abertura na criação
+}
+
 /**
  * Histórico de edições do contrato — marcos do ciclo de vida (reserva criada,
  * contrato aberto/fechado/faturado) + última alteração, com o nome do ator já

@@ -26,6 +26,7 @@ import {
   useUpdateContratoRenting,
 } from '@/hooks/useContratosRenting';
 import { useEstacoes } from '@/hooks/useEstacoes';
+import { tipoRealizacaoPendenteEsperada } from './realizacaoPendente';
 import { useOrgDefinicoes, ivaParaModalidade } from '@/hooks/useOrgDefinicoes';
 import { useRentingCoberturas } from '@/hooks/useRentingCoberturas';
 import { useRentingExtras } from '@/hooks/useRentingExtras';
@@ -633,18 +634,13 @@ export function useContratoForm(): UseContratoFormReturn {
   );
 
   // ── Realização pendente ───────────────────────────────────────
-  // NOTA: propositadamente NÃO se esconde para contratos facturados — a
-  // fatura congela os valores fiscais (por trigger), não o ciclo operacional.
+  // NOTA: propositadamente NÃO depende do estado financeiro — a fatura
+  // congela os valores fiscais (por trigger), não o ciclo operacional.
   // Havia um guard `!isFacturado` aqui que, no fluxo "criar + faturar à
   // cabeça", escondia para sempre a única forma de confirmar a entrega
   // (ex.: #611 BL-60-FQ ficou preso em "Agendado" com o carro na rua).
-  const tipoEventoEsperado: 'entrega' | 'recolha' | null = !contrato
-    ? null
-    : contrato.estado_operacional === 'agendado'
-      ? 'entrega'
-      : contrato.estado_operacional === 'em_curso'
-        ? 'recolha'
-        : null;
+  // Regra + teste sentinela: realizacaoPendente.ts / realizacaoPendente.test.ts.
+  const tipoEventoEsperado = tipoRealizacaoPendenteEsperada(contrato);
 
   const { data: eventoPendente, isFetching: fetchingEventoPendente } = useQuery({
     queryKey: ['calendario-evento-pendente', contrato?.id ?? null, tipoEventoEsperado],
