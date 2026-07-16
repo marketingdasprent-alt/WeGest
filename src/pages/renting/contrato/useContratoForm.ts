@@ -632,9 +632,12 @@ export function useContratoForm(): UseContratoFormReturn {
     [coberturasForm]
   );
 
-  const isFacturado = contrato?.estado_financeiro === 'facturado';
-
   // ── Realização pendente ───────────────────────────────────────
+  // NOTA: propositadamente NÃO se esconde para contratos facturados — a
+  // fatura congela os valores fiscais (por trigger), não o ciclo operacional.
+  // Havia um guard `!isFacturado` aqui que, no fluxo "criar + faturar à
+  // cabeça", escondia para sempre a única forma de confirmar a entrega
+  // (ex.: #611 BL-60-FQ ficou preso em "Agendado" com o carro na rua).
   const tipoEventoEsperado: 'entrega' | 'recolha' | null = !contrato
     ? null
     : contrato.estado_operacional === 'agendado'
@@ -658,7 +661,7 @@ export function useContratoForm(): UseContratoFormReturn {
       if (error || !data) return null;
       return { id: data.id as string, tipo: data.tipo as 'entrega' | 'recolha' };
     },
-    enabled: isEdit && !!contrato && !!tipoEventoEsperado && !isFacturado,
+    enabled: isEdit && !!contrato && !!tipoEventoEsperado,
     refetchOnMount: 'always',
     staleTime: 0,
   });
