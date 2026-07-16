@@ -2,6 +2,7 @@ import { History, CalendarPlus, FileSignature, PackageCheck, Receipt, PenLine } 
 
 import { Card, CardContent } from '@/components/ui/card';
 import {
+  isAberturaReal,
   useContratoHistorico,
   type ContratoHistoricoEvento,
   type ContratoHistoricoEventoTipo,
@@ -65,7 +66,8 @@ export function HistoricoEdicoesContrato({ contratoId }: Props) {
         ) : (
           <div className="space-y-2.5">
             {ORDEM_MARCOS.map((tipo) => {
-              const ev = porTipo(tipo);
+              let ev = porTipo(tipo);
+              if (tipo === 'contrato_aberto' && ev && !isAberturaReal(ev)) ev = undefined;
               const { label, Icon } = MARCO_META[tipo];
               return (
                 <div key={tipo} className="flex items-start gap-2">

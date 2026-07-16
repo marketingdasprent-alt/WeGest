@@ -73,8 +73,14 @@ describe('contratoRenovavel', () => {
   it('aceita rent-a-car longa duração activo e actual', () => {
     expect(contratoRenovavel(base)).toBe(true);
   });
-  it('aceita TVDE longa duração activo e actual', () => {
+  it('aceita TVDE longa duração com data_fim (igual a rent-a-car)', () => {
     expect(contratoRenovavel({ ...base, regime: 'tvde' })).toBe(true);
+  });
+  it('aceita TVDE SEM data_fim (em aberto — a 1.ª renovação arranca o ciclo)', () => {
+    expect(contratoRenovavel({ ...base, regime: 'tvde', data_fim: null })).toBe(true);
+  });
+  it('rejeita slot', () => {
+    expect(contratoRenovavel({ ...base, regime: 'slot' })).toBe(false);
   });
   it('rejeita curta duração', () => {
     expect(contratoRenovavel({ ...base, is_longa_duracao: false })).toBe(false);
@@ -85,7 +91,7 @@ describe('contratoRenovavel', () => {
   it('rejeita contrato devolvido/fechado', () => {
     expect(contratoRenovavel({ ...base, estado_operacional: 'devolvido' })).toBe(false);
   });
-  it('rejeita sem data_fim', () => {
+  it('rejeita rent-a-car sem data_fim', () => {
     expect(contratoRenovavel({ ...base, data_fim: null })).toBe(false);
   });
 });
@@ -113,6 +119,22 @@ describe('estadoRenovacaoContrato', () => {
         hoje
       )
     ).toBeNull();
+  });
+  it('devolve null para contratos não renováveis (slot)', () => {
+    expect(
+      estadoRenovacaoContrato({ ...base, regime: 'slot', data_fim: '2026-07-10T08:00:00' }, hoje)
+    ).toBeNull();
+  });
+  it('TVDE com data_fim comporta-se exactamente como rent-a-car', () => {
+    expect(
+      estadoRenovacaoContrato({ ...base, regime: 'tvde', data_fim: '2026-07-10T08:00:00' }, hoje)
+    ).toBe('atraso');
+    expect(
+      estadoRenovacaoContrato({ ...base, regime: 'tvde', data_fim: '2026-07-13T08:00:00' }, hoje)
+    ).toBe('hoje');
+  });
+  it('TVDE sem data_fim é renovável mas sem prazo (não entra no banner)', () => {
+    expect(estadoRenovacaoContrato({ ...base, regime: 'tvde', data_fim: null }, hoje)).toBeNull();
   });
 });
 

@@ -249,7 +249,8 @@ export function ReservaTabGeralSectionPeriodos({
             )}
             {isTvde ? (
               <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 p-3 text-xs text-muted-foreground">
-                Reservas TVDE não têm data de fim — o contrato é aberto e renovado automaticamente.
+                Reservas TVDE não têm data de fim — o contrato nasce em aberto e a 1.ª renovação
+                («Renovar contrato») fecha o período até esse dia e arranca o ciclo mensal.
               </div>
             ) : (
               <FormField
