@@ -26,6 +26,7 @@ import {
   useUpdateContratoRenting,
 } from '@/hooks/useContratosRenting';
 import { useEstacoes } from '@/hooks/useEstacoes';
+import { tipoRealizacaoPendenteEsperada } from './realizacaoPendente';
 import { useOrgDefinicoes, ivaParaModalidade } from '@/hooks/useOrgDefinicoes';
 import { useRentingCoberturas } from '@/hooks/useRentingCoberturas';
 import { useRentingExtras } from '@/hooks/useRentingExtras';
@@ -44,6 +45,8 @@ import { useReserva } from '@/hooks/useReservas';
 import { useReservaCondutores } from '@/hooks/useReservaCondutores';
 import { useViaturas } from '@/hooks/useViaturas';
 import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
+
+import { fillEmptyFormFields } from '@/lib/fillEmptyFormFields';
 
 import type {
   CoberturaFormItem,
@@ -556,18 +559,12 @@ export function useContratoForm(): UseContratoFormReturn {
     );
     if (!linha) return;
     const isTvdeReg = regime === 'tvde';
-    const kmIncl = isTvdeReg ? linha.km_mensal : linha.km_mensal_iva;
-    const kmExtra = isTvdeReg ? linha.km_adicional_valor : linha.km_adicional_valor_iva;
-    const franquia = isTvdeReg ? linha.franquia_valor : linha.franquia_valor_iva;
-    const caucao = isTvdeReg ? linha.caucao_valor : linha.caucao_valor_iva;
-    if (kmIncl != null && form.getValues('kms_incluidos') == null)
-      form.setValue('kms_incluidos', kmIncl, { shouldDirty: true });
-    if (kmExtra != null && form.getValues('km_adicional_valor') == null)
-      form.setValue('km_adicional_valor', kmExtra, { shouldDirty: true });
-    if (franquia != null && form.getValues('franquia_valor') == null)
-      form.setValue('franquia_valor', franquia, { shouldDirty: true });
-    if (caucao != null && form.getValues('caucao_valor') == null)
-      form.setValue('caucao_valor', caucao, { shouldDirty: true });
+    fillEmptyFormFields(form, {
+      kms_incluidos: isTvdeReg ? linha.km_mensal : linha.km_mensal_iva,
+      km_adicional_valor: isTvdeReg ? linha.km_adicional_valor : linha.km_adicional_valor_iva,
+      franquia_valor: isTvdeReg ? linha.franquia_valor : linha.franquia_valor_iva,
+      caucao_valor: isTvdeReg ? linha.caucao_valor : linha.caucao_valor_iva,
+    });
   }, [tarifaIdWatch, viaturaId, regime, viaturas, precosModeloTvde, form]);
 
   // ── Viaturas disponíveis ──────────────────────────────────────
@@ -632,16 +629,14 @@ export function useContratoForm(): UseContratoFormReturn {
     [coberturasForm]
   );
 
-  const isFacturado = contrato?.estado_financeiro === 'facturado';
-
   // ── Realização pendente ───────────────────────────────────────
-  const tipoEventoEsperado: 'entrega' | 'recolha' | null = !contrato
-    ? null
-    : contrato.estado_operacional === 'agendado'
-      ? 'entrega'
-      : contrato.estado_operacional === 'em_curso'
-        ? 'recolha'
-        : null;
+  // NOTA: propositadamente NÃO depende do estado financeiro — a fatura
+  // congela os valores fiscais (por trigger), não o ciclo operacional.
+  // Havia um guard `!isFacturado` aqui que, no fluxo "criar + faturar à
+  // cabeça", escondia para sempre a única forma de confirmar a entrega
+  // (ex.: #611 BL-60-FQ ficou preso em "Agendado" com o carro na rua).
+  // Regra + teste sentinela: realizacaoPendente.ts / realizacaoPendente.test.ts.
+  const tipoEventoEsperado = tipoRealizacaoPendenteEsperada(contrato);
 
   const { data: eventoPendente, isFetching: fetchingEventoPendente } = useQuery({
     queryKey: ['calendario-evento-pendente', contrato?.id ?? null, tipoEventoEsperado],
@@ -658,7 +653,7 @@ export function useContratoForm(): UseContratoFormReturn {
       if (error || !data) return null;
       return { id: data.id as string, tipo: data.tipo as 'entrega' | 'recolha' };
     },
-    enabled: isEdit && !!contrato && !!tipoEventoEsperado && !isFacturado,
+    enabled: isEdit && !!contrato && !!tipoEventoEsperado,
     refetchOnMount: 'always',
     staleTime: 0,
   });
@@ -808,7 +803,10 @@ export function useContratoForm(): UseContratoFormReturn {
       estacao_entrega_id: values.estacao_entrega_id || null,
       data_inicio: localInputToIso(values.data_inicio),
       estacao_recolha_id: values.estacao_recolha_id || null,
-      data_fim: values.regime === 'tvde' ? null : localInputToIso(values.data_fim ?? ''),
+      data_fim:
+        values.regime === 'tvde' && !values.is_longa_duracao
+          ? null
+          : localInputToIso(values.data_fim ?? ''),
       estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
       estado_operacional: values.estado_operacional,
       estado_financeiro: values.estado_financeiro,
@@ -976,7 +974,10 @@ export function useContratoForm(): UseContratoFormReturn {
               estacao_entrega_id: values.estacao_entrega_id || null,
               data_inicio: localInputToIso(values.data_inicio),
               estacao_recolha_id: values.estacao_recolha_id || null,
-              data_fim: values.regime === 'tvde' ? null : localInputToIso(values.data_fim ?? ''),
+              data_fim:
+                values.regime === 'tvde' && !values.is_longa_duracao
+                  ? null
+                  : localInputToIso(values.data_fim ?? ''),
               estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
               estado_operacional: values.estado_operacional,
               estado_financeiro: values.estado_financeiro,

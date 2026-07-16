@@ -1,8 +1,23 @@
-export type PlataformaIntegracao = 'bolt' | 'uber' | 'via_verde' | 'combustivel' | 'robot';
+export type PlataformaIntegracao =
+  | 'bolt'
+  | 'uber'
+  | 'via_verde'
+  | 'combustivel'
+  | 'robot'
+  | 'email';
 
 // Available platforms for creation — internally stored as 'robot' with robot_target_platform
-// (exceto 'viaverde', que é manual: armazenada como plataforma='viaverde', sem robot/credenciais)
-export type PlataformaOperacional = 'uber' | 'bolt' | 'bp' | 'repsol' | 'edp' | 'viaverde';
+// (exceto 'viaverde', que é manual: armazenada como plataforma='viaverde', sem robot/credenciais;
+// e 'brevo', armazenada como plataforma='email' + email_provider='brevo' — integração de email
+// da própria empresa, sem robot/Apify, API key cifrada via RPC set_email_api_key)
+export type PlataformaOperacional =
+  | 'uber'
+  | 'bolt'
+  | 'bp'
+  | 'repsol'
+  | 'edp'
+  | 'viaverde'
+  | 'brevo';
 
 export interface IntegracaoConfig {
   id: string;
@@ -36,6 +51,11 @@ export interface IntegracaoConfig {
   logo_url?: string | null;
   robot_target_platform?: string | null;
   webhook_signing_key?: string | null;
+  email_provider?: string | null;
+  email_sender_name?: string | null;
+  email_sender_email?: string | null;
+  email_reply_to?: string | null;
+  email_provider_config?: Record<string, unknown> | null;
 }
 
 // Pre-configured defaults for Uber integrations (stored as robot internally)

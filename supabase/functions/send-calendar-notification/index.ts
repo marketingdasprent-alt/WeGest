@@ -1,23 +1,11 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { EmailService } from "../_shared/email/services/EmailService.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-const TIPO_LABELS: Record<string, string> = {
-  entrega: "Entrega",
-  recolha: "Recolha",
-  devolucao: "Devolucao",
-  troca: "Troca",
-  upgrade: "Upgrade",
-};
-
-function formatMatricula(val: string): string {
-  const clean = val.replace(/[-\s]/g, "").toUpperCase();
-  return clean.match(/.{1,2}/g)?.join("-") || clean;
-}
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -29,12 +17,11 @@ serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const brevoApiKey = Deno.env.get("BREVO_API_KEY");
 
-    if (!brevoApiKey) throw new Error("BREVO_API_KEY not configured");
     if (!orgId) throw new Error("org_id é obrigatório");
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const emailService = new EmailService(supabase);
 
     // 1. Membros (não-motoristas) DESTA org — recipientes scoped por user_organizacoes.
     const { data: orgMembers, error: membersError } = await supabase
@@ -104,73 +91,22 @@ serve(async (req: Request) => {
       allEmails
     );
 
-    const dataEvento = new Date(data_inicio);
-    const dataFormatada = dataEvento.toLocaleDateString("pt-PT", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    const horaFormatada = dia_todo
-      ? "Dia inteiro"
-      : dataEvento.toLocaleTimeString("pt-PT", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-    const matriculaFormatada = formatMatricula(matricula);
-    const cidadeFormatada = cidade ? cidade.toUpperCase() : "";
-    const tipoLabel = TIPO_LABELS[tipo] || tipo;
-
-    const subject = `Novo evento: ${tipoLabel} - ${matriculaFormatada}${
-      cidadeFormatada ? " " + cidadeFormatada : ""
-    }`;
-
-    const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: #1a1a2e; padding: 24px; border-radius: 10px; text-align: center; margin-bottom: 20px;">
-    <h1 style="color: #fff; margin: 0; font-size: 22px;">Novo Evento no Calendario</h1>
-  </div>
-  <div style="background: #f9f9f9; padding: 24px; border-radius: 10px;">
-    <h2 style="margin-top: 0;">${matriculaFormatada}${
-      cidadeFormatada ? " - " + cidadeFormatada : ""
-    }</h2>
-    <p><strong>Tipo:</strong> ${tipoLabel}</p>
-    <p><strong>Data:</strong> ${dataFormatada}</p>
-    <p><strong>Hora:</strong> ${horaFormatada}</p>
-  </div>
-  <p style="color: #666; font-size: 12px; text-align: center; margin-top: 20px;">
-    Decada Ousada - Email automatico gerado pelo sistema WeGest.
-  </p>
-</body>
-</html>
-    `;
-
     let totalSent = 0;
     for (const email of allEmails) {
-      const resp = await fetch("https://api.brevo.com/v3/smtp/email", {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "api-key": brevoApiKey,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          sender: { name: "Decada Ousada", email: "noreply@dasprent.pt" },
-          to: [{ email }],
-          subject,
-          htmlContent,
-        }),
+      const result = await emailService.sendCalendarNotification(orgId, {
+        to: email,
+        matricula,
+        cidade,
+        tipo,
+        dataInicio: data_inicio,
+        diaTodo: dia_todo,
       });
 
-      if (!resp.ok) {
-        const errData = await resp.json();
-        console.error(`Erro Brevo para ${email}:`, errData);
-      } else {
+      if (result.success) {
         console.log(`Notificacao enviada para ${email}`);
         totalSent++;
+      } else {
+        console.error(`Erro ao enviar notificacao para ${email}:`, result.error);
       }
     }
 

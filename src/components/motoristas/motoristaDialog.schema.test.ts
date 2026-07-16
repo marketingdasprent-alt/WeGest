@@ -73,4 +73,24 @@ describe('buildMotoristaPayload', () => {
     expect(payload.status_ativo).toBe(true);
     expect(payload.is_slot).toBe(false);
   });
+
+  it('inclui caucao_valor quando definido', () => {
+    const payload = buildMotoristaPayload({ ...baseValues, caucao_valor: 300 });
+    expect(payload.caucao_valor).toBe(300);
+  });
+
+  it('caucao_valor fica null quando não definido', () => {
+    const payload = buildMotoristaPayload(baseValues);
+    expect(payload.caucao_valor).toBeNull();
+  });
+
+  it('inclui lead_id quando houve match confirmado', () => {
+    const payload = buildMotoristaPayload({ ...baseValues, lead_id: 'lead-1' });
+    expect(payload.lead_id).toBe('lead-1');
+  });
+
+  it('lead_id fica null quando não houve match', () => {
+    const payload = buildMotoristaPayload(baseValues);
+    expect(payload.lead_id).toBeNull();
+  });
 });

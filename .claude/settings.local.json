@@ -1,4 +1,7 @@
 {
+  "env": {
+    "API_KEY_21ST": "21st_sk_7716765254560737dfe13d55be2683c813dbfb739fac36b24b0c683ddc03d31c"
+  },
   "permissions": {
     "allow": [
       "Bash(npx supabase:*)",

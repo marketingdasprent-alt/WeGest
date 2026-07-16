@@ -303,6 +303,25 @@ export const IntegracoesTab: React.FC = () => {
       });
     });
 
+    // Brevo (email) — integração da própria empresa (plataforma='email', email_provider='brevo')
+    integracoes
+      .filter((i) => i.plataforma === 'email')
+      .forEach((i) => {
+        result.push({
+          id: i.id,
+          type: 'email',
+          nome: i.nome,
+          ativo: i.ativo,
+          ultimoSync: null,
+          username: i.email_sender_email ?? null,
+          password: null,
+          connectionMode: 'api',
+          subLabel: i.email_sender_email ?? undefined,
+          rawData: i,
+          logoUrl: null,
+        });
+      });
+
     // Faturação fiscal — cartão sempre presente (configurado ou não)
     const fatRow = (integracoes as any[]).find((i) => i.plataforma === 'faturacao') || null;
     result.push({
@@ -343,6 +362,14 @@ export const IntegracoesTab: React.FC = () => {
         setSelectedIntegracao(card.rawData as IntegracaoConfig);
         setDetailModalOpen(true);
       }
+    } else if (card.type === 'email') {
+      // Edição fica para uma fase seguinte (IntegracaoDetailModal é hoje
+      // desenhado à volta de Bolt/Uber — reaproveitá-lo tal-e-qual para email
+      // mostraria campos errados). Eliminar + recriar funciona entretanto.
+      toast({
+        title: 'Edição ainda não disponível',
+        description: 'Para alterar a integração Brevo, elimine-a e crie novamente.',
+      });
     } else {
       const integracao = card.rawData as IntegracaoConfig;
       setSelectedIntegracao(integracao);
@@ -677,7 +704,7 @@ export const IntegracoesTab: React.FC = () => {
                 data={card}
                 onEdit={handleCardEdit}
                 onSync={
-                  card.type !== 'via_verde' && card.type !== 'faturacao'
+                  card.type !== 'via_verde' && card.type !== 'faturacao' && card.type !== 'email'
                     ? handleCardSync
                     : undefined
                 }

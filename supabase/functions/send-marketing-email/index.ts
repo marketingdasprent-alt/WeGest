@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { EmailService } from "../_shared/email/services/EmailService.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,12 +13,10 @@ serve(async (req) => {
   }
 
   try {
-    const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY");
-    if (!BREVO_API_KEY) throw new Error("BREVO_API_KEY não configurada");
-
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const emailService = new EmailService(supabase);
 
     const { campanha_id, lista_id, assinatura_id: overrideAssinaturaId } = await req.json();
     if (!campanha_id) throw new Error("campanha_id é obrigatório");
@@ -102,6 +101,8 @@ serve(async (req) => {
       let totalEnviados = 0;
       let totalErros = 0;
       const BATCH_SIZE = 50;
+      const htmlContent = campanha.conteudo_html + assinaturaHtml;
+      const tags = ["campanha_" + campanha_id.substring(0, 8)];
 
       // Acumular detalhes por contacto
       const detalhes: Array<{
@@ -115,73 +116,31 @@ serve(async (req) => {
         const batch = contactos.slice(i, i + BATCH_SIZE);
 
         for (const contacto of batch) {
-          try {
-            const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-              method: "POST",
-              headers: {
-                "api-key": BREVO_API_KEY,
-                "Content-Type": "application/json",
-                Accept: "application/json",
-              },
-              body: JSON.stringify({
-                sender: { name: "DÉCADA OUSADA", email: "noreply@dasprent.pt" },
-                to: [{ name: contacto.nome, email: contacto.email }],
-                subject: campanha.assunto,
-                htmlContent: campanha.conteudo_html + assinaturaHtml,
-                tags: ["campanha_" + campanha_id.substring(0, 8)],
-              }),
+          const result = await emailService.sendMarketing(orgId, {
+            to: contacto.email,
+            toNome: contacto.nome,
+            subject: campanha.assunto,
+            html: htmlContent,
+            tags,
+            campanhaId: campanha_id,
+          });
+
+          if (result.success) {
+            totalEnviados++;
+            detalhes.push({
+              contacto_email: contacto.email,
+              contacto_nome: contacto.nome,
+              status: "enviado",
+              erro_mensagem: null,
             });
-
-            if (response.ok) {
-              totalEnviados++;
-              // Extract messageId from Brevo response
-              let brevoMessageId: string | null = null;
-              try {
-                const respData = await response.json();
-                brevoMessageId = respData.messageId || null;
-              } catch (_) {
-                // ignore parse errors
-              }
-              
-              // Insert into email_sends table
-              if (brevoMessageId) {
-                await supabase.from("email_sends").insert({
-                  campanha_id,
-                  email: contacto.email,
-                  nome: contacto.nome,
-                  brevo_message_id: brevoMessageId,
-                  status: "sent",
-                  last_event: "sent",
-                  last_event_at: new Date().toISOString(),
-                  org_id: orgId,
-                });
-              }
-
-              detalhes.push({
-                contacto_email: contacto.email,
-                contacto_nome: contacto.nome,
-                status: "enviado",
-                erro_mensagem: null,
-              });
-            } else {
-              const errData = await response.text();
-              console.error(`Erro ao enviar para ${contacto.email}:`, errData);
-              totalErros++;
-              detalhes.push({
-                contacto_email: contacto.email,
-                contacto_nome: contacto.nome,
-                status: "erro",
-                erro_mensagem: errData,
-              });
-            }
-          } catch (err: any) {
-            console.error(`Exceção ao enviar para ${contacto.email}:`, err);
+          } else {
+            console.error(`Erro ao enviar para ${contacto.email}:`, result.error);
             totalErros++;
             detalhes.push({
               contacto_email: contacto.email,
               contacto_nome: contacto.nome,
               status: "erro",
-              erro_mensagem: err.message || "Erro desconhecido",
+              erro_mensagem: result.error ?? "Erro desconhecido",
             });
           }
         }

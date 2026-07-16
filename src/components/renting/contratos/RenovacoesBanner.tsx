@@ -71,8 +71,8 @@ export function RenovacoesBanner({ contratos, getClienteNome, getCondutorNome }:
               <RefreshCw className="h-5 w-5 text-amber-600" /> Contratos por renovar
             </DialogTitle>
             <DialogDescription>
-              Contratos de longa duração (Rent-a-Car) cuja renovação chegou ou está em atraso. Clica
-              num contrato para o abrir e renovar.
+              Contratos de longa duração (Rent-a-Car e TVDE com data de fim) cuja renovação chegou
+              ou está em atraso. Clica num contrato para o abrir e renovar.
             </DialogDescription>
           </DialogHeader>
 

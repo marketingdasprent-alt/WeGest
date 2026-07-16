@@ -57,8 +57,9 @@ export const contratoFormSchema = z
 
     // Recolha
     estacao_recolha_id: z.string().uuid().nullable().optional(),
-    // TVDE não tem data de fim (renovação automática) — obrigatória só fora
-    // desse regime (validado no superRefine abaixo).
+    // TVDE pode não ter data de fim (contrato em aberto até à 1.ª renovação,
+    // que arranca o ciclo mensal) — obrigatória só fora desse regime
+    // (validado no superRefine abaixo).
     data_fim: z.string().optional().nullable(),
 
     // Estação origem da viatura
@@ -186,9 +187,23 @@ export const contratoFormSchema = z
       }),
   })
   .superRefine((d, ctx) => {
-    // TVDE: sem data de fim — o contrato é aberto, renovado automaticamente
-    // (ver is_longa_duracao/renovacao_opcao). Fora de TVDE, é obrigatória.
-    if (d.regime === 'tvde') return;
+    // TVDE: data de fim OPCIONAL — sem ela o contrato fica em aberto e a 1.ª
+    // renovação (RPC renovar_contrato_renting) fecha o período até hoje e
+    // arranca o ciclo mensal. Quando fornecida, valida-se só a ordem.
+    if (d.regime === 'tvde') {
+      if (
+        d.data_fim &&
+        !Number.isNaN(new Date(d.data_fim).getTime()) &&
+        new Date(d.data_fim).getTime() <= new Date(d.data_inicio).getTime()
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['data_fim'],
+          message: 'Data fim tem que ser posterior à data início',
+        });
+      }
+      return;
+    }
     if (!d.data_fim || Number.isNaN(new Date(d.data_fim).getTime())) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

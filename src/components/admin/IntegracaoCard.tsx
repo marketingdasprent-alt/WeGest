@@ -31,7 +31,8 @@ export type IntegracaoCardType =
   | 'via_verde'
   | 'combustivel'
   | 'robot'
-  | 'faturacao';
+  | 'faturacao'
+  | 'email';
 
 export interface IntegracaoCardData {
   id: string;
@@ -88,6 +89,11 @@ const PLATFORM_META: Record<IntegracaoCardType, { label: string; logo: string; c
     label: 'Faturação',
     logo: '',
     color: 'hsl(var(--chart-1))',
+  },
+  email: {
+    label: 'Brevo',
+    logo: '/images/logo-brevo.png',
+    color: 'hsl(var(--chart-2))',
   },
 };
 export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({

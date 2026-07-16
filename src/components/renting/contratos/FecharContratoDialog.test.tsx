@@ -79,6 +79,10 @@ vi.mock('@/contexts/AuthContext', () => ({
   }),
 }));
 
+vi.mock('@/contexts/TenantContext', () => ({
+  useOrgId: () => 'org-1',
+}));
+
 // AssinaturasHandoverSection usa canvas + Supabase — mock simples.
 vi.mock('@/components/assinatura/AssinaturasHandoverSection', () => ({
   AssinaturasHandoverSection: React.forwardRef<

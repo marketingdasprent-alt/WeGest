@@ -66,10 +66,13 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
   const kmFim = parseKm(kmFimStr);
 
   const novoPeriodo = useMemo(() => {
-    if (!contrato.data_fim) return null;
-    const inicio = new Date(contrato.data_fim);
+    // TVDE antigo sem data_fim (contrato em aberto): a 1.ª renovação arranca
+    // o ciclo — fecha o período até hoje e o novo começa agora (espelha a RPC,
+    // que usa COALESCE(data_fim, now())).
+    const baseFim = contrato.data_fim ?? new Date().toISOString();
+    const inicio = new Date(baseFim);
     const fim = proximaDataRenovacao(
-      contrato.data_fim,
+      baseFim,
       contrato.renovacao_opcao,
       contrato.renovacao_intervalo_dias
     );
@@ -127,7 +130,8 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
             <div className="flex items-center justify-between px-3 py-2">
               <span className="text-muted-foreground text-xs">Período atual</span>
               <span className="tabular-nums">
-                {formatDate(contrato.data_inicio)} → {formatDate(contrato.data_fim)}
+                {formatDate(contrato.data_inicio)} →{' '}
+                {contrato.data_fim ? formatDate(contrato.data_fim) : 'em aberto (fecha hoje)'}
               </span>
             </div>
             <div className="flex items-center justify-between px-3 py-2">
@@ -217,7 +221,10 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
             )}
           </div>
 
-          {naoFaturado && (
+          {/* Aviso só informativo — a faturação NUNCA bloqueia a renovação (nem o
+              fecho do antigo). Em TVDE nem se mostra: não se fatura TVDE, seria
+              ruído em todas as renovações. */}
+          {naoFaturado && contrato.regime !== 'tvde' && (
             <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-700 dark:text-amber-300">
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               <p className="text-xs">

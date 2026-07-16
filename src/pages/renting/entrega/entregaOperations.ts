@@ -3,6 +3,7 @@
  * Lógica de Supabase, geração de PDF e envio de email.
  */
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
@@ -21,11 +22,12 @@ interface BlocoFolha {
 
 interface GerarFolhaParams {
   modo: 'preview' | 'print';
-  tmplId: string;
   bloco: BlocoFolha;
   assinaturasRef: React.RefObject<AssinaturasHandoverHandle>;
   observacoes: string;
   contexto: {
+    emissorId: string | null;
+    anexoDanosTemplateId: string | null;
     condutorNome: string;
     condutorEmail: string;
     clienteNome: string;
@@ -46,8 +48,18 @@ interface GerarFolhaParams {
  * Chamado 1x na entrega/recolha simples, 2x na troca.
  */
 export async function gerarFolhaBloco(params: GerarFolhaParams): Promise<void> {
-  const { modo, tmplId, bloco, assinaturasRef, observacoes, contexto, responsavelNome, info } =
-    params;
+  const { modo, bloco, assinaturasRef, observacoes, contexto, responsavelNome, info } = params;
+
+  // Resolvido no servidor por contexto_folha_por_token (SECURITY DEFINER) —
+  // a query directa a document_templates fica bloqueada por RLS aqui, pois
+  // quem faz check-in/out por token normalmente não tem sessão/permissão de
+  // renting.
+  const tmplId = contexto?.anexoDanosTemplateId ?? null;
+  if (!tmplId) {
+    toast.error('Não existe uma Folha de Danos activa. Contacta o gestor da frota.');
+    return;
+  }
+
   const {
     matricula,
     viaturaId,
@@ -130,6 +142,10 @@ export async function gerarFolhaBloco(params: GerarFolhaParams): Promise<void> {
       toNome: contexto?.condutorNome,
       matricula,
       momento: isEntrega ? 'ENTREGA' : 'RECOLHA',
+      // Fluxo por token, sem sessão — sem org_id disponível aqui; a Edge
+      // Function deriva a org a partir de viaturaId (viaturas.org_id).
+      orgId: null,
+      viaturaId,
     });
   }
 }

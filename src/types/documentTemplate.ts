@@ -28,6 +28,11 @@ export interface DocumentTemplate {
 // no gerador (escolha por regime); os restantes são documentos genéricos que
 // aparecem no checklist "Gerar Documentos". Partilhado entre o editor e o
 // filtro da tab de documentos.
+//
+// 'anexo_danos' fica de fora de propósito: a Folha de Danos é um documento
+// fixo do sistema (não editável por admin), gerado só no fluxo de
+// check-in/out/troca — ver DocumentosTab (exclui da lista) e
+// GenerateDocumentsDialog/ContratoDocumentosDialog (excluem do checklist).
 export const TIPO_TEMPLATE_OPTIONS = [
   { value: 'contrato_aluguer', label: 'Contrato de Aluguer' },
   { value: 'contrato_prestacao', label: 'Contrato de Prestação' },
@@ -35,6 +40,5 @@ export const TIPO_TEMPLATE_OPTIONS = [
   { value: 'declaracao', label: 'Declaração' },
   { value: 'procedimentos', label: 'Procedimentos' },
   { value: 'recibo', label: 'Recibo' },
-  { value: 'anexo_danos', label: 'Folha de Danos' },
   { value: 'outro', label: 'Outro documento' },
 ] as const;

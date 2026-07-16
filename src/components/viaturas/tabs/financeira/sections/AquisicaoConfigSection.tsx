@@ -17,7 +17,6 @@ import { calculateTotalViatura } from '@/utils/viaturas-financeiro';
 export function AquisicaoConfigSection() {
   const { control, watch, setValue } = useFormContext();
 
-  const tipoFrota = watch('tipo_frota');
   const custoViatura = watch('custo_viatura');
   const custosOperacionais = watch('custos_operacionais');
   const custosAdicionais = watch('custos_adicionais');
@@ -38,8 +37,6 @@ export function AquisicaoConfigSection() {
       setValue('total_viatura', totalCalculated.toFixed(2));
     }
   }, [totalCalculated, setValue]);
-
-  const emissoresDisabled = tipoFrota === 'frota_propria';
 
   return (
     <>
@@ -103,11 +100,7 @@ export function AquisicaoConfigSection() {
               <FormItem>
                 <FormLabel>Entidade Financeira / Emissor</FormLabel>
                 <FormControl>
-                  <EmissorSelect
-                    value={field.value || ''}
-                    onChange={field.onChange}
-                    disabled={emissoresDisabled}
-                  />
+                  <EmissorSelect value={field.value || ''} onChange={field.onChange} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
