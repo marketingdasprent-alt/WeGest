@@ -101,7 +101,7 @@ export function MotoristaDocumentosCard({ motorista }: MotoristaDocumentosCardPr
           <div className="p-2 bg-teal-500/10 rounded-xl">
             <FileText className="w-4 h-4 md:w-5 md:h-5 text-teal-600 dark:text-teal-400" />
           </div>
-          Documentos Legais
+          Os Meus Documentos
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
