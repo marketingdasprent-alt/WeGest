@@ -803,7 +803,7 @@ export function MotoristaDashboard() {
         <MotoristaHistoricoViaturasCard motoristaId={motorista.id} />
 
         <div id="motorista-documentos-card">
-          <MotoristaDocumentosCard motorista={motorista} />
+          <MotoristaDocumentosCard motoristaId={motorista.id} />
         </div>
 
         {usaRecibos && (
