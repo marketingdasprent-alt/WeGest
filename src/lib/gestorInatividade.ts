@@ -48,7 +48,7 @@ export function validarNovoPeriodo({
   if (sobrepoe) {
     return {
       valido: false,
-      erro: 'Já existe um período agendado ou ativo com sobreposição com estas datas.',
+      erro: 'Já existe um período agendado ou ativo que se sobrepõe a estas datas.',
     };
   }
 
