@@ -31,6 +31,7 @@ interface Lead {
   status: string;
   created_at: string;
   formulario_id?: string;
+  caucao_valor?: number | null;
 }
 
 interface Formulario {
@@ -70,6 +71,7 @@ export const EditLeadDialog: React.FC<EditLeadDialogProps> = ({
         campaign_tags: lead.campaign_tags || [],
         status: lead.status,
         formulario_id: lead.formulario_id || 'none',
+        caucao_valor: lead.caucao_valor ?? null,
       });
     }
   }, [lead]);
@@ -193,6 +195,27 @@ export const EditLeadDialog: React.FC<EditLeadDialogProps> = ({
                 onChange={(e) => setFormData((prev) => ({ ...prev, zona: e.target.value }))}
                 className="bg-card border-border text-foreground text-sm sm:text-base"
                 placeholder="Ex: Lisboa, Porto..."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="caucao_valor" className="text-muted-foreground text-sm sm:text-base">
+                Caução (€)
+              </Label>
+              <Input
+                id="caucao_valor"
+                type="number"
+                min={0}
+                step="0.01"
+                value={formData.caucao_valor ?? ''}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    caucao_valor: e.target.value === '' ? null : Number(e.target.value),
+                  }))
+                }
+                className="bg-card border-border text-foreground text-sm sm:text-base"
+                placeholder="0,00"
               />
             </div>
 

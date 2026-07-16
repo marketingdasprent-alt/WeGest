@@ -31,6 +31,7 @@ import {
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { empresaDocData } from '@/config/empresas';
 import { resolveCartaoFrota } from '@/utils/document-template/resolveCartaoFrota';
+import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
 import { matchesSearch, cn } from '@/lib/utils';
 import { printPdf } from '@/lib/printPdf';
 
@@ -55,6 +56,7 @@ interface Motorista {
   data_contratacao?: string | null;
   cidade?: string | null;
   cidade_assinatura?: string | null;
+  iban?: string | null;
 }
 
 interface DocumentTemplate {
@@ -300,6 +302,7 @@ export const GenerateDocumentsDialog = ({
         morada: activeMotorista.morada || '',
         email: activeMotorista.email || '',
         telefone: activeMotorista.telefone || '',
+        iban: activeMotorista.iban || '',
         cartao_bp: activeMotorista.cartao_bp || '',
         cartao_repsol: activeMotorista.cartao_repsol || '',
         cartao_edp: activeMotorista.cartao_edp || '',
@@ -686,15 +689,7 @@ export const GenerateDocumentsDialog = ({
                       onChange={(e) => setDataAssinatura(e.target.value)}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cidadeAssinatura">Cidade de Assinatura</Label>
-                    <Input
-                      id="cidadeAssinatura"
-                      value={cidadeAssinatura}
-                      onChange={(e) => setCidadeAssinatura(e.target.value)}
-                      placeholder="Ex: Lisboa"
-                    />
-                  </div>
+                  <CidadeAssinaturaField value={cidadeAssinatura} onChange={setCidadeAssinatura} />
                   <div className="space-y-2 col-span-2">
                     <Label htmlFor="empresa">Empresa</Label>
                     <Select value={selectedEmpresa} onValueChange={setSelectedEmpresa}>

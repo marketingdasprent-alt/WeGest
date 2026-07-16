@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import {
   Command,
@@ -12,9 +13,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { fillEmptyFormFields } from '@/lib/fillEmptyFormFields';
+import { findLeadMatch, type LeadMatch } from '@/lib/leadMatch';
 import { normalizeNif, type FormValues } from './motoristaDialog.schema';
 import type { GestorTvde } from './useGestoresTvde';
 
@@ -25,6 +38,8 @@ interface MotoristaFormDadosPessoaisProps {
   setGestorPopoverOpen: (open: boolean) => void;
   /** Só em criação — avisa de NIF duplicado ao sair do campo, em vez de só no submit. */
   verificarNifDuplicado?: boolean;
+  /** Só em criação — procura lead com o mesmo email/telefone ao sair do campo. */
+  verificarLead?: boolean;
 }
 
 export function MotoristaFormDadosPessoais({
@@ -33,7 +48,13 @@ export function MotoristaFormDadosPessoais({
   gestorPopoverOpen,
   setGestorPopoverOpen,
   verificarNifDuplicado = false,
+  verificarLead = false,
 }: MotoristaFormDadosPessoaisProps) {
+  const [leadEncontrado, setLeadEncontrado] = useState<LeadMatch | null>(null);
+  // Evita repetir a mesma pesquisa (e reabrir o dialog) se o gestor sair do
+  // campo várias vezes sem mudar o valor.
+  const ultimaVerificacaoRef = useRef<string | null>(null);
+
   const handleNifBlur = async (rawValue: string) => {
     if (!verificarNifDuplicado) return;
     const nif = normalizeNif(rawValue);
@@ -52,6 +73,27 @@ export function MotoristaFormDadosPessoais({
       form.clearErrors('nif');
     }
   };
+
+  const verificarMatchLead = async () => {
+    if (!verificarLead) return;
+    const email = form.getValues('email') || '';
+    const telefone = form.getValues('telefone') || '';
+    const chave = `${email}|${telefone}`;
+    if (chave === '|' || chave === ultimaVerificacaoRef.current) return;
+    ultimaVerificacaoRef.current = chave;
+
+    const match = await findLeadMatch(email, telefone);
+    if (match) setLeadEncontrado(match);
+  };
+
+  const confirmarUsarLead = () => {
+    if (!leadEncontrado) return;
+    if (!form.getValues('nome')) form.setValue('nome', leadEncontrado.nome);
+    fillEmptyFormFields(form, { caucao_valor: leadEncontrado.caucao_valor });
+    form.setValue('lead_id', leadEncontrado.id);
+    setLeadEncontrado(null);
+  };
+
   return (
     <>
       <FormField
@@ -181,6 +223,10 @@ export function MotoristaFormDadosPessoais({
                 <PhoneInput
                   value={field.value || ''}
                   onChange={field.onChange}
+                  onBlur={() => {
+                    field.onBlur();
+                    void verificarMatchLead();
+                  }}
                   defaultCountry="PT"
                   className="h-11"
                 />
@@ -197,13 +243,51 @@ export function MotoristaFormDadosPessoais({
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input type="email" placeholder="email@exemplo.com" {...field} className="h-11" />
+                <Input
+                  type="email"
+                  placeholder="email@exemplo.com"
+                  {...field}
+                  onBlur={(e) => {
+                    field.onBlur();
+                    void verificarMatchLead();
+                  }}
+                  className="h-11"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
       </div>
+
+      <FormField
+        control={form.control}
+        name="caucao_valor"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Caução</FormLabel>
+            <div className="relative">
+              <FormControl>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="0,00"
+                  className="h-11 pr-8"
+                  value={(field.value as number | null) ?? ''}
+                  onChange={(e) =>
+                    field.onChange(e.target.value === '' ? null : Number(e.target.value))
+                  }
+                />
+              </FormControl>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                €
+              </span>
+            </div>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2">
@@ -280,6 +364,34 @@ export function MotoristaFormDadosPessoais({
           </FormItem>
         )}
       />
+
+      <AlertDialog
+        open={!!leadEncontrado}
+        onOpenChange={(open) => !open && setLeadEncontrado(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Encontrámos um lead correspondente</AlertDialogTitle>
+            <AlertDialogDescription>
+              {leadEncontrado && (
+                <>
+                  <strong>{leadEncontrado.nome}</strong> — {leadEncontrado.email}
+                  {leadEncontrado.telefone ? ` · ${leadEncontrado.telefone}` : ''}
+                  {leadEncontrado.caucao_valor != null && (
+                    <> · Caução: {leadEncontrado.caucao_valor.toFixed(2)} €</>
+                  )}
+                  <br />
+                  Usar estes dados para preencher nome e caução?
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setLeadEncontrado(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarUsarLead}>Usar estes dados</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

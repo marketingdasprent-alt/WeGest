@@ -6,7 +6,9 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/comp
 import { Input } from '@/components/ui/input';
 
 import type { Estacao } from '@/hooks/useEstacoes';
+import { calcularDataFimLongaDuracao } from '@/lib/renovacaoContrato';
 import type { ContratoFormValues } from './contratoForm.schema';
+import { isoToLocalInput } from './contratoForm.schema';
 import { EstacaoSelectField } from './EstacaoSelectField';
 import { SectionTitle } from './SectionTitle';
 
@@ -18,18 +20,48 @@ interface SectionEntregaRecolhaProps {
 export const SectionEntregaRecolha: React.FC<SectionEntregaRecolhaProps> = ({ form, estacoes }) => {
   const regime = form.watch('regime');
   const isTvde = regime === 'tvde';
+  const isLongaDuracao = form.watch('is_longa_duracao');
+  const dataInicio = form.watch('data_inicio');
+  const renovacaoOpcao = form.watch('renovacao_opcao');
+  const renovacaoIntervaloDias = form.watch('renovacao_intervalo_dias');
 
   // Em TVDE não sabemos onde a viatura será recolhida (contratos de 2-3
-  // anos) — limpa a estação de recolha para não enviar dado órfão se o user
-  // mudou de rent_a_car → tvde mid-form. A data_fim NÃO se limpa: um TVDE
-  // pode ter período (o mês atual do ciclo de renovação — fica definido na
-  // 1.ª renovação) e apagá-lo aqui quebrava a cadeia mensal ao editar.
+  // anos) — limpa o valor automaticamente se o user mudou de rent_a_car →
+  // tvde mid-form. `data_fim` é tratado nos dois efeitos abaixo, separado
+  // desta regra (agora depende de is_longa_duracao, não só do regime).
   useEffect(() => {
     if (!isTvde) return;
     if (form.getValues('estacao_recolha_id')) {
       form.setValue('estacao_recolha_id', null, { shouldDirty: true });
     }
   }, [isTvde, form]);
+
+  // TVDE sem longa duração continua sem data de fim (contrato aberto).
+  useEffect(() => {
+    if (!(isTvde && !isLongaDuracao)) return;
+    if (form.getValues('data_fim')) {
+      form.setValue('data_fim', null, { shouldDirty: true });
+    }
+  }, [isTvde, isLongaDuracao, form]);
+
+  // Longa duração (qualquer regime): data_fim passa a ser a "próxima
+  // renovação", calculada a partir da Data Início + intervalo escolhido —
+  // nunca digitada à mão. Sincroniza para o campo do formulário para que a
+  // validação Zod e o submit continuem a usar `data_fim` como única fonte.
+  useEffect(() => {
+    if (!isLongaDuracao || !dataInicio) return;
+    const calculada = calcularDataFimLongaDuracao(
+      dataInicio,
+      isLongaDuracao,
+      renovacaoOpcao,
+      renovacaoIntervaloDias
+    );
+    if (!calculada) return;
+    const local = isoToLocalInput(calculada.toISOString());
+    if (form.getValues('data_fim') !== local) {
+      form.setValue('data_fim', local, { shouldDirty: true, shouldValidate: true });
+    }
+  }, [isLongaDuracao, dataInicio, renovacaoOpcao, renovacaoIntervaloDias, form]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -93,30 +125,45 @@ export const SectionEntregaRecolha: React.FC<SectionEntregaRecolhaProps> = ({ fo
               )}
             />
           )}
-          <FormField
-            control={form.control}
-            name="data_fim"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Data Fim {!isTvde && <span className="text-red-500">*</span>}</FormLabel>
-                <FormControl>
-                  <Input
-                    type="datetime-local"
-                    className="bg-background"
-                    {...field}
-                    value={field.value ?? ''}
-                  />
-                </FormControl>
-                {isTvde && (
-                  <p className="text-xs text-muted-foreground">
-                    Opcional em TVDE — sem data, o contrato fica em aberto e a 1.ª renovação (botão
-                    «Renovar contrato») fecha o período até hoje e arranca o ciclo mensal.
-                  </p>
-                )}
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {isTvde && !isLongaDuracao ? (
+            <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 p-3 text-xs text-muted-foreground">
+              Contratos TVDE não têm data de fim — são abertos, com renovação automática (ver
+              Duração/Renovação abaixo).
+            </div>
+          ) : (
+            <FormField
+              control={form.control}
+              name="data_fim"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {isLongaDuracao ? (
+                      'Próxima renovação'
+                    ) : (
+                      <>
+                        Data Fim <span className="text-red-500">*</span>
+                      </>
+                    )}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type="datetime-local"
+                      className="bg-background"
+                      {...field}
+                      value={field.value ?? ''}
+                      disabled={!!isLongaDuracao}
+                    />
+                  </FormControl>
+                  {isLongaDuracao && (
+                    <p className="text-xs text-muted-foreground">
+                      Calculado automaticamente a partir da Data Início e do intervalo de renovação.
+                    </p>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
         </div>
       </div>
     </div>

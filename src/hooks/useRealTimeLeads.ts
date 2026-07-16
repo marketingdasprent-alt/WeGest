@@ -18,6 +18,7 @@ interface Lead {
   gestor_responsavel?: string;
   valor_negocio?: string;
   updated_at?: string;
+  caucao_valor?: number | null;
 }
 
 interface DateFilter {

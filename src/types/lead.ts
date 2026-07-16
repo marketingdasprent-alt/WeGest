@@ -12,4 +12,5 @@ export interface Lead {
   observacoes?: string | null;
   observacoes_gestores?: string | null;
   gestor_responsavel?: string | null;
+  caucao_valor?: number | null;
 }

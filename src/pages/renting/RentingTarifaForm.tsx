@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getTarifaFormValidationError, type PrecoModeloForm } from './tarifaFormValidation';
+import type { Json } from '@/integrations/supabase/types';
+import { buildPrecosModeloLinhas } from './precosModeloBuilder';
 import { Tag, Save, Trash2, ChevronRight, Calendar, Clock, ShieldCheck, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -209,69 +211,22 @@ const RentingTarifaForm = () => {
   });
 
   /**
-   * Sincroniza renting_tarifa_precos_modelo com o mapa em memória:
-   * apaga tudo e reinsere as linhas com preço válido. As colunas gravadas
-   * dependem do tipo da tarifa:
-   *   TVDE       → preco_semana + km_mensal/km_adicional_valor/franquia_valor
-   *   Rent-a-Car → preco_dia/preco_mes + km_mensal_iva/km_adicional_valor_iva/franquia_valor_iva
-   * Os campos dos dois regimes são independentes (colunas separadas) — editar
-   * um não afeta o outro. O "preço-chave" (preco_semana no TVDE, preco_dia no
-   * RaC) tem de estar preenchido para a linha ser gravada.
+   * Sincroniza renting_tarifa_precos_modelo com o mapa em memória. As linhas
+   * vêm de `buildPrecosModeloLinhas` (./precosModeloBuilder.ts), que grava
+   * SEMPRE as colunas dos dois regimes (TVDE e Rent-a-Car), qualquer que seja
+   * o `tipo` seleccionado no momento de gravar — não voltar a filtrar por
+   * `form.para_tvde` aqui (incidente de 2026-07-14: 34 linhas TVDE
+   * substituídas por lixo). O delete+insert corre atomicamente dentro da RPC
+   * `salvar_precos_modelo_tarifa` (uma única transacção de função Postgres),
+   * para não repetir esse incidente se o insert falhasse a meio.
    */
   const savePrecosModelo = async (tarifaId: string) => {
-    await supabase.from('renting_tarifa_precos_modelo').delete().eq('tarifa_id', tarifaId);
-    const num = (v: string) => (v.trim() ? parseFloat(v) : null);
-    const int = (v: string) => (v.trim() ? parseInt(v) : null);
-    const valido = (v: string) => v.trim() !== '' && !Number.isNaN(parseFloat(v));
-
-    // Grava a linha se QUALQUER campo do regime estiver preenchido — não só o
-    // "preço-chave". Um modelo pode ter só caução/franquia/km definidos sem
-    // diária/semanal (ex.: herda o preço do grupo mas tem franquia própria).
-    // Exigir só o preço-chave fazia o delete+insert apagar essas linhas em
-    // silêncio (sem erro, sem toast) sempre que o utilizador gravava.
-    const linhas = Object.entries(precosModelo)
-      .filter(([, v]) =>
-        form.para_tvde
-          ? valido(v.preco_semana) ||
-            valido(v.km_mensal) ||
-            valido(v.km_adicional_valor) ||
-            valido(v.franquia_valor) ||
-            valido(v.caucao_valor)
-          : valido(v.preco_dia) ||
-            valido(v.preco_mes) ||
-            valido(v.km_mensal_iva) ||
-            valido(v.km_adicional_valor_iva) ||
-            valido(v.franquia_valor_iva) ||
-            valido(v.caucao_valor_iva)
-      )
-      .map(([modelo_id, v]) =>
-        form.para_tvde
-          ? {
-              org_id: orgId!,
-              tarifa_id: tarifaId,
-              modelo_id,
-              preco_semana: num(v.preco_semana),
-              km_mensal: int(v.km_mensal),
-              km_adicional_valor: num(v.km_adicional_valor),
-              franquia_valor: num(v.franquia_valor),
-              caucao_valor: num(v.caucao_valor),
-            }
-          : {
-              org_id: orgId!,
-              tarifa_id: tarifaId,
-              modelo_id,
-              preco_dia: num(v.preco_dia),
-              preco_mes: num(v.preco_mes),
-              km_mensal_iva: int(v.km_mensal_iva),
-              km_adicional_valor_iva: num(v.km_adicional_valor_iva),
-              franquia_valor_iva: num(v.franquia_valor_iva),
-              caucao_valor_iva: num(v.caucao_valor_iva),
-            }
-      );
-    if (linhas.length) {
-      const { error } = await supabase.from('renting_tarifa_precos_modelo').insert(linhas);
-      if (error) throw error;
-    }
+    const linhas = buildPrecosModeloLinhas(precosModelo, orgId!, tarifaId);
+    const { error } = await supabase.rpc('salvar_precos_modelo_tarifa', {
+      p_tarifa_id: tarifaId,
+      p_linhas: linhas as unknown as Json,
+    });
+    if (error) throw error;
   };
 
   const validate = () => {

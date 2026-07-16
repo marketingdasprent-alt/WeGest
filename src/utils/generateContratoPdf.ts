@@ -32,6 +32,9 @@ export interface GenerateContratoPdfParams {
    *  Documentos". Quando dado, gera exactamente estes; senão, decide pelo
    *  regime (rent_a_car → aluguer; tvde → prestação + aluguer). */
   templateIds?: string[];
+  /** Cidade de assinatura escolhida no dialog (normalmente a cidade de uma
+   *  estação). Manda sobre o fallback (sede da empresa / cidade do motorista). */
+  cidadeAssinatura?: string;
 }
 
 /**
@@ -49,6 +52,7 @@ export const generateContratoPdf = async ({
   empresa,
   action = 'print',
   templateIds,
+  cidadeAssinatura,
 }: GenerateContratoPdfParams): Promise<void> => {
   if (!empresa) {
     throw new Error('Empresa não definida — impossível gerar contrato.');
@@ -208,6 +212,7 @@ export const generateContratoPdf = async ({
         email: mo.email ?? '',
         telefone: mo.telefone ?? '',
         cidade: mo.cidade ?? '',
+        iban: mo.iban ?? '',
       }
     : cli
       ? {
@@ -225,6 +230,7 @@ export const generateContratoPdf = async ({
           email: cli.email ?? '',
           telefone: cli.telefone ?? '',
           cidade: cli.cidade ?? '',
+          iban: cli.iban ?? '',
         }
       : { nome: '—', nif: '', morada: '', email: '', telefone: '' };
 
@@ -298,7 +304,8 @@ export const generateContratoPdf = async ({
     data_inicio: contrato.data_inicio,
     data_fim: contrato.data_fim,
     data_assinatura: today,
-    cidade_assinatura: empresa.sede || (motoristaData.cidade as string) || 'Leiria',
+    cidade_assinatura:
+      cidadeAssinatura || empresa.sede || (motoristaData.cidade as string) || 'Leiria',
     duracao_meses: duracaoMeses,
     dias: String(diasContrato),
     numero_contrato: contrato.codigo != null ? String(contrato.codigo) : '',

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  calcularDataFimLongaDuracao,
   contratoRenovavel,
   contratosPorRenovar,
   estadoRenovacaoContrato,
@@ -40,6 +41,31 @@ describe('proximaDataRenovacao', () => {
     const d = proximaDataRenovacao('2026-01-15T10:00', 'primeiro_dia_mes', null);
     expect(d.getMonth()).toBe(1); // Fev
     expect(d.getDate()).toBe(1);
+  });
+});
+
+describe('calcularDataFimLongaDuracao', () => {
+  it('devolve null quando não é longa duração', () => {
+    expect(calcularDataFimLongaDuracao(iso('2026-07-15'), false, 'intervalo_dias', 30)).toBeNull();
+  });
+
+  it('devolve null quando is_longa_duracao é null/undefined', () => {
+    expect(calcularDataFimLongaDuracao(iso('2026-07-15'), null, 'intervalo_dias', 30)).toBeNull();
+    expect(calcularDataFimLongaDuracao(iso('2026-07-15'), undefined, null, null)).toBeNull();
+  });
+
+  it('longa duração com intervalo_dias soma os dias à data início', () => {
+    const d = calcularDataFimLongaDuracao(iso('2026-07-15'), true, 'intervalo_dias', 30);
+    expect(d).not.toBeNull();
+    expect(d?.getUTCMonth()).toBe(7); // Agosto
+    expect(d?.getUTCDate()).toBe(14);
+  });
+
+  it('longa duração com mesmo_dia_cada_mes soma 1 mês mantendo o dia', () => {
+    const d = calcularDataFimLongaDuracao('2026-07-15T10:00', true, 'mesmo_dia_cada_mes', null);
+    expect(d).not.toBeNull();
+    expect(d?.getMonth()).toBe(7); // Agosto
+    expect(d?.getDate()).toBe(15);
   });
 });
 
@@ -86,7 +112,15 @@ describe('estadoRenovacaoContrato', () => {
   it('devolve null quando a renovação ainda não chegou', () => {
     expect(estadoRenovacaoContrato({ ...base, data_fim: '2026-07-20T08:00:00' }, hoje)).toBeNull();
   });
-  it('devolve null para contratos não renováveis', () => {
+  it('devolve null para contratos não renováveis (curta duração)', () => {
+    expect(
+      estadoRenovacaoContrato(
+        { ...base, is_longa_duracao: false, data_fim: '2026-07-10T08:00:00' },
+        hoje
+      )
+    ).toBeNull();
+  });
+  it('devolve null para contratos não renováveis (slot)', () => {
     expect(
       estadoRenovacaoContrato({ ...base, regime: 'slot', data_fim: '2026-07-10T08:00:00' }, hoje)
     ).toBeNull();

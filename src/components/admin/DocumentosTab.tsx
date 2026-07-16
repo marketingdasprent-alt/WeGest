@@ -41,7 +41,9 @@ export const DocumentosTab = () => {
         .order('versao', { ascending: false });
 
       if (error) throw error;
-      setTemplates(data || []);
+      // Folha de Danos (anexo_danos) é documento fixo do sistema, não editável
+      // por admin — fica de fora desta aba mesmo que já exista na BD.
+      setTemplates((data || []).filter((t) => t.tipo !== 'anexo_danos'));
     } catch (error) {
       console.error('Erro ao carregar templates:', error);
       toast.error('Erro ao carregar templates de documentos');

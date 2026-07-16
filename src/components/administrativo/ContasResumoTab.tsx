@@ -8,7 +8,6 @@ import { MotoristaResumoDialog } from './MotoristaResumoDialog';
 import { ImportarDadosWizard } from './ImportarDadosWizard';
 import { RelatorioPagamentoDialog } from './RelatorioPagamentoDialog';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useOrgId } from '@/contexts/TenantContext';
 import { RECURSOS } from '@/utils/permissions';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -37,10 +36,10 @@ import { ContasResumoBulkBar } from './ContasResumoBulkBar';
 const WEEK_STARTS_ON = 1;
 
 // Coluna Gorjeta: dados sensíveis (gorjeta é rendimento do motorista, não da
-// org) — só visível para admins da própria org (Década Ousada), nunca para
-// motoristas (a rota /administrativo já lhes está bloqueada) nem para outras
-// orgs do SaaS.
-const DECADA_OUSADA_ORG_ID = '11111111-1111-1111-1111-111111111111';
+// org) — gate por recurso RBAC (administrativo_ver_gorjeta), não por
+// org_id fixo. Cada organização decide, via Permissões, quem na sua
+// própria equipa vê isto; admins continuam a ver sempre (bypass em
+// PermissionsContext).
 
 // Atalhos rápidos para seleção de semanas
 const getWeekShortcuts = () => [
@@ -52,10 +51,9 @@ const getWeekShortcuts = () => [
 
 export function ContasResumoTab() {
   const isMobile = useIsMobile();
-  const { hasAccessToResource, isAdmin } = usePermissions();
-  const orgId = useOrgId();
+  const { hasAccessToResource } = usePermissions();
   const canImportar = hasAccessToResource(RECURSOS.ADMINISTRATIVO_IMPORTAR);
-  const showGorjeta = isAdmin && orgId === DECADA_OUSADA_ORG_ID;
+  const showGorjeta = hasAccessToResource(RECURSOS.ADMINISTRATIVO_VER_GORJETA);
   const [loading, setLoading] = useState(true);
   const [resumos, setResumos] = useState<MotoristaResumo[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
