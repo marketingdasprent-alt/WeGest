@@ -214,7 +214,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
       };
 
       if (!isViaVerde) {
-        insertData.webhook_url = defaults.site_url;
+        insertData.webhook_url = (defaults as any).site_url;
       }
 
       insertData.client_id = formData.login;

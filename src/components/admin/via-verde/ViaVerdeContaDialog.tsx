@@ -34,8 +34,16 @@ const contaSchema = z.object({
   ftp_protocolo: z.enum(['ftp', 'sftp']).default('ftp'),
   ftp_utilizador: z.string().trim().max(255).optional().default(''),
   ftp_password: z.string().trim().max(255).optional().default(''),
-  sync_email: z.string().trim().min(1, 'O email de login do portal Via Verde é obrigatório para o robô Apify.').max(255),
-  sync_password: z.string().trim().min(1, 'A password do portal Via Verde é obrigatória para o robô Apify.').max(255),
+  sync_email: z
+    .string()
+    .trim()
+    .min(1, 'O email de login do portal Via Verde é obrigatório para o robô Apify.')
+    .max(255),
+  sync_password: z
+    .string()
+    .trim()
+    .min(1, 'A password do portal Via Verde é obrigatória para o robô Apify.')
+    .max(255),
   ftp_modo_passivo: z.boolean().default(true),
   ftp_ativo: z.boolean().default(false),
   sync_ativo: z.boolean().default(true),
