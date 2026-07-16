@@ -3,6 +3,7 @@ import {
   contratoRenovavel,
   contratosPorRenovar,
   estadoRenovacaoContrato,
+  prazoRenovacao,
   proximaDataRenovacao,
   type ContratoRenovavelInput,
 } from './renovacaoContrato';
@@ -12,7 +13,10 @@ const base: ContratoRenovavelInput = {
   is_longa_duracao: true,
   substituido_em: null,
   estado_operacional: 'em_curso',
+  data_inicio: '2026-06-13T10:00:00Z',
   data_fim: '2026-07-13T10:00:00Z',
+  renovacao_opcao: 'intervalo_dias',
+  renovacao_intervalo_dias: 30,
   deleted_at: null,
 };
 
@@ -99,22 +103,67 @@ describe('estadoRenovacaoContrato', () => {
       estadoRenovacaoContrato({ ...base, regime: 'tvde', data_fim: '2026-07-13T08:00:00' }, hoje)
     ).toBe('hoje');
   });
-  it('TVDE sem data_fim é renovável mas sem prazo (não entra no banner)', () => {
-    expect(estadoRenovacaoContrato({ ...base, regime: 'tvde', data_fim: null }, hoje)).toBeNull();
+  it('TVDE em aberto (sem data_fim): prazo virtual = início + ciclo', () => {
+    // Começou há mais de um ciclo (30d) → objectivamente em atraso.
+    expect(
+      estadoRenovacaoContrato(
+        { ...base, regime: 'tvde', data_fim: null, data_inicio: '2026-05-01T10:00:00Z' },
+        hoje
+      )
+    ).toBe('atraso');
+    // Começou há menos de um ciclo → ainda não chegou.
+    expect(
+      estadoRenovacaoContrato(
+        { ...base, regime: 'tvde', data_fim: null, data_inicio: '2026-07-01T10:00:00Z' },
+        hoje
+      )
+    ).toBeNull();
+  });
+});
+
+describe('prazoRenovacao', () => {
+  it('usa a data_fim quando existe', () => {
+    expect(prazoRenovacao(base)?.toISOString()).toBe(new Date(base.data_fim!).toISOString());
+  });
+  it('TVDE em aberto: data_inicio + ciclo de renovação', () => {
+    const prazo = prazoRenovacao({
+      ...base,
+      regime: 'tvde',
+      data_fim: null,
+      data_inicio: '2026-06-01T10:00:00Z',
+    });
+    expect(prazo?.getUTCMonth()).toBe(6); // Julho
+    expect(prazo?.getUTCDate()).toBe(1);
+  });
+  it('rent-a-car sem data_fim não tem prazo', () => {
+    expect(prazoRenovacao({ ...base, data_fim: null })).toBeNull();
   });
 });
 
 describe('contratosPorRenovar', () => {
   const hoje = new Date('2026-07-13T12:00:00');
-  it('inclui hoje + atraso, com atraso primeiro e por data_fim ascendente', () => {
+  it('inclui hoje + atraso, com atraso primeiro e por prazo ascendente', () => {
     const contratos = [
       { ...base, id: 'hoje', data_fim: '2026-07-13T08:00:00' },
       { ...base, id: 'atraso-novo', data_fim: '2026-07-12T08:00:00' },
       { ...base, id: 'atraso-antigo', data_fim: '2026-07-01T08:00:00' },
       { ...base, id: 'futuro', data_fim: '2026-08-01T08:00:00' },
+      // TVDE em aberto: prazo virtual 15/05 + 30d = 14/06 — o mais atrasado.
+      {
+        ...base,
+        id: 'tvde-aberto',
+        regime: 'tvde' as const,
+        data_fim: null,
+        data_inicio: '2026-05-15T08:00:00',
+      },
     ];
     const r = contratosPorRenovar(contratos, hoje);
-    expect(r.map((x) => (x.contrato as any).id)).toEqual(['atraso-antigo', 'atraso-novo', 'hoje']);
+    expect(r.map((x) => (x.contrato as any).id)).toEqual([
+      'tvde-aberto',
+      'atraso-antigo',
+      'atraso-novo',
+      'hoje',
+    ]);
     expect(r.every((x) => x.estado)).toBe(true);
   });
 });

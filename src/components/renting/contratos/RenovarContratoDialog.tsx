@@ -221,7 +221,10 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
             )}
           </div>
 
-          {naoFaturado && (
+          {/* Aviso só informativo — a faturação NUNCA bloqueia a renovação (nem o
+              fecho do antigo). Em TVDE nem se mostra: não se fatura TVDE, seria
+              ruído em todas as renovações. */}
+          {naoFaturado && contrato.regime !== 'tvde' && (
             <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-700 dark:text-amber-300">
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               <p className="text-xs">
