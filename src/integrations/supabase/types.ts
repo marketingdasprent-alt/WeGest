@@ -4505,6 +4505,60 @@ export type Database = {
           },
         ]
       }
+      gestor_periodos_inatividade: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_fim: string
+          data_inicio: string
+          gestor_id: string
+          id: string
+          notificado_fim_em: string | null
+          notificado_inicio_em: string | null
+          org_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_fim: string
+          data_inicio: string
+          gestor_id: string
+          id?: string
+          notificado_fim_em?: string | null
+          notificado_inicio_em?: string | null
+          org_id?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string
+          data_inicio?: string
+          gestor_id?: string
+          id?: string
+          notificado_fim_em?: string | null
+          notificado_inicio_em?: string | null
+          org_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gestor_periodos_inatividade_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gestor_periodos_inatividade_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integracoes_webhooks: {
         Row: {
           ativo: boolean | null
