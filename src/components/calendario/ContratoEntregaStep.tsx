@@ -497,6 +497,8 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
                   toNome: motoristaNome,
                   matricula: viatura.matricula,
                   momento: 'ENTREGA',
+                  orgId,
+                  viaturaId: viatura.id,
                 });
               }
             } else {
@@ -537,6 +539,8 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
             toNome: motoristaNome,
             matricula: viatura.matricula,
             momento: 'ENTREGA',
+            orgId,
+            viaturaId: viatura.id,
           });
         }
       }

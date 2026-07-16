@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { EmailService } from "../_shared/email/services/EmailService.ts";
+import { passwordRecoveryTemplate, magicLinkTemplate } from "../_shared/email/templates/authEmail.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +12,7 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const siteUrlEnv = (Deno.env.get("SUPABASE_SITE_URL") || '').replace(/\/$/, '');
 const supabaseAdmin = supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null;
+const emailService = supabaseAdmin ? new EmailService(supabaseAdmin) : null;
 
 interface EmailRequest {
   to: string;
@@ -29,21 +32,15 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const brevoApiKey = Deno.env.get("BREVO_API_KEY");
-    if (!brevoApiKey) {
-      throw new Error("BREVO_API_KEY not configured");
+    if (!supabaseAdmin) {
+      throw new Error("SUPABASE_SERVICE_ROLE_KEY not configured");
     }
 
-    const { to, subject, type, token, token_hash, redirect_to, resetUrl, magicLinkUrl }: EmailRequest = await req.json();
+    const { to, type, redirect_to }: EmailRequest = await req.json();
 
-    let htmlContent = "";
-    let templateSubject = subject;
     let actionLink = "";
 
     if (type === 'password_recovery' || type === 'magic_link') {
-      if (!supabaseAdmin) {
-        throw new Error("SUPABASE_SERVICE_ROLE_KEY not configured");
-      }
       const isRecovery = type === 'password_recovery';
       const baseUrl = siteUrlEnv || new URL(req.url).origin;
       const targetPath = isRecovery ? '/reset-password' : '/crm';
@@ -81,128 +78,63 @@ const handler = async (req: Request): Promise<Response> => {
       // @ts-ignore - properties shape provided by Supabase
       actionLink = (linkData.properties as any).action_link as string;
     }
-    if (type === 'password_recovery') {
-      templateSubject = "Redefinir a sua palavra-passe - WeGest";
-      htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Redefinir Senha</title>
-        </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 30px;">
-            <h1 style="color: white; margin: 0; font-size: 28px;">Redefinir Senha</h1>
-            <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">WeGest</p>
-          </div>
 
-          <div style="background: #f9f9f9; padding: 30px; border-radius: 10px; margin-bottom: 30px;">
-            <h2 style="color: #333; margin-top: 0;">Pedido de redefinição de palavra-passe</h2>
-            <p>Olá,</p>
-            <p>Recebemos um pedido para redefinir a palavra-passe da sua conta no WeGest.</p>
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${actionLink}" style="background: #000000; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px;">
-                Redefinir palavra-passe
-              </a>
-            </div>
-            
-            <p>Se o botão não funcionar, copie e cole o link abaixo no seu navegador:</p>
-            <p style="background: #e9ecef; padding: 15px; border-radius: 5px; word-break: break-all; font-size: 14px;">${actionLink}</p>
-            
-            <p><strong>Este link é válido por 1 hora.</strong></p>
-            <p>Se não solicitou esta redefinição, pode ignorar este email com segurança.</p>
-          </div>
-          
-          <div style="text-align: center; color: #666; font-size: 14px;">
-            <p>© ${new Date().getFullYear()} WeGest. Todos os direitos reservados.</p>
-            <p>Este é um email automático, não responda a esta mensagem.</p>
-          </div>
-        </body>
-        </html>
-      `;
-    } else if (type === 'magic_link') {
-      templateSubject = "O seu link de acesso - WeGest";
-      htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Link de Acesso</title>
-        </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 30px;">
-            <h1 style="color: white; margin: 0; font-size: 28px;">Acesso Rápido</h1>
-            <p style="color: white; margin: 10px 0 0 0; opacity: 0.9;">WeGest</p>
-          </div>
+    // Resolve a org do destinatário (profiles.email → org_id, NOT NULL) para
+    // usar a integração de email dessa org. Auth Hook não tem sessão nem
+    // subdomínio fiável — best-effort; sem resolução, mantém o envio directo
+    // com a key global (comportamento anterior, zero regressão no login).
+    let orgId: string | null = null;
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('org_id')
+      .eq('email', to)
+      .maybeSingle();
+    orgId = profile?.org_id ?? null;
 
-          <div style="background: #f9f9f9; padding: 30px; border-radius: 10px; margin-bottom: 30px;">
-            <h2 style="color: #333; margin-top: 0;">O seu link de acesso</h2>
-            <p>Olá,</p>
-            <p>Clique no botão abaixo para aceder à sua conta no WeGest de forma rápida e segura:</p>
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${actionLink}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px;">
-                Aceder à conta
-              </a>
-            </div>
-            
-            <p>Se o botão não funcionar, copie e cole o link abaixo no seu navegador:</p>
-            <p style="background: #e9ecef; padding: 15px; border-radius: 5px; word-break: break-all; font-size: 14px;">${actionLink}</p>
-            
-            <p><strong>Este link é válido por 1 hora.</strong></p>
-            <p>Se não solicitou este acesso, pode ignorar este email com segurança.</p>
-          </div>
-          
-          <div style="text-align: center; color: #666; font-size: 14px;">
-            <p>© ${new Date().getFullYear()} WeGest. Todos os direitos reservados.</p>
-            <p>Este é um email automático, não responda a esta mensagem.</p>
-          </div>
-        </body>
-        </html>
-      `;
+    let result: { success: boolean; providerMessageId?: string; error?: string };
+
+    if (orgId && emailService) {
+      result = await emailService.sendAuthEmail(orgId, { to, type, actionLink });
+    } else {
+      // Fallback legado: utilizador sem profile resolvido (ex.: 1º login).
+      // Mesmo caminho de sempre, direto à key global — nunca deve bloquear login.
+      const brevoApiKey = Deno.env.get("BREVO_API_KEY");
+      if (!brevoApiKey) throw new Error("BREVO_API_KEY not configured");
+
+      const { subject, html } =
+        type === 'password_recovery' ? passwordRecoveryTemplate(actionLink) : magicLinkTemplate(actionLink);
+
+      const brevoResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': brevoApiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: "WeGest", email: "noreply@dasprent.pt" },
+          to: [{ email: to, name: to.split('@')[0] }],
+          subject,
+          htmlContent: html,
+        }),
+      });
+
+      const responseData = await brevoResponse.json().catch(() => ({}));
+      if (!brevoResponse.ok) {
+        result = { success: false, error: responseData.message || 'Brevo API error' };
+      } else {
+        result = { success: true, providerMessageId: responseData.messageId };
+      }
     }
 
-    const emailData = {
-      sender: {
-        name: "WeGest",
-        email: "noreply@dasprent.pt"
-      },
-      to: [{
-        email: to,
-        name: to.split('@')[0]
-      }],
-      subject: templateSubject,
-      htmlContent: htmlContent
-    };
+    if (!result.success) throw new Error(result.error || 'Falha ao enviar email');
 
-    console.log('Enviando email via Brevo para:', to, 'tipo:', type);
-
-    const brevoResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        'accept': 'application/json',
-        'api-key': brevoApiKey,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify(emailData),
-    });
-
-    const responseData = await brevoResponse.json();
-
-    if (!brevoResponse.ok) {
-      console.error('Erro do Brevo:', responseData);
-      throw new Error(`Brevo API error: ${responseData.message || 'Unknown error'}`);
-    }
-
-    console.log('Email enviado com sucesso via Brevo:', responseData);
+    console.log('Email enviado com sucesso via', orgId ? 'EmailService' : 'fallback legado', 'para:', to, 'tipo:', type);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        messageId: responseData.messageId,
+      JSON.stringify({
+        success: true,
+        messageId: result.providerMessageId,
         message: 'Email enviado com sucesso'
       }),
       {
@@ -217,16 +149,16 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("Erro ao enviar email via Brevo:", error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: false,
         error: error.message,
         message: 'Erro ao enviar email'
       }),
       {
         status: 500,
-        headers: { 
-          "Content-Type": "application/json", 
-          ...corsHeaders 
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders
         },
       }
     );

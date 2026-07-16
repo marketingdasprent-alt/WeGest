@@ -4242,7 +4242,7 @@ export type Database = {
           bounce_type: string | null
           bounced_at: string | null
           brevo_message_id: string | null
-          campanha_id: string
+          campanha_id: string | null
           clicked_at: string | null
           created_at: string
           delivered_at: string | null
@@ -4255,6 +4255,7 @@ export type Database = {
           nome: string | null
           opened_at: string | null
           org_id: string | null
+          origem: string
           status: string
           unsubscribed_at: string | null
           updated_at: string
@@ -4263,7 +4264,7 @@ export type Database = {
           bounce_type?: string | null
           bounced_at?: string | null
           brevo_message_id?: string | null
-          campanha_id: string
+          campanha_id?: string | null
           clicked_at?: string | null
           created_at?: string
           delivered_at?: string | null
@@ -4276,6 +4277,7 @@ export type Database = {
           nome?: string | null
           opened_at?: string | null
           org_id?: string | null
+          origem?: string
           status?: string
           unsubscribed_at?: string | null
           updated_at?: string
@@ -4284,7 +4286,7 @@ export type Database = {
           bounce_type?: string | null
           bounced_at?: string | null
           brevo_message_id?: string | null
-          campanha_id?: string
+          campanha_id?: string | null
           clicked_at?: string | null
           created_at?: string
           delivered_at?: string | null
@@ -4297,6 +4299,7 @@ export type Database = {
           nome?: string | null
           opened_at?: string | null
           org_id?: string | null
+          origem?: string
           status?: string
           unsubscribed_at?: string | null
           updated_at?: string
@@ -4498,6 +4501,60 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "formularios_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gestor_periodos_inatividade: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_fim: string
+          data_inicio: string
+          gestor_id: string
+          id: string
+          notificado_fim_em: string | null
+          notificado_inicio_em: string | null
+          org_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_fim: string
+          data_inicio: string
+          gestor_id: string
+          id?: string
+          notificado_fim_em?: string | null
+          notificado_inicio_em?: string | null
+          org_id?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string
+          data_inicio?: string
+          gestor_id?: string
+          id?: string
+          notificado_fim_em?: string | null
+          notificado_inicio_em?: string | null
+          org_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gestor_periodos_inatividade_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gestor_periodos_inatividade_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
@@ -6567,6 +6624,11 @@ export type Database = {
           cookies_json: string | null
           created_at: string | null
           criado_por: string | null
+          email_provider: string | null
+          email_provider_config: Json | null
+          email_reply_to: string | null
+          email_sender_email: string | null
+          email_sender_name: string | null
           encryption_key_fingerprint: string | null
           id: string
           intervalo_sync_horas: number | null
@@ -6607,6 +6669,11 @@ export type Database = {
           cookies_json?: string | null
           created_at?: string | null
           criado_por?: string | null
+          email_provider?: string | null
+          email_provider_config?: Json | null
+          email_reply_to?: string | null
+          email_sender_email?: string | null
+          email_sender_name?: string | null
           encryption_key_fingerprint?: string | null
           id?: string
           intervalo_sync_horas?: number | null
@@ -6647,6 +6714,11 @@ export type Database = {
           cookies_json?: string | null
           created_at?: string | null
           criado_por?: string | null
+          email_provider?: string | null
+          email_provider_config?: Json | null
+          email_reply_to?: string | null
+          email_sender_email?: string | null
+          email_sender_name?: string | null
           encryption_key_fingerprint?: string | null
           id?: string
           intervalo_sync_horas?: number | null
@@ -11130,6 +11202,7 @@ export type Database = {
         }[]
       }
       get_current_org_id: { Args: never; Returns: string }
+      get_email_api_key: { Args: { p_integracao_id: string }; Returns: string }
       get_gestores: {
         Args: never
         Returns: {
@@ -11300,6 +11373,10 @@ export type Database = {
       }
       salvar_precos_modelo_tarifa: {
         Args: { p_linhas: Json; p_tarifa_id: string }
+        Returns: undefined
+      }
+      set_email_api_key: {
+        Args: { p_api_key: string; p_integracao_id: string }
         Returns: undefined
       }
       show_limit: { Args: never; Returns: number }

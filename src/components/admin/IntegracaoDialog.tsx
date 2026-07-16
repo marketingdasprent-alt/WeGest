@@ -46,6 +46,7 @@ const PLATFORMS: { id: PlataformaOperacional; name: string; logo: string }[] = [
   { id: 'repsol', name: 'Repsol', logo: '/images/logo-repsol.png' },
   { id: 'edp', name: 'EDP', logo: '/images/logo-edp.png' },
   { id: 'viaverde', name: 'Via Verde', logo: '/images/logo-via-verde.png' },
+  { id: 'brevo', name: 'Brevo (Email)', logo: '/images/logo-brevo.png' },
 ];
 
 const STEP_LABELS = ['Seleção de plataforma', 'Credenciais', 'Confirmação'];
@@ -109,7 +110,15 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
     password: '',
     cron_schedule: 'disabled' as 'disabled' | 'daily' | 'weekly' | 'custom',
     cron_custom: '',
+    apiKey: '',
+    senderName: '',
+    senderEmail: '',
+    replyTo: '',
   });
+  const [brevoTestState, setBrevoTestState] = useState<'idle' | 'testing' | 'success' | 'error'>(
+    'idle'
+  );
+  const [brevoTestError, setBrevoTestError] = useState('');
 
   const resetForm = () => {
     setFormData({
@@ -119,9 +128,15 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
       password: '',
       cron_schedule: 'disabled',
       cron_custom: '',
+      apiKey: '',
+      senderName: '',
+      senderEmail: '',
+      replyTo: '',
     });
     setShowPassword(false);
     setStep(1);
+    setBrevoTestState('idle');
+    setBrevoTestError('');
   };
 
   const handleClose = (nextOpen: boolean) => {
@@ -144,12 +159,43 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
         : isEdp
           ? EDP_DEFAULTS
           : UBER_DEFAULTS;
+  const isBrevo = formData.plataforma === 'brevo';
   const needsLoginPassword = isUber || isBolt || isBp || isRepsol || isEdp;
   const selectedPlatform = PLATFORMS.find((p) => p.id === formData.plataforma);
 
   const canProceedStep1 = !!formData.plataforma;
   // Via Verde é manual (sem credenciais) → basta ter nome.
-  const canProceedStep2 = isViaVerde ? !!formData.nome : !!(formData.login && formData.password);
+  // Brevo exige teste de ligação aprovado antes de avançar — email errado
+  // e silencioso é pior do que um robot mal configurado (ver brevo-test-connection).
+  const canProceedStep2 = isViaVerde
+    ? !!formData.nome
+    : isBrevo
+      ? !!(formData.senderName && formData.senderEmail) && brevoTestState === 'success'
+      : !!(formData.login && formData.password);
+
+  const handleTestBrevoConnection = async () => {
+    if (!formData.apiKey) {
+      toast({ title: 'Preencha a API Key primeiro', variant: 'destructive' });
+      return;
+    }
+    setBrevoTestState('testing');
+    setBrevoTestError('');
+    try {
+      const { data, error } = await supabase.functions.invoke('brevo-test-connection', {
+        body: { api_key: formData.apiKey },
+      });
+      if (error || !data?.success) {
+        setBrevoTestState('error');
+        setBrevoTestError(data?.error || error?.message || 'Não foi possível ligar à Brevo');
+        return;
+      }
+      setBrevoTestState('success');
+      toast({ title: 'Ligação confirmada', description: 'API key da Brevo válida.' });
+    } catch (err: any) {
+      setBrevoTestState('error');
+      setBrevoTestError(err.message || 'Não foi possível ligar à Brevo');
+    }
+  };
 
   const handleNext = () => {
     if (step === 1 && !canProceedStep1) {
@@ -184,6 +230,39 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
 
     try {
       setSaving(true);
+
+      // Brevo: integração de email da própria empresa (plataforma='email',
+      // email_provider='brevo'). API key nunca é gravada em texto plano —
+      // primeiro o INSERT sem a key, depois set_email_api_key() cifra-a
+      // via pgp_sym_encrypt (RPC, ver migration 20260716110000).
+      if (isBrevo) {
+        const { data: inserted, error: brevoError } = await supabase
+          .from('plataformas_configuracao')
+          .insert({
+            nome: formData.nome,
+            plataforma: 'email',
+            email_provider: 'brevo',
+            email_sender_name: formData.senderName,
+            email_sender_email: formData.senderEmail,
+            email_reply_to: formData.replyTo || null,
+            ativo: true,
+          })
+          .select('id')
+          .single();
+        if (brevoError) throw brevoError;
+
+        const { error: keyError } = await supabase.rpc('set_email_api_key', {
+          p_integracao_id: inserted.id,
+          p_api_key: formData.apiKey,
+        });
+        if (keyError) throw keyError;
+
+        toast({ title: 'Integração criada', description: `Brevo "${formData.nome}" criada.` });
+        setSaving(false);
+        onOpenChange(false);
+        onSuccess();
+        return;
+      }
 
       // Via Verde: integração manual (sem robot/Apify/credenciais).
       if (isViaVerde) {
@@ -364,6 +443,104 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                     />
                   </div>
                 </>
+              ) : isBrevo ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    A sua empresa é responsável pela própria conta Brevo. Introduza a API Key gerada
+                    em <em>brevo.com › SMTP &amp; API</em> e confirme a ligação antes de continuar.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="brevo-api-key">
+                      API Key <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Input
+                          id="brevo-api-key"
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="xkeysib-..."
+                          value={formData.apiKey}
+                          onChange={(e) => {
+                            setFormData((prev) => ({ ...prev, apiKey: e.target.value }));
+                            setBrevoTestState('idle');
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleTestBrevoConnection}
+                        disabled={brevoTestState === 'testing' || !formData.apiKey}
+                      >
+                        {brevoTestState === 'testing' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          'Testar ligação'
+                        )}
+                      </Button>
+                    </div>
+                    {brevoTestState === 'success' && (
+                      <p className="text-xs text-emerald-600 flex items-center gap-1">
+                        <Check className="h-3 w-3" /> Ligação confirmada
+                      </p>
+                    )}
+                    {brevoTestState === 'error' && (
+                      <p className="text-xs text-destructive">{brevoTestError}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="brevo-sender-name">
+                      Sender Name <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="brevo-sender-name"
+                      placeholder="Ex: Empresa X"
+                      value={formData.senderName}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, senderName: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="brevo-sender-email">
+                      Sender Email <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="brevo-sender-email"
+                      type="email"
+                      placeholder="noreply@empresa-x.pt"
+                      value={formData.senderEmail}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, senderEmail: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="brevo-reply-to">Reply-To (opcional)</Label>
+                    <Input
+                      id="brevo-reply-to"
+                      type="email"
+                      placeholder="suporte@empresa-x.pt"
+                      value={formData.replyTo}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, replyTo: e.target.value }))
+                      }
+                    />
+                  </div>
+                </>
               ) : (
                 <>
                   <p className="text-sm text-muted-foreground">
@@ -431,7 +608,10 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
               />
               <div>
                 <p className="font-semibold text-foreground">{selectedPlatform.name}</p>
-                {formData.login && (
+                {isBrevo && formData.senderEmail && (
+                  <p className="text-sm text-muted-foreground">{formData.senderEmail}</p>
+                )}
+                {!isBrevo && formData.login && (
                   <p className="text-sm text-muted-foreground">{maskEmail(formData.login)}</p>
                 )}
               </div>
@@ -453,31 +633,33 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
               />
             </div>
 
-            {/* Schedule */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Agendamento Automático
-              </Label>
-              <Select
-                value={formData.cron_schedule}
-                onValueChange={(value: 'disabled' | 'daily' | 'weekly' | 'custom') =>
-                  setFormData((prev) => ({ ...prev, cron_schedule: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="disabled">Desativado</SelectItem>
-                  <SelectItem value="daily">Diário (00:00)</SelectItem>
-                  <SelectItem value="weekly">Semanal (Segunda 00:00)</SelectItem>
-                  <SelectItem value="custom">Personalizado (Cron)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Schedule — não aplicável ao Brevo (não há sincronização, só envio sob-demanda) */}
+            {!isBrevo && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Agendamento Automático
+                </Label>
+                <Select
+                  value={formData.cron_schedule}
+                  onValueChange={(value: 'disabled' | 'daily' | 'weekly' | 'custom') =>
+                    setFormData((prev) => ({ ...prev, cron_schedule: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="disabled">Desativado</SelectItem>
+                    <SelectItem value="daily">Diário (00:00)</SelectItem>
+                    <SelectItem value="weekly">Semanal (Segunda 00:00)</SelectItem>
+                    <SelectItem value="custom">Personalizado (Cron)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-            {formData.cron_schedule === 'custom' && (
+            {!isBrevo && formData.cron_schedule === 'custom' && (
               <div className="space-y-2">
                 <Label htmlFor="cron_custom">Expressão Cron</Label>
                 <Input

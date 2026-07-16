@@ -1,4 +1,6 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { EmailService } from '../_shared/email/services/EmailService.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,6 +14,10 @@ interface SendFolhaDanosEmailRequest {
   /** PDF em base64 puro (sem prefixo data:...;base64,). */
   pdfBase64: string;
   filename: string;
+  /** Ausente no fluxo por token (sem sessão) — derivado de viaturaId nesse caso. */
+  org_id?: string;
+  /** Viatura do check-in/check-out — usada para derivar org_id quando org_id é omitido. */
+  viaturaId?: string;
 }
 
 serve(async (req) => {
@@ -20,40 +26,31 @@ serve(async (req) => {
   }
 
   try {
-    const BREVO_API_KEY = Deno.env.get('BREVO_API_KEY');
-    if (!BREVO_API_KEY) throw new Error('BREVO_API_KEY não configurada');
-
-    const { to, toNome, subject, pdfBase64, filename }: SendFolhaDanosEmailRequest =
+    const { to, toNome, subject, pdfBase64, filename, org_id, viaturaId }: SendFolhaDanosEmailRequest =
       await req.json();
 
-    if (!to || !pdfBase64 || !filename) {
-      return new Response(JSON.stringify({ error: 'to, pdfBase64 e filename são obrigatórios' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (!to || !pdfBase64 || !filename || (!org_id && !viaturaId)) {
+      return new Response(
+        JSON.stringify({ error: 'to, pdfBase64, filename e (org_id ou viaturaId) são obrigatórios' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        'api-key': BREVO_API_KEY,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        sender: { name: 'DÉCADA OUSADA', email: 'noreply@dasprent.pt' },
-        to: [{ email: to, name: toNome || undefined }],
-        subject,
-        htmlContent:
-          '<p>Segue em anexo a folha de registo de danos referente ao check-in/check-out da viatura.</p>',
-        attachment: [{ content: pdfBase64, name: filename }],
-      }),
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const emailService = new EmailService(supabase);
+
+    const result = await emailService.sendFolhaDanos(org_id ?? null, {
+      to,
+      toNome,
+      subject,
+      pdfBase64,
+      filename,
+      viaturaId,
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Brevo: ${errText}`);
-    }
+    if (!result.success) throw new Error(result.error || 'Falha ao enviar email');
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
