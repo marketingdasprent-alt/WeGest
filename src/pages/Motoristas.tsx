@@ -158,6 +158,7 @@ export default function Motoristas() {
   const motoristasFichaIncompleta = useMemo(
     () =>
       motoristas
+        .filter((motorista) => motorista.status_ativo !== false)
         .map((motorista) => ({ motorista, camposEmFalta: camposFichaEmFalta(motorista) }))
         .filter((m) => m.camposEmFalta.length > 0),
     [motoristas]
