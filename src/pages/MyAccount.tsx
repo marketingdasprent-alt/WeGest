@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { User, Loader2, Eye, EyeOff, Trash2, PenLine, Eraser } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { SignaturePad, type SignaturePadHandle } from '@/components/assinatura/SignaturePad';
+import { PeriodoInatividadeSection } from '@/components/my-account/PeriodoInatividadeSection';
+import { isGestorCargo } from '@/lib/gestorInatividade';
 
 interface Profile {
   id: string;
@@ -240,7 +242,7 @@ export default function MyAccount() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-6 max-w-2xl">
+      <div className="container mx-auto p-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -447,6 +449,8 @@ export default function MyAccount() {
                 </Button>
               </div>
             </div>
+
+            {isGestorCargo(profile.cargo) && <PeriodoInatividadeSection />}
 
             {/* Eliminar Conta */}
             <div className="border-t pt-6">
