@@ -363,8 +363,8 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
               <p className="text-sm text-muted-foreground">
                 {isViaVerde ? (
                   <>
-                    Introduza as credenciais do <strong>portal Via Verde</strong>. O robô usará
-                    este login para extrair automaticamente os extratos semanais.
+                    Introduza as credenciais do <strong>portal Via Verde</strong>. O robô usará este
+                    login para extrair automaticamente os extratos semanais.
                   </>
                 ) : (
                   <>Introduza as credenciais da sua conta {selectedPlatform.name}.</>
@@ -392,9 +392,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                     type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={formData.password}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, password: e.target.value }))
-                    }
+                    onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
                   />
                   <Button
                     type="button"

@@ -375,7 +375,8 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
           console.error('Erro ao actualizar via_verde_contas:', contaErr);
           toast({
             title: 'Aviso',
-            description: 'Configuração guardada, mas a conta Via Verde pode não ter sido actualizada.',
+            description:
+              'Configuração guardada, mas a conta Via Verde pode não ter sido actualizada.',
             variant: 'destructive',
           });
         }

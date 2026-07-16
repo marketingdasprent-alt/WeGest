@@ -334,7 +334,8 @@ export const IntegracoesTab: React.FC = () => {
       // Integração nova (com robot Apify) → abrir IntegracaoDetailModal.
       // Conta antiga (FTP/sync) → abrir ViaVerdeContaDialog.
       const raw = card.rawData as { integracao_id?: string } | null | undefined;
-      const isContaLegada = !!raw && typeof raw === 'object' && 'integracao_id' in raw && !('plataforma' in raw);
+      const isContaLegada =
+        !!raw && typeof raw === 'object' && 'integracao_id' in raw && !('plataforma' in raw);
       if (isContaLegada) {
         setSelectedViaVerdeConta(raw as ViaVerdeConta);
         setViaVerdeDialogOpen(true);
