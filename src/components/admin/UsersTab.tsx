@@ -63,6 +63,7 @@ interface Profile {
   is_admin: boolean;
   created_at: string;
   disponivel_transferista: boolean;
+  periodo_ativo_ate: string | null;
 }
 
 type SortColumn = 'nome' | 'email' | 'created_at';
@@ -142,6 +143,16 @@ export const UsersTab = () => {
 
       if (profilesError) throw profilesError;
 
+      const { data: periodosAtivos } = await supabase
+        .from('gestor_periodos_inatividade')
+        .select('gestor_id, data_fim')
+        .eq('status', 'ativo')
+        .in('gestor_id', userIds);
+
+      const periodoAtivoMap = new Map(
+        (periodosAtivos || []).map((p) => [p.gestor_id, p.data_fim])
+      );
+
       const membershipMap = Object.fromEntries(memberships.map((m) => [m.user_id, m]));
 
       const mapped = (profilesData || []).map((p) => ({
@@ -152,6 +163,7 @@ export const UsersTab = () => {
         cargo_id: membershipMap[p.id]?.cargo_id ?? null,
         is_admin: membershipMap[p.id]?.is_admin ?? false,
         disponivel_transferista: p.disponivel_transferista ?? true,
+        periodo_ativo_ate: periodoAtivoMap.get(p.id) ?? null,
       }));
 
       setProfiles(mapped);
@@ -873,11 +885,16 @@ export const UsersTab = () => {
               <div>
                 <Label className="text-foreground">Disponível como transferista</Label>
                 <p className="text-xs text-muted-foreground">
-                  Pode ser escalado para entregas/recolhas de viaturas.
+                  {editingProfile?.periodo_ativo_ate
+                    ? `Gerido automaticamente por período de inatividade até ${new Date(
+                        editingProfile.periodo_ativo_ate
+                      ).toLocaleDateString('pt-PT')}.`
+                    : 'Pode ser escalado para entregas/recolhas de viaturas.'}
                 </p>
               </div>
               <Switch
                 checked={editingProfile?.disponivel_transferista ?? true}
+                disabled={!!editingProfile?.periodo_ativo_ate}
                 onCheckedChange={(checked) =>
                   setEditingProfile((prev) =>
                     prev ? { ...prev, disponivel_transferista: checked } : null
