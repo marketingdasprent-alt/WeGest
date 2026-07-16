@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       _backup_viaturas_20260710: {
@@ -1552,7 +1577,7 @@ export type Database = {
           cargo_id: string
           created_at: string | null
           id: string
-          org_id: string | null
+          org_id: string
           pode_editar: boolean
           recurso_id: string
           tem_acesso: boolean | null
@@ -1561,7 +1586,7 @@ export type Database = {
           cargo_id: string
           created_at?: string | null
           id?: string
-          org_id?: string | null
+          org_id?: string
           pode_editar?: boolean
           recurso_id: string
           tem_acesso?: boolean | null
@@ -1570,7 +1595,7 @@ export type Database = {
           cargo_id?: string
           created_at?: string | null
           id?: string
-          org_id?: string | null
+          org_id?: string
           pode_editar?: boolean
           recurso_id?: string
           tem_acesso?: boolean | null
@@ -2678,8 +2703,8 @@ export type Database = {
           criado_em: string | null
           criado_por: string | null
           data_assinatura: string
-          data_inicio: string
           data_fim: string | null
+          data_inicio: string
           documento_url: string | null
           duracao_meses: number | null
           eletricidade_checkin: string | null
@@ -2716,8 +2741,8 @@ export type Database = {
           criado_em?: string | null
           criado_por?: string | null
           data_assinatura: string
-          data_inicio: string
           data_fim?: string | null
+          data_inicio: string
           documento_url?: string | null
           duracao_meses?: number | null
           eletricidade_checkin?: string | null
@@ -2754,8 +2779,8 @@ export type Database = {
           criado_em?: string | null
           criado_por?: string | null
           data_assinatura?: string
-          data_inicio?: string
           data_fim?: string | null
+          data_inicio?: string
           documento_url?: string | null
           duracao_meses?: number | null
           eletricidade_checkin?: string | null
@@ -3020,6 +3045,9 @@ export type Database = {
           data_inicio: string
           deleted_at: string | null
           desconto_percentagem: number | null
+          dua_devolvida_em: string | null
+          dua_observacoes: string | null
+          dua_original_com_motorista: boolean
           eletricidade_entrada: string | null
           eletricidade_saida: string | null
           emissor_id: string | null
@@ -3040,9 +3068,6 @@ export type Database = {
           km_entrada: number | null
           km_saida: number | null
           kms_incluidos: number | null
-          dua_original_com_motorista: boolean
-          dua_devolvida_em: string | null
-          dua_observacoes: string | null
           local_entrega: string | null
           local_recolha: string | null
           matricula: string | null
@@ -3096,6 +3121,9 @@ export type Database = {
           data_inicio: string
           deleted_at?: string | null
           desconto_percentagem?: number | null
+          dua_devolvida_em?: string | null
+          dua_observacoes?: string | null
+          dua_original_com_motorista?: boolean
           eletricidade_entrada?: string | null
           eletricidade_saida?: string | null
           emissor_id?: string | null
@@ -3116,9 +3144,6 @@ export type Database = {
           km_entrada?: number | null
           km_saida?: number | null
           kms_incluidos?: number | null
-          dua_original_com_motorista?: boolean
-          dua_devolvida_em?: string | null
-          dua_observacoes?: string | null
           local_entrega?: string | null
           local_recolha?: string | null
           matricula?: string | null
@@ -3172,6 +3197,9 @@ export type Database = {
           data_inicio?: string
           deleted_at?: string | null
           desconto_percentagem?: number | null
+          dua_devolvida_em?: string | null
+          dua_observacoes?: string | null
+          dua_original_com_motorista?: boolean
           eletricidade_entrada?: string | null
           eletricidade_saida?: string | null
           emissor_id?: string | null
@@ -3192,9 +3220,6 @@ export type Database = {
           km_entrada?: number | null
           km_saida?: number | null
           kms_incluidos?: number | null
-          dua_original_com_motorista?: boolean
-          dua_devolvida_em?: string | null
-          dua_observacoes?: string | null
           local_entrega?: string | null
           local_recolha?: string | null
           matricula?: string | null
@@ -4689,7 +4714,6 @@ export type Database = {
       leads_dasprent: {
         Row: {
           campaign_tags: string[] | null
-          caucao_valor: number | null
           created_at: string | null
           data_aluguer: string | null
           email: string
@@ -4710,7 +4734,6 @@ export type Database = {
         }
         Insert: {
           campaign_tags?: string[] | null
-          caucao_valor?: number | null
           created_at?: string | null
           data_aluguer?: string | null
           email: string
@@ -4731,7 +4754,6 @@ export type Database = {
         }
         Update: {
           campaign_tags?: string[] | null
-          caucao_valor?: number | null
           created_at?: string | null
           data_aluguer?: string | null
           email?: string
@@ -5758,7 +5780,6 @@ export type Database = {
           cartao_edp: string | null
           cartao_frota: string | null
           cartao_repsol: string | null
-          caucao_valor: number | null
           cidade: string | null
           cidade_assinatura: string | null
           cliente_id: string | null
@@ -5779,7 +5800,6 @@ export type Database = {
           iban: string | null
           id: string
           is_slot: boolean | null
-          lead_id: string | null
           licenca_tvde_ficheiro_url: string | null
           licenca_tvde_numero: string | null
           licenca_tvde_validade: string | null
@@ -5810,7 +5830,6 @@ export type Database = {
           cartao_edp?: string | null
           cartao_frota?: string | null
           cartao_repsol?: string | null
-          caucao_valor?: number | null
           cidade?: string | null
           cidade_assinatura?: string | null
           cliente_id?: string | null
@@ -5831,7 +5850,6 @@ export type Database = {
           iban?: string | null
           id?: string
           is_slot?: boolean | null
-          lead_id?: string | null
           licenca_tvde_ficheiro_url?: string | null
           licenca_tvde_numero?: string | null
           licenca_tvde_validade?: string | null
@@ -5862,7 +5880,6 @@ export type Database = {
           cartao_edp?: string | null
           cartao_frota?: string | null
           cartao_repsol?: string | null
-          caucao_valor?: number | null
           cidade?: string | null
           cidade_assinatura?: string | null
           cliente_id?: string | null
@@ -5883,7 +5900,6 @@ export type Database = {
           iban?: string | null
           id?: string
           is_slot?: boolean | null
-          lead_id?: string | null
           licenca_tvde_ficheiro_url?: string | null
           licenca_tvde_numero?: string | null
           licenca_tvde_validade?: string | null
@@ -5909,13 +5925,6 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "motoristas_ativos_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "leads_dasprent"
             referencedColumns: ["id"]
           },
           {
@@ -10868,6 +10877,7 @@ export type Database = {
       contexto_folha_por_token: {
         Args: { p_token: string }
         Returns: {
+          anexo_danos_template_id: string
           cliente_nome: string
           combustivel_saida: string
           condutor_email: string
@@ -10876,10 +10886,10 @@ export type Database = {
           empresa_cargo_representante: string
           empresa_licenca_tvde: string
           empresa_licenca_validade: string
-          empresa_logo_url: string | null
+          empresa_logo_url: string
           empresa_nif: string
           empresa_nome: string
-          empresa_papel_timbrado: string | null
+          empresa_papel_timbrado: string
           empresa_representante: string
           empresa_sede: string
           km_saida: number
@@ -11220,6 +11230,8 @@ export type Database = {
       realizar_token_realizacao: {
         Args: {
           p_combustivel: string
+          p_dua_devolvida?: boolean
+          p_dua_original_levada?: boolean
           p_eletricidade?: string
           p_km: number
           p_token: string
@@ -11249,7 +11261,7 @@ export type Database = {
         Returns: boolean
       }
       renovar_contrato_renting: {
-        Args: { p_contrato_id: string }
+        Args: { p_contrato_id: string; p_km_fim?: number; p_km_inicio?: number }
         Returns: string
       }
       reserva_tem_conflito: {
@@ -11481,6 +11493,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["admin", "gestor_tvde", "gestor_comercial", "colaborador"],
