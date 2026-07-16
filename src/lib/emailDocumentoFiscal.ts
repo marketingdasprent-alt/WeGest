@@ -30,7 +30,7 @@ export async function enviarDocumentoFiscalEmail({
 
   const { data, error } = await supabase.functions.invoke<{ success?: boolean; error?: string }>(
     'send-documento-fiscal-email',
-    { body: { to, toNome, subject, mensagem, pdfBase64, filename } }
+    { body: { to, toNome, subject, mensagem, pdfBase64, filename, org_id: invoice.org_id } }
   );
 
   if (error) throw new Error(error.message || 'Falha ao contactar o serviço de email');

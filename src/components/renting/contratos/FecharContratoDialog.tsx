@@ -43,6 +43,7 @@ import { computeFechoRapidoDefaults } from './fecharContratoDefaults';
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrgId } from '@/contexts/TenantContext';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
 import {
@@ -122,6 +123,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   const fecharMutation = useFecharContrato();
   const { data: estacoes = [] } = useEstacoes();
   const { user } = useAuth();
+  const orgId = useOrgId();
   const responsavelNome =
     (user?.user_metadata?.nome as string | undefined) ?? user?.email ?? 'Responsável';
 
@@ -419,6 +421,8 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
           toNome: contexto?.condutorNome,
           matricula: matricula ?? '',
           momento: 'RECOLHA',
+          orgId,
+          viaturaId: contexto?.viaturaId ?? viaturaId ?? undefined,
         });
       }
     } catch {
