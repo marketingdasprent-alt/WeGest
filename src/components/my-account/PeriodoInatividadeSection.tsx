@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -32,7 +33,7 @@ const STATUS_VARIANT: Record<Periodo['status'], 'default' | 'secondary' | 'outli
 };
 
 function hojeISO(): string {
-  return new Date().toISOString().split('T')[0];
+  return format(new Date(), 'yyyy-MM-dd');
 }
 
 export function PeriodoInatividadeSection() {
@@ -44,6 +45,9 @@ export function PeriodoInatividadeSection() {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const criarLockRef = useRef(false);
+  const cancelarLockRef = useRef(false);
+  const terminarLockRef = useRef(false);
 
   const fetchPeriodos = useCallback(async () => {
     if (!user) return;
@@ -72,10 +76,16 @@ export function PeriodoInatividadeSection() {
   }, [fetchPeriodos]);
 
   const handleCriar = async () => {
-    if (!user || !range.from || !range.to) return;
+    if (criarLockRef.current) return;
+    criarLockRef.current = true;
 
-    const dataInicio = range.from.toISOString().split('T')[0];
-    const dataFim = range.to.toISOString().split('T')[0];
+    if (!user || !range.from || !range.to) {
+      criarLockRef.current = false;
+      return;
+    }
+
+    const dataInicio = format(range.from, 'yyyy-MM-dd');
+    const dataFim = format(range.to, 'yyyy-MM-dd');
     const hoje = hojeISO();
     const periodosExistentes: PeriodoExistente[] = periodos.map((p) => ({
       id: p.id,
@@ -87,6 +97,7 @@ export function PeriodoInatividadeSection() {
     const validacao = validarNovoPeriodo({ dataInicio, dataFim, hoje, periodosExistentes });
     if (!validacao.valido) {
       toast({ variant: 'destructive', title: 'Datas inválidas', description: validacao.erro });
+      criarLockRef.current = false;
       return;
     }
 
@@ -101,9 +112,10 @@ export function PeriodoInatividadeSection() {
       if (error) throw error;
 
       if (dataInicio <= hoje) {
-        await supabase.functions.invoke('process-gestor-inatividade', {
+        const { error: invokeError } = await supabase.functions.invoke('process-gestor-inatividade', {
           body: { periodoId: data.id, forcar: 'ativar' },
         });
+        if (invokeError) throw invokeError;
       }
 
       toast({ title: 'Período agendado', description: 'Período de inatividade guardado com sucesso.' });
@@ -118,10 +130,14 @@ export function PeriodoInatividadeSection() {
       });
     } finally {
       setSubmitting(false);
+      criarLockRef.current = false;
     }
   };
 
   const handleCancelar = async (id: string) => {
+    if (cancelarLockRef.current) return;
+    cancelarLockRef.current = true;
+
     setProcessingId(id);
     try {
       const { error } = await supabase
@@ -139,10 +155,14 @@ export function PeriodoInatividadeSection() {
       });
     } finally {
       setProcessingId(null);
+      cancelarLockRef.current = false;
     }
   };
 
   const handleTerminarAgora = async (id: string) => {
+    if (terminarLockRef.current) return;
+    terminarLockRef.current = true;
+
     setProcessingId(id);
     try {
       const { error } = await supabase.functions.invoke('process-gestor-inatividade', {
@@ -159,6 +179,7 @@ export function PeriodoInatividadeSection() {
       });
     } finally {
       setProcessingId(null);
+      terminarLockRef.current = false;
     }
   };
 
