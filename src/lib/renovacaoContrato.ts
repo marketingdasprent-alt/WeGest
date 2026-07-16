@@ -1,8 +1,8 @@
 /**
- * Lógica pura de renovação de contratos de renting (Rent-a-Car, longa duração).
- * A renovação em si corre server-side (RPC renovar_contrato_renting); aqui vive
- * só o cálculo da próxima data de renovação e a deteção de contratos por renovar,
- * usados pelo banner de avisos e pelo diálogo de confirmação.
+ * Lógica pura de renovação de contratos de renting (Rent-a-Car e TVDE, longa
+ * duração). A renovação em si corre server-side (RPC renovar_contrato_renting);
+ * aqui vive só o cálculo da próxima data de renovação e a deteção de contratos
+ * por renovar, usados pelo banner de avisos e pelo diálogo de confirmação.
  */
 import type { ContratoRenting } from '@/types/contratoRenting';
 
@@ -48,15 +48,18 @@ export function proximaDataRenovacao(
   return new Date(d.getTime() + dias * 24 * 60 * 60 * 1000);
 }
 
-/** Um contrato é renovável se for rent-a-car de longa duração, versão actual e activo. */
+/** Um contrato é renovável se for rent-a-car ou TVDE de longa duração, versão
+ *  actual e activo. Rent-a-car exige data_fim; TVDE pode não ter (contratos
+ *  antigos abertos, sem data de fim) — nesse caso a 1.ª renovação arranca o
+ *  ciclo mensal a partir de hoje e daí em diante comporta-se como rent-a-car. */
 export function contratoRenovavel(c: ContratoRenovavelInput): boolean {
   return (
-    c.regime === 'rent_a_car' &&
+    (c.regime === 'rent_a_car' || c.regime === 'tvde') &&
     !!c.is_longa_duracao &&
     !c.substituido_em &&
     !c.deleted_at &&
     (c.estado_operacional === 'em_curso' || c.estado_operacional === 'agendado') &&
-    !!c.data_fim
+    (!!c.data_fim || c.regime === 'tvde')
   );
 }
 
@@ -69,6 +72,9 @@ export function estadoRenovacaoContrato(
   hoje: Date = new Date()
 ): EstadoRenovacao | null {
   if (!contratoRenovavel(c)) return null;
+  // TVDE sem data_fim (em aberto): renovável mas sem prazo — não há "hoje"
+  // nem "atraso" até a 1.ª renovação arrancar o ciclo mensal.
+  if (!c.data_fim) return null;
   const fim = inicioDoDia(new Date(c.data_fim as string));
   const ref = inicioDoDia(hoje);
   if (fim.getTime() > ref.getTime()) return null;

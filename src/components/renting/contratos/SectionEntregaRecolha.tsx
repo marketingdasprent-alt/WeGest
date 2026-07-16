@@ -19,17 +19,15 @@ export const SectionEntregaRecolha: React.FC<SectionEntregaRecolhaProps> = ({ fo
   const regime = form.watch('regime');
   const isTvde = regime === 'tvde';
 
-  // Em TVDE não sabemos onde a viatura será recolhida (contratos
-  // de 2-3 anos) nem há data de fim (contrato aberto, renovação automática).
-  // Limpa os valores automaticamente para não enviar dado órfão se o user
-  // mudou de rent_a_car → tvde mid-form.
+  // Em TVDE não sabemos onde a viatura será recolhida (contratos de 2-3
+  // anos) — limpa a estação de recolha para não enviar dado órfão se o user
+  // mudou de rent_a_car → tvde mid-form. A data_fim NÃO se limpa: um TVDE
+  // pode ter período (o mês atual do ciclo de renovação — fica definido na
+  // 1.ª renovação) e apagá-lo aqui quebrava a cadeia mensal ao editar.
   useEffect(() => {
     if (!isTvde) return;
     if (form.getValues('estacao_recolha_id')) {
       form.setValue('estacao_recolha_id', null, { shouldDirty: true });
-    }
-    if (form.getValues('data_fim')) {
-      form.setValue('data_fim', null, { shouldDirty: true });
     }
   }, [isTvde, form]);
 
@@ -95,33 +93,30 @@ export const SectionEntregaRecolha: React.FC<SectionEntregaRecolhaProps> = ({ fo
               )}
             />
           )}
-          {isTvde ? (
-            <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 p-3 text-xs text-muted-foreground">
-              Contratos TVDE não têm data de fim — são abertos, com renovação automática (ver
-              Duração/Renovação abaixo).
-            </div>
-          ) : (
-            <FormField
-              control={form.control}
-              name="data_fim"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    Data Fim <span className="text-red-500">*</span>
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      type="datetime-local"
-                      className="bg-background"
-                      {...field}
-                      value={field.value ?? ''}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
+          <FormField
+            control={form.control}
+            name="data_fim"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Data Fim {!isTvde && <span className="text-red-500">*</span>}</FormLabel>
+                <FormControl>
+                  <Input
+                    type="datetime-local"
+                    className="bg-background"
+                    {...field}
+                    value={field.value ?? ''}
+                  />
+                </FormControl>
+                {isTvde && (
+                  <p className="text-xs text-muted-foreground">
+                    Opcional em TVDE — sem data, o contrato fica em aberto e a 1.ª renovação (botão
+                    «Renovar contrato») fecha o período até hoje e arranca o ciclo mensal.
+                  </p>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
       </div>
     </div>

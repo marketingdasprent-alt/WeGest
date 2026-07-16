@@ -66,10 +66,13 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
   const kmFim = parseKm(kmFimStr);
 
   const novoPeriodo = useMemo(() => {
-    if (!contrato.data_fim) return null;
-    const inicio = new Date(contrato.data_fim);
+    // TVDE antigo sem data_fim (contrato em aberto): a 1.ª renovação arranca
+    // o ciclo — fecha o período até hoje e o novo começa agora (espelha a RPC,
+    // que usa COALESCE(data_fim, now())).
+    const baseFim = contrato.data_fim ?? new Date().toISOString();
+    const inicio = new Date(baseFim);
     const fim = proximaDataRenovacao(
-      contrato.data_fim,
+      baseFim,
       contrato.renovacao_opcao,
       contrato.renovacao_intervalo_dias
     );
@@ -127,7 +130,8 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
             <div className="flex items-center justify-between px-3 py-2">
               <span className="text-muted-foreground text-xs">Período atual</span>
               <span className="tabular-nums">
-                {formatDate(contrato.data_inicio)} → {formatDate(contrato.data_fim)}
+                {formatDate(contrato.data_inicio)} →{' '}
+                {contrato.data_fim ? formatDate(contrato.data_fim) : 'em aberto (fecha hoje)'}
               </span>
             </div>
             <div className="flex items-center justify-between px-3 py-2">
