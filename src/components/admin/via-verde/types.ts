@@ -45,7 +45,7 @@ export const VIA_VERDE_DEFAULT_FORM_VALUES: ViaVerdeContaFormValues = {
   ftp_modo_passivo: true,
   ftp_utilizador: '',
   ftp_password: '',
-  ftp_ativo: true,
+  ftp_ativo: false,
   sync_email: '',
   sync_password: '',
   sync_ativo: true,

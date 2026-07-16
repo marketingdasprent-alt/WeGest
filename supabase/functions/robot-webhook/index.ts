@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
       .from('plataformas_configuracao')
       .select('id, nome, plataforma, robot_target_platform')
       .eq('id', integracaoId)
-      .eq('plataforma', 'robot')
+      .in('plataforma', ['robot', 'via_verde'])
       .single();
 
     if (configError || !config) {
@@ -332,6 +332,49 @@ Deno.serve(async (req) => {
         }),
         { status: importResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
+    }
+
+    // Detect Via Verde transactions data in payload
+    // O actor Apify envia EITHER:
+    //   - { dados_csv: "<csv content>", periodo_inicio, periodo_fim, ... }
+    //   - { transacoes: [...], periodo_inicio, periodo_fim, ... }
+    if (config.robot_target_platform === 'viaverde') {
+      const viaVerdeCsv =
+        payload.dados_csv || payload.csv_content || payload.dados_csv_viaverde || findCsvInPayload(payload);
+      const viaVerdeTransacoes = Array.isArray(payload.transacoes) ? payload.transacoes : null;
+
+      if (viaVerdeCsv || viaVerdeTransacoes) {
+        console.log('robot-webhook: Via Verde data detected, forwarding to via-verde-import');
+
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/via-verde-import`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            integracao_id: integracaoId,
+            conta_id: payload.conta_id || null,
+            dados_csv: viaVerdeCsv,
+            transacoes: viaVerdeTransacoes,
+            periodo_inicio: payload.periodo_inicio || null,
+            periodo_fim: payload.periodo_fim || null,
+          }),
+        });
+
+        const result = await resp.json();
+        console.log('robot-webhook: via-verde-import response:', JSON.stringify(result).substring(0, 500));
+
+        return new Response(
+          JSON.stringify({
+            success: resp.ok,
+            message: resp.ok ? 'Dados Via Verde processados com sucesso' : 'Erro ao processar dados Via Verde',
+            integracao_id: integracaoId,
+            import_result: result,
+          }),
+          { status: resp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
     }
 
     // If we reached here, data was technically received but not recognized as a known format

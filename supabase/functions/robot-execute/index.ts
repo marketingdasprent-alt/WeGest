@@ -13,18 +13,12 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  if (SYNC_AUTOMATICO_DESATIVADO) {
-    return new Response(
-      JSON.stringify({ success: false, disabled: true, error: 'Sincronização automática desativada. Use o import manual por CSV.' }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
-
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    const { integracao_id } = await req.json();
+    const requestBody = await req.json();
+    const { integracao_id, periodo_inicio, periodo_fim } = requestBody;
     if (!integracao_id) {
       return new Response(
         JSON.stringify({ success: false, error: 'integracao_id é obrigatório' }),
@@ -45,6 +39,16 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ success: false, error: 'Integração robot não encontrada' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // SYNC_AUTOMATICO_DESATIVADO bloqueia Uber/Bolt/BP/Repsol/EDP.
+    // Via Verde é a única plataforma permitida através do block — o robô
+    // Apify dedicado foi criado para esta integração.
+    if (SYNC_AUTOMATICO_DESATIVADO && config.robot_target_platform !== 'viaverde') {
+      return new Response(
+        JSON.stringify({ success: false, disabled: true, error: 'Sincronização automática desativada. Use o import manual por CSV.' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
@@ -89,7 +93,6 @@ Deno.serve(async (req) => {
 
     const authMode = config.auth_mode || 'password';
 
-    // Build input based on auth mode
     const actorInput: Record<string, unknown> = {
       startUrl: config.webhook_url || null,
       callbackUrl,
@@ -97,7 +100,6 @@ Deno.serve(async (req) => {
     };
 
     if (authMode === 'cookies') {
-      // Parse cookies JSON and send as array
       let parsedCookies = [];
       try {
         parsedCookies = config.cookies_json ? JSON.parse(config.cookies_json) : [];
@@ -109,7 +111,6 @@ Deno.serve(async (req) => {
       }
       actorInput.cookies = parsedCookies;
     } else {
-      // Universal fields — send under multiple common field names so any actor variant picks them up
       actorInput.username = config.client_id || null;
       actorInput.email = config.client_id || null;
       actorInput.login = config.client_id || null;
@@ -119,9 +120,55 @@ Deno.serve(async (req) => {
       actorInput.appPassword = config.client_secret || null;
     }
 
-    // Pass Anti-Captcha key if configured
     if (config.anti_captcha_key) {
       actorInput.antiCaptchaKey = config.anti_captcha_key;
+    }
+
+    // ── Via Verde: credenciais vivem em via_verde_contas (sync_email/sync_password),
+    // não em plataformas_configuracao. URL do portal é fixa.
+    // Período por defeito = semana anterior (Seg-Dom ISO).
+    if (targetPlatform === 'viaverde') {
+      const VIA_VERDE_EXTRATOS_URL = 'https://www.viaverde.pt/empresas/minha-via-verde/extratos-movimentos';
+      actorInput.startUrl = VIA_VERDE_EXTRATOS_URL;
+
+      const { data: conta, error: contaError } = await supabase
+        .from('via_verde_contas')
+        .select('sync_email, sync_password, nome_conta')
+        .eq('integracao_id', integracao_id)
+        .eq('sync_ativo', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (contaError || !conta) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Nenhuma conta Via Verde com sync_ativo=true encontrada para esta integração.',
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      actorInput.email = conta.sync_email;
+      actorInput.password = conta.sync_password;
+      actorInput.username = conta.sync_email;
+      actorInput.login = conta.sync_email;
+
+      // Período: usar o fornecido no body, senão calcular semana anterior (Seg-Dom)
+      let ini = periodo_inicio;
+      let fim = periodo_fim;
+      if (!ini || !fim) {
+        const today = new Date();
+        const dow = today.getDay(); // 0=Dom, 1=Seg...6=Sáb
+        const diffToThisMonday = dow === 0 ? 6 : dow - 1;
+        const lastMonday = new Date(today.getTime() - (diffToThisMonday + 7) * 86400000);
+        const lastSunday = new Date(lastMonday.getTime() + 6 * 86400000);
+        ini = lastMonday.toISOString().split('T')[0];
+        fim = lastSunday.toISOString().split('T')[0];
+      }
+      actorInput.periodo_inicio = ini;
+      actorInput.periodo_fim = fim;
     }
 
     const apifyResponse = await fetch(
