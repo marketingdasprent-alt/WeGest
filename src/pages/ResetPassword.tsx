@@ -6,8 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
-import { Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, CheckCircle2, Circle } from 'lucide-react';
 import { getPostAuthRoute, getUnauthenticatedRoute } from '@/lib/native';
+import {
+  passwordChecks,
+  isPasswordStrong,
+  PASSWORD_POLICY_MESSAGE,
+  PASSWORD_REQUIREMENTS,
+} from '@/lib/passwordPolicy';
 
 const ResetPassword = () => {
   const [password, setPassword] = useState('');
@@ -71,10 +77,10 @@ const ResetPassword = () => {
       return;
     }
 
-    if (password.length < 6) {
+    if (!isPasswordStrong(password)) {
       toast({
-        title: 'Palavra-passe demasiado curta',
-        description: 'A palavra-passe deve ter pelo menos 6 caracteres.',
+        title: 'Palavra-passe fraca',
+        description: PASSWORD_POLICY_MESSAGE,
         variant: 'destructive',
       });
       return;
@@ -92,7 +98,14 @@ const ResetPassword = () => {
         description: 'A sua palavra-passe foi atualizada com sucesso.',
       });
 
-      navigate(getPostAuthRoute(), { replace: true });
+      // Motoristas (ex.: onboarding email-first) vão para o painel de
+      // motorista; no web getPostAuthRoute() devolveria /crm. A sessão de
+      // recuperação já traz o tipo do utilizador nos metadados.
+      const { data: userData } = await supabase.auth.getUser();
+      const meta = userData?.user?.user_metadata as Record<string, unknown> | undefined;
+      const isMotorista = meta?.tipo_utilizador === 'motorista' || meta?.cargo_nome === 'Motorista';
+
+      navigate(isMotorista ? '/motorista/painel' : getPostAuthRoute(), { replace: true });
     } catch (error: any) {
       console.error('Password reset error:', error);
       toast({
@@ -125,7 +138,7 @@ const ResetPassword = () => {
                 required
                 className="auth-input pr-11"
                 placeholder="Introduza a nova palavra-passe"
-                minLength={6}
+                minLength={8}
                 autoComplete="new-password"
               />
               <button
@@ -137,6 +150,26 @@ const ResetPassword = () => {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            {password.length > 0 && (
+              <div className="space-y-1 pt-0.5">
+                {PASSWORD_REQUIREMENTS.map(({ key, label }) => {
+                  const ok = passwordChecks(password)[key];
+                  return (
+                    <p
+                      key={key}
+                      className={`flex items-center gap-1.5 text-xs ${ok ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
+                    >
+                      {ok ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+                      ) : (
+                        <Circle className="h-3.5 w-3.5 flex-shrink-0" />
+                      )}
+                      {label}
+                    </p>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -150,7 +183,7 @@ const ResetPassword = () => {
                 required
                 className="auth-input pr-11"
                 placeholder="Confirme a nova palavra-passe"
-                minLength={6}
+                minLength={8}
                 autoComplete="new-password"
               />
               <button

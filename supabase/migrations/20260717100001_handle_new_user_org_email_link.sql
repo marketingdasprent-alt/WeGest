@@ -1,0 +1,152 @@
+-- ============================================================
+-- handle_new_user_org: ligação motorista SEGURA (email + telefone)
+-- ============================================================
+-- Contexto: no fluxo email-first, o gestor cria o perfil motoristas_ativos
+-- com o EMAIL do motorista e a conta liga-se por posse desse email.
+--
+-- Esta migração reescreve os DOIS blocos de ligação motorista<->perfil do
+-- trigger, fechando um takeover cross-org que existia no match por
+-- telefone (o bloco original filtrava só por normalize_phone, sem org e
+-- sem exigir o email — bastava conhecer o telefone semi-público da vítima
+-- e o código da org para reclamar o perfil de outra pessoa/tenant):
+--
+--   (1) Por EMAIL, na MESMA org — caminho principal. Só liga se o email de
+--       LOGIN (NEW.email) coincidir com o email do perfil. Isto garante a
+--       posse-do-email da variante segura.
+--   (2) Fallback por TELEFONE, mas restrito a perfis LEGADOS SEM email e à
+--       MESMA org. Perfis COM email NUNCA ligam por telefone — só por posse
+--       do email. Evita reclamar o perfil de alguém conhecendo só o número.
+--
+-- Ambos escopados por org_id (IS NOT NULL) → sem ligações cross-tenant.
+-- Guardados por user_id IS NULL + LIMIT 1 determinístico.
+-- Dispara no signUp (portal) e no admin.createUser (edge function).
+--
+-- Deploy: aplicar à mão no SQL editor (CI não faz db push).
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.handle_new_user_org()
+RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _org_id uuid;
+  _cargo_id uuid;
+  _cargo_nome text;
+  _is_first_user boolean;
+  _user_nome text;
+  _user_phone text;
+  _normalized_phone text;
+  _motorista_id uuid;
+  _is_motorista_signup boolean;
+  _tipo_utilizador text;
+  _skip_org_assign boolean;
+BEGIN
+  _is_first_user := (SELECT COUNT(*) = 0 FROM public.profiles);
+  _user_nome := COALESCE(NEW.raw_user_meta_data->>'nome', split_part(NEW.email, '@', 1));
+  _user_phone := NEW.raw_user_meta_data->>'telefone';
+  _normalized_phone := public.normalize_phone(_user_phone);
+  _is_motorista_signup := COALESCE(NEW.raw_user_meta_data->>'cargo_nome', '') = 'Motorista';
+  _tipo_utilizador := COALESCE(NEW.raw_user_meta_data->>'tipo_utilizador',
+                       CASE WHEN _is_motorista_signup THEN 'motorista' ELSE 'colaborador' END);
+
+  _skip_org_assign := (_tipo_utilizador = 'colaborador'
+                       AND NEW.raw_user_meta_data->>'cargo_nome' IS NULL
+                       AND NEW.raw_user_meta_data->>'cargo_id' IS NULL);
+
+  SELECT c.org_id, c.cargo_id, cg.nome
+  INTO _org_id, _cargo_id, _cargo_nome
+  FROM public.convites c
+  LEFT JOIN public.cargos cg ON cg.id = c.cargo_id
+  WHERE c.email = NEW.email
+    AND c.usado = false
+  ORDER BY c.created_at DESC
+  LIMIT 1;
+
+  IF _cargo_id IS NULL AND NEW.raw_user_meta_data->>'cargo_id' IS NOT NULL THEN
+    _cargo_id := (NEW.raw_user_meta_data->>'cargo_id')::uuid;
+    SELECT nome INTO _cargo_nome FROM public.cargos WHERE id = _cargo_id;
+  END IF;
+
+  IF _org_id IS NULL AND NEW.raw_user_meta_data->>'org_id' IS NOT NULL THEN
+    _org_id := (NEW.raw_user_meta_data->>'org_id')::uuid;
+  END IF;
+
+  IF _org_id IS NULL AND NOT _skip_org_assign THEN
+    SELECT id INTO _org_id FROM public.organizacoes WHERE ativa = true ORDER BY created_at ASC LIMIT 1;
+  END IF;
+
+  IF _org_id IS NULL THEN
+    SELECT id INTO _org_id FROM public.organizacoes
+    WHERE ativa = true ORDER BY created_at DESC LIMIT 1;
+  END IF;
+
+  INSERT INTO public.profiles (id, email, nome, org_id, cargo_id, cargo, is_admin, tipo_utilizador)
+  VALUES (
+    NEW.id, NEW.email, _user_nome, _org_id, _cargo_id, _cargo_nome,
+    COALESCE(_is_first_user, false), _tipo_utilizador
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    org_id = COALESCE(EXCLUDED.org_id, profiles.org_id),
+    cargo_id = COALESCE(EXCLUDED.cargo_id, profiles.cargo_id),
+    cargo = COALESCE(EXCLUDED.cargo, profiles.cargo),
+    tipo_utilizador = COALESCE(EXCLUDED.tipo_utilizador, profiles.tipo_utilizador);
+
+  IF _org_id IS NOT NULL THEN
+    INSERT INTO public.user_organizacoes (user_id, org_id, role, cargo_id, is_admin)
+    VALUES (NEW.id, _org_id, 'member', _cargo_id, COALESCE(_is_first_user, false))
+    ON CONFLICT (user_id, org_id) DO NOTHING;
+
+    INSERT INTO public.user_org_ativa (user_id, org_id)
+    VALUES (NEW.id, _org_id)
+    ON CONFLICT (user_id) DO NOTHING;
+  END IF;
+
+  -- Ligação (1): por EMAIL, na MESMA org. Exige que o email de LOGIN
+  -- coincida com o email do perfil → posse do email (variante segura B).
+  IF _is_motorista_signup
+     AND NEW.email IS NOT NULL
+     AND _org_id IS NOT NULL THEN
+    SELECT ma.id INTO _motorista_id
+    FROM public.motoristas_ativos ma
+    WHERE ma.user_id IS NULL
+      AND ma.org_id = _org_id
+      AND ma.email IS NOT NULL
+      AND lower(ma.email) = lower(NEW.email)
+    ORDER BY ma.created_at ASC NULLS LAST, ma.id ASC
+    LIMIT 1;
+
+    IF _motorista_id IS NOT NULL THEN
+      UPDATE public.motoristas_ativos
+      SET user_id = NEW.id, updated_at = now()
+      WHERE id = _motorista_id AND user_id IS NULL;
+    END IF;
+  END IF;
+
+  -- Ligação (2): FALLBACK por TELEFONE — só perfis LEGADOS SEM email e na
+  -- MESMA org. Perfis COM email nunca ligam por telefone (só por posse do
+  -- email, bloco 1), impedindo takeover conhecendo apenas o número.
+  IF _is_motorista_signup
+     AND _motorista_id IS NULL
+     AND _normalized_phone IS NOT NULL
+     AND _org_id IS NOT NULL THEN
+    SELECT ma.id INTO _motorista_id
+    FROM public.motoristas_ativos ma
+    WHERE ma.user_id IS NULL
+      AND ma.org_id = _org_id
+      AND ma.email IS NULL
+      AND ma.telefone IS NOT NULL
+      AND public.normalize_phone(ma.telefone) = _normalized_phone
+    ORDER BY ma.created_at ASC NULLS LAST, ma.id ASC
+    LIMIT 1;
+
+    IF _motorista_id IS NOT NULL THEN
+      UPDATE public.motoristas_ativos
+      SET user_id = NEW.id, updated_at = now()
+      WHERE id = _motorista_id AND user_id IS NULL;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
