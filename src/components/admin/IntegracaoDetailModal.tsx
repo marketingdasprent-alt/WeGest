@@ -1055,13 +1055,17 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                 <Label className="text-xs">Período a filtrar (Executar Robot)</Label>
                 <Select
                   value={periodoTipo}
-                  onValueChange={(value: 'semana_anterior' | 'personalizado') => setPeriodoTipo(value)}
+                  onValueChange={(value: 'semana_anterior' | 'personalizado') =>
+                    setPeriodoTipo(value)
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="semana_anterior">Semana anterior (Segunda-Domingo)</SelectItem>
+                    <SelectItem value="semana_anterior">
+                      Semana anterior (Segunda-Domingo)
+                    </SelectItem>
                     <SelectItem value="personalizado">Personalizado</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1097,15 +1101,15 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
               )}
               {(SINCRONIZACAO_ATIVA || integracao.plataforma === 'via_verde') &&
                 (integracao.plataforma === 'robot' || integracao.plataforma === 'via_verde') && (
-                <Button variant="outline" onClick={handleExecuteRobot} disabled={executingRobot}>
-                  {executingRobot ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Play className="mr-2 h-4 w-4" />
-                  )}
-                  Executar Robot
-                </Button>
-              )}
+                  <Button variant="outline" onClick={handleExecuteRobot} disabled={executingRobot}>
+                    {executingRobot ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Play className="mr-2 h-4 w-4" />
+                    )}
+                    Executar Robot
+                  </Button>
+                )}
               <Button onClick={handleSave} disabled={saving}>
                 {saving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
