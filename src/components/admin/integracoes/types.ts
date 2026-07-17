@@ -56,6 +56,9 @@ export interface IntegracaoConfig {
   email_sender_email?: string | null;
   email_reply_to?: string | null;
   email_provider_config?: Record<string, unknown> | null;
+  // Via Verde: dia/hora do sync automático (0=Domingo..6=Sábado, 0-23h Lisboa)
+  sync_dia_semana?: number | null;
+  sync_hora?: number | null;
 }
 
 // Pre-configured defaults for Uber integrations (stored as robot internally)
