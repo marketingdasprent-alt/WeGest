@@ -95,6 +95,15 @@ interface TransacaoEstruturada {
   tipo_evento?: string | null;
   contrato?: string | null;
   transaction_id?: string | null;
+  // Campos como o actor Apify da Via Verde realmente produz (ver
+  // viaverde-scraper-wegest main.js) — nomes diferentes dos assumidos acima.
+  data_entrada?: string | null;
+  data_saida?: string | null;
+  local_entrada?: string | null;
+  local_saida?: string | null;
+  servico?: string | null;
+  valor?: number | string | null;
+  contaMobilidade?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -213,17 +222,20 @@ Deno.serve(async (req) => {
       }
     } else if (Array.isArray(transacoes)) {
       for (const t of transacoes as TransacaoEstruturada[]) {
-        const txDate = parseDate(t.transaction_date || '');
-        const valorStr = t.amount !== null && t.amount !== undefined ? String(t.amount) : '';
+        // Aceita tanto os nomes "canónicos" como os que o actor Apify da Via
+        // Verde realmente produz (data_entrada/data_saida/local_saida/valor/...).
+        const txDate = parseDate(t.transaction_date || t.data_saida || t.data_entrada || '');
+        const amountRaw = t.amount ?? t.valor;
+        const valorStr = amountRaw !== null && amountRaw !== undefined ? String(amountRaw) : '';
         processRow(
           txDate,
           t.matricula || '',
-          t.barreira_saida || '',
+          t.barreira_saida || t.local_saida || t.local_entrada || '',
           t.operador || '',
           valorStr,
-          t.contrato || '',
+          t.contrato || t.contaMobilidade || '',
           t.nr_equipamento || '',
-          t.tipo_evento || '',
+          t.tipo_evento || t.servico || '',
           t as Record<string, unknown>
         );
       }

@@ -57,22 +57,26 @@ Deno.serve(async (req) => {
 
     // Forçar uso do Actor ID e API Token da integração "mestre/original" da MESMA org
     // Isso garante que todas as sub-contas operem sob o mesmo robô e credenciais mais recentes.
+    // Via Verde tem conta Apify própria e dedicada — NUNCA deve herdar de um "mestre"
+    // partilhado (usar sempre o actor_id/token gravados na própria linha da integração).
     const targetPlatform = config.robot_target_platform || config.plataforma;
-    const { data: masterConfig } = await supabase
-      .from('plataformas_configuracao')
-      .select('apify_actor_id, apify_api_token')
-      .eq('plataforma', 'robot')
-      .eq('robot_target_platform', targetPlatform)
-      .eq('org_id', config.org_id)
-      .not('apify_actor_id', 'is', null)
-      .not('apify_api_token', 'is', null)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .single();
+    if (targetPlatform !== 'viaverde') {
+      const { data: masterConfig } = await supabase
+        .from('plataformas_configuracao')
+        .select('apify_actor_id, apify_api_token')
+        .eq('plataforma', 'robot')
+        .eq('robot_target_platform', targetPlatform)
+        .eq('org_id', config.org_id)
+        .not('apify_actor_id', 'is', null)
+        .not('apify_api_token', 'is', null)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single();
 
-    if (masterConfig) {
-      actorId = masterConfig.apify_actor_id;
-      apifyToken = masterConfig.apify_api_token;
+      if (masterConfig) {
+        actorId = masterConfig.apify_actor_id;
+        apifyToken = masterConfig.apify_api_token;
+      }
     }
 
     if (!actorId) {
