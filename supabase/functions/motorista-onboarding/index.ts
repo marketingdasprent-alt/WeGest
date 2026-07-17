@@ -6,21 +6,21 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // ============================================================
 // ÚNICO ponto de entrada (anon, pré-login) do fluxo: o portal envia o
 // email + org e esta função decide o ramo E age, SEMPRE re-validando no
-// servidor (nunca confia no cliente):
+// servidor (nunca confia no cliente). Duas verificações, por esta ordem:
 //
-//   status 'criar'        → não existe perfil de motorista para este email
-//                           nesta org (ou já tem conta ligada). O portal
-//                           mostra o formulário de candidatura de raiz.
-//   status 'enviado'      → existe perfil sem conta e a conta foi criada
-//                           agora; enviámos o LINK SEGURO (recovery ->
-//                           /reset-password) por email. Só quem tem acesso
-//                           à caixa define a password — sem takeover.
-//   status 'existe_conta' → existe perfil, mas já há uma conta auth com
-//                           este email. Não mexemos nessa conta (podia ser
-//                           de outra org/tipo): o portal manda iniciar
-//                           sessão / usar "esqueci a palavra-passe".
+//   (1) Já existe conta auth (profiles) com este email? → 'existe_conta',
+//       SEMPRE, independente de haver ou não perfil motoristas_ativos
+//       elegível. Um motorista que já ativou a conta tem user_id
+//       preenchido na ficha — por isso não aparece na verificação (2) — e
+//       tem de ser mandado para o login, nunca para a candidatura do zero.
+//   (2) Existe perfil motoristas_ativos desta org, com este email, e AINDA
+//       sem conta (user_id NULL)?
+//         SIM → cria a conta + liga + envia LINK SEGURO (recovery ->
+//               /reset-password) por email → 'enviado'. Só quem tem acesso
+//               à caixa define a password — sem takeover.
+//         NÃO → 'criar' (formulário de candidatura de raiz).
 //
-// Guardas: só cria/ligar conta quando existe motoristas_ativos com este
+// Guardas: só cria/liga conta quando existe motoristas_ativos com este
 // email (match EXATO case-insensitive, sem wildcards), user_id NULL e
 // org_id = ao pedido. A ligação do user_id ao perfil é feita pelo trigger
 // handle_new_user_org (por email, escopado à org) no momento do
@@ -78,7 +78,23 @@ serve(async (req) => {
       return json({ ok: false, error: "email e org_id são obrigatórios" }, 400);
     }
 
-    // Elegibilidade: perfil de motorista desta org, com este email (match
+    // Verificação (1), ANTES de tudo: já existe uma conta auth com este
+    // email? Independente de haver ou não perfil motoristas_ativos elegível
+    // — um motorista que já ativou a conta (ex.: já fez login antes) tem
+    // user_id preenchido na sua ficha, por isso NÃO aparece na query de
+    // elegibilidade abaixo; sem esta verificação primeiro, cairia sempre em
+    // 'criar' (candidatura do zero) em vez de ser mandado para o login.
+    const { data: profileExistente } = await admin
+      .from("profiles")
+      .select("id")
+      .ilike("email", escapeLike(emailNorm))
+      .maybeSingle();
+
+    if (profileExistente) {
+      return json({ ok: true, status: "existe_conta" });
+    }
+
+    // Elegibilidade (2): perfil de motorista desta org, com este email (match
     // exato case-insensitive) e AINDA sem conta. É a guarda que impede esta
     // função de criar contas arbitrárias ou ligar-se a perfis de outra org.
     const { data: perfil, error: perfilErr } = await admin
