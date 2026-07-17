@@ -112,11 +112,19 @@ const PainelMotorista: React.FC = () => {
         }
       }
 
-      const { data: motoristaData } = await supabase
+      const { data: motoristaData, error: motoristaError } = await supabase
         .from('motoristas_ativos')
         .select('id, nome, foto_url, status_ativo')
         .eq('user_id', user.id)
         .maybeSingle();
+
+      if (motoristaError) {
+        // Não cair silenciosamente na candidatura em branco quando a query
+        // falha por um erro real (ex.: coluna inexistente, RLS mal configurada)
+        // — já aconteceu e mostrou o formulário de candidatura a um motorista
+        // com conta e documentação completas.
+        console.error('Erro ao carregar motorista ativo:', motoristaError);
+      }
 
       if (motoristaData) {
         setMotoristaAtivo(motoristaData as any);

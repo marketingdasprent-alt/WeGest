@@ -4,19 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Eye, EyeOff, Car, CheckCircle2, Circle } from 'lucide-react';
-import { PhoneInput } from '@/components/ui/phone-input';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 import { type ResolvedOrg } from '@/lib/org-codigo';
 import { passwordChecks, PASSWORD_REQUIREMENTS } from '@/lib/passwordPolicy';
 
 interface RegistoMotoristaFormCriarContaProps {
   org: ResolvedOrg | null;
-  nome: string;
-  setNome: (v: string) => void;
   email: string;
-  setEmail: (v: string) => void;
-  telefone: string;
-  onTelefoneChange: (v: string) => void;
   password: string;
   setPassword: (v: string) => void;
   confirmPassword: string;
@@ -28,18 +22,16 @@ interface RegistoMotoristaFormCriarContaProps {
   onBack: () => void;
 }
 
-// Ramo "sem perfil elegível" do fluxo email-first: candidatura de raiz
-// (nome + telefone + password) via signUp — extraído do orquestrador
+// Ramo "sem perfil elegível" do fluxo email-first: só cria a conta (password)
+// via signUp. Nome/telefone e restantes dados do motorista ficam para a
+// candidatura completa (CandidaturaFormulario, em /motorista/painel), a
+// "aba certa" onde essa informação é efetivamente recolhida — evita pedir os
+// mesmos dados duas vezes em dois ecrãs diferentes. Extraído do orquestrador
 // RegistoMotorista.tsx só para manter os ficheiros dentro do limite de
 // linhas; não tem lógica própria além de renderizar/emitir eventos.
 export function RegistoMotoristaFormCriarConta({
   org,
-  nome,
-  setNome,
   email,
-  setEmail,
-  telefone,
-  onTelefoneChange,
   password,
   setPassword,
   confirmPassword,
@@ -71,48 +63,17 @@ export function RegistoMotoristaFormCriarConta({
     >
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="nome">Nome completo</Label>
-          <Input
-            id="nome"
-            type="text"
-            placeholder="O seu nome completo"
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            required
-            disabled={loading}
-            className="auth-input"
-            autoComplete="name"
-          />
-        </div>
-
-        <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             type="email"
-            placeholder="seu@email.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            disabled={loading}
+            disabled
+            readOnly
             className="auth-input"
             autoComplete="email"
             inputMode="email"
           />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="telefone">Telefone</Label>
-          <PhoneInput
-            id="telefone"
-            value={telefone}
-            onChange={onTelefoneChange}
-            defaultCountry="PT"
-            disabled={loading}
-          />
-          <p className="text-xs text-muted-foreground">
-            Selecione o código do país e introduza o número.
-          </p>
         </div>
 
         <div className="space-y-2">

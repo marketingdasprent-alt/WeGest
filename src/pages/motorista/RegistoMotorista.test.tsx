@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 const signUp = vi.fn();
 const invoke = vi.fn();
@@ -27,19 +27,19 @@ const toast = vi.fn();
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: null }) }));
 
-vi.mock('@/components/ui/phone-input', () => ({
-  PhoneInput: (p: any) => (
-    <input aria-label="Telefone" value={p.value} onChange={(e) => p.onChange(e.target.value)} />
-  ),
-  validatePhoneNumber: () => true,
-}));
-
 import RegistoMotorista from './RegistoMotorista';
 
+// Rotas-alvo mockadas para poder verificar PARA ONDE o registo redireciona
+// (painel direto vs. login a pedir confirmação de email) sem montar as
+// páginas reais.
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <RegistoMotorista />
+      <Routes>
+        <Route path="/motorista/registo" element={<RegistoMotorista />} />
+        <Route path="/motorista/painel" element={<div>PAINEL-MOCK</div>} />
+        <Route path="/motorista/login" element={<div>LOGIN-MOCK</div>} />
+      </Routes>
     </MemoryRouter>
   );
 }
@@ -50,8 +50,6 @@ async function continuarComEmail(email = 'ze@x.pt') {
 }
 
 async function preencherCriar() {
-  fireEvent.change(screen.getByLabelText(/Nome completo/i), { target: { value: 'Zé' } });
-  fireEvent.change(screen.getByLabelText(/Telefone/i), { target: { value: '+351912345678' } });
   fireEvent.change(screen.getByLabelText(/^Palavra-passe$/i), { target: { value: 'abcd1234' } });
   fireEvent.change(screen.getByLabelText(/Confirmar palavra-passe/i), {
     target: { value: 'abcd1234' },
@@ -83,7 +81,7 @@ describe('RegistoMotorista (web) — email-first', () => {
     expect(signUp).not.toHaveBeenCalled();
   });
 
-  it('status "criar" → mostra formulário e cria conta com org_id/tipo motorista', async () => {
+  it('status "criar" → mostra só password (nome/telefone ficam para a candidatura) e cria conta com org_id/tipo motorista', async () => {
     resolveOrgByCodigo.mockResolvedValue({ id: 'org-x', nome: 'Empresa X' });
     invoke.mockResolvedValue({ data: { ok: true, status: 'criar' }, error: null });
     renderAt('/motorista/registo?org=empresa-x');
@@ -91,14 +89,50 @@ describe('RegistoMotorista (web) — email-first', () => {
 
     await continuarComEmail('novo@x.pt');
     await waitFor(() => expect(invoke).toHaveBeenCalled());
-    // Ramo "sem perfil" → formulário completo
-    await screen.findByLabelText(/Nome completo/i);
+    // Ramo "sem perfil" → só cria a conta; sem campos de Nome/Telefone.
+    await screen.findByLabelText(/^Palavra-passe$/i);
+    expect(screen.queryByLabelText(/Nome completo/i)).toBeNull();
+    expect(screen.queryByLabelText(/Telefone/i)).toBeNull();
 
     await preencherCriar();
     await waitFor(() => expect(signUp).toHaveBeenCalled());
     const arg = signUp.mock.calls[0][0];
+    expect(arg.email).toBe('novo@x.pt');
     expect(arg.options.data.org_id).toBe('org-x');
     expect(arg.options.data.tipo_utilizador).toBe('motorista');
+    expect(arg.options.data.nome).toBeUndefined();
+    expect(arg.options.data.telefone).toBeUndefined();
+  });
+
+  it('signUp com sessão ativa (confirmação de email desligada) → vai direto para o painel', async () => {
+    resolveOrgByCodigo.mockResolvedValue({ id: 'org-x', nome: 'Empresa X' });
+    invoke.mockResolvedValue({ data: { ok: true, status: 'criar' }, error: null });
+    signUp.mockResolvedValue({
+      data: { user: { id: 'u1' }, session: { access_token: 'tok' } },
+      error: null,
+    });
+    renderAt('/motorista/registo?org=empresa-x');
+    await screen.findByText(/Empresa X/i);
+
+    await continuarComEmail('novo@x.pt');
+    await screen.findByLabelText(/^Palavra-passe$/i);
+    await preencherCriar();
+
+    expect(await screen.findByText(/PAINEL-MOCK/i)).toBeTruthy();
+  });
+
+  it('signUp sem sessão (a aguardar confirmação de email) → vai para o login', async () => {
+    resolveOrgByCodigo.mockResolvedValue({ id: 'org-x', nome: 'Empresa X' });
+    invoke.mockResolvedValue({ data: { ok: true, status: 'criar' }, error: null });
+    signUp.mockResolvedValue({ data: { user: { id: 'u1' }, session: null }, error: null });
+    renderAt('/motorista/registo?org=empresa-x');
+    await screen.findByText(/Empresa X/i);
+
+    await continuarComEmail('novo@x.pt');
+    await screen.findByLabelText(/^Palavra-passe$/i);
+    await preencherCriar();
+
+    expect(await screen.findByText(/LOGIN-MOCK/i)).toBeTruthy();
   });
 
   it('status "enviado" → NÃO faz signUp e mostra "verifique o email"', async () => {

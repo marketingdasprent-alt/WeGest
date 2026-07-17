@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Car, MailCheck, LogIn } from 'lucide-react';
-import { validatePhoneNumber } from '@/components/ui/phone-input';
 import { getEmailRedirectUrl, isNativeApp } from '@/lib/native';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 import { resolveOrgByCodigo, normalizeCodigo, type ResolvedOrg } from '@/lib/org-codigo';
@@ -36,9 +35,7 @@ const RegistoMotorista: React.FC = () => {
 
   const [step, setStep] = useState<Step>('email');
 
-  const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
-  const [telefone, setTelefone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -85,10 +82,6 @@ const RegistoMotorista: React.FC = () => {
       cancelled = true;
     };
   }, [urlOrgCode, native]);
-
-  const handleTelefoneChange = (value: string) => {
-    setTelefone(value);
-  };
 
   // Traduz/clarifica os erros do Supabase para o motorista perceber o que correu mal.
   const traduzirErroRegisto = (msg?: string) => {
@@ -192,7 +185,10 @@ const RegistoMotorista: React.FC = () => {
     }
   };
 
-  // Passo 2 (ramo "sem perfil"): cria a conta de raiz (candidatura).
+  // Passo 2 (ramo "sem perfil"): cria só a conta (password). Nome, telefone e
+  // restantes dados do motorista são preenchidos a seguir na candidatura
+  // completa (CandidaturaFormulario) — não faz sentido pedi-los aqui outra
+  // vez num ecrã à parte.
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -214,15 +210,6 @@ const RegistoMotorista: React.FC = () => {
       return;
     }
 
-    if (!validatePhoneNumber(telefone)) {
-      toast({
-        title: 'Erro',
-        description: 'Telefone inválido. Verifique o número inserido.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     const orgToUse = await ensureOrg();
     if (!orgToUse) return;
 
@@ -235,8 +222,6 @@ const RegistoMotorista: React.FC = () => {
         options: {
           emailRedirectTo: getEmailRedirectUrl('/motorista/login'),
           data: {
-            nome,
-            telefone,
             cargo_id: CARGO_MOTORISTA_ID,
             cargo_nome: 'Motorista',
             tipo_utilizador: 'motorista',
@@ -246,6 +231,17 @@ const RegistoMotorista: React.FC = () => {
       });
 
       if (error) throw error;
+
+      // Confirmação de email desligada (comum quando o envio é feito pelo
+      // Brevo, não pelo Supabase) → signUp já devolve sessão ativa: avança
+      // logo para a candidatura completa, sem passar por login. Só quando
+      // a confirmação estiver mesmo ligada é que não há sessão ainda — aí
+      // fica o passo de "verifique o email".
+      if (data.session) {
+        toast({ title: 'Conta criada!', description: 'Vamos completar a sua candidatura.' });
+        navigate('/motorista/painel');
+        return;
+      }
 
       if (data.user) {
         toast({
@@ -429,16 +425,11 @@ const RegistoMotorista: React.FC = () => {
     );
   }
 
-  // Passo 2 (ramo "sem perfil"): formulário completo de candidatura.
+  // Passo 2 (ramo "sem perfil"): criação da conta (password).
   return (
     <RegistoMotoristaFormCriarConta
       org={org}
-      nome={nome}
-      setNome={setNome}
       email={email}
-      setEmail={setEmail}
-      telefone={telefone}
-      onTelefoneChange={handleTelefoneChange}
       password={password}
       setPassword={setPassword}
       confirmPassword={confirmPassword}
