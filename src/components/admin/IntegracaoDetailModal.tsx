@@ -152,7 +152,18 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
     cron_schedule: 'disabled' as string,
     cron_custom: '',
     robot_target_platform: (integracao.robot_target_platform ?? 'uber') as 'bolt' | 'uber' | 'bp',
+    sync_dia_semana: integracao.sync_dia_semana ?? 1,
+    sync_hora: integracao.sync_hora ?? 4,
   });
+
+  // Período do robô ao clicar "Executar Robot" — escolha por-execução, não é
+  // gravado na integração (o sync automático usa sempre "semana anterior",
+  // calculado dinamicamente dentro do robot-execute).
+  const [periodoTipo, setPeriodoTipo] = useState<'semana_anterior' | 'personalizado'>(
+    'semana_anterior'
+  );
+  const [periodoInicio, setPeriodoInicio] = useState('');
+  const [periodoFim, setPeriodoFim] = useState('');
 
   // Load real cron state from pg_cron when modal opens
   const loadCronState = async () => {
@@ -200,7 +211,12 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
       cron_schedule: 'disabled',
       cron_custom: '',
       robot_target_platform: (integracao.robot_target_platform ?? 'uber') as 'bolt' | 'uber' | 'bp',
+      sync_dia_semana: integracao.sync_dia_semana ?? 1,
+      sync_hora: integracao.sync_hora ?? 4,
     });
+    setPeriodoTipo('semana_anterior');
+    setPeriodoInicio('');
+    setPeriodoFim('');
     loadCronState();
   }, [open, integracao]);
 
@@ -268,11 +284,18 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
   };
 
   const handleExecuteRobot = async () => {
+    if (periodoTipo === 'personalizado' && (!periodoInicio || !periodoFim)) {
+      toast({ title: 'Preencha as duas datas do período personalizado', variant: 'destructive' });
+      return;
+    }
     try {
       setExecutingRobot(true);
-      const { data, error } = await supabase.functions.invoke('robot-execute', {
-        body: { integracao_id: integracao.id },
-      });
+      const body: Record<string, unknown> = { integracao_id: integracao.id };
+      if (periodoTipo === 'personalizado') {
+        body.periodo_inicio = periodoInicio;
+        body.periodo_fim = periodoFim;
+      }
+      const { data, error } = await supabase.functions.invoke('robot-execute', { body });
       if (error) {
         let msg = error.message;
         try {
@@ -320,6 +343,8 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
         updatePayload.auth_mode = 'password';
         if (isViaVerde) {
           updatePayload.sync_automatico = formData.sync_automatico;
+          updatePayload.sync_dia_semana = formData.sync_dia_semana;
+          updatePayload.sync_hora = formData.sync_hora;
         }
       } else if (integracao.plataforma === 'uber') {
         // Native Uber integration (webhook + direct API)
@@ -600,20 +625,69 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
 
             {/* Toggle de sync automático — só Via Verde */}
             {isViaVerde && (
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
-                <div>
-                  <p className="text-sm font-medium">Sync automático (semanal)</p>
-                  <p className="text-xs text-muted-foreground">
-                    Activa o robô para correr todas as segundas-feiras às 04h00 (Lisboa) e importar
-                    a semana anterior.
-                  </p>
+              <div className="space-y-3 rounded-lg border border-border p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium">Sync automático (semanal)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Activa o robô para correr no dia/hora escolhidos abaixo (Lisboa) e importar a
+                      semana anterior (Segunda-Domingo).
+                    </p>
+                  </div>
+                  <Switch
+                    checked={formData.sync_automatico}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({ ...prev, sync_automatico: checked }))
+                    }
+                  />
                 </div>
-                <Switch
-                  checked={formData.sync_automatico}
-                  onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, sync_automatico: checked }))
-                  }
-                />
+
+                {formData.sync_automatico && (
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Dia da semana</Label>
+                      <Select
+                        value={String(formData.sync_dia_semana)}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({ ...prev, sync_dia_semana: Number(value) }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0">Domingo</SelectItem>
+                          <SelectItem value="1">Segunda-feira</SelectItem>
+                          <SelectItem value="2">Terça-feira</SelectItem>
+                          <SelectItem value="3">Quarta-feira</SelectItem>
+                          <SelectItem value="4">Quinta-feira</SelectItem>
+                          <SelectItem value="5">Sexta-feira</SelectItem>
+                          <SelectItem value="6">Sábado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Hora (Lisboa)</Label>
+                      <Select
+                        value={String(formData.sync_hora)}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({ ...prev, sync_hora: Number(value) }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 24 }, (_, h) => (
+                            <SelectItem key={h} value={String(h)}>
+                              {String(h).padStart(2, '0')}:00
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -970,6 +1044,47 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                     setFormData((prev) => ({ ...prev, sync_automatico: checked }))
                   }
                 />
+              </div>
+            )}
+
+            {/* Período a filtrar na próxima execução manual — só Via Verde.
+                O sync automático (toggle acima) usa sempre "semana anterior",
+                calculado no momento em que corre; isto é só para o Play. */}
+            {isViaVerde && (
+              <div className="space-y-2 rounded-lg border border-border p-4">
+                <Label className="text-xs">Período a filtrar (Executar Robot)</Label>
+                <Select
+                  value={periodoTipo}
+                  onValueChange={(value: 'semana_anterior' | 'personalizado') => setPeriodoTipo(value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="semana_anterior">Semana anterior (Segunda-Domingo)</SelectItem>
+                    <SelectItem value="personalizado">Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+                {periodoTipo === 'personalizado' && (
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">De</Label>
+                      <Input
+                        type="date"
+                        value={periodoInicio}
+                        onChange={(e) => setPeriodoInicio(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Até</Label>
+                      <Input
+                        type="date"
+                        value={periodoFim}
+                        onChange={(e) => setPeriodoFim(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
