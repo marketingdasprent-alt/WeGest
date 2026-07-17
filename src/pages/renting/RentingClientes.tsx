@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, Eraser, Plus, Search, SlidersHorizontal, Users } from 'lucide-react';
+import {
+  ChevronDown,
+  Eraser,
+  FileSpreadsheet,
+  Loader2,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Users,
+} from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,8 +36,10 @@ import {
 import { useClientes } from '@/hooks/useClientes';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
+import { useToast } from '@/hooks/use-toast';
 
 import { cn, matchesSearch } from '@/lib/utils';
+import { exportClientesExcel } from '@/utils/clientesExport';
 
 import type { ClienteComDocumentos } from '@/types/cliente';
 
@@ -202,6 +213,8 @@ const RentingClientes = () => {
   };
 
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [exporting, setExporting] = useState(false);
 
   const { data: clientes = [], isLoading } = useClientes();
 
@@ -367,6 +380,22 @@ const RentingClientes = () => {
     navigate('/renting/clientes/novo');
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportClientesExcel(filtered);
+    } catch (error) {
+      console.error('Erro ao exportar clientes:', error);
+      toast({
+        title: 'Erro ao exportar',
+        description: 'Não foi possível gerar o ficheiro Excel.',
+        variant: 'destructive',
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleEdit = (cliente: ClienteComDocumentos) => {
     navigate(`/renting/clientes/${cliente.id}`);
   };
@@ -529,6 +558,19 @@ const RentingClientes = () => {
         }
         icon={Users}
       >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExport}
+          disabled={exporting || filtered.length === 0}
+        >
+          {exporting ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+          )}
+          Exportar
+        </Button>
         <Button onClick={handleNew} size="sm">
           <Plus className="h-4 w-4 mr-2" />
           Novo Cliente

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, FileText, Loader2, Printer } from 'lucide-react';
+import type jsPDF from 'jspdf';
+import { Download, FileText, Loader2, Mail, Printer } from 'lucide-react';
 
 import {
   Dialog,
@@ -22,6 +23,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useDocumentTemplates } from '@/hooks/useDocumentTemplates';
+import { useContactosDocumento } from '@/hooks/useContactosDocumento';
 
 import { generateContratoPdf, type CondutorPrincipal } from '@/utils/generateContratoPdf';
 import type { EmpresaConfig } from '@/config/empresas';
@@ -30,6 +32,7 @@ import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Motorista } from '@/types/motorista';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
+import { EnviarContratoEmailDialog } from './EnviarContratoEmailDialog';
 
 interface Props {
   open: boolean;
@@ -78,6 +81,9 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gerando, setGerando] = useState(false);
   const [cidadeAssinatura, setCidadeAssinatura] = useState('');
+  const [enviarEmailOpen, setEnviarEmailOpen] = useState(false);
+  const [pdfParaEnviar, setPdfParaEnviar] = useState<jsPDF | null>(null);
+  const [filenameParaEnviar, setFilenameParaEnviar] = useState('');
 
   // Chave estável de um condutor (cliente_id em rent-a-car, motorista_id em
   // TVDE/slot) — usada para seleccionar para quem gerar os documentos.
@@ -99,6 +105,17 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
   }, [open, condutores]);
 
   const condutorSelecionado = condutores.find((c) => condutorKey(c) === condutorId) ?? null;
+
+  // Cliente e/ou condutor (motorista ou cliente-condutor) para o envio por email.
+  const { data: contactosEnvio = [] } = useContactosDocumento({
+    clienteId: contrato.cliente_id,
+    condutor: condutorSelecionado
+      ? {
+          cliente_id: condutorSelecionado.cliente_id,
+          motorista_id: condutorSelecionado.motorista_id,
+        }
+      : null,
+  });
 
   const { data: todosTemplates = [], isLoading: loading } = useDocumentTemplates(
     open ? empresaId : null
@@ -153,12 +170,25 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
 
   const count = templates.filter((t) => selected.has(t.id)).length;
 
-  const gerar = async (action: 'print' | 'download') => {
-    const empresa = empresas.find((e) => e.id === empresaId) ?? null;
-    const templateIds = templates
+  // IDs escolhidos, na ordem de leitura do PDF combinado — partilhado por
+  // download/impressão/email.
+  const templateIdsEscolhidos = () =>
+    templates
       .filter((t) => selected.has(t.id))
       .sort((a, b) => ordemTipo(a.tipo) - ordemTipo(b.tipo) || a.nome.localeCompare(b.nome))
       .map((t) => t.id);
+
+  const condutorPrincipalAtual = (): CondutorPrincipal | null =>
+    condutorSelecionado
+      ? {
+          cliente_id: condutorSelecionado.cliente_id,
+          motorista_id: condutorSelecionado.motorista_id,
+        }
+      : null;
+
+  const gerar = async (action: 'print' | 'download') => {
+    const empresa = empresas.find((e) => e.id === empresaId) ?? null;
+    const templateIds = templateIdsEscolhidos();
 
     if (templateIds.length === 0) {
       toast({ title: 'Selecione pelo menos um documento', variant: 'destructive' });
@@ -171,15 +201,9 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
 
     try {
       setGerando(true);
-      const condutorPrincipal: CondutorPrincipal | null = condutorSelecionado
-        ? {
-            cliente_id: condutorSelecionado.cliente_id,
-            motorista_id: condutorSelecionado.motorista_id,
-          }
-        : null;
       await generateContratoPdf({
         contrato,
-        condutorPrincipal,
+        condutorPrincipal: condutorPrincipalAtual(),
         clientes,
         motoristas,
         viatura,
@@ -192,6 +216,45 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
     } catch (err) {
       toast({
         title: 'Erro ao gerar documentos',
+        description: err instanceof Error ? err.message : 'Erro inesperado',
+        variant: 'destructive',
+      });
+    } finally {
+      setGerando(false);
+    }
+  };
+
+  // Gera o PDF sem imprimir/descarregar e abre o dialog de envio por email —
+  // mantém este dialog aberto por baixo, tal como acontece ao enviar faturas.
+  const prepararEnvioEmail = async () => {
+    const empresa = empresas.find((e) => e.id === empresaId) ?? null;
+    const templateIds = templateIdsEscolhidos();
+
+    if (templateIds.length === 0) {
+      toast({ title: 'Selecione pelo menos um documento', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setGerando(true);
+      const resultado = await generateContratoPdf({
+        contrato,
+        condutorPrincipal: condutorPrincipalAtual(),
+        clientes,
+        motoristas,
+        viatura,
+        empresa,
+        action: 'email',
+        templateIds,
+        cidadeAssinatura,
+      });
+      if (!resultado) throw new Error('Não foi possível gerar o documento.');
+      setPdfParaEnviar(resultado.pdf);
+      setFilenameParaEnviar(resultado.fileName);
+      setEnviarEmailOpen(true);
+    } catch (err) {
+      toast({
+        title: 'Erro ao preparar o envio',
         description: err instanceof Error ? err.message : 'Erro inesperado',
         variant: 'destructive',
       });
@@ -314,6 +377,15 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
             PDF
           </Button>
           <Button
+            variant="outline"
+            onClick={prepararEnvioEmail}
+            disabled={gerando || loading || count === 0}
+            className="gap-2"
+          >
+            {gerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+            Email
+          </Button>
+          <Button
             onClick={() => gerar('print')}
             disabled={gerando || loading || count === 0 || !cidadeAssinatura.trim()}
             className="gap-2"
@@ -327,6 +399,15 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <EnviarContratoEmailDialog
+        open={enviarEmailOpen}
+        onOpenChange={setEnviarEmailOpen}
+        pdf={pdfParaEnviar}
+        filename={filenameParaEnviar}
+        contextoLabel={`Contrato #${contrato.codigo ?? ''}`}
+        entidades={contactosEnvio}
+      />
     </Dialog>
   );
 };
