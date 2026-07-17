@@ -3,12 +3,12 @@ import type { Motorista } from '@/types/motorista';
 
 // xlsx real escreveria um ficheiro para disco em Node — mock para isolar a
 // lógica de montagem das linhas/colunas.
-const aoaToSheet = vi.fn(() => ({ '!ref': 'A1:AE3' }));
-const bookNew = vi.fn(() => ({}));
-const bookAppendSheet = vi.fn();
-const writeFile = vi.fn();
-const decodeRange = vi.fn(() => ({ s: { r: 0, c: 0 }, e: { r: 0, c: 0 } }));
-const encodeCell = vi.fn(() => 'A1');
+const aoaToSheet = vi.fn((..._args: unknown[]) => ({ '!ref': 'A1:AE3' }));
+const bookNew = vi.fn((..._args: unknown[]) => ({}));
+const bookAppendSheet = vi.fn((..._args: unknown[]) => undefined);
+const writeFile = vi.fn((..._args: unknown[]) => undefined);
+const decodeRange = vi.fn((..._args: unknown[]) => ({ s: { r: 0, c: 0 }, e: { r: 0, c: 0 } }));
+const encodeCell = vi.fn((..._args: unknown[]) => 'A1');
 
 vi.mock('xlsx', () => ({
   utils: {
@@ -37,7 +37,7 @@ function chainableResolving<T>(result: T) {
 }
 
 let motoristaViaturasResult: { data: unknown; error: unknown } = { data: [], error: null };
-const fromMock = vi.fn(() => chainableResolving(motoristaViaturasResult));
+const fromMock = vi.fn((..._args: unknown[]) => chainableResolving(motoristaViaturasResult));
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: { from: (...a: unknown[]) => fromMock(...a) },

@@ -37,7 +37,7 @@ interface ViaturaAtualInfo {
 // Estados operacionais considerados "em curso" — mesmo critério usado em
 // ContratoEstadoActions (ESTADOS_ORIGEM_FECHO) para saber se um contrato
 // ainda está activo.
-const ESTADOS_CONTRATO_ATIVO = ['agendado', 'em_curso'];
+const ESTADOS_CONTRATO_ATIVO = ['agendado', 'em_curso'] as const;
 
 /** Viatura do contrato de renting activo de cada cliente — versão actual
  *  (substituido_em NULL), não eliminada, num dos estados em curso. Uma

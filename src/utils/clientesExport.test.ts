@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ClienteComDocumentos } from '@/types/cliente';
 
-const aoaToSheet = vi.fn(() => ({ '!ref': 'A1:AZ3' }));
-const bookNew = vi.fn(() => ({}));
-const bookAppendSheet = vi.fn();
-const writeFile = vi.fn();
-const decodeRange = vi.fn(() => ({ s: { r: 0, c: 0 }, e: { r: 0, c: 0 } }));
-const encodeCell = vi.fn(() => 'A1');
+const aoaToSheet = vi.fn((..._args: unknown[]) => ({ '!ref': 'A1:AZ3' }));
+const bookNew = vi.fn((..._args: unknown[]) => ({}));
+const bookAppendSheet = vi.fn((..._args: unknown[]) => undefined);
+const writeFile = vi.fn((..._args: unknown[]) => undefined);
+const decodeRange = vi.fn((..._args: unknown[]) => ({ s: { r: 0, c: 0 }, e: { r: 0, c: 0 } }));
+const encodeCell = vi.fn((..._args: unknown[]) => 'A1');
 
 vi.mock('xlsx', () => ({
   utils: {
@@ -35,7 +35,7 @@ function chainableResolving<T>(result: T) {
 }
 
 let contratosResult: { data: unknown; error: unknown } = { data: [], error: null };
-const fromMock = vi.fn(() => chainableResolving(contratosResult));
+const fromMock = vi.fn((..._args: unknown[]) => chainableResolving(contratosResult));
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: { from: (...a: unknown[]) => fromMock(...a) },
