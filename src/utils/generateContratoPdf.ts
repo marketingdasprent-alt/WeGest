@@ -1,3 +1,4 @@
+import type jsPDF from 'jspdf';
 import { supabase } from '@/integrations/supabase/client';
 import { empresaDocData, empresaFooterText, type EmpresaConfig } from '@/config/empresas';
 import { resolveCartaoFrota } from './document-template/resolveCartaoFrota';
@@ -27,7 +28,8 @@ export interface GenerateContratoPdfParams {
   viatura?: ViaturaBasic | null;
   /** Empresa actual — fornece dados para os placeholders {{empresa_*}}. */
   empresa: EmpresaConfig | null;
-  action?: 'print' | 'download';
+  /** 'email' gera o PDF sem imprimir/descarregar — quem chama trata do envio. */
+  action?: 'print' | 'download' | 'email';
   /** IDs de templates a gerar (ordenados), escolhidos no dialog "Gerar
    *  Documentos". Quando dado, gera exactamente estes; senão, decide pelo
    *  regime (rent_a_car → aluguer; tvde → prestação + aluguer). */
@@ -53,7 +55,7 @@ export const generateContratoPdf = async ({
   action = 'print',
   templateIds,
   cidadeAssinatura,
-}: GenerateContratoPdfParams): Promise<void> => {
+}: GenerateContratoPdfParams): Promise<{ pdf: jsPDF; fileName: string } | null> => {
   if (!empresa) {
     throw new Error('Empresa não definida — impossível gerar contrato.');
   }
@@ -455,5 +457,6 @@ export const generateContratoPdf = async ({
 
   const fileName =
     `Contrato_${contrato.codigo ?? ''}_${(motoristaData.nome as string) ?? ''}`.trim();
-  await generateDocumentosCombinados(docs, { action, fileName });
+  const pdf = await generateDocumentosCombinados(docs, { action, fileName });
+  return pdf ? { pdf, fileName: `${fileName}.pdf` } : null;
 };
