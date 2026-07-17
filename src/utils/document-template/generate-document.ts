@@ -297,7 +297,7 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
  */
 export const generateDocumentosCombinados = async (
   docs: DocumentoCombinado[],
-  opts: { action?: 'print' | 'download'; fileName?: string } = {}
+  opts: { action?: 'print' | 'download' | 'email'; fileName?: string } = {}
 ): Promise<jsPDF | null> => {
   const { action = 'print', fileName } = opts;
   if (docs.length === 0) return null;
@@ -316,8 +316,9 @@ export const generateDocumentosCombinados = async (
   const resolvedFileName = fileName || `documento_${format(new Date(), 'yyyyMMdd')}.pdf`;
   if (action === 'print') {
     printPdf(pdf, resolvedFileName);
-  } else {
+  } else if (action === 'download') {
     pdf.save(resolvedFileName);
   }
+  // 'email': sem efeito secundário — quem chamou extrai o PDF para anexar ao envio.
   return pdf;
 };
