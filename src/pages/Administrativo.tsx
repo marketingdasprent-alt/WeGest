@@ -6,12 +6,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FinanceiroStats } from '@/components/financeiro/FinanceiroStats';
 import { FinanceiroFilters } from '@/components/financeiro/FinanceiroFilters';
 import { RecibosTable } from '@/components/financeiro/RecibosTable';
-import { Loader2, Receipt, Zap, Car, Briefcase, Calculator, Fuel } from 'lucide-react';
+import { Loader2, Receipt, Zap, Car, Briefcase, Calculator, Fuel, MapPin } from 'lucide-react';
 import { BoltDataTab } from '@/components/administrativo/BoltDataTab';
 import { UberDataTab } from '@/components/administrativo/UberDataTab';
 import { BPDataTab } from '@/components/administrativo/BPDataTab';
 import { RepsolDataTab } from '@/components/administrativo/RepsolDataTab';
 import { EdpDataTab } from '@/components/administrativo/EdpDataTab';
+import { ViaVerdeDataTab } from '@/components/administrativo/ViaVerdeDataTab';
 import { ContasResumoTab } from '@/components/administrativo/ContasResumoTab';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -178,6 +179,10 @@ export default function Administrativo() {
               <Zap className="h-4 w-4 text-green-500" />
               EDP
             </TabsTrigger>
+            <TabsTrigger value="viaverde" className={triggerClass}>
+              <MapPin className="h-4 w-4 text-emerald-500" />
+              Via Verde
+            </TabsTrigger>
           </>
         )}
       </TabsList>
@@ -221,6 +226,10 @@ export default function Administrativo() {
 
             <TabsContent value="edp" className="mt-0">
               <EdpDataTab />
+            </TabsContent>
+
+            <TabsContent value="viaverde" className="mt-0">
+              <ViaVerdeDataTab />
             </TabsContent>
           </>
         )}

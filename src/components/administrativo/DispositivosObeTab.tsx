@@ -25,13 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { SearchableSelect, type SearchableSelectItem } from '@/components/ui/searchable-select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -298,6 +292,33 @@ export function DispositivosObeTab() {
     });
     return list;
   }, [dispositivos, search, apenasAtivos, sortField, sortDir]);
+
+  // Viaturas selecionáveis no diálogo: uma viatura não pode ter 2 OBE, por
+  // isso excluímos as que já estão associadas a OUTRO dispositivo. A viatura
+  // já associada ao dispositivo em edição continua disponível (para não a
+  // "perder" da lista ao editar o próprio registo dela).
+  const viaturasDisponiveis = useMemo(() => {
+    const ocupadas = new Set(
+      dispositivos
+        .filter((d) => d.viatura_id && d.id !== editing?.id)
+        .map((d) => d.viatura_id as string)
+    );
+    return viaturas.filter((v) => !ocupadas.has(v.id));
+  }, [viaturas, dispositivos, editing]);
+
+  const viaturaSelectItems: SearchableSelectItem[] = useMemo(
+    () =>
+      viaturasDisponiveis.map((v) => ({
+        id: v.id,
+        searchText: `${v.matricula} ${v.marca} ${v.modelo}`,
+        label: (
+          <>
+            {v.matricula} — {v.marca} {v.modelo}
+          </>
+        ),
+      })),
+    [viaturasDisponiveis]
+  );
 
   // ── CRUD ─────────────────────────────────────────────────────────────────
   const openCreate = () => {
@@ -763,22 +784,16 @@ export function DispositivosObeTab() {
 
             <div className="space-y-1.5">
               <Label>Viatura Associada</Label>
-              <Select
-                value={form.viatura_id || 'none'}
-                onValueChange={(v) => setForm((f) => ({ ...f, viatura_id: v === 'none' ? '' : v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sem viatura" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sem viatura</SelectItem>
-                  {viaturas.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.matricula} — {v.marca} {v.modelo}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                items={viaturaSelectItems}
+                value={form.viatura_id || null}
+                onChange={(id) => setForm((f) => ({ ...f, viatura_id: id || '' }))}
+                placeholder="Pesquisar por matrícula..."
+                emptyText="Nenhuma viatura disponível (todas já têm OBE associado)."
+              />
+              <p className="text-xs text-muted-foreground">
+                Só mostra viaturas sem OBE associado — uma viatura não pode ter 2 dispositivos.
+              </p>
             </div>
 
             <div className="flex items-center gap-3">
