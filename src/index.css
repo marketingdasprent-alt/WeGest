@@ -184,6 +184,45 @@ html[data-native-app="true"] .native-bottom {
   }
 }
 
+/* ============================================================
+ * Escala proporcional da UI (desktop / multi-monitor)
+ * ============================================================
+ * Toda a UI (Tailwind) é medida em rem, por isso escalar o
+ * font-size da RAIZ (html) escala TUDO em conjunto — sidebar
+ * (16rem), ícones (h-4 w-4), espaçamentos e texto — como um zoom.
+ * Assim, ao passar para um monitor de menor resolução, em vez de
+ * manter o tamanho fixo e deixar de caber (ícones/cartões
+ * "encavalitados"), a interface inteira encolhe proporcionalmente
+ * e continua a caber na mesma disposição.
+ *
+ * clamp(min, ideal, max) — para afinar, mexer SÓ nestes 3 valores:
+ *   • max  16px  → monitores grandes (a partir de ~1920px de largura)
+ *                  ficam IGUAIS a hoje (não amplia).
+ *   • ideal 0.833vw → entre ~1440px e ~1920px encolhe suavemente
+ *                     (dá exatamente 16px a 1920px de largura).
+ *   • min  12px  → abaixo de ~1440px estabiliza nos 75% para não
+ *                  ficar ilegível. (Baixar p/ 11px encolhe mais;
+ *                  subir p/ 13px encolhe menos.)
+ *
+ * Guardas: só em ecrãs largos com RATO (desktop) e NUNCA na app
+ * nativa nem em telemóveis/tablets táteis — aí a densidade e os
+ * alvos de toque atuais mantêm-se exatamente como estão.
+ * ============================================================ */
+@media (min-width: 1024px) and (pointer: fine) {
+  html:not([data-native-app="true"]) {
+    font-size: clamp(12px, 0.833vw, 16px);
+  }
+
+  /* Os campos de formulário acompanham a escala no desktop. O 16px
+     fixo definido acima existe apenas para impedir o zoom automático
+     do iOS ao focar inputs em ecrãs táteis — irrelevante com rato. */
+  html:not([data-native-app="true"]) input,
+  html:not([data-native-app="true"]) textarea,
+  html:not([data-native-app="true"]) select {
+    font-size: 1rem;
+  }
+}
+
 @layer components {
   .auth-screen {
     @apply relative flex min-h-screen items-center justify-center overflow-hidden bg-background;
