@@ -31,7 +31,8 @@ export type IntegracaoCardType =
   | 'via_verde'
   | 'combustivel'
   | 'robot'
-  | 'faturacao';
+  | 'faturacao'
+  | 'email';
 
 export interface IntegracaoCardData {
   id: string;
@@ -88,6 +89,11 @@ const PLATFORM_META: Record<IntegracaoCardType, { label: string; logo: string; c
     label: 'Faturação',
     logo: '',
     color: 'hsl(var(--chart-1))',
+  },
+  email: {
+    label: 'Brevo',
+    logo: '/images/logo-brevo.png',
+    color: 'hsl(var(--chart-2))',
   },
 };
 export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
@@ -196,7 +202,9 @@ export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${connectionDotColor}`} />
           <span className="text-xs text-muted-foreground">{connectionLabel}</span>
-          {SINCRONIZACAO_ATIVA && data.ativo && onExecute && (
+          {/* Via Verde é a única exceção ao kill-switch SINCRONIZACAO_ATIVA — mesmo
+              motivo do guard em robot-execute (robot_target_platform !== 'viaverde'). */}
+          {(SINCRONIZACAO_ATIVA || data.type === 'via_verde') && data.ativo && onExecute && (
             <Button
               variant="ghost"
               size="icon"

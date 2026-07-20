@@ -359,6 +359,8 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
                   toNome: motoristaNome,
                   matricula: viatura?.matricula ?? '',
                   momento: 'RECOLHA',
+                  orgId,
+                  viaturaId: viatura?.id,
                 });
               }
             }

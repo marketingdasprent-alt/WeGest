@@ -1,4 +1,6 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { EmailService } from '../_shared/email/services/EmailService.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,19 +16,7 @@ interface SendDocumentoFiscalEmailRequest {
   /** PDF em base64 puro (sem prefixo data:...;base64,). */
   pdfBase64: string;
   filename: string;
-}
-
-/** Escapa HTML e converte quebras de linha em parágrafos/br para o corpo do email. */
-function textoParaHtml(texto: string): string {
-  const escapado = texto
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-  const corpo = escapado
-    .split(/\r?\n/)
-    .map((linha) => (linha.trim() === '' ? '<br>' : `<p style="margin:0 0 8px">${linha}</p>`))
-    .join('');
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#333">${corpo}</div>`;
+  org_id: string;
 }
 
 serve(async (req) => {
@@ -35,9 +25,6 @@ serve(async (req) => {
   }
 
   try {
-    const BREVO_API_KEY = Deno.env.get('BREVO_API_KEY');
-    if (!BREVO_API_KEY) throw new Error('BREVO_API_KEY não configurada');
-
     const {
       to,
       toNome,
@@ -45,35 +32,31 @@ serve(async (req) => {
       mensagem,
       pdfBase64,
       filename,
+      org_id,
     }: SendDocumentoFiscalEmailRequest = await req.json();
 
-    if (!to || !subject || !pdfBase64 || !filename) {
+    if (!to || !subject || !pdfBase64 || !filename || !org_id) {
       return new Response(
-        JSON.stringify({ error: 'to, subject, pdfBase64 e filename são obrigatórios' }),
+        JSON.stringify({ error: 'to, subject, pdfBase64, filename e org_id são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        'api-key': BREVO_API_KEY,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        sender: { name: 'DASPRENT', email: 'noreply@dasprent.pt' },
-        to: [{ email: to, name: toNome || undefined }],
-        subject,
-        htmlContent: textoParaHtml(mensagem || ''),
-        attachment: [{ content: pdfBase64, name: filename }],
-      }),
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const emailService = new EmailService(supabase);
+
+    const result = await emailService.sendDocumentoFiscal(org_id, {
+      to,
+      toNome,
+      subject,
+      mensagem: mensagem || '',
+      pdfBase64,
+      filename,
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Brevo: ${errText}`);
-    }
+    if (!result.success) throw new Error(result.error || 'Falha ao enviar email');
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

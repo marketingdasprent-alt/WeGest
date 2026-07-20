@@ -142,6 +142,10 @@ export async function gerarFolhaBloco(params: GerarFolhaParams): Promise<void> {
       toNome: contexto?.condutorNome,
       matricula,
       momento: isEntrega ? 'ENTREGA' : 'RECOLHA',
+      // Fluxo por token, sem sessão — sem org_id disponível aqui; a Edge
+      // Function deriva a org a partir de viaturaId (viaturas.org_id).
+      orgId: null,
+      viaturaId,
     });
   }
 }

@@ -72,6 +72,9 @@ verify_jwt = false
 [functions.sync-campaign-sends]
 verify_jwt = false
 
+[functions.brevo-test-connection]
+verify_jwt = false
+
 [functions.via-verde-test-connection]
 verify_jwt = false
 
