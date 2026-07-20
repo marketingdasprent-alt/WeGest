@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { MotoristaViaturaCard } from './MotoristaViaturaCard';
+import { MotoristaHistoricoViaturasCard } from './MotoristaHistoricoViaturasCard';
 import { MotoristaDocumentosCard } from './MotoristaDocumentosCard';
 import { MotoristaMovimentosCard } from './MotoristaMovimentosCard';
 import { MotoristaRecibosCard } from './MotoristaRecibosCard';
@@ -52,6 +53,7 @@ interface MotoristaAtivo {
   morada: string;
   cidade: string;
   status_ativo: boolean;
+  recibo_verde: boolean | null;
   data_contratacao: string;
   documento_tipo: string;
   documento_numero: string;
@@ -344,6 +346,11 @@ export function MotoristaDashboard() {
     );
   }
 
+  // Motorista que NÃO usa recibos verdes (recibo_verde=false): esconde tudo o
+  // que lhes diz respeito (cartões "Recibos Pendentes"/"Em Falta" + secção de
+  // recibos). null/true = usa (comportamento normal).
+  const usaRecibos = motorista.recibo_verde !== false;
+
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-700 pb-12">
       <div className="flex flex-col gap-1 px-1">
@@ -353,7 +360,12 @@ export function MotoristaDashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+      <div
+        className={cn(
+          'grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6',
+          usaRecibos ? 'lg:grid-cols-4' : 'lg:grid-cols-2'
+        )}
+      >
         <Card className="rounded-[1.5rem] md:rounded-[2rem] overflow-hidden group hover:shadow-md transition-all duration-300">
           <CardContent className="p-5 md:p-6">
             <div className="flex justify-between items-start mb-3 md:mb-4">
@@ -374,251 +386,262 @@ export function MotoristaDashboard() {
           </CardContent>
         </Card>
 
-        <Dialog open={pendentesModalOpen} onOpenChange={setPendentesModalOpen}>
-          <DialogTrigger asChild>
-            <Card className="rounded-[1.5rem] md:rounded-[2rem] overflow-hidden group hover:shadow-md transition-all duration-300 cursor-pointer active:scale-[0.98]">
-              <CardContent className="p-5 md:p-6">
-                <div className="flex justify-between items-start mb-3 md:mb-4">
-                  <span className="text-muted-foreground text-[10px] font-black tracking-widest uppercase">
-                    Recibos Pendentes
-                  </span>
-                  <div className="p-2 bg-blue-500/10 rounded-lg group-hover:bg-blue-500/20 transition-colors">
-                    <Receipt className="w-4 h-4 text-blue-500" />
-                  </div>
-                </div>
-                <p className="text-2xl md:text-3xl font-black mb-1 md:mb-2">
-                  {stats.recibosPendentesAceitacao}
-                </p>
-                <div className="flex items-center justify-between">
-                  <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-tight">
-                    Em validação
-                  </p>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
-                </div>
-              </CardContent>
-            </Card>
-          </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-xl rounded-[1.5rem] md:rounded-[2rem] border-border bg-background p-0 overflow-hidden">
-            <div className="p-5 md:p-8">
-              <DialogHeader className="mb-6 md:mb-8">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 md:p-3 bg-blue-500/10 rounded-2xl">
-                    <Receipt className="h-5 w-5 md:h-6 md:w-6 text-blue-500" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-xl md:text-2xl font-black tracking-tight">
-                      Recibos em Validação
-                    </DialogTitle>
-                    <p className="text-xs md:text-sm text-muted-foreground font-medium">
-                      Recibos submetidos aguardando aprovação
-                    </p>
-                  </div>
-                </div>
-              </DialogHeader>
-
-              <div className="space-y-3 md:space-y-4 max-h-[50vh] overflow-y-auto pr-2 scrollbar-hide">
-                {stats.recibosPendentesList.length === 0 ? (
-                  <div className="text-center py-8 md:py-12 bg-muted/20 rounded-[1.5rem] md:rounded-[2rem] border border-dashed">
-                    <Check className="h-10 w-10 md:h-12 md:w-12 text-green-500 mx-auto mb-3 opacity-20" />
-                    <p className="font-bold text-sm md:text-base">Sem recibos pendentes</p>
-                    <p className="text-[10px] md:text-xs text-muted-foreground">
-                      Todos os seus recibos foram processados.
-                    </p>
-                  </div>
-                ) : (
-                  stats.recibosPendentesList.map((recibo) => (
-                    <div
-                      key={recibo.id}
-                      className="flex items-center justify-between p-4 md:p-5 bg-muted/30 hover:bg-muted/50 rounded-2xl border border-border transition-all group"
-                    >
-                      <div className="flex items-center gap-3 md:gap-4">
-                        <div className="p-2 bg-background rounded-xl border border-border shadow-sm">
-                          <FileText className="h-4 w-4 md:h-5 md:w-5 text-blue-500" />
-                        </div>
-                        <div>
-                          <p className="text-xs md:text-sm font-bold text-foreground line-clamp-1">
-                            {recibo.descricao}
-                          </p>
-                          <p className="text-[9px] md:text-[10px] font-black uppercase tracking-wider text-muted-foreground mt-0.5">
-                            {format(new Date(recibo.criado_em), 'dd MMM yyyy', { locale: pt })} •{' '}
-                            {formatCurrency(recibo.valor)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 md:gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 md:h-9 md:w-9 rounded-xl bg-background border border-border hover:border-primary/20 hover:text-primary transition-all"
-                          onClick={() => handleView(recibo.url)}
-                        >
-                          <Eye className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 md:h-9 md:w-9 rounded-xl bg-background border border-border hover:border-primary/20 hover:text-primary transition-all"
-                          onClick={() => handleDownload(recibo.url, recibo.nome)}
-                        >
-                          <Download className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                        </Button>
+        {usaRecibos && (
+          <>
+            <Dialog open={pendentesModalOpen} onOpenChange={setPendentesModalOpen}>
+              <DialogTrigger asChild>
+                <Card className="rounded-[1.5rem] md:rounded-[2rem] overflow-hidden group hover:shadow-md transition-all duration-300 cursor-pointer active:scale-[0.98]">
+                  <CardContent className="p-5 md:p-6">
+                    <div className="flex justify-between items-start mb-3 md:mb-4">
+                      <span className="text-muted-foreground text-[10px] font-black tracking-widest uppercase">
+                        Recibos Pendentes
+                      </span>
+                      <div className="p-2 bg-blue-500/10 rounded-lg group-hover:bg-blue-500/20 transition-colors">
+                        <Receipt className="w-4 h-4 text-blue-500" />
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-
-              <div className="mt-6 md:mt-8">
-                <Button
-                  variant="outline"
-                  className="w-full rounded-xl font-bold py-5 md:py-6 border-border"
-                  onClick={() => setPendentesModalOpen(false)}
-                >
-                  Fechar
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={recibosModalOpen} onOpenChange={setRecibosModalOpen}>
-          <DialogTrigger asChild>
-            <Card
-              className={cn(
-                'rounded-[1.5rem] md:rounded-[2rem] overflow-hidden group hover:shadow-md transition-all duration-300 cursor-pointer active:scale-[0.98]',
-                stats.recibosEmFalta > 0
-                  ? 'border-destructive/20 bg-destructive/5 hover:border-destructive/40'
-                  : 'hover:border-primary/40'
-              )}
-            >
-              <CardContent className="p-5 md:p-6">
-                <div className="flex justify-between items-start mb-3 md:mb-4">
-                  <span className="text-muted-foreground text-[10px] font-black tracking-widest uppercase">
-                    Recibos em falta
-                  </span>
-                  <div
-                    className={cn(
-                      'p-2 rounded-lg',
-                      stats.recibosEmFalta > 0 ? 'bg-destructive/20' : 'bg-muted'
-                    )}
-                  >
-                    <AlertCircle
-                      className={cn(
-                        'w-4 h-4',
-                        stats.recibosEmFalta > 0 ? 'text-destructive' : 'text-muted-foreground/30'
-                      )}
-                    />
-                  </div>
-                </div>
-                <p
-                  className={cn(
-                    'text-2xl md:text-3xl font-black mb-1 md:mb-2',
-                    stats.recibosEmFalta > 0 ? 'text-destructive' : 'text-foreground'
-                  )}
-                >
-                  {stats.recibosEmFalta}
-                </p>
-                <div className="flex items-center justify-between">
-                  <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-tight">
-                    Semanas em atraso
-                  </p>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
-                </div>
-              </CardContent>
-            </Card>
-          </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-xl rounded-[1.5rem] md:rounded-[2rem] border-border bg-background p-0 overflow-hidden">
-            <div className="p-5 md:p-8">
-              <DialogHeader className="mb-6 md:mb-8">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 md:p-3 bg-destructive/10 rounded-2xl">
-                    <AlertCircle className="h-5 w-5 md:h-6 md:w-6 text-destructive" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-xl md:text-2xl font-black tracking-tight">
-                      Recibos em Falta
-                    </DialogTitle>
-                    <p className="text-xs md:text-sm text-muted-foreground font-medium">
-                      Lista de semanas pendentes de submissão
+                    <p className="text-2xl md:text-3xl font-black mb-1 md:mb-2">
+                      {stats.recibosPendentesAceitacao}
                     </p>
-                  </div>
-                </div>
-              </DialogHeader>
+                    <div className="flex items-center justify-between">
+                      <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-tight">
+                        Em validação
+                      </p>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </DialogTrigger>
+              <DialogContent className="w-[95vw] sm:max-w-xl rounded-[1.5rem] md:rounded-[2rem] border-border bg-background p-0 overflow-hidden">
+                <div className="p-5 md:p-8">
+                  <DialogHeader className="mb-6 md:mb-8">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 md:p-3 bg-blue-500/10 rounded-2xl">
+                        <Receipt className="h-5 w-5 md:h-6 md:w-6 text-blue-500" />
+                      </div>
+                      <div>
+                        <DialogTitle className="text-xl md:text-2xl font-black tracking-tight">
+                          Recibos em Validação
+                        </DialogTitle>
+                        <p className="text-xs md:text-sm text-muted-foreground font-medium">
+                          Recibos submetidos aguardando aprovação
+                        </p>
+                      </div>
+                    </div>
+                  </DialogHeader>
 
-              <div className="space-y-3 md:space-y-4 max-h-[50vh] overflow-y-auto pr-2 scrollbar-hide">
-                {stats.semanasEmFalta.length === 0 ? (
-                  <div className="text-center py-8 md:py-12 bg-muted/20 rounded-[1.5rem] md:rounded-[2rem] border border-dashed">
-                    <Check className="h-10 w-10 md:h-12 md:w-12 text-green-500 mx-auto mb-3 opacity-20" />
-                    <p className="font-bold text-sm md:text-base">Tudo em dia!</p>
-                    <p className="text-[10px] md:text-xs text-muted-foreground">
-                      Não existem recibos pendentes.
-                    </p>
-                  </div>
-                ) : (
-                  stats.semanasEmFalta.map((semana) => (
-                    <div
-                      key={semana.value}
-                      className="flex items-center justify-between p-4 md:p-5 bg-muted/30 hover:bg-muted/50 rounded-2xl border border-border transition-all group"
-                    >
-                      <div className="flex items-center gap-3 md:gap-4">
-                        <div className="p-2 bg-background rounded-xl border border-border shadow-sm group-hover:border-primary/20 transition-all">
-                          <CalendarDays className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground group-hover:text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-xs md:text-sm font-bold text-foreground">
-                            {semana.label}
-                          </p>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <Clock className="h-3 w-3 text-destructive" />
-                            <span className="text-[9px] md:text-[10px] text-destructive font-black uppercase tracking-wider">
-                              Pendente
-                            </span>
+                  <div className="space-y-3 md:space-y-4 max-h-[50vh] overflow-y-auto pr-2 scrollbar-hide">
+                    {stats.recibosPendentesList.length === 0 ? (
+                      <div className="text-center py-8 md:py-12 bg-muted/20 rounded-[1.5rem] md:rounded-[2rem] border border-dashed">
+                        <Check className="h-10 w-10 md:h-12 md:w-12 text-green-500 mx-auto mb-3 opacity-20" />
+                        <p className="font-bold text-sm md:text-base">Sem recibos pendentes</p>
+                        <p className="text-[10px] md:text-xs text-muted-foreground">
+                          Todos os seus recibos foram processados.
+                        </p>
+                      </div>
+                    ) : (
+                      stats.recibosPendentesList.map((recibo) => (
+                        <div
+                          key={recibo.id}
+                          className="flex items-center justify-between p-4 md:p-5 bg-muted/30 hover:bg-muted/50 rounded-2xl border border-border transition-all group"
+                        >
+                          <div className="flex items-center gap-3 md:gap-4">
+                            <div className="p-2 bg-background rounded-xl border border-border shadow-sm">
+                              <FileText className="h-4 w-4 md:h-5 md:w-5 text-blue-500" />
+                            </div>
+                            <div>
+                              <p className="text-xs md:text-sm font-bold text-foreground line-clamp-1">
+                                {recibo.descricao}
+                              </p>
+                              <p className="text-[9px] md:text-[10px] font-black uppercase tracking-wider text-muted-foreground mt-0.5">
+                                {format(new Date(recibo.criado_em), 'dd MMM yyyy', { locale: pt })}{' '}
+                                • {formatCurrency(recibo.valor)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 md:gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 md:h-9 md:w-9 rounded-xl bg-background border border-border hover:border-primary/20 hover:text-primary transition-all"
+                              onClick={() => handleView(recibo.url)}
+                            >
+                              <Eye className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 md:h-9 md:w-9 rounded-xl bg-background border border-border hover:border-primary/20 hover:text-primary transition-all"
+                              onClick={() => handleDownload(recibo.url, recibo.nome)}
+                            >
+                              <Download className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                            </Button>
                           </div>
                         </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 md:h-9 rounded-xl font-bold text-[10px] md:text-xs hover:bg-primary hover:text-primary-foreground border-border px-2 md:px-3"
-                        onClick={() => {
-                          setRecibosModalOpen(false);
-                          // Scroll to the receipts card and open its dialog if we could,
-                          // but since we want to be dynamic, we'll just scroll for now.
-                          const element = document.getElementById('recibos-verdes-card');
-                          if (element) {
-                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            // Adicionar um pequeno brilho temporário para destacar onde deve clicar
-                            element.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
-                            setTimeout(() => {
-                              element.classList.remove('ring-2', 'ring-primary', 'ring-offset-2');
-                            }, 3000);
-                          }
-                          toast.info(
-                            `Use o botão "Submeter Recibo Verde" abaixo para a semana ${semana.label}`
-                          );
-                        }}
-                      >
-                        <Upload className="h-3.5 w-3.5 mr-2" />
-                        Anexar
-                      </Button>
-                    </div>
-                  ))
-                )}
-              </div>
+                      ))
+                    )}
+                  </div>
 
-              {stats.semanasEmFalta.length > 0 && (
-                <div className="mt-8 p-4 bg-primary/5 rounded-2xl border border-primary/10">
-                  <p className="text-[10px] text-primary font-black uppercase tracking-widest mb-1 text-center">
-                    Importante
-                  </p>
-                  <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
-                    A submissão atempada dos recibos garante o processamento correto do seu saldo.
-                  </p>
+                  <div className="mt-6 md:mt-8">
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-xl font-bold py-5 md:py-6 border-border"
+                      onClick={() => setPendentesModalOpen(false)}
+                    >
+                      Fechar
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={recibosModalOpen} onOpenChange={setRecibosModalOpen}>
+              <DialogTrigger asChild>
+                <Card
+                  className={cn(
+                    'rounded-[1.5rem] md:rounded-[2rem] overflow-hidden group hover:shadow-md transition-all duration-300 cursor-pointer active:scale-[0.98]',
+                    stats.recibosEmFalta > 0
+                      ? 'border-destructive/20 bg-destructive/5 hover:border-destructive/40'
+                      : 'hover:border-primary/40'
+                  )}
+                >
+                  <CardContent className="p-5 md:p-6">
+                    <div className="flex justify-between items-start mb-3 md:mb-4">
+                      <span className="text-muted-foreground text-[10px] font-black tracking-widest uppercase">
+                        Recibos em falta
+                      </span>
+                      <div
+                        className={cn(
+                          'p-2 rounded-lg',
+                          stats.recibosEmFalta > 0 ? 'bg-destructive/20' : 'bg-muted'
+                        )}
+                      >
+                        <AlertCircle
+                          className={cn(
+                            'w-4 h-4',
+                            stats.recibosEmFalta > 0
+                              ? 'text-destructive'
+                              : 'text-muted-foreground/30'
+                          )}
+                        />
+                      </div>
+                    </div>
+                    <p
+                      className={cn(
+                        'text-2xl md:text-3xl font-black mb-1 md:mb-2',
+                        stats.recibosEmFalta > 0 ? 'text-destructive' : 'text-foreground'
+                      )}
+                    >
+                      {stats.recibosEmFalta}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-tight">
+                        Semanas em atraso
+                      </p>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </DialogTrigger>
+              <DialogContent className="w-[95vw] sm:max-w-xl rounded-[1.5rem] md:rounded-[2rem] border-border bg-background p-0 overflow-hidden">
+                <div className="p-5 md:p-8">
+                  <DialogHeader className="mb-6 md:mb-8">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 md:p-3 bg-destructive/10 rounded-2xl">
+                        <AlertCircle className="h-5 w-5 md:h-6 md:w-6 text-destructive" />
+                      </div>
+                      <div>
+                        <DialogTitle className="text-xl md:text-2xl font-black tracking-tight">
+                          Recibos em Falta
+                        </DialogTitle>
+                        <p className="text-xs md:text-sm text-muted-foreground font-medium">
+                          Lista de semanas pendentes de submissão
+                        </p>
+                      </div>
+                    </div>
+                  </DialogHeader>
+
+                  <div className="space-y-3 md:space-y-4 max-h-[50vh] overflow-y-auto pr-2 scrollbar-hide">
+                    {stats.semanasEmFalta.length === 0 ? (
+                      <div className="text-center py-8 md:py-12 bg-muted/20 rounded-[1.5rem] md:rounded-[2rem] border border-dashed">
+                        <Check className="h-10 w-10 md:h-12 md:w-12 text-green-500 mx-auto mb-3 opacity-20" />
+                        <p className="font-bold text-sm md:text-base">Tudo em dia!</p>
+                        <p className="text-[10px] md:text-xs text-muted-foreground">
+                          Não existem recibos pendentes.
+                        </p>
+                      </div>
+                    ) : (
+                      stats.semanasEmFalta.map((semana) => (
+                        <div
+                          key={semana.value}
+                          className="flex items-center justify-between p-4 md:p-5 bg-muted/30 hover:bg-muted/50 rounded-2xl border border-border transition-all group"
+                        >
+                          <div className="flex items-center gap-3 md:gap-4">
+                            <div className="p-2 bg-background rounded-xl border border-border shadow-sm group-hover:border-primary/20 transition-all">
+                              <CalendarDays className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground group-hover:text-primary" />
+                            </div>
+                            <div>
+                              <p className="text-xs md:text-sm font-bold text-foreground">
+                                {semana.label}
+                              </p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <Clock className="h-3 w-3 text-destructive" />
+                                <span className="text-[9px] md:text-[10px] text-destructive font-black uppercase tracking-wider">
+                                  Pendente
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 md:h-9 rounded-xl font-bold text-[10px] md:text-xs hover:bg-primary hover:text-primary-foreground border-border px-2 md:px-3"
+                            onClick={() => {
+                              setRecibosModalOpen(false);
+                              // Scroll to the receipts card and open its dialog if we could,
+                              // but since we want to be dynamic, we'll just scroll for now.
+                              const element = document.getElementById('recibos-verdes-card');
+                              if (element) {
+                                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                // Adicionar um pequeno brilho temporário para destacar onde deve clicar
+                                element.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+                                setTimeout(() => {
+                                  element.classList.remove(
+                                    'ring-2',
+                                    'ring-primary',
+                                    'ring-offset-2'
+                                  );
+                                }, 3000);
+                              }
+                              toast.info(
+                                `Use o botão "Submeter Recibo Verde" abaixo para a semana ${semana.label}`
+                              );
+                            }}
+                          >
+                            <Upload className="h-3.5 w-3.5 mr-2" />
+                            Anexar
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {stats.semanasEmFalta.length > 0 && (
+                    <div className="mt-8 p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                      <p className="text-[10px] text-primary font-black uppercase tracking-widest mb-1 text-center">
+                        Importante
+                      </p>
+                      <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
+                        A submissão atempada dos recibos garante o processamento correto do seu
+                        saldo.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </>
+        )}
 
         <Dialog open={docsModalOpen} onOpenChange={setDocsModalOpen}>
           <DialogTrigger asChild>
@@ -777,17 +800,21 @@ export function MotoristaDashboard() {
       <div className="space-y-8">
         <MotoristaViaturaCard motoristaId={motorista.id} />
 
+        <MotoristaHistoricoViaturasCard motoristaId={motorista.id} />
+
         <div id="motorista-documentos-card">
-          <MotoristaDocumentosCard motorista={motorista} />
+          <MotoristaDocumentosCard motoristaId={motorista.id} />
         </div>
 
-        <div id="recibos-verdes-card">
-          <MotoristaRecibosCard
-            motoristaId={motorista.id}
-            userId={user?.id || ''}
-            dataContratacao={motorista.data_contratacao}
-          />
-        </div>
+        {usaRecibos && (
+          <div id="recibos-verdes-card">
+            <MotoristaRecibosCard
+              motoristaId={motorista.id}
+              userId={user?.id || ''}
+              dataContratacao={motorista.data_contratacao}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

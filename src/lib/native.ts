@@ -24,8 +24,21 @@ export const getNativeLoginRoute = () => NATIVE_DRIVER_LOGIN_ROUTE;
 
 export const getNativePanelRoute = () => NATIVE_DRIVER_PANEL_ROUTE;
 
-export const getUnauthenticatedRoute = () =>
-  isNativeDriverOnlyMode() ? getNativeEntryRoute() : '/login';
+// Rota de login para um utilizador SEM sessão.
+//  • App nativa (só motorista)      → entrada do motorista.
+//  • Web, a partir do portal motorista (/motorista/*) → login do motorista (/login).
+//  • Web, a partir da área de staff  → login da equipa (/equipa).
+// `pathname` opcional: quando não é dado, mantém o login do motorista (/login),
+// o comportamento histórico usado no ecrã partilhado de reset de password.
+// Sem isto, um utilizador de staff que perdesse a sessão (ex.: SIGNED_OUT
+// propagado a outras tabs ao fazer logout numa) era atirado para a área do
+// motorista em vez do login da equipa.
+export const getUnauthenticatedRoute = (pathname?: string) => {
+  if (isNativeDriverOnlyMode()) return getNativeEntryRoute();
+  if (!pathname) return '/login';
+  const isMotoristaPortal = /^\/motorista(\/|$)/.test(pathname);
+  return isMotoristaPortal ? '/login' : '/equipa';
+};
 
 export const getPostAuthRoute = () => (isNativeDriverOnlyMode() ? getNativePanelRoute() : '/crm');
 

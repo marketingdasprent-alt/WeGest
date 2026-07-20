@@ -139,9 +139,24 @@ const RegistarOrg = () => {
       return;
     } catch (error: any) {
       console.error('Registration error:', error);
+
+      // FunctionsHttpError não expõe o corpo JSON da resposta em error.message
+      // (fica só a string genérica "Edge Function returned a non-2xx status
+      // code") — a mensagem real do register-org está em error.context
+      // (a Response), por isso lemos o corpo antes de mostrar o toast.
+      let description = error?.message || 'Não foi possível completar o registo.';
+      if (error?.context?.json) {
+        try {
+          const body = await error.context.json();
+          if (body?.error) description = body.error;
+        } catch {
+          // corpo não é JSON válido — mantém a mensagem genérica
+        }
+      }
+
       toast({
         title: 'Erro no registo',
-        description: error.message || 'Não foi possível completar o registo.',
+        description,
         variant: 'destructive',
       });
     } finally {

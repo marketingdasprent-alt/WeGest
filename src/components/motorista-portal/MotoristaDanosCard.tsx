@@ -43,7 +43,7 @@ const STATUS_PAGAMENTO = {
   },
   sem_debito: {
     label: 'Sem Débito',
-    color: 'bg-gray-500/10 text-gray-600 border-gray-500/20',
+    color: 'bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20',
   },
 };
 

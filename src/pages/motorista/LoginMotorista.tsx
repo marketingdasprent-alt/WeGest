@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDefaultRoute } from '@/hooks/useDefaultRoute';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,9 +13,11 @@ import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 
 const LoginMotorista: React.FC = () => {
   const { user } = useAuth();
+  const { defaultRoute, loading: routeLoading } = useDefaultRoute();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const hasRedirected = useRef(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -24,12 +27,22 @@ const LoginMotorista: React.FC = () => {
     new URLSearchParams(location.search).get('modo') === 'recuperar'
   );
 
-  // /login sempre direciona para /motorista/painel
   useEffect(() => {
-    if (user) {
-      navigate('/motorista/painel', { replace: true });
+    if (!user) hasRedirected.current = false;
+  }, [user]);
+
+  // Já autenticado → encaminha para a área do PAPEL do utilizador (motorista
+  // → painel; staff → a sua rota por omissão), tal como /equipa e /. Antes ia
+  // sempre para /motorista/painel, o que atirava para a área do motorista um
+  // utilizador de staff que caísse nesta página (ex.: por um link antigo ou
+  // por redirect de sessão perdida).
+  useEffect(() => {
+    if (hasRedirected.current) return;
+    if (user && !routeLoading && defaultRoute) {
+      hasRedirected.current = true;
+      navigate(defaultRoute, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, routeLoading, defaultRoute, navigate]);
 
   useEffect(() => {
     setIsResetMode(new URLSearchParams(location.search).get('modo') === 'recuperar');
@@ -57,7 +70,8 @@ const LoginMotorista: React.FC = () => {
           title: 'Bem-vindo!',
           description: 'Sessão iniciada com sucesso.',
         });
-        navigate('/motorista/painel', { replace: true });
+        // O redirect é feito pelo efeito acima, para a rota certa consoante o
+        // papel (motorista → painel; staff → a sua área) — não fixo no painel.
       }
     } catch (error: any) {
       console.error('Erro no login:', error);

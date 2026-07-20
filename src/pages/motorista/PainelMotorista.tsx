@@ -7,6 +7,7 @@ import { CandidaturaEmAnalise } from '@/components/motorista-portal/CandidaturaE
 import { CandidaturaRejeitada } from '@/components/motorista-portal/CandidaturaRejeitada';
 import { MotoristaDashboard } from '@/components/motorista-portal/MotoristaDashboard';
 import { MotoristaLayout } from '@/components/motorista-portal/MotoristaLayout';
+import { getOrgSessionStorageKey } from '@/contexts/TenantContext';
 
 interface MotoristaData {
   id: string;
@@ -104,6 +105,12 @@ const PainelMotorista: React.FC = () => {
             .upsert({ user_id: user.id, org_id: orgMotorista }, { onConflict: 'user_id' });
 
           if (!switchError) {
+            // Fixar a org do motorista só NESTA aba (sessionStorage, não
+            // partilhado) — evita que outras abas já abertas na conta (ex.:
+            // o dashboard de staff, para contas com dupla função) sejam
+            // arrastadas para esta org só porque a linha partilhada
+            // `user_org_ativa` mudou.
+            sessionStorage.setItem(getOrgSessionStorageKey(user.id), orgMotorista);
             // Recarregar para que a RLS passe a usar a org correta.
             window.location.reload();
             return;
@@ -112,11 +119,19 @@ const PainelMotorista: React.FC = () => {
         }
       }
 
-      const { data: motoristaData } = await supabase
+      const { data: motoristaData, error: motoristaError } = await supabase
         .from('motoristas_ativos')
         .select('id, nome, foto_url, status_ativo')
         .eq('user_id', user.id)
         .maybeSingle();
+
+      if (motoristaError) {
+        // Não cair silenciosamente na candidatura em branco quando a query
+        // falha por um erro real (ex.: coluna inexistente, RLS mal configurada)
+        // — já aconteceu e mostrou o formulário de candidatura a um motorista
+        // com conta e documentação completas.
+        console.error('Erro ao carregar motorista ativo:', motoristaError);
+      }
 
       if (motoristaData) {
         setMotoristaAtivo(motoristaData as any);

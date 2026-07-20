@@ -46,7 +46,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { has: hasModulo, isLoading: modulesLoading } = useModules();
   const navigate = useNavigate();
   const location = useLocation();
-  const unauthenticatedRoute = getUnauthenticatedRoute();
+  // Sensível à área que se tentava aceder: uma página de staff sem sessão vai
+  // para o login da equipa (/equipa); o portal do motorista vai para /login.
+  const unauthenticatedRoute = getUnauthenticatedRoute(location.pathname);
 
   const loading = authLoading || tenantLoading || permissionsLoading || modulesLoading;
 

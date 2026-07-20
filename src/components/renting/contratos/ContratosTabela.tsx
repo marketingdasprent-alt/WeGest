@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, FileText, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, FileText, Loader2, RefreshCw } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -8,7 +8,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 import { useEventosPendentesRenting } from '@/hooks/useEventosPendentesRenting';
+import { estadoRenovacaoContrato } from '@/lib/renovacaoContrato';
 import type { ContratoRenting } from '@/types/contratoRenting';
 import { EstadoOperacionalBadge } from './EstadoOperacionalBadge';
 import { EstadoFinanceiroBadge } from './EstadoFinanceiroBadge';
@@ -188,10 +190,31 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
                 </TableCell>
                 <TableCell className="text-muted-foreground">{getCondutorNome(c.id)}</TableCell>
                 <TableCell>
-                  <EstadoOperacionalBadge
-                    estado={c.estado_operacional}
-                    recolhaPendente={idsComRecolhaPendente.has(c.id)}
-                  />
+                  <div className="flex flex-col items-start gap-1">
+                    <EstadoOperacionalBadge
+                      estado={c.estado_operacional}
+                      recolhaPendente={idsComRecolhaPendente.has(c.id)}
+                    />
+                    {(() => {
+                      // Aviso de renovação inline (TVDE renova a cada 30 dias).
+                      const renov = estadoRenovacaoContrato(c);
+                      if (!renov) return null;
+                      return (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'gap-1 font-medium',
+                            renov === 'atraso'
+                              ? 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300'
+                              : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                          )}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          {renov === 'atraso' ? 'Renovar (atraso)' : 'Renovar hoje'}
+                        </Badge>
+                      );
+                    })()}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <EstadoFinanceiroBadge estado={c.estado_financeiro} />

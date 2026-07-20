@@ -428,20 +428,21 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
           ? new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
           : null;
 
-        // Upload do primeiro template ao storage
+        // Guarda TODOS os documentos seleccionados no bucket 'documentos'
+        // ('{contratoId}/…pdf'), não só o 1.º — o motorista vê-os depois na
+        // "Viatura Atual". firstDocUrl mantém o 1.º (contratos.documento_url).
         let firstDocUrl: string | null = null;
         let successCount = 0;
         for (const templateId of templateIds) {
           try {
-            if (!firstDocUrl) {
-              firstDocUrl =
-                (await uploadDocumentToStorage({
-                  templateId,
-                  motoristaData: motoristaFull,
-                  documentData: docData,
-                  contratoId,
-                })) || null;
-            }
+            const docUrl =
+              (await uploadDocumentToStorage({
+                templateId,
+                motoristaData: motoristaFull,
+                documentData: docData,
+                contratoId,
+              })) || null;
+            if (!firstDocUrl) firstDocUrl = docUrl;
 
             await generateDocumentFromTemplate({
               templateId,

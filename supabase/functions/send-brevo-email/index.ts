@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { EmailService } from "../_shared/email/services/EmailService.ts";
-import { passwordRecoveryTemplate, magicLinkTemplate } from "../_shared/email/templates/authEmail.ts";
+import { passwordRecoveryTemplate, magicLinkTemplate, motoristaOnboardingTemplate } from "../_shared/email/templates/authEmail.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,8 +16,8 @@ const emailService = supabaseAdmin ? new EmailService(supabaseAdmin) : null;
 
 interface EmailRequest {
   to: string;
-  subject: string;
-  type: 'password_recovery' | 'magic_link';
+  subject?: string;
+  type: 'password_recovery' | 'magic_link' | 'motorista_onboarding';
   token?: string;
   token_hash?: string;
   redirect_to?: string;
@@ -40,8 +40,10 @@ const handler = async (req: Request): Promise<Response> => {
 
     let actionLink = "";
 
-    if (type === 'password_recovery' || type === 'magic_link') {
-      const isRecovery = type === 'password_recovery';
+    if (type === 'password_recovery' || type === 'magic_link' || type === 'motorista_onboarding') {
+      // O onboarding do motorista também aterra em /reset-password (define a
+      // 1.ª palavra-passe) — tratado como recovery para forçar esse destino.
+      const isRecovery = type === 'password_recovery' || type === 'motorista_onboarding';
       const baseUrl = siteUrlEnv || new URL(req.url).origin;
       const targetPath = isRecovery ? '/reset-password' : '/crm';
 
@@ -102,7 +104,11 @@ const handler = async (req: Request): Promise<Response> => {
       if (!brevoApiKey) throw new Error("BREVO_API_KEY not configured");
 
       const { subject, html } =
-        type === 'password_recovery' ? passwordRecoveryTemplate(actionLink) : magicLinkTemplate(actionLink);
+        type === 'password_recovery'
+          ? passwordRecoveryTemplate(actionLink)
+          : type === 'motorista_onboarding'
+            ? motoristaOnboardingTemplate(actionLink)
+            : magicLinkTemplate(actionLink);
 
       const brevoResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
