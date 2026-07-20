@@ -26,6 +26,11 @@ vi.mock('@/lib/native', () => ({
 const toast = vi.fn();
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: null }) }));
+// O componente usa useDefaultRoute (redirect por papel) — com user=null aqui,
+// não redireciona; mockar evita montar PermissionsProvider neste teste.
+vi.mock('@/hooks/useDefaultRoute', () => ({
+  useDefaultRoute: () => ({ defaultRoute: null, loading: false }),
+}));
 
 import RegistoMotorista from './RegistoMotorista';
 

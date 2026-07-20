@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDefaultRoute } from '@/hooks/useDefaultRoute';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,8 +31,10 @@ interface OnboardingResponse {
 
 const RegistoMotorista: React.FC = () => {
   const { user } = useAuth();
+  const { defaultRoute, loading: routeLoading } = useDefaultRoute();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const hasRedirected = useRef(false);
 
   const [step, setStep] = useState<Step>('email');
 
@@ -52,10 +55,20 @@ const RegistoMotorista: React.FC = () => {
   const [resolveError, setResolveError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) {
-      navigate('/motorista/painel');
+    if (!user) hasRedirected.current = false;
+  }, [user]);
+
+  // Utilizador já autenticado que abre a página de registo → vai para a área
+  // do seu PAPEL (motorista → painel; staff → a sua rota por omissão), em vez
+  // de ir sempre para o painel do motorista. O registo de um NOVO motorista é
+  // encaminhado pelo handleRegister (não passa por aqui).
+  useEffect(() => {
+    if (hasRedirected.current) return;
+    if (user && !routeLoading && defaultRoute) {
+      hasRedirected.current = true;
+      navigate(defaultRoute, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, routeLoading, defaultRoute, navigate]);
 
   // Resolve a org a partir do código do URL (web) ou pré-preenchido.
   useEffect(() => {
