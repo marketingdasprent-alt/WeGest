@@ -7,6 +7,7 @@ import { CandidaturaEmAnalise } from '@/components/motorista-portal/CandidaturaE
 import { CandidaturaRejeitada } from '@/components/motorista-portal/CandidaturaRejeitada';
 import { MotoristaDashboard } from '@/components/motorista-portal/MotoristaDashboard';
 import { MotoristaLayout } from '@/components/motorista-portal/MotoristaLayout';
+import { getOrgSessionStorageKey } from '@/contexts/TenantContext';
 
 interface MotoristaData {
   id: string;
@@ -104,6 +105,12 @@ const PainelMotorista: React.FC = () => {
             .upsert({ user_id: user.id, org_id: orgMotorista }, { onConflict: 'user_id' });
 
           if (!switchError) {
+            // Fixar a org do motorista só NESTA aba (sessionStorage, não
+            // partilhado) — evita que outras abas já abertas na conta (ex.:
+            // o dashboard de staff, para contas com dupla função) sejam
+            // arrastadas para esta org só porque a linha partilhada
+            // `user_org_ativa` mudou.
+            sessionStorage.setItem(getOrgSessionStorageKey(user.id), orgMotorista);
             // Recarregar para que a RLS passe a usar a org correta.
             window.location.reload();
             return;
