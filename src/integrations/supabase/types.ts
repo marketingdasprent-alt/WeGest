@@ -5671,6 +5671,89 @@ export type Database = {
           },
         ]
       }
+      motorista_resumo_semanal: {
+        Row: {
+          id: string
+          org_id: string
+          motorista_id: string
+          contrato_id: string
+          viatura_id: string
+          semana_inicio: string
+          semana_fim: string
+          custo_aluguer: number
+          receita_bolt: number
+          receita_uber: number
+          receita_outras: number
+          despesa_caucao: number
+          despesa_seguros: number
+          despesa_outros: number
+          gerado_em: string
+        }
+        Insert: {
+          id?: string
+          org_id?: string
+          motorista_id: string
+          contrato_id: string
+          viatura_id: string
+          semana_inicio: string
+          semana_fim: string
+          custo_aluguer?: number
+          receita_bolt?: number
+          receita_uber?: number
+          receita_outras?: number
+          despesa_caucao?: number
+          despesa_seguros?: number
+          despesa_outros?: number
+          gerado_em?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          motorista_id?: string
+          contrato_id?: string
+          viatura_id?: string
+          semana_inicio?: string
+          semana_fim?: string
+          custo_aluguer?: number
+          receita_bolt?: number
+          receita_uber?: number
+          receita_outras?: number
+          despesa_caucao?: number
+          despesa_seguros?: number
+          despesa_outros?: number
+          gerado_em?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motorista_resumo_semanal_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_resumo_semanal_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_resumo_semanal_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos_renting"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_resumo_semanal_viatura_id_fkey"
+            columns: ["viatura_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       motorista_viaturas: {
         Row: {
           contrato_prestacao_assinatura: string | null
@@ -10545,6 +10628,66 @@ export type Database = {
           },
           {
             foreignKeyName: "viatura_reservas_viatura_id_fkey"
+            columns: ["viatura_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      viatura_resumo_semanal: {
+        Row: {
+          id: string
+          org_id: string
+          viatura_id: string
+          semana_inicio: string
+          semana_fim: string
+          receita_aluguer: number
+          receita_outros: number
+          despesa_combustivel: number
+          despesa_portagens: number
+          despesa_danos: number
+          despesa_outros: number
+          gerado_em: string
+        }
+        Insert: {
+          id?: string
+          org_id?: string
+          viatura_id: string
+          semana_inicio: string
+          semana_fim: string
+          receita_aluguer?: number
+          receita_outros?: number
+          despesa_combustivel?: number
+          despesa_portagens?: number
+          despesa_danos?: number
+          despesa_outros?: number
+          gerado_em?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          viatura_id?: string
+          semana_inicio?: string
+          semana_fim?: string
+          receita_aluguer?: number
+          receita_outros?: number
+          despesa_combustivel?: number
+          despesa_portagens?: number
+          despesa_danos?: number
+          despesa_outros?: number
+          gerado_em?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "viatura_resumo_semanal_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "viatura_resumo_semanal_viatura_id_fkey"
             columns: ["viatura_id"]
             isOneToOne: false
             referencedRelation: "viaturas"

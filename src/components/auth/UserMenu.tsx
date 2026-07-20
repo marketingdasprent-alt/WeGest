@@ -1,4 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -8,16 +10,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LogOut, Settings, User } from 'lucide-react';
+import { Building2, LogOut, Settings, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const UserMenu = () => {
   const { user, signOut } = useAuth();
+  const { isAdmin, hasAccessToResource } = usePermissions();
   const navigate = useNavigate();
 
   if (!user) return null;
 
   const displayName = user.user_metadata?.nome || user.email?.split('@')[0] || 'Utilizador';
+  const canViewOrg = isAdmin || hasAccessToResource(RECURSOS.ADMIN_MINHA_ORGANIZACAO);
 
   return (
     <DropdownMenu>
@@ -40,6 +44,15 @@ export const UserMenu = () => {
           <Settings className="h-4 w-4 mr-2" />
           Configurações
         </DropdownMenuItem>
+        {canViewOrg && (
+          <DropdownMenuItem
+            onClick={() => navigate('/minha-organizacao')}
+            className="text-foreground hover:bg-muted cursor-pointer"
+          >
+            <Building2 className="h-4 w-4 mr-2" />
+            Minha Organização
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           onClick={signOut}
           className="text-foreground hover:bg-muted cursor-pointer"
