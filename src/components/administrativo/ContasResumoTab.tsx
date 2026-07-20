@@ -4,6 +4,9 @@ import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek } from '
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MotoristaResumoDialog } from './MotoristaResumoDialog';
 import { ImportarDadosWizard } from './ImportarDadosWizard';
 import { RelatorioPagamentoDialog } from './RelatorioPagamentoDialog';
@@ -34,6 +37,25 @@ import { ContasResumoBulkBar } from './ContasResumoBulkBar';
 
 // Semana: Segunda (1) a Domingo (0)
 const WEEK_STARTS_ON = 1;
+
+export async function fecharSemanaFinanceiro(
+  client: Pick<typeof supabase, 'functions'>,
+  periodoInicio: Date,
+  periodoFim: Date
+) {
+  const { data, error } = await client.functions.invoke('fechar-semana-financeiro', {
+    body: {
+      semanaInicio: format(periodoInicio, 'yyyy-MM-dd'),
+      semanaFim: format(periodoFim, 'yyyy-MM-dd'),
+    },
+  });
+  if (error) throw new Error(error.message);
+  // A edge function devolve sempre HTTP 200 (mesmo em falha lógica, ex:
+  // período no futuro) — invoke() só popula `error` em falha de transporte,
+  // por isso o success:false do corpo tem de ser verificado à parte.
+  if (!data?.success) throw new Error(data?.error || 'Falha ao fechar o período.');
+  return data as { success: boolean; viaturasAtualizadas: number; motoristasAtualizados: number };
+}
 
 // Coluna Gorjeta: dados sensíveis (gorjeta é rendimento do motorista, não da
 // org) — gate por recurso RBAC (administrativo_ver_gorjeta), não por
@@ -67,6 +89,12 @@ export function ContasResumoTab() {
   const [relatorioPagamentoOpen, setRelatorioPagamentoOpen] = useState(false);
   const [motoristasList, setMotoristasList] = useState<Array<{ id: string; nome: string }>>([]);
   const [rendaAluguerSemana, setRendaAluguerSemana] = useState(0);
+  const [fechandoSemana, setFechandoSemana] = useState(false);
+  // Período a fechar (independente da semana visualizada na tabela) — null =
+  // segue a semana selecionada (weekStart/weekEnd); só passa a fixo quando o
+  // utilizador escolhe um período custom no popover "Fechar Período".
+  const [fecharRange, setFecharRange] = useState<{ from: Date; to: Date } | null>(null);
+  const [fecharPopoverOpen, setFecharPopoverOpen] = useState(false);
   const logoSrc = useThemedLogo();
 
   // Maps for extra print data and filters
@@ -151,6 +179,35 @@ export function ContasResumoTab() {
   const goToPreviousWeek = () => setSelectedWeek(subWeeks(selectedWeek, 1));
   const goToNextWeek = () => setSelectedWeek(addWeeks(selectedWeek, 1));
 
+  // Segue a semana visualizada por omissão; fica fixo assim que o
+  // utilizador escolhe um período custom no popover. Não dá pra fechar dias
+  // que ainda não aconteceram — se a semana visualizada avança até domingo
+  // futuro (ex: "Semana Actual" a meio da semana), o fim por omissão fica
+  // preso a hoje, não ao domingo.
+  const hoje = new Date();
+  const weekEndClamped = weekEnd > hoje ? hoje : weekEnd;
+  const rangeParaFechar = fecharRange ?? { from: weekStart, to: weekEndClamped };
+
+  const handleFecharSemana = async () => {
+    setFechandoSemana(true);
+    try {
+      const resultado = await fecharSemanaFinanceiro(
+        supabase,
+        rangeParaFechar.from,
+        rangeParaFechar.to
+      );
+      toast.success(
+        `Período fechado: ${resultado.viaturasAtualizadas} viaturas, ${resultado.motoristasAtualizados} motoristas atualizados.`
+      );
+      loadResumos();
+    } catch (error) {
+      console.error('Erro ao fechar período:', error);
+      toast.error('Erro ao fechar o período. Tente novamente.');
+    } finally {
+      setFechandoSemana(false);
+    }
+  };
+
   // Verificar se é a semana actual
   const isCurrentWeek = isThisWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
 
@@ -194,6 +251,12 @@ export function ContasResumoTab() {
 
   useEffect(() => {
     loadResumos();
+  }, [selectedWeek]);
+
+  // Navegar de semana reseta o período custom — evita fechar sem querer um
+  // período de outra semana que ficou escolhido no popover.
+  useEffect(() => {
+    setFecharRange(null);
   }, [selectedWeek]);
 
   async function loadResumos() {
@@ -1077,6 +1140,49 @@ export function ContasResumoTab() {
         onFilterGestorChange={setFilterGestor}
         gestorMap={gestorMap}
       />
+
+      <div className="flex justify-end">
+        <Popover open={fecharPopoverOpen} onOpenChange={setFecharPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" disabled={fechandoSemana}>
+              {fechandoSemana ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                `Fechar Período (${format(rangeParaFechar.from, 'dd/MM')} - ${format(rangeParaFechar.to, 'dd/MM')})`
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-3" align="end">
+            <p className="text-xs font-medium text-muted-foreground mb-2">Período a fechar</p>
+            <Calendar
+              mode="range"
+              // day_today do Calendar partilhado usa bg-accent preenchido —
+              // visualmente igual à seleção, confunde "hoje" com "escolhido".
+              // Override só aqui (não no componente partilhado, usado
+              // noutras páginas): contorno em vez de preenchimento.
+              classNames={{ day_today: 'border border-primary text-foreground' }}
+              selected={{ from: rangeParaFechar.from, to: rangeParaFechar.to }}
+              onSelect={(r) => {
+                if (r?.from) setFecharRange({ from: r.from, to: r.to ?? r.from });
+              }}
+              numberOfMonths={1}
+              defaultMonth={rangeParaFechar.from}
+              disabled={{ after: new Date() }}
+            />
+            <Button
+              className="w-full mt-2"
+              size="sm"
+              disabled={fechandoSemana}
+              onClick={() => {
+                setFecharPopoverOpen(false);
+                handleFecharSemana();
+              }}
+            >
+              Fechar {format(rangeParaFechar.from, 'dd/MM')} - {format(rangeParaFechar.to, 'dd/MM')}
+            </Button>
+          </PopoverContent>
+        </Popover>
+      </div>
 
       <ContasResumoStats
         totalMotoristas={filteredResumos.length}

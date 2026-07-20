@@ -35,6 +35,7 @@ const AdminDocumentos = lazy(() => import('@/pages/AdminDocumentos'));
 const AuditoriaPage = lazy(() => import('@/pages/admin/AuditoriaPage'));
 const MotoristaCandidaturas = lazy(() => import('@/pages/MotoristaCandidaturas'));
 const MyAccount = lazy(() => import('@/pages/MyAccount'));
+const MinhaOrganizacao = lazy(() => import('@/pages/MinhaOrganizacao'));
 const Login = lazy(() => import('@/pages/Login'));
 const Register = lazy(() => import('@/pages/Register'));
 const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
@@ -439,6 +440,16 @@ const WebAppRoutes = () => {
               <ProtectedRoute>
                 <DashboardLayout>
                   <MyAccount />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/minha-organizacao"
+            element={
+              <ProtectedRoute requiredResource={RECURSOS.ADMIN_MINHA_ORGANIZACAO}>
+                <DashboardLayout>
+                  <MinhaOrganizacao />
                 </DashboardLayout>
               </ProtectedRoute>
             }

@@ -1,26 +1,39 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Loader2,
   Coins,
-  FileText,
   RefreshCw,
   TrendingDown,
-  Zap,
-  Fuel,
   Activity,
-  Building2,
+  AlertTriangle,
+  Info,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 
+export type ContratoDetalheTvde = {
+  tipo: 'tvde';
+  valorSemanal: number;
+  semanas: number;
+};
+
+export type ContratoDetalheRentACar = {
+  tipo: 'rent_a_car';
+  tarifaDiaria: number;
+  dias: number;
+  override: boolean;
+};
+
 export interface ReceitasData {
-  contratos: number;
-  portagens: number;
-  combustivel: number;
+  /** Receita do contrato ativo desta viatura, acumulada desde o início do contrato. */
+  contratoReceita: number;
+  contratoRegime: 'tvde' | 'rent_a_car' | null;
+  contratoDetalhe: ContratoDetalheTvde | ContratoDetalheRentACar | null;
+  multas: number;
   danos: number;
-  outros: number;
-  reembolsos: number;
   loading: boolean;
 }
 
@@ -37,6 +50,7 @@ function AmountCard({
   colorClass,
   gradientClass,
   loading,
+  breakdown,
 }: {
   label: string;
   value: number;
@@ -45,13 +59,43 @@ function AmountCard({
   colorClass: string;
   gradientClass: string;
   loading: boolean;
+  /** Quando presente (com pelo menos 1 item), mostra ícone clicável com o detalhe. */
+  breakdown?: { label: string; value: string }[];
 }) {
+  const temBreakdown = !!breakdown && breakdown.length > 0;
+
   return (
     <Card className={cn('border-border shadow-sm', gradientClass)}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
           {icon}
           {label}
+          {temBreakdown && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Ver detalhe de ${label}`}
+                  className="text-muted-foreground/70 hover:text-foreground transition-colors"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64" align="start">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  Detalhe de {label}
+                </p>
+                <div className="space-y-1.5">
+                  {breakdown!.map((item) => (
+                    <div key={item.label} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{item.label}</span>
+                      <span className="font-medium">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -70,123 +114,100 @@ export function ViaturaFinanceiraReceitas({
   receitas,
   loadReceitas,
 }: ViaturaFinanceiraMovimentosProps) {
-  const balanco =
-    (receitas.contratos || 0) +
-    (receitas.outros || 0) -
-    (receitas.portagens || 0) -
-    (receitas.combustivel || 0) -
-    (receitas.danos || 0);
+  if (!receitas.loading && !receitas.contratoRegime) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          Sem contrato ativo (agendado ou em curso) para esta viatura.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const breakdown: { label: string; value: string }[] = [];
+  if (receitas.contratoDetalhe?.tipo === 'tvde') {
+    breakdown.push(
+      { label: 'Tarifa semanal', value: formatCurrency(receitas.contratoDetalhe.valorSemanal) },
+      { label: 'Semanas ativas', value: String(receitas.contratoDetalhe.semanas) }
+    );
+  } else if (receitas.contratoDetalhe?.tipo === 'rent_a_car') {
+    if (receitas.contratoDetalhe.override) {
+      breakdown.push({ label: 'Valor definido manualmente', value: 'sim' });
+    } else {
+      breakdown.push(
+        { label: 'Tarifa diária', value: formatCurrency(receitas.contratoDetalhe.tarifaDiaria) },
+        { label: 'Dias do contrato', value: String(receitas.contratoDetalhe.dias) }
+      );
+    }
+  }
 
   return (
-    <>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <AmountCard
-          label="Contratos"
-          value={receitas.contratos}
-          icon={<Coins className="h-4 w-4 text-green-500" />}
-          note="Total de rendas recebidas"
-          colorClass="text-green-600 dark:text-green-400"
-          gradientClass="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border-green-500/20"
-          loading={receitas.loading}
-        />
-        <AmountCard
-          label="Outros Ganhos"
-          value={receitas.outros}
-          icon={<FileText className="h-4 w-4 text-purple-500" />}
-          note="Ajustes e extras"
-          colorClass="text-purple-600 dark:text-purple-400"
-          gradientClass="bg-gradient-to-br from-purple-500/10 to-violet-500/5 border-purple-500/20"
-          loading={receitas.loading}
-        />
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <AmountCard
+        label="Receita do Contrato"
+        value={receitas.contratoReceita}
+        icon={<Coins className="h-4 w-4 text-green-500" />}
+        note="Acumulada desde o início do contrato ativo, sem extras/coberturas/taxas"
+        colorClass="text-green-600 dark:text-green-400"
+        gradientClass="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border-green-500/20"
+        loading={receitas.loading}
+        breakdown={breakdown}
+      />
 
-        <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 flex flex-col justify-center">
-          <CardContent className="pt-6">
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium text-muted-foreground">Balanço Operacional</p>
-              <p
-                className={cn(
-                  'text-3xl font-black',
-                  balanco >= 0 ? 'text-primary' : 'text-red-500'
-                )}
-              >
-                {formatCurrency(balanco)}
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={loadReceitas}
-                className="w-fit h-7 px-2 text-[10px] uppercase tracking-wider font-bold"
-              >
-                <RefreshCw className="h-3 w-3 mr-1" /> Atualizar Dados
-              </Button>
+      <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 flex flex-col justify-center">
+        <CardContent className="pt-6">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium text-muted-foreground">Regime do Contrato</p>
+              {receitas.contratoRegime && (
+                <Badge variant="outline" className="uppercase text-[10px]">
+                  {receitas.contratoRegime === 'tvde' ? 'TVDE' : 'Rent-a-Car'}
+                </Badge>
+              )}
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="mt-8 p-4 bg-muted/30 rounded-xl border border-dashed text-center">
-        <p className="text-sm text-muted-foreground">
-          Os dados acima são calculados automaticamente com base nas associações temporais dos
-          motoristas a esta viatura e nos registos financeiros correspondentes.
-        </p>
-      </div>
-    </>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={loadReceitas}
+              className="w-fit h-7 px-2 text-[10px] uppercase tracking-wider font-bold"
+            >
+              <RefreshCw className="h-3 w-3 mr-1" /> Atualizar Dados
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
 export function ViaturaFinanceiraDespesas({ receitas }: { receitas: ReceitasData }) {
+  const total = (receitas.multas || 0) + (receitas.danos || 0);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       <AmountCard
         label="Total de Despesas"
-        value={receitas.combustivel + receitas.portagens + receitas.danos}
+        value={total}
         icon={<TrendingDown className="h-4 w-4 text-red-500" />}
-        note="Soma de todos os custos"
+        note="Multas + custos de reparação"
         colorClass="text-red-600 dark:text-red-400"
         gradientClass="bg-gradient-to-br from-red-500/10 to-rose-500/5 border-red-500/20"
         loading={receitas.loading}
       />
       <AmountCard
-        label="Reembolsos"
-        value={receitas.reembolsos}
-        icon={<RefreshCw className="h-4 w-4 text-orange-500" />}
-        note="Total de créditos/devoluções"
-        colorClass="text-orange-600 dark:text-orange-400"
-        gradientClass="bg-gradient-to-br from-orange-500/10 to-amber-500/5 border-orange-500/20"
-        loading={receitas.loading}
-      />
-      <AmountCard
-        label="Portagens"
-        value={receitas.portagens}
-        icon={<Zap className="h-4 w-4 text-blue-500" />}
-        note="Custos de via verde/passagens"
-        colorClass="text-blue-600 dark:text-blue-400"
-        gradientClass="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 border-blue-500/20"
-        loading={receitas.loading}
-      />
-      <AmountCard
-        label="Portagens Operacionais"
-        value={0}
-        icon={<Building2 className="h-4 w-4 text-slate-500" />}
-        note="Custos operacionais de estrutura"
-        colorClass="text-slate-600 dark:text-slate-400"
-        gradientClass="bg-gradient-to-br from-slate-500/10 to-slate-500/5 border-slate-500/20"
-        loading={receitas.loading}
-      />
-      <AmountCard
-        label="Combustível"
-        value={receitas.combustivel}
-        icon={<Fuel className="h-4 w-4 text-orange-500" />}
-        note="Gasto total em abastecimentos"
-        colorClass="text-orange-600 dark:text-orange-400"
-        gradientClass="bg-gradient-to-br from-orange-500/10 to-red-500/5 border-orange-500/20"
+        label="Multas"
+        value={receitas.multas}
+        icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
+        note="Infrações registadas nesta viatura"
+        colorClass="text-amber-600 dark:text-amber-400"
+        gradientClass="bg-gradient-to-br from-amber-500/10 to-yellow-500/5 border-amber-500/20"
         loading={receitas.loading}
       />
       <AmountCard
         label="Danos"
         value={receitas.danos}
         icon={<Activity className="h-4 w-4 text-red-500" />}
-        note="Gasto total em reparações"
+        note="Custo de reparações (oficina)"
         colorClass="text-red-600 dark:text-red-400"
         gradientClass="bg-gradient-to-br from-red-500/10 to-rose-500/5 border-red-500/20"
         loading={receitas.loading}

@@ -25,6 +25,7 @@ const Assistencia = lazy(() => import('@/pages/Assistencia'));
 const AssistenciaNova = lazy(() => import('@/pages/AssistenciaNova'));
 const TicketDetails = lazy(() => import('@/pages/TicketDetails'));
 const MyAccount = lazy(() => import('@/pages/MyAccount'));
+const MinhaOrganizacao = lazy(() => import('@/pages/MinhaOrganizacao'));
 const MotoristaCandidaturas = lazy(() => import('@/pages/MotoristaCandidaturas'));
 const Calendario = lazy(() => import('@/pages/Calendario'));
 const Administrativo = lazy(() => import('@/pages/Administrativo'));
@@ -206,6 +207,16 @@ const NativeAppRoutes = () => {
             <ProtectedRoute>
               <DashboardLayout>
                 <MyAccount />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/minha-organizacao"
+          element={
+            <ProtectedRoute requiredResource={RECURSOS.ADMIN_MINHA_ORGANIZACAO}>
+              <DashboardLayout>
+                <MinhaOrganizacao />
               </DashboardLayout>
             </ProtectedRoute>
           }

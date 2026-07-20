@@ -17,6 +17,7 @@ import { EmpresasTab } from '@/components/admin/EmpresasTab';
 import { ViaturasTiposTab } from '@/components/admin/ViaturasTiposTab';
 import { FiscalTab } from '@/components/admin/FiscalTab';
 import { PrivacidadeTab } from '@/components/admin/PrivacidadeTab';
+import { MinhaOrganizacaoTab } from '@/components/admin/MinhaOrganizacaoTab';
 import { OrganizacoesTab } from '@/components/admin/OrganizacoesTab';
 import { ImportExcelDialog } from '@/components/admin/ImportExcelDialog';
 import { RECURSOS } from '@/utils/permissions';
@@ -63,6 +64,12 @@ const AdminSettings = () => {
           className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto text-xs"
         >
           Utilizadores
+        </TabsTrigger>
+        <TabsTrigger
+          value="minha-organizacao"
+          className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto text-xs"
+        >
+          Minha Organização
         </TabsTrigger>
         {canConvites && (
           <TabsTrigger
@@ -151,6 +158,10 @@ const AdminSettings = () => {
       <div className="space-y-6">
         <TabsContent value="users" className="mt-0">
           <UsersTab />
+        </TabsContent>
+
+        <TabsContent value="minha-organizacao" className="mt-0">
+          <MinhaOrganizacaoTab />
         </TabsContent>
 
         {canConvites && (

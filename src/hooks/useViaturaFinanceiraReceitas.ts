@@ -3,185 +3,156 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { ReceitasData } from '@/components/viaturas/tabs/ViaturaFinanceiraMovimentos';
 
-// Quebra a cadeia de inferência de tipos do Supabase para queries com .select('*')
-// em tabelas com muitas colunas (evita TS2589 "Type instantiation is excessively deep").
-type SimpleQueryBuilder = {
-  select: (cols: string) => {
-    in: (
-      col: string,
-      vals: string[]
-    ) => Promise<{
-      data: Record<string, unknown>[] | null;
-      error: unknown;
-    }>;
-  };
-};
-const db = supabase as unknown as { from: (t: string) => SimpleQueryBuilder };
-
-function getTrimestreDataRange() {
-  const now = new Date();
-  const month = now.getMonth();
-  let startMonth: number;
-  let year: number;
-
-  if (month < 3) {
-    startMonth = 0;
-    year = now.getFullYear();
-  } else if (month < 6) {
-    startMonth = 3;
-    year = now.getFullYear();
-  } else if (month < 9) {
-    startMonth = 6;
-    year = now.getFullYear();
-  } else {
-    startMonth = 9;
-    year = now.getFullYear();
-  }
-
-  const inicio = new Date(year, startMonth, 1);
-  const fim = new Date(year, startMonth + 3, 0);
-  return { inicio, fim };
+function toDateStr(d: Date): string {
+  return d.toISOString().split('T')[0];
 }
 
+/** Dias inteiros entre duas datas, arredondado pra cima, mínimo 1. */
+function diasEntre(inicio: Date, fim: Date): number {
+  return Math.max(1, Math.ceil((fim.getTime() - inicio.getTime()) / 86_400_000));
+}
+
+const EMPTY: ReceitasData = {
+  contratoReceita: 0,
+  contratoRegime: null,
+  contratoDetalhe: null,
+  multas: 0,
+  danos: 0,
+  loading: true,
+};
+
 export function useViaturaFinanceiraReceitas(viaturaId: string | undefined) {
-  const [receitas, setReceitas] = useState<ReceitasData>({
-    contratos: 0,
-    portagens: 0,
-    combustivel: 0,
-    danos: 0,
-    outros: 0,
-    reembolsos: 0,
-    loading: true,
-  });
+  const [receitas, setReceitas] = useState<ReceitasData>(EMPTY);
 
   const loadReceitas = useCallback(async () => {
     if (!viaturaId) return;
     setReceitas((prev) => ({ ...prev, loading: true }));
 
     try {
-      const { inicio, fim } = getTrimestreDataRange();
+      const hoje = new Date();
 
-      // A. Associações da viatura a motoristas no trimestre
-      const { data: associacoes } = await supabase
-        .from('motorista_viaturas')
-        .select('id, motorista_id, data_inicio, data_fim')
-        .eq('viatura_id', viaturaId);
+      // Contrato ativo da viatura. Pode haver várias linhas agendado/em_curso
+      // ao mesmo tempo (reservas futuras sobrepostas, comum nos dados de
+      // teste) — critério de escolha: 1) 'em_curso' (a decorrer agora) tem
+      // sempre prioridade sobre 'agendado' (só planeado); 2) entre iguais,
+      // prefere quem tem tarifa resolvível (tarifa_id/tarifa_diaria/
+      // valor_total_manual) — senão calha pegar numa reserva placeholder sem
+      // preço nenhum configurado. Receita = valor do contrato inteiro até
+      // hoje, não do trimestre — um contrato TVDE não tem "fim" natural por
+      // trimestre.
+      const { data: contratosAtivos } = await supabase
+        .from('contratos_renting')
+        .select(
+          'id, regime, data_inicio, data_fim, tarifa_id, tarifa_diaria, valor_total_manual, estado_operacional'
+        )
+        .eq('viatura_id', viaturaId)
+        .in('estado_operacional', ['agendado', 'em_curso']);
 
-      if (!associacoes || associacoes.length === 0) {
-        setReceitas({
-          contratos: 0,
-          portagens: 0,
-          combustivel: 0,
-          danos: 0,
-          outros: 0,
-          reembolsos: 0,
-          loading: false,
-        });
+      const temTarifa = (c: (typeof contratosAtivos)[number]) =>
+        !!c.tarifa_id || (Number(c.tarifa_diaria) || 0) > 0 || c.valor_total_manual != null;
+
+      const contrato =
+        [...(contratosAtivos ?? [])].sort((a, b) => {
+          if (a.estado_operacional !== b.estado_operacional) {
+            return a.estado_operacional === 'em_curso' ? -1 : 1;
+          }
+          if (temTarifa(a) !== temTarifa(b)) return temTarifa(a) ? -1 : 1;
+          return b.data_inicio.localeCompare(a.data_inicio);
+        })[0] ?? null;
+
+      if (!contrato) {
+        setReceitas({ ...EMPTY, loading: false });
         return;
       }
 
-      // Recolher motoristas únicos
-      const motoristaIds = [...new Set(associacoes.map((a) => a.motorista_id))];
+      const dataInicio = new Date(`${contrato.data_inicio.split('T')[0]}T00:00:00Z`);
+      const dataFim = contrato.data_fim
+        ? new Date(`${contrato.data_fim.split('T')[0]}T00:00:00Z`)
+        : null;
+      const periodoFim = dataFim && dataFim < hoje ? dataFim : hoje;
 
-      // B. Financeiro dos contratos (em paralelo)
-      const [finRes, contratosRes, boltRes, bpRes, repsolRes, edpRes] = await Promise.all([
-        db.from('financeiro').select('*').in('motorista_id', motoristaIds),
-        db.from('contratos').select('*').in('motorista_id', motoristaIds),
-        db.from('bolt_portagens').select('*').in('motorista_id', motoristaIds),
-        db.from('bp_fuel_transactions').select('*').in('motorista_id', motoristaIds),
-        db.from('repsol_fuel').select('*').in('motorista_id', motoristaIds),
-        db.from('edp_fuel').select('*').in('motorista_id', motoristaIds),
-      ]);
+      let contratoReceita = 0;
+      let contratoDetalhe: ReceitasData['contratoDetalhe'] = null;
 
-      const finData = finRes.data || [];
-      const contratosData = contratosRes.data || [];
-      const boltData = boltRes.data || [];
+      if (contrato.regime === 'tvde') {
+        const dias = diasEntre(dataInicio, periodoFim);
+        const semanas = Math.ceil(dias / 7);
 
-      let totalContratos = 0;
-      let totalOutros = 0;
-      let totalPortagens = 0;
-      let totalCombustivel = 0;
-      let totalReembolsos = 0;
+        let valorSemanal = 0;
+        if (contrato.tarifa_id) {
+          const { data: tarifa } = await supabase
+            .from('renting_tarifas')
+            .select('preco_semana')
+            .eq('id', contrato.tarifa_id)
+            .maybeSingle();
+          valorSemanal = Number(tarifa?.preco_semana ?? 0);
 
-      for (const assoc of associacoes) {
-        if (!assoc.data_inicio) continue;
-        const aInicio = new Date(assoc.data_inicio + 'T00:00:00');
-        const aFim = assoc.data_fim ? new Date(assoc.data_fim + 'T00:00:00') : new Date();
+          // TVDE não tem preço por grupo — é por modelo da viatura.
+          if (!valorSemanal) {
+            const { data: viatura } = await supabase
+              .from('viaturas')
+              .select('modelo_id')
+              .eq('id', viaturaId)
+              .maybeSingle();
+            if (viatura?.modelo_id) {
+              const { data: precoModelo } = await supabase
+                .from('renting_tarifa_precos_modelo')
+                .select('preco_semana')
+                .eq('tarifa_id', contrato.tarifa_id)
+                .eq('modelo_id', viatura.modelo_id)
+                .maybeSingle();
+              valorSemanal = Number(precoModelo?.preco_semana ?? 0);
+            }
+          }
+        }
 
-        // Período da associação dentro do trimestre
-        const periodoInicio = aInicio > inicio ? aInicio : inicio;
-        const periodoFim = aFim < fim ? aFim : fim;
-
-        if (periodoInicio > periodoFim) continue;
-
-        // Financeiro filtrado
-        const finFiltrado = finData.filter((f: any) => {
-          if (f.motorista_id !== assoc.motorista_id) return false;
-          const d = new Date(f.data_movimento || f.created_at || '');
-          return d >= periodoInicio && d <= periodoFim;
-        });
-
-        totalContratos += finFiltrado
-          .filter((f: any) => f.categoria === 'renda_viatura')
-          .reduce((acc: number, curr: any) => {
-            const val = Number(curr.valor) || 0;
-            return acc + (curr.tipo === 'debito' ? val : -val);
-          }, 0);
-
-        totalOutros += finFiltrado
-          .filter((f: any) => f.categoria === 'outro')
-          .reduce((acc: number, curr: any) => {
-            const val = Number(curr.valor) || 0;
-            return acc + (curr.tipo === 'debito' ? val : -val);
-          }, 0);
-
-        totalReembolsos += finFiltrado
-          .filter((f: any) => f.tipo === 'credito')
-          .reduce((acc: number, curr: any) => acc + (Number(curr.valor) || 0), 0);
-
-        totalPortagens += (boltData || [])
-          .filter((b: any) => {
-            if (b.motorista_id !== assoc.motorista_id) return false;
-            const pInicio = b.periodo_inicio ? new Date(b.periodo_inicio) : null;
-            const pFim = b.periodo_fim ? new Date(b.periodo_fim) : null;
-            if (!pInicio || !pFim) return false;
-            return pInicio <= periodoFim && pFim >= periodoInicio;
-          })
-          .reduce((acc: number, curr: any) => acc + (Number(curr.portagens) || 0), 0);
-
-        const fuelItems = [
-          ...(bpRes.data || []),
-          ...(repsolRes.data || []),
-          ...(edpRes.data || []),
-        ].filter((f: any) => {
-          const d = new Date(f.transaction_date || f.data_movimento || '');
-          return f.motorista_id === assoc.motorista_id && d >= periodoInicio && d <= periodoFim;
-        });
-
-        totalCombustivel += fuelItems.reduce(
-          (acc: number, curr: any) => acc + (Number(curr.amount) || 0),
-          0
-        );
+        contratoReceita = valorSemanal * semanas;
+        contratoDetalhe = { tipo: 'tvde', valorSemanal, semanas };
+      } else {
+        const dias = diasEntre(dataInicio, periodoFim);
+        const tarifaDiaria = Number(contrato.tarifa_diaria) || 0;
+        const temOverride = contrato.valor_total_manual != null;
+        contratoReceita = temOverride ? Number(contrato.valor_total_manual) : tarifaDiaria * dias;
+        contratoDetalhe = { tipo: 'rent_a_car', tarifaDiaria, dias, override: temOverride };
       }
 
-      // Danos
-      const { data: reparacoesData } = await supabase
-        .from('viatura_reparacoes')
-        .select('custo')
-        .eq('viatura_id', viaturaId);
+      const inicioStr = toDateStr(dataInicio);
+      const fimStr = toDateStr(periodoFim);
 
-      const totalDanos = (reparacoesData || []).reduce(
-        (acc: number, curr: any) => acc + (Number(curr.custo) || 0),
+      const [multasRes, reparacoesRes] = await Promise.all([
+        supabase
+          .from('viatura_multas')
+          .select('valor')
+          .eq('viatura_id', viaturaId)
+          .gte('data_infracao', inicioStr)
+          .lte('data_infracao', fimStr),
+        supabase
+          .from('viatura_reparacoes')
+          .select('custo, data_entrada, data_saida')
+          .eq('viatura_id', viaturaId),
+      ]);
+
+      const totalMultas = (multasRes.data || []).reduce(
+        (acc: number, r: any) => acc + (Number(r.valor) || 0),
         0
       );
 
+      const totalDanos = (reparacoesRes.data || [])
+        .filter((r: any) => {
+          const dataRef = r.data_saida ?? r.data_entrada;
+          return !!dataRef && dataRef >= inicioStr && dataRef <= fimStr;
+        })
+        .reduce((acc: number, r: any) => acc + (Number(r.custo) || 0), 0);
+
       setReceitas({
-        contratos: totalContratos,
-        portagens: totalPortagens,
-        combustivel: totalCombustivel,
+        contratoReceita,
+        // 'slot' existe no enum partilhado mas não gera linhas em
+        // contratos_renting na prática — trata-se como rent_a_car por
+        // segurança de tipos (a fórmula usada já é a mesma, no `else` acima).
+        contratoRegime: contrato.regime === 'tvde' ? 'tvde' : 'rent_a_car',
+        contratoDetalhe,
+        multas: totalMultas,
         danos: totalDanos,
-        outros: totalOutros,
-        reembolsos: totalReembolsos,
         loading: false,
       });
     } catch (error) {

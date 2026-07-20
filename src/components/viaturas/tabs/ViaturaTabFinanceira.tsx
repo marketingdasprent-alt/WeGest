@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wallet, History, TrendingUp, TrendingDown, Tag } from 'lucide-react';
+import { Wallet, History, TrendingUp, TrendingDown, Tag, CalendarClock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ViaturaFinanceiraResumoCards } from './ViaturaFinanceiraResumoCards';
@@ -14,6 +14,7 @@ import {
   ViaturaFinanceiraReceitas,
   ViaturaFinanceiraDespesas,
 } from './ViaturaFinanceiraMovimentos';
+import { ViaturaFinanceiraSemanal } from './ViaturaFinanceiraSemanal';
 import { AquisicaoConfigSection } from './financeira/sections/AquisicaoConfigSection';
 import { FinanciamentoSection } from './financeira/sections/FinanciamentoSection';
 import { DepreciacaoSection } from './financeira/sections/DepreciacaoSection';
@@ -193,12 +194,11 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
   }
 
   const totalAquisicaoVal = parseFloat(form.watch('total_viatura') || '0');
-  const totalReceitasVal = (receitas.contratos || 0) + (receitas.outros || 0);
-  const totalDespesasVal =
-    (receitas.combustivel || 0) + (receitas.portagens || 0) + (receitas.danos || 0);
+  const totalReceitasVal = receitas.contratoReceita || 0;
+  const totalDespesasVal = (receitas.multas || 0) + (receitas.danos || 0);
   const lucroOperacional = totalReceitasVal - totalDespesasVal;
   const rentabilidadePerc =
-    totalAquisicaoVal > 0 ? (lucroOperacional / totalAquisicaoVal) * 100 : 0;
+    totalAquisicaoVal > 0 ? (lucroOperacional / totalAquisicaoVal) * 100 : null;
   const restanteMeses = calculateRestanteFinanciamento(
     form.watch('tipo_financiamento'),
     form.watch('data_primeiro_pagamento'),
@@ -228,6 +228,9 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
           </TabsTrigger>
           <TabsTrigger value="despesas" className="flex items-center gap-2">
             <TrendingDown className="h-4 w-4" /> Despesas
+          </TabsTrigger>
+          <TabsTrigger value="semanal" className="flex items-center gap-2">
+            <CalendarClock className="h-4 w-4" /> Semanal
           </TabsTrigger>
           <TabsTrigger value="venda" className="flex items-center gap-2">
             <Tag className="h-4 w-4" /> Venda
@@ -278,6 +281,10 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
 
         <TabsContent value="despesas" className="mt-6">
           <ViaturaFinanceiraDespesas receitas={receitas} />
+        </TabsContent>
+
+        <TabsContent value="semanal" className="mt-6">
+          <ViaturaFinanceiraSemanal viaturaId={viatura.id} />
         </TabsContent>
       </Tabs>
     </div>
