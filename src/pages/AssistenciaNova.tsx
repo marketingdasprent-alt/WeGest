@@ -50,6 +50,7 @@ import {
   Zap,
   Flame,
   Eraser,
+  UserCog,
 } from 'lucide-react';
 import { AssistenciaMultimediaUpload } from '@/components/assistencia/AssistenciaMultimediaUpload';
 import { matchesSearch } from '@/lib/utils';
@@ -730,6 +731,13 @@ export default function AssistenciaNova() {
                   </Select>
                 </div>
 
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <UserCog className="h-4 w-4" /> Assistente responsável (opcional)
+                  </Label>
+                  <AssistenteResponsavelSelect value={atribuidoA} onChange={setAtribuidoA} />
+                </div>
+
                 {isGas && (
                   <div className="space-y-2 p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-900/50">
                     <Label
@@ -867,10 +875,6 @@ export default function AssistenciaNova() {
                         <SelectItem value="urgente">Urgente</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Assistente responsável (opcional)</Label>
-                    <AssistenteResponsavelSelect value={atribuidoA} onChange={setAtribuidoA} />
                   </div>
                 </CardContent>
               </Card>
