@@ -166,9 +166,28 @@ async function fileToCsvText(file: File): Promise<string> {
   if (nome.endsWith('.xlsx') || nome.endsWith('.xls')) {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: 'array' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    // rawNumbers:false → usa os valores como aparecem no Excel (datas/números formatados)
-    return XLSX.utils.sheet_to_csv(ws, { FS: ';', blankrows: false, rawNumbers: false });
+
+    // Alguns ficheiros trazem capa/resumo na 1ª folha e os movimentos noutra.
+    // Escolhemos a folha com mais linhas não vazias para reduzir imports parciais.
+    let bestCsv = '';
+    let bestScore = -1;
+
+    for (const sheetName of wb.SheetNames) {
+      const ws = wb.Sheets[sheetName];
+      if (!ws) continue;
+      const csv = XLSX.utils.sheet_to_csv(ws, { FS: ';', blankrows: false, rawNumbers: false });
+      const score = csv
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0).length;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestCsv = csv;
+      }
+    }
+
+    return bestCsv;
   }
   return file.text();
 }
