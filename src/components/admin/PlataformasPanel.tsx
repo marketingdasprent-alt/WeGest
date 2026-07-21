@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { Loader2, Plus, Settings, Zap, Car, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -26,6 +27,9 @@ export const PlataformasPanel: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedIntegracao, setSelectedIntegracao] = useState<IntegracaoConfig | null>(null);
+  const [sortField, setSortField] = useState<string>('nome');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   useEffect(() => {
     fetchIntegracoes();
@@ -77,6 +81,36 @@ export const PlataformasPanel: React.FC = () => {
     setSelectedIntegracao(null);
     setDialogOpen(true);
   };
+
+  const getLastActivity = (integracao: IntegracaoConfig) =>
+    integracao.plataforma === 'uber'
+      ? (integracao.last_webhook_at ?? integracao.ultimo_sync)
+      : integracao.ultimo_sync;
+
+  const sortedIntegracoes = useMemo(() => {
+    const list = [...integracoes];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'nome') {
+        va = a.nome || '';
+        vb = b.nome || '';
+      } else if (sortField === 'plataforma') {
+        va = a.plataforma || '';
+        vb = b.plataforma || '';
+      } else if (sortField === 'estado') {
+        va = a.ativo ? 0 : 1;
+        vb = b.ativo ? 0 : 1;
+      } else if (sortField === 'lastActivity') {
+        va = getLastActivity(a) || '';
+        vb = getLastActivity(b) || '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [integracoes, sortField, sortDir]);
 
   const getPlataformaBadge = (plataforma: string) => {
     switch (plataforma) {
@@ -136,19 +170,45 @@ export const PlataformasPanel: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Plataforma</TableHead>
-                  <TableHead className="text-center">Estado</TableHead>
-                  <TableHead>Última actividade</TableHead>
+                  <SortableTableHead
+                    field="nome"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Nome
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="plataforma"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Plataforma
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="estado"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    className="text-center"
+                  >
+                    Estado
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="lastActivity"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Última actividade
+                  </SortableTableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {integracoes.map((integracao) => {
-                  const lastActivity =
-                    integracao.plataforma === 'uber'
-                      ? (integracao.last_webhook_at ?? integracao.ultimo_sync)
-                      : integracao.ultimo_sync;
+                {sortedIntegracoes.map((integracao) => {
+                  const lastActivity = getLastActivity(integracao);
 
                   return (
                     <TableRow key={integracao.id} className="cursor-pointer hover:bg-muted/50">

@@ -5,14 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -42,6 +35,7 @@ import { cn, matchesSearch } from '@/lib/utils';
 import { ImportRobotCsvDialog } from '@/components/admin/ImportRobotCsvDialog';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 // Semana: Segunda (1) a Domingo (0) — igual ao resumo
 const WEEK_STARTS_ON = 1;
@@ -84,6 +78,9 @@ export const EdpDataTab: React.FC = () => {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIntegracao, setSelectedIntegracao] = useState('all');
+  const [sortField, setSortField] = useState<string>('transaction_date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
   // Estado: data dentro da semana selecionada (default: semana passada)
   const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
 
@@ -148,12 +145,46 @@ export const EdpDataTab: React.FC = () => {
     }
   };
 
-  const filtered = transacoes.filter(
-    (t) =>
-      !searchTerm ||
-      matchesSearch(t.motorista?.nome, searchTerm) ||
-      matchesSearch(t.station_name, searchTerm)
-  );
+  const filtered = transacoes
+    .filter(
+      (t) =>
+        !searchTerm ||
+        matchesSearch(t.motorista?.nome, searchTerm) ||
+        matchesSearch(t.station_name, searchTerm)
+    )
+    .sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortField) {
+        case 'transaction_date':
+          va = a.transaction_date;
+          vb = b.transaction_date;
+          break;
+        case 'motorista':
+          va = a.motorista?.nome || '';
+          vb = b.motorista?.nome || '';
+          break;
+        case 'card_number':
+          va = a.card_number || '';
+          vb = b.card_number || '';
+          break;
+        case 'station_name':
+          va = a.station_name || '';
+          vb = b.station_name || '';
+          break;
+        case 'quantity':
+          va = a.quantity || 0;
+          vb = b.quantity || 0;
+          break;
+        case 'amount':
+          va = a.amount || 0;
+          vb = b.amount || 0;
+          break;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   const stats = {
     total: filtered.length,
@@ -279,12 +310,56 @@ export const EdpDataTab: React.FC = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Data</TableHead>
-                <TableHead>Motorista</TableHead>
-                <TableHead>Cartão</TableHead>
-                <TableHead>Ponto de Carga</TableHead>
-                <TableHead className="text-right">Energia</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
+                <SortableTableHead
+                  field="transaction_date"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Data
+                </SortableTableHead>
+                <SortableTableHead
+                  field="motorista"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Motorista
+                </SortableTableHead>
+                <SortableTableHead
+                  field="card_number"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Cartão
+                </SortableTableHead>
+                <SortableTableHead
+                  field="station_name"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Ponto de Carga
+                </SortableTableHead>
+                <SortableTableHead
+                  field="quantity"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Energia
+                </SortableTableHead>
+                <SortableTableHead
+                  field="amount"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Valor
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

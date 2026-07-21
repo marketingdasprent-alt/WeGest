@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Layers, Save, Trash2, Car, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
@@ -152,6 +153,45 @@ const RentingGrupoForm = () => {
   });
 
   const removerViatura = useAssociarViaturaGrupo(id);
+
+  // Ordenação da tabela de viaturas associadas
+  const [sortField, setSortField] = useState<string>('matricula');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
+
+  const viaturasOrdenadas = useMemo(() => {
+    const list = [...viaturasAssociadas];
+    list.sort((a: any, b: any) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortField) {
+        case 'matricula':
+          va = a.matricula || '';
+          vb = b.matricula || '';
+          break;
+        case 'marca':
+          va = a.marca || '';
+          vb = b.marca || '';
+          break;
+        case 'modelo':
+          va = a.modelo || '';
+          vb = b.modelo || '';
+          break;
+        case 'ano':
+          va = a.ano || 0;
+          vb = b.ano || 0;
+          break;
+        case 'estado':
+          va = a.status || '';
+          vb = b.status || '';
+          break;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [viaturasAssociadas, sortField, sortDir]);
 
   useEffect(() => {
     if (!grupo) return;
@@ -549,16 +589,51 @@ const RentingGrupoForm = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Matrícula</TableHead>
-                    <TableHead>Marca</TableHead>
-                    <TableHead>Modelo</TableHead>
-                    <TableHead>Ano</TableHead>
-                    <TableHead>Estado</TableHead>
+                    <SortableTableHead
+                      field="matricula"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    >
+                      Matrícula
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="marca"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    >
+                      Marca
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="modelo"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    >
+                      Modelo
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="ano"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    >
+                      Ano
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="estado"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    >
+                      Estado
+                    </SortableTableHead>
                     <TableHead className="w-12" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {viaturasAssociadas.map((v: any) => (
+                  {viaturasOrdenadas.map((v: any) => (
                     <TableRow key={v.id} className="hover:bg-muted/50">
                       <TableCell className="font-mono font-semibold">{v.matricula}</TableCell>
                       <TableCell>{v.marca || '—'}</TableCell>

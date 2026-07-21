@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { format, startOfWeek, addWeeks, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import {
@@ -34,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import {
   Select,
   SelectContent,
@@ -785,6 +786,9 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   const [movimentoFaturaMap, setMovimentoFaturaMap] = useState<Map<string, string>>(new Map());
   const [recorrencias, setRecorrencias] = useState<RecorrenciaFinanceira[]>([]);
   const { canEdit } = useCanEditFinanceiro();
+  const [sortField, setSortField] = useState<string>('data_movimento');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   useEffect(() => {
     loadMovimentos();
@@ -947,6 +951,37 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(value);
   };
+
+  const movimentosOrdenados = useMemo(() => {
+    const list = [...movimentos];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'data_movimento') {
+        va = a.data_movimento;
+        vb = b.data_movimento;
+      } else if (sortField === 'descricao') {
+        va = a.descricao;
+        vb = b.descricao;
+      } else if (sortField === 'categoria') {
+        va = a.categoria || '';
+        vb = b.categoria || '';
+      } else if (sortField === 'tipo') {
+        va = a.tipo;
+        vb = b.tipo;
+      } else if (sortField === 'valor') {
+        va = Number(a.valor);
+        vb = Number(b.valor);
+      } else if (sortField === 'status') {
+        va = a.status;
+        vb = b.status;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [movimentos, sortField, sortDir]);
 
   const handleOpenAcordo = (mov: MovimentoFinanceiro) => {
     setReparacaoParaAcordo(mov);
@@ -1157,12 +1192,55 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Data</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead>Categoria</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead>Estado</TableHead>
+                <SortableTableHead
+                  field="data_movimento"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Data
+                </SortableTableHead>
+                <SortableTableHead
+                  field="descricao"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Descrição
+                </SortableTableHead>
+                <SortableTableHead
+                  field="categoria"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Categoria
+                </SortableTableHead>
+                <SortableTableHead
+                  field="tipo"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Tipo
+                </SortableTableHead>
+                <SortableTableHead
+                  field="valor"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Valor
+                </SortableTableHead>
+                <SortableTableHead
+                  field="status"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Estado
+                </SortableTableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -1174,7 +1252,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
                   </TableCell>
                 </TableRow>
               ) : (
-                movimentos.map((movimento) => (
+                movimentosOrdenados.map((movimento) => (
                   <TableRow
                     key={movimento.id}
                     className={cn(

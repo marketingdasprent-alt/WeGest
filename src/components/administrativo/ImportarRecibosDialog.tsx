@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,14 +13,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Upload, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface ParsedRecibo {
   fileName: string;
@@ -422,6 +416,45 @@ export function ImportarRecibosDialog({
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v);
 
+  const [sortField, setSortField] = useState<string>('nome');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
+
+  const STATUS_RANK: Record<string, number> = { matched: 0, unmatched: 1, error: 2 };
+  const sortedRecibos = useMemo(() => {
+    const list = [...parsedRecibos];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'status') {
+        va = STATUS_RANK[a.status] ?? 0;
+        vb = STATUS_RANK[b.status] ?? 0;
+      } else if (sortField === 'nome') {
+        va = a.nome || a.fileName || '';
+        vb = b.nome || b.fileName || '';
+      } else if (sortField === 'motoristaMatch') {
+        va = a.motoristaMatch || '';
+        vb = b.motoristaMatch || '';
+      } else if (sortField === 'dataInicio') {
+        va = a.dataInicio || '';
+        vb = b.dataInicio || '';
+      } else if (sortField === 'liquido') {
+        va = a.liquido ?? 0;
+        vb = b.liquido ?? 0;
+      } else if (sortField === 'uber') {
+        va = a.uber ?? 0;
+        vb = b.uber ?? 0;
+      } else if (sortField === 'bolt') {
+        va = a.bolt ?? 0;
+        vb = b.bolt ?? 0;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [parsedRecibos, sortField, sortDir]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
@@ -482,17 +515,69 @@ export function ImportarRecibosDialog({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Nome (PDF)</TableHead>
-                      <TableHead>Motorista (Sistema)</TableHead>
-                      <TableHead>Semana</TableHead>
-                      <TableHead className="text-right">Líquido</TableHead>
-                      <TableHead className="text-right">Uber</TableHead>
-                      <TableHead className="text-right">Bolt</TableHead>
+                      <SortableTableHead
+                        field="status"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Estado
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="nome"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Nome (PDF)
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="motoristaMatch"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Motorista (Sistema)
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="dataInicio"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Semana
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="liquido"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        align="right"
+                      >
+                        Líquido
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="uber"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        align="right"
+                      >
+                        Uber
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="bolt"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        align="right"
+                      >
+                        Bolt
+                      </SortableTableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {parsedRecibos.map((r, i) => (
+                    {sortedRecibos.map((r, i) => (
                       <TableRow key={i} className={r.status === 'error' ? 'opacity-50' : ''}>
                         <TableCell>
                           {r.status === 'matched' && (

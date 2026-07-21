@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { cn } from '@/lib/utils';
 
 import { type ClienteComDocumentos, TIPO_CLIENTE_LABELS } from '@/types/cliente';
@@ -87,6 +88,9 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
   const form = useFormContext<CondutoresFieldsShape>();
   const [adicionarOpen, setAdicionarOpen] = useState(false);
   const [infoCondutor, setInfoCondutor] = useState<ClienteComDocumentos | Motorista | null>(null);
+  const [sortField, setSortField] = useState<string>('nome');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
   // tvde e slot usam motoristas; rent_a_car usa clientes.
   const isTvde = regime !== 'rent_a_car';
 
@@ -109,6 +113,35 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
     motoristas.forEach((mo) => m.set(mo.id, mo));
     return m;
   }, [motoristas]);
+
+  // Ordena só para exibição — cada item guarda o `idx` original em `fields`
+  // (o índice do useFieldArray), que continua a ser o usado pelos handlers
+  // (handleDefinirPrincipal/handleRemover) para não desalinhar com o form.
+  const sortedFields = useMemo(() => {
+    const withEntidade = fields.map((field, idx) => {
+      const c = field.cliente_id ? clientesPorId.get(field.cliente_id) : null;
+      const mo = field.motorista_id ? motoristasPorId.get(field.motorista_id) : null;
+      return { field, idx, entidade: c ?? mo };
+    });
+    withEntidade.sort((a, b) => {
+      let va: string = '';
+      let vb: string = '';
+      if (sortField === 'nome') {
+        va = a.entidade?.nome || '';
+        vb = b.entidade?.nome || '';
+      } else if (sortField === 'nif') {
+        va = a.entidade?.nif || '';
+        vb = b.entidade?.nif || '';
+      } else if (sortField === 'telefone') {
+        va = a.entidade?.telefone || '';
+        vb = b.entidade?.telefone || '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return withEntidade;
+  }, [fields, clientesPorId, motoristasPorId, sortField, sortDir]);
 
   // Gestor automático: ao definir/trocar o motorista principal, herda o gestor
   // responsável dele (motoristas_ativos.gestor_responsavel guarda o NOME — aqui
@@ -365,15 +398,33 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30 hover:bg-muted/30">
-                <TableHead className="text-xs font-semibold uppercase tracking-wide">
+                <SortableTableHead
+                  field="nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="text-xs font-semibold uppercase tracking-wide"
+                >
                   Nome
-                </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide w-36">
+                </SortableTableHead>
+                <SortableTableHead
+                  field="nif"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="text-xs font-semibold uppercase tracking-wide w-36"
+                >
                   NIF
-                </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide w-36">
+                </SortableTableHead>
+                <SortableTableHead
+                  field="telefone"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="text-xs font-semibold uppercase tracking-wide w-36"
+                >
                   Telemóvel
-                </TableHead>
+                </SortableTableHead>
                 <TableHead className="text-center w-36">
                   <Star
                     className="h-4 w-4 inline-block text-amber-500"
@@ -396,11 +447,8 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
                   </TableCell>
                 </TableRow>
               ) : (
-                fields.map((field, idx) => {
-                  const c = field.cliente_id ? clientesPorId.get(field.cliente_id) : null;
-                  const mo = field.motorista_id ? motoristasPorId.get(field.motorista_id) : null;
+                sortedFields.map(({ field, idx, entidade }) => {
                   const principal = field.is_principal;
-                  const entidade = c ?? mo;
                   const idFallback = (field.cliente_id ?? field.motorista_id ?? '').slice(0, 8);
                   return (
                     <TableRow key={field.id} className={cn(principal && 'bg-amber-500/5')}>

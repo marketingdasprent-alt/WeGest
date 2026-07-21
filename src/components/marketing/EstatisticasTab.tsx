@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import {
   Loader2,
   Send,
@@ -39,6 +40,9 @@ export const EstatisticasTab = () => {
   const [campanhaId, setCampanhaId] = useState<string>('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [sortField, setSortField] = useState<string>('last_event_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   // Fetch campanhas enviadas
   const { data: campanhas } = useQuery({
@@ -96,6 +100,35 @@ export const EstatisticasTab = () => {
         unsubscribed: emailSends.filter((e) => e.status === 'unsubscribed').length,
       }
     : null;
+
+  const sortedEmailSends = useMemo(() => {
+    if (!emailSends) return [];
+    const list = [...emailSends];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'email') {
+        va = a.email || '';
+        vb = b.email || '';
+      } else if (sortField === 'status') {
+        va = a.status || '';
+        vb = b.status || '';
+      } else if (sortField === 'last_event') {
+        va = a.last_event || '';
+        vb = b.last_event || '';
+      } else if (sortField === 'last_event_at') {
+        va = a.last_event_at || '';
+        vb = b.last_event_at || '';
+      } else if (sortField === 'error_message') {
+        va = a.error_message || '';
+        vb = b.error_message || '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [emailSends, sortField, sortDir]);
 
   const campanhaSelecionada = campanhas?.find((c) => c.id === campanhaId);
   const totalEnviados = campanhaSelecionada?.total_enviados || totais?.total || 0;
@@ -257,15 +290,50 @@ export const EstatisticasTab = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Último Evento</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Detalhe</TableHead>
+                      <SortableTableHead
+                        field="email"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Email
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="status"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Estado
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="last_event"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Último Evento
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="last_event_at"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Data
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="error_message"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Detalhe
+                      </SortableTableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {emailSends.map((send) => (
+                    {sortedEmailSends.map((send) => (
                       <TableRow key={send.id}>
                         <TableCell className="text-sm">{send.email}</TableCell>
                         <TableCell>{statusBadge(send.status)}</TableCell>

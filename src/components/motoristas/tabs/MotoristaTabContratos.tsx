@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, addMonths } from 'date-fns';
 import { FileSignature, Download, Printer, Eye, CarTaxiFront, Euro } from 'lucide-react';
@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { SectionCard } from '@/components/ui/section-card';
 import { EstadoOperacionalBadge } from '@/components/renting/contratos/EstadoOperacionalBadge';
 import { RegimeBadge } from '@/components/renting/reservas/RegimeBadge';
@@ -78,6 +79,30 @@ export function MotoristaTabContratos({ motorista }: MotoristaTabContratosProps)
   // no badge de estado (ver EstadoOperacionalBadge).
   const { data: recolhasPendentes = [] } = useEventosPendentesRenting({ tipo: 'recolha' });
   const idsComRecolhaPendente = new Set(recolhasPendentes.map((e) => e.origem_id));
+
+  const [rentingSortField, setRentingSortField] = useState<string>('data_inicio');
+  const [rentingSortDir, setRentingSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleRentingSort = (f: string) =>
+    toggleSort(
+      f,
+      { sortField: rentingSortField, sortDir: rentingSortDir },
+      setRentingSortField,
+      setRentingSortDir
+    );
+
+  // Sem campo por omissão: preserva a ordem original da query (versao desc) até o
+  // utilizador clicar num cabeçalho — nenhum dos campos ordenáveis expostos
+  // corresponde 1:1 a essa ordem (contratos_ podem ter datas de início não
+  // monótonas com a versão).
+  const [prestacaoSortField, setPrestacaoSortField] = useState<string>('');
+  const [prestacaoSortDir, setPrestacaoSortDir] = useState<'asc' | 'desc'>('desc');
+  const handlePrestacaoSort = (f: string) =>
+    toggleSort(
+      f,
+      { sortField: prestacaoSortField, sortDir: prestacaoSortDir },
+      setPrestacaoSortField,
+      setPrestacaoSortDir
+    );
 
   const loadContratos = async () => {
     try {
@@ -287,6 +312,65 @@ export function MotoristaTabContratos({ motorista }: MotoristaTabContratosProps)
     }
   };
 
+  const contratosRentingOrdenados = useMemo(() => {
+    const list = [...contratosRenting];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (rentingSortField === 'codigo') {
+        va = a.codigo;
+        vb = b.codigo;
+      } else if (rentingSortField === 'matricula') {
+        va = a.matricula || '';
+        vb = b.matricula || '';
+      } else if (rentingSortField === 'data_inicio') {
+        va = a.data_inicio;
+        vb = b.data_inicio;
+      } else if (rentingSortField === 'data_fim') {
+        va = a.data_fim || '';
+        vb = b.data_fim || '';
+      } else if (rentingSortField === 'estado_operacional') {
+        va = a.estado_operacional;
+        vb = b.estado_operacional;
+      } else if (rentingSortField === 'estado_financeiro') {
+        va = a.estado_financeiro;
+        vb = b.estado_financeiro;
+      }
+      if (va < vb) return rentingSortDir === 'asc' ? -1 : 1;
+      if (va > vb) return rentingSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [contratosRenting, rentingSortField, rentingSortDir]);
+
+  const contratosOrdenados = useMemo(() => {
+    const list = [...contratos];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (prestacaoSortField === 'numero_contrato') {
+        va = a.numero_contrato ?? -1;
+        vb = b.numero_contrato ?? -1;
+      } else if (prestacaoSortField === 'empresa') {
+        va = getEmpresaNome(a.empresa_id);
+        vb = getEmpresaNome(b.empresa_id);
+      } else if (prestacaoSortField === 'data_inicio') {
+        va = a.data_inicio;
+        vb = b.data_inicio;
+      } else if (prestacaoSortField === 'data_fim') {
+        va = addMonths(new Date(a.data_inicio), a.duracao_meses || 12).getTime();
+        vb = addMonths(new Date(b.data_inicio), b.duracao_meses || 12).getTime();
+      } else if (prestacaoSortField === 'status') {
+        va = a.status;
+        vb = b.status;
+      }
+      if (va < vb) return prestacaoSortDir === 'asc' ? -1 : 1;
+      if (va > vb) return prestacaoSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [contratos, prestacaoSortField, prestacaoSortDir]);
+
   const loading = loadingContratos || loadingRenting;
 
   if (loading) {
@@ -311,12 +395,55 @@ export function MotoristaTabContratos({ motorista }: MotoristaTabContratosProps)
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-24">Código</TableHead>
-              <TableHead>Viatura</TableHead>
-              <TableHead>Início</TableHead>
-              <TableHead>Fim</TableHead>
-              <TableHead>Estado Op.</TableHead>
-              <TableHead>Estado Fin.</TableHead>
+              <SortableTableHead
+                field="codigo"
+                sortField={rentingSortField}
+                sortDir={rentingSortDir}
+                onSort={handleRentingSort}
+                className="w-24"
+              >
+                Código
+              </SortableTableHead>
+              <SortableTableHead
+                field="matricula"
+                sortField={rentingSortField}
+                sortDir={rentingSortDir}
+                onSort={handleRentingSort}
+              >
+                Viatura
+              </SortableTableHead>
+              <SortableTableHead
+                field="data_inicio"
+                sortField={rentingSortField}
+                sortDir={rentingSortDir}
+                onSort={handleRentingSort}
+              >
+                Início
+              </SortableTableHead>
+              <SortableTableHead
+                field="data_fim"
+                sortField={rentingSortField}
+                sortDir={rentingSortDir}
+                onSort={handleRentingSort}
+              >
+                Fim
+              </SortableTableHead>
+              <SortableTableHead
+                field="estado_operacional"
+                sortField={rentingSortField}
+                sortDir={rentingSortDir}
+                onSort={handleRentingSort}
+              >
+                Estado Op.
+              </SortableTableHead>
+              <SortableTableHead
+                field="estado_financeiro"
+                sortField={rentingSortField}
+                sortDir={rentingSortDir}
+                onSort={handleRentingSort}
+              >
+                Estado Fin.
+              </SortableTableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
@@ -329,7 +456,7 @@ export function MotoristaTabContratos({ motorista }: MotoristaTabContratosProps)
                 </TableCell>
               </TableRow>
             ) : (
-              contratosRenting.map((c) => (
+              contratosRentingOrdenados.map((c) => (
                 <TableRow
                   key={c.id}
                   className="cursor-pointer hover:bg-muted/50 transition-colors"
@@ -383,11 +510,47 @@ export function MotoristaTabContratos({ motorista }: MotoristaTabContratosProps)
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-28">Nº</TableHead>
-              <TableHead>Empresa / Viatura</TableHead>
-              <TableHead>Início</TableHead>
-              <TableHead>Fim</TableHead>
-              <TableHead>Status</TableHead>
+              <SortableTableHead
+                field="numero_contrato"
+                sortField={prestacaoSortField}
+                sortDir={prestacaoSortDir}
+                onSort={handlePrestacaoSort}
+                className="w-28"
+              >
+                Nº
+              </SortableTableHead>
+              <SortableTableHead
+                field="empresa"
+                sortField={prestacaoSortField}
+                sortDir={prestacaoSortDir}
+                onSort={handlePrestacaoSort}
+              >
+                Empresa / Viatura
+              </SortableTableHead>
+              <SortableTableHead
+                field="data_inicio"
+                sortField={prestacaoSortField}
+                sortDir={prestacaoSortDir}
+                onSort={handlePrestacaoSort}
+              >
+                Início
+              </SortableTableHead>
+              <SortableTableHead
+                field="data_fim"
+                sortField={prestacaoSortField}
+                sortDir={prestacaoSortDir}
+                onSort={handlePrestacaoSort}
+              >
+                Fim
+              </SortableTableHead>
+              <SortableTableHead
+                field="status"
+                sortField={prestacaoSortField}
+                sortDir={prestacaoSortDir}
+                onSort={handlePrestacaoSort}
+              >
+                Status
+              </SortableTableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -400,7 +563,7 @@ export function MotoristaTabContratos({ motorista }: MotoristaTabContratosProps)
                 </TableCell>
               </TableRow>
             ) : (
-              contratos.map((contrato) => (
+              contratosOrdenados.map((contrato) => (
                 <TableRow
                   key={contrato.id}
                   className={

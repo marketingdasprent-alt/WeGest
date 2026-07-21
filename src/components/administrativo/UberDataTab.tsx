@@ -7,14 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -42,6 +35,7 @@ import { cn, matchesSearch } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface Integracao {
   id: string;
@@ -151,6 +145,9 @@ export const UberDataTab: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIntegracao, setSelectedIntegracao] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [sortField, setSortField] = useState<string>('occurred_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const statusOptions = [
     { value: 'all', label: 'Todos os estados' },
@@ -348,7 +345,7 @@ export const UberDataTab: React.FC = () => {
   }, [transactions]);
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter((t) => {
+    const list = transactions.filter((t) => {
       if (selectedStatus !== 'all') {
         if (selectedStatus === 'settled' && t.status !== 'settled') return false;
         if (selectedStatus === 'pending' && t.status !== 'pending') return false;
@@ -366,7 +363,45 @@ export const UberDataTab: React.FC = () => {
       }
       return true;
     });
-  }, [transactions, searchTerm, selectedStatus, driverNameMap, uberDriversMap]);
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortField) {
+        case 'integracao':
+          va = a.integracao?.nome || '';
+          vb = b.integracao?.nome || '';
+          break;
+        case 'trip_reference':
+          va = a.trip_reference || '';
+          vb = b.trip_reference || '';
+          break;
+        case 'motorista':
+          va = getDriverName(a, driverNameMap, uberDriversMap).name;
+          vb = getDriverName(b, driverNameMap, uberDriversMap).name;
+          break;
+        case 'occurred_at':
+          va = a.occurred_at || '';
+          vb = b.occurred_at || '';
+          break;
+        case 'transaction_type':
+          va = a.transaction_type || '';
+          vb = b.transaction_type || '';
+          break;
+        case 'gross_amount':
+          va = a.gross_amount || 0;
+          vb = b.gross_amount || 0;
+          break;
+        case 'status':
+          va = a.status || '';
+          vb = b.status || '';
+          break;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [transactions, searchTerm, selectedStatus, driverNameMap, uberDriversMap, sortField, sortDir]);
 
   const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
     usePagination(
@@ -653,13 +688,64 @@ export const UberDataTab: React.FC = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Integração</TableHead>
-                <TableHead>Referência</TableHead>
-                <TableHead>Motorista</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="text-center">Estado</TableHead>
+                <SortableTableHead
+                  field="integracao"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Integração
+                </SortableTableHead>
+                <SortableTableHead
+                  field="trip_reference"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Referência
+                </SortableTableHead>
+                <SortableTableHead
+                  field="motorista"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Motorista
+                </SortableTableHead>
+                <SortableTableHead
+                  field="occurred_at"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Data
+                </SortableTableHead>
+                <SortableTableHead
+                  field="transaction_type"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Tipo
+                </SortableTableHead>
+                <SortableTableHead
+                  field="gross_amount"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Valor
+                </SortableTableHead>
+                <SortableTableHead
+                  field="status"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="text-center"
+                >
+                  Estado
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

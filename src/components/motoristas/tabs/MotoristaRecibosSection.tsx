@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import {
   Select,
   SelectContent,
@@ -88,6 +89,26 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
   const [ficheiroSelecionado, setFicheiroSelecionado] = useState<File | null>(null);
   const [semanaSeleccionada, setSemanaSeleccionada] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [resumosSortField, setResumosSortField] = useState<string>('semana_referencia_inicio');
+  const [resumosSortDir, setResumosSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleResumosSort = (f: string) =>
+    toggleSort(
+      f,
+      { sortField: resumosSortField, sortDir: resumosSortDir },
+      setResumosSortField,
+      setResumosSortDir
+    );
+
+  const [recibosSortField, setRecibosSortField] = useState<string>('created_at');
+  const [recibosSortDir, setRecibosSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleRecibosSort = (f: string) =>
+    toggleSort(
+      f,
+      { sortField: recibosSortField, sortDir: recibosSortDir },
+      setRecibosSortField,
+      setRecibosSortDir
+    );
 
   const semanasDisponiveis = useMemo(() => {
     const dataBase = motorista?.data_contratacao
@@ -532,20 +553,69 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
   };
 
   // Filtrar recibos por semana e status
-  const recibosFiltrados = recibos.filter((recibo) => {
-    if (filtroStatus !== 'todos' && recibo.status !== filtroStatus) return false;
+  const recibosFiltrados = recibos
+    .filter((recibo) => {
+      if (filtroStatus !== 'todos' && recibo.status !== filtroStatus) return false;
 
-    // Filtro temporal: se o recibo tem semana de referência, deve bater com o início da semana selecionada
-    if (recibo.semana_referencia_inicio) {
-      const recWeekStart = format(new Date(recibo.semana_referencia_inicio), 'yyyy-MM-dd');
-      const selWeekStart = format(weekStart, 'yyyy-MM-dd');
-      return recWeekStart === selWeekStart;
-    }
+      // Filtro temporal: se o recibo tem semana de referência, deve bater com o início da semana selecionada
+      if (recibo.semana_referencia_inicio) {
+        const recWeekStart = format(new Date(recibo.semana_referencia_inicio), 'yyyy-MM-dd');
+        const selWeekStart = format(weekStart, 'yyyy-MM-dd');
+        return recWeekStart === selWeekStart;
+      }
 
-    // Se não tem semana de referência, tentamos ver se a data de criação cai na semana (opcional)
-    // Mas o mais correto é o motorista associar à semana certa.
-    return true;
-  });
+      // Se não tem semana de referência, tentamos ver se a data de criação cai na semana (opcional)
+      // Mas o mais correto é o motorista associar à semana certa.
+      return true;
+    })
+    .sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (recibosSortField === 'codigo') {
+        va = a.codigo;
+        vb = b.codigo;
+      } else if (recibosSortField === 'descricao') {
+        va = a.descricao;
+        vb = b.descricao;
+      } else if (recibosSortField === 'valor_total') {
+        va = a.valor_total || 0;
+        vb = b.valor_total || 0;
+      } else if (recibosSortField === 'status') {
+        va = a.status;
+        vb = b.status;
+      } else if (recibosSortField === 'created_at') {
+        va = a.created_at;
+        vb = b.created_at;
+      }
+      if (va < vb) return recibosSortDir === 'asc' ? -1 : 1;
+      if (va > vb) return recibosSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+  const resumosOrdenados = useMemo(() => {
+    const list = [...resumosGuardados];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (resumosSortField === 'semana_referencia_inicio') {
+        va = a.semana_referencia_inicio || a.periodo_referencia || '';
+        vb = b.semana_referencia_inicio || b.periodo_referencia || '';
+      } else if (resumosSortField === 'descricao') {
+        va = a.descricao;
+        vb = b.descricao;
+      } else if (resumosSortField === 'valor_total') {
+        va = a.valor_total || 0;
+        vb = b.valor_total || 0;
+      } else if (resumosSortField === 'created_at') {
+        va = a.created_at;
+        vb = b.created_at;
+      }
+      if (va < vb) return resumosSortDir === 'asc' ? -1 : 1;
+      if (va > vb) return resumosSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [resumosGuardados, resumosSortField, resumosSortDir]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val);
@@ -652,15 +722,44 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
-                  <TableHead>Período</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead className="text-right">Líquido</TableHead>
-                  <TableHead>Guardado em</TableHead>
+                  <SortableTableHead
+                    field="semana_referencia_inicio"
+                    sortField={resumosSortField}
+                    sortDir={resumosSortDir}
+                    onSort={handleResumosSort}
+                  >
+                    Período
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="descricao"
+                    sortField={resumosSortField}
+                    sortDir={resumosSortDir}
+                    onSort={handleResumosSort}
+                  >
+                    Descrição
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="valor_total"
+                    sortField={resumosSortField}
+                    sortDir={resumosSortDir}
+                    onSort={handleResumosSort}
+                    align="right"
+                  >
+                    Líquido
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="created_at"
+                    sortField={resumosSortField}
+                    sortDir={resumosSortDir}
+                    onSort={handleResumosSort}
+                  >
+                    Guardado em
+                  </SortableTableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {resumosGuardados.map((resumo) => (
+                {resumosOrdenados.map((resumo) => (
                   <TableRow key={resumo.id}>
                     <TableCell className="font-mono text-xs font-medium text-blue-700">
                       {resumo.semana_referencia_inicio
@@ -759,10 +858,40 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
-                  <TableHead className="w-24">Código</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead>Status</TableHead>
+                  <SortableTableHead
+                    field="codigo"
+                    sortField={recibosSortField}
+                    sortDir={recibosSortDir}
+                    onSort={handleRecibosSort}
+                    className="w-24"
+                  >
+                    Código
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="descricao"
+                    sortField={recibosSortField}
+                    sortDir={recibosSortDir}
+                    onSort={handleRecibosSort}
+                  >
+                    Descrição
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="valor_total"
+                    sortField={recibosSortField}
+                    sortDir={recibosSortDir}
+                    onSort={handleRecibosSort}
+                    align="right"
+                  >
+                    Valor
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="status"
+                    sortField={recibosSortField}
+                    sortDir={recibosSortDir}
+                    onSort={handleRecibosSort}
+                  >
+                    Status
+                  </SortableTableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>

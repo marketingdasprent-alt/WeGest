@@ -8,9 +8,6 @@ import {
   Pencil,
   Trash2,
   AlertTriangle,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   Layers,
   Printer,
   FileSpreadsheet,
@@ -56,6 +53,7 @@ import { exportViaturasPdf, exportViaturasExcel } from '@/utils/viaturasExport';
 import { useViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface ViaturasTipo {
   id: string;
@@ -86,9 +84,6 @@ interface Viatura {
   viatura_tipos?: ViaturasTipo | null;
 }
 
-type SortColumn = 'matricula' | 'marca' | 'ano' | 'km_atual' | 'status';
-type SortDirection = 'asc' | 'desc';
-
 /** Lower-case + strip diacritics + strip dashes/spaces — pesquisa de matrícula/marca/modelo. */
 function normalizeSearch(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[-\s]/g, '');
@@ -114,8 +109,9 @@ export default function Viaturas() {
   const [combustivelFilter, setCombustivelFilter] = useState<string>('all');
   const [tipoFilter, setTipoFilter] = useState<string>('all');
   const [tipos, setTipos] = useState<ViaturasTipo[]>([]);
-  const [sortColumn, setSortColumn] = useState<SortColumn>('matricula');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [sortField, setSortField] = useState<string>('matricula');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   // Dialog states
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -182,26 +178,6 @@ export default function Viaturas() {
     };
   }, [viaturas, estadoDe]);
 
-  const handleSort = (column: SortColumn) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
-
-  const getSortIcon = (column: SortColumn) => {
-    if (sortColumn !== column) {
-      return <ArrowUpDown className="h-4 w-4" />;
-    }
-    return sortDirection === 'asc' ? (
-      <ArrowUp className="h-4 w-4" />
-    ) : (
-      <ArrowDown className="h-4 w-4" />
-    );
-  };
-
   const tiposCounts = useMemo(() => {
     const total: Record<string, number> = {};
     const disponiveis: Record<string, number> = {};
@@ -265,8 +241,33 @@ export default function Viaturas() {
 
     // Ordenação
     result.sort((a, b) => {
-      let aVal: any = sortColumn === 'status' ? estadoDe(a) : a[sortColumn];
-      let bVal: any = sortColumn === 'status' ? estadoDe(b) : b[sortColumn];
+      let aVal: any = '';
+      let bVal: any = '';
+      if (sortField === 'matricula') {
+        aVal = a.matricula;
+        bVal = b.matricula;
+      } else if (sortField === 'marca') {
+        aVal = a.marca;
+        bVal = b.marca;
+      } else if (sortField === 'ano') {
+        aVal = a.ano;
+        bVal = b.ano;
+      } else if (sortField === 'categoria') {
+        aVal = a.categoria;
+        bVal = b.categoria;
+      } else if (sortField === 'combustivel') {
+        aVal = a.combustivel;
+        bVal = b.combustivel;
+      } else if (sortField === 'status') {
+        aVal = estadoDe(a);
+        bVal = estadoDe(b);
+      } else if (sortField === 'km_atual') {
+        aVal = a.km_atual;
+        bVal = b.km_atual;
+      } else if (sortField === 'inspecao_validade') {
+        aVal = a.inspecao_validade;
+        bVal = b.inspecao_validade;
+      }
 
       if (aVal === null || aVal === undefined) aVal = '';
       if (bVal === null || bVal === undefined) bVal = '';
@@ -274,8 +275,8 @@ export default function Viaturas() {
       if (typeof aVal === 'string') aVal = aVal.toLowerCase();
       if (typeof bVal === 'string') bVal = bVal.toLowerCase();
 
-      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
       return 0;
     });
 
@@ -287,8 +288,8 @@ export default function Viaturas() {
     categoriaFilter,
     combustivelFilter,
     tipoFilter,
-    sortColumn,
-    sortDirection,
+    sortField,
+    sortDir,
     estadoDe,
   ]);
 
@@ -651,54 +652,78 @@ export default function Viaturas() {
           <Table>
             <TableHeader>
               <TableRow className="h-10">
-                <TableHead
-                  className="h-10 cursor-pointer hover:bg-muted/50"
-                  onClick={() => handleSort('matricula')}
+                <SortableTableHead
+                  field="matricula"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-10"
                 >
-                  <div className="flex items-center gap-2 text-xs">
-                    Matrícula
-                    {getSortIcon('matricula')}
-                  </div>
-                </TableHead>
-                <TableHead
-                  className="h-10 cursor-pointer hover:bg-muted/50"
-                  onClick={() => handleSort('marca')}
+                  Matrícula
+                </SortableTableHead>
+                <SortableTableHead
+                  field="marca"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-10"
                 >
-                  <div className="flex items-center gap-2 text-xs">
-                    Marca/Modelo
-                    {getSortIcon('marca')}
-                  </div>
-                </TableHead>
-                <TableHead
-                  className="h-10 cursor-pointer hover:bg-muted/50"
-                  onClick={() => handleSort('ano')}
+                  Marca/Modelo
+                </SortableTableHead>
+                <SortableTableHead
+                  field="ano"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-10"
                 >
-                  <div className="flex items-center gap-2 text-xs">
-                    Ano
-                    {getSortIcon('ano')}
-                  </div>
-                </TableHead>
-                <TableHead className="h-10 text-xs">Categoria</TableHead>
-                <TableHead className="h-10 text-xs">Combustível</TableHead>
-                <TableHead
-                  className="h-10 cursor-pointer hover:bg-muted/50"
-                  onClick={() => handleSort('status')}
+                  Ano
+                </SortableTableHead>
+                <SortableTableHead
+                  field="categoria"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-10"
                 >
-                  <div className="flex items-center gap-2 text-xs">
-                    Status
-                    {getSortIcon('status')}
-                  </div>
-                </TableHead>
-                <TableHead
-                  className="h-10 cursor-pointer hover:bg-muted/50"
-                  onClick={() => handleSort('km_atual')}
+                  Categoria
+                </SortableTableHead>
+                <SortableTableHead
+                  field="combustivel"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-10"
                 >
-                  <div className="flex items-center gap-2 text-xs">
-                    Km
-                    {getSortIcon('km_atual')}
-                  </div>
-                </TableHead>
-                <TableHead className="h-10 text-xs">Inspeção</TableHead>
+                  Combustível
+                </SortableTableHead>
+                <SortableTableHead
+                  field="status"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-10"
+                >
+                  Status
+                </SortableTableHead>
+                <SortableTableHead
+                  field="km_atual"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-10"
+                >
+                  Km
+                </SortableTableHead>
+                <SortableTableHead
+                  field="inspecao_validade"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-10"
+                >
+                  Inspeção
+                </SortableTableHead>
                 <TableHead className="h-10 text-xs text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>

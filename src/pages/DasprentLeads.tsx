@@ -24,6 +24,7 @@ import { pt } from 'date-fns/locale';
 import { DasprentNavigation } from '@/components/DasprentNavigation';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface Lead {
   id: string;
@@ -56,6 +57,9 @@ const DasprentLeads = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [sortField, setSortField] = useState<string>('created_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -116,8 +120,39 @@ const DasprentLeads = () => {
     return statusOption ? statusOption.label : status;
   };
 
-  const filteredLeads =
-    filterStatus === 'all' ? leads : leads.filter((lead) => lead.status === filterStatus);
+  const filteredLeads = (
+    filterStatus === 'all' ? leads : leads.filter((lead) => lead.status === filterStatus)
+  )
+    .slice()
+    .sort((a, b) => {
+      let va: string = '';
+      let vb: string = '';
+      if (sortField === 'nome') {
+        va = a.nome;
+        vb = b.nome;
+      } else if (sortField === 'email') {
+        va = a.email;
+        vb = b.email;
+      } else if (sortField === 'zona') {
+        va = a.zona || '';
+        vb = b.zona || '';
+      } else if (sortField === 'tipo_viatura') {
+        va = a.tipo_viatura || '';
+        vb = b.tipo_viatura || '';
+      } else if (sortField === 'data_aluguer') {
+        va = a.data_aluguer || '';
+        vb = b.data_aluguer || '';
+      } else if (sortField === 'status') {
+        va = a.status;
+        vb = b.status;
+      } else if (sortField === 'created_at') {
+        va = a.created_at;
+        vb = b.created_at;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   // Paginação client-side (com seletor de tamanho). Volta à 1ª página ao trocar
   // de filtro de status.
@@ -249,13 +284,69 @@ const DasprentLeads = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-gray-300">Nome</TableHead>
-                      <TableHead className="text-gray-300">Contacto</TableHead>
-                      <TableHead className="text-gray-300">Zona</TableHead>
-                      <TableHead className="text-gray-300">Tipo Viatura</TableHead>
-                      <TableHead className="text-gray-300">Data Aluguer</TableHead>
-                      <TableHead className="text-gray-300">Status</TableHead>
-                      <TableHead className="text-gray-300">Data Criação</TableHead>
+                      <SortableTableHead
+                        field="nome"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-gray-300"
+                      >
+                        Nome
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="email"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-gray-300"
+                      >
+                        Contacto
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="zona"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-gray-300"
+                      >
+                        Zona
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="tipo_viatura"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-gray-300"
+                      >
+                        Tipo Viatura
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="data_aluguer"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-gray-300"
+                      >
+                        Data Aluguer
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="status"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-gray-300"
+                      >
+                        Status
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="created_at"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-gray-300"
+                      >
+                        Data Criação
+                      </SortableTableHead>
                       <TableHead className="text-gray-300">Observações</TableHead>
                     </TableRow>
                   </TableHeader>

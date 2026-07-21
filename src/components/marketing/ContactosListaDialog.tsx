@@ -12,7 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Trash2, Loader2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMotoristasAudiencia } from '@/hooks/useMotoristasAudiencia';
 
@@ -26,17 +27,9 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
   const queryClient = useQueryClient();
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
-  const [sortField, setSortField] = useState<'nome' | 'email' | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-
-  const toggleSort = (field: 'nome' | 'email') => {
-    if (sortField === field) {
-      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
+  const [sortField, setSortField] = useState<string>('nome');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const isSistema = lista.origem === 'motoristas_ativos';
 
@@ -62,13 +55,24 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
   const carregando = isSistema ? loadingSistema : isLoading;
 
   const sortedContactos = useMemo(() => {
-    if (!linhas || !sortField) return linhas;
-    return [...linhas].sort((a, b) => {
-      const valA = (a[sortField] || '').toLowerCase();
-      const valB = (b[sortField] || '').toLowerCase();
-      return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    if (!linhas) return linhas;
+    const list = [...linhas];
+    list.sort((a, b) => {
+      let va = '';
+      let vb = '';
+      if (sortField === 'nome') {
+        va = (a.nome || '').toLowerCase();
+        vb = (b.nome || '').toLowerCase();
+      } else if (sortField === 'email') {
+        va = (a.email || '').toLowerCase();
+        vb = (b.email || '').toLowerCase();
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
     });
-  }, [linhas, sortField, sortDirection]);
+    return list;
+  }, [linhas, sortField, sortDir]);
 
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -150,44 +154,22 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="gap-1 -ml-2"
-                    onClick={() => toggleSort('nome')}
-                  >
-                    Nome
-                    {sortField === 'nome' ? (
-                      sortDirection === 'asc' ? (
-                        <ArrowUp className="h-3 w-3" />
-                      ) : (
-                        <ArrowDown className="h-3 w-3" />
-                      )
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
-                    )}
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="gap-1 -ml-2"
-                    onClick={() => toggleSort('email')}
-                  >
-                    Email
-                    {sortField === 'email' ? (
-                      sortDirection === 'asc' ? (
-                        <ArrowUp className="h-3 w-3" />
-                      ) : (
-                        <ArrowDown className="h-3 w-3" />
-                      )
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
-                    )}
-                  </Button>
-                </TableHead>
+                <SortableTableHead
+                  field="nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Nome
+                </SortableTableHead>
+                <SortableTableHead
+                  field="email"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Email
+                </SortableTableHead>
                 {!isSistema && <TableHead className="w-10" />}
               </TableRow>
             </TableHeader>

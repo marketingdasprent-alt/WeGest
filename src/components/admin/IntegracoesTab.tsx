@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, Pencil, Trash2, Webhook, Play, Settings } from 'lucide-react';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { IntegracaoCard, type IntegracaoCardData } from './IntegracaoCard';
 import { IntegracaoDialog } from './IntegracaoDialog';
 import { IntegracaoDetailModal } from './IntegracaoDetailModal';
@@ -118,6 +119,15 @@ export const IntegracoesTab: React.FC = () => {
 
   // Webhooks
   const [webhooks, setWebhooks] = useState<IntegracaoWebhook[]>([]);
+  const [webhookSortField, setWebhookSortField] = useState<string>('nome');
+  const [webhookSortDir, setWebhookSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleWebhookSort = (f: string) =>
+    toggleSort(
+      f,
+      { sortField: webhookSortField, sortDir: webhookSortDir },
+      setWebhookSortField,
+      setWebhookSortDir
+    );
   const [webhookDialogOpen, setWebhookDialogOpen] = useState(false);
   const [deleteWebhookDialogOpen, setDeleteWebhookDialogOpen] = useState(false);
   const [selectedWebhook, setSelectedWebhook] = useState<IntegracaoWebhook | null>(null);
@@ -654,6 +664,28 @@ export const IntegracoesTab: React.FC = () => {
   const getEventoLabel = (evento: string) =>
     EVENTOS_DISPONIVEIS.find((e) => e.value === evento)?.label || evento;
 
+  const sortedWebhooks = React.useMemo(() => {
+    const list = [...webhooks];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (webhookSortField === 'nome') {
+        va = a.nome;
+        vb = b.nome;
+      } else if (webhookSortField === 'evento') {
+        va = getEventoLabel(a.evento);
+        vb = getEventoLabel(b.evento);
+      } else if (webhookSortField === 'url') {
+        va = a.url;
+        vb = b.url;
+      }
+      if (va < vb) return webhookSortDir === 'asc' ? -1 : 1;
+      if (va > vb) return webhookSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [webhooks, webhookSortField, webhookSortDir]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -751,15 +783,36 @@ export const IntegracoesTab: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Evento</TableHead>
-                  <TableHead>URL</TableHead>
+                  <SortableTableHead
+                    field="nome"
+                    sortField={webhookSortField}
+                    sortDir={webhookSortDir}
+                    onSort={handleWebhookSort}
+                  >
+                    Nome
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="evento"
+                    sortField={webhookSortField}
+                    sortDir={webhookSortDir}
+                    onSort={handleWebhookSort}
+                  >
+                    Evento
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="url"
+                    sortField={webhookSortField}
+                    sortDir={webhookSortDir}
+                    onSort={handleWebhookSort}
+                  >
+                    URL
+                  </SortableTableHead>
                   <TableHead className="text-center">Estado</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {webhooks.map((webhook) => (
+                {sortedWebhooks.map((webhook) => (
                   <TableRow key={webhook.id}>
                     <TableCell>
                       <div>

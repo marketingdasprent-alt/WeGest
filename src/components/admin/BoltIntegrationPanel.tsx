@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { SINCRONIZACAO_ATIVA } from '@/config/sync';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { useTenant } from '@/contexts/TenantContext';
 import {
   Loader2,
@@ -108,6 +109,23 @@ export const BoltIntegrationPanel: React.FC = () => {
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [logs, setLogs] = useState<BoltSyncLog[]>([]);
 
+  // Ordenação — Mapeamento
+  const [sortFieldMap, setSortFieldMap] = useState<string>('driver_name');
+  const [sortDirMap, setSortDirMap] = useState<'asc' | 'desc'>('asc');
+  const handleSortMap = (f: string) =>
+    toggleSort(f, { sortField: sortFieldMap, sortDir: sortDirMap }, setSortFieldMap, setSortDirMap);
+
+  // Ordenação — Histórico
+  const [sortFieldLogs, setSortFieldLogs] = useState<string>('created_at');
+  const [sortDirLogs, setSortDirLogs] = useState<'asc' | 'desc'>('desc');
+  const handleSortLogs = (f: string) =>
+    toggleSort(
+      f,
+      { sortField: sortFieldLogs, sortDir: sortDirLogs },
+      setSortFieldLogs,
+      setSortDirLogs
+    );
+
   const [syncDates, setSyncDates] = useState({
     start: format(subDays(new Date(), 7), 'yyyy-MM-dd'),
     end: format(new Date(), 'yyyy-MM-dd'),
@@ -119,6 +137,28 @@ export const BoltIntegrationPanel: React.FC = () => {
   const [loadingBoltData, setLoadingBoltData] = useState(false);
   const [fetchingDrivers, setFetchingDrivers] = useState(false);
   const [fetchingVehicles, setFetchingVehicles] = useState(false);
+
+  // Ordenação — Motoristas Bolt
+  const [sortFieldDrivers, setSortFieldDrivers] = useState<string>('name');
+  const [sortDirDrivers, setSortDirDrivers] = useState<'asc' | 'desc'>('asc');
+  const handleSortDrivers = (f: string) =>
+    toggleSort(
+      f,
+      { sortField: sortFieldDrivers, sortDir: sortDirDrivers },
+      setSortFieldDrivers,
+      setSortDirDrivers
+    );
+
+  // Ordenação — Viaturas Bolt
+  const [sortFieldVehicles, setSortFieldVehicles] = useState<string>('license_plate');
+  const [sortDirVehicles, setSortDirVehicles] = useState<'asc' | 'desc'>('asc');
+  const handleSortVehicles = (f: string) =>
+    toggleSort(
+      f,
+      { sortField: sortFieldVehicles, sortDir: sortDirVehicles },
+      setSortFieldVehicles,
+      setSortDirVehicles
+    );
 
   useEffect(() => {
     fetchData();
@@ -508,6 +548,115 @@ export const BoltIntegrationPanel: React.FC = () => {
     }
   };
 
+  const sortedBoltDrivers = useMemo(() => {
+    const list = [...boltDrivers];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortFieldDrivers === 'name') {
+        va = a.name || a.first_name || '';
+        vb = b.name || b.first_name || '';
+      } else if (sortFieldDrivers === 'phone') {
+        va = a.phone || '';
+        vb = b.phone || '';
+      } else if (sortFieldDrivers === 'email') {
+        va = a.email || '';
+        vb = b.email || '';
+      } else if (sortFieldDrivers === 'status') {
+        va = a.status || '';
+        vb = b.status || '';
+      }
+      if (va < vb) return sortDirDrivers === 'asc' ? -1 : 1;
+      if (va > vb) return sortDirDrivers === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [boltDrivers, sortFieldDrivers, sortDirDrivers]);
+
+  const sortedBoltVehicles = useMemo(() => {
+    const list = [...boltVehicles];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortFieldVehicles === 'license_plate') {
+        va = a.license_plate || a.reg_number || '';
+        vb = b.license_plate || b.reg_number || '';
+      } else if (sortFieldVehicles === 'model') {
+        va = a.model || '';
+        vb = b.model || '';
+      } else if (sortFieldVehicles === 'brand') {
+        va = a.brand || a.make || '';
+        vb = b.brand || b.make || '';
+      } else if (sortFieldVehicles === 'color') {
+        va = a.color || '';
+        vb = b.color || '';
+      } else if (sortFieldVehicles === 'status') {
+        va = a.status || '';
+        vb = b.status || '';
+      }
+      if (va < vb) return sortDirVehicles === 'asc' ? -1 : 1;
+      if (va > vb) return sortDirVehicles === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [boltVehicles, sortFieldVehicles, sortDirVehicles]);
+
+  const sortedMapeamentos = useMemo(() => {
+    const list = [...mapeamentos];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortFieldMap === 'driver_name') {
+        va = a.driver_name || '';
+        vb = b.driver_name || '';
+      } else if (sortFieldMap === 'driver_phone') {
+        va = a.driver_phone || '';
+        vb = b.driver_phone || '';
+      } else if (sortFieldMap === 'mapeamento') {
+        va = a.auto_mapped ? 2 : a.motorista_id ? 1 : 0;
+        vb = b.auto_mapped ? 2 : b.motorista_id ? 1 : 0;
+      }
+      if (va < vb) return sortDirMap === 'asc' ? -1 : 1;
+      if (va > vb) return sortDirMap === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [mapeamentos, sortFieldMap, sortDirMap]);
+
+  const sortedLogs = useMemo(() => {
+    const list = [...logs];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortFieldLogs === 'created_at') {
+        va = a.created_at;
+        vb = b.created_at;
+      } else if (sortFieldLogs === 'tipo') {
+        va = a.tipo || '';
+        vb = b.tipo || '';
+      } else if (sortFieldLogs === 'status') {
+        va = a.status || '';
+        vb = b.status || '';
+      } else if (sortFieldLogs === 'viagens_novas') {
+        va = a.viagens_novas || 0;
+        vb = b.viagens_novas || 0;
+      } else if (sortFieldLogs === 'viagens_atualizadas') {
+        va = a.viagens_atualizadas || 0;
+        vb = b.viagens_atualizadas || 0;
+      } else if (sortFieldLogs === 'erros') {
+        va = a.erros || 0;
+        vb = b.erros || 0;
+      } else if (sortFieldLogs === 'mensagem') {
+        va = a.mensagem || '';
+        vb = b.mensagem || '';
+      }
+      if (va < vb) return sortDirLogs === 'asc' ? -1 : 1;
+      if (va > vb) return sortDirLogs === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [logs, sortFieldLogs, sortDirLogs]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -758,14 +907,42 @@ export const BoltIntegrationPanel: React.FC = () => {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Nome</TableHead>
-                          <TableHead>Telefone</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Estado</TableHead>
+                          <SortableTableHead
+                            field="name"
+                            sortField={sortFieldDrivers}
+                            sortDir={sortDirDrivers}
+                            onSort={handleSortDrivers}
+                          >
+                            Nome
+                          </SortableTableHead>
+                          <SortableTableHead
+                            field="phone"
+                            sortField={sortFieldDrivers}
+                            sortDir={sortDirDrivers}
+                            onSort={handleSortDrivers}
+                          >
+                            Telefone
+                          </SortableTableHead>
+                          <SortableTableHead
+                            field="email"
+                            sortField={sortFieldDrivers}
+                            sortDir={sortDirDrivers}
+                            onSort={handleSortDrivers}
+                          >
+                            Email
+                          </SortableTableHead>
+                          <SortableTableHead
+                            field="status"
+                            sortField={sortFieldDrivers}
+                            sortDir={sortDirDrivers}
+                            onSort={handleSortDrivers}
+                          >
+                            Estado
+                          </SortableTableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {boltDrivers.map((driver, index) => (
+                        {sortedBoltDrivers.map((driver, index) => (
                           <TableRow key={driver.uuid || index}>
                             <TableCell className="font-medium">
                               {driver.name || driver.first_name || 'Sem nome'}
@@ -808,15 +985,50 @@ export const BoltIntegrationPanel: React.FC = () => {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Matrícula</TableHead>
-                          <TableHead>Modelo</TableHead>
-                          <TableHead>Marca</TableHead>
-                          <TableHead>Cor</TableHead>
-                          <TableHead>Estado</TableHead>
+                          <SortableTableHead
+                            field="license_plate"
+                            sortField={sortFieldVehicles}
+                            sortDir={sortDirVehicles}
+                            onSort={handleSortVehicles}
+                          >
+                            Matrícula
+                          </SortableTableHead>
+                          <SortableTableHead
+                            field="model"
+                            sortField={sortFieldVehicles}
+                            sortDir={sortDirVehicles}
+                            onSort={handleSortVehicles}
+                          >
+                            Modelo
+                          </SortableTableHead>
+                          <SortableTableHead
+                            field="brand"
+                            sortField={sortFieldVehicles}
+                            sortDir={sortDirVehicles}
+                            onSort={handleSortVehicles}
+                          >
+                            Marca
+                          </SortableTableHead>
+                          <SortableTableHead
+                            field="color"
+                            sortField={sortFieldVehicles}
+                            sortDir={sortDirVehicles}
+                            onSort={handleSortVehicles}
+                          >
+                            Cor
+                          </SortableTableHead>
+                          <SortableTableHead
+                            field="status"
+                            sortField={sortFieldVehicles}
+                            sortDir={sortDirVehicles}
+                            onSort={handleSortVehicles}
+                          >
+                            Estado
+                          </SortableTableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {boltVehicles.map((vehicle, index) => (
+                        {sortedBoltVehicles.map((vehicle, index) => (
                           <TableRow key={vehicle.uuid || index}>
                             <TableCell className="font-medium font-mono">
                               {vehicle.license_plate || vehicle.reg_number || '-'}
@@ -854,14 +1066,35 @@ export const BoltIntegrationPanel: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Motorista Bolt</TableHead>
-                    <TableHead>Telefone</TableHead>
+                    <SortableTableHead
+                      field="driver_name"
+                      sortField={sortFieldMap}
+                      sortDir={sortDirMap}
+                      onSort={handleSortMap}
+                    >
+                      Motorista Bolt
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="driver_phone"
+                      sortField={sortFieldMap}
+                      sortDir={sortDirMap}
+                      onSort={handleSortMap}
+                    >
+                      Telefone
+                    </SortableTableHead>
                     <TableHead>Motorista Sistema</TableHead>
-                    <TableHead>Mapeamento</TableHead>
+                    <SortableTableHead
+                      field="mapeamento"
+                      sortField={sortFieldMap}
+                      sortDir={sortDirMap}
+                      onSort={handleSortMap}
+                    >
+                      Mapeamento
+                    </SortableTableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mapeamentos.map((m) => (
+                  {sortedMapeamentos.map((m) => (
                     <TableRow key={m.id}>
                       <TableCell>
                         <div>
@@ -926,17 +1159,69 @@ export const BoltIntegrationPanel: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Novas</TableHead>
-                    <TableHead>Actualizadas</TableHead>
-                    <TableHead>Erros</TableHead>
-                    <TableHead>Mensagem</TableHead>
+                    <SortableTableHead
+                      field="created_at"
+                      sortField={sortFieldLogs}
+                      sortDir={sortDirLogs}
+                      onSort={handleSortLogs}
+                    >
+                      Data
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="tipo"
+                      sortField={sortFieldLogs}
+                      sortDir={sortDirLogs}
+                      onSort={handleSortLogs}
+                    >
+                      Tipo
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="status"
+                      sortField={sortFieldLogs}
+                      sortDir={sortDirLogs}
+                      onSort={handleSortLogs}
+                    >
+                      Estado
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="viagens_novas"
+                      sortField={sortFieldLogs}
+                      sortDir={sortDirLogs}
+                      onSort={handleSortLogs}
+                      align="right"
+                    >
+                      Novas
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="viagens_atualizadas"
+                      sortField={sortFieldLogs}
+                      sortDir={sortDirLogs}
+                      onSort={handleSortLogs}
+                      align="right"
+                    >
+                      Actualizadas
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="erros"
+                      sortField={sortFieldLogs}
+                      sortDir={sortDirLogs}
+                      onSort={handleSortLogs}
+                      align="right"
+                    >
+                      Erros
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="mensagem"
+                      sortField={sortFieldLogs}
+                      sortDir={sortDirLogs}
+                      onSort={handleSortLogs}
+                    >
+                      Mensagem
+                    </SortableTableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {logs.map((log) => (
+                  {sortedLogs.map((log) => (
                     <TableRow key={log.id}>
                       <TableCell className="text-sm">
                         {format(new Date(log.created_at), 'dd/MM/yyyy HH:mm', { locale: pt })}
@@ -947,11 +1232,13 @@ export const BoltIntegrationPanel: React.FC = () => {
                       <TableCell>
                         <BoltSyncStatusBadge status={log.status} />
                       </TableCell>
-                      <TableCell className="text-green-500">{log.viagens_novas || 0}</TableCell>
-                      <TableCell className="text-blue-500">
+                      <TableCell className="text-green-500 text-right">
+                        {log.viagens_novas || 0}
+                      </TableCell>
+                      <TableCell className="text-blue-500 text-right">
                         {log.viagens_atualizadas || 0}
                       </TableCell>
-                      <TableCell className="text-red-500">{log.erros || 0}</TableCell>
+                      <TableCell className="text-red-500 text-right">{log.erros || 0}</TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">
                         {log.mensagem || '-'}
                       </TableCell>

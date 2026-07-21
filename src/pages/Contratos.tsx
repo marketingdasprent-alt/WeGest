@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -43,6 +43,7 @@ import { EditContractDialog } from '@/components/contratos/EditContractDialog';
 import { ContractStatsCards } from '@/components/contratos/ContractStatsCards';
 import { GenerateDocumentsDialog } from '@/components/motoristas/GenerateDocumentsDialog';
 import { ContratosGroupedView } from '@/components/contratos/ContratosGroupedView';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { uploadDocumentToStorage } from '@/utils/generateDocumentFromTemplate';
 import { getEmpresaById } from '@/config/empresas';
 import {
@@ -73,6 +74,9 @@ export default function Contratos() {
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [sortField, setSortField] = useState<string>('data_inicio');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   useEffect(() => {
     fetchContratos();
@@ -329,11 +333,39 @@ export default function Contratos() {
     contrato.motorista_nome.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const sortedContratos = useMemo(() => {
+    const list = [...filteredContratos];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'motorista_nome') {
+        va = a.motorista_nome || '';
+        vb = b.motorista_nome || '';
+      } else if (sortField === 'empresa_id') {
+        va = a.empresa_id === 'decada_ousada' ? 'WeGest' : 'Distância Arrojada';
+        vb = b.empresa_id === 'decada_ousada' ? 'WeGest' : 'Distância Arrojada';
+      } else if (sortField === 'data_inicio') {
+        va = a.data_inicio || '';
+        vb = b.data_inicio || '';
+      } else if (sortField === 'status') {
+        va = a.status || '';
+        vb = b.status || '';
+      } else if (sortField === 'versao') {
+        va = a.versao || 1;
+        vb = b.versao || 1;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [filteredContratos, sortField, sortDir]);
+
   // Paginação
   const totalPages = Math.ceil(filteredContratos.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedContratos = filteredContratos.slice(startIndex, endIndex);
+  const paginatedContratos = sortedContratos.slice(startIndex, endIndex);
 
   // Reset para página 1 quando filtros mudarem
   useEffect(() => {
@@ -440,7 +472,7 @@ export default function Contratos() {
             )}
             {viewMode === 'grouped' ? (
               <ContratosGroupedView
-                contratos={filteredContratos}
+                contratos={sortedContratos}
                 onDownload={handleDownload}
                 onPrint={handleReimprimir}
                 onEdit={(contrato) => {
@@ -459,11 +491,46 @@ export default function Contratos() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Motorista</TableHead>
-                      <TableHead>Empresa</TableHead>
-                      <TableHead>Data do Contrato</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Versão</TableHead>
+                      <SortableTableHead
+                        field="motorista_nome"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Motorista
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="empresa_id"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Empresa
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="data_inicio"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Data do Contrato
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="status"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Status
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="versao"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Versão
+                      </SortableTableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>

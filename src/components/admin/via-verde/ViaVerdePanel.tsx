@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { Loader2, Pencil, Plus, RefreshCw, Settings } from 'lucide-react';
 import type { IntegracaoConfig } from '../integracoes/types';
 import { ViaVerdeContaDialog } from './ViaVerdeContaDialog';
@@ -26,6 +27,9 @@ export const ViaVerdePanel: React.FC = () => {
   const [integracao, setIntegracao] = useState<IntegracaoConfig | null>(null);
   const [contas, setContas] = useState<ViaVerdeConta[]>([]);
   const [selectedConta, setSelectedConta] = useState<ViaVerdeConta | null>(null);
+  const [sortField, setSortField] = useState<string>('nome_conta');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const normalizeIntegracao = async (integracaoBase: IntegracaoConfig) => {
     if (integracaoBase.nome === VIA_VERDE_INTERNAL_NAME) {
@@ -148,6 +152,34 @@ export const ViaVerdePanel: React.FC = () => {
     }
   };
 
+  const sortedContas = useMemo(() => {
+    const list = [...contas];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'nome_conta') {
+        va = a.nome_conta;
+        vb = b.nome_conta;
+      } else if (sortField === 'codigo_rac') {
+        va = a.codigo_rac || '';
+        vb = b.codigo_rac || '';
+      } else if (sortField === 'ftp_ativo') {
+        va = a.ftp_ativo ? 0 : 1;
+        vb = b.ftp_ativo ? 0 : 1;
+      } else if (sortField === 'sync_ativo') {
+        va = a.sync_ativo ? 0 : 1;
+        vb = b.sync_ativo ? 0 : 1;
+      } else if (sortField === 'estado') {
+        va = a.ftp_ativo || a.sync_ativo ? 0 : 1;
+        vb = b.ftp_ativo || b.sync_ativo ? 0 : 1;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [contas, sortField, sortDir]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -197,16 +229,51 @@ export const ViaVerdePanel: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Conta</TableHead>
-                  <TableHead>RAC</TableHead>
-                  <TableHead>FTP/SFTP</TableHead>
-                  <TableHead>Sync dispositivos</TableHead>
-                  <TableHead>Estado</TableHead>
+                  <SortableTableHead
+                    field="nome_conta"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Conta
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="codigo_rac"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    RAC
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="ftp_ativo"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    FTP/SFTP
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="sync_ativo"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Sync dispositivos
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="estado"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Estado
+                  </SortableTableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {contas.map((conta) => {
+                {sortedContas.map((conta) => {
                   const contaActiva = conta.ftp_ativo || conta.sync_ativo;
 
                   return (

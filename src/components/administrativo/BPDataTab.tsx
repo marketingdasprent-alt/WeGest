@@ -5,14 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -39,6 +32,7 @@ import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek } from '
 import { pt } from 'date-fns/locale';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 // Semana: Segunda (1) a Domingo (0) — igual ao resumo
 const WEEK_STARTS_ON = 1;
@@ -84,6 +78,9 @@ export const BPDataTab: React.FC = () => {
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIntegracao, setSelectedIntegracao] = useState('all');
+  const [sortField, setSortField] = useState<string>('transaction_date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
   // Estado: data dentro da semana selecionada (default: semana passada)
   const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
 
@@ -162,14 +159,53 @@ export const BPDataTab: React.FC = () => {
   };
 
   const filteredTransacoes = useMemo(() => {
-    if (!searchTerm) return transacoes;
-    return transacoes.filter(
-      (t) =>
-        matchesSearch(t.motorista?.nome, searchTerm) ||
-        matchesSearch(t.fuel_type, searchTerm) ||
-        matchesSearch(t.station_name, searchTerm)
-    );
-  }, [transacoes, searchTerm]);
+    const list = searchTerm
+      ? transacoes.filter(
+          (t) =>
+            matchesSearch(t.motorista?.nome, searchTerm) ||
+            matchesSearch(t.fuel_type, searchTerm) ||
+            matchesSearch(t.station_name, searchTerm)
+        )
+      : [...transacoes];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortField) {
+        case 'transaction_date':
+          va = a.transaction_date;
+          vb = b.transaction_date;
+          break;
+        case 'motorista':
+          va = a.motorista?.nome || '';
+          vb = b.motorista?.nome || '';
+          break;
+        case 'card_number':
+          va = a.card_number || '';
+          vb = b.card_number || '';
+          break;
+        case 'station_name':
+          va = a.station_name || '';
+          vb = b.station_name || '';
+          break;
+        case 'fuel_type':
+          va = a.fuel_type || '';
+          vb = b.fuel_type || '';
+          break;
+        case 'quantity':
+          va = a.quantity || 0;
+          vb = b.quantity || 0;
+          break;
+        case 'amount':
+          va = a.amount || 0;
+          vb = b.amount || 0;
+          break;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [transacoes, searchTerm, sortField, sortDir]);
 
   const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
     usePagination(
@@ -366,13 +402,64 @@ export const BPDataTab: React.FC = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Data</TableHead>
-                <TableHead>Motorista</TableHead>
-                <TableHead>Cartão</TableHead>
-                <TableHead>Posto / Localização</TableHead>
-                <TableHead>Produto</TableHead>
-                <TableHead className="text-right">Quantidade</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
+                <SortableTableHead
+                  field="transaction_date"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Data
+                </SortableTableHead>
+                <SortableTableHead
+                  field="motorista"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Motorista
+                </SortableTableHead>
+                <SortableTableHead
+                  field="card_number"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Cartão
+                </SortableTableHead>
+                <SortableTableHead
+                  field="station_name"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Posto / Localização
+                </SortableTableHead>
+                <SortableTableHead
+                  field="fuel_type"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Produto
+                </SortableTableHead>
+                <SortableTableHead
+                  field="quantity"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Quantidade
+                </SortableTableHead>
+                <SortableTableHead
+                  field="amount"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Valor
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

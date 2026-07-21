@@ -1,13 +1,8 @@
+import { useMemo, useState } from 'react';
 import { Loader2, History } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import {
   fmtEur,
   fmtDT,
@@ -31,6 +26,38 @@ export function CartaoHistoricoSheet({
   historico,
   totalHistorico,
 }: CartaoHistoricoSheetProps) {
+  const [sortField, setSortField] = useState<string>('transaction_date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
+
+  const sortedHistorico = useMemo(() => {
+    const list = [...historico];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'transaction_date') {
+        va = a.transaction_date || '';
+        vb = b.transaction_date || '';
+      } else if (sortField === 'station_name') {
+        va = a.station_name || '';
+        vb = b.station_name || '';
+      } else if (sortField === 'fuel_type') {
+        va = a.fuel_type || '';
+        vb = b.fuel_type || '';
+      } else if (sortField === 'quantity') {
+        va = a.quantity ?? 0;
+        vb = b.quantity ?? 0;
+      } else if (sortField === 'amount') {
+        va = a.amount ?? 0;
+        vb = b.amount ?? 0;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [historico, sortField, sortDir]);
+
   return (
     <Sheet open={!!historyCartao} onOpenChange={(o) => !o && onOpenChange(false)}>
       <SheetContent className="w-full sm:max-w-2xl flex flex-col">
@@ -81,15 +108,52 @@ export function CartaoHistoricoSheet({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Posto</TableHead>
-                  <TableHead>Combust.</TableHead>
-                  <TableHead className="text-right">Litros</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
+                  <SortableTableHead
+                    field="transaction_date"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Data
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="station_name"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Posto
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="fuel_type"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Combust.
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="quantity"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    align="right"
+                  >
+                    Litros
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="amount"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    align="right"
+                  >
+                    Valor
+                  </SortableTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {historico.map((h, i) => (
+                {sortedHistorico.map((h, i) => (
                   <TableRow key={i}>
                     <TableCell className="text-xs whitespace-nowrap">
                       {fmtDT(h.transaction_date)}
