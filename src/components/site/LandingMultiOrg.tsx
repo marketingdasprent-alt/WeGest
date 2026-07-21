@@ -1,19 +1,27 @@
 import { useRef } from 'react';
-import { motion, useScroll, useTransform, useMotionValue, type MotionValue } from 'framer-motion';
+import { gsap } from '@/lib/motion/gsapConfig';
 import { useSimplifiedMotion } from '@/hooks/useSimplifiedMotion';
+import { usePinnedTimeline } from '@/hooks/usePinnedTimeline';
 import { SectionHeading } from './SectionHeading';
 
 const LANES = ['Organização A', 'Organização B', 'Organização C'];
 
 export const LandingMultiOrg = () => {
-  const sectionRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const pinRef = useRef<HTMLDivElement>(null);
+  const lanesRef = useRef<HTMLDivElement>(null);
   const simplified = useSimplifiedMotion();
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ['start start', 'end end'],
+
+  usePinnedTimeline(sectionRef, pinRef, simplified, (tl) => {
+    if (!lanesRef.current) return;
+    const bars = gsap.utils.toArray<HTMLElement>(lanesRef.current.querySelectorAll('[data-bar]'));
+    tl.fromTo(
+      bars,
+      { scaleX: 0 },
+      { scaleX: 1, duration: 1, stagger: 0.15, ease: 'power2.out' },
+      0
+    );
   });
-  const staticValue = useMotionValue(1);
-  const progress = simplified ? staticValue : scrollYProgress;
 
   return (
     <section
@@ -21,42 +29,28 @@ export const LandingMultiOrg = () => {
       className={simplified ? 'relative px-6 py-24' : 'relative h-[300vh]'}
     >
       <div
+        ref={pinRef}
         className={
           simplified
             ? 'flex flex-col items-center gap-10'
-            : 'sticky top-0 flex h-screen flex-col items-center justify-center gap-10 overflow-hidden px-6'
+            : 'flex h-screen flex-col items-center justify-center gap-10 overflow-hidden px-6'
         }
       >
         <SectionHeading eyebrow="// organizacoes.isoladas" title="Cada organização no seu fluxo.">
           Os dados de uma empresa nunca tocam nos de outra — por definição, não por confiança.
         </SectionHeading>
 
-        <div className="flex w-full max-w-2xl flex-col gap-4">
-          {LANES.map((lane, index) => (
-            <Lane key={lane} label={lane} index={index} progress={progress} />
+        <div ref={lanesRef} className="flex w-full max-w-2xl flex-col gap-4">
+          {LANES.map((lane) => (
+            <div key={lane} className="flex items-center gap-4">
+              <span className="w-32 shrink-0 font-mono text-xs text-muted-foreground">{lane}</span>
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-card">
+                <div data-bar className="h-full origin-left rounded-full bg-primary" />
+              </div>
+            </div>
           ))}
         </div>
       </div>
     </section>
-  );
-};
-
-interface LaneProps {
-  label: string;
-  index: number;
-  progress: MotionValue<number>;
-}
-
-const Lane = ({ label, index, progress }: LaneProps) => {
-  const delayed = useTransform(progress, (value) => Math.max(0, value - index * 0.1));
-  const barWidth = useTransform(delayed, [0, 1], ['0%', '100%']);
-
-  return (
-    <div className="flex items-center gap-4">
-      <span className="w-32 shrink-0 font-mono text-xs text-muted-foreground">{label}</span>
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-card">
-        <motion.div className="h-full rounded-full bg-primary" style={{ width: barWidth }} />
-      </div>
-    </div>
   );
 };

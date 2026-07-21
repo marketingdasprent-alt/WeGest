@@ -30,7 +30,7 @@ const Landing = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="dark flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
       </div>
     );
@@ -41,7 +41,7 @@ const Landing = () => {
   }
 
   return (
-    <div className="relative bg-background">
+    <div className="dark relative bg-background text-foreground">
       <BackgroundField />
       <ScrollRail labels={CHAPTER_LABELS} />
       <LandingHero />

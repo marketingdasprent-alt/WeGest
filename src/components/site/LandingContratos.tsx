@@ -1,7 +1,7 @@
 import { useRef } from 'react';
-import { motion, useScroll, useTransform, useMotionValue, type MotionValue } from 'framer-motion';
+import { gsap } from '@/lib/motion/gsapConfig';
 import { useSimplifiedMotion } from '@/hooks/useSimplifiedMotion';
-import { stepIndexFromProgress } from '@/lib/scrollMotion';
+import { usePinnedTimeline } from '@/hooks/usePinnedTimeline';
 import { SectionHeading } from './SectionHeading';
 
 interface ChainNode {
@@ -17,16 +17,23 @@ const NODES: ChainNode[] = [
 ];
 
 export const LandingContratos = () => {
-  const sectionRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const pinRef = useRef<HTMLDivElement>(null);
+  const cardsRef = useRef<HTMLDivElement>(null);
   const simplified = useSimplifiedMotion();
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ['start start', 'end end'],
-  });
 
-  const scrollDriven = useTransform(scrollYProgress, (p) => stepIndexFromProgress(p, NODES.length));
-  const staticValue = useMotionValue(NODES.length - 1);
-  const activeIndex = simplified ? staticValue : scrollDriven;
+  usePinnedTimeline(sectionRef, pinRef, simplified, (tl) => {
+    if (!cardsRef.current) return;
+    const cards = gsap.utils.toArray<HTMLElement>(cardsRef.current.children);
+    cards.forEach((card, index) => {
+      tl.fromTo(
+        card,
+        { opacity: 0.25, scale: 0.92 },
+        { opacity: 1, scale: 1, duration: 1, ease: 'power2.out' },
+        index
+      );
+    });
+  });
 
   return (
     <section
@@ -34,10 +41,11 @@ export const LandingContratos = () => {
       className={simplified ? 'relative px-6 py-24' : 'relative h-[300vh]'}
     >
       <div
+        ref={pinRef}
         className={
           simplified
             ? 'flex flex-col items-center gap-10'
-            : 'sticky top-0 flex h-screen flex-col items-center justify-center gap-10 overflow-hidden px-6'
+            : 'flex h-screen flex-col items-center justify-center gap-10 overflow-hidden px-6'
         }
       >
         <SectionHeading
@@ -48,35 +56,24 @@ export const LandingContratos = () => {
           clique extra.
         </SectionHeading>
 
-        <div className="flex w-full max-w-4xl flex-col gap-4 md:flex-row md:gap-3">
+        <div
+          ref={cardsRef}
+          className="flex w-full max-w-4xl flex-col gap-4 md:flex-row md:gap-3"
+        >
           {NODES.map((node, index) => (
-            <ChainNodeCard key={node.label} node={node} index={index} activeIndex={activeIndex} />
+            <div
+              key={node.label}
+              className="flex-1 rounded-xl border border-primary/20 bg-card/60 p-5 backdrop-blur-sm"
+            >
+              <span className="font-mono text-xs text-primary/70">
+                {String(index + 1).padStart(2, '0')}
+              </span>
+              <h3 className="mt-2 text-lg font-semibold text-foreground">{node.label}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{node.description}</p>
+            </div>
           ))}
         </div>
       </div>
     </section>
-  );
-};
-
-interface ChainNodeCardProps {
-  node: ChainNode;
-  index: number;
-  activeIndex: MotionValue<number>;
-}
-
-const ChainNodeCard = ({ node, index, activeIndex }: ChainNodeCardProps) => {
-  const opacity = useTransform(activeIndex, (value) => (value >= index ? 1 : 0.35));
-
-  return (
-    <motion.div
-      className="flex-1 rounded-xl border border-primary/20 bg-card/60 p-5 backdrop-blur-sm"
-      style={{ opacity }}
-    >
-      <span className="font-mono text-xs text-primary/70">
-        {String(index + 1).padStart(2, '0')}
-      </span>
-      <h3 className="mt-2 text-lg font-semibold text-foreground">{node.label}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{node.description}</p>
-    </motion.div>
   );
 };

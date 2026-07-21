@@ -28,6 +28,20 @@ beforeAll(() => {
   }) as unknown as typeof window.matchMedia;
 });
 
+// SectionHeading parte o título em <span> por palavra (stagger do Anime.js),
+// por isso getByText(string) não casa — o texto já não vive num nó só.
+// Comparamos directamente o textContent de cada <h2>, normalizado (NFC) para
+// não falhar por acentos compostos de forma diferente (NFD vs NFC).
+function headingTexts(): string[] {
+  return Array.from(document.querySelectorAll('h2')).map((h2) =>
+    (h2.textContent ?? '').normalize('NFC')
+  );
+}
+
+function nfc(text: string): string {
+  return text.normalize('NFC');
+}
+
 describe('Landing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -48,15 +62,16 @@ describe('Landing', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('A frota nunca pára. O sistema também não devia.')).toBeTruthy();
-    expect(screen.getByText('Cada viatura vive em três sítios diferentes.')).toBeTruthy();
-    expect(screen.getByText('Um fluxo só. Tudo ligado.')).toBeTruthy();
-    expect(screen.getByText('Um contrato. Quatro passos automáticos.')).toBeTruthy();
-    expect(screen.getByText('O calendário preenche-se sozinho.')).toBeTruthy();
-    expect(screen.getByText('Cada semana fecha-se a si própria.')).toBeTruthy();
-    expect(screen.getByText('Cada organização no seu fluxo.')).toBeTruthy();
-    expect(screen.getByText('Liga só o que precisas.')).toBeTruthy();
-    expect(screen.getByText('O seu fluxo começa aqui.')).toBeTruthy();
+    const titles = headingTexts();
+    expect(titles).toContain(nfc('A frota nunca pára. O sistema também não devia.'));
+    expect(titles).toContain(nfc('Cada viatura vive em três sítios diferentes.'));
+    expect(titles).toContain(nfc('Um fluxo só. Tudo ligado.'));
+    expect(titles).toContain(nfc('Um contrato. Quatro passos automáticos.'));
+    expect(titles).toContain(nfc('O calendário preenche-se sozinho.'));
+    expect(titles).toContain(nfc('Cada semana fecha-se a si própria.'));
+    expect(titles).toContain(nfc('Cada organização no seu fluxo.'));
+    expect(titles).toContain(nfc('Liga só o que precisas.'));
+    expect(titles).toContain(nfc('O seu fluxo começa aqui.'));
 
     expect(screen.getByRole('link', { name: 'Começar agora' })).toHaveAttribute(
       'href',
@@ -87,6 +102,6 @@ describe('Landing', () => {
       </MemoryRouter>
     );
 
-    expect(screen.queryByText('A frota nunca pára. O sistema também não devia.')).toBeNull();
+    expect(headingTexts()).toHaveLength(0);
   });
 });
