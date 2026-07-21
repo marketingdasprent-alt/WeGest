@@ -382,7 +382,7 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
         </div>
       </div>
 
-      <Accordion type="multiple" className="w-full" defaultValue={['Motoristas', 'Viaturas']}>
+      <Accordion type="multiple" className="w-full">
         {modulosComRecursos.map((modulo) => {
           const Icon = modulo.icon;
           const stats = getModuloStats(modulo.key);
