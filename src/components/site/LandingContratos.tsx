@@ -18,18 +18,17 @@ const NODES: ChainNode[] = [
 
 export const LandingContratos = () => {
   const sectionRef = useRef<HTMLElement>(null);
-  const pinRef = useRef<HTMLDivElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const simplified = useSimplifiedMotion();
 
-  usePinnedTimeline(sectionRef, pinRef, simplified, (tl) => {
+  usePinnedTimeline(sectionRef, simplified, (tl) => {
     if (!cardsRef.current) return;
     const cards = gsap.utils.toArray<HTMLElement>(cardsRef.current.children);
     cards.forEach((card, index) => {
       tl.fromTo(
         card,
-        { opacity: 0.25, scale: 0.92 },
-        { opacity: 1, scale: 1, duration: 1, ease: 'power2.out' },
+        { opacity: 0.25, scale: 0.94, x: -12 },
+        { opacity: 1, scale: 1, x: 0, duration: 1, ease: 'power2.out' },
         index
       );
     });
@@ -38,17 +37,15 @@ export const LandingContratos = () => {
   return (
     <section
       ref={sectionRef}
-      className={simplified ? 'relative px-6 py-24' : 'relative h-[300vh]'}
+      className={
+        simplified
+          ? 'relative px-6 py-24'
+          : 'relative flex h-screen flex-col justify-center overflow-hidden px-6 lg:px-16'
+      }
     >
-      <div
-        ref={pinRef}
-        className={
-          simplified
-            ? 'flex flex-col items-center gap-10'
-            : 'flex h-screen flex-col items-center justify-center gap-10 overflow-hidden px-6'
-        }
-      >
+      <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">
         <SectionHeading
+          align="left"
           eyebrow="// contratos.cascata"
           title="Um contrato. Quatro passos automáticos."
         >
@@ -56,20 +53,17 @@ export const LandingContratos = () => {
           clique extra.
         </SectionHeading>
 
-        <div
-          ref={cardsRef}
-          className="flex w-full max-w-4xl flex-col gap-4 md:flex-row md:gap-3"
-        >
+        <div ref={cardsRef} className="flex flex-col gap-5 border-l-2 border-primary/25 pl-8">
           {NODES.map((node, index) => (
             <div
               key={node.label}
-              className="flex-1 rounded-xl border border-primary/20 bg-card/60 p-5 backdrop-blur-sm"
+              className="rounded-xl border border-primary/20 bg-card/60 p-6 backdrop-blur-sm"
             >
               <span className="font-mono text-xs text-primary/70">
                 {String(index + 1).padStart(2, '0')}
               </span>
-              <h3 className="mt-2 text-lg font-semibold text-foreground">{node.label}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{node.description}</p>
+              <h3 className="mt-2 text-xl font-semibold text-foreground">{node.label}</h3>
+              <p className="mt-1 text-base text-muted-foreground">{node.description}</p>
             </div>
           ))}
         </div>
