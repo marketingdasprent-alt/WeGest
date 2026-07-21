@@ -76,12 +76,10 @@ describe('DocumentoSuplementarList', () => {
   it('descarregar: gera URL assinada e abre em nova aba', async () => {
     (supabase as unknown as { storage: unknown }).storage = {
       from: vi.fn().mockReturnValue({
-        createSignedUrl: vi
-          .fn()
-          .mockResolvedValue({
-            data: { signedUrl: 'https://signed.example/norma.pdf' },
-            error: null,
-          }),
+        createSignedUrl: vi.fn().mockResolvedValue({
+          data: { signedUrl: 'https://signed.example/norma.pdf' },
+          error: null,
+        }),
       }),
     };
     renderWithClient(
