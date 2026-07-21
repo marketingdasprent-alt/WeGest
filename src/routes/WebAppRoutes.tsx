@@ -63,7 +63,8 @@ const Calendario = lazy(() => import('@/pages/Calendario'));
 const Marketing = lazy(() => import('@/pages/Marketing'));
 const Realize = lazy(() => import('@/pages/Realize'));
 const MotoristaDetalhe = lazy(() => import('@/pages/MotoristaDetalhe'));
-const Index = lazy(() => import('@/pages/Index'));
+const Landing = lazy(() => import('@/pages/Landing'));
+const Entrar = lazy(() => import('@/pages/Entrar'));
 const EliminarConta = lazy(() => import('@/pages/EliminarConta'));
 const SelecionarOrg = lazy(() => import('@/pages/SelecionarOrg'));
 const RegistarOrg = lazy(() => import('@/pages/RegistarOrg'));
@@ -103,7 +104,8 @@ const WebAppRoutes = () => {
       <ScrollToTop />
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<Landing />} />
+          <Route path="/entrar" element={<Entrar />} />
           <Route path="/sobre" element={<Sobre />} />
           <Route path="/contactos" element={<Contactos />} />
           <Route path="/faq" element={<FAQ />} />
