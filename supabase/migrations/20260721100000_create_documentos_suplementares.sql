@@ -59,6 +59,13 @@ CREATE POLICY "mt_documentos_suplementares_all" ON public.documentos_suplementar
   USING (org_id = get_current_org_id() AND (is_current_user_admin() OR has_permission(auth.uid(), 'admin_documentos')))
   WITH CHECK (org_id = get_current_org_id() AND (is_current_user_admin() OR has_permission(auth.uid(), 'admin_documentos')));
 
+DROP POLICY IF EXISTS rls_org_isolation ON public.documentos_suplementares;
+
+CREATE POLICY rls_org_isolation ON public.documentos_suplementares AS RESTRICTIVE
+  FOR ALL TO authenticated
+  USING (org_id = public.get_current_org_id())
+  WITH CHECK (org_id IS NULL OR org_id = public.get_current_org_id());
+
 DROP POLICY IF EXISTS "mt_documento_suplementar_empresas_select" ON public.documento_suplementar_empresas;
 DROP POLICY IF EXISTS "mt_documento_suplementar_empresas_all" ON public.documento_suplementar_empresas;
 
@@ -70,6 +77,13 @@ CREATE POLICY "mt_documento_suplementar_empresas_all" ON public.documento_suplem
   FOR ALL TO authenticated
   USING (org_id = get_current_org_id() AND (is_current_user_admin() OR has_permission(auth.uid(), 'admin_documentos')))
   WITH CHECK (org_id = get_current_org_id() AND (is_current_user_admin() OR has_permission(auth.uid(), 'admin_documentos')));
+
+DROP POLICY IF EXISTS rls_org_isolation ON public.documento_suplementar_empresas;
+
+CREATE POLICY rls_org_isolation ON public.documento_suplementar_empresas AS RESTRICTIVE
+  FOR ALL TO authenticated
+  USING (org_id = public.get_current_org_id())
+  WITH CHECK (org_id IS NULL OR org_id = public.get_current_org_id());
 
 COMMENT ON TABLE public.documentos_suplementares IS
   'Ficheiros estáticos (PDF/Word/imagem) sem placeholders dinâmicos, associáveis a várias empresas.';
