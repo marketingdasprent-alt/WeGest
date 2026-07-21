@@ -18,6 +18,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import type { Ticket, Anexo, Viatura, Motorista } from './types';
+import { AssistenteResponsavelField } from './AssistenteResponsavelField';
 
 interface Props {
   ticket: Ticket;
@@ -29,6 +30,9 @@ interface Props {
   canAtribuirSubstituta: boolean;
   onAtribuirSubstituta: () => void;
   onOpenGallery: () => void;
+  /** Quem pode gerir a assistência escolhe o assistente responsável. */
+  canEditResponsavel: boolean;
+  onResponsavelChange: () => void;
 }
 
 export const TicketSidebar: React.FC<Props> = ({
@@ -41,6 +45,8 @@ export const TicketSidebar: React.FC<Props> = ({
   canAtribuirSubstituta,
   onAtribuirSubstituta,
   onOpenGallery,
+  canEditResponsavel,
+  onResponsavelChange,
 }) => (
   <div className="space-y-6 lg:h-full lg:overflow-y-auto pr-1 custom-scrollbar">
     {ticket.descricao && (
@@ -144,6 +150,13 @@ export const TicketSidebar: React.FC<Props> = ({
               <p className="text-xs text-muted-foreground mt-1">Nenhuma atribuída.</p>
             )}
           </div>
+        )}
+        {canEditResponsavel && (
+          <AssistenteResponsavelField
+            ticketId={ticket.id}
+            atribuidoA={ticket.atribuido_a}
+            onChanged={onResponsavelChange}
+          />
         )}
         <Separator />
         <div className="grid grid-cols-1 gap-3">
