@@ -138,7 +138,6 @@ export const DocumentoSuplementarDialog = ({
                   <label
                     htmlFor={`empresa-suplementar-${e.id}`}
                     className="text-sm cursor-pointer"
-                    onClick={() => toggleEmpresa(e.id)}
                   >
                     {e.nome}
                   </label>
