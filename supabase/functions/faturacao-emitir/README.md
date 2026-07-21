@@ -48,6 +48,16 @@ supabase secrets set KEYINVOICE_ENDPOINT=<endpoint alternativo, se aplicável>
   (`{ provider, apiKey, settings? }`) para testar **antes** de gravar na app.
 - **pdf** — `{ provider_doctype, provider_docnum, serie?, signed? }` → `{ base64 }`.
 
+## Função legada `keyinvoice-emitir` — DESATIVADA
+
+Esta função substituiu a antiga `keyinvoice-emitir`, que autenticava com um secret
+GLOBAL (`KEYINVOICE_API_KEY`, uma chave para todas as orgs). Essa função foi
+**desativada em produção** (redeployada como stub que responde `410 Gone`) porque era
+uma porta lateral: permitia emitir pela chave global sem integração por-org. Toda a app
+usa exclusivamente `faturacao-emitir`. Pode ser **apagada em definitivo**
+(`supabase functions delete keyinvoice-emitir`), e o secret global `KEYINVOICE_API_KEY`
+pode/deve ser removido — já não é lido por ninguém.
+
 ## Deploy
 
 ```bash

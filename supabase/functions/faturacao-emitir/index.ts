@@ -11,10 +11,13 @@
 //   1) descobre a org do chamador via RPC get_current_org_id() (JWT do chamador);
 //   2) lê a linha `plataformas_configuracao` (plataforma='faturacao', ativo) com
 //      SERVICE ROLE (a RLS é admin-only; o utilizador que fatura pode não ser admin);
-//   3) o adapter aplica os seus defaults/fallbacks (ex.: secrets do deployment),
-//      por isso a emissão continua a funcionar mesmo sem config na app.
-// Se não se conseguir determinar a org, NÃO se lê nenhuma linha (evita misturar
-// config entre tenants) — usa-se só o fallback de secrets do adapter.
+//   3) despacha para o adapter com a config da org (chave + settings).
+// A CHAVE da API vem SEMPRE da org (client_secret) — NÃO há fallback para um
+// secret global. Sem org resolvida ou sem config, a chave é vazia e a emissão
+// falha cedo e claro ("Chave do <provider> não configurada"), em vez de
+// arriscar emitir pela conta de outra organização. (Só valores não-sensíveis
+// que não identificam ninguém — endpoint, doctypes, defaults — é que o adapter
+// pode ainda buscar a secrets do deployment como predefinição partilhável.)
 //
 // Actions (body.action):
 //   'emit'  (default) — cria o documento e grava em `invoices`.
