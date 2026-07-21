@@ -44,6 +44,29 @@ export async function renderHtmlBlock(
 
   const contentElements = htmlToText(html);
 
+  // Pré-carregar imagens de assinatura embebidas em células de tabela.
+  // renderTable é síncrono, por isso resolvem-se aqui os data URLs para
+  // HTMLImageElement antes de desenhar a tabela. Sem isto o Map fica sempre
+  // vazio e a assinatura nunca aparece no PDF (a procura em renderTable falha
+  // sempre). `signatures` é partilhado entre as duas partes do documento
+  // (antes/depois de {{secao_danos}}) — o `has()` evita recarregar a mesma
+  // imagem duas vezes.
+  for (const element of contentElements) {
+    if (element.type === 'table' && element.rows) {
+      for (const row of element.rows) {
+        for (const cell of row) {
+          if (cell.signatureSrc && !signatures.has(cell.signatureSrc)) {
+            try {
+              signatures.set(cell.signatureSrc, await loadImage(cell.signatureSrc));
+            } catch (err) {
+              console.warn('Falha a carregar a imagem da assinatura:', err);
+            }
+          }
+        }
+      }
+    }
+  }
+
   // Agrupar elementos consecutivos com mesmo alinhamento em "linhas lógicas"
   const groupedElements: Array<{
     align: string;
