@@ -345,7 +345,10 @@ export const GruposTab = () => {
 
       {/* Dialog criar/editar */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-w-3xl max-h-[90vh] overflow-y-auto"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>
               {editingGrupo ? `Editar Grupo: ${editingGrupo.nome}` : 'Novo Grupo'}
