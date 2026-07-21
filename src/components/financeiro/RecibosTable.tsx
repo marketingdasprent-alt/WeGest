@@ -52,6 +52,20 @@ interface RecibosTableProps {
   onReciboUpdated: () => void;
 }
 
+const RECIBOS_COLUMNS: {
+  field: string;
+  label: string;
+  className?: string;
+  align?: 'left' | 'right';
+}[] = [
+  { field: 'codigo', label: 'Código', className: 'w-[80px]' },
+  { field: 'motorista', label: 'Motorista' },
+  { field: 'semana', label: 'Semana' },
+  { field: 'valor_total', label: 'Valor', align: 'right' },
+  { field: 'created_at', label: 'Submetido' },
+  { field: 'status', label: 'Status' },
+];
+
 export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
   const isMobile = useIsMobile();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -365,56 +379,19 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <SortableTableHead
-                field="codigo"
-                sortField={sortField}
-                sortDir={sortDir}
-                onSort={handleSort}
-                className="w-[80px]"
-              >
-                Código
-              </SortableTableHead>
-              <SortableTableHead
-                field="motorista"
-                sortField={sortField}
-                sortDir={sortDir}
-                onSort={handleSort}
-              >
-                Motorista
-              </SortableTableHead>
-              <SortableTableHead
-                field="semana"
-                sortField={sortField}
-                sortDir={sortDir}
-                onSort={handleSort}
-              >
-                Semana
-              </SortableTableHead>
-              <SortableTableHead
-                field="valor_total"
-                sortField={sortField}
-                sortDir={sortDir}
-                onSort={handleSort}
-                align="right"
-              >
-                Valor
-              </SortableTableHead>
-              <SortableTableHead
-                field="created_at"
-                sortField={sortField}
-                sortDir={sortDir}
-                onSort={handleSort}
-              >
-                Submetido
-              </SortableTableHead>
-              <SortableTableHead
-                field="status"
-                sortField={sortField}
-                sortDir={sortDir}
-                onSort={handleSort}
-              >
-                Status
-              </SortableTableHead>
+              {RECIBOS_COLUMNS.map((col) => (
+                <SortableTableHead
+                  key={col.field}
+                  field={col.field}
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className={col.className}
+                  align={col.align}
+                >
+                  {col.label}
+                </SortableTableHead>
+              ))}
               <TableHead className="text-right">Acções</TableHead>
             </TableRow>
           </TableHeader>
