@@ -30,6 +30,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -56,6 +66,7 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editCusto, setEditCusto] = useState<Partial<CustoAdicional>>({});
+  const [deleteTarget, setDeleteTarget] = useState<CustoAdicional | null>(null);
   const [sortField, setSortField] = useState<string>('semana_referencia');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
@@ -92,6 +103,8 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
       setCustos(custos.filter((c) => c.id !== id));
     } catch (error: any) {
       toast.error('Erro ao remover: ' + error.message);
+    } finally {
+      setDeleteTarget(null);
     }
   }
 
@@ -367,7 +380,7 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDelete(custo.id)}
+                              onClick={() => setDeleteTarget(custo)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -382,6 +395,27 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar custo adicional?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O lançamento será removido permanentemente do
+              histórico deste motorista.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => deleteTarget && handleDelete(deleteTarget.id)}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -404,6 +404,8 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   };
 
   const handleDeleteDocument = async (doc: ViaturaDocument) => {
+    if (!window.confirm('Tem a certeza que quer remover este documento?')) return;
+
     try {
       await supabase.storage.from('viatura-documentos').remove([doc.ficheiro_url]);
 

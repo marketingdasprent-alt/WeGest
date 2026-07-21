@@ -112,6 +112,7 @@ const ContratoForm = () => {
     aplicarDadosViatura,
     handleSubmit,
     handleDelete,
+    confirmDelete,
     confirmarNovaVersao,
     handleClienteCriado,
     handleMotoristaCriado,
@@ -480,9 +481,7 @@ const ContratoForm = () => {
         onOpenChange={setConfirmDeleteOpen}
         contrato={contrato ?? null}
         isPending={false}
-        onConfirm={() => {
-          /* handled via handleDelete + confirmDelete in hook */
-        }}
+        onConfirm={confirmDelete}
       />
 
       <ClienteDialog

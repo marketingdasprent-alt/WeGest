@@ -422,7 +422,19 @@ const Calendario: React.FC = () => {
                   }
                 : undefined
             }
-            onDeleteEvent={isAdmin ? (id) => deleteMutation.mutate(id) : undefined}
+            onDeleteEvent={
+              isAdmin
+                ? (id) => {
+                    if (
+                      !window.confirm(
+                        'Tem a certeza que quer eliminar este evento? Esta ação não pode ser desfeita.'
+                      )
+                    )
+                      return;
+                    deleteMutation.mutate(id);
+                  }
+                : undefined
+            }
             onEventDetails={handleDetails}
             onAbrirCheckin={handleAbrirCheckin}
             isLoading={isLoading}
