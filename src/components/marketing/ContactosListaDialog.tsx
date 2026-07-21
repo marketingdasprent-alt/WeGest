@@ -13,6 +13,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMotoristasAudiencia } from '@/hooks/useMotoristasAudiencia';
@@ -29,6 +39,7 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
   const [email, setEmail] = useState('');
   const [sortField, setSortField] = useState<string>('nome');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const isSistema = lista.origem === 'motoristas_ativos';
@@ -103,6 +114,7 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
       queryClient.invalidateQueries({ queryKey: ['marketing-contactos', lista.id] });
       queryClient.invalidateQueries({ queryKey: ['marketing-listas-with-count'] });
       toast.success('Contacto removido');
+      setDeleteId(null);
     },
   });
 
@@ -185,7 +197,7 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
                         size="sm"
                         title="Remover contacto"
                         aria-label="Remover contacto"
-                        onClick={() => deleteMutation.mutate(c.id)}
+                        onClick={() => setDeleteId(c.id)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -201,6 +213,26 @@ const ContactosListaDialog = ({ open, onOpenChange, lista }: Props) => {
           {linhas?.length || 0} {isSistema ? 'motorista(s) ativo(s)' : 'contacto(s) nesta lista'}
         </p>
       </DialogContent>
+
+      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar contacto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O contacto será removido permanentemente desta lista.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => deleteId && deleteMutation.mutate(deleteId)}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };

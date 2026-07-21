@@ -195,6 +195,7 @@ export function ViaturaTabSeguro({ viatura, onUpdate }: ViaturaTabSeguroProps) {
 
   const handleDeleteCartaVerde = async () => {
     if (!cartaVerde) return;
+    if (!window.confirm('Tem a certeza que quer remover a Carta Verde?')) return;
 
     try {
       await supabase.storage.from('viatura-documentos').remove([cartaVerde.ficheiro_url]);
