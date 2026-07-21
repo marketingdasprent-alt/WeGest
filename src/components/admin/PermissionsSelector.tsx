@@ -154,7 +154,7 @@ function getLabel(nome: string): string {
 // Recursos que são um SIM/NÃO por grupo (não os 3 níveis Nenhum/Ver/Editar).
 // "Disponível para assistência": tem_acesso=true → o grupo fica selecionável
 // como assistente responsável nos tickets. Só há 2 estados (sim/não).
-const BOOLEAN_RECURSOS = new Set(['assistencia_disponivel']);
+export const BOOLEAN_RECURSOS = new Set(['assistencia_disponivel']);
 
 // ── Level Toggle ─────────────────────────────────────────────────────────────
 
