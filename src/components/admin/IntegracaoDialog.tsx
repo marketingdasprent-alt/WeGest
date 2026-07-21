@@ -38,9 +38,17 @@ interface IntegracaoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  /**
+   * KeyInvoice (faturação) tem o seu próprio dialog dedicado
+   * (FaturacaoIntegracaoDialog — testar ligação, definições avançadas,
+   * doctypes), mais completo do que o wizard genérico login+password. Em vez
+   * de duplicar essa lógica aqui, selecionar "KeyInvoice" no passo 1 fecha
+   * este wizard e pede ao pai (IntegracoesTab) para abrir esse dialog.
+   */
+  onOpenFaturacao?: () => void;
 }
 
-const PLATFORMS: { id: PlataformaOperacional; name: string; logo: string }[] = [
+const PLATFORMS: { id: PlataformaOperacional | 'keyinvoice'; name: string; logo: string }[] = [
   { id: 'uber', name: 'Uber', logo: '/images/logo-uber.png' },
   { id: 'bolt', name: 'Bolt', logo: '/images/logo-bolt.png' },
   { id: 'bp', name: 'BP', logo: '/images/logo-bp.png' },
@@ -48,6 +56,7 @@ const PLATFORMS: { id: PlataformaOperacional; name: string; logo: string }[] = [
   { id: 'edp', name: 'EDP', logo: '/images/logo-edp.png' },
   { id: 'viaverde', name: 'Via Verde', logo: '/images/logo-via-verde.png' },
   { id: 'brevo', name: 'Brevo (Email)', logo: '/images/logo-brevo.png' },
+  { id: 'keyinvoice', name: 'KeyInvoice', logo: '/images/logo-keyinvoice.svg' },
 ];
 
 const STEP_LABELS = ['Seleção de plataforma', 'Credenciais', 'Confirmação'];
@@ -98,6 +107,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
   open,
   onOpenChange,
   onSuccess,
+  onOpenFaturacao,
 }) => {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
@@ -391,7 +401,14 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   <button
                     key={platform.id}
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, plataforma: platform.id }))}
+                    onClick={() => {
+                      if (platform.id === 'keyinvoice') {
+                        handleClose(false);
+                        onOpenFaturacao?.();
+                        return;
+                      }
+                      setFormData((prev) => ({ ...prev, plataforma: platform.id }));
+                    }}
                     className={cn(
                       'flex flex-col items-center justify-center gap-3 rounded-xl border-2 p-6 transition-all hover:shadow-md cursor-pointer bg-card',
                       isSelected

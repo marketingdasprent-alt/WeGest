@@ -20,17 +20,23 @@ O slug público (só para mostrar o nome na UI) fica em `org_definicoes.faturaca
 **Trocar de software = mudar na app.** Para o KeyInvoice, basta a chave (endpoint/doctypes/
 defaults vêm dos defaults do adapter).
 
-## Fallback de secrets (transição / deployments single-tenant)
+## Chave da API — sem fallback global
 
-Se a org não tiver config, o adapter KeyInvoice cai nos secrets do deployment, para a
-emissão continuar a funcionar:
+A chave (`client_secret`) **não** tem fallback para nenhum secret do deployment — só a
+config da própria organização é usada. Sem config, a emissão falha cedo e claro
+(`"Chave do KeyInvoice não configurada."`), em vez de arriscar emitir pela conta de outra
+organização. Cada org tem de configurar a sua própria chave em Integrações → Adicionar
+Plataforma → KeyInvoice.
+
+Os restantes valores (endpoint, doctypes, defaults) não identificam nenhuma organização e
+continuam a aceitar secrets do deployment como valores por-defeito partilháveis:
 
 ```bash
-supabase secrets set KEYINVOICE_API_KEY=<chave API5>
 supabase secrets set KI_DEFAULT_PRODUCT=<id/ref do artigo genérico>
 # opcionais (têm defaults no adapter):
 supabase secrets set KI_DOCTYPE_FT=4 KI_DOCTYPE_FR=34 KI_DOCTYPE_NC=7 KI_DOCTYPE_RC=<id>
 supabase secrets set KI_DEFAULT_IDTAX=<id IVA de recurso>
+supabase secrets set KEYINVOICE_ENDPOINT=<endpoint alternativo, se aplicável>
 ```
 
 `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` são injetados pelo runtime.
