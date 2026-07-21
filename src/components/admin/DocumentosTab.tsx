@@ -34,8 +34,10 @@ export const DocumentosTab = () => {
   const { empresas } = useClientesEmpresas();
 
   const [isSuplementarDialogOpen, setIsSuplementarDialogOpen] = useState(false);
-  const [editingSuplementar, setEditingSuplementar] = useState<DocumentoSuplementarComEmpresas | null>(null);
-  const { data: suplementares = [], isLoading: loadingSuplementares } = useDocumentosSuplementares();
+  const [editingSuplementar, setEditingSuplementar] =
+    useState<DocumentoSuplementarComEmpresas | null>(null);
+  const { data: suplementares = [], isLoading: loadingSuplementares } =
+    useDocumentosSuplementares();
 
   useEffect(() => {
     fetchTemplates();

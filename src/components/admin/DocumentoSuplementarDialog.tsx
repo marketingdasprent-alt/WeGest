@@ -88,7 +88,11 @@ export const DocumentoSuplementarDialog = ({
           ficheiroUrlAtual: documento.ficheiro_url,
         });
       } else {
-        await createMutation.mutateAsync({ nome, file: file as File, empresaIds: Array.from(empresaIds) });
+        await createMutation.mutateAsync({
+          nome,
+          file: file as File,
+          empresaIds: Array.from(empresaIds),
+        });
       }
       onOpenChange(false);
     } catch {
@@ -100,7 +104,9 @@ export const DocumentoSuplementarDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{documento ? 'Editar Documento Suplementar' : 'Novo Documento Suplementar'}</DialogTitle>
+          <DialogTitle>
+            {documento ? 'Editar Documento Suplementar' : 'Novo Documento Suplementar'}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
@@ -118,11 +124,18 @@ export const DocumentoSuplementarDialog = ({
               className="hidden"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
-            <Button type="button" variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()}>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => fileInputRef.current?.click()}
+            >
               <Upload className="mr-2 h-4 w-4" />
               {file ? file.name : documento ? 'Substituir ficheiro' : 'Escolher ficheiro'}
             </Button>
-            <p className="text-xs text-muted-foreground">PDF, Word, Excel, imagem ou texto · máximo 10 MB</p>
+            <p className="text-xs text-muted-foreground">
+              PDF, Word, Excel, imagem ou texto · máximo 10 MB
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -135,10 +148,7 @@ export const DocumentoSuplementarDialog = ({
                     checked={empresaIds.has(e.id)}
                     onCheckedChange={() => toggleEmpresa(e.id)}
                   />
-                  <label
-                    htmlFor={`empresa-suplementar-${e.id}`}
-                    className="text-sm cursor-pointer"
-                  >
+                  <label htmlFor={`empresa-suplementar-${e.id}`} className="text-sm cursor-pointer">
                     {e.nome}
                   </label>
                 </div>

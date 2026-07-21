@@ -166,7 +166,9 @@ export function useUpdateDocumentoSuplementar() {
         .filter((a: { cliente_empresa_id: string }) => !desejadosIds.has(a.cliente_empresa_id))
         .map((a: { id: string }) => a.id);
       if (paraApagar.length > 0) {
-        const { error } = await from('documento_suplementar_empresas').delete().in('id', paraApagar);
+        const { error } = await from('documento_suplementar_empresas')
+          .delete()
+          .in('id', paraApagar);
         if (error) throw error;
       }
 

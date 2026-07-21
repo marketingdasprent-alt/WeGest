@@ -32,7 +32,11 @@ describe('DocumentTemplateList', () => {
 
   it('lista o template com nome, empresa e versão', () => {
     render(
-      <DocumentTemplateList templates={[template]} nomePorEmpresa={{ e1: 'Urbango' }} {...handlers} />
+      <DocumentTemplateList
+        templates={[template]}
+        nomePorEmpresa={{ e1: 'Urbango' }}
+        {...handlers}
+      />
     );
     expect(screen.getByText('Contrato TVDE')).toBeTruthy();
     expect(screen.getByText(/Urbango/)).toBeTruthy();
@@ -42,7 +46,11 @@ describe('DocumentTemplateList', () => {
 
   it('chama onEdit e onToggleStatus com o template', () => {
     render(
-      <DocumentTemplateList templates={[template]} nomePorEmpresa={{ e1: 'Urbango' }} {...handlers} />
+      <DocumentTemplateList
+        templates={[template]}
+        nomePorEmpresa={{ e1: 'Urbango' }}
+        {...handlers}
+      />
     );
     fireEvent.click(screen.getByTitle('Editar'));
     expect(handlers.onEdit).toHaveBeenCalledWith(template);

@@ -55,7 +55,10 @@ describe('useDocumentosSuplementares', () => {
             ativo: true,
             created_at: '2026-01-01',
             updated_at: '2026-01-01',
-            documento_suplementar_empresas: [{ cliente_empresa_id: 'e1' }, { cliente_empresa_id: 'e2' }],
+            documento_suplementar_empresas: [
+              { cliente_empresa_id: 'e1' },
+              { cliente_empresa_id: 'e2' },
+            ],
           },
         ],
         error: null,
@@ -113,7 +116,10 @@ describe('useDocumentosSuplementares', () => {
   });
 
   it('atualiza: sincroniza empresas por diferença (apaga removidas, insere novas)', async () => {
-    const updateChain: any = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ error: null }) };
+    const updateChain: any = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    };
     const selectChain: any = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockResolvedValue({
@@ -124,7 +130,10 @@ describe('useDocumentosSuplementares', () => {
         error: null,
       }),
     };
-    const deleteChain: any = { delete: vi.fn().mockReturnThis(), in: vi.fn().mockResolvedValue({ error: null }) };
+    const deleteChain: any = {
+      delete: vi.fn().mockReturnThis(),
+      in: vi.fn().mockResolvedValue({ error: null }),
+    };
     const insertChain: any = { insert: vi.fn().mockResolvedValue({ error: null }) };
 
     let callCount = 0;
@@ -149,12 +158,17 @@ describe('useDocumentosSuplementares', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(deleteChain.in).toHaveBeenCalledWith('id', ['j2']);
-    expect(insertChain.insert).toHaveBeenCalledWith([{ documento_id: 'd1', cliente_empresa_id: 'e3' }]);
+    expect(insertChain.insert).toHaveBeenCalledWith([
+      { documento_id: 'd1', cliente_empresa_id: 'e3' },
+    ]);
   });
 
   it('elimina: apaga a linha e remove o ficheiro do storage (best-effort)', async () => {
     const { remove } = mockStorage();
-    const deleteChain: any = { delete: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ error: null }) };
+    const deleteChain: any = {
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    };
     (supabase.from as any).mockReturnValue(deleteChain);
     const { wrapper } = makeWrapper();
 

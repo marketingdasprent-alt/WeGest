@@ -35,7 +35,12 @@ describe('DocumentoSuplementarList', () => {
 
   it('mostra estado vazio quando não há documentos', () => {
     renderWithClient(
-      <DocumentoSuplementarList documentos={[]} nomePorEmpresa={{}} isLoading={false} onEdit={vi.fn()} />
+      <DocumentoSuplementarList
+        documentos={[]}
+        nomePorEmpresa={{}}
+        isLoading={false}
+        onEdit={vi.fn()}
+      />
     );
     expect(screen.getByText(/nenhum documento suplementar/i)).toBeTruthy();
   });
@@ -57,7 +62,12 @@ describe('DocumentoSuplementarList', () => {
   it('chama onEdit ao clicar em Editar', () => {
     const onEdit = vi.fn();
     renderWithClient(
-      <DocumentoSuplementarList documentos={[doc]} nomePorEmpresa={{}} isLoading={false} onEdit={onEdit} />
+      <DocumentoSuplementarList
+        documentos={[doc]}
+        nomePorEmpresa={{}}
+        isLoading={false}
+        onEdit={onEdit}
+      />
     );
     fireEvent.click(screen.getByTitle('Editar'));
     expect(onEdit).toHaveBeenCalledWith(doc);
@@ -68,26 +78,46 @@ describe('DocumentoSuplementarList', () => {
       from: vi.fn().mockReturnValue({
         createSignedUrl: vi
           .fn()
-          .mockResolvedValue({ data: { signedUrl: 'https://signed.example/norma.pdf' }, error: null }),
+          .mockResolvedValue({
+            data: { signedUrl: 'https://signed.example/norma.pdf' },
+            error: null,
+          }),
       }),
     };
     renderWithClient(
-      <DocumentoSuplementarList documentos={[doc]} nomePorEmpresa={{}} isLoading={false} onEdit={vi.fn()} />
+      <DocumentoSuplementarList
+        documentos={[doc]}
+        nomePorEmpresa={{}}
+        isLoading={false}
+        onEdit={vi.fn()}
+      />
     );
     fireEvent.click(screen.getByTitle('Descarregar'));
     await waitFor(() =>
-      expect(window.open).toHaveBeenCalledWith('https://signed.example/norma.pdf', '_blank', 'noopener,noreferrer')
+      expect(window.open).toHaveBeenCalledWith(
+        'https://signed.example/norma.pdf',
+        '_blank',
+        'noopener,noreferrer'
+      )
     );
   });
 
   it('eliminar: pede confirmação e chama o delete no Supabase ao confirmar', async () => {
-    const deleteChain: any = { delete: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ error: null }) };
+    const deleteChain: any = {
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    };
     (supabase.from as any).mockReturnValue(deleteChain);
     (supabase as unknown as { storage: unknown }).storage = {
       from: vi.fn().mockReturnValue({ remove: vi.fn().mockResolvedValue({ error: null }) }),
     };
     renderWithClient(
-      <DocumentoSuplementarList documentos={[doc]} nomePorEmpresa={{}} isLoading={false} onEdit={vi.fn()} />
+      <DocumentoSuplementarList
+        documentos={[doc]}
+        nomePorEmpresa={{}}
+        isLoading={false}
+        onEdit={vi.fn()}
+      />
     );
 
     fireEvent.click(screen.getByTitle('Eliminar'));

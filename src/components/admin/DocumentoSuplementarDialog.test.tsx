@@ -56,7 +56,9 @@ describe('DocumentoSuplementarDialog', () => {
   });
 
   it('editar: pré-preenche nome e empresas, e chama update sem novo ficheiro', async () => {
-    render(<DocumentoSuplementarDialog open documento={documentoExistente} onOpenChange={vi.fn()} />);
+    render(
+      <DocumentoSuplementarDialog open documento={documentoExistente} onOpenChange={vi.fn()} />
+    );
 
     expect(screen.getByLabelText('Nome')).toHaveValue('Norma Interna');
     fireEvent.click(screen.getByRole('button', { name: /guardar/i }));

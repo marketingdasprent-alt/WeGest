@@ -14,7 +14,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { FileText, Download, Pencil, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useRemoveDocumentoSuplementar, getDocumentoSuplementarSignedUrl } from '@/hooks/useDocumentosSuplementares';
+import {
+  useRemoveDocumentoSuplementar,
+  getDocumentoSuplementarSignedUrl,
+} from '@/hooks/useDocumentosSuplementares';
 import type { DocumentoSuplementarComEmpresas } from '@/types/documentoSuplementar';
 
 interface DocumentoSuplementarListProps {
@@ -118,7 +121,13 @@ export const DocumentoSuplementarList = ({
               >
                 <Download className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(doc)} title="Editar">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => onEdit(doc)}
+                title="Editar"
+              >
                 <Pencil className="h-4 w-4" />
               </Button>
               <Button
@@ -140,8 +149,8 @@ export const DocumentoSuplementarList = ({
           <AlertDialogHeader>
             <AlertDialogTitle>Eliminar documento suplementar?</AlertDialogTitle>
             <AlertDialogDescription>
-              O ficheiro <strong>{deleteTarget?.nome}</strong> será removido permanentemente para todas as
-              empresas associadas. Esta ação não pode ser desfeita.
+              O ficheiro <strong>{deleteTarget?.nome}</strong> será removido permanentemente para
+              todas as empresas associadas. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

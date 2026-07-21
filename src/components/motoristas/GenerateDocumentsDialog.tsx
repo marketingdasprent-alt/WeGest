@@ -760,7 +760,10 @@ export const GenerateDocumentsDialog = ({
                 </div>
 
                 {(() => {
-                  const suplementaresDaEmpresa = filtrarSuplementaresAtivos(suplementares, selectedEmpresa);
+                  const suplementaresDaEmpresa = filtrarSuplementaresAtivos(
+                    suplementares,
+                    selectedEmpresa
+                  );
                   if (suplementaresDaEmpresa.length === 0) return null;
                   return (
                     <div className="space-y-2">

@@ -63,7 +63,8 @@ export const DocumentTemplateList = ({
               Empresa: {getEmpresaNome(template)} · Versão: {template.versao}
             </p>
             <p className="text-xs text-muted-foreground">
-              Criado: {formatDate(template.created_at)} · Atualizado: {formatDate(template.updated_at)}
+              Criado: {formatDate(template.created_at)} · Atualizado:{' '}
+              {formatDate(template.updated_at)}
             </p>
           </div>
           <div className="flex gap-1 shrink-0">
