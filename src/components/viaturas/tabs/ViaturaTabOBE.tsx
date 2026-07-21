@@ -112,6 +112,7 @@ export function ViaturaTabOBE({ viatura, onUpdate }: ViaturaTabOBEProps) {
 
   const handleDeleteContrato = async () => {
     if (!contratoOBE) return;
+    if (!window.confirm('Tem a certeza que quer remover o Contrato OBE?')) return;
     try {
       await supabase.storage.from('viatura-documentos').remove([contratoOBE.ficheiro_url]);
       const { error } = await supabase.from('viatura_documentos').delete().eq('id', contratoOBE.id);

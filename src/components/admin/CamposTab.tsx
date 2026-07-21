@@ -23,6 +23,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useOrgId } from '@/contexts/TenantContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -82,6 +92,10 @@ export function CamposTab() {
   const [novaCategoria, setNovaCategoria] = useState<CampoCategoria>('contrato');
   const [novaCategoriaNome, setNovaCategoriaNome] = useState('');
   const [novaFonte, setNovaFonte] = useState('');
+  const [deleteCampoTarget, setDeleteCampoTarget] = useState<{
+    id: string;
+    label: string;
+  } | null>(null);
 
   // Categorias disponíveis no select (base + as já criadas pelo provider).
   const categoriasDisponiveis = useMemo(
@@ -334,7 +348,7 @@ export function CamposTab() {
                           variant="ghost"
                           size="icon"
                           className="h-5 w-5 text-destructive"
-                          onClick={() => apagarCampo.mutate(c.id)}
+                          onClick={() => setDeleteCampoTarget({ id: c.id, label: c.label })}
                           aria-label="Apagar campo"
                         >
                           <Trash2 className="h-3 w-3" />
@@ -426,6 +440,36 @@ export function CamposTab() {
           })}
         </div>
       )}
+
+      <AlertDialog
+        open={!!deleteCampoTarget}
+        onOpenChange={(o) => !o && setDeleteCampoTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar campo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteCampoTarget
+                ? `O campo "${deleteCampoTarget.label}" será removido do catálogo. Esta ação não pode ser desfeita e pode afetar templates que já o usem.`
+                : 'Esta ação não pode ser desfeita.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteCampoTarget) {
+                  apagarCampo.mutate(deleteCampoTarget.id);
+                  setDeleteCampoTarget(null);
+                }
+              }}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
