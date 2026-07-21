@@ -30,5 +30,8 @@ vi.mock('@/integrations/supabase/client', () => ({
     auth: {
       getSession: vi.fn(),
     },
+    functions: {
+      invoke: vi.fn(),
+    },
   },
 }));

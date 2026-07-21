@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react';
 import { useRedirectIfAuthenticated } from '@/hooks/useRedirectIfAuthenticated';
 import { BackgroundField } from '@/components/site/BackgroundField';
 import { LandingHero } from '@/components/site/LandingHero';
+import { LandingStats } from '@/components/site/LandingStats';
 import { LandingFeatures } from '@/components/site/LandingFeatures';
 import { LandingModulos } from '@/components/site/LandingModulos';
 import { LandingCTA } from '@/components/site/LandingCTA';
@@ -26,6 +27,7 @@ const Landing = () => {
     <div className="dark relative bg-background text-foreground">
       <BackgroundField />
       <LandingHero />
+      <LandingStats />
       <LandingFeatures />
       <LandingModulos />
       <LandingCTA />

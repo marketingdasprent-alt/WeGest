@@ -9,7 +9,7 @@ export const LandingCTA = () => {
 
   return (
     <section className="relative flex flex-col items-center gap-8 px-6 py-32">
-      <SectionHeading eyebrow="// comecar" title="O seu fluxo começa aqui." />
+      <SectionHeading eyebrow="// comecar" title="Comece hoje mesmo." />
 
       <motion.div
         initial={prefersReducedMotion ? undefined : { opacity: 0, y: 24 }}

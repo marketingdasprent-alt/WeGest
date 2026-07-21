@@ -13,25 +13,25 @@ const FEATURES: Feature[] = [
     icon: FileSignature,
     title: 'Contratos automáticos',
     description:
-      'Ao assinar, o sistema cria a reserva, aloca a viatura e agenda os eventos — sem um único clique extra.',
+      'Ao assinar, o sistema cria a reserva, aloca a viatura e agenda os eventos sem um único clique extra.',
   },
   {
     icon: CalendarClock,
     title: 'Calendário que se preenche sozinho',
     description:
-      'Check-ins, check-outs e renovações aparecem porque aconteceram — não porque alguém os desenhou.',
+      'Check-ins, check-outs e renovações aparecem porque aconteceram não porque alguém os desenhou.',
   },
   {
     icon: Wallet,
     title: 'Financeiro que fecha sozinho',
     description:
-      'Tarifas, quilómetros e movimentos juntam-se num resumo semanal — sem folha de cálculo paralela.',
+      'Tarifas, quilómetros e movimentos juntam-se num resumo semanal sem folha de cálculo paralela.',
   },
   {
     icon: ShieldCheck,
     title: 'Organizações isoladas',
     description:
-      'Os dados de uma empresa nunca tocam nos de outra — por definição, não por confiança.',
+      'Os dados de uma empresa nunca tocam nos de outra por definição, não por confiança.',
   },
 ];
 
@@ -50,8 +50,8 @@ export const LandingFeatures = () => {
 
   return (
     <section className="relative flex flex-col items-center gap-12 px-6 py-24">
-      <SectionHeading eyebrow="// como.funciona" title="Um fluxo só. Tudo ligado.">
-        Cada acção gera automaticamente a próxima. Sem re-introduzir dados, sem esquecer um passo.
+      <SectionHeading eyebrow="// como.funciona" title="Tudo conectado, automaticamente.">
+        Cada ação gera automaticamente a próxima. Sem re-introduzir dados, sem esquecer um passo.
       </SectionHeading>
 
       <motion.div

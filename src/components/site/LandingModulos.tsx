@@ -16,33 +16,49 @@ const MODULOS: Modulo[] = [
     label: 'Frota',
     icon: Truck,
     description: 'A base: viaturas, documentos, combustível.',
-    features: ['Ficha completa por viatura', 'Alertas de documentos a expirar', 'Histórico de manutenção'],
+    features: [
+      'Ficha completa por viatura',
+      'Alertas de documentos a expirar',
+      'Histórico de manutenção',
+    ],
   },
   {
     label: 'TVDE',
     icon: Car,
     description: 'Motoristas, candidaturas e conformidade.',
-    features: ['Candidaturas e onboarding', 'Documentação com validade automática', 'Painel próprio do motorista'],
+    features: [
+      'Candidaturas e onboarding',
+      'Documentação com validade automática',
+      'Painel próprio do motorista',
+    ],
   },
   {
     label: 'Rent-a-Car',
     icon: Key,
     description: 'Contratos, reservas e tarifas por grupo.',
-    features: ['Contrato gera reserva e eventos sozinho', 'Calendário de disponibilidade', 'Tarifas por grupo de viatura'],
+    features: [
+      'Contrato gera reserva e eventos sozinho',
+      'Calendário de disponibilidade',
+      'Tarifas por grupo de viatura',
+    ],
   },
   {
     label: 'Assistência',
     icon: LifeBuoy,
     description: 'Tickets, reparações e sinistros.',
-    features: ['Tickets com acompanhamento', 'Reparações ligadas à viatura', 'Histórico de sinistros'],
+    features: [
+      'Tickets com acompanhamento',
+      'Reparações ligadas à viatura',
+      'Histórico de sinistros',
+    ],
   },
 ];
 
 const DIFERENCIAIS = [
   'Isolamento total entre organizações',
-  'Tudo automático — sem re-introduzir dados',
+  'Tudo automático, sem re-introduzir dados',
   'Corre no browser, sem instalação',
-  'Suporte em português',
+  'Qr code para entregas e recolhas',
 ];
 
 const containerVariants = {
@@ -62,8 +78,8 @@ export const LandingModulos = () => {
   return (
     <section className="relative flex flex-col items-center gap-12 px-6 py-24">
       <SectionHeading eyebrow="// modulos.e.planos" title="Liga só o que precisas.">
-        Sem mensalidade fixa por funcionalidades que não usa — o preço acompanha os módulos que
-        activar.
+        Sem mensalidade fixa por funcionalidades que não usa, o preço acompanha os módulos que
+        ativar.
       </SectionHeading>
 
       <motion.div
@@ -115,7 +131,7 @@ export const LandingModulos = () => {
           Pedir uma proposta
         </Link>
         <p className="text-xs text-muted-foreground/70">
-          Preço à medida da operação — sem mensalidades escondidas.
+          Preço à medida da operação. Sem mensalidades escondidas.
         </p>
       </div>
     </section>

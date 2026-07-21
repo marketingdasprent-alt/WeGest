@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import { SectionHeading } from './SectionHeading';
 import { useMagneticHover } from '@/hooks/useMagneticHover';
+import { ContactModal } from './ContactModal';
 
 export const LandingHero = () => {
   const prefersReducedMotion = useReducedMotion();
   const primaryRef = useMagneticHover<HTMLAnchorElement>(0.4);
-  const secondaryRef = useMagneticHover<HTMLAnchorElement>(0.3);
+  const secondaryRef = useMagneticHover<HTMLButtonElement>(0.3);
 
   return (
     <section className="relative flex min-h-screen flex-col items-center justify-center gap-8 px-6">
@@ -15,8 +16,8 @@ export const LandingHero = () => {
         eyebrow="// wegest.sistema"
         title="A frota nunca para. O sistema também não devia."
       >
-        Contratos, viaturas, motoristas e financeiro — tudo num só fluxo, sem re-escrever o mesmo
-        dado duas vezes.
+        Contratos, viaturas, motoristas e financeiro. Tudo integrado, sem re-escrever o mesmo dado
+        duas vezes.
       </SectionHeading>
 
       <motion.div
@@ -32,13 +33,17 @@ export const LandingHero = () => {
         >
           Começar agora
         </Link>
-        <Link
-          ref={secondaryRef}
-          to="/entrar"
-          className="rounded-xl border border-border/50 px-8 py-4 text-center text-lg font-medium text-foreground backdrop-blur-sm transition-colors hover:border-primary/50 hover:bg-card/40"
-        >
-          Já é cliente? Entrar
-        </Link>
+        <ContactModal
+          trigger={
+            <button
+              ref={secondaryRef}
+              type="button"
+              className="rounded-xl border border-border/50 px-8 py-4 text-center text-lg font-medium text-foreground backdrop-blur-sm transition-colors hover:border-primary/50 hover:bg-card/40"
+            >
+              Fale conosco
+            </button>
+          }
+        />
       </motion.div>
 
       {!prefersReducedMotion && (

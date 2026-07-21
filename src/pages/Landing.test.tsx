@@ -64,9 +64,10 @@ describe('Landing', () => {
 
     const titles = headingTexts();
     expect(titles).toContain(nfc('A frota nunca para. O sistema também não devia.'));
-    expect(titles).toContain(nfc('Um fluxo só. Tudo ligado.'));
+    expect(titles).toContain(nfc('Testado na nossa própria frota.'));
+    expect(titles).toContain(nfc('Tudo conectado, automaticamente.'));
     expect(titles).toContain(nfc('Liga só o que precisas.'));
-    expect(titles).toContain(nfc('O seu fluxo começa aqui.'));
+    expect(titles).toContain(nfc('Comece hoje mesmo.'));
 
     expect(screen.getByRole('link', { name: 'Começar agora' })).toHaveAttribute(
       'href',
@@ -76,6 +77,7 @@ describe('Landing', () => {
       'href',
       '/registar-org'
     );
+    expect(screen.getByRole('button', { name: 'Fale conosco' })).toBeTruthy();
 
     const entrarLinks = screen.getAllByRole('link', { name: 'Já é cliente? Entrar' });
     expect(entrarLinks.length).toBeGreaterThan(0);
