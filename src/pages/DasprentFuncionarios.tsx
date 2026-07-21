@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/table';
 import { Users, Plus, Edit, Trash2 } from 'lucide-react';
 import { DasprentNavigation } from '@/components/DasprentNavigation';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface Funcionario {
   id: string;
@@ -50,6 +51,9 @@ const DasprentFuncionarios = () => {
     data_admissao: '',
     ativo: true,
   });
+  const [sortField, setSortField] = useState<string>('nome');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -154,6 +158,30 @@ const DasprentFuncionarios = () => {
       });
     }
   };
+
+  const sortedFuncionarios = [...funcionarios].sort((a, b) => {
+    let va: string | number = '';
+    let vb: string | number = '';
+    if (sortField === 'nome') {
+      va = a.nome;
+      vb = b.nome;
+    } else if (sortField === 'email') {
+      va = a.email;
+      vb = b.email;
+    } else if (sortField === 'cargo') {
+      va = a.cargo || '';
+      vb = b.cargo || '';
+    } else if (sortField === 'departamento') {
+      va = a.departamento || '';
+      vb = b.departamento || '';
+    } else if (sortField === 'ativo') {
+      va = a.ativo ? 0 : 1;
+      vb = b.ativo ? 0 : 1;
+    }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
 
   if (loading && funcionarios.length === 0) {
     return (
@@ -287,16 +315,56 @@ const DasprentFuncionarios = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-gray-300">Nome</TableHead>
-                    <TableHead className="text-gray-300">Email</TableHead>
-                    <TableHead className="text-gray-300">Cargo</TableHead>
-                    <TableHead className="text-gray-300">Departamento</TableHead>
-                    <TableHead className="text-gray-300">Status</TableHead>
+                    <SortableTableHead
+                      field="nome"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="text-gray-300"
+                    >
+                      Nome
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="email"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="text-gray-300"
+                    >
+                      Email
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="cargo"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="text-gray-300"
+                    >
+                      Cargo
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="departamento"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="text-gray-300"
+                    >
+                      Departamento
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="ativo"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="text-gray-300"
+                    >
+                      Status
+                    </SortableTableHead>
                     <TableHead className="text-gray-300">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {funcionarios.map((funcionario) => (
+                  {sortedFuncionarios.map((funcionario) => (
                     <TableRow key={funcionario.id}>
                       <TableCell className="text-white">{funcionario.nome}</TableCell>
                       <TableCell className="text-gray-300">{funcionario.email}</TableCell>

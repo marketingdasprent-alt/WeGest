@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layers, Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,6 +57,9 @@ const RentingGrupos = () => {
 
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<RentingGrupo | null>(null);
+  const [sortField, setSortField] = useState<string>('codigo');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const { data: grupos = [], isLoading } = useQuery({
     queryKey: ['renting_grupos', orgId],
@@ -80,9 +84,37 @@ const RentingGrupos = () => {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const filtered = grupos.filter((g) => {
-    return !search || matchesSearch(g.nome, search) || matchesSearch(g.codigo, search);
-  });
+  const filtered = useMemo(() => {
+    const list = grupos.filter((g) => {
+      return !search || matchesSearch(g.nome, search) || matchesSearch(g.codigo, search);
+    });
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortField) {
+        case 'codigo':
+          va = a.codigo || '';
+          vb = b.codigo || '';
+          break;
+        case 'nome':
+          va = a.nome || '';
+          vb = b.nome || '';
+          break;
+        case 'descricao':
+          va = a.descricao || '';
+          vb = b.descricao || '';
+          break;
+        case 'estado':
+          va = a.ativo ? 1 : 0;
+          vb = b.ativo ? 1 : 0;
+          break;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [grupos, search, sortField, sortDir]);
 
   return (
     <div className="w-full">
@@ -142,10 +174,42 @@ const RentingGrupos = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-20">Código</TableHead>
-                <TableHead className="min-w-[160px]">Nome</TableHead>
-                <TableHead className="min-w-[240px]">Descrição</TableHead>
-                <TableHead className="w-20">Estado</TableHead>
+                <SortableTableHead
+                  field="codigo"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-20"
+                >
+                  Código
+                </SortableTableHead>
+                <SortableTableHead
+                  field="nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[160px]"
+                >
+                  Nome
+                </SortableTableHead>
+                <SortableTableHead
+                  field="descricao"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[240px]"
+                >
+                  Descrição
+                </SortableTableHead>
+                <SortableTableHead
+                  field="estado"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-20"
+                >
+                  Estado
+                </SortableTableHead>
                 <TableHead className="w-20" />
               </TableRow>
             </TableHeader>

@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface HistoricoItem {
   transaction_id: string;
@@ -55,6 +56,9 @@ export function ViaturaObeHistoricoSection({ viaturaId }: ViaturaObeHistoricoSec
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [search, setSearch] = useState('');
+  const [sortField, setSortField] = useState<string>('transaction_date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const carregar = async () => {
     setLoading(true);
@@ -79,17 +83,49 @@ export function ViaturaObeHistoricoSection({ viaturaId }: ViaturaObeHistoricoSec
   }, [viaturaId, dataInicio, dataFim]);
 
   const filtered = useMemo(() => {
-    if (!search) return items;
-    const t = norm(search);
-    return items.filter(
-      (h) =>
-        norm(h.barreira_entrada || '').includes(t) ||
-        norm(h.barreira_saida || '').includes(t) ||
-        norm(h.operador || '').includes(t) ||
-        norm(h.motorista_nome || '').includes(t) ||
-        norm(h.contrato_codigo ? String(h.contrato_codigo) : '').includes(t)
-    );
-  }, [items, search]);
+    const list = !search
+      ? [...items]
+      : items.filter((h) => {
+          const t = norm(search);
+          return (
+            norm(h.barreira_entrada || '').includes(t) ||
+            norm(h.barreira_saida || '').includes(t) ||
+            norm(h.operador || '').includes(t) ||
+            norm(h.motorista_nome || '').includes(t) ||
+            norm(h.contrato_codigo ? String(h.contrato_codigo) : '').includes(t)
+          );
+        });
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'transaction_date') {
+        va = a.transaction_date;
+        vb = b.transaction_date;
+      } else if (sortField === 'barreira_entrada') {
+        va = a.barreira_entrada || '';
+        vb = b.barreira_entrada || '';
+      } else if (sortField === 'barreira_saida') {
+        va = a.barreira_saida || '';
+        vb = b.barreira_saida || '';
+      } else if (sortField === 'operador') {
+        va = a.operador || '';
+        vb = b.operador || '';
+      } else if (sortField === 'motorista_nome') {
+        va = a.motorista_nome || '';
+        vb = b.motorista_nome || '';
+      } else if (sortField === 'contrato_codigo') {
+        va = a.contrato_codigo || 0;
+        vb = b.contrato_codigo || 0;
+      } else if (sortField === 'amount') {
+        va = a.amount || 0;
+        vb = b.amount || 0;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [items, search, sortField, sortDir]);
 
   const total = useMemo(
     () => filtered.reduce((a, h) => a + (Number(h.amount) || 0), 0),
@@ -152,13 +188,63 @@ export function ViaturaObeHistoricoSection({ viaturaId }: ViaturaObeHistoricoSec
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Entrada</TableHead>
-                  <TableHead>Saída</TableHead>
-                  <TableHead>Operador</TableHead>
-                  <TableHead>Motorista (à data)</TableHead>
-                  <TableHead>Contrato (à data)</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
+                  <SortableTableHead
+                    field="transaction_date"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Data
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="barreira_entrada"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Entrada
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="barreira_saida"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Saída
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="operador"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Operador
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="motorista_nome"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Motorista (à data)
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="contrato_codigo"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Contrato (à data)
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="amount"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    align="right"
+                  >
+                    Valor
+                  </SortableTableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

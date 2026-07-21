@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ShieldCheck, Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,6 +66,9 @@ const RentingCoberturas = () => {
   const [deleteTarget, setDeleteTarget] = useState<RentingCobertura | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [sortField, setSortField] = useState<string>('nome');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const { data: coberturas = [], isLoading } = useQuery({
     queryKey: ['renting_coberturas', orgId],
@@ -89,7 +93,39 @@ const RentingCoberturas = () => {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const filtered = coberturas.filter((c) => !search || matchesSearch(c.nome, search));
+  const filtered = useMemo(() => {
+    const list = coberturas.filter((c) => !search || matchesSearch(c.nome, search));
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortField) {
+        case 'nome':
+          va = a.nome || '';
+          vb = b.nome || '';
+          break;
+        case 'descricao':
+          va = a.descricao || '';
+          vb = b.descricao || '';
+          break;
+        case 'preco_dia':
+          va = a.preco_dia || 0;
+          vb = b.preco_dia || 0;
+          break;
+        case 'franquia':
+          va = a.franquia_valor ?? 0;
+          vb = b.franquia_valor ?? 0;
+          break;
+        case 'estado':
+          va = a.ativa ? 1 : 0;
+          vb = b.ativa ? 1 : 0;
+          break;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [coberturas, search, sortField, sortDir]);
 
   const openNew = () => {
     setEditing(null);
@@ -202,11 +238,53 @@ const RentingCoberturas = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[180px]">Nome</TableHead>
-                <TableHead className="min-w-[240px]">Descrição</TableHead>
-                <TableHead className="w-28 text-right">€/dia</TableHead>
-                <TableHead className="w-28 text-right">Franquia</TableHead>
-                <TableHead className="w-20">Estado</TableHead>
+                <SortableTableHead
+                  field="nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[180px]"
+                >
+                  Nome
+                </SortableTableHead>
+                <SortableTableHead
+                  field="descricao"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[240px]"
+                >
+                  Descrição
+                </SortableTableHead>
+                <SortableTableHead
+                  field="preco_dia"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                  className="w-28"
+                >
+                  €/dia
+                </SortableTableHead>
+                <SortableTableHead
+                  field="franquia"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                  className="w-28"
+                >
+                  Franquia
+                </SortableTableHead>
+                <SortableTableHead
+                  field="estado"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-20"
+                >
+                  Estado
+                </SortableTableHead>
                 <TableHead className="w-20" />
               </TableRow>
             </TableHeader>

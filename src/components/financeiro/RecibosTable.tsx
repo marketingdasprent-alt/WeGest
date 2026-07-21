@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ReciboStatusBadge } from '@/lib/statusBadges';
 import {
@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { Card, CardContent } from '@/components/ui/card';
 import { Eye, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -51,6 +52,20 @@ interface RecibosTableProps {
   onReciboUpdated: () => void;
 }
 
+const RECIBOS_COLUMNS: {
+  field: string;
+  label: string;
+  className?: string;
+  align?: 'left' | 'right';
+}[] = [
+  { field: 'codigo', label: 'Código', className: 'w-[80px]' },
+  { field: 'motorista', label: 'Motorista' },
+  { field: 'semana', label: 'Semana' },
+  { field: 'valor_total', label: 'Valor', align: 'right' },
+  { field: 'created_at', label: 'Submetido' },
+  { field: 'status', label: 'Status' },
+];
+
 export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
   const isMobile = useIsMobile();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -60,10 +75,49 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
   const [rejeitarRecibo, setRejeitarRecibo] = useState<Recibo | null>(null);
   const [motivoRecusa, setMotivoRecusa] = useState('');
 
-  // Assinatura estável da lista (1.º id + tamanho) para voltar à 1ª página
-  // quando o pai troca de filtro — mesmo que a contagem se mantenha igual.
+  const [sortField, setSortField] = useState<string>('created_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
+
+  const sortedRecibos = useMemo(() => {
+    const list = [...recibos];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'codigo') {
+        va = a.codigo;
+        vb = b.codigo;
+      } else if (sortField === 'motorista') {
+        va = a.motoristas_ativos?.nome || '';
+        vb = b.motoristas_ativos?.nome || '';
+      } else if (sortField === 'semana') {
+        va = a.semana_referencia_inicio || '';
+        vb = b.semana_referencia_inicio || '';
+      } else if (sortField === 'valor_total') {
+        va = a.valor_total ?? 0;
+        vb = b.valor_total ?? 0;
+      } else if (sortField === 'created_at') {
+        va = a.created_at || '';
+        vb = b.created_at || '';
+      } else if (sortField === 'status') {
+        va = a.status || '';
+        vb = b.status || '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [recibos, sortField, sortDir]);
+
+  // Assinatura estável da lista (1.º id + tamanho + ordenação) para voltar à
+  // 1ª página quando o pai troca de filtro ou o utilizador reordena.
   const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
-    usePagination(recibos, 25, `${recibos.length}|${recibos[0]?.id ?? ''}`);
+    usePagination(
+      sortedRecibos,
+      25,
+      `${recibos.length}|${recibos[0]?.id ?? ''}|${sortField}|${sortDir}`
+    );
 
   const formatCurrency = (value: number | null) =>
     value
@@ -325,12 +379,19 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[80px]">Código</TableHead>
-              <TableHead>Motorista</TableHead>
-              <TableHead>Semana</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
-              <TableHead>Submetido</TableHead>
-              <TableHead>Status</TableHead>
+              {RECIBOS_COLUMNS.map((col) => (
+                <SortableTableHead
+                  key={col.field}
+                  field={col.field}
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className={col.className}
+                  align={col.align}
+                >
+                  {col.label}
+                </SortableTableHead>
+              ))}
               <TableHead className="text-right">Acções</TableHead>
             </TableRow>
           </TableHeader>

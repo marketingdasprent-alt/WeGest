@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronRight, Download, Printer, Edit, History, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -67,6 +68,9 @@ export const ContratosGroupedView = ({
   generatingId,
 }: ContratosGroupedViewProps) => {
   const [expandedMotoristas, setExpandedMotoristas] = useState<Set<string>>(new Set());
+  const [sortField, setSortField] = useState<string>('motorista_nome');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   // Group contracts by motorista
   const groupedByMotorista = contratos.reduce<Record<string, MotoristGroup>>((acc, contrato) => {
@@ -105,9 +109,24 @@ export const ContratosGroupedView = ({
     return acc;
   }, {});
 
-  const groups = Object.values(groupedByMotorista).sort((a, b) =>
-    a.motorista_nome.localeCompare(b.motorista_nome)
-  );
+  const groups = Object.values(groupedByMotorista).sort((a, b) => {
+    if (sortField === 'total_contratos') {
+      const va = a.total_contratos;
+      const vb = b.total_contratos;
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    }
+    if (sortField === 'status') {
+      const va = a.ultimo_contrato.status;
+      const vb = b.ultimo_contrato.status;
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    }
+    const cmp = a.motorista_nome.localeCompare(b.motorista_nome);
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
 
   const toggleExpand = (motoristaId: string) => {
     setExpandedMotoristas((prev) => {
@@ -127,10 +146,31 @@ export const ContratosGroupedView = ({
         <TableHeader>
           <TableRow>
             <TableHead className="w-[40px]"></TableHead>
-            <TableHead>Motorista</TableHead>
+            <SortableTableHead
+              field="motorista_nome"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Motorista
+            </SortableTableHead>
             <TableHead>Empresas</TableHead>
-            <TableHead className="text-center">Contratos</TableHead>
-            <TableHead>Status Atual</TableHead>
+            <SortableTableHead
+              field="total_contratos"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Contratos
+            </SortableTableHead>
+            <SortableTableHead
+              field="status"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Status Atual
+            </SortableTableHead>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>

@@ -33,6 +33,7 @@ import {
 import { baixarDocumentoPdf } from '@/lib/faturacao';
 import type { InvoiceMetadata } from '@/types/faturacao';
 import { useContaCorrenteCliente } from '@/hooks/useContaCorrenteCliente';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface ClienteContaCorrenteTabProps {
   clienteId: string | null;
@@ -102,6 +103,9 @@ function legendaSaldo(saldo: number): string {
 export function ClienteContaCorrenteTab({ clienteId }: ClienteContaCorrenteTabProps) {
   const navigate = useNavigate();
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<string>('dataMovimento');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
   const { data, isLoading, isError } = useContaCorrenteCliente(clienteId);
 
   if (!clienteId) {
@@ -148,7 +152,35 @@ export function ClienteContaCorrenteTab({ clienteId }: ClienteContaCorrenteTabPr
   const faturado = data?.faturado ?? 0;
   const recebido = data?.recebido ?? 0;
   const saldo = data?.saldo ?? 0;
-  const linhas = data?.linhas ?? [];
+  const linhas = [...(data?.linhas ?? [])].sort((a, b) => {
+    let va: string | number = '';
+    let vb: string | number = '';
+    if (sortField === 'dataMovimento') {
+      va = a.dataMovimento || '';
+      vb = b.dataMovimento || '';
+    } else if (sortField === 'numeroDoc') {
+      va = a.numeroDoc || '';
+      vb = b.numeroDoc || '';
+    } else if (sortField === 'docTipo') {
+      va = a.docTipo || '';
+      vb = b.docTipo || '';
+    } else if (sortField === 'descritivo') {
+      va = a.descritivo || '';
+      vb = b.descritivo || '';
+    } else if (sortField === 'contratoLabel') {
+      va = a.contratoLabel || '';
+      vb = b.contratoLabel || '';
+    } else if (sortField === 'debito') {
+      va = a.debito || 0;
+      vb = b.debito || 0;
+    } else if (sortField === 'credito') {
+      va = a.credito || 0;
+      vb = b.credito || 0;
+    }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
 
   /** Célula de valor (débito/crédito): mostra "—" quando não se aplica. */
   const valorCell = (valor: number | null, corClass: string) =>
@@ -196,13 +228,71 @@ export function ClienteContaCorrenteTab({ clienteId }: ClienteContaCorrenteTabPr
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="h-9 text-xs">Data</TableHead>
-              <TableHead className="h-9 text-xs">Nº / Ref.</TableHead>
-              <TableHead className="h-9 text-xs">Tipo</TableHead>
-              <TableHead className="h-9 text-xs">Descrição</TableHead>
-              <TableHead className="h-9 text-xs">Contrato</TableHead>
-              <TableHead className="h-9 text-xs text-right">Débito</TableHead>
-              <TableHead className="h-9 text-xs text-right">Crédito</TableHead>
+              <SortableTableHead
+                field="dataMovimento"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+                className="h-9"
+              >
+                Data
+              </SortableTableHead>
+              <SortableTableHead
+                field="numeroDoc"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+                className="h-9"
+              >
+                Nº / Ref.
+              </SortableTableHead>
+              <SortableTableHead
+                field="docTipo"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+                className="h-9"
+              >
+                Tipo
+              </SortableTableHead>
+              <SortableTableHead
+                field="descritivo"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+                className="h-9"
+              >
+                Descrição
+              </SortableTableHead>
+              <SortableTableHead
+                field="contratoLabel"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+                className="h-9"
+              >
+                Contrato
+              </SortableTableHead>
+              <SortableTableHead
+                field="debito"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+                align="right"
+                className="h-9"
+              >
+                Débito
+              </SortableTableHead>
+              <SortableTableHead
+                field="credito"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+                align="right"
+                className="h-9"
+              >
+                Crédito
+              </SortableTableHead>
               <TableHead className="h-9 text-xs text-center">PDF</TableHead>
             </TableRow>
           </TableHeader>

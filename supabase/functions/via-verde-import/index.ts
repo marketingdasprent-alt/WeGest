@@ -12,7 +12,10 @@ const jsonError = (error: string, status: number) =>
   });
 
 const stripAcc = (s: string) =>
-  (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  (s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 
 const normMatricula = (s: string) => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
@@ -95,6 +98,15 @@ interface TransacaoEstruturada {
   tipo_evento?: string | null;
   contrato?: string | null;
   transaction_id?: string | null;
+  // Campos como o actor Apify da Via Verde realmente produz (ver
+  // viaverde-scraper-wegest main.js) — nomes diferentes dos assumidos acima.
+  data_entrada?: string | null;
+  data_saida?: string | null;
+  local_entrada?: string | null;
+  local_saida?: string | null;
+  servico?: string | null;
+  valor?: number | string | null;
+  contaMobilidade?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -152,6 +164,66 @@ Deno.serve(async (req) => {
       return null;
     };
 
+    // ── Condutor via contrato (fonte prioritária) ──────────────────────────
+    // motorista_viaturas (acima) fica facilmente dessincronizada dos
+    // contratos de renting — é só um fallback. A mesma prioridade usada em
+    // resolverCondutor.ts (contrato > motorista_viaturas) é replicada aqui:
+    // contratos_renting.periodo/contrato_condutores.vigencia cobrindo a data
+    // da portagem tem sempre prioridade sobre a atribuição solta em
+    // motorista_viaturas.
+    const { data: contratos } = await supabase
+      .from('contratos_renting')
+      .select('id, viatura_id, data_inicio, data_fim')
+      .eq('org_id', orgId)
+      .is('deleted_at', null);
+    const contratosByViatura = new Map<string, { id: string; ini: string; fim: string | null }[]>();
+    (contratos || []).forEach((c: any) => {
+      if (!c.viatura_id) return;
+      const arr = contratosByViatura.get(c.viatura_id) || [];
+      arr.push({ id: c.id, ini: c.data_inicio, fim: c.data_fim });
+      contratosByViatura.set(c.viatura_id, arr);
+    });
+
+    const { data: condutores } = await supabase
+      .from('contrato_condutores')
+      .select('contrato_id, motorista_id, is_principal, data_inicio, data_fim')
+      .eq('org_id', orgId)
+      .not('motorista_id', 'is', null);
+    const condutoresByContrato = new Map<
+      string,
+      { mot: string; principal: boolean; ini: string; fim: string | null }[]
+    >();
+    (condutores || []).forEach((cc: any) => {
+      const arr = condutoresByContrato.get(cc.contrato_id) || [];
+      arr.push({
+        mot: cc.motorista_id,
+        principal: !!cc.is_principal,
+        ini: cc.data_inicio,
+        fim: cc.data_fim,
+      });
+      condutoresByContrato.set(cc.contrato_id, arr);
+    });
+
+    const motoristaPorContratoNaData = (viaturaId: string, dataIso: string): string | null => {
+      const dia = dataIso.slice(0, 10);
+      const contratosViatura = contratosByViatura.get(viaturaId) || [];
+      for (const c of contratosViatura) {
+        const ciIni = c.ini ? c.ini.slice(0, 10) : null;
+        const ciFim = c.fim ? c.fim.slice(0, 10) : null;
+        if (!ciIni || ciIni > dia || (ciFim && ciFim < dia)) continue;
+        const candidatos = (condutoresByContrato.get(c.id) || []).filter((cc) => {
+          const cIni = cc.ini ? cc.ini.slice(0, 10) : null;
+          const cFim = cc.fim ? cc.fim.slice(0, 10) : null;
+          return cIni && cIni <= dia && (!cFim || cFim >= dia);
+        });
+        if (candidatos.length > 0) {
+          candidatos.sort((a, b) => Number(b.principal) - Number(a.principal));
+          return candidatos[0].mot;
+        }
+      }
+      return null;
+    };
+
     const upsertMap = new Map<string, Record<string, unknown>>();
     let imported = 0,
       matched = 0,
@@ -174,7 +246,9 @@ Deno.serve(async (req) => {
       }
       const amount = parseNumber(valorStr as string);
       const viaturaId = matriculaMap.get(normMatricula(matricula)) || null;
-      const motoristaId = viaturaId ? motoristaNaData(viaturaId, txDate) : null;
+      const motoristaId = viaturaId
+        ? motoristaPorContratoNaData(viaturaId, txDate) || motoristaNaData(viaturaId, txDate)
+        : null;
       if (motoristaId) matched++;
 
       const txId = `vv-${normMatricula(matricula)}-${txDate.replace(/\D/g, '')}-${stripAcc(barreira).replace(/\W/g, '')}-${(valorStr || '').replace(/\D/g, '')}`;
@@ -213,17 +287,20 @@ Deno.serve(async (req) => {
       }
     } else if (Array.isArray(transacoes)) {
       for (const t of transacoes as TransacaoEstruturada[]) {
-        const txDate = parseDate(t.transaction_date || '');
-        const valorStr = t.amount !== null && t.amount !== undefined ? String(t.amount) : '';
+        // Aceita tanto os nomes "canónicos" como os que o actor Apify da Via
+        // Verde realmente produz (data_entrada/data_saida/local_saida/valor/...).
+        const txDate = parseDate(t.transaction_date || t.data_saida || t.data_entrada || '');
+        const amountRaw = t.amount ?? t.valor;
+        const valorStr = amountRaw !== null && amountRaw !== undefined ? String(amountRaw) : '';
         processRow(
           txDate,
           t.matricula || '',
-          t.barreira_saida || '',
+          t.barreira_saida || t.local_saida || t.local_entrada || '',
           t.operador || '',
           valorStr,
-          t.contrato || '',
+          t.contrato || t.contaMobilidade || '',
           t.nr_equipamento || '',
-          t.tipo_evento || '',
+          t.tipo_evento || t.servico || '',
           t as Record<string, unknown>
         );
       }
@@ -241,10 +318,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({ success: true, imported, matched, skipped }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify({ success: true, imported, matched, skipped }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   } catch (err) {
     return new Response(JSON.stringify({ success: false, error: (err as Error).message }), {
       status: 500,

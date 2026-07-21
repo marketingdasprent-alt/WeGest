@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 import { AssistenciaMultimediaUpload } from '@/components/assistencia/AssistenciaMultimediaUpload';
 import { matchesSearch } from '@/lib/utils';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface Viatura {
   id: string;
@@ -84,6 +85,9 @@ export default function AssistenciaNova() {
   const [filteredViaturas, setFilteredViaturas] = useState<Viatura[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [sortField, setSortField] = useState<string>('matricula');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const [selectedViatura, setSelectedViatura] = useState<Viatura | null>(null);
   const [viaturaSubstituta, setViaturaSubstituta] = useState<Viatura | null>(null);
@@ -157,6 +161,25 @@ export default function AssistenciaNova() {
       )
     );
   }, [searchTerm, viaturas]);
+
+  const sortedViaturas = useMemo(() => {
+    const list = [...filteredViaturas];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'matricula') {
+        va = a.matricula || '';
+        vb = b.matricula || '';
+      } else if (sortField === 'status') {
+        va = a.status || '';
+        vb = b.status || '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [filteredViaturas, sortField, sortDir]);
 
   const handleSelectViatura = async (viatura: Viatura) => {
     setSelectedViatura(viatura);
@@ -509,13 +532,27 @@ export default function AssistenciaNova() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Viatura</TableHead>
-                      <TableHead>Status Atual</TableHead>
+                      <SortableTableHead
+                        field="matricula"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Viatura
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="status"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                      >
+                        Status Atual
+                      </SortableTableHead>
                       <TableHead className="text-right">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredViaturas.map((v) => (
+                    {sortedViaturas.map((v) => (
                       <TableRow
                         key={v.id}
                         className="cursor-pointer hover:bg-muted/50"

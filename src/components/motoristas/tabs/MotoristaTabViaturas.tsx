@@ -56,6 +56,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { SectionCard } from '@/components/ui/section-card';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Motorista } from '@/pages/Motoristas';
@@ -112,6 +113,15 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
     versao: number;
     numero_contrato: number | null;
   } | null>(null);
+  const [histSortField, setHistSortField] = useState<string>('data_inicio');
+  const [histSortDir, setHistSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleHistSort = (f: string) =>
+    toggleSort(
+      f,
+      { sortField: histSortField, sortDir: histSortDir },
+      setHistSortField,
+      setHistSortDir
+    );
 
   const [formData, setFormData] = useState({
     viatura_id: '',
@@ -219,7 +229,28 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
   // Mais recente primeiro (associacoes já vem ordenado por data_inicio desc).
   const viaturaAtual = associacoesAtivas[0];
   const outrasAtivas = associacoesAtivas.slice(1);
-  const historico = associacoes.filter((a) => a.status !== 'ativo');
+  const historico = associacoes
+    .filter((a) => a.status !== 'ativo')
+    .sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (histSortField === 'matricula') {
+        va = a.viatura?.matricula || '';
+        vb = b.viatura?.matricula || '';
+      } else if (histSortField === 'modelo') {
+        va = `${a.viatura?.marca || ''} ${a.viatura?.modelo || ''}`;
+        vb = `${b.viatura?.marca || ''} ${b.viatura?.modelo || ''}`;
+      } else if (histSortField === 'categoria') {
+        va = a.viatura?.categoria || '';
+        vb = b.viatura?.categoria || '';
+      } else if (histSortField === 'data_inicio') {
+        va = a.data_inicio;
+        vb = b.data_inicio;
+      }
+      if (va < vb) return histSortDir === 'asc' ? -1 : 1;
+      if (va > vb) return histSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   const getValidityStatus = (date: string | null | undefined) => {
     if (!date) return null;
@@ -610,10 +641,38 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Matrícula</TableHead>
-                <TableHead>Modelo</TableHead>
-                <TableHead>Categoria</TableHead>
-                <TableHead>Período</TableHead>
+                <SortableTableHead
+                  field="matricula"
+                  sortField={histSortField}
+                  sortDir={histSortDir}
+                  onSort={handleHistSort}
+                >
+                  Matrícula
+                </SortableTableHead>
+                <SortableTableHead
+                  field="modelo"
+                  sortField={histSortField}
+                  sortDir={histSortDir}
+                  onSort={handleHistSort}
+                >
+                  Modelo
+                </SortableTableHead>
+                <SortableTableHead
+                  field="categoria"
+                  sortField={histSortField}
+                  sortDir={histSortDir}
+                  onSort={handleHistSort}
+                >
+                  Categoria
+                </SortableTableHead>
+                <SortableTableHead
+                  field="data_inicio"
+                  sortField={histSortField}
+                  sortDir={histSortDir}
+                  onSort={handleHistSort}
+                >
+                  Período
+                </SortableTableHead>
                 <TableHead>Duração</TableHead>
               </TableRow>
             </TableHeader>

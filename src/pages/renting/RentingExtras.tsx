@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { PackagePlus, Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -80,6 +81,9 @@ const RentingExtras = () => {
   const [deleteTarget, setDeleteTarget] = useState<RentingExtra | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [sortField, setSortField] = useState<string>('nome');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const { data: extras = [], isLoading } = useQuery({
     queryKey: ['renting_extras', orgId],
@@ -104,7 +108,43 @@ const RentingExtras = () => {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const filtered = extras.filter((e) => !search || matchesSearch(e.nome, search));
+  const filtered = useMemo(() => {
+    const list = extras.filter((e) => !search || matchesSearch(e.nome, search));
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortField) {
+        case 'nome':
+          va = a.nome || '';
+          vb = b.nome || '';
+          break;
+        case 'descricao':
+          va = a.descricao || '';
+          vb = b.descricao || '';
+          break;
+        case 'preco':
+          va = a.preco_unidade || 0;
+          vb = b.preco_unidade || 0;
+          break;
+        case 'tipo':
+          va = a.tipo_calculo || '';
+          vb = b.tipo_calculo || '';
+          break;
+        case 'qtd':
+          va = a.quantidade_maxima ?? 0;
+          vb = b.quantidade_maxima ?? 0;
+          break;
+        case 'estado':
+          va = a.ativo ? 1 : 0;
+          vb = b.ativo ? 1 : 0;
+          break;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [extras, search, sortField, sortDir]);
 
   const openNew = () => {
     setEditing(null);
@@ -219,12 +259,61 @@ const RentingExtras = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[180px]">Nome</TableHead>
-                <TableHead className="min-w-[200px]">Descrição</TableHead>
-                <TableHead className="w-28 text-right">Preço</TableHead>
-                <TableHead className="w-28">Tipo</TableHead>
-                <TableHead className="w-28">Qtd. máx.</TableHead>
-                <TableHead className="w-20">Estado</TableHead>
+                <SortableTableHead
+                  field="nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[180px]"
+                >
+                  Nome
+                </SortableTableHead>
+                <SortableTableHead
+                  field="descricao"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[200px]"
+                >
+                  Descrição
+                </SortableTableHead>
+                <SortableTableHead
+                  field="preco"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                  className="w-28"
+                >
+                  Preço
+                </SortableTableHead>
+                <SortableTableHead
+                  field="tipo"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-28"
+                >
+                  Tipo
+                </SortableTableHead>
+                <SortableTableHead
+                  field="qtd"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-28"
+                >
+                  Qtd. máx.
+                </SortableTableHead>
+                <SortableTableHead
+                  field="estado"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-20"
+                >
+                  Estado
+                </SortableTableHead>
                 <TableHead className="w-20" />
               </TableRow>
             </TableHeader>

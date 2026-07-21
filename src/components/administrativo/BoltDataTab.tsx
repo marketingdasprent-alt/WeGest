@@ -5,14 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -43,6 +36,7 @@ import { cn, matchesSearch } from '@/lib/utils';
 import { ImportRobotCsvDialog } from '@/components/admin/ImportRobotCsvDialog';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 // Semana: Segunda (1) a Domingo (0) — igual ao resumo
 const WEEK_STARTS_ON = 1;
@@ -96,6 +90,9 @@ export const BoltDataTab: React.FC = () => {
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIntegracao, setSelectedIntegracao] = useState('all');
+  const [sortField, setSortField] = useState<string>('periodo_inicio');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
   // Estado: data dentro da semana selecionada (default: semana passada)
   const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
 
@@ -202,14 +199,61 @@ export const BoltDataTab: React.FC = () => {
 
   // Apply local search filter
   const filteredResumos = useMemo(() => {
-    if (!searchTerm) return resumos;
-    return resumos.filter(
-      (r) =>
-        matchesSearch(r.motorista_nome, searchTerm) ||
-        matchesSearch(r.email, searchTerm) ||
-        matchesSearch(r.telefone, searchTerm)
-    );
-  }, [resumos, searchTerm]);
+    const list = searchTerm
+      ? resumos.filter(
+          (r) =>
+            matchesSearch(r.motorista_nome, searchTerm) ||
+            matchesSearch(r.email, searchTerm) ||
+            matchesSearch(r.telefone, searchTerm)
+        )
+      : [...resumos];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortField) {
+        case 'integracao':
+          va = a.integracao?.nome || '';
+          vb = b.integracao?.nome || '';
+          break;
+        case 'motorista_nome':
+          va = a.motorista_nome || '';
+          vb = b.motorista_nome || '';
+          break;
+        case 'periodo_inicio':
+          va = a.periodo_inicio || '';
+          vb = b.periodo_inicio || '';
+          break;
+        case 'viagens_terminadas':
+          va = a.viagens_terminadas || 0;
+          vb = b.viagens_terminadas || 0;
+          break;
+        case 'tempo_online_min':
+          va = a.tempo_online_min || 0;
+          vb = b.tempo_online_min || 0;
+          break;
+        case 'ganhos_brutos_total':
+          va = a.ganhos_brutos_total || 0;
+          vb = b.ganhos_brutos_total || 0;
+          break;
+        case 'comissoes':
+          va = a.comissoes || 0;
+          vb = b.comissoes || 0;
+          break;
+        case 'ganhos_liquidos':
+          va = a.ganhos_liquidos || 0;
+          vb = b.ganhos_liquidos || 0;
+          break;
+        case 'classificacao_media':
+          va = a.classificacao_media || 0;
+          vb = b.classificacao_media || 0;
+          break;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [resumos, searchTerm, sortField, sortDir]);
 
   // Pagination (apresentação) sobre a lista já filtrada/ordenada
   const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
@@ -526,15 +570,84 @@ export const BoltDataTab: React.FC = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Integração</TableHead>
-                <TableHead>Motorista</TableHead>
-                <TableHead>Período</TableHead>
-                <TableHead className="text-right">Viagens</TableHead>
-                <TableHead className="text-right">Tempo Online</TableHead>
-                <TableHead className="text-right">Ganhos Brutos</TableHead>
-                <TableHead className="text-right">Comissões</TableHead>
-                <TableHead className="text-right">Ganhos Líquidos</TableHead>
-                <TableHead className="text-center">Classificação</TableHead>
+                <SortableTableHead
+                  field="integracao"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Integração
+                </SortableTableHead>
+                <SortableTableHead
+                  field="motorista_nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Motorista
+                </SortableTableHead>
+                <SortableTableHead
+                  field="periodo_inicio"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Período
+                </SortableTableHead>
+                <SortableTableHead
+                  field="viagens_terminadas"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Viagens
+                </SortableTableHead>
+                <SortableTableHead
+                  field="tempo_online_min"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Tempo Online
+                </SortableTableHead>
+                <SortableTableHead
+                  field="ganhos_brutos_total"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Ganhos Brutos
+                </SortableTableHead>
+                <SortableTableHead
+                  field="comissoes"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Comissões
+                </SortableTableHead>
+                <SortableTableHead
+                  field="ganhos_liquidos"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Ganhos Líquidos
+                </SortableTableHead>
+                <SortableTableHead
+                  field="classificacao_media"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="text-center"
+                >
+                  Classificação
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

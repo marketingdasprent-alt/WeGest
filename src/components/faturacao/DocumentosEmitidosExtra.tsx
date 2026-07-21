@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { baixarDocumentoPdf } from '@/lib/faturacao';
 import { tipoDocumentoLabel } from '@/lib/documentoEmail';
@@ -29,6 +30,9 @@ interface Props {
 
 export function DocumentosEmitidosExtra({ invoices, onEnviar }: Props) {
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<string>('data');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const docs = invoices
     .filter(
@@ -37,7 +41,23 @@ export function DocumentosEmitidosExtra({ invoices, onEnviar }: Props) {
         inv.status === 'emitida' &&
         !!inv.provider_docnum
     )
-    .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+    .sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'documento') {
+        va = a.numero || a.provider_docnum || '';
+        vb = b.numero || b.provider_docnum || '';
+      } else if (sortField === 'total') {
+        va = a.total || 0;
+        vb = b.total || 0;
+      } else if (sortField === 'data') {
+        va = a.data_emissao ?? a.created_at ?? '';
+        vb = b.data_emissao ?? b.created_at ?? '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   if (docs.length === 0) return null;
 
@@ -61,9 +81,31 @@ export function DocumentosEmitidosExtra({ invoices, onEnviar }: Props) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Documento</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead>Data</TableHead>
+              <SortableTableHead
+                field="documento"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+              >
+                Documento
+              </SortableTableHead>
+              <SortableTableHead
+                field="total"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+                align="right"
+              >
+                Total
+              </SortableTableHead>
+              <SortableTableHead
+                field="data"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+              >
+                Data
+              </SortableTableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>

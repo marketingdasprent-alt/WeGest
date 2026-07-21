@@ -3,16 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, Search, Users, Clock, Route, Activity } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface AtividadeMotorista {
   id: string;
@@ -56,6 +50,9 @@ export const UberViagensTab: React.FC<Props> = ({ uberDriversMap }) => {
   const [loading, setLoading] = useState(false);
   const [atividade, setAtividade] = useState<AtividadeMotorista[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState<string>('created_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const fetchAtividade = useCallback(async () => {
     setLoading(true);
@@ -93,13 +90,48 @@ export const UberViagensTab: React.FC<Props> = ({ uberDriversMap }) => {
   };
 
   const filtered = useMemo(() => {
-    if (!searchTerm) return atividade;
     const term = searchTerm.toLowerCase();
-    return atividade.filter((a) => {
-      const name = getDriverDisplayName(a).toLowerCase();
-      return name.includes(term) || (a.periodo || '').includes(term);
+    const list = searchTerm
+      ? atividade.filter((a) => {
+          const name = getDriverDisplayName(a).toLowerCase();
+          return name.includes(term) || (a.periodo || '').includes(term);
+        })
+      : [...atividade];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortField) {
+        case 'motorista':
+          va = getDriverDisplayName(a);
+          vb = getDriverDisplayName(b);
+          break;
+        case 'viagens_concluidas':
+          va = a.viagens_concluidas || 0;
+          vb = b.viagens_concluidas || 0;
+          break;
+        case 'tempo_online_minutos':
+          va = a.tempo_online_minutos || 0;
+          vb = b.tempo_online_minutos || 0;
+          break;
+        case 'tempo_em_viagem_minutos':
+          va = a.tempo_em_viagem_minutos || 0;
+          vb = b.tempo_em_viagem_minutos || 0;
+          break;
+        case 'periodo':
+          va = a.periodo || '';
+          vb = b.periodo || '';
+          break;
+        case 'created_at':
+          va = a.created_at || '';
+          vb = b.created_at || '';
+          break;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
     });
-  }, [atividade, searchTerm, uberDriversMap]);
+    return list;
+  }, [atividade, searchTerm, uberDriversMap, sortField, sortDir]);
 
   const stats = useMemo(
     () => ({
@@ -188,11 +220,49 @@ export const UberViagensTab: React.FC<Props> = ({ uberDriversMap }) => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Motorista</TableHead>
-                <TableHead className="text-center">Viagens</TableHead>
-                <TableHead className="text-center">Tempo Online</TableHead>
-                <TableHead className="text-center">Tempo em Viagem</TableHead>
-                <TableHead>Período</TableHead>
+                <SortableTableHead
+                  field="motorista"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Motorista
+                </SortableTableHead>
+                <SortableTableHead
+                  field="viagens_concluidas"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="text-center"
+                >
+                  Viagens
+                </SortableTableHead>
+                <SortableTableHead
+                  field="tempo_online_minutos"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="text-center"
+                >
+                  Tempo Online
+                </SortableTableHead>
+                <SortableTableHead
+                  field="tempo_em_viagem_minutos"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="text-center"
+                >
+                  Tempo em Viagem
+                </SortableTableHead>
+                <SortableTableHead
+                  field="periodo"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Período
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

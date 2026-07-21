@@ -1,4 +1,3 @@
-import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -9,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import { cn } from '@/lib/utils';
 import type { MotoristaResumo } from './contasResumoExports';
 
@@ -38,43 +38,6 @@ interface ContasResumoTabelaProps {
   showGorjeta?: boolean;
 }
 
-function SortTh({
-  field,
-  children,
-  right,
-  sortField,
-  sortDir,
-  onSort,
-}: {
-  field: SortField;
-  children: React.ReactNode;
-  right?: boolean;
-  sortField: SortField;
-  sortDir: 'asc' | 'desc';
-  onSort: (field: SortField) => void;
-}) {
-  const Icon = sortField !== field ? ArrowUpDown : sortDir === 'desc' ? ArrowDown : ArrowUp;
-  return (
-    <TableHead
-      className={cn(
-        'cursor-pointer select-none hover:bg-muted/50 transition-colors',
-        right && 'text-right'
-      )}
-      onClick={() => onSort(field)}
-    >
-      <span className={cn('inline-flex items-center gap-1', right && 'justify-end w-full')}>
-        {children}
-        <Icon
-          className={cn(
-            'h-3 w-3',
-            sortField === field ? 'text-primary' : 'text-muted-foreground/50'
-          )}
-        />
-      </span>
-    </TableHead>
-  );
-}
-
 export function ContasResumoTabela({
   filteredResumos,
   pageItems,
@@ -88,6 +51,8 @@ export function ContasResumoTabela({
   formatCurrency,
   showGorjeta = false,
 }: ContasResumoTabelaProps) {
+  const handleSort = (f: string) => onSort(f as SortField);
+
   return (
     <>
       <div className="hidden md:block rounded-md border">
@@ -102,71 +67,88 @@ export function ContasResumoTabela({
                   onCheckedChange={onToggleSelectAll}
                 />
               </TableHead>
-              <SortTh field="driver_name" sortField={sortField} sortDir={sortDir} onSort={onSort}>
-                Nome
-              </SortTh>
-              <SortTh
-                field="total_faturado"
-                right
+              <SortableTableHead
+                field="driver_name"
                 sortField={sortField}
                 sortDir={sortDir}
-                onSort={onSort}
+                onSort={handleSort}
+              >
+                Nome
+              </SortableTableHead>
+              <SortableTableHead
+                field="total_faturado"
+                align="right"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
               >
                 Faturado
-              </SortTh>
+              </SortableTableHead>
               {showGorjeta && (
-                <SortTh
+                <SortableTableHead
                   field="gorjeta"
-                  right
+                  align="right"
                   sortField={sortField}
                   sortDir={sortDir}
-                  onSort={onSort}
+                  onSort={handleSort}
                 >
                   Gorjeta
-                </SortTh>
+                </SortableTableHead>
               )}
-              <SortTh field="liquido" right sortField={sortField} sortDir={sortDir} onSort={onSort}>
-                Líquido
-              </SortTh>
-              <SortTh field="aluguer" right sortField={sortField} sortDir={sortDir} onSort={onSort}>
-                Aluguer
-              </SortTh>
-              <SortTh
-                field="combustivel"
-                right
+              <SortableTableHead
+                field="liquido"
+                align="right"
                 sortField={sortField}
                 sortDir={sortDir}
-                onSort={onSort}
+                onSort={handleSort}
+              >
+                Líquido
+              </SortableTableHead>
+              <SortableTableHead
+                field="aluguer"
+                align="right"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+              >
+                Aluguer
+              </SortableTableHead>
+              <SortableTableHead
+                field="combustivel"
+                align="right"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
               >
                 Combustível
-              </SortTh>
-              <SortTh
+              </SortableTableHead>
+              <SortableTableHead
                 field="portagens"
-                right
+                align="right"
                 sortField={sortField}
                 sortDir={sortDir}
-                onSort={onSort}
+                onSort={handleSort}
               >
                 Portagens
-              </SortTh>
-              <SortTh
+              </SortableTableHead>
+              <SortableTableHead
                 field="outros_custos"
-                right
+                align="right"
                 sortField={sortField}
                 sortDir={sortDir}
-                onSort={onSort}
+                onSort={handleSort}
               >
                 Outros Custos
-              </SortTh>
-              <SortTh
+              </SortableTableHead>
+              <SortableTableHead
                 field="reparacoes"
-                right
+                align="right"
                 sortField={sortField}
                 sortDir={sortDir}
-                onSort={onSort}
+                onSort={handleSort}
               >
                 Reparações
-              </SortTh>
+              </SortableTableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

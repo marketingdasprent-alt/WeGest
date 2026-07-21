@@ -1,15 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronUp, ChevronDown, MessageCircle, Mail } from 'lucide-react';
+import { MessageCircle, Mail } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -48,16 +42,6 @@ interface CRMListViewProps {
   getTagsForFormulario: (formularioId?: string) => string[];
 }
 
-type SortColumn =
-  | 'nome'
-  | 'email'
-  | 'telefone'
-  | 'tipo_viatura'
-  | 'tem_formacao_tvde'
-  | 'status'
-  | 'created_at'
-  | 'gestor_responsavel';
-
 const statusColorMap: Record<string, string> = {
   novo: 'bg-blue-500/20 text-blue-400 border-blue-500/50',
   contactado: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50',
@@ -88,48 +72,9 @@ export const CRMListView: React.FC<CRMListViewProps> = ({
   getTagsForFormulario,
 }) => {
   const navigate = useNavigate();
-  const [sortColumn, setSortColumn] = useState<SortColumn>('created_at');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-
-  const handleSort = (column: SortColumn) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
-
-  const SortableHeader = ({
-    column,
-    label,
-    className,
-  }: {
-    column: SortColumn;
-    label: string;
-    className?: string;
-  }) => (
-    <TableHead
-      className={cn(
-        'h-10 cursor-pointer select-none hover:bg-muted/50 transition-colors',
-        className
-      )}
-      onClick={() => handleSort(column)}
-    >
-      <div className="flex items-center gap-1">
-        {label}
-        {sortColumn === column ? (
-          sortDirection === 'asc' ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )
-        ) : (
-          <ChevronDown className="h-4 w-4 opacity-30" />
-        )}
-      </div>
-    </TableHead>
-  );
+  const [sortField, setSortField] = useState<string>('created_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const formatDate = (dateString: string) => {
     try {
@@ -155,46 +100,46 @@ export const CRMListView: React.FC<CRMListViewProps> = ({
   };
 
   const sortedLeads = useMemo(() => {
-    return [...leads].sort((a, b) => {
-      let aValue: any = a[sortColumn];
-      let bValue: any = b[sortColumn];
-
-      // Handle nulls
-      if (aValue === null || aValue === undefined) aValue = '';
-      if (bValue === null || bValue === undefined) bValue = '';
-
-      // Date comparison
-      if (sortColumn === 'created_at') {
-        const aDate = aValue ? new Date(aValue).getTime() : 0;
-        const bDate = bValue ? new Date(bValue).getTime() : 0;
-        return sortDirection === 'asc' ? aDate - bDate : bDate - aDate;
+    const list = [...leads];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'nome') {
+        va = a.nome;
+        vb = b.nome;
+      } else if (sortField === 'email') {
+        va = a.email || '';
+        vb = b.email || '';
+      } else if (sortField === 'telefone') {
+        va = a.telefone || '';
+        vb = b.telefone || '';
+      } else if (sortField === 'tipo_viatura') {
+        va = a.tipo_viatura || '';
+        vb = b.tipo_viatura || '';
+      } else if (sortField === 'tem_formacao_tvde') {
+        va = a.tem_formacao_tvde === true ? 1 : a.tem_formacao_tvde === false ? 0 : -1;
+        vb = b.tem_formacao_tvde === true ? 1 : b.tem_formacao_tvde === false ? 0 : -1;
+      } else if (sortField === 'status') {
+        va = a.status;
+        vb = b.status;
+      } else if (sortField === 'created_at') {
+        va = a.created_at ? new Date(a.created_at).getTime() : 0;
+        vb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      } else if (sortField === 'gestor_responsavel') {
+        va = a.gestor_responsavel || '';
+        vb = b.gestor_responsavel || '';
       }
-
-      // Boolean comparison
-      if (sortColumn === 'tem_formacao_tvde') {
-        const aNum = aValue === true ? 1 : aValue === false ? 0 : -1;
-        const bNum = bValue === true ? 1 : bValue === false ? 0 : -1;
-        return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
-      }
-
-      // String comparison
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        const comparison = aValue.localeCompare(bValue, 'pt');
-        return sortDirection === 'asc' ? comparison : -comparison;
-      }
-
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [leads, sortColumn, sortDirection]);
+    return list;
+  }, [leads, sortField, sortDir]);
 
   // Paginação client-side (com seletor de tamanho). O resetKey volta à 1ª página
   // quando o pai filtra (muda a contagem/1.º lead) ou quando se reordena a tabela.
   const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
-    usePagination(
-      sortedLeads,
-      25,
-      `${leads.length}|${leads[0]?.id ?? ''}|${sortColumn}|${sortDirection}`
-    );
+    usePagination(sortedLeads, 25, `${leads.length}|${leads[0]?.id ?? ''}|${sortField}|${sortDir}`);
 
   const handleRowClick = (lead: Lead) => {
     navigate(`/crm/lead/${lead.id}`);
@@ -205,34 +150,77 @@ export const CRMListView: React.FC<CRMListViewProps> = ({
       <Table className="w-full table-fixed">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <SortableHeader column="nome" label="Nome" />
-            <SortableHeader column="telefone" label="Telefone" className="w-[110px]" />
-            <SortableHeader column="status" label="Status" className="w-[100px]" />
-            <SortableHeader
-              column="email"
-              label="Email"
+            <SortableTableHead
+              field="nome"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Nome
+            </SortableTableHead>
+            <SortableTableHead
+              field="telefone"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={handleSort}
+              className="w-[110px]"
+            >
+              Telefone
+            </SortableTableHead>
+            <SortableTableHead
+              field="status"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={handleSort}
+              className="w-[100px]"
+            >
+              Status
+            </SortableTableHead>
+            <SortableTableHead
+              field="email"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={handleSort}
               className="hidden md:table-cell w-[200px]"
-            />
-            <SortableHeader
-              column="created_at"
-              label="Criado"
+            >
+              Email
+            </SortableTableHead>
+            <SortableTableHead
+              field="created_at"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={handleSort}
               className="hidden md:table-cell w-[100px]"
-            />
-            <SortableHeader
-              column="tipo_viatura"
-              label="Viatura"
+            >
+              Criado
+            </SortableTableHead>
+            <SortableTableHead
+              field="tipo_viatura"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={handleSort}
               className="hidden lg:table-cell w-[100px]"
-            />
-            <SortableHeader
-              column="gestor_responsavel"
-              label="Gestor"
+            >
+              Viatura
+            </SortableTableHead>
+            <SortableTableHead
+              field="gestor_responsavel"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={handleSort}
               className="hidden lg:table-cell w-[140px]"
-            />
-            <SortableHeader
-              column="tem_formacao_tvde"
-              label="Form."
+            >
+              Gestor
+            </SortableTableHead>
+            <SortableTableHead
+              field="tem_formacao_tvde"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={handleSort}
               className="hidden xl:table-cell w-[70px]"
-            />
+            >
+              Form.
+            </SortableTableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
