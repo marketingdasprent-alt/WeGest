@@ -13,7 +13,7 @@ export const LandingHero = () => {
     <section className="relative flex min-h-screen flex-col items-center justify-center gap-8 px-6">
       <SectionHeading
         eyebrow="// wegest.sistema"
-        title="A frota nunca pára. O sistema também não devia."
+        title="A frota nunca para. O sistema também não devia."
       >
         Contratos, viaturas, motoristas e financeiro — tudo num só fluxo, sem re-escrever o mesmo
         dado duas vezes.

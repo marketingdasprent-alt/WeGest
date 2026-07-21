@@ -60,7 +60,7 @@ export const LandingModulos = () => {
   const ctaRef = useMagneticHover<HTMLAnchorElement>(0.35);
 
   return (
-    <section className="relative flex min-h-screen flex-col items-center justify-center gap-12 px-6 py-24">
+    <section className="relative flex flex-col items-center gap-12 px-6 py-24">
       <SectionHeading eyebrow="// modulos.e.planos" title="Liga só o que precisas.">
         Sem mensalidade fixa por funcionalidades que não usa — o preço acompanha os módulos que
         activar.

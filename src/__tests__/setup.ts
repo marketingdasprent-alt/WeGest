@@ -2,8 +2,8 @@ import { expect, afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
-// jsdom não implementa matchMedia; gsap/ScrollTrigger chama-o no import
-// (module scope), antes de qualquer beforeAll de teste conseguir mockar.
+// jsdom não implementa matchMedia; useReducedMotion (framer-motion) e
+// useSimplifiedMotion chamam-no em vários componentes da landing.
 if (typeof window !== 'undefined' && !window.matchMedia) {
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,

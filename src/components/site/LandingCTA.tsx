@@ -8,7 +8,7 @@ export const LandingCTA = () => {
   const ctaRef = useMagneticHover<HTMLAnchorElement>(0.4);
 
   return (
-    <section className="relative flex min-h-screen flex-col items-center justify-center gap-8 px-6">
+    <section className="relative flex flex-col items-center gap-8 px-6 py-32">
       <SectionHeading eyebrow="// comecar" title="O seu fluxo começa aqui." />
 
       <motion.div

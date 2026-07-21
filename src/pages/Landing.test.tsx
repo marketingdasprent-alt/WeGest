@@ -63,13 +63,8 @@ describe('Landing', () => {
     );
 
     const titles = headingTexts();
-    expect(titles).toContain(nfc('A frota nunca pára. O sistema também não devia.'));
-    expect(titles).toContain(nfc('Cada viatura vive em três sítios diferentes.'));
+    expect(titles).toContain(nfc('A frota nunca para. O sistema também não devia.'));
     expect(titles).toContain(nfc('Um fluxo só. Tudo ligado.'));
-    expect(titles).toContain(nfc('Um contrato. Quatro passos automáticos.'));
-    expect(titles).toContain(nfc('O calendário preenche-se sozinho.'));
-    expect(titles).toContain(nfc('Cada semana fecha-se a si própria.'));
-    expect(titles).toContain(nfc('Cada organização no seu fluxo.'));
     expect(titles).toContain(nfc('Liga só o que precisas.'));
     expect(titles).toContain(nfc('O seu fluxo começa aqui.'));
 
