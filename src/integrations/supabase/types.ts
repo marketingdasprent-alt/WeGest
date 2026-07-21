@@ -3578,6 +3578,52 @@ export type Database = {
           },
         ]
       }
+      documento_suplementar_empresas: {
+        Row: {
+          cliente_empresa_id: string
+          created_at: string
+          documento_id: string
+          id: string
+          org_id: string
+        }
+        Insert: {
+          cliente_empresa_id: string
+          created_at?: string
+          documento_id: string
+          id?: string
+          org_id?: string
+        }
+        Update: {
+          cliente_empresa_id?: string
+          created_at?: string
+          documento_id?: string
+          id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documento_suplementar_empresas_cliente_empresa_id_fkey"
+            columns: ["cliente_empresa_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documento_suplementar_empresas_documento_id_fkey"
+            columns: ["documento_id"]
+            isOneToOne: false
+            referencedRelation: "documentos_suplementares"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documento_suplementar_empresas_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documentos: {
         Row: {
           arquivo_url: string | null
@@ -3624,6 +3670,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "documentos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documentos_suplementares: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          criado_por: string | null
+          ficheiro_nome: string
+          ficheiro_url: string
+          id: string
+          mime_type: string
+          nome: string
+          org_id: string
+          tamanho_bytes: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          criado_por?: string | null
+          ficheiro_nome: string
+          ficheiro_url: string
+          id?: string
+          mime_type: string
+          nome: string
+          org_id?: string
+          tamanho_bytes: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          criado_por?: string | null
+          ficheiro_nome?: string
+          ficheiro_url?: string
+          id?: string
+          mime_type?: string
+          nome?: string
+          org_id?: string
+          tamanho_bytes?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documentos_suplementares_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
