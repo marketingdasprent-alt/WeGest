@@ -89,8 +89,8 @@ const RentingContratos = () => {
     const m = new Map<string, { nome: string; nif: string }>();
     condutoresPrincipais.forEach((c) => {
       m.set(c.contratoId, {
-        nome: c.motoristaNome ?? '',
-        nif: c.motoristaNif ?? '',
+        nome: c.nome ?? '',
+        nif: c.nif ?? '',
       });
     });
     return m;
