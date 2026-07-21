@@ -1,7 +1,12 @@
 import { useQuadroToken, useRegenerarQuadroToken } from '@/hooks/useQuadroToken';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Copy, RefreshCw, Tv } from 'lucide-react';
 import { toast } from 'sonner';
 
+// Mesma "família" visual dos cartões vizinhos nesta aba (InviteGenerationForm,
+// MotoristaInviteLink, GeneratedInviteDisplay) — cartão escuro com gradiente,
+// ícone + título, e a caixa de link em fonte monoespaçada.
 export function QuadroTvSection() {
   const { data: token, isLoading } = useQuadroToken();
   const regenerar = useRegenerarQuadroToken();
@@ -15,31 +20,51 @@ export function QuadroTvSection() {
   };
 
   return (
-    <div className="rounded-lg border p-4 space-y-3">
-      <div>
-        <h3 className="text-lg font-semibold">Quadro TV</h3>
-        <p className="text-sm text-muted-foreground">
+    <Card className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-gray-700/50 backdrop-blur-sm">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-white">
+          <Tv className="h-5 w-5 text-primary" />
+          Quadro TV
+        </CardTitle>
+        <p className="text-gray-400 text-sm">
           Link só-leitura para mostrar entregas e devoluções numa TV. Não pede login. Regenerar
           invalida o link antigo.
         </p>
-      </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {isLoading ? (
+            <p className="text-sm text-gray-400">A carregar…</p>
+          ) : link ? (
+            <div className="p-3 bg-gray-700/50 rounded-lg border border-gray-600">
+              <p className="text-primary text-sm font-mono break-all">{link}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">Ainda não há link gerado.</p>
+          )}
 
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">A carregar…</p>
-      ) : link ? (
-        <div className="flex items-center gap-2">
-          <code className="flex-1 truncate rounded bg-muted px-2 py-1 text-sm">{link}</code>
-          <Button variant="outline" size="sm" onClick={copiar}>
-            Copiar
-          </Button>
+          <div className="flex gap-2">
+            {link && (
+              <Button
+                onClick={copiar}
+                variant="outline"
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white border-gray-600"
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Copiar Link
+              </Button>
+            )}
+            <Button
+              onClick={() => regenerar.mutate()}
+              disabled={regenerar.isPending}
+              className={link ? 'flex-1' : 'w-full'}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              {token ? 'Regenerar link' : 'Gerar link'}
+            </Button>
+          </div>
         </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">Ainda não há link gerado.</p>
-      )}
-
-      <Button size="sm" onClick={() => regenerar.mutate()} disabled={regenerar.isPending}>
-        {token ? 'Regenerar link' : 'Gerar link'}
-      </Button>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

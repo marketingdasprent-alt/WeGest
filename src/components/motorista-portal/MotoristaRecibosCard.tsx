@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -29,7 +30,17 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Receipt, Plus, Upload, Loader2, FileText, Eye, Trash2, Check } from 'lucide-react';
+import {
+  Receipt,
+  Plus,
+  Upload,
+  Loader2,
+  FileText,
+  Eye,
+  Trash2,
+  Check,
+  AlertCircle,
+} from 'lucide-react';
 import { format, startOfWeek, addDays, addWeeks, isBefore, isEqual } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -44,6 +55,7 @@ interface Recibo {
   valor_total: number;
   ficheiro_url: string;
   status: string;
+  observacoes: string | null;
   created_at: string;
 }
 
@@ -74,6 +86,8 @@ export function MotoristaRecibosCard({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reciboToDelete, setReciboToDelete] = useState<Recibo | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Recibo recusado seleccionado — mostra o motivo da recusa (observacoes).
+  const [motivoRecibo, setMotivoRecibo] = useState<Recibo | null>(null);
 
   // Form state
   const [semanaSeleccionada, setSemanaSeleccionada] = useState('');
@@ -523,6 +537,16 @@ export function MotoristaRecibosCard({
                   <p className="text-xs font-black text-muted-foreground">
                     {formatCurrency(Number(recibo.valor_total || 0))}
                   </p>
+                  {recibo.status === 'rejeitado' && (
+                    <button
+                      type="button"
+                      onClick={() => setMotivoRecibo(recibo)}
+                      className="mt-1 inline-flex w-fit items-center gap-1 text-[11px] font-bold text-destructive hover:underline"
+                    >
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      Ver motivo da recusa
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Button
@@ -583,6 +607,32 @@ export function MotoristaRecibosCard({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Motivo da recusa — mostrado ao clicar num recibo recusado */}
+        <Dialog open={!!motivoRecibo} onOpenChange={(open) => !open && setMotivoRecibo(null)}>
+          <DialogContent className="rounded-[2rem] border-border bg-background">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-lg font-black text-destructive">
+                <AlertCircle className="w-5 h-5" />
+                Recibo recusado
+              </DialogTitle>
+              <DialogDescription className="text-muted-foreground font-medium">
+                {motivoRecibo ? formatSemanaReferencia(motivoRecibo) : ''}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-destructive/80 mb-1">
+                Motivo da recusa
+              </p>
+              <p className="text-sm font-medium text-foreground whitespace-pre-wrap">
+                {motivoRecibo?.observacoes?.trim() || 'Sem motivo indicado.'}
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Corrige o que for indicado e submete um novo recibo para esta semana.
+            </p>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

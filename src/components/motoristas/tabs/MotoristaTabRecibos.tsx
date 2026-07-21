@@ -11,7 +11,10 @@ interface MotoristaTabRecibosProps {
 }
 
 export function MotoristaTabRecibos({ motorista }: MotoristaTabRecibosProps) {
-  const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 0));
+  // Semana atual ainda está em curso — aluguer é cobrado pela semana inteira
+  // mas o faturado Bolt/Uber só reflete os dias já decorridos, dando líquido
+  // negativo até a semana fechar. Default = última semana fechada.
+  const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
 
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 1 });

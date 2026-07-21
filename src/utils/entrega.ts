@@ -90,6 +90,24 @@ export function nivelPreenchido(
   return okCombustivel && okEletrico;
 }
 
+/**
+ * O km de saída/entrada tem de ser >= ao odómetro actual da viatura: o carro
+ * não anda para trás, logo não se pode "abrir" (ou fechar) com menos km do que
+ * a viatura já tem (ex.: 35 km num carro com 350000). `kmMinimo` é o
+ * `viaturas.km_atual` no momento — quando é null/desconhecido, não se bloqueia
+ * (não há baseline para comparar). Devolve a mensagem de erro ou null.
+ */
+export function validarKmContraViatura(km: string, kmMinimo?: number | null): string | null {
+  if (kmMinimo == null) return null;
+  if (!km.trim()) return null; // vazio → "km obrigatório" é apanhado antes (Number('') é 0!)
+  const n = Number(km);
+  if (!Number.isFinite(n)) return null;
+  if (n < kmMinimo) {
+    return `O km introduzido (${n.toLocaleString('pt-PT')}) não pode ser inferior ao km atual da viatura (${kmMinimo.toLocaleString('pt-PT')}).`;
+  }
+  return null;
+}
+
 export function validarDadosObrigatorios(
   km: string,
   combustivel: string,
@@ -99,17 +117,27 @@ export function validarDadosObrigatorios(
   tipoCombustivel?: string | null,
   eletricidade?: string,
   tipoCombustivelAntiga?: string | null,
-  eletricidadeAntiga?: string
+  eletricidadeAntiga?: string,
+  /** Odómetro actual da viatura (viaturas.km_atual) — bloqueia km inferior. */
+  kmMinimo?: number | null,
+  /** Odómetro actual da viatura devolvida na troca. */
+  kmMinimoAntiga?: number | null
 ): string | null {
   if (!km.trim() || !nivelPreenchido(tipoCombustivel, combustivel, eletricidade ?? '')) {
     return 'Preenche o km e o nível de combustível/bateria antes de continuar.';
   }
+  const errKm = validarKmContraViatura(km, kmMinimo);
+  if (errKm) return errKm;
   if (
     isTroca &&
     (!kmAntiga?.trim() ||
       !nivelPreenchido(tipoCombustivelAntiga, combustivelAntiga ?? '', eletricidadeAntiga ?? ''))
   ) {
     return 'Preenche também o km e combustível/bateria da viatura devolvida.';
+  }
+  if (isTroca) {
+    const errKmAntiga = validarKmContraViatura(kmAntiga ?? '', kmMinimoAntiga);
+    if (errKmAntiga) return errKmAntiga;
   }
   return null;
 }

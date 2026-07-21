@@ -19,7 +19,7 @@ import {
   eliminacaoContaConfirmacaoTemplate,
   type EliminacaoContaInput,
 } from '../templates/eliminacaoConta.ts';
-import { passwordRecoveryTemplate, magicLinkTemplate } from '../templates/authEmail.ts';
+import { passwordRecoveryTemplate, magicLinkTemplate, motoristaOnboardingTemplate } from '../templates/authEmail.ts';
 import type { EmailAttachment, EmailMessage, EmailSendResult } from '../types/index.ts';
 
 // deno-lint-ignore no-explicit-any
@@ -202,7 +202,7 @@ export class EmailService {
 
   async sendAuthEmail(
     orgId: string,
-    args: { to: string; type: 'password_recovery' | 'magic_link'; actionLink: string }
+    args: { to: string; type: 'password_recovery' | 'magic_link' | 'motorista_onboarding'; actionLink: string }
   ): Promise<EmailSendResult> {
     if (!args.to || !args.to.includes('@')) {
       throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
@@ -211,7 +211,9 @@ export class EmailService {
     const { subject, html } =
       args.type === 'password_recovery'
         ? passwordRecoveryTemplate(args.actionLink)
-        : magicLinkTemplate(args.actionLink);
+        : args.type === 'motorista_onboarding'
+          ? motoristaOnboardingTemplate(args.actionLink)
+          : magicLinkTemplate(args.actionLink);
     const message: EmailMessage = { to: [{ email: args.to }], subject, html };
 
     return this.send(orgId, 'auth', message);

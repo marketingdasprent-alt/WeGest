@@ -18,6 +18,16 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { ReciboPreviewDialog } from './ReciboPreviewDialog';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 interface Recibo {
   id: string;
@@ -46,6 +56,10 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
   const isMobile = useIsMobile();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [previewRecibo, setPreviewRecibo] = useState<Recibo | null>(null);
+  // Recusa com motivo: abre um modal para escrever o porquê, que fica gravado
+  // em observacoes e aparece ao motorista no painel (ao clicar no recibo recusado).
+  const [rejeitarRecibo, setRejeitarRecibo] = useState<Recibo | null>(null);
+  const [motivoRecusa, setMotivoRecusa] = useState('');
 
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -138,13 +152,14 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
     }
   }
 
-  async function handleRejeitar(id: string) {
+  async function handleRejeitar(id: string, motivo: string) {
     setLoadingAction(id + '-rejeitar');
     try {
       const { error } = await supabase
         .from('motorista_recibos')
         .update({
           status: 'rejeitado',
+          observacoes: motivo.trim() || null,
           data_validacao: new Date().toISOString(),
           validado_por: (await supabase.auth.getUser()).data.user?.id,
         })
@@ -152,6 +167,8 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
 
       if (error) throw error;
       toast.success('Recibo recusado');
+      setRejeitarRecibo(null);
+      setMotivoRecusa('');
       onReciboUpdated();
     } catch (error) {
       console.error('Erro ao rejeitar:', error);
@@ -160,6 +177,66 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
       setLoadingAction(null);
     }
   }
+
+  // Modal de recusa com motivo — partilhado pelas vistas mobile e desktop.
+  const rejeitarModal = (
+    <Dialog
+      open={!!rejeitarRecibo}
+      onOpenChange={(open) => {
+        if (!open) {
+          setRejeitarRecibo(null);
+          setMotivoRecusa('');
+        }
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Recusar recibo verde</DialogTitle>
+          <DialogDescription>
+            {rejeitarRecibo?.motoristas_ativos?.nome
+              ? `Recibo de ${rejeitarRecibo.motoristas_ativos.nome}. `
+              : ''}
+            Escreve o motivo — o motorista vê-o no painel ao clicar no recibo recusado.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="motivo-recusa">Motivo da recusa</Label>
+          <Textarea
+            id="motivo-recusa"
+            value={motivoRecusa}
+            onChange={(e) => setMotivoRecusa(e.target.value)}
+            placeholder="Ex: o valor não corresponde à semana, o ficheiro está ilegível…"
+            rows={4}
+            autoFocus
+          />
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setRejeitarRecibo(null);
+              setMotivoRecusa('');
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => rejeitarRecibo && handleRejeitar(rejeitarRecibo.id, motivoRecusa)}
+            disabled={
+              !motivoRecusa.trim() || loadingAction === (rejeitarRecibo?.id ?? '') + '-rejeitar'
+            }
+          >
+            {loadingAction === (rejeitarRecibo?.id ?? '') + '-rejeitar' ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              'Confirmar recusa'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   // Mobile view - Cards
   if (isMobile) {
@@ -229,7 +306,7 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
                           variant="outline"
                           size="sm"
                           className="flex-1 text-red-600 hover:text-red-700"
-                          onClick={() => handleRejeitar(recibo.id)}
+                          onClick={() => setRejeitarRecibo(recibo)}
                           disabled={loadingAction === recibo.id + '-rejeitar'}
                         >
                           {loadingAction === recibo.id + '-rejeitar' ? (
@@ -276,6 +353,7 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
               : null
           }
         />
+        {rejeitarModal}
       </>
     );
   }
@@ -400,7 +478,7 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleRejeitar(recibo.id)}
+                            onClick={() => setRejeitarRecibo(recibo)}
                             disabled={loadingAction === recibo.id + '-rejeitar'}
                             title="Recusar"
                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
@@ -448,6 +526,7 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
             : null
         }
       />
+      {rejeitarModal}
     </>
   );
 }

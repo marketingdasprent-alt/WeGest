@@ -262,6 +262,7 @@ serve(async (req) => {
       const permissoes = recursos.map((r) => ({
         cargo_id: cargo.id,
         recurso_id: r.id,
+        org_id: org.id,
         tem_acesso: true,
         pode_editar: true,
       }));

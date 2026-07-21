@@ -8,7 +8,8 @@ interface ViaturaFinanceiraResumoCardsProps {
   restanteMeses: string;
   totalReceitasVal: number;
   totalDespesasVal: number;
-  rentabilidadePerc: number;
+  /** null quando não há Custo Aquisição configurado — não dá para calcular %. */
+  rentabilidadePerc: number | null;
 }
 
 export function ViaturaFinanceiraResumoCards({
@@ -77,9 +78,11 @@ export function ViaturaFinanceiraResumoCards({
       <Card
         className={cn(
           'border-border shadow-sm',
-          rentabilidadePerc >= 0
-            ? 'bg-green-50/50 dark:bg-green-950/20'
-            : 'bg-red-50/50 dark:bg-red-950/20'
+          rentabilidadePerc === null
+            ? ''
+            : rentabilidadePerc >= 0
+              ? 'bg-green-50/50 dark:bg-green-950/20'
+              : 'bg-red-50/50 dark:bg-red-950/20'
         )}
       >
         <CardContent className="p-4">
@@ -92,11 +95,18 @@ export function ViaturaFinanceiraResumoCards({
           <div
             className={cn(
               'text-xl font-bold',
-              rentabilidadePerc >= 0 ? 'text-primary' : 'text-red-500'
+              rentabilidadePerc === null
+                ? 'text-muted-foreground'
+                : rentabilidadePerc >= 0
+                  ? 'text-primary'
+                  : 'text-red-500'
             )}
           >
-            {formatPercentage(rentabilidadePerc, 2)}
+            {rentabilidadePerc === null ? 'N/A' : formatPercentage(rentabilidadePerc, 2)}
           </div>
+          {rentabilidadePerc === null && (
+            <p className="text-xs text-muted-foreground mt-1">Sem Custo Aquisição configurado</p>
+          )}
         </CardContent>
       </Card>
     </div>

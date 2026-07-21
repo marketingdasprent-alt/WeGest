@@ -49,6 +49,7 @@ export const RECURSOS = {
   ADMIN_FORMULARIOS: 'admin_formularios',
   ADMIN_INTEGRACOES: 'admin_integracoes',
   ADMIN_CONFIGURACOES: 'admin_configuracoes',
+  ADMIN_MINHA_ORGANIZACAO: 'admin_minha_organizacao',
 
   // Administrativo (antigo "Financeiro")
   FINANCEIRO_RECIBOS: 'financeiro_recibos',
