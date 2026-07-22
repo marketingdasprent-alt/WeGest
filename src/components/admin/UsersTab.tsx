@@ -41,19 +41,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrgId } from '@/contexts/TenantContext';
-import {
-  Loader2,
-  Pencil,
-  Trash2,
-  Key,
-  Search,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  Plus,
-} from 'lucide-react';
+import { Loader2, Pencil, Trash2, Key, Search, Plus } from 'lucide-react';
 import type { Cargo } from '@/hooks/useRBAC';
 import { matchesSearch } from '@/lib/utils';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface Profile {
   id: string;
@@ -66,9 +57,6 @@ interface Profile {
   periodo_ativo_ate: string | null;
 }
 
-type SortColumn = 'nome' | 'email' | 'created_at';
-type SortDirection = 'asc' | 'desc';
-
 export const UsersTab = () => {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [grupos, setGrupos] = useState<Cargo[]>([]);
@@ -77,8 +65,9 @@ export const UsersTab = () => {
   // Filtros e ordenação
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGrupo, setFilterGrupo] = useState<string | null>(null);
-  const [sortColumn, setSortColumn] = useState<SortColumn>('created_at');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortField, setSortField] = useState<string>('created_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   // Dialog de edição
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
@@ -213,42 +202,28 @@ export const UsersTab = () => {
 
     // Ordenação
     result.sort((a, b) => {
-      let aVal = a[sortColumn] || '';
-      let bVal = b[sortColumn] || '';
-
-      if (sortColumn === 'created_at') {
-        aVal = new Date(aVal).getTime().toString();
-        bVal = new Date(bVal).getTime().toString();
-        const comparison = Number(aVal) - Number(bVal);
-        return sortDirection === 'asc' ? comparison : -comparison;
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'nome') {
+        va = a.nome || '';
+        vb = b.nome || '';
+      } else if (sortField === 'email') {
+        va = a.email || '';
+        vb = b.email || '';
+      } else if (sortField === 'grupo') {
+        va = grupos.find((g) => g.id === a.cargo_id)?.nome || 'Sem grupo';
+        vb = grupos.find((g) => g.id === b.cargo_id)?.nome || 'Sem grupo';
+      } else if (sortField === 'created_at') {
+        va = new Date(a.created_at).getTime();
+        vb = new Date(b.created_at).getTime();
       }
-
-      const comparison = aVal.toString().localeCompare(bVal.toString());
-      return sortDirection === 'asc' ? comparison : -comparison;
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
     });
 
     return result;
-  }, [profiles, searchTerm, filterGrupo, sortColumn, sortDirection]);
-
-  const handleSort = (column: SortColumn) => {
-    if (sortColumn === column) {
-      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
-
-  const getSortIcon = (column: SortColumn) => {
-    if (sortColumn !== column) {
-      return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
-    }
-    return sortDirection === 'asc' ? (
-      <ArrowUp className="h-4 w-4 ml-1" />
-    ) : (
-      <ArrowDown className="h-4 w-4 ml-1" />
-    );
-  };
+  }, [profiles, searchTerm, filterGrupo, sortField, sortDir, grupos]);
 
   // Criar utilizador
   const handleCreateUser = async () => {
@@ -622,34 +597,42 @@ export const UsersTab = () => {
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-muted/50">
-                <TableHead
-                  className="text-muted-foreground cursor-pointer select-none"
-                  onClick={() => handleSort('nome')}
+                <SortableTableHead
+                  field="nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="text-muted-foreground"
                 >
-                  <div className="flex items-center">
-                    Nome
-                    {getSortIcon('nome')}
-                  </div>
-                </TableHead>
-                <TableHead
-                  className="text-muted-foreground cursor-pointer select-none"
-                  onClick={() => handleSort('email')}
+                  Nome
+                </SortableTableHead>
+                <SortableTableHead
+                  field="email"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="text-muted-foreground"
                 >
-                  <div className="flex items-center">
-                    Email
-                    {getSortIcon('email')}
-                  </div>
-                </TableHead>
-                <TableHead className="text-muted-foreground">Grupo</TableHead>
-                <TableHead
-                  className="text-muted-foreground cursor-pointer select-none"
-                  onClick={() => handleSort('created_at')}
+                  Email
+                </SortableTableHead>
+                <SortableTableHead
+                  field="grupo"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="text-muted-foreground"
                 >
-                  <div className="flex items-center">
-                    Data
-                    {getSortIcon('created_at')}
-                  </div>
-                </TableHead>
+                  Grupo
+                </SortableTableHead>
+                <SortableTableHead
+                  field="created_at"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="text-muted-foreground"
+                >
+                  Data
+                </SortableTableHead>
                 <TableHead className="text-right text-muted-foreground">Ações</TableHead>
               </TableRow>
             </TableHeader>

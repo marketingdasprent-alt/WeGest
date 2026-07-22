@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Trash2,
   Calendar,
@@ -30,6 +30,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -55,6 +66,10 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editCusto, setEditCusto] = useState<Partial<CustoAdicional>>({});
+  const [deleteTarget, setDeleteTarget] = useState<CustoAdicional | null>(null);
+  const [sortField, setSortField] = useState<string>('semana_referencia');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   useEffect(() => {
     loadCustos();
@@ -88,6 +103,8 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
       setCustos(custos.filter((c) => c.id !== id));
     } catch (error: any) {
       toast.error('Erro ao remover: ' + error.message);
+    } finally {
+      setDeleteTarget(null);
     }
   }
 
@@ -148,6 +165,31 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
     }).format(value);
   };
 
+  const custosOrdenados = useMemo(() => {
+    const list = [...custos];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'semana_referencia') {
+        va = a.semana_referencia;
+        vb = b.semana_referencia;
+      } else if (sortField === 'tipo') {
+        va = a.tipo;
+        vb = b.tipo;
+      } else if (sortField === 'valor') {
+        va = a.valor;
+        vb = b.valor;
+      } else if (sortField === 'status') {
+        va = a.status;
+        vb = b.status;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [custos, sortField, sortDir]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -178,10 +220,38 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
-              <TableHead>Semana / Data</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Valor</TableHead>
-              <TableHead>Estado</TableHead>
+              <SortableTableHead
+                field="semana_referencia"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+              >
+                Semana / Data
+              </SortableTableHead>
+              <SortableTableHead
+                field="tipo"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+              >
+                Tipo
+              </SortableTableHead>
+              <SortableTableHead
+                field="valor"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+              >
+                Valor
+              </SortableTableHead>
+              <SortableTableHead
+                field="status"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+              >
+                Estado
+              </SortableTableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -194,7 +264,7 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
                 </TableCell>
               </TableRow>
             ) : (
-              custos.map((custo) => {
+              custosOrdenados.map((custo) => {
                 const isEditing = editingId === custo.id;
                 return (
                   <TableRow key={custo.id}>
@@ -310,7 +380,7 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDelete(custo.id)}
+                              onClick={() => setDeleteTarget(custo)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -325,6 +395,27 @@ export function MotoristaTabOutrosCustos({ motorista }: MotoristaTabOutrosCustos
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar custo adicional?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O lançamento será removido permanentemente do
+              histórico deste motorista.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => deleteTarget && handleDelete(deleteTarget.id)}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

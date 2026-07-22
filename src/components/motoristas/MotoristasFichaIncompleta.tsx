@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { normalizeString } from '@/lib/utils';
 import type { Motorista } from '@/types/motorista';
 
@@ -40,15 +41,41 @@ export const MotoristasFichaIncompleta: React.FC<Props> = ({
   onSelect,
 }) => {
   const [search, setSearch] = useState('');
+  const [sortField, setSortField] = useState<string>('codigo');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return motoristas;
-    const t = normalizeString(search);
-    return motoristas.filter(
-      ({ motorista }) =>
-        normalizeString(motorista.nome).includes(t) || motorista.codigo.toString().includes(search)
-    );
-  }, [motoristas, search]);
+    const list = search.trim()
+      ? motoristas.filter(({ motorista }) => {
+          const t = normalizeString(search);
+          return (
+            normalizeString(motorista.nome).includes(t) ||
+            motorista.codigo.toString().includes(search)
+          );
+        })
+      : [...motoristas];
+
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'codigo') {
+        va = a.motorista.codigo;
+        vb = b.motorista.codigo;
+      } else if (sortField === 'nome') {
+        va = a.motorista.nome;
+        vb = b.motorista.nome;
+      } else if (sortField === 'camposEmFalta') {
+        va = a.camposEmFalta.length;
+        vb = b.camposEmFalta.length;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return list;
+  }, [motoristas, search, sortField, sortDir]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -87,9 +114,31 @@ export const MotoristasFichaIncompleta: React.FC<Props> = ({
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="w-[70px]">Cód.</TableHead>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Campos em falta</TableHead>
+                    <SortableTableHead
+                      field="codigo"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="w-[70px]"
+                    >
+                      Cód.
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="nome"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    >
+                      Nome
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="camposEmFalta"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    >
+                      Campos em falta
+                    </SortableTableHead>
                     <TableHead className="w-[40px]" />
                   </TableRow>
                 </TableHeader>

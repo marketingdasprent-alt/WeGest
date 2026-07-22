@@ -25,6 +25,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CRMFilters, FilterState } from '@/components/crm/CRMFilters';
 import { useCampaignTags } from '@/hooks/useCampaignTags';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface Lead {
   id: string;
@@ -80,6 +81,9 @@ const Contatos = () => {
   });
   const { toast } = useToast();
   const { availableTags } = useCampaignTags();
+  const [sortField, setSortField] = useState<string>('created_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   // Função para extrair dados das observações quando campos principais estão vazios
   const getLeadDisplayData = (lead: Lead) => {
@@ -236,6 +240,37 @@ const Contatos = () => {
     }
   };
 
+  const sortedLeads = useMemo(() => {
+    const list = [...leads];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'nome') {
+        va = a.nome || '';
+        vb = b.nome || '';
+      } else if (sortField === 'email') {
+        va = a.email || '';
+        vb = b.email || '';
+      } else if (sortField === 'telefone') {
+        va = a.telefone || '';
+        vb = b.telefone || '';
+      } else if (sortField === 'zona') {
+        va = a.zona || '';
+        vb = b.zona || '';
+      } else if (sortField === 'status') {
+        va = a.status || '';
+        vb = b.status || '';
+      } else if (sortField === 'created_at') {
+        va = a.created_at || '';
+        vb = b.created_at || '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [leads, sortField, sortDir]);
+
   if (loading && currentPage === 1) {
     return (
       <div className="min-h-screen bg-background">
@@ -288,17 +323,65 @@ const Contatos = () => {
                 <Table>
                   <TableHeader>
                     <TableRow className="border-border">
-                      <TableHead className="text-muted-foreground">Nome</TableHead>
-                      <TableHead className="text-muted-foreground">Email</TableHead>
-                      <TableHead className="text-muted-foreground">Telefone</TableHead>
-                      <TableHead className="text-muted-foreground">Zona</TableHead>
-                      <TableHead className="text-muted-foreground">Status</TableHead>
-                      <TableHead className="text-muted-foreground">Data</TableHead>
+                      <SortableTableHead
+                        field="nome"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-muted-foreground"
+                      >
+                        Nome
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="email"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-muted-foreground"
+                      >
+                        Email
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="telefone"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-muted-foreground"
+                      >
+                        Telefone
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="zona"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-muted-foreground"
+                      >
+                        Zona
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="status"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-muted-foreground"
+                      >
+                        Status
+                      </SortableTableHead>
+                      <SortableTableHead
+                        field="created_at"
+                        sortField={sortField}
+                        sortDir={sortDir}
+                        onSort={handleSort}
+                        className="text-muted-foreground"
+                      >
+                        Data
+                      </SortableTableHead>
                       <TableHead className="text-muted-foreground">Tags</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {leads.map((lead) => {
+                    {sortedLeads.map((lead) => {
                       const displayData = getLeadDisplayData(lead);
                       return (
                         <TableRow key={lead.id} className="border-border hover:bg-muted/30">

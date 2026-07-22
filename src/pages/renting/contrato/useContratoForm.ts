@@ -166,6 +166,7 @@ export interface UseContratoFormReturn {
   aplicarDadosViatura: (viaturaId: string) => void;
   handleSubmit: () => void;
   handleDelete: () => void;
+  confirmDelete: () => void;
   confirmarNovaVersao: (motivo: string) => void;
   handleClienteCriado: (clienteId: string) => void;
   handleMotoristaCriado: (motoristaId: string) => void;
@@ -1084,6 +1085,7 @@ export function useContratoForm(): UseContratoFormReturn {
     aplicarDadosViatura,
     handleSubmit: form.handleSubmit(onSubmit, onInvalid),
     handleDelete,
+    confirmDelete,
     confirmarNovaVersao,
     handleClienteCriado,
     handleMotoristaCriado,

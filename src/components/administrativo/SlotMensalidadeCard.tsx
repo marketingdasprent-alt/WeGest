@@ -3,7 +3,7 @@
  * de slot do motorista e permite emitir a fatura fiscal (reusa a máquina de
  * faturação) e marcar como paga.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { useSlotCobrancasMensais, type SlotCobranca } from '@/hooks/useSlotCobrancasMensais';
@@ -39,6 +40,33 @@ export function SlotMensalidadeCard({ motoristaId }: { motoristaId?: string }) {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const visiveis = cobrancas.filter((c) => c.estado !== 'anulada');
+
+  const [sortField, setSortField] = useState<string>('periodo_de');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
+
+  const sortedVisiveis = useMemo(() => {
+    const list = [...visiveis];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'periodo_de') {
+        va = a.periodo_de || '';
+        vb = b.periodo_de || '';
+      } else if (sortField === 'valor_total') {
+        va = a.valor_total ?? 0;
+        vb = b.valor_total ?? 0;
+      } else if (sortField === 'estado') {
+        va = a.estado || '';
+        vb = b.estado || '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [visiveis, sortField, sortDir]);
+
   if (!motoristaId || (!isLoading && visiveis.length === 0)) return null;
 
   function invalidate() {
@@ -118,14 +146,36 @@ export function SlotMensalidadeCard({ motoristaId }: { motoristaId?: string }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Período</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
-              <TableHead>Estado</TableHead>
+              <SortableTableHead
+                field="periodo_de"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+              >
+                Período
+              </SortableTableHead>
+              <SortableTableHead
+                field="valor_total"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+                align="right"
+              >
+                Valor
+              </SortableTableHead>
+              <SortableTableHead
+                field="estado"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+              >
+                Estado
+              </SortableTableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visiveis.map((c) => {
+            {sortedVisiveis.map((c) => {
               const porEmitir =
                 !c.documento_externo_ref && c.emite_fatura_fiscal && c.estado === 'pendente';
               return (

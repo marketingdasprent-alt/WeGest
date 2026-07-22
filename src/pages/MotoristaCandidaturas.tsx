@@ -59,6 +59,7 @@ import { DocumentPreviewPanel } from '@/components/motoristas/DocumentPreviewPan
 import { cn, matchesSearch } from '@/lib/utils';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface Candidatura {
   id: string;
@@ -127,6 +128,9 @@ const MotoristaCandidaturas: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortField, setSortField] = useState<string>('data');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   // Dialog states
   const [selectedCandidatura, setSelectedCandidatura] = useState<Candidatura | null>(null);
@@ -186,16 +190,40 @@ const MotoristaCandidaturas: React.FC = () => {
     }
   };
 
-  const filteredCandidaturas = candidaturas.filter((c) => {
-    const matchesSearchResult =
-      matchesSearch(c.nome, searchTerm) ||
-      matchesSearch(c.email, searchTerm) ||
-      (c.nif && matchesSearch(c.nif, searchTerm));
+  const filteredCandidaturas = candidaturas
+    .filter((c) => {
+      const matchesSearchResult =
+        matchesSearch(c.nome, searchTerm) ||
+        matchesSearch(c.email, searchTerm) ||
+        (c.nif && matchesSearch(c.nif, searchTerm));
 
-    const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
+      const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
 
-    return matchesSearchResult && matchesStatus;
-  });
+      return matchesSearchResult && matchesStatus;
+    })
+    .sort((a, b) => {
+      let va: string = '';
+      let vb: string = '';
+      if (sortField === 'nome') {
+        va = a.nome;
+        vb = b.nome;
+      } else if (sortField === 'email') {
+        va = a.email;
+        vb = b.email;
+      } else if (sortField === 'telefone') {
+        va = a.telefone || '';
+        vb = b.telefone || '';
+      } else if (sortField === 'status') {
+        va = a.status;
+        vb = b.status;
+      } else if (sortField === 'data') {
+        va = a.data_submissao || a.created_at;
+        vb = b.data_submissao || b.created_at;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
     usePagination(filteredCandidaturas, 25, `${searchTerm}|${statusFilter}`);
@@ -485,11 +513,49 @@ const MotoristaCandidaturas: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead className="hidden md:table-cell">Email</TableHead>
-                  <TableHead className="hidden sm:table-cell">Telefone</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="hidden lg:table-cell">Data</TableHead>
+                  <SortableTableHead
+                    field="nome"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Nome
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="email"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    className="hidden md:table-cell"
+                  >
+                    Email
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="telefone"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    className="hidden sm:table-cell"
+                  >
+                    Telefone
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="status"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Status
+                  </SortableTableHead>
+                  <SortableTableHead
+                    field="data"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    className="hidden lg:table-cell"
+                  >
+                    Data
+                  </SortableTableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>

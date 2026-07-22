@@ -98,6 +98,12 @@ export function ViaturaObeDispositivoSection({
 
   const handleRemover = async () => {
     if (!atual) return;
+    if (
+      !window.confirm(
+        'Tem a certeza que quer remover a associação deste dispositivo OBE à viatura?'
+      )
+    )
+      return;
     setSaving(true);
     try {
       const { error } = await (supabase as any)

@@ -12,18 +12,12 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 
 import { useReservas } from '@/hooks/useReservas';
 import { useContratosRenting } from '@/hooks/useContratosRenting';
 import { formatDateTime, matchesCodigo, normalizeMatricula } from './contratosUtils';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface ContratoSelectorReservaProps {
   open: boolean;
@@ -38,6 +32,9 @@ export const ContratoSelectorReserva: React.FC<ContratoSelectorReservaProps> = (
 }) => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const [sortField, setSortField] = useState<string>('codigo');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const { data: reservas = [], isLoading: loadingReservas } = useReservas({
     limit: 500,
@@ -57,7 +54,7 @@ export const ContratoSelectorReserva: React.FC<ContratoSelectorReservaProps> = (
 
   const reservasElegiveis = useMemo(() => {
     const searchNorm = normalizeMatricula(search.trim());
-    return reservas.filter((r) => {
+    const list = reservas.filter((r) => {
       // Estado tem que ser confirmada ou em_curso
       if (!ESTADOS_ELEGIVEIS.includes(r.estado as (typeof ESTADOS_ELEGIVEIS)[number])) return false;
       // Tem que ter cliente E viatura (necessários para o contrato)
@@ -72,7 +69,31 @@ export const ContratoSelectorReserva: React.FC<ContratoSelectorReservaProps> = (
       }
       return true;
     });
-  }, [reservas, reservasIdsComContrato, search]);
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'codigo') {
+        va = a.codigo;
+        vb = b.codigo;
+      } else if (sortField === 'matricula') {
+        va = a.matricula ?? '';
+        vb = b.matricula ?? '';
+      } else if (sortField === 'cliente_nome') {
+        va = a.cliente_nome ?? '';
+        vb = b.cliente_nome ?? '';
+      } else if (sortField === 'data_inicio') {
+        va = a.data_inicio ?? '';
+        vb = b.data_inicio ?? '';
+      } else if (sortField === 'estado') {
+        va = a.estado ?? '';
+        vb = b.estado ?? '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [reservas, reservasIdsComContrato, search, sortField, sortDir]);
 
   const handleSelect = (reservaId: string) => {
     onOpenChange(false);
@@ -109,11 +130,51 @@ export const ContratoSelectorReserva: React.FC<ContratoSelectorReservaProps> = (
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent sticky top-0 bg-card">
-                <TableHead className="h-9 text-xs">Código</TableHead>
-                <TableHead className="h-9 text-xs">Matrícula</TableHead>
-                <TableHead className="h-9 text-xs">Cliente</TableHead>
-                <TableHead className="h-9 text-xs">Data Início</TableHead>
-                <TableHead className="h-9 text-xs">Estado</TableHead>
+                <SortableTableHead
+                  field="codigo"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-9 text-xs"
+                >
+                  Código
+                </SortableTableHead>
+                <SortableTableHead
+                  field="matricula"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-9 text-xs"
+                >
+                  Matrícula
+                </SortableTableHead>
+                <SortableTableHead
+                  field="cliente_nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-9 text-xs"
+                >
+                  Cliente
+                </SortableTableHead>
+                <SortableTableHead
+                  field="data_inicio"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-9 text-xs"
+                >
+                  Data Início
+                </SortableTableHead>
+                <SortableTableHead
+                  field="estado"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="h-9 text-xs"
+                >
+                  Estado
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

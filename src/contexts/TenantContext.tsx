@@ -2,6 +2,18 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
+// A org ativa de cada aba/separador fica fixada em sessionStorage (nunca
+// partilhado entre abas, ao contrário de `user_org_ativa` na BD, que é uma
+// única linha por utilizador partilhada por todas as abas/dispositivos).
+// Sem isto, qualquer aba que force uma troca da org partilhada (ex.: o portal
+// do motorista, para contas com dupla função) "teleportava" todas as outras
+// abas já abertas para a mesma org assim que voltavam a ficar visíveis.
+// `user_org_ativa` continua a servir de valor por omissão só para abas novas
+// que ainda não têm nada fixado nesta sessão do browser.
+// A chave inclui o user_id para não haver fuga entre contas na mesma aba
+// (ex.: logout e login como outra pessoa no mesmo separador/computador).
+export const getOrgSessionStorageKey = (userId: string) => `wegest_active_org_id:${userId}`;
+
 interface Organizacao {
   id: string;
   nome: string;
@@ -66,7 +78,24 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         setOrgs(orgsList);
 
-        // Carregar org ativa
+        // Refresh silencioso (aba a voltar a ficar visível): só serve para
+        // detetar orgs novas associadas entretanto — nunca toca em orgId. A
+        // org ativa desta aba, uma vez resolvida, é fixa (ver sessionStorage
+        // abaixo); só muda por ação explícita do utilizador (switchOrg).
+        if (silent) return;
+
+        // Já resolvida nesta aba/sessão do browser? Usa o valor fixado, sem
+        // voltar a ler `user_org_ativa` (que é partilhado entre abas e pode
+        // ter sido alterado por outra aba/portal entretanto).
+        const sessionKey = getOrgSessionStorageKey(user.id);
+        const pinnedOrgId = sessionStorage.getItem(sessionKey);
+        if (pinnedOrgId && orgsList.some((o) => o.id === pinnedOrgId)) {
+          setOrgId(pinnedOrgId);
+          return;
+        }
+
+        // Primeira resolução nesta aba — usa `user_org_ativa` como valor por
+        // omissão (última org ativa da conta) e fixa-o para esta aba.
         const { data: orgAtiva } = await supabase
           .from('user_org_ativa')
           .select('org_id')
@@ -75,10 +104,12 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         if (orgAtiva?.org_id && orgsList.some((o) => o.id === orgAtiva.org_id)) {
           setOrgId(orgAtiva.org_id);
+          sessionStorage.setItem(sessionKey, orgAtiva.org_id);
         } else if (orgsList.length === 1) {
           // Auto-selecionar se só tem uma org
           const singleOrgId = orgsList[0].id;
           setOrgId(singleOrgId);
+          sessionStorage.setItem(sessionKey, singleOrgId);
           await supabase
             .from('user_org_ativa')
             .upsert({ user_id: user.id, org_id: singleOrgId }, { onConflict: 'user_id' });
@@ -141,6 +172,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return;
       }
 
+      sessionStorage.setItem(getOrgSessionStorageKey(user.id), newOrgId);
       setOrgId(newOrgId);
 
       // Forçar reload para limpar caches de dados

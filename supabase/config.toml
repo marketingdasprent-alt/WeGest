@@ -28,6 +28,12 @@ verify_jwt = false
 [functions.create-user]
 verify_jwt = false
 
+# Onboarding de motorista (fluxo email-first). Aberta pré-login (anon) →
+# verify_jwt=false. Segurança: só age sobre um perfil motoristas_ativos
+# desta org, com este email e sem conta (user_id NULL); envia link seguro.
+[functions.motorista-onboarding]
+verify_jwt = false
+
 [functions.bolt-auth]
 verify_jwt = false
 

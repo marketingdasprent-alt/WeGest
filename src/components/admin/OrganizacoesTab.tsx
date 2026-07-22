@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,7 @@ import { Separator } from '@/components/ui/separator';
 import { Building2, Pencil, Users, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { validarNIF } from '@/lib/pt-validators';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface Organizacao {
   id: string;
@@ -64,6 +65,9 @@ export const OrganizacoesTab: React.FC = () => {
   const [editingOrg, setEditingOrg] = useState<Organizacao | null>(null);
   const [formData, setFormData] = useState<FormData>(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [sortField, setSortField] = useState<string>('nome');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const fetchOrgs = useCallback(async () => {
     setLoading(true);
@@ -101,6 +105,37 @@ export const OrganizacoesTab: React.FC = () => {
   useEffect(() => {
     fetchOrgs();
   }, [fetchOrgs]);
+
+  const sortedOrgs = useMemo(() => {
+    const list = [...orgs];
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'nome') {
+        va = a.nome;
+        vb = b.nome;
+      } else if (sortField === 'codigo') {
+        va = a.codigo;
+        vb = b.codigo;
+      } else if (sortField === 'nif') {
+        va = a.nif || '';
+        vb = b.nif || '';
+      } else if (sortField === 'telefone') {
+        va = a.telefone || '';
+        vb = b.telefone || '';
+      } else if (sortField === 'user_count') {
+        va = a._user_count ?? 0;
+        vb = b._user_count ?? 0;
+      } else if (sortField === 'ativa') {
+        va = a.ativa ? 0 : 1;
+        vb = b.ativa ? 0 : 1;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [orgs, sortField, sortDir]);
 
   const openEditDialog = (org: Organizacao) => {
     setEditingOrg(org);
@@ -179,19 +214,60 @@ export const OrganizacoesTab: React.FC = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Código</TableHead>
-                <TableHead>NIF</TableHead>
-                <TableHead>Contacto</TableHead>
-                <TableHead>
+                <SortableTableHead
+                  field="nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Nome
+                </SortableTableHead>
+                <SortableTableHead
+                  field="codigo"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Código
+                </SortableTableHead>
+                <SortableTableHead
+                  field="nif"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  NIF
+                </SortableTableHead>
+                <SortableTableHead
+                  field="telefone"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Contacto
+                </SortableTableHead>
+                <SortableTableHead
+                  field="user_count"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
                   <Users className="h-3.5 w-3.5" />
-                </TableHead>
-                <TableHead>Estado</TableHead>
+                </SortableTableHead>
+                <SortableTableHead
+                  field="ativa"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Estado
+                </SortableTableHead>
                 <TableHead className="w-[60px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orgs.map((org) => (
+              {sortedOrgs.map((org) => (
                 <TableRow key={org.id}>
                   <TableCell>
                     <div className="font-medium">{org.nome}</div>

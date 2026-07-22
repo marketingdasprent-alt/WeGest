@@ -37,6 +37,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { matchesSearch } from '@/lib/utils';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface Combustivel {
   id: string;
@@ -57,6 +58,9 @@ const ViaturaCombustiveis = () => {
   const [deleteTarget, setDeleteTarget] = useState<Combustivel | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [sortField, setSortField] = useState<string>('nome');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const { data: combustiveis = [], isLoading } = useQuery({
     queryKey: ['viatura_combustiveis', orgId],
@@ -81,7 +85,22 @@ const ViaturaCombustiveis = () => {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const filtered = combustiveis.filter((c) => !search || matchesSearch(c.nome, search));
+  const filtered = combustiveis
+    .filter((c) => !search || matchesSearch(c.nome, search))
+    .sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'nome') {
+        va = a.nome;
+        vb = b.nome;
+      } else if (sortField === 'ativo') {
+        va = a.ativo ? 0 : 1;
+        vb = b.ativo ? 0 : 1;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   const openNew = () => {
     setEditing(null);
@@ -178,8 +197,24 @@ const ViaturaCombustiveis = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[200px]">Nome</TableHead>
-                <TableHead className="w-20">Estado</TableHead>
+                <SortableTableHead
+                  field="nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[200px]"
+                >
+                  Nome
+                </SortableTableHead>
+                <SortableTableHead
+                  field="ativo"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-20"
+                >
+                  Estado
+                </SortableTableHead>
                 <TableHead className="w-20" />
               </TableRow>
             </TableHeader>

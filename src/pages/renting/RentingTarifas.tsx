@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Tag, Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,6 +48,9 @@ const RentingTarifas = () => {
 
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<RentingTarifa | null>(null);
+  const [sortField, setSortField] = useState<string>('nome');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const { data: tarifas = [], isLoading } = useQuery({
     queryKey: ['renting_tarifas', orgId],
@@ -74,7 +78,35 @@ const RentingTarifas = () => {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const filtered = tarifas.filter((t) => !search || matchesSearch(t.nome, search));
+  const filtered = useMemo(() => {
+    const list = tarifas.filter((t) => !search || matchesSearch(t.nome, search));
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortField) {
+        case 'nome':
+          va = a.nome || '';
+          vb = b.nome || '';
+          break;
+        case 'tipo':
+          va = a.tipo || '';
+          vb = b.tipo || '';
+          break;
+        case 'validade':
+          va = a.valido_de || '';
+          vb = b.valido_de || '';
+          break;
+        case 'estado':
+          va = a.ativa ? 1 : 0;
+          vb = b.ativa ? 1 : 0;
+          break;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [tarifas, search, sortField, sortDir]);
 
   return (
     <div className="w-full">
@@ -132,10 +164,42 @@ const RentingTarifas = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[180px]">Nome</TableHead>
-                <TableHead className="w-28">Tipo</TableHead>
-                <TableHead className="w-44 whitespace-nowrap">Validade</TableHead>
-                <TableHead className="w-20">Estado</TableHead>
+                <SortableTableHead
+                  field="nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[180px]"
+                >
+                  Nome
+                </SortableTableHead>
+                <SortableTableHead
+                  field="tipo"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-28"
+                >
+                  Tipo
+                </SortableTableHead>
+                <SortableTableHead
+                  field="validade"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-44 whitespace-nowrap"
+                >
+                  Validade
+                </SortableTableHead>
+                <SortableTableHead
+                  field="estado"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-20"
+                >
+                  Estado
+                </SortableTableHead>
                 <TableHead className="w-20" />
               </TableRow>
             </TableHeader>

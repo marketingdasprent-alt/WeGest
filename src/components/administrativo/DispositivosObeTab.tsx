@@ -56,13 +56,11 @@ import {
   CheckCircle2,
   Car,
   Wifi,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   Printer,
   FileDown,
   ChevronDown,
 } from 'lucide-react';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Viatura {
@@ -207,11 +205,15 @@ export function DispositivosObeTab() {
   const { toast } = useToast();
   const [dispositivos, setDispositivos] = useState<DispositivoObe[]>([]);
   const [viaturas, setViaturas] = useState<Viatura[]>([]);
+  const [motoristaAtualByViatura, setMotoristaAtualByViatura] = useState<Map<string, string>>(
+    new Map()
+  );
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [apenasAtivos, setApenasAtivos] = useState(false);
   const [sortField, setSortField] = useState<string>('nr_equipamento');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   // CRUD Dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -226,6 +228,18 @@ export function DispositivosObeTab() {
   const [historyDev, setHistoryDev] = useState<DispositivoObe | null>(null);
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [histDataInicio, setHistDataInicio] = useState('');
+  const [histDataFim, setHistDataFim] = useState('');
+  const [histSearch, setHistSearch] = useState('');
+  const [histSortField, setHistSortField] = useState<string>('transaction_date');
+  const [histSortDir, setHistSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleHistSort = (f: string) =>
+    toggleSort(
+      f,
+      { sortField: histSortField, sortDir: histSortDir },
+      setHistSortField,
+      setHistSortDir
+    );
 
   // Import
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -240,17 +254,26 @@ export function DispositivosObeTab() {
   const carregar = async () => {
     setLoading(true);
     try {
-      const [{ data: devs, error: e1 }, { data: vits, error: e2 }] = await Promise.all([
+      const [
+        { data: devs, error: e1 },
+        { data: vits, error: e2 },
+        { data: motoristas, error: e3 },
+      ] = await Promise.all([
         (supabase as any)
           .from('dispositivos_obe')
           .select('*, viatura:viatura_id(matricula, marca, modelo)')
           .order('nr_equipamento'),
         supabase.from('viaturas').select('id, matricula, marca, modelo').order('matricula'),
+        (supabase as any).rpc('get_viaturas_motorista_atual'),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
+      if (e3) console.error('Erro ao carregar motorista atual por viatura:', e3.message);
       setDispositivos(devs || []);
       setViaturas(vits || []);
+      setMotoristaAtualByViatura(
+        new Map((motoristas || []).map((m: any) => [m.viatura_id, m.motorista_nome as string]))
+      );
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
     } finally {
@@ -263,11 +286,13 @@ export function DispositivosObeTab() {
       if (apenasAtivos && !d.ativo) return false;
       if (!search) return true;
       const t = norm(search);
+      const motoristaNome = d.viatura_id ? motoristaAtualByViatura.get(d.viatura_id) || '' : '';
       return (
         norm(d.nr_equipamento).includes(t) ||
         norm(d.contrato || '').includes(t) ||
         norm(d.viatura?.matricula || '').includes(t) ||
-        norm(d.viatura ? `${d.viatura.marca} ${d.viatura.modelo}` : '').includes(t)
+        norm(d.viatura ? `${d.viatura.marca} ${d.viatura.modelo}` : '').includes(t) ||
+        norm(motoristaNome).includes(t)
       );
     });
     list.sort((a, b) => {
@@ -276,6 +301,9 @@ export function DispositivosObeTab() {
       if (sortField === 'nr_equipamento') {
         va = a.nr_equipamento;
         vb = b.nr_equipamento;
+      } else if (sortField === 'motorista') {
+        va = (a.viatura_id ? motoristaAtualByViatura.get(a.viatura_id) : '') || '';
+        vb = (b.viatura_id ? motoristaAtualByViatura.get(b.viatura_id) : '') || '';
       } else if (sortField === 'contrato') {
         va = a.contrato || '';
         vb = b.contrato || '';
@@ -291,7 +319,7 @@ export function DispositivosObeTab() {
       return 0;
     });
     return list;
-  }, [dispositivos, search, apenasAtivos, sortField, sortDir]);
+  }, [dispositivos, search, apenasAtivos, sortField, sortDir, motoristaAtualByViatura]);
 
   // Viaturas selecionáveis no diálogo: uma viatura não pode ter 2 OBE, por
   // isso excluímos as que já estão associadas a OUTRO dispositivo. A viatura
@@ -385,6 +413,9 @@ export function DispositivosObeTab() {
   const openHistory = async (d: DispositivoObe) => {
     setHistoryDev(d);
     setHistorico([]);
+    setHistDataInicio('');
+    setHistDataFim('');
+    setHistSearch('');
     setLoadingHistory(true);
     try {
       const { data, error } = await (supabase as any).rpc('get_obe_historico_portagens', {
@@ -403,9 +434,54 @@ export function DispositivosObeTab() {
     }
   };
 
+  const historicoFiltrado = useMemo(() => {
+    const list = historico.filter((h) => {
+      const dia = h.transaction_date.slice(0, 10);
+      if (histDataInicio && dia < histDataInicio) return false;
+      if (histDataFim && dia > histDataFim) return false;
+      if (histSearch) {
+        const t = norm(histSearch);
+        const matches =
+          norm(h.barreira_entrada || '').includes(t) ||
+          norm(h.barreira_saida || '').includes(t) ||
+          norm(h.operador || '').includes(t) ||
+          norm(h.motorista_nome || '').includes(t);
+        if (!matches) return false;
+      }
+      return true;
+    });
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (histSortField === 'transaction_date') {
+        va = a.transaction_date;
+        vb = b.transaction_date;
+      } else if (histSortField === 'barreira_entrada') {
+        va = a.barreira_entrada || '';
+        vb = b.barreira_entrada || '';
+      } else if (histSortField === 'barreira_saida') {
+        va = a.barreira_saida || '';
+        vb = b.barreira_saida || '';
+      } else if (histSortField === 'operador') {
+        va = a.operador || '';
+        vb = b.operador || '';
+      } else if (histSortField === 'motorista_nome') {
+        va = a.motorista_nome || '';
+        vb = b.motorista_nome || '';
+      } else if (histSortField === 'amount') {
+        va = a.amount || 0;
+        vb = b.amount || 0;
+      }
+      if (va < vb) return histSortDir === 'asc' ? -1 : 1;
+      if (va > vb) return histSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [historico, histDataInicio, histDataFim, histSearch, histSortField, histSortDir]);
+
   const totalHistorico = useMemo(
-    () => historico.reduce((s, r) => s + (r.amount || 0), 0),
-    [historico]
+    () => historicoFiltrado.reduce((s, r) => s + (r.amount || 0), 0),
+    [historicoFiltrado]
   );
 
   // ── Export / Print ───────────────────────────────────────────────────────
@@ -642,53 +718,60 @@ export function DispositivosObeTab() {
         <div className="border rounded-lg overflow-hidden">
           <Table>
             <TableHeader>
-              {(() => {
-                const handleSort = (f: string) => {
-                  if (sortField === f) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-                  else {
-                    setSortField(f);
-                    setSortDir('asc');
-                  }
-                };
-                const SortTh = ({
-                  field,
-                  children,
-                  className,
-                }: {
-                  field: string;
-                  children: React.ReactNode;
-                  className?: string;
-                }) => {
-                  const active = sortField === field;
-                  const Icon = active ? (sortDir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
-                  return (
-                    <TableHead className={className}>
-                      <button
-                        onClick={() => handleSort(field)}
-                        className={`flex items-center gap-1 text-xs font-medium hover:text-foreground transition-colors ${active ? 'text-foreground' : 'text-muted-foreground'}`}
-                      >
-                        {children}
-                        <Icon className="h-3 w-3 shrink-0" />
-                      </button>
-                    </TableHead>
-                  );
-                };
-                return (
-                  <TableRow>
-                    <SortTh field="nr_equipamento">Nº Equipamento</SortTh>
-                    <SortTh field="contrato">Contrato</SortTh>
-                    <SortTh field="viatura">Viatura</SortTh>
-                    <SortTh field="estado">Estado</SortTh>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                );
-              })()}
+              <TableRow>
+                <SortableTableHead
+                  field="nr_equipamento"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Nº Equipamento
+                </SortableTableHead>
+                <SortableTableHead
+                  field="motorista"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Motorista
+                </SortableTableHead>
+                <SortableTableHead
+                  field="contrato"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Contrato
+                </SortableTableHead>
+                <SortableTableHead
+                  field="viatura"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Viatura
+                </SortableTableHead>
+                <SortableTableHead
+                  field="estado"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Estado
+                </SortableTableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell className="font-mono font-medium text-sm">
                     {d.nr_equipamento}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {(d.viatura_id && motoristaAtualByViatura.get(d.viatura_id)) || (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {d.contrato || '-'}
@@ -938,9 +1021,12 @@ export function DispositivosObeTab() {
         </DialogContent>
       </Dialog>
 
-      {/* ── History Sheet ─────────────────────────────────────────────────── */}
+      {/* ── History Sheet (full screen) ─────────────────────────────────── */}
       <Sheet open={!!historyDev} onOpenChange={(o) => !o && setHistoryDev(null)}>
-        <SheetContent className="w-full sm:max-w-2xl flex flex-col">
+        <SheetContent
+          side="right"
+          className="w-screen sm:max-w-none lg:w-[calc(100vw-16rem)] flex flex-col"
+        >
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2 flex-wrap">
               <History className="h-5 w-5 text-muted-foreground" />
@@ -962,41 +1048,129 @@ export function DispositivosObeTab() {
               Sem portagens registadas para este equipamento.
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto -mx-6 px-6 mt-4">
-              <div className="flex justify-between items-center text-sm mb-3 px-1">
-                <span className="text-muted-foreground">{historico.length} portagem(ns)</span>
-                <span className="font-semibold">{fmtEur(totalHistorico)}</span>
+            <div className="flex-1 overflow-y-auto -mx-6 px-6 mt-4 flex flex-col">
+              <div className="flex flex-wrap items-end gap-3 mb-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">De</Label>
+                  <Input
+                    type="date"
+                    value={histDataInicio}
+                    onChange={(e) => setHistDataInicio(e.target.value)}
+                    className="w-40"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Até</Label>
+                  <Input
+                    type="date"
+                    value={histDataFim}
+                    onChange={(e) => setHistDataFim(e.target.value)}
+                    className="w-40"
+                  />
+                </div>
+                <div className="space-y-1.5 flex-1 min-w-[220px]">
+                  <Label className="text-xs">Pesquisar</Label>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Barreira, operador, motorista..."
+                      value={histSearch}
+                      onChange={(e) => setHistSearch(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                </div>
               </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Entrada</TableHead>
-                    <TableHead>Saída</TableHead>
-                    <TableHead>Motorista</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {historico.map((h, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="text-xs whitespace-nowrap">
-                        {fmtDT(h.transaction_date)}
-                      </TableCell>
-                      <TableCell className="text-xs max-w-[120px] truncate">
-                        {h.barreira_entrada || '-'}
-                      </TableCell>
-                      <TableCell className="text-xs max-w-[120px] truncate">
-                        {h.barreira_saida || '-'}
-                      </TableCell>
-                      <TableCell className="text-xs">{h.motorista_nome || '-'}</TableCell>
-                      <TableCell className="text-xs text-right font-medium">
-                        {fmtEur(h.amount)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+
+              {historicoFiltrado.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+                  Nenhuma portagem corresponde aos filtros.
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center text-sm mb-3 px-1">
+                    <span className="text-muted-foreground">
+                      {historicoFiltrado.length} portagem(ns)
+                    </span>
+                    <span className="font-semibold">{fmtEur(totalHistorico)}</span>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <SortableTableHead
+                          field="transaction_date"
+                          sortField={histSortField}
+                          sortDir={histSortDir}
+                          onSort={handleHistSort}
+                        >
+                          Data
+                        </SortableTableHead>
+                        <SortableTableHead
+                          field="barreira_entrada"
+                          sortField={histSortField}
+                          sortDir={histSortDir}
+                          onSort={handleHistSort}
+                        >
+                          Entrada
+                        </SortableTableHead>
+                        <SortableTableHead
+                          field="barreira_saida"
+                          sortField={histSortField}
+                          sortDir={histSortDir}
+                          onSort={handleHistSort}
+                        >
+                          Saída
+                        </SortableTableHead>
+                        <SortableTableHead
+                          field="operador"
+                          sortField={histSortField}
+                          sortDir={histSortDir}
+                          onSort={handleHistSort}
+                        >
+                          Operador
+                        </SortableTableHead>
+                        <SortableTableHead
+                          field="motorista_nome"
+                          sortField={histSortField}
+                          sortDir={histSortDir}
+                          onSort={handleHistSort}
+                        >
+                          Motorista
+                        </SortableTableHead>
+                        <SortableTableHead
+                          field="amount"
+                          sortField={histSortField}
+                          sortDir={histSortDir}
+                          onSort={handleHistSort}
+                          align="right"
+                        >
+                          Valor
+                        </SortableTableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {historicoFiltrado.map((h, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-xs whitespace-nowrap">
+                            {fmtDT(h.transaction_date)}
+                          </TableCell>
+                          <TableCell className="text-xs max-w-[160px] truncate">
+                            {h.barreira_entrada || '-'}
+                          </TableCell>
+                          <TableCell className="text-xs max-w-[160px] truncate">
+                            {h.barreira_saida || '-'}
+                          </TableCell>
+                          <TableCell className="text-xs">{h.operador || '-'}</TableCell>
+                          <TableCell className="text-xs">{h.motorista_nome || '-'}</TableCell>
+                          <TableCell className="text-xs text-right font-medium">
+                            {fmtEur(h.amount)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </>
+              )}
             </div>
           )}
         </SheetContent>

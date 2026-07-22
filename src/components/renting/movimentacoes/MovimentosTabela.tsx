@@ -1,4 +1,4 @@
-import { ArrowRightLeft, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { ArrowRightLeft, Loader2 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import type { Movimento } from '@/types/movimento';
 import { MovimentoEstadoBadge, MovimentoTipoBadge } from './MovimentoBadges';
 import { formatDateTime } from './movimentosUtils';
@@ -33,45 +33,6 @@ interface MovimentosTabelaProps {
   onRowClick: (m: Movimento) => void;
 }
 
-interface SortableHeadProps {
-  column: SortColumn;
-  label: string;
-  className?: string;
-  current: SortColumn;
-  dir: SortDir;
-  onSort: (col: SortColumn) => void;
-}
-
-const SortableHead: React.FC<SortableHeadProps> = ({
-  column,
-  label,
-  className,
-  current,
-  dir,
-  onSort,
-}) => (
-  <TableHead
-    className={cn(
-      'h-10 cursor-pointer select-none whitespace-nowrap hover:bg-muted/40 transition-colors text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-      className
-    )}
-    onClick={() => onSort(column)}
-  >
-    <div className="flex items-center gap-1">
-      {label}
-      {current === column ? (
-        dir === 'asc' ? (
-          <ChevronUp className="h-3.5 w-3.5" />
-        ) : (
-          <ChevronDown className="h-3.5 w-3.5" />
-        )
-      ) : (
-        <ChevronDown className="h-3.5 w-3.5 opacity-30" />
-      )}
-    </div>
-  </TableHead>
-);
-
 export const MovimentosTabela: React.FC<MovimentosTabelaProps> = ({
   movimentos,
   isLoading,
@@ -81,23 +42,73 @@ export const MovimentosTabela: React.FC<MovimentosTabelaProps> = ({
   onSort,
   onRowClick,
 }) => {
-  const headProps = { current: sortColumn, dir: sortDir, onSort };
+  const handleSort = (f: string) => onSort(f as SortColumn);
 
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
-            <SortableHead column="codigo" label="Código" {...headProps} />
-            <SortableHead column="tipo" label="Tipo" {...headProps} />
-            <SortableHead column="matricula" label="Matrícula" {...headProps} />
-            <SortableHead column="data_partida" label="Data Partida" {...headProps} />
-            <SortableHead column="data_chegada" label="Data Chegada" {...headProps} />
+            <SortableTableHead
+              field="codigo"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Código
+            </SortableTableHead>
+            <SortableTableHead
+              field="tipo"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Tipo
+            </SortableTableHead>
+            <SortableTableHead
+              field="matricula"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Matrícula
+            </SortableTableHead>
+            <SortableTableHead
+              field="data_partida"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Data Partida
+            </SortableTableHead>
+            <SortableTableHead
+              field="data_chegada"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Data Chegada
+            </SortableTableHead>
             <TableHead className="h-10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Info
             </TableHead>
-            <SortableHead column="colaborador_nome" label="Colaborador" {...headProps} />
-            <SortableHead column="estado" label="Estado" className="text-right" {...headProps} />
+            <SortableTableHead
+              field="colaborador_nome"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Colaborador
+            </SortableTableHead>
+            <SortableTableHead
+              field="estado"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+              align="right"
+            >
+              Estado
+            </SortableTableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

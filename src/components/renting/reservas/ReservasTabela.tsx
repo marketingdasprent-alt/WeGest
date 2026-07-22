@@ -1,4 +1,4 @@
-import { CalendarCheck, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { CalendarCheck, Loader2 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import type { Reserva } from '@/types/reserva';
 import { EstadoBadge } from './EstadoBadge';
 import { RegimeBadge } from './RegimeBadge';
@@ -37,45 +37,6 @@ interface ReservasTabelaProps {
   getEstacaoNome: (id: string | null | undefined) => string;
 }
 
-interface SortableHeadProps {
-  column: SortColumn;
-  label: string;
-  className?: string;
-  current: SortColumn;
-  dir: SortDir;
-  onSort: (col: SortColumn) => void;
-}
-
-const SortableHead: React.FC<SortableHeadProps> = ({
-  column,
-  label,
-  className,
-  current,
-  dir,
-  onSort,
-}) => (
-  <TableHead
-    className={cn(
-      'h-10 cursor-pointer select-none whitespace-nowrap hover:bg-muted/40 transition-colors text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-      className
-    )}
-    onClick={() => onSort(column)}
-  >
-    <div className="flex items-center gap-1">
-      {label}
-      {current === column ? (
-        dir === 'asc' ? (
-          <ChevronUp className="h-3.5 w-3.5" />
-        ) : (
-          <ChevronDown className="h-3.5 w-3.5" />
-        )
-      ) : (
-        <ChevronDown className="h-3.5 w-3.5 opacity-30" />
-      )}
-    </div>
-  </TableHead>
-);
-
 export const ReservasTabela: React.FC<ReservasTabelaProps> = ({
   reservas,
   isLoading,
@@ -86,25 +47,89 @@ export const ReservasTabela: React.FC<ReservasTabelaProps> = ({
   onRowClick,
   getEstacaoNome,
 }) => {
-  const headProps = { current: sortColumn, dir: sortDir, onSort };
+  const handleSort = (f: string) => onSort(f as SortColumn);
 
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
-            <SortableHead column="codigo" label="Código" {...headProps} />
-            <SortableHead column="matricula" label="Matrícula" {...headProps} />
-            <SortableHead column="grupo" label="Grupo" {...headProps} />
+            <SortableTableHead
+              field="codigo"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Código
+            </SortableTableHead>
+            <SortableTableHead
+              field="matricula"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Matrícula
+            </SortableTableHead>
+            <SortableTableHead
+              field="grupo"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Grupo
+            </SortableTableHead>
             <TableHead className="h-10 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Regime
             </TableHead>
-            <SortableHead column="estacao_entrega_id" label="Estação Entrega" {...headProps} />
-            <SortableHead column="data_inicio" label="Data Início" {...headProps} />
-            <SortableHead column="data_fim" label="Data Fim" {...headProps} />
-            <SortableHead column="cliente_nome" label="Cliente" {...headProps} />
-            <SortableHead column="condutor_nome" label="Condutor" {...headProps} />
-            <SortableHead column="estado" label="Estado" className="text-right" {...headProps} />
+            <SortableTableHead
+              field="estacao_entrega_id"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Estação Entrega
+            </SortableTableHead>
+            <SortableTableHead
+              field="data_inicio"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Data Início
+            </SortableTableHead>
+            <SortableTableHead
+              field="data_fim"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Data Fim
+            </SortableTableHead>
+            <SortableTableHead
+              field="cliente_nome"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Cliente
+            </SortableTableHead>
+            <SortableTableHead
+              field="condutor_nome"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Condutor
+            </SortableTableHead>
+            <SortableTableHead
+              field="estado"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+              align="right"
+            >
+              Estado
+            </SortableTableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

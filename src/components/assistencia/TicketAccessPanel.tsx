@@ -152,6 +152,11 @@ export const TicketAccessPanel = forwardRef<TicketAccessPanelRef, TicketAccessPa
     };
 
     const handleRemoveAccess = async (profileId: string) => {
+      if (
+        !window.confirm('Tem a certeza que quer remover o acesso deste utilizador a este ticket?')
+      )
+        return;
+
       try {
         const { error } = await supabase
           .from('assistencia_ticket_acessos')

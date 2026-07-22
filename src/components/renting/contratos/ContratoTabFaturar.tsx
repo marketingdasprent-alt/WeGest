@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { useContratoCoberturas } from '@/hooks/useContratoCoberturas';
@@ -95,6 +96,9 @@ export function ContratoTabFaturar({ contrato }: Props) {
   const [anularOpen, setAnularOpen] = useState(false);
   const [anularBusy, setAnularBusy] = useState(false);
   const [enviarInvoice, setEnviarInvoice] = useState<InvoiceMetadata | null>(null);
+  const [sortField, setSortField] = useState<string>('created_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const { data: coberturas } = useContratoCoberturas(contrato.id);
   const { data: extras } = useContratoExtras(contrato.id);
@@ -494,6 +498,34 @@ export function ContratoTabFaturar({ contrato }: Props) {
     [cobrancas, ncPorCobranca, recibosPorCobranca, contrato.id]
   );
 
+  const cobrancasVisiveis = useMemo(() => {
+    const list = (cobrancas ?? []).filter((c) => c.estado !== 'anulada');
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      if (sortField === 'documento_externo_ref') {
+        va = a.documento_externo_ref || '';
+        vb = b.documento_externo_ref || '';
+      } else if (sortField === 'destinatario_nome') {
+        va = a.destinatario_nome || '';
+        vb = b.destinatario_nome || '';
+      } else if (sortField === 'valor_total') {
+        va = a.valor_total || 0;
+        vb = b.valor_total || 0;
+      } else if (sortField === 'estado') {
+        va = a.estado || '';
+        vb = b.estado || '';
+      } else if (sortField === 'created_at') {
+        va = a.emitida_em || a.created_at || '';
+        vb = b.emitida_em || b.created_at || '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [cobrancas, sortField, sortDir]);
+
   return (
     <div className="space-y-4">
       <Card>
@@ -570,17 +602,53 @@ export function ContratoTabFaturar({ contrato }: Props) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nº / Ref.</TableHead>
-                <TableHead>Destinatário</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Data</TableHead>
+                <SortableTableHead
+                  field="documento_externo_ref"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Nº / Ref.
+                </SortableTableHead>
+                <SortableTableHead
+                  field="destinatario_nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Destinatário
+                </SortableTableHead>
+                <SortableTableHead
+                  field="valor_total"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Total
+                </SortableTableHead>
+                <SortableTableHead
+                  field="estado"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Estado
+                </SortableTableHead>
+                <SortableTableHead
+                  field="created_at"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Data
+                </SortableTableHead>
                 <TableHead className="text-right">Nota de Crédito</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {(() => {
-                const visiveis = (cobrancas ?? []).filter((c) => c.estado !== 'anulada');
+                const visiveis = cobrancasVisiveis;
                 if (visiveis.length === 0)
                   return (
                     <TableRow>

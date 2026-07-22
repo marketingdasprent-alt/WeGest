@@ -8,7 +8,6 @@ import {
   Car,
   Calendar,
   Fuel,
-  FileText,
   Eye,
   Download,
   AlertCircle,
@@ -79,11 +78,14 @@ export function MotoristaViaturaCard({ motoristaId }: MotoristaViaturaCardProps)
     if (!viaturaAtual?.viatura.id) return;
     setLoadingDocs(true);
     try {
+      // DUA: o upload atual (ViaturaTabDados.tsx) grava sempre 'dua_frente' /
+      // 'dua_verso'; 'dua' sozinho é o valor legado de antes da separação
+      // frente/verso — mantido aqui para viaturas com documentos antigos.
       const { data, error } = await supabase
         .from('viatura_documentos')
         .select('*')
         .eq('viatura_id', viaturaAtual.viatura.id)
-        .in('tipo_documento', ['dua', 'ipo', 'carta_verde']);
+        .in('tipo_documento', ['dua_frente', 'dua_verso', 'dua', 'ipo', 'carta_verde']);
 
       if (error) throw error;
       setDocumentos(data || []);
@@ -331,7 +333,10 @@ export function MotoristaViaturaCard({ motoristaId }: MotoristaViaturaCardProps)
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
             {/* DUA */}
             {(() => {
-              const doc = documentos.find((d) => d.tipo_documento === 'dua');
+              const doc =
+                documentos.find((d) => d.tipo_documento === 'dua_frente') ??
+                documentos.find((d) => d.tipo_documento === 'dua') ??
+                documentos.find((d) => d.tipo_documento === 'dua_verso');
               return (
                 <Card
                   className={cn(

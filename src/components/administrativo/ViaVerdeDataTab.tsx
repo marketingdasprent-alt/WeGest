@@ -4,14 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -35,6 +28,7 @@ import { pt } from 'date-fns/locale';
 import { cn, matchesSearch } from '@/lib/utils';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 const WEEK_STARTS_ON = 1;
 
@@ -75,6 +69,9 @@ export const ViaVerdeDataTab: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIntegracao, setSelectedIntegracao] = useState('all');
   const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
+  const [sortField, setSortField] = useState<string>('transaction_date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
   const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
@@ -139,15 +136,53 @@ export const ViaVerdeDataTab: React.FC = () => {
     }
   };
 
-  const filtered = transacoes.filter(
-    (t) =>
-      !searchTerm ||
-      matchesSearch(t.motorista?.nome, searchTerm) ||
-      matchesSearch(t.matricula, searchTerm) ||
-      matchesSearch(t.barreira_entrada, searchTerm) ||
-      matchesSearch(t.barreira_saida, searchTerm) ||
-      matchesSearch(t.operador, searchTerm)
-  );
+  const filtered = transacoes
+    .filter(
+      (t) =>
+        !searchTerm ||
+        matchesSearch(t.motorista?.nome, searchTerm) ||
+        matchesSearch(t.matricula, searchTerm) ||
+        matchesSearch(t.barreira_entrada, searchTerm) ||
+        matchesSearch(t.barreira_saida, searchTerm) ||
+        matchesSearch(t.operador, searchTerm)
+    )
+    .sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortField) {
+        case 'transaction_date':
+          va = a.transaction_date;
+          vb = b.transaction_date;
+          break;
+        case 'matricula':
+          va = a.matricula || '';
+          vb = b.matricula || '';
+          break;
+        case 'motorista':
+          va = a.motorista?.nome || '';
+          vb = b.motorista?.nome || '';
+          break;
+        case 'barreira_entrada':
+          va = a.barreira_entrada || '';
+          vb = b.barreira_entrada || '';
+          break;
+        case 'barreira_saida':
+          va = a.barreira_saida || '';
+          vb = b.barreira_saida || '';
+          break;
+        case 'operador':
+          va = a.operador || '';
+          vb = b.operador || '';
+          break;
+        case 'amount':
+          va = a.amount || 0;
+          vb = b.amount || 0;
+          break;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   const stats = {
     total: filtered.length,
@@ -273,13 +308,63 @@ export const ViaVerdeDataTab: React.FC = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Data</TableHead>
-                <TableHead>Matrícula</TableHead>
-                <TableHead>Motorista</TableHead>
-                <TableHead>Entrada</TableHead>
-                <TableHead>Saída</TableHead>
-                <TableHead>Operador</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
+                <SortableTableHead
+                  field="transaction_date"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Data
+                </SortableTableHead>
+                <SortableTableHead
+                  field="matricula"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Matrícula
+                </SortableTableHead>
+                <SortableTableHead
+                  field="motorista"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Motorista
+                </SortableTableHead>
+                <SortableTableHead
+                  field="barreira_entrada"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Entrada
+                </SortableTableHead>
+                <SortableTableHead
+                  field="barreira_saida"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Saída
+                </SortableTableHead>
+                <SortableTableHead
+                  field="operador"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                >
+                  Operador
+                </SortableTableHead>
+                <SortableTableHead
+                  field="amount"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                >
+                  Valor
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

@@ -2,6 +2,16 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -40,6 +50,7 @@ export const ListaEsperaDrawer: React.FC<ListaEsperaDrawerProps> = ({
   const [marcaModelo, setMarcaModelo] = useState('');
   const [motoristaId, setMotoristaId] = useState('');
   const [observacoes, setObservacoes] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<ListaEsperaEvento | null>(null);
 
   const { data: lista = [], isLoading } = useQuery({
     queryKey: ['lista-espera'],
@@ -156,6 +167,7 @@ export const ListaEsperaDrawer: React.FC<ListaEsperaDrawerProps> = ({
       queryClient.invalidateQueries({ queryKey: ['lista-espera'] });
       queryClient.invalidateQueries({ queryKey: ['calendario-eventos'] });
       toast.success('Entrada removida da lista de espera');
+      setDeleteTarget(null);
     },
     onError: () => toast.error('Erro ao remover entrada'),
   });
@@ -278,7 +290,7 @@ export const ListaEsperaDrawer: React.FC<ListaEsperaDrawerProps> = ({
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 text-destructive shrink-0"
-                    onClick={() => deleteMutation.mutate(entry.id)}
+                    onClick={() => setDeleteTarget(entry)}
                     disabled={deleteMutation.isPending}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -288,6 +300,31 @@ export const ListaEsperaDrawer: React.FC<ListaEsperaDrawerProps> = ({
             </div>
           ))}
         </div>
+
+        <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remover da lista de espera?</AlertDialogTitle>
+              <AlertDialogDescription>
+                A entrada <strong>{deleteTarget?.titulo}</strong> será removida da lista de espera.
+                Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  if (deleteTarget) {
+                    deleteMutation.mutate(deleteTarget.id);
+                  }
+                }}
+              >
+                Remover
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );

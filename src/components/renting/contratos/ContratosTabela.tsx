@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, FileText, Loader2 } from 'lucide-react';
+import { FileText, Loader2, RefreshCw } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -7,8 +7,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 import { useEventosPendentesRenting } from '@/hooks/useEventosPendentesRenting';
+import { estadoRenovacaoContrato } from '@/lib/renovacaoContrato';
 import type { ContratoRenting } from '@/types/contratoRenting';
 import { EstadoOperacionalBadge } from './EstadoOperacionalBadge';
 import { EstadoFinanceiroBadge } from './EstadoFinanceiroBadge';
@@ -41,45 +44,6 @@ interface ContratosTabelaProps {
   getCondutorNome: (contratoId: string) => string;
 }
 
-interface SortableHeadProps {
-  column: SortColumn;
-  label: string;
-  className?: string;
-  current: SortColumn;
-  dir: SortDir;
-  onSort: (col: SortColumn) => void;
-}
-
-const SortableHead: React.FC<SortableHeadProps> = ({
-  column,
-  label,
-  className,
-  current,
-  dir,
-  onSort,
-}) => (
-  <TableHead
-    className={cn(
-      'h-10 cursor-pointer select-none whitespace-nowrap hover:bg-muted/40 transition-colors text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-      className
-    )}
-    onClick={() => onSort(column)}
-  >
-    <div className="flex items-center gap-1">
-      {label}
-      {current === column ? (
-        dir === 'asc' ? (
-          <ChevronUp className="h-3.5 w-3.5" />
-        ) : (
-          <ChevronDown className="h-3.5 w-3.5" />
-        )
-      ) : (
-        <ChevronDown className="h-3.5 w-3.5 opacity-30" />
-      )}
-    </div>
-  </TableHead>
-);
-
 export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
   contratos,
   isLoading,
@@ -92,7 +56,7 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
   getEstacaoNome,
   getCondutorNome,
 }) => {
-  const headProps = { current: sortColumn, dir: sortDir, onSort };
+  const handleSort = (f: string) => onSort(f as SortColumn);
 
   // Contratos com recolha agendada mas ainda não confirmada — mostra-se um
   // indicador extra no badge de estado (ver EstadoOperacionalBadge).
@@ -110,24 +74,90 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
       <Table>
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
-            <SortableHead column="codigo" label="Código" {...headProps} />
-            <SortableHead column="matricula" label="Matrícula" {...headProps} />
-            <SortableHead column="grupo" label="Grupo" {...headProps} />
+            <SortableTableHead
+              field="codigo"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Código
+            </SortableTableHead>
+            <SortableTableHead
+              field="matricula"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Matrícula
+            </SortableTableHead>
+            <SortableTableHead
+              field="grupo"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Grupo
+            </SortableTableHead>
             <TableHead className="h-10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Estação Entrega
             </TableHead>
-            <SortableHead column="data_inicio" label="Data Início" {...headProps} />
-            <SortableHead column="data_fim" label="Data Fim" {...headProps} />
-            <SortableHead column="cliente_nome" label="Cliente" {...headProps} />
-            <SortableHead column="condutor_nome" label="Condutor" {...headProps} />
-            <SortableHead column="estado_operacional" label="Estado" {...headProps} />
-            <SortableHead column="estado_financeiro" label="Faturação" {...headProps} />
-            <SortableHead
-              column="total_final"
-              label="Total"
-              className="text-right"
-              {...headProps}
-            />
+            <SortableTableHead
+              field="data_inicio"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Data Início
+            </SortableTableHead>
+            <SortableTableHead
+              field="data_fim"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Data Fim
+            </SortableTableHead>
+            <SortableTableHead
+              field="cliente_nome"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Cliente
+            </SortableTableHead>
+            <SortableTableHead
+              field="condutor_nome"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Condutor
+            </SortableTableHead>
+            <SortableTableHead
+              field="estado_operacional"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Estado
+            </SortableTableHead>
+            <SortableTableHead
+              field="estado_financeiro"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+            >
+              Faturação
+            </SortableTableHead>
+            <SortableTableHead
+              field="total_final"
+              sortField={sortColumn}
+              sortDir={sortDir}
+              onSort={handleSort}
+              align="right"
+            >
+              Total
+            </SortableTableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -188,10 +218,31 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
                 </TableCell>
                 <TableCell className="text-muted-foreground">{getCondutorNome(c.id)}</TableCell>
                 <TableCell>
-                  <EstadoOperacionalBadge
-                    estado={c.estado_operacional}
-                    recolhaPendente={idsComRecolhaPendente.has(c.id)}
-                  />
+                  <div className="flex flex-col items-start gap-1">
+                    <EstadoOperacionalBadge
+                      estado={c.estado_operacional}
+                      recolhaPendente={idsComRecolhaPendente.has(c.id)}
+                    />
+                    {(() => {
+                      // Aviso de renovação inline (TVDE renova a cada 30 dias).
+                      const renov = estadoRenovacaoContrato(c);
+                      if (!renov) return null;
+                      return (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'gap-1 font-medium',
+                            renov === 'atraso'
+                              ? 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300'
+                              : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                          )}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          {renov === 'atraso' ? 'Renovar (atraso)' : 'Renovar hoje'}
+                        </Badge>
+                      );
+                    })()}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <EstadoFinanceiroBadge estado={c.estado_financeiro} />

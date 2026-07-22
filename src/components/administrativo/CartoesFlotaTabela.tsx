@@ -1,15 +1,4 @@
-import {
-  Loader2,
-  History,
-  Pencil,
-  Trash2,
-  UserCheck,
-  UserX,
-  AlertTriangle,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-} from 'lucide-react';
+import { Loader2, History, Pencil, Trash2, UserCheck, UserX, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -20,38 +9,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { TIPO_INFO, STATUS_INFO, fmtEur, fmtDate, type CartaoFrota } from './cartoesFlotaTab.types';
-
-function SortTh({
-  field,
-  children,
-  className,
-  sortField,
-  sortDir,
-  onSort,
-}: {
-  field: string;
-  children: React.ReactNode;
-  className?: string;
-  sortField: string;
-  sortDir: 'asc' | 'desc';
-  onSort: (field: string) => void;
-}) {
-  const active = sortField === field;
-  const Icon = active ? (sortDir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
-  return (
-    <TableHead className={className}>
-      <button
-        onClick={() => onSort(field)}
-        className={`flex items-center gap-1 text-xs font-medium hover:text-foreground transition-colors ${active ? 'text-foreground' : 'text-muted-foreground'}`}
-      >
-        {children}
-        <Icon className="h-3 w-3 shrink-0" />
-      </button>
-    </TableHead>
-  );
-}
 
 interface CartoesFlotaTabelaProps {
   loading: boolean;
@@ -120,42 +80,67 @@ export function CartoesFlotaTabela({
       <Table>
         <TableHeader>
           <TableRow>
-            <SortTh field="tipo" sortField={sortField} sortDir={sortDir} onSort={onSort}>
+            <SortableTableHead field="tipo" sortField={sortField} sortDir={sortDir} onSort={onSort}>
               Tipo
-            </SortTh>
-            <SortTh field="numero" sortField={sortField} sortDir={sortDir} onSort={onSort}>
+            </SortableTableHead>
+            <SortableTableHead
+              field="numero"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={onSort}
+            >
               Número
-            </SortTh>
-            <SortTh field="detentor" sortField={sortField} sortDir={sortDir} onSort={onSort}>
+            </SortableTableHead>
+            <SortableTableHead
+              field="detentor"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={onSort}
+            >
               Detentor
-            </SortTh>
-            <SortTh field="titular" sortField={sortField} sortDir={sortDir} onSort={onSort}>
+            </SortableTableHead>
+            <SortableTableHead
+              field="titular"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={onSort}
+            >
               Titular
-            </SortTh>
-            <SortTh
+            </SortableTableHead>
+            <SortableTableHead
               field="limite"
-              className="text-right"
+              align="right"
               sortField={sortField}
               sortDir={sortDir}
               onSort={onSort}
             >
               Plafond
-            </SortTh>
-            <SortTh
+            </SortableTableHead>
+            <SortableTableHead
               field="consumo"
-              className="text-right"
+              align="right"
               sortField={sortField}
               sortDir={sortDir}
               onSort={onSort}
             >
               Consumo (mês)
-            </SortTh>
-            <SortTh field="validade" sortField={sortField} sortDir={sortDir} onSort={onSort}>
+            </SortableTableHead>
+            <SortableTableHead
+              field="validade"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={onSort}
+            >
               Validade
-            </SortTh>
-            <SortTh field="status" sortField={sortField} sortDir={sortDir} onSort={onSort}>
+            </SortableTableHead>
+            <SortableTableHead
+              field="status"
+              sortField={sortField}
+              sortDir={sortDir}
+              onSort={onSort}
+            >
               Status
-            </SortTh>
+            </SortableTableHead>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>

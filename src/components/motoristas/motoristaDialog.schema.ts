@@ -26,7 +26,10 @@ export const formSchema = z.object({
       (v) => ({ message: validarNIF(v).message || 'NIF inválido' })
     ),
   telefone: z.string().optional(),
-  email: z.string().email('Email inválido').optional().or(z.literal('')),
+  // Email obrigatório: é a chave que liga a conta do motorista (fluxo
+  // email-first do convite) ao perfil criado pelo gestor. Sem email, o
+  // motorista não é "convidável". O telefone mantém-se como fallback.
+  email: z.string().min(1, 'Email é obrigatório').email('Email inválido'),
   documento_tipo: z.string().min(1, 'Tipo de documento é obrigatório'),
   documento_numero: z.string().min(1, 'Número do documento é obrigatório'),
   documento_validade: z.string().optional().refine(validateDateYear, {

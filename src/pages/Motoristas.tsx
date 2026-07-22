@@ -2,8 +2,6 @@ import { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
-  ChevronUp,
-  ChevronDown,
   Plus,
   Check,
   RefreshCw,
@@ -27,15 +25,9 @@ import { PortagensNaoAssociadas } from '@/components/motoristas/PortagensNaoAsso
 import { BpNaoAssociadas } from '@/components/motoristas/BpNaoAssociadas';
 import { GenerateDocumentsDialog } from '@/components/motoristas/GenerateDocumentsDialog';
 import { MotoristaCard } from '@/components/motoristas/MotoristaCard';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import {
   Select,
   SelectContent,
@@ -48,7 +40,7 @@ import { MotoristaDetailsDrawer } from '@/components/motoristas/MotoristaDetails
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
-import { cn, normalizeString } from '@/lib/utils';
+import { normalizeString } from '@/lib/utils';
 import { camposFichaEmFalta } from '@/lib/motoristaFichaCompleta';
 import { useMotoristas } from '@/hooks/useMotoristas';
 import { exportMotoristasExcel } from '@/utils/motoristasExport';
@@ -103,7 +95,7 @@ export default function Motoristas() {
     setSearchParams(newParams, { replace: true });
   };
 
-  const handleSort = (column: SortColumn) => {
+  const handleSort = (column: string) => {
     const newDir = sortColumn === column && sortDirection === 'asc' ? 'desc' : 'asc';
     updateFilters({ sort: column, dir: newDir });
   };
@@ -166,38 +158,6 @@ export default function Motoristas() {
         .map((motorista) => ({ motorista, camposEmFalta: camposFichaEmFalta(motorista) }))
         .filter((m) => m.camposEmFalta.length > 0),
     [motoristas]
-  );
-
-  // Sortable header component
-  const SortableHeader = ({
-    column,
-    label,
-    className,
-  }: {
-    column: SortColumn;
-    label: string;
-    className?: string;
-  }) => (
-    <TableHead
-      className={cn(
-        'h-10 cursor-pointer select-none hover:bg-muted/50 transition-colors',
-        className
-      )}
-      onClick={() => handleSort(column)}
-    >
-      <div className="flex items-center gap-1">
-        {label}
-        {sortColumn === column ? (
-          sortDirection === 'asc' ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )
-        ) : (
-          <ChevronDown className="h-4 w-4 opacity-30" />
-        )}
-      </div>
-    </TableHead>
   );
 
   // Combined filtering and sorting logic
@@ -573,25 +533,68 @@ export default function Motoristas() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <SortableHeader column="codigo" label="Cód." className="w-[70px]" />
-                <SortableHeader column="nome" label="Nome" />
-                <SortableHeader column="telefone" label="Telefone" className="w-[130px]" />
-                <SortableHeader
-                  column="gestor_responsavel"
-                  label="Gestor"
+                <SortableTableHead
+                  field="codigo"
+                  sortField={sortColumn}
+                  sortDir={sortDirection}
+                  onSort={handleSort}
+                  className="w-[70px]"
+                >
+                  Cód.
+                </SortableTableHead>
+                <SortableTableHead
+                  field="nome"
+                  sortField={sortColumn}
+                  sortDir={sortDirection}
+                  onSort={handleSort}
+                >
+                  Nome
+                </SortableTableHead>
+                <SortableTableHead
+                  field="telefone"
+                  sortField={sortColumn}
+                  sortDir={sortDirection}
+                  onSort={handleSort}
+                  className="w-[130px]"
+                >
+                  Telefone
+                </SortableTableHead>
+                <SortableTableHead
+                  field="gestor_responsavel"
+                  sortField={sortColumn}
+                  sortDir={sortDirection}
+                  onSort={handleSort}
                   className="w-[140px] hidden md:table-cell"
-                />
-                <SortableHeader
-                  column="bolt_id"
-                  label="ID Bolt"
+                >
+                  Gestor
+                </SortableTableHead>
+                <SortableTableHead
+                  field="bolt_id"
+                  sortField={sortColumn}
+                  sortDir={sortDirection}
+                  onSort={handleSort}
                   className="w-[120px] hidden xl:table-cell"
-                />
-                <SortableHeader
-                  column="cidade"
-                  label="Cidade"
+                >
+                  ID Bolt
+                </SortableTableHead>
+                <SortableTableHead
+                  field="cidade"
+                  sortField={sortColumn}
+                  sortDir={sortDirection}
+                  onSort={handleSort}
                   className="w-[120px] hidden lg:table-cell"
-                />
-                <SortableHeader column="status_ativo" label="Status" className="w-[80px]" />
+                >
+                  Cidade
+                </SortableTableHead>
+                <SortableTableHead
+                  field="status_ativo"
+                  sortField={sortColumn}
+                  sortDir={sortDirection}
+                  onSort={handleSort}
+                  className="w-[80px]"
+                >
+                  Status
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

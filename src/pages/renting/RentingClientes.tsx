@@ -24,14 +24,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 import { useClientes } from '@/hooks/useClientes';
 import { usePagination } from '@/hooks/usePagination';
@@ -216,6 +210,11 @@ const RentingClientes = () => {
   const { toast } = useToast();
   const [exporting, setExporting] = useState(false);
 
+  // Ordenação da tabela
+  const [sortField, setSortField] = useState<string>('codigo');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
+
   const { data: clientes = [], isLoading } = useClientes();
 
   // Opções dinâmicas dos selects (extraídas dos dados existentes)
@@ -272,7 +271,7 @@ const RentingClientes = () => {
   const filtered = useMemo(() => {
     const isVisible = (k: FilterKey) => visibleFilters.includes(k);
 
-    return clientes.filter((c) => {
+    const list = clientes.filter((c) => {
       if (isVisible('codigo') && codigoFiltro && !c.codigo.toString().includes(codigoFiltro.trim()))
         return false;
       if (isVisible('tipo') && tipoFiltro !== 'todos') {
@@ -324,6 +323,74 @@ const RentingClientes = () => {
       }
       return true;
     });
+
+    list.sort((a, b) => {
+      let va: string | number = '';
+      let vb: string | number = '';
+      switch (sortField) {
+        case 'codigo':
+          va = a.codigo;
+          vb = b.codigo;
+          break;
+        case 'tipo':
+          va = a.tipo_cliente ?? (a.is_empresa ? 'empresa' : 'particular');
+          vb = b.tipo_cliente ?? (b.is_empresa ? 'empresa' : 'particular');
+          break;
+        case 'nome':
+          va = a.nome || '';
+          vb = b.nome || '';
+          break;
+        case 'genero':
+          va = a.is_empresa ? '' : a.genero || '';
+          vb = b.is_empresa ? '' : b.genero || '';
+          break;
+        case 'morada':
+          va = a.morada || '';
+          vb = b.morada || '';
+          break;
+        case 'codigo_postal':
+          va = a.codigo_postal || '';
+          vb = b.codigo_postal || '';
+          break;
+        case 'localidade':
+          va = a.localidade || '';
+          vb = b.localidade || '';
+          break;
+        case 'cidade':
+          va = a.cidade || '';
+          vb = b.cidade || '';
+          break;
+        case 'pais':
+          va = a.pais || '';
+          vb = b.pais || '';
+          break;
+        case 'telefone':
+          va = a.telefone || '';
+          vb = b.telefone || '';
+          break;
+        case 'email':
+          va = a.email || '';
+          vb = b.email || '';
+          break;
+        case 'nif':
+          va = a.nif || '';
+          vb = b.nif || '';
+          break;
+        case 'val_doc':
+          va = a.documentoIdentificacao?.validade || '';
+          vb = b.documentoIdentificacao?.validade || '';
+          break;
+        case 'val_carta':
+          va = a.cartaConducao?.validade || '';
+          vb = b.cartaConducao?.validade || '';
+          break;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return list;
   }, [
     clientes,
     search,
@@ -339,6 +406,8 @@ const RentingClientes = () => {
     emailFiltro,
     telemovelFiltro,
     expiradosFiltro,
+    sortField,
+    sortDir,
   ]);
 
   // Paginação client-side sobre a lista já filtrada.
@@ -693,20 +762,132 @@ const RentingClientes = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-16">Cód.</TableHead>
-                <TableHead className="w-24">Tipo</TableHead>
-                <TableHead className="min-w-[180px]">Nome</TableHead>
-                <TableHead className="w-20">Género</TableHead>
-                <TableHead className="min-w-[180px]">Morada</TableHead>
-                <TableHead className="w-24">Cód. Postal</TableHead>
-                <TableHead className="min-w-[120px]">Localidade</TableHead>
-                <TableHead className="min-w-[120px]">Cidade</TableHead>
-                <TableHead className="w-24">País</TableHead>
-                <TableHead className="min-w-[140px]">Telemóvel</TableHead>
-                <TableHead className="min-w-[160px]">Email</TableHead>
-                <TableHead className="w-24">NIF</TableHead>
-                <TableHead className="w-28">Val. Doc.</TableHead>
-                <TableHead className="w-28">Val. Carta</TableHead>
+                <SortableTableHead
+                  field="codigo"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-16"
+                >
+                  Cód.
+                </SortableTableHead>
+                <SortableTableHead
+                  field="tipo"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-24"
+                >
+                  Tipo
+                </SortableTableHead>
+                <SortableTableHead
+                  field="nome"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[180px]"
+                >
+                  Nome
+                </SortableTableHead>
+                <SortableTableHead
+                  field="genero"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-20"
+                >
+                  Género
+                </SortableTableHead>
+                <SortableTableHead
+                  field="morada"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[180px]"
+                >
+                  Morada
+                </SortableTableHead>
+                <SortableTableHead
+                  field="codigo_postal"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-24"
+                >
+                  Cód. Postal
+                </SortableTableHead>
+                <SortableTableHead
+                  field="localidade"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[120px]"
+                >
+                  Localidade
+                </SortableTableHead>
+                <SortableTableHead
+                  field="cidade"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[120px]"
+                >
+                  Cidade
+                </SortableTableHead>
+                <SortableTableHead
+                  field="pais"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-24"
+                >
+                  País
+                </SortableTableHead>
+                <SortableTableHead
+                  field="telefone"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[140px]"
+                >
+                  Telemóvel
+                </SortableTableHead>
+                <SortableTableHead
+                  field="email"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="min-w-[160px]"
+                >
+                  Email
+                </SortableTableHead>
+                <SortableTableHead
+                  field="nif"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-24"
+                >
+                  NIF
+                </SortableTableHead>
+                <SortableTableHead
+                  field="val_doc"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-28"
+                >
+                  Val. Doc.
+                </SortableTableHead>
+                <SortableTableHead
+                  field="val_carta"
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  className="w-28"
+                >
+                  Val. Carta
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

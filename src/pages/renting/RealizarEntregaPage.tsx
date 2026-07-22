@@ -182,6 +182,33 @@ const RealizarEntregaPage = () => {
     },
   });
 
+  // Odómetro atual de cada viatura envolvida — baseline para bloquear km
+  // introduzido inferior ao que a viatura já tem (não anda para trás).
+  const { data: viaturaKmAtual = null } = useQuery({
+    queryKey: ['viatura-km-atual', contexto?.viaturaId],
+    enabled: !!contexto?.viaturaId,
+    queryFn: async (): Promise<number | null> => {
+      const { data } = await supabase
+        .from('viaturas')
+        .select('km_atual')
+        .eq('id', contexto!.viaturaId!)
+        .maybeSingle();
+      return (data?.km_atual as number | null) ?? null;
+    },
+  });
+  const { data: viaturaAntigaKmAtual = null } = useQuery({
+    queryKey: ['viatura-km-atual', viaturaAntigaId],
+    enabled: isTroca && !!viaturaAntigaId,
+    queryFn: async (): Promise<number | null> => {
+      const { data } = await supabase
+        .from('viaturas')
+        .select('km_atual')
+        .eq('id', viaturaAntigaId!)
+        .maybeSingle();
+      return (data?.km_atual as number | null) ?? null;
+    },
+  });
+
   // Tipo de combustível de cada viatura envolvida — decide se se mostra o
   // seletor de combustível, de bateria, ou ambos (híbridos).
   const { data: tipoCombustivel } = useTipoCombustivel(contexto?.viaturaId);
@@ -282,7 +309,9 @@ const RealizarEntregaPage = () => {
       tipoCombustivel,
       eletrico,
       tipoCombustivelAntiga,
-      eletricoAntiga
+      eletricoAntiga,
+      viaturaKmAtual,
+      viaturaAntigaKmAtual
     );
     if (err) {
       toast({ title: err, variant: 'destructive' });
@@ -347,7 +376,9 @@ const RealizarEntregaPage = () => {
       tipoCombustivel,
       eletrico,
       tipoCombustivelAntiga,
-      eletricoAntiga
+      eletricoAntiga,
+      viaturaKmAtual,
+      viaturaAntigaKmAtual
     );
     if (err) {
       toast({ title: err, variant: 'destructive' });
@@ -476,7 +507,11 @@ const RealizarEntregaPage = () => {
       kmAntiga,
       combustivelAntiga,
       tipoCombustivel,
-      eletrico
+      eletrico,
+      tipoCombustivelAntiga,
+      eletricoAntiga,
+      viaturaKmAtual,
+      viaturaAntigaKmAtual
     );
     if (err) {
       toast({ title: err, variant: 'destructive' });
