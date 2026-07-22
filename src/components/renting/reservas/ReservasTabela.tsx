@@ -35,6 +35,7 @@ interface ReservasTabelaProps {
   onSort: (col: SortColumn) => void;
   onRowClick: (r: Reserva) => void;
   getEstacaoNome: (id: string | null | undefined) => string;
+  getCondutorNome: (r: Reserva) => string;
 }
 
 export const ReservasTabela: React.FC<ReservasTabelaProps> = ({
@@ -46,6 +47,7 @@ export const ReservasTabela: React.FC<ReservasTabelaProps> = ({
   onSort,
   onRowClick,
   getEstacaoNome,
+  getCondutorNome,
 }) => {
   const handleSort = (f: string) => onSort(f as SortColumn);
 
@@ -119,7 +121,7 @@ export const ReservasTabela: React.FC<ReservasTabelaProps> = ({
               sortDir={sortDir}
               onSort={handleSort}
             >
-              Condutor
+              Condutor/Motorista
             </SortableTableHead>
             <SortableTableHead
               field="estado"
@@ -177,7 +179,7 @@ export const ReservasTabela: React.FC<ReservasTabelaProps> = ({
                   {formatDateTime(r.data_fim)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{r.cliente_nome ?? '—'}</TableCell>
-                <TableCell className="text-muted-foreground">{r.condutor_nome ?? '—'}</TableCell>
+                <TableCell className="text-muted-foreground">{getCondutorNome(r)}</TableCell>
                 <TableCell className="text-right">
                   <EstadoBadge estado={r.estado} />
                 </TableCell>

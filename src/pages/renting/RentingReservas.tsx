@@ -10,6 +10,7 @@ import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { useReservas } from '@/hooks/useReservas';
+import { useReservaCondutoresPrincipais } from '@/hooks/useReservaCondutores';
 import { useClientes } from '@/hooks/useClientes';
 import { useMotoristas } from '@/hooks/useMotoristas';
 import { useToast } from '@/hooks/use-toast';
@@ -49,6 +50,7 @@ const RentingReservas = () => {
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
 
   const { data: reservas = [], isLoading } = useReservas({ limit: HARD_LIMIT });
+  const { data: condutoresPrincipais = [] } = useReservaCondutoresPrincipais();
   const { data: clientes = [] } = useClientes();
   const { data: motoristas = [] } = useMotoristas();
 
@@ -81,6 +83,37 @@ const RentingReservas = () => {
     return m;
   }, [motoristas]);
 
+  const motoristaNomeById = useMemo(() => {
+    const m = new Map<string, string>();
+    motoristas.forEach((mot) => m.set(mot.id, mot.nome));
+    return m;
+  }, [motoristas]);
+
+  // Condutor principal (motorista OU cliente) por reserva, vindo do m:n
+  // reserva_condutores — o principal atribuído independentemente do regime.
+  const condutorPrincipalById = useMemo(() => {
+    const m = new Map<string, { nome: string; nif: string }>();
+    condutoresPrincipais.forEach((c) => {
+      m.set(c.reservaId, { nome: c.nome ?? '', nif: c.nif ?? '' });
+    });
+    return m;
+  }, [condutoresPrincipais]);
+
+  // Nome de quem conduz, com prioridade: principal atribuído (m:n) → motorista
+  // desnormalizado (condutor_id) → condutor_nome → "—".
+  const getCondutorNome = useCallback(
+    (r: Reserva): string => {
+      const principal = condutorPrincipalById.get(r.id)?.nome;
+      if (principal) return principal;
+      if (r.condutor_id) {
+        const nome = motoristaNomeById.get(r.condutor_id);
+        if (nome) return nome;
+      }
+      return r.condutor_nome || '—';
+    },
+    [condutorPrincipalById, motoristaNomeById]
+  );
+
   const getEstacaoNome = useCallback(
     (id: string | null | undefined) => (id ? (estacaoNomeById.get(id) ?? '—') : '—'),
     [estacaoNomeById]
@@ -99,12 +132,15 @@ const RentingReservas = () => {
 
     const result = reservas.filter((r) => {
       if (searchRaw) {
-        const condutorNif = r.condutor_id ? (motoristaNifById.get(r.condutor_id) ?? '') : '';
+        const principal = condutorPrincipalById.get(r.id);
+        const condutorNome = getCondutorNome(r);
+        const condutorNif =
+          principal?.nif || (r.condutor_id ? (motoristaNifById.get(r.condutor_id) ?? '') : '');
         const clienteNif = r.cliente_id ? (clienteNifById.get(r.cliente_id) ?? '') : '';
         const matches =
           String(r.codigo).includes(searchRaw) ||
           normalizeMatricula(r.matricula ?? '').includes(matriculaNorm) ||
-          (r.condutor_nome ?? '').toLowerCase().includes(searchLower) ||
+          condutorNome.toLowerCase().includes(searchLower) ||
           condutorNif.includes(searchRaw) ||
           clienteNif.includes(searchRaw);
         if (!matches) return false;
@@ -132,6 +168,9 @@ const RentingReservas = () => {
       if (sortColumn === 'estacao_entrega_id') {
         av = getEstacaoNome(a.estacao_entrega_id);
         bv = getEstacaoNome(b.estacao_entrega_id);
+      } else if (sortColumn === 'condutor_nome') {
+        av = getCondutorNome(a);
+        bv = getCondutorNome(b);
       } else {
         av = (a[sortColumn] ?? '') as string | number;
         bv = (b[sortColumn] ?? '') as string | number;
@@ -151,6 +190,8 @@ const RentingReservas = () => {
     sortColumn,
     sortDir,
     getEstacaoNome,
+    getCondutorNome,
+    condutorPrincipalById,
     motoristaNifById,
     clienteNifById,
   ]);
@@ -205,7 +246,7 @@ const RentingReservas = () => {
       formatDateTime(r.data_inicio),
       formatDateTime(r.data_fim),
       r.cliente_nome,
-      r.condutor_nome,
+      getCondutorNome(r),
       ESTADO_LABELS[r.estado],
       r.valor_total,
     ]);
@@ -278,6 +319,7 @@ const RentingReservas = () => {
             onSort={handleSort}
             onRowClick={handleRowClick}
             getEstacaoNome={getEstacaoNome}
+            getCondutorNome={getCondutorNome}
           />
 
           <TablePagination

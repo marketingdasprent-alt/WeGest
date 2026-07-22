@@ -332,23 +332,24 @@ export const IntegracoesTab: React.FC = () => {
         });
       });
 
-    // Faturação fiscal — cartão sempre presente (configurado ou não)
+    // Faturação fiscal (KeyInvoice, etc.) — igual às restantes plataformas:
+    // só aparece na grelha depois de configurada, via "Adicionar Plataforma".
     const fatRow = (integracoes as any[]).find((i) => i.plataforma === 'faturacao') || null;
-    result.push({
-      id: fatRow?.id ? `fat-${fatRow.id}` : 'fat-novo',
-      type: 'faturacao',
-      nome: 'Faturação',
-      ativo: !!fatRow?.ativo,
-      ultimoSync: null,
-      username: null,
-      password: null,
-      connectionMode: 'api',
-      subLabel: fatRow?.ativo
-        ? faturacaoProviderLabel(fatRow?.config?.provider)
-        : 'Não configurado',
-      rawData: fatRow,
-      logoUrl: null,
-    });
+    if (fatRow) {
+      result.push({
+        id: fatRow.id,
+        type: 'faturacao',
+        nome: 'Faturação',
+        ativo: !!fatRow.ativo,
+        ultimoSync: null,
+        username: null,
+        password: null,
+        connectionMode: 'api',
+        subLabel: faturacaoProviderLabel(fatRow.config?.provider),
+        rawData: fatRow,
+        logoUrl: null,
+      });
+    }
 
     setCards(result);
   };
@@ -744,7 +745,7 @@ export const IntegracoesTab: React.FC = () => {
                 onExecute={
                   isRobotBacked ? handleExecuteRobot : isUberBacked ? handleExecuteUber : undefined
                 }
-                onDelete={card.type !== 'faturacao' ? handleDelete : undefined}
+                onDelete={handleDelete}
                 isExecuting={executingRobots.has(card.id)}
               />
             );
@@ -882,6 +883,10 @@ export const IntegracoesTab: React.FC = () => {
         open={newIntegracaoDialogOpen}
         onOpenChange={setNewIntegracaoDialogOpen}
         onSuccess={fetchAll}
+        onOpenFaturacao={() => {
+          setFaturacaoRow(null);
+          setFaturacaoDialogOpen(true);
+        }}
       />
 
       {selectedIntegracao && (

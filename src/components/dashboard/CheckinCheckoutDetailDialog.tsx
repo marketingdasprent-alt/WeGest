@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import {
@@ -21,6 +22,7 @@ import {
   CreditCard,
   Banknote,
   Gauge,
+  ExternalLink,
 } from 'lucide-react';
 import {
   Dialog,
@@ -31,40 +33,26 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { CheckinCheckoutSession, SessionMedia } from '@/hooks/useCheckinCheckoutHistorico';
+import {
+  useMediaSignedUrl,
+  type CheckinCheckoutSession,
+  type SessionMedia,
+} from '@/hooks/useCheckinCheckoutHistorico';
 
-const BUCKET = 'contrato-media';
-
-// ── Imagem com URL assinada ───────────────────────────────────────────────────
+// ── Imagem com URL assinada (bucket-aware) ────────────────────────────────────
 function ContratoMediaImage({
-  path,
+  media,
   className,
   onClick,
 }: {
-  path: string;
+  media: SessionMedia;
   className?: string;
   onClick?: () => void;
 }) {
-  const [src, setSrc] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    supabase.storage
-      .from(BUCKET)
-      .createSignedUrl(path, 60 * 10)
-      .then(({ data }) => {
-        if (!cancelled && data?.signedUrl) setSrc(data.signedUrl);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [path]);
-
+  const src = useMediaSignedUrl(media);
   if (!src) return <Skeleton className={className} />;
   return <img src={src} className={className} alt="" onClick={onClick} />;
 }
@@ -95,7 +83,7 @@ function PhotoGrid({
           className="aspect-square rounded-lg overflow-hidden border bg-muted cursor-pointer hover:ring-2 hover:ring-primary transition-all"
           onClick={() => onOpen(i)}
         >
-          <ContratoMediaImage path={m.url} className="w-full h-full object-cover" />
+          <ContratoMediaImage media={m} className="w-full h-full object-cover" />
         </div>
       ))}
     </div>
@@ -118,10 +106,12 @@ function Lightbox({ state, onClose }: { state: LightboxState; onClose: () => voi
     let cancelled = false;
     Promise.all(
       state.media.map((m) =>
-        supabase.storage
-          .from(BUCKET)
-          .createSignedUrl(m.url, 60 * 30)
-          .then(({ data }) => data?.signedUrl ?? null)
+        m.directUrl
+          ? Promise.resolve<string | null>(m.path)
+          : supabase.storage
+              .from(m.bucket)
+              .createSignedUrl(m.path, 60 * 30)
+              .then(({ data }) => data?.signedUrl ?? null)
       )
     ).then((resolved) => {
       if (!cancelled) setUrls(resolved);
@@ -158,7 +148,7 @@ function Lightbox({ state, onClose }: { state: LightboxState; onClose: () => voi
         if (!o) onClose();
       }}
     >
-      <DialogContent className="max-w-[95vw] w-full h-[90vh] p-0 bg-black/95 border-none flex flex-col items-center justify-center overflow-hidden">
+      <DialogContent className="max-w-[95vw] w-full h-[90vh] p-0 bg-black/95 border-none flex flex-col items-center justify-center overflow-hidden [&>button.absolute]:hidden">
         <DialogHeader className="sr-only">
           <DialogTitle>Visualização de Foto</DialogTitle>
           <DialogDescription>Foto do check-in/check-out</DialogDescription>
@@ -239,6 +229,7 @@ interface Props {
 }
 
 export const CheckinCheckoutDetailDialog: React.FC<Props> = ({ open, onOpenChange, session }) => {
+  const navigate = useNavigate();
   const [lightbox, setLightbox] = useState<LightboxState>({
     open: false,
     index: 0,
@@ -257,28 +248,42 @@ export const CheckinCheckoutDetailDialog: React.FC<Props> = ({ open, onOpenChang
       const { data, error } = await supabase
         .from('reserva_condutores')
         .select(
-          'id, is_principal, clientes:cliente_id (id, nome, nif), motoristas:motorista_id (id, nome)'
+          `id, is_principal,
+          clientes:cliente_id ( id, nome, nif, email, telefone, morada, codigo_postal, cidade, data_nascimento ),
+          motoristas:motorista_id ( id, nome, nif, email, telefone, morada, cidade )`
         )
         .eq('reserva_id', reservaId as string)
         .order('is_principal', { ascending: false });
       if (error) return [];
       return (data ?? [])
-        .map((c: any) => ({
-          id: c.id,
-          isPrincipal: c.is_principal as boolean,
-          nome: c.clientes?.nome ?? c.motoristas?.nome ?? null,
-          nif: c.clientes?.nif ?? null,
-        }))
+        .map((c: any) => {
+          const p = c.clientes ?? c.motoristas ?? {};
+          return {
+            id: c.id,
+            isPrincipal: c.is_principal as boolean,
+            tipo: c.clientes ? 'Cliente' : c.motoristas ? 'Motorista' : null,
+            nome: p.nome ?? null,
+            nif: p.nif ?? null,
+            email: p.email ?? null,
+            telefone: p.telefone ?? null,
+            morada: p.morada ?? null,
+            codigo_postal: p.codigo_postal ?? null,
+            cidade: p.cidade ?? null,
+            data_nascimento: p.data_nascimento ?? null,
+          };
+        })
         .filter((c: any) => c.nome);
     },
   });
 
   if (!session) return null;
 
-  const { contrato, mediaCheckin, mediaCheckout } = session;
+  const { contrato, fotos } = session;
   const codigo = contrato?.codigo ? `RNT-${String(contrato.codigo).padStart(4, '0')}` : '—';
-  const hasCheckin = mediaCheckin.length > 0;
-  const hasCheckout = mediaCheckout.length > 0;
+  // Badges do momento vêm do evento realizado (as fotos não distinguem
+  // check-in de check-out de forma fiável).
+  const hasCheckin = !!session.checkinAt;
+  const hasCheckout = !!session.checkoutAt;
 
   const formatDate = (iso: string | null | undefined) => {
     if (!iso) return '—';
@@ -289,10 +294,26 @@ export const CheckinCheckoutDetailDialog: React.FC<Props> = ({ open, onOpenChang
     }
   };
 
+  const formatDia = (iso: string | null | undefined) => {
+    if (!iso) return '—';
+    try {
+      return format(parseISO(iso), 'dd/MM/yyyy', { locale: pt });
+    } catch {
+      return iso;
+    }
+  };
+
   const openLightbox = (media: SessionMedia[], index: number) =>
     setLightbox({ open: true, index, media, signedUrls: [] });
 
-  const defaultTab = hasCheckin ? 'checkin' : 'checkout';
+  // Redirect para a página do contrato — só renting tem página de detalhe
+  // (o sistema legado não tem rota por id).
+  const canOpenContrato = session.sistema === 'renting' && !!contrato?.id;
+  const goToContrato = () => {
+    if (!contrato?.id) return;
+    onOpenChange(false);
+    navigate(`/renting/contratos/${contrato.id}`);
+  };
 
   return (
     <>
@@ -312,314 +333,337 @@ export const CheckinCheckoutDetailDialog: React.FC<Props> = ({ open, onOpenChang
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 mt-2">
-            <div className="space-y-4 p-1 pr-3">
-              {/* Info do contrato */}
-              <section className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                  <div className="flex items-start gap-2">
-                    <Car className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Viatura</p>
-                      <p className="font-medium">
-                        {contrato?.viatura
-                          ? `${contrato.viatura.matricula} · ${contrato.viatura.marca} ${contrato.viatura.modelo}`
-                          : '—'}
-                      </p>
-                    </div>
+          {canOpenContrato && (
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={goToContrato}
+              >
+                Abrir contrato
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+
+          <div className="space-y-4 overflow-y-auto max-h-[72vh] mt-2 p-1 pr-3">
+            {/* Info do contrato */}
+            <section className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div className="flex items-start gap-2">
+                  <Car className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Viatura</p>
+                    <p className="font-medium">
+                      {contrato?.viatura
+                        ? `${contrato.viatura.matricula} · ${contrato.viatura.marca} ${contrato.viatura.modelo}`
+                        : '—'}
+                    </p>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <User className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                    <div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <User className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      {isLegacy ? 'Motorista' : 'Cliente'}
+                    </p>
+                    <p className="font-medium">
+                      {contrato?.cliente?.nome ?? contrato?.motorista_nome ?? '—'}
+                    </p>
+                    {(contrato?.cliente?.nif ?? contrato?.motorista_nif) && (
                       <p className="text-xs text-muted-foreground">
-                        {isLegacy ? 'Motorista' : 'Cliente'}
+                        NIF: {contrato?.cliente?.nif ?? contrato?.motorista_nif}
                       </p>
-                      <p className="font-medium">
-                        {contrato?.cliente?.nome ?? contrato?.motorista_nome ?? '—'}
-                      </p>
-                      {(contrato?.cliente?.nif ?? contrato?.motorista_nif) && (
-                        <p className="text-xs text-muted-foreground">
-                          NIF: {contrato?.cliente?.nif ?? contrato?.motorista_nif}
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Período</p>
+                    <p className="font-medium">
+                      {formatDate(contrato?.data_inicio)} →{' '}
+                      {contrato?.data_fim ? formatDate(contrato.data_fim) : 'Em curso'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                {hasCheckout && (
+                  <Badge
+                    variant="outline"
+                    className="border-green-400 text-green-600 dark:text-green-400 text-[10px]"
+                  >
+                    <LogOut className="h-3 w-3 mr-1" /> Check-out · {formatDate(session.checkoutAt)}
+                  </Badge>
+                )}
+                {hasCheckin && (
+                  <Badge
+                    variant="outline"
+                    className="border-blue-400 text-blue-600 dark:text-blue-400 text-[10px]"
+                  >
+                    <LogIn className="h-3 w-3 mr-1" /> Check-in · {formatDate(session.checkinAt)}
+                  </Badge>
+                )}
+              </div>
+            </section>
+
+            {/* Ficha do motorista (legado) */}
+            {isLegacy && (
+              <section className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <Users className="h-3.5 w-3.5" /> Ficha do Motorista
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                  {contrato?.motorista_nome && (
+                    <div className="flex items-start gap-2">
+                      <User className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Nome</p>
+                        <p className="font-medium">{contrato.motorista_nome}</p>
+                        {contrato.motorista_nif && (
+                          <p className="text-xs text-muted-foreground">
+                            NIF: {contrato.motorista_nif}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {contrato?.motorista_email && (
+                    <div className="flex items-start gap-2">
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Email</p>
+                        <p className="font-medium break-all">{contrato.motorista_email}</p>
+                      </div>
+                    </div>
+                  )}
+                  {contrato?.motorista_telefone && (
+                    <div className="flex items-start gap-2">
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Telemóvel</p>
+                        <p className="font-medium">{contrato.motorista_telefone}</p>
+                      </div>
+                    </div>
+                  )}
+                  {(contrato?.motorista_cidade || contrato?.motorista_morada) && (
+                    <div className="flex items-start gap-2">
+                      <MapPin className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Localidade</p>
+                        <p className="font-medium">
+                          {contrato?.motorista_cidade ?? contrato?.motorista_morada}
                         </p>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Período</p>
-                      <p className="font-medium">
-                        {formatDate(contrato?.data_inicio)} →{' '}
-                        {contrato?.data_fim ? formatDate(contrato.data_fim) : 'Em curso'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 pt-1 flex-wrap">
-                  {hasCheckin && (
-                    <Badge
-                      variant="outline"
-                      className="border-blue-400 text-blue-600 dark:text-blue-400 text-[10px]"
-                    >
-                      <LogIn className="h-3 w-3 mr-1" /> Check-in ({mediaCheckin.length} fotos)
-                    </Badge>
                   )}
-                  {hasCheckout && (
-                    <Badge
-                      variant="outline"
-                      className="border-green-400 text-green-600 dark:text-green-400 text-[10px]"
-                    >
-                      <LogOut className="h-3 w-3 mr-1" /> Check-out ({mediaCheckout.length} fotos)
-                    </Badge>
+                  {contrato?.motorista_iban && (
+                    <div className="flex items-start gap-2 sm:col-span-2">
+                      <CreditCard className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">IBAN</p>
+                        <p className="font-medium font-mono text-xs tracking-wide">
+                          {contrato.motorista_iban}
+                        </p>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </section>
 
-              {/* Ficha do motorista (legado) */}
-              {isLegacy && (
-                <section className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Users className="h-3.5 w-3.5" /> Ficha do Motorista
-                  </h3>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                    {contrato?.motorista_nome && (
+                {/* Dados financeiros */}
+                {(contrato?.viatura?.valor_mensal != null ||
+                  contrato?.motorista_caucao != null ||
+                  contrato?.viatura?.limite_kms != null ||
+                  contrato?.motorista_cartao_frota) && (
+                  <div className="pt-3 border-t grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                    {contrato?.viatura?.valor_mensal != null && (
                       <div className="flex items-start gap-2">
-                        <User className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                        <Banknote className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
                         <div>
-                          <p className="text-xs text-muted-foreground">Nome</p>
-                          <p className="font-medium">{contrato.motorista_nome}</p>
-                          {contrato.motorista_nif && (
-                            <p className="text-xs text-muted-foreground">
-                              NIF: {contrato.motorista_nif}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {contrato?.motorista_email && (
-                      <div className="flex items-start gap-2">
-                        <Mail className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-xs text-muted-foreground">Email</p>
-                          <p className="font-medium break-all">{contrato.motorista_email}</p>
-                        </div>
-                      </div>
-                    )}
-                    {contrato?.motorista_telefone && (
-                      <div className="flex items-start gap-2">
-                        <Phone className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-xs text-muted-foreground">Telemóvel</p>
-                          <p className="font-medium">{contrato.motorista_telefone}</p>
-                        </div>
-                      </div>
-                    )}
-                    {(contrato?.motorista_cidade || contrato?.motorista_morada) && (
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-xs text-muted-foreground">Localidade</p>
-                          <p className="font-medium">
-                            {contrato?.motorista_cidade ?? contrato?.motorista_morada}
+                          <p className="text-xs text-muted-foreground">Valor</p>
+                          <p className="font-semibold">
+                            {contrato.viatura.valor_mensal.toLocaleString('pt-PT', {
+                              style: 'currency',
+                              currency: 'EUR',
+                            })}
                           </p>
                         </div>
                       </div>
                     )}
-                    {contrato?.motorista_iban && (
-                      <div className="flex items-start gap-2 sm:col-span-2">
+                    {contrato?.motorista_caucao != null && (
+                      <div className="flex items-start gap-2">
+                        <Banknote className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Caução</p>
+                          <p className="font-semibold">
+                            {contrato.motorista_caucao.toLocaleString('pt-PT', {
+                              style: 'currency',
+                              currency: 'EUR',
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {contrato?.viatura?.limite_kms != null && (
+                      <div className="flex items-start gap-2">
+                        <Gauge className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Kms</p>
+                          <p className="font-semibold">
+                            {contrato.viatura.limite_kms.toLocaleString('pt-PT')}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {contrato?.motorista_cartao_frota && (
+                      <div className="flex items-start gap-2">
                         <CreditCard className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
                         <div>
-                          <p className="text-xs text-muted-foreground">IBAN</p>
-                          <p className="font-medium font-mono text-xs tracking-wide">
-                            {contrato.motorista_iban}
-                          </p>
+                          <p className="text-xs text-muted-foreground">Cartão Frota</p>
+                          <p className="font-semibold">{contrato.motorista_cartao_frota}</p>
                         </div>
                       </div>
                     )}
                   </div>
+                )}
 
-                  {/* Dados financeiros */}
-                  {(contrato?.viatura?.valor_mensal != null ||
-                    contrato?.motorista_caucao != null ||
-                    contrato?.viatura?.limite_kms != null ||
-                    contrato?.motorista_cartao_frota) && (
-                    <div className="pt-3 border-t grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                      {contrato?.viatura?.valor_mensal != null && (
-                        <div className="flex items-start gap-2">
-                          <Banknote className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Valor</p>
-                            <p className="font-semibold">
-                              {contrato.viatura.valor_mensal.toLocaleString('pt-PT', {
-                                style: 'currency',
-                                currency: 'EUR',
-                              })}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                      {contrato?.motorista_caucao != null && (
-                        <div className="flex items-start gap-2">
-                          <Banknote className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Caução</p>
-                            <p className="font-semibold">
-                              {contrato.motorista_caucao.toLocaleString('pt-PT', {
-                                style: 'currency',
-                                currency: 'EUR',
-                              })}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                      {contrato?.viatura?.limite_kms != null && (
-                        <div className="flex items-start gap-2">
-                          <Gauge className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Kms</p>
-                            <p className="font-semibold">
-                              {contrato.viatura.limite_kms.toLocaleString('pt-PT')}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                      {contrato?.motorista_cartao_frota && (
-                        <div className="flex items-start gap-2">
-                          <CreditCard className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-xs text-muted-foreground">Cartão Frota</p>
-                            <p className="font-semibold">{contrato.motorista_cartao_frota}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                {/* KMs e combustível do check-in/out */}
+                {(contrato?.km_checkin != null ||
+                  contrato?.km_checkout != null ||
+                  contrato?.combustivel_checkin ||
+                  contrato?.combustivel_checkout) && (
+                  <div className="pt-3 border-t grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    {contrato?.km_checkin != null && (
+                      <div>
+                        <span className="font-medium text-foreground">KM Check-in:</span>{' '}
+                        {contrato.km_checkin.toLocaleString('pt-PT')}
+                      </div>
+                    )}
+                    {contrato?.km_checkout != null && (
+                      <div>
+                        <span className="font-medium text-foreground">KM Check-out:</span>{' '}
+                        {contrato.km_checkout.toLocaleString('pt-PT')}
+                      </div>
+                    )}
+                    {contrato?.combustivel_checkin && (
+                      <div>
+                        <span className="font-medium text-foreground">Comb. entrada:</span>{' '}
+                        {contrato.combustivel_checkin}
+                      </div>
+                    )}
+                    {contrato?.combustivel_checkout && (
+                      <div>
+                        <span className="font-medium text-foreground">Comb. saída:</span>{' '}
+                        {contrato.combustivel_checkout}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
 
-                  {/* KMs e combustível do check-in/out */}
-                  {(contrato?.km_checkin != null ||
-                    contrato?.km_checkout != null ||
-                    contrato?.combustivel_checkin ||
-                    contrato?.combustivel_checkout) && (
-                    <div className="pt-3 border-t grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                      {contrato?.km_checkin != null && (
-                        <div>
-                          <span className="font-medium text-foreground">KM Check-in:</span>{' '}
-                          {contrato.km_checkin.toLocaleString('pt-PT')}
-                        </div>
-                      )}
-                      {contrato?.km_checkout != null && (
-                        <div>
-                          <span className="font-medium text-foreground">KM Check-out:</span>{' '}
-                          {contrato.km_checkout.toLocaleString('pt-PT')}
-                        </div>
-                      )}
-                      {contrato?.combustivel_checkin && (
-                        <div>
-                          <span className="font-medium text-foreground">Comb. entrada:</span>{' '}
-                          {contrato.combustivel_checkin}
-                        </div>
-                      )}
-                      {contrato?.combustivel_checkout && (
-                        <div>
-                          <span className="font-medium text-foreground">Comb. saída:</span>{' '}
-                          {contrato.combustivel_checkout}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </section>
-              )}
-
-              {/* Condutores renting */}
-              {!isLegacy && condutores.length > 0 && (
-                <section className="rounded-lg border bg-muted/30 p-4 space-y-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Users className="h-3.5 w-3.5" /> Condutor{condutores.length !== 1 ? 'es' : ''}
-                  </h3>
-                  <div className="space-y-2">
-                    {condutores.map((c) => (
-                      <div key={c.id} className="flex items-center gap-2 text-sm">
-                        <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="font-medium">{c.nome}</span>
+            {/* Condutores renting */}
+            {!isLegacy && condutores.length > 0 && (
+              <section className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <Users className="h-3.5 w-3.5" /> Condutor{condutores.length !== 1 ? 'es' : ''}
+                </h3>
+                <div className="space-y-3">
+                  {condutores.map((c) => (
+                    <div key={c.id} className="rounded-md border bg-background/40 p-3 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="font-medium text-sm">{c.nome}</span>
+                        {c.tipo && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                            {c.tipo}
+                          </span>
+                        )}
                         {c.isPrincipal && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
                             Principal
                           </span>
                         )}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
                         {c.nif && (
-                          <span className="text-xs text-muted-foreground ml-auto">
-                            NIF: {c.nif}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <CreditCard className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="text-muted-foreground">NIF:</span>
+                            <span className="font-medium">{c.nif}</span>
+                          </div>
+                        )}
+                        {c.telefone && (
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="font-medium">{c.telefone}</span>
+                          </div>
+                        )}
+                        {c.email && (
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="font-medium break-all">{c.email}</span>
+                          </div>
+                        )}
+                        {(c.morada || c.cidade) && (
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="font-medium truncate">
+                              {[c.morada, c.codigo_postal, c.cidade].filter(Boolean).join(', ')}
+                            </span>
+                          </div>
+                        )}
+                        {c.data_nascimento && (
+                          <div className="flex items-center gap-1.5">
+                            <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="text-muted-foreground">Nasc.:</span>
+                            <span className="font-medium">{formatDia(c.data_nascimento)}</span>
+                          </div>
                         )}
                       </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {/* Observações */}
-              {(contrato?.comentarios_entrega || contrato?.comentarios_recolha) && (
-                <section className="space-y-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <MessageSquare className="h-3.5 w-3.5" /> Observações
-                  </h3>
-                  {contrato.comentarios_entrega && (
-                    <div className="rounded-md border bg-muted/20 p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Entrega</p>
-                      <p className="text-sm">{contrato.comentarios_entrega}</p>
                     </div>
-                  )}
-                  {contrato.comentarios_recolha && (
-                    <div className="rounded-md border bg-muted/20 p-3">
-                      <p className="text-xs text-muted-foreground mb-1">Recolha</p>
-                      <p className="text-sm">{contrato.comentarios_recolha}</p>
-                    </div>
-                  )}
-                </section>
-              )}
+                  ))}
+                </div>
+              </section>
+            )}
 
-              {/* Fotos com tabs */}
-              <section className="space-y-3">
+            {/* Observações */}
+            {(contrato?.comentarios_entrega || contrato?.comentarios_recolha) && (
+              <section className="space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                  <Camera className="h-3.5 w-3.5" /> Fotos (
-                  {mediaCheckin.length + mediaCheckout.length})
+                  <MessageSquare className="h-3.5 w-3.5" /> Observações
                 </h3>
-                {hasCheckin && hasCheckout ? (
-                  <Tabs defaultValue={defaultTab}>
-                    <TabsList className="h-8">
-                      <TabsTrigger value="checkin" className="text-xs gap-1.5">
-                        <LogIn className="h-3 w-3" /> Check-in ({mediaCheckin.length})
-                      </TabsTrigger>
-                      <TabsTrigger value="checkout" className="text-xs gap-1.5">
-                        <LogOut className="h-3 w-3" /> Check-out ({mediaCheckout.length})
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="checkin" className="mt-3">
-                      <PhotoGrid
-                        media={mediaCheckin}
-                        onOpen={(i) => openLightbox(mediaCheckin, i)}
-                        empty="Sem fotos de check-in."
-                      />
-                    </TabsContent>
-                    <TabsContent value="checkout" className="mt-3">
-                      <PhotoGrid
-                        media={mediaCheckout}
-                        onOpen={(i) => openLightbox(mediaCheckout, i)}
-                        empty="Sem fotos de check-out."
-                      />
-                    </TabsContent>
-                  </Tabs>
-                ) : (
-                  <PhotoGrid
-                    media={hasCheckin ? mediaCheckin : mediaCheckout}
-                    onOpen={(i) => openLightbox(hasCheckin ? mediaCheckin : mediaCheckout, i)}
-                    empty="Sem fotos registadas."
-                  />
+                {contrato.comentarios_entrega && (
+                  <div className="rounded-md border bg-muted/20 p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Entrega</p>
+                    <p className="text-sm">{contrato.comentarios_entrega}</p>
+                  </div>
+                )}
+                {contrato.comentarios_recolha && (
+                  <div className="rounded-md border bg-muted/20 p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Recolha</p>
+                    <p className="text-sm">{contrato.comentarios_recolha}</p>
+                  </div>
                 )}
               </section>
-            </div>
-          </ScrollArea>
+            )}
+
+            {/* Fotos — galeria única (as fotos dos danos não distinguem
+                  check-in de check-out de forma fiável). */}
+            <section className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <Camera className="h-3.5 w-3.5" /> Fotos ({fotos.length})
+              </h3>
+              <PhotoGrid
+                media={fotos}
+                onOpen={(i) => openLightbox(fotos, i)}
+                empty="Sem fotos registadas."
+              />
+            </section>
+          </div>
         </DialogContent>
       </Dialog>
 
