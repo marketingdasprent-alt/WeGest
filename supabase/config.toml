@@ -3,6 +3,10 @@ project_id = "hkqzzxgeedsmjnhyquke"
 [functions.send-brevo-email]
 verify_jwt = false
 
+# Formulário "Fale connosco" da landing pública. Sem sessão → aceita anon.
+[functions.contact-inquiry]
+verify_jwt = false
+
 [functions.send-folha-danos-email]
 verify_jwt = false
 

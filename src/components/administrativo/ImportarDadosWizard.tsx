@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { buildSupabaseFunctionUrl } from '@/utils/supabaseFunctionUrl';
 import {
   Dialog,
   DialogContent,
@@ -429,12 +430,11 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
       const token = sessionData?.session?.access_token;
       if (!token) throw new Error('Sessão inválida. Inicie sessão novamente.');
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       let url = '';
       let body: Record<string, unknown> = {};
 
       if (plataforma === 'bolt') {
-        url = `https://${projectId}.supabase.co/functions/v1/bolt-import-csv`;
+        url = buildSupabaseFunctionUrl('bolt-import-csv');
         body = {
           integracao_id: integracaoId,
           dados_csv_bolt: csvText,
@@ -444,7 +444,7 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
           origem: 'Upload Manual (Contas)',
         };
       } else if (plataforma === 'uber') {
-        url = `https://${projectId}.supabase.co/functions/v1/uber-webhook?integracao_id=${integracaoId}`;
+        url = buildSupabaseFunctionUrl('uber-webhook', { integracao_id: integracaoId });
         // Prefixa o nome com YYYYMMDD-YYYYMMDD para a edge function detectar a
         // semana (occurred_at default) — caso o CSV não tenha coluna de data.
         const wStart = fmtDate(weekStart).replace(/-/g, '');
@@ -463,7 +463,7 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
         };
       } else {
         // bp / repsol / edp / viaverde
-        url = `https://${projectId}.supabase.co/functions/v1/${plataforma}-import-csv`;
+        url = buildSupabaseFunctionUrl(`${plataforma}-import-csv`);
         body = { integracao_id: integracaoId, combustivel_csv: csvText };
       }
 
@@ -490,10 +490,10 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
         0;
       const errs = data.errors ?? data.erros ?? 0;
       const totalRows = data.total_rows ?? data.total ?? imp;
+      const skipped = data.skipped ?? 0;
+      const deduped = data.deduped_in_payload ?? 0;
 
       if (imp === 0) {
-        const totalRows = data.total ?? data.total_rows ?? 0;
-        const skipped = data.skipped ?? 0;
         const headers: string[] = data.debug_headers ?? [];
         const desc =
           totalRows === 0
@@ -510,9 +510,9 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
       } else {
         toast.success(`${imp} registo(s) ${plataforma.toUpperCase()} importado(s).`, {
           description:
-            errs > 0
-              ? `${errs} erro(s) de ${totalRows} linha(s)`
-              : `Período: ${data.periodo || `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}`}`,
+            `${totalRows} linha(s) lida(s) · ${skipped} ignorada(s) · ${deduped} deduplicada(s)` +
+            (errs > 0 ? ` · ${errs} erro(s)` : '') +
+            ` · Período: ${data.periodo || `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}`}`,
         });
       }
       onImportComplete?.();

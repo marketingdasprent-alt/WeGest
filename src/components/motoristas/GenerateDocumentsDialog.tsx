@@ -181,7 +181,7 @@ export const GenerateDocumentsDialog = ({
         (m) =>
           matchesSearch(m.nome, searchTerm) ||
           matchesSearch(m.email, searchTerm) ||
-          (m.nif && m.nif.includes(searchTerm))
+          (m.nif && m.nif.startsWith(searchTerm))
       );
       setFilteredMotoristas(filtered);
     }

@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
+import { buildSupabaseFunctionUrl } from '@/utils/supabaseFunctionUrl';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -182,8 +183,7 @@ export const ImportExcelDialog: React.FC<Props> = ({ open, onOpenChange }) => {
       } = await supabase.auth.getSession();
       if (!session) throw new Error('Sessão inválida');
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const url = `https://${projectId}.supabase.co/functions/v1/excel-import`;
+      const url = buildSupabaseFunctionUrl('excel-import');
 
       const response = await fetch(url, {
         method: 'POST',

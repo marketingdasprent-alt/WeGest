@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { buildSupabaseFunctionUrl } from '@/utils/supabaseFunctionUrl';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -51,9 +52,8 @@ export const ImportUberCsvDialog: React.FC<ImportUberCsvDialogProps> = ({
         throw new Error('Sessão inválida. Inicie sessão novamente.');
       }
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       // Usa uber-webhook com dados_csv_brutos — aceita utilizadores admin autenticados normalmente
-      const url = `https://${projectId}.supabase.co/functions/v1/uber-webhook?integracao_id=${integracaoId}`;
+      const url = buildSupabaseFunctionUrl('uber-webhook', { integracao_id: integracaoId });
 
       const response = await fetch(url, {
         method: 'POST',

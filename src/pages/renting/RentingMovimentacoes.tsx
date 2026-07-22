@@ -27,6 +27,7 @@ import {
 import {
   csvEscape,
   formatDateTime,
+  matchesCodigo,
   normalizeMatricula,
 } from '@/components/renting/movimentacoes/movimentosUtils';
 import { MOVIMENTO_ESTADO_LABELS, MOVIMENTO_TIPO_LABELS, type Movimento } from '@/types/movimento';
@@ -59,7 +60,7 @@ const RentingMovimentacoes = () => {
       if (matriculaNorm) {
         if (!normalizeMatricula(m.matricula ?? '').includes(matriculaNorm)) return false;
       }
-      if (codigoNorm && !String(m.codigo).includes(codigoNorm)) return false;
+      if (codigoNorm && !matchesCodigo(m.codigo, codigoNorm)) return false;
       if (filtros.tipo !== 'todos' && m.tipo !== filtros.tipo) return false;
       if (filtros.estado !== 'todos' && m.estado !== filtros.estado) return false;
       if (filtros.estacao !== 'todas') {

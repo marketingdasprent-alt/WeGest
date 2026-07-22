@@ -1,21 +1,9 @@
-﻿import { useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { useDefaultRoute } from '@/hooks/useDefaultRoute';
 import { Loader2, Car, Shield, Building2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useRedirectIfAuthenticated } from '@/hooks/useRedirectIfAuthenticated';
 
-const Index = () => {
-  const { user, loading: authLoading } = useAuth();
-  const { defaultRoute, loading: routeLoading } = useDefaultRoute();
-  const navigate = useNavigate();
-
-  const loading = authLoading || routeLoading;
-
-  useEffect(() => {
-    if (!loading && user && defaultRoute) {
-      navigate(defaultRoute, { replace: true });
-    }
-  }, [loading, user, defaultRoute, navigate]);
+const Entrar = () => {
+  const { loading, isAuthenticated } = useRedirectIfAuthenticated();
 
   if (loading) {
     return (
@@ -30,7 +18,7 @@ const Index = () => {
     );
   }
 
-  if (user) {
+  if (isAuthenticated) {
     return null;
   }
 
@@ -89,4 +77,4 @@ const Index = () => {
   );
 };
 
-export default Index;
+export default Entrar;
