@@ -206,9 +206,9 @@ export default function Motoristas() {
       const nomeNorm = normalizeString(m.nome);
       const matchesSearch =
         searchTerm.trim() === '' ||
-        m.codigo.toString().includes(searchTerm) ||
+        (/^\d+$/.test(searchTerm.trim()) && m.codigo === Number(searchTerm.trim())) ||
         searchWords.every((w) => nomeNorm.includes(w)) ||
-        (m.nif && m.nif.includes(searchTerm)) ||
+        (m.nif && m.nif.startsWith(searchTerm)) ||
         (m.bolt_id && m.bolt_id.includes(searchTerm)) ||
         (m.uber_uuid && m.uber_uuid.includes(searchTerm)) ||
         (m.telefone && m.telefone.includes(searchTerm));
