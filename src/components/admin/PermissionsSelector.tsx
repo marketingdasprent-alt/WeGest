@@ -72,6 +72,7 @@ const MODULOS = [
 const RECURSO_LABELS: Record<string, string> = {
   // Dashboard
   dashboard_ver: 'Aceder ao Dashboard',
+  dashboard_checkin_historico: 'Ver histórico de check-in / check-out',
   // Renting
   renting_clientes: 'Gestão de clientes de renting',
   renting_contratos: 'Gestão de contratos de renting',
