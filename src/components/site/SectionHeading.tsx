@@ -54,7 +54,7 @@ export const SectionHeading = ({
       >
         {eyebrow}
       </span>
-      <h2 className="text-5xl font-bold leading-[1.05] tracking-tight text-foreground md:text-6xl lg:text-7xl">
+      <h2 className="font-display text-balance text-5xl font-semibold leading-[1.05] tracking-[-0.02em] text-foreground md:text-6xl lg:text-7xl">
         {words.map((word, index) => (
           // O espaço fica fora do <span data-word> de propósito: dentro de
           // um inline-block, o browser colapsa espaço junto à borda da caixa.
@@ -74,7 +74,7 @@ export const SectionHeading = ({
       {children && (
         <div
           data-body
-          className={`max-w-xl text-lg text-muted-foreground md:text-xl ${
+          className={`max-w-xl text-pretty text-lg text-muted-foreground md:text-xl ${
             prefersReducedMotion ? '' : 'opacity-0'
           }`}
         >

@@ -1,61 +1,65 @@
 import { motion, useReducedMotion } from 'framer-motion';
-import { Link } from 'react-router-dom';
-import { ChevronDown } from 'lucide-react';
-import { SectionHeading } from './SectionHeading';
+import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { useMagneticHover } from '@/hooks/useMagneticHover';
-import { ContactModal } from './ContactModal';
 
-export const LandingHero = () => {
+interface LandingHeroProps {
+  onContactClick?: () => void;
+}
+
+// Hero minimalista de propósito: o produto começa logo a seguir. Nada de
+// separação grande entre esta secção e o tour — o visitante deve sentir que
+// "entrou" no WeGest quase de imediato.
+//
+// O CTA é "Fale connosco", não "Criar organização": não há self-serve —
+// a organização só é criada depois de assinar connosco.
+export const LandingHero = ({ onContactClick }: LandingHeroProps) => {
   const prefersReducedMotion = useReducedMotion();
-  const primaryRef = useMagneticHover<HTMLAnchorElement>(0.4);
-  const secondaryRef = useMagneticHover<HTMLButtonElement>(0.3);
+  const logoSrc = useThemedLogo();
+  const ctaRef = useMagneticHover<HTMLButtonElement>(0.35);
 
   return (
-    <section className="relative flex min-h-screen flex-col items-center justify-center gap-8 px-6">
-      <SectionHeading
-        eyebrow="// wegest.sistema"
-        title="A frota nunca para. O sistema também não devia."
+    <section className="relative flex min-h-[70vh] flex-col items-center justify-center gap-6 px-6 py-20 text-center">
+      <motion.img
+        src={logoSrc}
+        alt="WeGest"
+        className="h-14 w-auto object-contain"
+        initial={prefersReducedMotion ? undefined : { opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      />
+
+      <motion.h1
+        className="font-display text-balance text-4xl font-semibold leading-[1.05] tracking-[-0.02em] text-foreground md:text-6xl"
+        initial={prefersReducedMotion ? undefined : { opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.1 }}
       >
-        Contratos, viaturas, motoristas e financeiro. Tudo integrado, sem re-escrever o mesmo dado
-        duas vezes.
-      </SectionHeading>
+        O software que já gere a nossa própria frota.
+      </motion.h1>
+
+      <motion.p
+        className="max-w-lg text-pretty text-lg text-muted-foreground"
+        initial={prefersReducedMotion ? undefined : { opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.2 }}
+      >
+        Desça e navegue o WeGest a sério — os mesmos ecrãs que a sua equipa vai usar todos os dias.
+      </motion.p>
 
       <motion.div
-        className="flex flex-col gap-4 sm:flex-row"
-        initial={prefersReducedMotion ? undefined : { opacity: 0, y: 24 }}
+        initial={prefersReducedMotion ? undefined : { opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, delay: 0.3 }}
+        transition={{ duration: 0.6, delay: 0.3 }}
       >
-        <Link
-          ref={primaryRef}
-          to="/registar-org"
-          className="relative rounded-xl bg-primary px-8 py-4 text-center text-lg font-semibold text-primary-foreground shadow-[0_0_40px_-8px] shadow-primary/50 transition-shadow hover:shadow-primary/70"
+        <button
+          ref={ctaRef}
+          type="button"
+          onClick={onContactClick}
+          className="rounded-md bg-primary px-6 py-3 text-center text-base font-medium text-primary-foreground transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/20"
         >
-          Começar agora
-        </Link>
-        <ContactModal
-          trigger={
-            <button
-              ref={secondaryRef}
-              type="button"
-              className="rounded-xl border border-border/50 px-8 py-4 text-center text-lg font-medium text-foreground backdrop-blur-sm transition-colors hover:border-primary/50 hover:bg-card/40"
-            >
-              Fale conosco
-            </button>
-          }
-        />
+          Fale connosco
+        </button>
       </motion.div>
-
-      {!prefersReducedMotion && (
-        <motion.div
-          className="absolute bottom-8 flex flex-col items-center gap-2 text-muted-foreground/70"
-          animate={{ y: [0, 8, 0] }}
-          transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          <span className="text-xs uppercase tracking-widest">scroll</span>
-          <ChevronDown className="h-4 w-4" />
-        </motion.div>
-      )}
     </section>
   );
 };
