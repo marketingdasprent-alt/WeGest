@@ -2,10 +2,15 @@
 // Adapter de faturação: KeyInvoice (API 5.0 — REST)
 // ============================================================
 // Implementa `FaturacaoProvider` para o KeyInvoice. O protocolo é o mesmo da
-// função original; o que muda é que a config (chave, endpoint, doctypes,
-// defaults) chega via `ProviderConfig` (da org), com FALLBACK para os secrets
-// do deployment — para que a emissão continue a funcionar mesmo antes de a
-// chave ser configurada na app.
+// função original; a config (chave, endpoint, doctypes, defaults) chega via
+// `ProviderConfig` (da org).
+//
+// A CHAVE DA API NÃO TEM FALLBACK GLOBAL — é sempre a de `cfg.apiKey`
+// (plataformas_configuracao.client_secret, por org), nunca um secret partilhado
+// do deployment. Cada organização só consegue faturar com o KeyInvoice se
+// tiver a própria chave configurada em Integrações; sem isso, falha cedo e
+// claro (ver authenticate()), em vez de arriscar emitir pela conta de outra
+// organização.
 //
 // Protocolo (doc API5):
 //   POST <endpoint>   Content-Type: application/json
@@ -16,7 +21,9 @@
 //
 // Settings (plataformas_configuracao.config) — todos opcionais:
 //   { provider:'keyinvoice', endpoint?, doctypes?:{FT,FR,NC,RC}, default_product?, default_idtax? }
-// Fallback de secrets (deployment): KEYINVOICE_API_KEY, KI_DOCTYPE_*, KI_DEFAULT_PRODUCT, KI_DEFAULT_IDTAX.
+// Estes (não a chave) continuam a aceitar fallback de secrets do deployment
+// como valores por-defeito partilháveis: KEYINVOICE_ENDPOINT, KI_DOCTYPE_*,
+// KI_DEFAULT_PRODUCT, KI_DEFAULT_IDTAX — não identificam nenhuma organização.
 // ============================================================
 import type {
   Cliente,
@@ -46,7 +53,8 @@ function resolve(cfg: ProviderConfig) {
   const s = (cfg.settings ?? {}) as Record<string, any>;
   const dt = (s.doctypes ?? {}) as Record<string, any>;
   return {
-    apiKey: String(cfg.apiKey || env('KEYINVOICE_API_KEY') || '').trim(),
+    // Sem fallback a secret global — só a chave da própria organização.
+    apiKey: String(cfg.apiKey || '').trim(),
     endpoint: String(s.endpoint || env('KEYINVOICE_ENDPOINT') || DEFAULT_ENDPOINT),
     doctypes: {
       FT: String(dt.FT ?? env('KI_DOCTYPE_FT') ?? '4'), // Fatura

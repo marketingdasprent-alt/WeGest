@@ -325,6 +325,7 @@ export const TrocaCheckinStep: React.FC<{
       queryClient.invalidateQueries({ queryKey: ['calendario-eventos'] });
       queryClient.invalidateQueries({ queryKey: ['viaturas-calendario'] });
       queryClient.invalidateQueries({ queryKey: ['motorista-viaturas'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'checkin-checkout-historico'] });
 
       toast.success(
         `Troca registada — CT-${String(newCt.numero_contrato ?? 0).padStart(4, '0')} criado`

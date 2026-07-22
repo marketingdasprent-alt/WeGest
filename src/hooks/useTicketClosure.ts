@@ -165,18 +165,23 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
         }
 
         // 2. Upload fatura
+        // Bucket 'assistencia-anexos' (não 'viatura-documentos'): quem fecha o
+        // ticket é gestor de assistência e o bucket de viaturas exige
+        // 'viaturas_editar'/admin — a fatura falhava silenciosamente por RLS
+        // para quem não tinha essa permissão. Este bucket já é o usado pelo
+        // resto do fluxo (chat, multimédia) e é público.
         let faturaUrl: string | null = (ticket as any).fatura_url || null;
         if (faturaFile) {
           const fileExt = faturaFile.name.split('.').pop();
           const fileName = `faturas/${ticketId}/${Date.now()}.${fileExt}`;
           const { error: uploadErr } = await supabase.storage
-            .from('viatura-documentos')
+            .from('assistencia-anexos')
             .upload(fileName, faturaFile);
           if (uploadErr) throw uploadErr;
 
           const {
             data: { publicUrl },
-          } = supabase.storage.from('viatura-documentos').getPublicUrl(fileName);
+          } = supabase.storage.from('assistencia-anexos').getPublicUrl(fileName);
           faturaUrl = publicUrl;
         }
 

@@ -399,6 +399,7 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
       queryClient.invalidateQueries({ queryKey: ['viaturas-calendario'] });
       queryClient.invalidateQueries({ queryKey: ['viaturas-pendentes-recolha'] });
       queryClient.invalidateQueries({ queryKey: ['motorista-viaturas'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'checkin-checkout-historico'] });
 
       toast.success(
         fazerDepois

@@ -10,6 +10,46 @@ function chaveCondutor(c: { cliente_id: string | null; motorista_id: string | nu
   return (c.cliente_id ?? c.motorista_id) as string;
 }
 
+type PessoaNomeNif = { nome: string | null; nif: string | null };
+
+export interface ReservaCondutorPrincipalInfo {
+  reservaId: string;
+  /** Nome do condutor principal — motorista (TVDE) ou cliente (rent-a-car). */
+  nome: string | null;
+  /** NIF/contribuinte do condutor principal, para a pesquisa da lista. */
+  nif: string | null;
+}
+
+/**
+ * Condutor principal de cada reserva a partir da relação m:n
+ * `reserva_condutores`. Tal como nos contratos, o principal atribuído pode ser
+ * um MOTORISTA (TVDE) ou um CLIENTE (rent-a-car) — devolvemos o nome/NIF de
+ * qualquer um. A lista de reservas usa isto (com fallback ao condutor_id/
+ * condutor_nome desnormalizado) para mostrar sempre quem conduz.
+ */
+export function useReservaCondutoresPrincipais() {
+  return useQuery({
+    queryKey: [...QUERY_KEY_BASE, 'principais'],
+    queryFn: async (): Promise<ReservaCondutorPrincipalInfo[]> => {
+      const { data, error } = await supabase
+        .from('reserva_condutores')
+        .select('reserva_id, motoristas_ativos(nome, nif), clientes(nome, nif)')
+        .eq('is_principal', true);
+      if (error) throw error;
+      return (data ?? []).map((c) => {
+        const motorista = c.motoristas_ativos as unknown as PessoaNomeNif | null;
+        const cliente = c.clientes as unknown as PessoaNomeNif | null;
+        return {
+          reservaId: c.reserva_id as string,
+          nome: motorista?.nome ?? cliente?.nome ?? null,
+          nif: motorista?.nif ?? cliente?.nif ?? null,
+        };
+      });
+    },
+    staleTime: 30_000,
+  });
+}
+
 /** Carrega os condutores de uma reserva. */
 export function useReservaCondutores(reservaId: string | null | undefined) {
   return useQuery({

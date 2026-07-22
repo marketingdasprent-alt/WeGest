@@ -440,6 +440,8 @@ const TicketDetails = () => {
           }
           onAtribuirSubstituta={handleAbrirSubstitutaModal}
           onOpenGallery={() => setShowGalleryDialog(true)}
+          canEditResponsavel={canChangeStatus}
+          onResponsavelChange={refetchTicket}
         />
       </div>
 

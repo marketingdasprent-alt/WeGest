@@ -145,6 +145,9 @@ export function MotoristaTabContratos({ motorista }: MotoristaTabContratosProps)
         )
         .in('id', ids)
         .is('deleted_at', null)
+        // contrato_condutores replica para a versão nova numa troca — sem isto,
+        // a versão antiga (substituída) aparecia duplicada nesta lista.
+        .is('substituido_em', null)
         .order('data_inicio', { ascending: false });
       if (error) throw error;
       setContratosRenting((data || []) as unknown as ContratoRentingResumo[]);

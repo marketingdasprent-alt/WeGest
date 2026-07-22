@@ -131,7 +131,7 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
               sortDir={sortDir}
               onSort={handleSort}
             >
-              Condutor
+              Condutor/Motorista
             </SortableTableHead>
             <SortableTableHead
               field="estado_operacional"

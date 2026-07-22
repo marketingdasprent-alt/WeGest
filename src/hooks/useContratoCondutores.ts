@@ -11,17 +11,22 @@ function chaveCondutor(c: { cliente_id: string | null; motorista_id: string | nu
   return (c.cliente_id ?? c.motorista_id) as string;
 }
 
+type PessoaNomeNif = { nome: string | null; nif: string | null };
+
 export interface CondutorPrincipalInfo {
   contratoId: string;
-  motoristaNome: string | null;
-  motoristaNif: string | null;
+  /** Nome do condutor principal — motorista (TVDE) ou cliente (rent-a-car). */
+  nome: string | null;
+  /** NIF/contribuinte do condutor principal, para a pesquisa da lista. */
+  nif: string | null;
 }
 
 /**
- * Condutor principal (motorista) de cada contrato — usado pela pesquisa da
- * lista de contratos (nome/contribuinte do motorista). Só TVDE tem
- * motorista_id preenchido; rent-a-car usa cliente_id (já pesquisável por
- * nome/NIF do cliente, que a lista já tem carregado à parte).
+ * Condutor principal de cada contrato — usado na coluna "Condutor/Motorista" e
+ * na pesquisa da lista de contratos. O principal atribuído tanto pode ser um
+ * MOTORISTA (TVDE, motorista_id) como um CLIENTE (rent-a-car, cliente_id);
+ * devolvemos o nome/NIF de qualquer um deles para que quem conduz apareça
+ * sempre, independentemente do regime.
  */
 export function useContratoCondutoresPrincipais() {
   return useQuery({
@@ -29,20 +34,17 @@ export function useContratoCondutoresPrincipais() {
     queryFn: async (): Promise<CondutorPrincipalInfo[]> => {
       const { data, error } = await supabase
         .from('contrato_condutores')
-        .select('contrato_id, motoristas_ativos(nome, nif)')
+        .select('contrato_id, motoristas_ativos(nome, nif), clientes(nome, nif)')
         .eq('is_principal', true)
-        .is('data_fim', null)
-        .not('motorista_id', 'is', null);
+        .is('data_fim', null);
       if (error) throw error;
       return (data ?? []).map((c) => {
-        const motorista = c.motoristas_ativos as unknown as {
-          nome: string | null;
-          nif: string | null;
-        } | null;
+        const motorista = c.motoristas_ativos as unknown as PessoaNomeNif | null;
+        const cliente = c.clientes as unknown as PessoaNomeNif | null;
         return {
           contratoId: c.contrato_id as string,
-          motoristaNome: motorista?.nome ?? null,
-          motoristaNif: motorista?.nif ?? null,
+          nome: motorista?.nome ?? cliente?.nome ?? null,
+          nif: motorista?.nif ?? cliente?.nif ?? null,
         };
       });
     },
