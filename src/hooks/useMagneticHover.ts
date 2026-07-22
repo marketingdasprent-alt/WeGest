@@ -2,9 +2,7 @@ import { useRef, type RefObject } from 'react';
 import { gsap, useGSAP } from '@/lib/motion/gsapConfig';
 import { useSimplifiedMotion } from '@/hooks/useSimplifiedMotion';
 
-export function useMagneticHover<T extends HTMLElement>(
-  strength = 0.35
-): RefObject<T> {
+export function useMagneticHover<T extends HTMLElement>(strength = 0.35): RefObject<T> {
   const ref = useRef<T>(null);
   const simplified = useSimplifiedMotion();
 

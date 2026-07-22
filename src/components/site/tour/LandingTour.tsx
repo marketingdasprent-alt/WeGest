@@ -211,7 +211,9 @@ const SimplifiedTour = () => {
       <div className="relative">
         <div className="sticky top-0 z-20 flex items-center gap-2 border-y border-border bg-card/80 px-6 py-3 backdrop-blur-md">
           <ActiveIcon className="h-4 w-4 text-primary" />
-          <span className="text-sm font-medium text-foreground">{TOUR_MODULES[activeIndex].label}</span>
+          <span className="text-sm font-medium text-foreground">
+            {TOUR_MODULES[activeIndex].label}
+          </span>
           <span className="ml-auto text-xs text-muted-foreground">
             {activeIndex + 1} / {TOUR_MODULES.length}
           </span>

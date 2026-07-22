@@ -12,9 +12,11 @@ const AtividadeChart = lazy(() => import('@/components/dashboard/AtividadeChart'
 const KPI_ICONS = [TrendingUp, Euro, Car, Percent];
 
 const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(
-    value
-  );
+  new Intl.NumberFormat('pt-PT', {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 0,
+  }).format(value);
 
 const KPI_FORMATTERS: Record<(typeof DASHBOARD_KPIS)[number]['unit'], (n: number) => string> = {
   number: (n) => String(Math.round(n)),
@@ -22,7 +24,13 @@ const KPI_FORMATTERS: Record<(typeof DASHBOARD_KPIS)[number]['unit'], (n: number
   percent: (n) => `${Math.round(n)}%`,
 };
 
-const AnimatedKpi = ({ kpi, icon }: { kpi: (typeof DASHBOARD_KPIS)[number]; icon: (typeof KPI_ICONS)[number] }) => {
+const AnimatedKpi = ({
+  kpi,
+  icon,
+}: {
+  kpi: (typeof DASHBOARD_KPIS)[number];
+  icon: (typeof KPI_ICONS)[number];
+}) => {
   const ref = useCountUp(kpi.value, KPI_FORMATTERS[kpi.unit]);
 
   return (
@@ -55,7 +63,9 @@ export const AnimatedDashboard = () => {
           transition={{ duration: 0.5, delay: 0.35 }}
           className="rounded-lg border border-border bg-card p-4"
         >
-          <h2 className="mb-2 text-sm font-medium text-foreground">Atividade &amp; rentabilidade</h2>
+          <h2 className="mb-2 text-sm font-medium text-foreground">
+            Atividade &amp; rentabilidade
+          </h2>
           <Suspense fallback={<div className="h-[220px]" />}>
             <AtividadeChart data={DASHBOARD_ATIVIDADE} formatCurrency={formatCurrency} />
           </Suspense>

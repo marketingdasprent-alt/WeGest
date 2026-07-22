@@ -22,7 +22,12 @@ const AnimatedStat = ({ stat }: { stat: (typeof FROTA_STATS)[number] }) => {
     <motion.div variants={staggerItem}>
       <Card className={cn(stat.highlighted && 'border-2 border-primary')}>
         <CardContent className="flex items-center gap-3 pt-5 pb-4">
-          <div className={cn('flex h-9 w-9 items-center justify-center rounded-full', TONE_CLASSES[stat.tone])}>
+          <div
+            className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-full',
+              TONE_CLASSES[stat.tone]
+            )}
+          >
             <Icon className="h-4 w-4" />
           </div>
           <div>
@@ -110,7 +115,10 @@ export const AnimatedFrota = () => {
             Pesquisar por matrícula, marca ou modelo...
           </div>
           {FILTROS.map((filtro) => (
-            <div key={filtro} className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
+            <div
+              key={filtro}
+              className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground"
+            >
               {filtro}
             </div>
           ))}

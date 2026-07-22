@@ -14,7 +14,10 @@ export const TourPrivacidadePanel = () => (
         Tratamos dados pessoais de motoristas e clientes conforme o RGPD: apenas para os fins
         contratados, sem partilha com terceiros fora do necessário para prestar o serviço.
       </p>
-      <Link to="/privacidade" className="inline-block font-medium text-primary hover:text-primary/80">
+      <Link
+        to="/privacidade"
+        className="inline-block font-medium text-primary hover:text-primary/80"
+      >
         Ver política completa →
       </Link>
     </div>

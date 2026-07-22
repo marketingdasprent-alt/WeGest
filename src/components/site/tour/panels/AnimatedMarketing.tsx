@@ -23,7 +23,8 @@ import { cn } from '@/lib/utils';
 
 const TAB_ICONS = [Mail, Users, Bell, BarChart3, Upload];
 
-const ACTION_BUTTON = 'flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground';
+const ACTION_BUTTON =
+  'flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground';
 
 export const AnimatedMarketing = () => {
   return (
@@ -48,7 +49,9 @@ export const AnimatedMarketing = () => {
                 key={tab}
                 className={cn(
                   'flex items-center gap-1.5 border-b-2 px-3 py-1.5 text-sm font-medium',
-                  isActive ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'
+                  isActive
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground'
                 )}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -61,14 +64,21 @@ export const AnimatedMarketing = () => {
 
       <div className="flex-1 space-y-4 px-8 py-6">
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-base font-semibold text-foreground">Campanhas de Email</h3>
+          <h3 className="font-display text-base font-semibold text-foreground">
+            Campanhas de Email
+          </h3>
           <button className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
             <Plus className="h-4 w-4" />
             Nova Campanha
           </button>
         </div>
 
-        <motion.div className="space-y-3" initial="hidden" animate="visible" variants={staggerContainer}>
+        <motion.div
+          className="space-y-3"
+          initial="hidden"
+          animate="visible"
+          variants={staggerContainer}
+        >
           {MARKETING_CAMPANHAS.map((campanha) => (
             <motion.div key={campanha.assunto} variants={staggerItem}>
               <Card>

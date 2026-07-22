@@ -5,9 +5,7 @@ interface UseInViewOnceResult<T extends HTMLElement> {
   inView: boolean;
 }
 
-export function useInViewOnce<T extends HTMLElement>(
-  threshold = 0.4
-): UseInViewOnceResult<T> {
+export function useInViewOnce<T extends HTMLElement>(threshold = 0.4): UseInViewOnceResult<T> {
   const ref = useRef<T>(null);
   const [inView, setInView] = useState(false);
 

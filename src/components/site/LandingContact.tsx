@@ -72,7 +72,14 @@ export const LandingContact = () => {
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="contact-mensagem">Mensagem</Label>
-          <Textarea id="contact-mensagem" name="mensagem" required minLength={10} maxLength={2000} rows={4} />
+          <Textarea
+            id="contact-mensagem"
+            name="mensagem"
+            required
+            minLength={10}
+            maxLength={2000}
+            rows={4}
+          />
         </div>
 
         <Button type="submit" disabled={submitting} className="mt-2">

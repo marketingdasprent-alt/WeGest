@@ -2,7 +2,12 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { cn } from '@/lib/utils';
-import { TOUR_MODULES, TOUR_INSTITUTIONAL_MODULES, CONTACT_INDEX, type TourModuleMeta } from './tourData';
+import {
+  TOUR_MODULES,
+  TOUR_INSTITUTIONAL_MODULES,
+  CONTACT_INDEX,
+  type TourModuleMeta,
+} from './tourData';
 
 interface TourSidebarProps {
   activeIndex: number;

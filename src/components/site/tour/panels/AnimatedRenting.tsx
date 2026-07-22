@@ -22,7 +22,9 @@ export const AnimatedRenting = () => {
           <FileText className="h-5 w-5 text-primary" />
           <div>
             <h2 className="font-display text-xl font-semibold text-foreground">Contratos</h2>
-            <p className="text-sm text-muted-foreground">Lista de contratos de renting — dados de demonstração.</p>
+            <p className="text-sm text-muted-foreground">
+              Lista de contratos de renting — dados de demonstração.
+            </p>
           </div>
         </div>
       </div>
@@ -31,7 +33,9 @@ export const AnimatedRenting = () => {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
           <span className="flex items-center gap-2 text-sm">
             <RefreshCw className="h-4 w-4 text-amber-500" />
-            <span className="font-medium text-amber-500">{RENTING_RENOVAR.total} contratos por renovar</span>
+            <span className="font-medium text-amber-500">
+              {RENTING_RENOVAR.total} contratos por renovar
+            </span>
             <span className="text-muted-foreground">·</span>
             <span className="font-medium text-red-500">{RENTING_RENOVAR.atraso} em atraso</span>
           </span>
@@ -105,8 +109,12 @@ export const AnimatedRenting = () => {
                   <TableCell className="text-muted-foreground">{row.matricula}</TableCell>
                   <TableCell className="text-muted-foreground">{row.grupo}</TableCell>
                   <TableCell className="text-muted-foreground">{row.estacaoEntrega}</TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">{row.dataInicio}</TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">{row.dataFim}</TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                    {row.dataInicio}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                    {row.dataFim}
+                  </TableCell>
                   <TableCell className="text-foreground">{row.cliente}</TableCell>
                   <TableCell className="text-muted-foreground">{row.condutor}</TableCell>
                   <TableCell>

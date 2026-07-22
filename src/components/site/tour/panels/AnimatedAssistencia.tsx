@@ -35,7 +35,9 @@ export const AnimatedAssistencia = () => {
     <div className="flex h-full flex-col overflow-y-auto">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-8 py-5">
         <div>
-          <h2 className="font-display text-xl font-semibold text-foreground">Gestão de Assistência</h2>
+          <h2 className="font-display text-xl font-semibold text-foreground">
+            Gestão de Assistência
+          </h2>
           <p className="text-sm text-muted-foreground">
             Gerir e resolver tickets de suporte e reparações — dados de demonstração.
           </p>

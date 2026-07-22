@@ -5,9 +5,6 @@ export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <ThemeSwitcher
-      value={theme as 'light' | 'dark' | 'system' | undefined}
-      onChange={setTheme}
-    />
+    <ThemeSwitcher value={theme as 'light' | 'dark' | 'system' | undefined} onChange={setTheme} />
   );
 }

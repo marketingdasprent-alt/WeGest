@@ -50,9 +50,10 @@ export const AnimatedMovimentacoes = () => {
         <div className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <p>
-            Os eventos são <span className="font-medium text-foreground">automáticos</span>. Entregas,
-            recolhas e trocas vêm dos <span className="font-medium text-foreground">contratos</span>; as
-            transferências internas vêm das movimentações. Aqui só consultas e fazes check-in / check-out.
+            Os eventos são <span className="font-medium text-foreground">automáticos</span>.
+            Entregas, recolhas e trocas vêm dos{' '}
+            <span className="font-medium text-foreground">contratos</span>; as transferências
+            internas vêm das movimentações. Aqui só consultas e fazes check-in / check-out.
           </p>
         </div>
 
@@ -64,7 +65,10 @@ export const AnimatedMovimentacoes = () => {
 
         <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-border bg-border text-[11px]">
           {DIAS_SEMANA.map((dia) => (
-            <div key={dia} className="bg-card px-2 py-1.5 text-center font-medium text-muted-foreground">
+            <div
+              key={dia}
+              className="bg-card px-2 py-1.5 text-center font-medium text-muted-foreground"
+            >
               {dia}
             </div>
           ))}
@@ -83,7 +87,9 @@ export const AnimatedMovimentacoes = () => {
                   cell.atual ? 'ring-1 ring-inset ring-primary' : ''
                 }`}
               >
-                <span className={`text-[11px] ${cell.atual ? 'font-semibold text-primary' : 'text-muted-foreground'}`}>
+                <span
+                  className={`text-[11px] ${cell.atual ? 'font-semibold text-primary' : 'text-muted-foreground'}`}
+                >
                   {cell.dia}
                 </span>
                 <div className="mt-1 flex flex-col gap-0.5">
@@ -96,7 +102,9 @@ export const AnimatedMovimentacoes = () => {
                     </span>
                   ))}
                   {cell.eventos.length > 2 && (
-                    <span className="text-[9px] text-muted-foreground">+{cell.eventos.length - 2}</span>
+                    <span className="text-[9px] text-muted-foreground">
+                      +{cell.eventos.length - 2}
+                    </span>
                   )}
                 </div>
               </motion.div>

@@ -15,7 +15,13 @@ const TONE_TEXT: Record<string, string> = {
   blue: 'text-blue-500',
 };
 
-const AlertaBadge = ({ alerta, icon: Icon }: { alerta: (typeof MOTORISTAS_ALERTAS)[number]; icon: (typeof ALERTA_ICONS)[number] }) => {
+const AlertaBadge = ({
+  alerta,
+  icon: Icon,
+}: {
+  alerta: (typeof MOTORISTAS_ALERTAS)[number];
+  icon: (typeof ALERTA_ICONS)[number];
+}) => {
   const ref = useCountUp(alerta.valor);
   return (
     <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
@@ -23,7 +29,9 @@ const AlertaBadge = ({ alerta, icon: Icon }: { alerta: (typeof MOTORISTAS_ALERTA
       <span className={cn('font-medium', TONE_TEXT[alerta.tone])}>
         <span ref={ref}>0</span> {alerta.label}
       </span>
-      <button className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-foreground">{alerta.acao}</button>
+      <button className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
+        {alerta.acao}
+      </button>
     </div>
   );
 };

@@ -6,7 +6,10 @@ import { CRM_COLUNAS } from '../tourData';
 export const AnimatedCRM = () => {
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <ModuleHeader title="CRM" subtitle="Pipeline de leads até se tornarem motoristas — dados de demonstração." />
+      <ModuleHeader
+        title="CRM"
+        subtitle="Pipeline de leads até se tornarem motoristas — dados de demonstração."
+      />
 
       <motion.div
         className="flex-1 px-8 py-6"

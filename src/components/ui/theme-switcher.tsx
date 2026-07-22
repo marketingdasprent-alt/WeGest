@@ -48,7 +48,10 @@ export const ThemeSwitcher = ({ value, onChange, defaultValue, className }: Them
 
   return (
     <div
-      className={cn('relative flex h-8 rounded-full bg-background p-1 ring-1 ring-border', className)}
+      className={cn(
+        'relative flex h-8 rounded-full bg-background p-1 ring-1 ring-border',
+        className
+      )}
     >
       {themes.map(({ key, icon: Icon, label }) => {
         const isActive = theme === key;
