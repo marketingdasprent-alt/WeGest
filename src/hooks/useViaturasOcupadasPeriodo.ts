@@ -82,6 +82,10 @@ export function useViaturasOcupadasPeriodo(args: UseViaturasOcupadasPeriodoArgs)
         .from('contratos_renting')
         .select('viatura_id, data_inicio, data_fim, id')
         .is('deleted_at', null)
+        // Versão substituída (troca/upgrade/downgrade) fica com estado_operacional
+        // congelado em 'agendado'/'em_curso' para sempre — sem isto, a viatura
+        // antiga aparecia sempre ocupada no seletor, mesmo já livre.
+        .is('substituido_em', null)
         .not('viatura_id', 'is', null)
         .in('estado_operacional', ['agendado', 'em_curso']);
       if (fimPedidoIso) {
