@@ -33,7 +33,9 @@ export function useCountUp(value: number, formatter?: (n: number) => string) {
       },
     });
 
-    return () => anim.pause();
+    return () => {
+      anim.pause();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
