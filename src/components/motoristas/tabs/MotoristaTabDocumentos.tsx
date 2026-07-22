@@ -603,9 +603,10 @@ export function MotoristaTabDocumentos({
     setBatchEntries([]);
   };
 
-  // Stats calculations
-  const totalTipos = TIPOS_DOCUMENTO.length;
-  const anexados = TIPOS_DOCUMENTO.filter((t) => getDocumentoByTipo(t.value, t.field)).length;
+  // Stats calculations — 'outros' é bucket livre (extra), não documento obrigatório.
+  const tiposObrigatorios = TIPOS_DOCUMENTO.filter((t) => t.value !== 'outros');
+  const totalTipos = tiposObrigatorios.length;
+  const anexados = tiposObrigatorios.filter((t) => getDocumentoByTipo(t.value, t.field)).length;
   const emFalta = totalTipos - anexados;
   const aExpirar = documentos.filter((d) => {
     if (!d.data_validade) return false;

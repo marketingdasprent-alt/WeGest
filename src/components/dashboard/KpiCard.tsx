@@ -13,7 +13,7 @@ const COLOR_CLASSES: Record<KpiColor, { border: string; icon: string; value: str
 
 interface KpiCardProps {
   label: string;
-  value: number | string;
+  value: React.ReactNode;
   icon: LucideIcon;
   color: KpiColor;
   onClick?: () => void;

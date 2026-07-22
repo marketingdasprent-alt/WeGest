@@ -12,6 +12,8 @@ import {
   Car,
   Fuel,
   FileWarning,
+  FileSpreadsheet,
+  Loader2,
 } from 'lucide-react';
 import { startOfWeek, format as formatDate } from 'date-fns';
 import { Input } from '@/components/ui/input';
@@ -49,6 +51,7 @@ import { TablePagination } from '@/components/ui/TablePagination';
 import { cn, normalizeString } from '@/lib/utils';
 import { camposFichaEmFalta } from '@/lib/motoristaFichaCompleta';
 import { useMotoristas } from '@/hooks/useMotoristas';
+import { exportMotoristasExcel } from '@/utils/motoristasExport';
 import {
   useCartoesNaoAssociadosCount,
   useBpNaoAssociadasCount,
@@ -138,6 +141,7 @@ export default function Motoristas() {
     bolt_id?: string;
     uber_uuid?: string;
   } | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const loading = motoristasQuery.isLoading || sincronizarIds.isPending;
 
@@ -158,6 +162,7 @@ export default function Motoristas() {
   const motoristasFichaIncompleta = useMemo(
     () =>
       motoristas
+        .filter((motorista) => motorista.status_ativo !== false)
         .map((motorista) => ({ motorista, camposEmFalta: camposFichaEmFalta(motorista) }))
         .filter((m) => m.camposEmFalta.length > 0),
     [motoristas]
@@ -326,6 +331,22 @@ export default function Motoristas() {
     sincronizarIds.mutate();
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportMotoristasExcel(filteredMotoristas);
+    } catch (error) {
+      console.error('Erro ao exportar motoristas:', error);
+      toast({
+        title: 'Erro ao exportar',
+        description: 'Não foi possível gerar o ficheiro Excel.',
+        variant: 'destructive',
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleMotoristaCreated = (motorista: Motorista) => {
     // Fechar primeiro o modal de criação (evita dois modais sobrepostos), depois
     // abrir o de gerar documentos já apontado ao motorista recém-criado.
@@ -432,6 +453,19 @@ export default function Motoristas() {
               </Badge>
             </Button>
           )}
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            disabled={exporting || filteredMotoristas.length === 0}
+            className="w-full sm:w-auto"
+          >
+            {exporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+            )}
+            Exportar
+          </Button>
           <Button onClick={handleAddMotorista} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Adicionar Motorista

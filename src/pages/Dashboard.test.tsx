@@ -16,8 +16,14 @@ vi.mock('@/contexts/TenantContext', () => ({
   useOrgId: () => null,
 }));
 
+// toast tem de ser uma referência ESTÁVEL entre renders (tal como no hook
+// real, que expõe uma função module-level) — caso contrário o fetchData
+// (useCallback com `toast` nas deps) muda de identidade a cada render e o
+// useEffect que o dispara entra num loop infinito de re-fetch, tornando os
+// testes instáveis (timing-dependent).
+const mockToastFn = vi.fn();
 vi.mock('@/hooks/use-toast', () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: mockToastFn }),
 }));
 
 vi.mock('react-router-dom', () => ({

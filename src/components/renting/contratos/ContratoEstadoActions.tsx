@@ -76,7 +76,8 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
     contrato.estado_financeiro !== 'facturado' &&
     canEdit('contratos_reverter_reserva');
 
-  // Renovação: só rent-a-car de longa duração, versão actual e activo.
+  // Renovação: rent-a-car e TVDE de longa duração, versão actual e activo.
+  // TVDE sem data_fim também conta — a 1.ª renovação arranca o ciclo mensal.
   const podeRenovar = contratoRenovavel(contrato);
   const renovacaoEstado = estadoRenovacaoContrato(contrato);
 

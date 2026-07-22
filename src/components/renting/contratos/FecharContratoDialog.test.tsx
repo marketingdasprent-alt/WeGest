@@ -1,17 +1,21 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 
 // ── Mocks (hoisted) ──────────────────────────────────────────────────────────
 
+// Estado mutável partilhado com a factory do mock (hoisted) — permite a um
+// teste individual simular uma viatura slot sem afectar os outros.
+const { chainableState } = vi.hoisted(() => ({ chainableState: { viaturaIsSlot: false } }));
+
 // Supabase mock: chainable + Promise real. Cada método retorna a própria
 // Promise (para encadear .select().eq().in()...) e a Promise resolve com
-// { data: null, error: null, count: 0 }. Usar uma Promise real (em vez de
+// { data: null, error: null, count: 0 } — excepto a tabela `viaturas`, que
+// devolve is_slot conforme `chainableState`. Usar uma Promise real (em vez de
 // thenable proxy) evita edge-cases de resolução do motor JS. Override do
 // mock básico do setup.ts.
 vi.mock('@/integrations/supabase/client', () => {
-  const result = { data: null, error: null, count: 0 };
   const methods = [
     'select',
     'eq',
@@ -36,7 +40,7 @@ vi.mock('@/integrations/supabase/client', () => {
 
   // Cria uma Promise real com os métodos encadeáveis anexados. `await` usa
   // o `then` nativo do Promise — sem proxy thenable, sem ambiguidade.
-  function createChainable(): Promise<typeof result> {
+  function createChainable(result: Record<string, unknown>): Promise<typeof result> {
     const p = Promise.resolve(result);
     for (const m of methods) {
       (p as unknown as Record<string, unknown>)[m] = vi.fn(() => p);
@@ -46,8 +50,12 @@ vi.mock('@/integrations/supabase/client', () => {
 
   return {
     supabase: {
-      from: vi.fn(() => createChainable()),
-      rpc: vi.fn(() => createChainable()),
+      from: vi.fn((table: string) =>
+        table === 'viaturas' && chainableState.viaturaIsSlot
+          ? createChainable({ data: { is_slot: true }, error: null, count: 0 })
+          : createChainable({ data: null, error: null, count: 0 })
+      ),
+      rpc: vi.fn(() => createChainable({ data: null, error: null, count: 0 })),
       auth: { getSession: vi.fn() },
     },
   };
@@ -148,6 +156,10 @@ const baseProps = {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('FecharContratoDialog', () => {
+  beforeEach(() => {
+    chainableState.viaturaIsSlot = false;
+  });
+
   it('rent-a-car: pré-preenche "Recolhida", data e estação — fecho funciona sem editar defaults', async () => {
     // Aumenta timeout: o componente faz queries Supabase mockadas + Radix Dialog é pesado no jsdom.
     const onOpenChange = vi.fn();
@@ -267,6 +279,45 @@ describe('FecharContratoDialog', () => {
     });
 
     const callArgs = mockMutateAsync.mock.calls[0][0];
+    expect(callArgs.recolha).toBeUndefined();
+  });
+
+  it('viatura slot: mostra só Data + Motivo e fecha com tipo/estação por defeito', async () => {
+    chainableState.viaturaIsSlot = true;
+    renderWithProviders(
+      <FecharContratoDialog {...baseProps} motoristaId="mot-1" estacaoOrigemId="est-1" />
+    );
+
+    // A query is_slot é assíncrona — só depois de resolver é que o Tipo
+    // desaparece do formulário.
+    await waitFor(() => {
+      expect(screen.queryByRole('radio', { name: /recolhida/i })).toBeNull();
+    });
+
+    // Sem Tipo, Estação, Valor em Dívida nem "Registar a recolha agora".
+    expect(screen.queryByRole('radio', { name: /devolvida/i })).toBeNull();
+    expect(screen.queryByLabelText(/^Estação/i)).toBeNull();
+    expect(screen.queryByText('Valor em Dívida')).toBeNull();
+    expect(screen.queryByText('Registar a recolha agora')).toBeNull();
+    expect(screen.queryByPlaceholderText('Ex: 45120')).toBeNull();
+    expect(screen.getByText(/fechar contrato #123/i)).toBeTruthy();
+
+    // Data continua visível e preenchida por defeito.
+    expect(screen.getByLabelText(/^Data/i)).toBeTruthy();
+    // Motivo continua visível e opcional.
+    expect(screen.getByLabelText(/Motivo/i)).toBeTruthy();
+
+    // Fecha sem preencher mais nada — tipo/estação vão com o default silencioso.
+    const submitBtn = screen.getByRole('button', { name: /fechar contrato/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+    });
+
+    const callArgs = mockMutateAsync.mock.calls[0][0];
+    expect(callArgs.estacaoId).toBe('est-1');
+    expect(callArgs.tipoEvento).toBeTruthy();
     expect(callArgs.recolha).toBeUndefined();
   });
 });

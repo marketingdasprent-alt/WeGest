@@ -56,6 +56,9 @@ export interface IntegracaoConfig {
   email_sender_email?: string | null;
   email_reply_to?: string | null;
   email_provider_config?: Record<string, unknown> | null;
+  // Via Verde: dia/hora do sync automático (0=Domingo..6=Sábado, 0-23h Lisboa)
+  sync_dia_semana?: number | null;
+  sync_hora?: number | null;
 }
 
 // Pre-configured defaults for Uber integrations (stored as robot internally)
@@ -103,8 +106,12 @@ export const EDP_DEFAULTS = {
   apify_api_token: 'apify_api_zyXNhVu0c2aYqhETTy6fgfDI5ZNrOA3DM0vc',
 };
 
-// Via Verde — importação manual (sem robot/scraping, sem credenciais).
+// Via Verde — suporta dois modos: manual (CSV upload via viaverde-import-csv)
+// ou automático via robô Apify dedicado (actor 8fz3SqtaKV6RTT4sa).
+// Manual continua como predefinição; o robô é opt-in por integração via `sync_automatico=true`.
 export const VIAVERDE_DEFAULTS = {
   manual: true as const,
   robot_target_platform: 'viaverde',
+  apify_actor_id: '8fz3SqtaKV6RTT4sa',
+  apify_api_token: 'apify_api_rZZQbfp7yP3gfexNRAHYQKJ0zK1zTK2wwwoH',
 };

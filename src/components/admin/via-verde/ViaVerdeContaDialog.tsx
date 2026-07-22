@@ -29,16 +29,24 @@ import { ViaVerdeLogoUpload } from './ViaVerdeLogoUpload';
 const contaSchema = z.object({
   nome_conta: z.string().trim().min(1, 'O nome da conta é obrigatório.').max(120),
   codigo_rac: z.string().trim().min(1, 'O código RAC é obrigatório.').max(60),
-  ftp_host: z.string().trim().min(1, 'O servidor FTP/SFTP é obrigatório.').max(255),
-  ftp_porta: z.coerce.number().int().min(1).max(65535),
-  ftp_protocolo: z.enum(['ftp', 'sftp']),
-  ftp_utilizador: z.string().trim().min(1, 'O utilizador FTP/SFTP é obrigatório.').max(255),
-  ftp_password: z.string().trim().min(1, 'A password FTP/SFTP é obrigatória.').max(255),
-  sync_email: z.string().trim().min(1, 'O utilizador do portal é obrigatório.').max(255),
-  sync_password: z.string().trim().min(1, 'A password do portal é obrigatória.').max(255),
-  ftp_modo_passivo: z.boolean(),
-  ftp_ativo: z.boolean(),
-  sync_ativo: z.boolean(),
+  ftp_host: z.string().trim().max(255).optional().default(''),
+  ftp_porta: z.coerce.number().int().min(1).max(65535).optional().default(21),
+  ftp_protocolo: z.enum(['ftp', 'sftp']).default('ftp'),
+  ftp_utilizador: z.string().trim().max(255).optional().default(''),
+  ftp_password: z.string().trim().max(255).optional().default(''),
+  sync_email: z
+    .string()
+    .trim()
+    .min(1, 'O email de login do portal Via Verde é obrigatório para o robô Apify.')
+    .max(255),
+  sync_password: z
+    .string()
+    .trim()
+    .min(1, 'A password do portal Via Verde é obrigatória para o robô Apify.')
+    .max(255),
+  ftp_modo_passivo: z.boolean().default(true),
+  ftp_ativo: z.boolean().default(false),
+  sync_ativo: z.boolean().default(true),
 });
 
 type TestResponse = {
@@ -142,16 +150,16 @@ export const ViaVerdeContaDialog: React.FC<ViaVerdeContaDialogProps> = ({
       setFormData({
         nome_conta: conta.nome_conta,
         codigo_rac: conta.codigo_rac,
-        ftp_host: conta.ftp_host,
-        ftp_porta: String(conta.ftp_porta),
-        ftp_protocolo: conta.ftp_protocolo,
-        ftp_modo_passivo: conta.ftp_modo_passivo,
-        ftp_utilizador: conta.ftp_utilizador,
-        ftp_password: conta.ftp_password,
-        ftp_ativo: conta.ftp_ativo,
-        sync_email: conta.sync_email,
-        sync_password: conta.sync_password,
-        sync_ativo: conta.sync_ativo,
+        ftp_host: conta.ftp_host || '',
+        ftp_porta: conta.ftp_porta ? String(conta.ftp_porta) : '21',
+        ftp_protocolo: conta.ftp_protocolo || 'ftp',
+        ftp_modo_passivo: conta.ftp_modo_passivo ?? true,
+        ftp_utilizador: conta.ftp_utilizador || '',
+        ftp_password: conta.ftp_password || '',
+        ftp_ativo: conta.ftp_ativo ?? false,
+        sync_email: conta.sync_email || '',
+        sync_password: conta.sync_password || '',
+        sync_ativo: conta.sync_ativo ?? true,
       });
       setLogoUrl(conta.logo_url ?? null);
     } else {
@@ -212,7 +220,16 @@ export const ViaVerdeContaDialog: React.FC<ViaVerdeContaDialogProps> = ({
         : supabaseAny.from('via_verde_contas').insert(values);
 
       const { error } = await query;
-      if (error) throw error;
+      if (error) {
+        console.error('[ViaVerdeContaDialog] Erro Supabase ao guardar:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          values,
+        });
+        throw error;
+      }
 
       toast({
         title: conta ? 'Conta actualizada' : 'Conta criada',

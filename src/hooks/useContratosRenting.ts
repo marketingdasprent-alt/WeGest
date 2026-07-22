@@ -377,6 +377,11 @@ export interface FecharContratoArgs {
   /** true quando o motorista tinha levado a DUA original e o gestor confirma a
    *  devolução no fecho — grava dua_devolvida_em = now() no contrato. */
   marcarDuaDevolvida?: boolean;
+  /** Força o fecho a ser tratado como definitivo (motorista desactivado,
+   *  toast "Contrato fechado") mesmo sem `recolha` — usado pelo fecho
+   *  simplificado de viaturas slot, que não captura km/combustível/fotos mas
+   *  fecha o contrato por completo na mesma (não fica "a aguardar recolha"). */
+  fecharAgora?: boolean;
 }
 
 /** Título/descrição do toast final — depende de a recolha ter sido
@@ -411,6 +416,7 @@ export function useFecharContrato() {
       viaturaId,
       recolha,
       marcarDuaDevolvida,
+      fecharAgora,
     }: FecharContratoArgs): Promise<{ fechouAgora: boolean }> => {
       const { data: estacao, error: errEstacao } = await supabase
         .from('estacoes')
@@ -558,9 +564,11 @@ export function useFecharContrato() {
 
       // Fechar o contrato termina o vínculo TVDE em curso — o motorista fica
       // inactivo automaticamente até ser associado a um novo contrato/viatura.
-      // Só acontece quando a recolha física já foi confirmada aqui (senão o
-      // motorista continua de posse da viatura até a recolha real acontecer).
-      if (motoristaId && recolha) {
+      // Acontece quando a recolha física já foi confirmada aqui (senão o
+      // motorista continua de posse da viatura até a recolha real acontecer)
+      // ou quando o fecho é forçado como definitivo (fecharAgora — slot, que
+      // não tem recolha física a capturar mas fecha por completo na mesma).
+      if (motoristaId && (recolha || fecharAgora)) {
         const { error: errMotorista } = await supabase
           .from('motoristas_ativos')
           .update({ status_ativo: false })
@@ -568,7 +576,7 @@ export function useFecharContrato() {
         if (errMotorista) throw errMotorista;
       }
 
-      return { fechouAgora: !!recolha };
+      return { fechouAgora: !!recolha || !!fecharAgora };
     },
     onSuccess: ({ fechouAgora }) => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });

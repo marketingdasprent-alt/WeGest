@@ -295,6 +295,11 @@ export const GenerateDocumentsDialog = ({
       return;
     }
 
+    if (!cidadeAssinatura.trim()) {
+      toast.error('Indique a cidade de assinatura');
+      return;
+    }
+
     try {
       setIsGenerating(true);
       setGeneratedTemplates(new Set());
@@ -804,7 +809,13 @@ export const GenerateDocumentsDialog = ({
           <Button
             variant="outline"
             onClick={() => handleGenerate('download')}
-            disabled={isGenerating || isLoading || !activeMotorista || visibleSelectedCount === 0}
+            disabled={
+              isGenerating ||
+              isLoading ||
+              !activeMotorista ||
+              visibleSelectedCount === 0 ||
+              !cidadeAssinatura.trim()
+            }
           >
             {isGenerating ? (
               <>
@@ -816,7 +827,13 @@ export const GenerateDocumentsDialog = ({
           </Button>
           <Button
             onClick={() => handleGenerate('print')}
-            disabled={isGenerating || isLoading || !activeMotorista || visibleSelectedCount === 0}
+            disabled={
+              isGenerating ||
+              isLoading ||
+              !activeMotorista ||
+              visibleSelectedCount === 0 ||
+              !cidadeAssinatura.trim()
+            }
           >
             {isGenerating ? (
               <>

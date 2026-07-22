@@ -369,4 +369,52 @@ describe('useFecharContrato', () => {
     // Toast diz "Recolha agendada"
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Recolha agendada' }));
   });
+
+  it('sem recolha mas fecharAgora=true (viatura slot) → fecha definitivamente e desactiva o motorista', async () => {
+    const chains = setupSupabase({
+      estacoes: { data: { nome: 'Estação A', cidade: 'Lisboa' }, error: null },
+      contratos_renting: { data: null, error: null },
+      calendario_eventos: { data: null, error: null },
+      motoristas_ativos: { data: null, error: null },
+    });
+
+    const args: FecharContratoArgs = {
+      contratoId: 'c1',
+      contratoCodigo: 42,
+      tipoEvento: 'devolvido',
+      estacaoId: 'est-1',
+      dataEvento: '2026-07-10T10:00:00Z',
+      matricula: 'AB-12-CD',
+      viaturaId: 'vit-1',
+      motoristaId: 'mot-1',
+      fecharAgora: true,
+      // Sem recolha — fecho simplificado de viatura slot (só data + motivo).
+    };
+
+    const { result } = renderHook(() => useFecharContrato(), {
+      wrapper: createWrapper(),
+    });
+
+    let fechouAgora: boolean | undefined;
+    await act(async () => {
+      const r = await result.current.mutateAsync(args);
+      fechouAgora = r.fechouAgora;
+    });
+
+    // Contrato fechado (estado_operacional = 'cancelado'), como qualquer fecho.
+    expect(chains.contratos_renting.update).toHaveBeenCalledWith(
+      expect.objectContaining({ estado_operacional: 'cancelado' })
+    );
+
+    // Motorista desactivado mesmo sem recolha física — fecharAgora força o
+    // fecho a ser tratado como definitivo (é isto que estava em falta antes
+    // desta flag existir: o slot fechava o contrato mas deixava o motorista
+    // "Ativo" para sempre).
+    expect(chains.motoristas_ativos.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status_ativo: false })
+    );
+
+    expect(fechouAgora).toBe(true);
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Contrato fechado' }));
+  });
 });

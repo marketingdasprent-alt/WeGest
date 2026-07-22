@@ -57,7 +57,7 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
     empresas[0] ??
     null;
 
-  const podeGerar = !!motorista && !!empresa;
+  const podeGerar = !!motorista && !!empresa && !!cidadeAssinatura.trim();
 
   const gerar = async () => {
     if (!motorista) {
@@ -66,6 +66,10 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
         description: 'Define o condutor (motorista) na aba Condutores antes de gerar.',
         variant: 'destructive',
       });
+      return;
+    }
+    if (!cidadeAssinatura.trim()) {
+      toast({ title: 'Indique a cidade de assinatura', variant: 'destructive' });
       return;
     }
     setLoading(true);
