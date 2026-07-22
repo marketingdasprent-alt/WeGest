@@ -1,7 +1,10 @@
+// src/components/admin/DocumentosTab.tsx
 import { useState, useEffect } from 'react';
 import { DocumentTemplateList } from '@/components/admin/DocumentTemplateList';
 import { DocumentTemplateEditor } from '@/components/admin/DocumentTemplateEditor';
 import { DocumentTemplatePreviewDialog } from '@/components/admin/DocumentTemplatePreviewDialog';
+import { DocumentoSuplementarList } from '@/components/admin/DocumentoSuplementarList';
+import { DocumentoSuplementarDialog } from '@/components/admin/DocumentoSuplementarDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,7 +18,9 @@ import { Plus, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import { useDocumentosSuplementares } from '@/hooks/useDocumentosSuplementares';
 import { TIPO_TEMPLATE_OPTIONS, type DocumentTemplate } from '@/types/documentTemplate';
+import type { DocumentoSuplementarComEmpresas } from '@/types/documentoSuplementar';
 
 export const DocumentosTab = () => {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -27,6 +32,12 @@ export const DocumentosTab = () => {
   const [busca, setBusca] = useState('');
   const [previewTemplate, setPreviewTemplate] = useState<DocumentTemplate | null>(null);
   const { empresas } = useClientesEmpresas();
+
+  const [isSuplementarDialogOpen, setIsSuplementarDialogOpen] = useState(false);
+  const [editingSuplementar, setEditingSuplementar] =
+    useState<DocumentoSuplementarComEmpresas | null>(null);
+  const { data: suplementares = [], isLoading: loadingSuplementares } =
+    useDocumentosSuplementares();
 
   useEffect(() => {
     fetchTemplates();
@@ -105,6 +116,16 @@ export const DocumentosTab = () => {
     }
   };
 
+  const handleNewSuplementar = () => {
+    setEditingSuplementar(null);
+    setIsSuplementarDialogOpen(true);
+  };
+
+  const handleEditSuplementar = (documento: DocumentoSuplementarComEmpresas) => {
+    setEditingSuplementar(documento);
+    setIsSuplementarDialogOpen(true);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -121,6 +142,9 @@ export const DocumentosTab = () => {
     .filter((t) => filtroEmpresa === 'todas' || t.cliente_empresa_id === filtroEmpresa)
     .filter((t) => filtroTipo === 'todos' || t.tipo === filtroTipo)
     .filter((t) => !buscaNormalizada || t.nome.toLowerCase().includes(buscaNormalizada));
+  const suplementaresFiltrados = suplementares
+    .filter((d) => filtroEmpresa === 'todas' || d.empresaIds.includes(filtroEmpresa))
+    .filter((d) => !buscaNormalizada || d.nome.toLowerCase().includes(buscaNormalizada));
 
   return (
     <div className="space-y-6">
@@ -137,9 +161,9 @@ export const DocumentosTab = () => {
         <>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-foreground">Templates de Documentos</h2>
+              <h2 className="text-2xl font-bold text-foreground">Documentos</h2>
               <p className="text-muted-foreground mt-1">
-                Gerir templates de contratos e outros documentos
+                Gerir templates de contratos e documentos suplementares
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -178,21 +202,42 @@ export const DocumentosTab = () => {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">Templates de Documentos</h3>
               <Button onClick={handleNew} className="gap-2 shrink-0">
                 <Plus className="h-4 w-4" />
                 Novo Template
               </Button>
             </div>
+            <DocumentTemplateList
+              templates={templatesFiltrados}
+              nomePorEmpresa={nomePorEmpresa}
+              onEdit={handleEdit}
+              onDuplicate={handleDuplicate}
+              onToggleStatus={handleToggleStatus}
+              onPreview={(t) => setPreviewTemplate(t)}
+            />
           </div>
 
-          <DocumentTemplateList
-            templates={templatesFiltrados}
-            nomePorEmpresa={nomePorEmpresa}
-            onEdit={handleEdit}
-            onDuplicate={handleDuplicate}
-            onToggleStatus={handleToggleStatus}
-            onPreview={(t) => setPreviewTemplate(t)}
-          />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">Documentos Suplementares</h3>
+              <Button onClick={handleNewSuplementar} className="gap-2 shrink-0">
+                <Plus className="h-4 w-4" />
+                Novo Documento Suplementar
+              </Button>
+            </div>
+            <DocumentoSuplementarList
+              documentos={suplementaresFiltrados}
+              nomePorEmpresa={nomePorEmpresa}
+              isLoading={loadingSuplementares}
+              onEdit={handleEditSuplementar}
+            />
+          </div>
         </>
       )}
       <DocumentTemplatePreviewDialog
@@ -201,6 +246,11 @@ export const DocumentosTab = () => {
         onOpenChange={(open) => {
           if (!open) setPreviewTemplate(null);
         }}
+      />
+      <DocumentoSuplementarDialog
+        open={isSuplementarDialogOpen}
+        documento={editingSuplementar}
+        onOpenChange={setIsSuplementarDialogOpen}
       />
     </div>
   );
