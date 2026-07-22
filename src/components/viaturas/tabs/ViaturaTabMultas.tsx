@@ -24,6 +24,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
 interface Multa {
   id: string;
@@ -64,6 +66,8 @@ const ESTADOS = [
 ];
 
 export function ViaturaTabMultas({ viaturaId }: ViaturaTabMultasProps) {
+  const { canEdit } = usePermissions();
+  const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
   const [multas, setMultas] = useState<Multa[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [loading, setLoading] = useState(true);
@@ -179,6 +183,7 @@ export function ViaturaTabMultas({ viaturaId }: ViaturaTabMultasProps) {
   };
 
   const handleDelete = async (multaId: string) => {
+    if (!podeEditar) return;
     if (!confirm('Tem certeza que deseja eliminar esta multa?')) return;
 
     try {
@@ -400,14 +405,16 @@ export function ViaturaTabMultas({ viaturaId }: ViaturaTabMultasProps) {
                             ))}
                           </SelectContent>
                         </Select>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="text-destructive"
-                          onClick={() => handleDelete(multa.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {podeEditar && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="text-destructive"
+                            onClick={() => handleDelete(multa.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                     {multa.observacoes && (

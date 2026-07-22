@@ -28,6 +28,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -101,6 +103,8 @@ interface Intervencao {
 }
 
 export function ViaturaTabReparacoes({ viaturaId, onUpdate }: ViaturaTabReparacoesProps) {
+  const { canEdit } = usePermissions();
+  const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
   const [intervencoes, setIntervencoes] = useState<Intervencao[]>([]);
   const [loading, setLoading] = useState(true);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
@@ -319,6 +323,7 @@ export function ViaturaTabReparacoes({ viaturaId, onUpdate }: ViaturaTabReparaco
   };
 
   const handleDeleteManual = async (reparacaoId: string) => {
+    if (!podeEditar) return;
     if (!confirm('Tem certeza que deseja eliminar esta reparação?')) return;
     try {
       const { error } = await supabase.from('viatura_reparacoes').delete().eq('id', reparacaoId);
@@ -569,7 +574,7 @@ export function ViaturaTabReparacoes({ viaturaId, onUpdate }: ViaturaTabReparaco
                             </>
                           )}
 
-                          {intervencao.type === 'manual' && (
+                          {intervencao.type === 'manual' && podeEditar && (
                             <Button
                               size="icon"
                               variant="ghost"

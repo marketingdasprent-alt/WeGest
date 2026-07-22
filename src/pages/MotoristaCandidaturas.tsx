@@ -60,6 +60,8 @@ import { cn, matchesSearch } from '@/lib/utils';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
 interface Candidatura {
   id: string;
@@ -124,6 +126,8 @@ const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
 
 const MotoristaCandidaturas: React.FC = () => {
   const { toast } = useToast();
+  const { canEdit } = usePermissions();
+  const podeGerirCandidaturas = canEdit(RECURSOS.MOTORISTAS_GESTAO);
   const [candidaturas, setCandidaturas] = useState<Candidatura[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -237,6 +241,7 @@ const MotoristaCandidaturas: React.FC = () => {
   };
 
   const handleApprove = async (candidatura: Candidatura) => {
+    if (!podeGerirCandidaturas) return;
     setProcessing(true);
     try {
       const { data, error } = await supabase.rpc('aprovar_candidatura_motorista', {
@@ -276,7 +281,7 @@ const MotoristaCandidaturas: React.FC = () => {
   };
 
   const handleReject = async () => {
-    if (!selectedCandidatura) return;
+    if (!selectedCandidatura || !podeGerirCandidaturas) return;
 
     setProcessing(true);
     try {
@@ -309,6 +314,7 @@ const MotoristaCandidaturas: React.FC = () => {
   };
 
   const handleMarkAsAnalyzing = async (candidatura: Candidatura) => {
+    if (!podeGerirCandidaturas) return;
     try {
       const { error } = await supabase
         .from('motorista_candidaturas')
@@ -904,46 +910,47 @@ const MotoristaCandidaturas: React.FC = () => {
               {/* Footer with Actions */}
               <DialogFooter className="p-6 pt-4 border-t flex-col sm:flex-row gap-2">
                 {(selectedCandidatura.status === 'submetido' ||
-                  selectedCandidatura.status === 'em_analise') && (
-                  <>
-                    {selectedCandidatura.status === 'submetido' && (
-                      <Button
-                        variant="outline"
-                        onClick={() => handleMarkAsAnalyzing(selectedCandidatura)}
-                      >
-                        <Clock className="h-4 w-4 mr-2" />
-                        Marcar Em Análise
-                      </Button>
-                    )}
-                    <div className="flex-1" />
-                    <Button
-                      variant="destructive"
-                      onClick={() => {
-                        setRejectDialogOpen(true);
-                      }}
-                      disabled={processing}
-                    >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Rejeitar
-                    </Button>
-                    <Button
-                      onClick={() => handleApprove(selectedCandidatura)}
-                      disabled={processing}
-                      className="bg-green-600 hover:bg-green-700"
-                    >
-                      {processing ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />A processar...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Aprovar
-                        </>
+                  selectedCandidatura.status === 'em_analise') &&
+                  podeGerirCandidaturas && (
+                    <>
+                      {selectedCandidatura.status === 'submetido' && (
+                        <Button
+                          variant="outline"
+                          onClick={() => handleMarkAsAnalyzing(selectedCandidatura)}
+                        >
+                          <Clock className="h-4 w-4 mr-2" />
+                          Marcar Em Análise
+                        </Button>
                       )}
-                    </Button>
-                  </>
-                )}
+                      <div className="flex-1" />
+                      <Button
+                        variant="destructive"
+                        onClick={() => {
+                          setRejectDialogOpen(true);
+                        }}
+                        disabled={processing}
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Rejeitar
+                      </Button>
+                      <Button
+                        onClick={() => handleApprove(selectedCandidatura)}
+                        disabled={processing}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        {processing ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />A processar...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Aprovar
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  )}
               </DialogFooter>
             </>
           )}

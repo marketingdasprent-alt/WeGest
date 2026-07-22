@@ -6,6 +6,7 @@ import { CreateFormularioDialog } from '@/components/formularios/CreateFormulari
 import { EditFormularioDialog } from '@/components/formularios/EditFormularioDialog';
 import { Button } from '@/components/ui/button';
 import { Plus, FileText, Loader2 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Formulario {
   id: string;
@@ -25,6 +26,7 @@ const Formularios = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingFormulario, setEditingFormulario] = useState<Formulario | null>(null);
   const { toast } = useToast();
+  const { isAdmin } = usePermissions();
 
   useEffect(() => {
     fetchFormularios();
@@ -270,6 +272,7 @@ const Formularios = () => {
   };
 
   const handleToggleAtivo = async (id: string, ativo: boolean) => {
+    if (!isAdmin) return;
     try {
       const { error } = await supabase
         .from('formularios')
@@ -297,6 +300,7 @@ const Formularios = () => {
   };
 
   const handleDeleteFormulario = async (id: string) => {
+    if (!isAdmin) return;
     try {
       // Primeiro apenas remover as referências do formulário nos leads (definir como null)
       const { error: leadsError } = await supabase
@@ -367,13 +371,15 @@ const Formularios = () => {
                 </p>
               </div>
             </div>
-            <Button
-              onClick={() => setIsCreateDialogOpen(true)}
-              className="bg-primary hover:bg-primary/90 text-white font-medium"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Formulário
-            </Button>
+            {isAdmin && (
+              <Button
+                onClick={() => setIsCreateDialogOpen(true)}
+                className="bg-primary hover:bg-primary/90 text-white font-medium"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Formulário
+              </Button>
+            )}
           </div>
 
           {/* Stats */}
@@ -420,6 +426,7 @@ const Formularios = () => {
                 onEdit={(formulario) => setEditingFormulario(formulario)}
                 onToggleAtivo={handleToggleAtivo}
                 onDelete={handleDeleteFormulario}
+                podeGerir={isAdmin}
               />
             ))}
           </div>

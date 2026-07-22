@@ -37,6 +37,8 @@ import {
   type ViaturaDocument,
   type BatchViaturaEntry,
 } from './viaturaTabDados.types';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 import { viaturaToFormValues, VIATURA_FK_FIELDS } from './viaturaFormValues';
 import { detectViaturaTipoFromFilename } from './viaturaBatchDetect';
 import { ViaturaFormIdentificacao } from './ViaturaFormIdentificacao';
@@ -54,6 +56,8 @@ interface ViaturaTabDadosProps {
 }
 
 export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDadosProps) {
+  const { canEdit } = usePermissions();
+  const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
   const [documents, setDocuments] = useState<ViaturaDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
@@ -404,6 +408,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   };
 
   const handleDeleteDocument = async (doc: ViaturaDocument) => {
+    if (!podeEditar) return;
     if (!window.confirm('Tem a certeza que quer remover este documento?')) return;
 
     try {
@@ -504,6 +509,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
         onUpload={handleUploadDocument}
         onView={handleViewDocument}
         onDelete={handleDeleteDocument}
+        podeEliminar={podeEditar}
       />
 
       <ViaturaBatchUploadDialog

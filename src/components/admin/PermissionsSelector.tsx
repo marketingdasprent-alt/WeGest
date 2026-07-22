@@ -19,6 +19,7 @@ import {
   Eye,
   Pencil,
   Ban,
+  Mail,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -66,6 +67,7 @@ const MODULOS = [
   { key: 'Calendário', label: 'Calendário', icon: CalendarDays },
   { key: 'Assistência', label: 'Assistência', icon: Wrench },
   { key: 'Administração', label: 'Administração', icon: Settings },
+  { key: 'Email', label: 'Email', icon: Mail },
 ];
 
 // Labels amigáveis para os recursos
@@ -146,6 +148,9 @@ const RECURSO_LABELS: Record<string, string> = {
   admin_configuracoes: 'Configurações do sistema',
   admin_fiscal: 'Definições fiscais (IVA)',
   admin_minha_organizacao: 'Gerir minha organização',
+  // Email
+  email_ver: 'Aceder às caixas de email e ler/enviar mensagens',
+  email_gerir: 'Criar, configurar e eliminar caixas de email',
 };
 
 function getLabel(nome: string): string {

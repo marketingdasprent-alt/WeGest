@@ -16,6 +16,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
 interface Documento {
   id: string;
@@ -44,6 +46,8 @@ const EXCLUDED_TIPOS = [
 ];
 
 export function ViaturaTabAnexos({ viaturaId }: ViaturaTabAnexosProps) {
+  const { canEdit } = usePermissions();
+  const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
   const [documentos, setDocumentos] = useState<Documento[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -161,6 +165,7 @@ export function ViaturaTabAnexos({ viaturaId }: ViaturaTabAnexosProps) {
   };
 
   const handleDelete = async (doc: Documento) => {
+    if (!podeEditar) return;
     if (!confirm('Tem certeza que deseja eliminar este documento?')) return;
 
     try {
@@ -309,14 +314,16 @@ export function ViaturaTabAnexos({ viaturaId }: ViaturaTabAnexosProps) {
                   <Button size="icon" variant="ghost" onClick={() => handleDownload(doc)}>
                     <Download className="h-4 w-4" />
                   </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="text-destructive"
-                    onClick={() => handleDelete(doc)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {podeEditar && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="text-destructive"
+                      onClick={() => handleDelete(doc)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

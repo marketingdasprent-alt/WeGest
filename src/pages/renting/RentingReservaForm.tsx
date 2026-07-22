@@ -39,6 +39,7 @@ import {
   useRentingTarifaPrecosModelo,
 } from '@/hooks/useRentingGruposTarifas';
 
+import { usePermissions } from '@/hooks/usePermissions';
 import { ClienteDialog } from '@/components/renting/ClienteDialog';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
 import { CondutorProvisiorioDialog } from '@/components/motoristas/CondutorProvisiorioDialog';
@@ -139,6 +140,8 @@ const RentingReservaForm = () => {
   const createMutation = useCreateReserva();
   const updateMutation = useUpdateReserva();
   const deleteMutation = useDeleteReserva();
+  const { canEdit } = usePermissions();
+  const podeEliminar = canEdit('renting_reservas');
   const syncCondutoresMutation = useSyncReservaCondutores();
   const syncCoberturasMutation = useSyncReservaCoberturas();
   const syncExtrasMutation = useSyncReservaExtras();
@@ -766,12 +769,12 @@ const RentingReservaForm = () => {
   };
 
   const handleDelete = () => {
-    if (!reserva) return;
+    if (!reserva || !podeEliminar) return;
     setConfirmDeleteOpen(true);
   };
 
   const confirmDelete = () => {
-    if (!reserva) return;
+    if (!reserva || !podeEliminar) return;
     deleteMutation.mutate(reserva.id, {
       onSuccess: () => {
         setConfirmDeleteOpen(false);
@@ -830,7 +833,7 @@ const RentingReservaForm = () => {
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>
-          {isEdit && !bloqueadaPorContrato && (
+          {isEdit && !bloqueadaPorContrato && podeEliminar && (
             <Button
               type="button"
               variant="destructive"

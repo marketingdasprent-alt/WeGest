@@ -29,26 +29,31 @@ export const RECURSOS = {
   VIATURAS_ELIMINAR: 'viaturas_eliminar',
   VIATURAS_FINANCEIRO: 'viaturas_financeiro',
   VIATURAS_MARCAS_MODELOS: 'viaturas_marcas_modelos',
+  VIATURAS_GRUPOS: 'viaturas_grupos',
   // Contratos
   CONTRATOS_VER: 'contratos_ver',
   CONTRATOS_CRIAR: 'contratos_criar',
   CONTRATOS_REIMPRIMIR: 'contratos_reimprimir',
+  CONTRATOS_REVERTER_RESERVA: 'contratos_reverter_reserva',
 
   // Assistência
   ASSISTENCIA_VER: 'assistencia_ver',
   ASSISTENCIA_CRIAR: 'assistencia_criar',
   ASSISTENCIA_CATEGORIAS: 'assistencia_categorias',
   ASSISTENCIA_TICKETS: 'assistencia_tickets', // Legacy - gestão completa
+  ASSISTENCIA_DISPONIVEL: 'assistencia_disponivel',
 
   // Administração
   ADMIN_UTILIZADORES: 'admin_utilizadores',
   ADMIN_CONVITES: 'admin_convites',
   ADMIN_GRUPOS: 'admin_grupos',
   ADMIN_DOCUMENTOS: 'admin_documentos',
+  ADMIN_DOCUMENTOS_PREVIEW: 'admin_documentos_preview',
   ADMIN_CAMPOS_DINAMICOS: 'admin_campos_dinamicos',
   ADMIN_FORMULARIOS: 'admin_formularios',
   ADMIN_INTEGRACOES: 'admin_integracoes',
   ADMIN_CONFIGURACOES: 'admin_configuracoes',
+  ADMIN_FISCAL: 'admin_fiscal',
   ADMIN_MINHA_ORGANIZACAO: 'admin_minha_organizacao',
 
   // Administrativo (antigo "Financeiro")
@@ -67,10 +72,11 @@ export const RECURSOS = {
   CALENDARIO_VER: 'calendario_ver',
   CALENDARIO_CRIAR: 'calendario_criar',
   CALENDARIO_EDITAR: 'calendario_editar',
-  CALENDARIO_EDITAR_TODOS: 'calendario_editar_todos',
+  CALENDARIO_GERIR_TODOS: 'calendario_gerir_todos',
   CALENDARIO_ELIMINAR: 'calendario_eliminar',
   CALENDARIO_RECOLHAS: 'calendario_recolhas',
   CALENDARIO_VER_GESTORES: 'calendario_ver_gestores',
+  CALENDARIO_EXPORTAR: 'calendario_exportar',
 
   // Renting
   RENTING_RESERVAS: 'renting_reservas',
@@ -82,6 +88,10 @@ export const RECURSOS = {
 
   // Dashboard / Contabilidade
   DASHBOARD_CHECKIN_HISTORICO: 'dashboard_checkin_historico',
+
+  // Email
+  EMAIL_VER: 'email_ver',
+  EMAIL_GERIR: 'email_gerir',
 } as const;
 
 export type RecursoKey = (typeof RECURSOS)[keyof typeof RECURSOS];
