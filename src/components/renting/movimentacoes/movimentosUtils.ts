@@ -44,6 +44,12 @@ export function normalizeMatricula(value: string): string {
   return value.toUpperCase().replace(/[-\s]/g, '');
 }
 
+/** Compara código (numérico) por igualdade exata, não substring — "585" não deve apanhar 1585/5850 */
+export function matchesCodigo(codigo: number, search: string): boolean {
+  const trimmed = search.trim();
+  return /^\d+$/.test(trimmed) && codigo === Number(trimmed);
+}
+
 /** Escapa um valor para uma célula CSV. */
 export function csvEscape(value: unknown): string {
   if (value === null || value === undefined) return '';

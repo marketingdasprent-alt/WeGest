@@ -23,7 +23,7 @@ import {
 
 import { useReservas } from '@/hooks/useReservas';
 import { useContratosRenting } from '@/hooks/useContratosRenting';
-import { formatDateTime, normalizeMatricula } from './contratosUtils';
+import { formatDateTime, matchesCodigo, normalizeMatricula } from './contratosUtils';
 
 interface ContratoSelectorReservaProps {
   open: boolean;
@@ -67,7 +67,7 @@ export const ContratoSelectorReserva: React.FC<ContratoSelectorReservaProps> = (
       // Search por matrícula ou código
       if (searchNorm) {
         const m = normalizeMatricula(r.matricula ?? '');
-        const codigoMatch = String(r.codigo).includes(search.trim());
+        const codigoMatch = matchesCodigo(r.codigo, search);
         if (!m.includes(searchNorm) && !codigoMatch) return false;
       }
       return true;

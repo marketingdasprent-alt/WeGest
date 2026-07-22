@@ -41,6 +41,7 @@ import { cn, matchesSearch } from '@/lib/utils';
 import { ImportRobotCsvDialog } from '@/components/admin/ImportRobotCsvDialog';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
+import { useOrgId } from '@/contexts/TenantContext';
 
 // Semana: Segunda (1) a Domingo (0) — igual ao resumo
 const WEEK_STARTS_ON = 1;
@@ -77,6 +78,7 @@ interface Integracao {
 
 export const RepsolDataTab: React.FC = () => {
   const { toast } = useToast();
+  const orgId = useOrgId();
   const [loading, setLoading] = useState(false);
   const [transacoes, setTransacoes] = useState<Transacao[]>([]);
   const [integracoes, setIntegracoes] = useState<Integracao[]>([]);
@@ -103,21 +105,38 @@ export const RepsolDataTab: React.FC = () => {
 
   useEffect(() => {
     fetchIntegracoes();
-  }, []);
+  }, [orgId]);
   useEffect(() => {
     fetchTransacoes();
-  }, [selectedIntegracao, selectedWeek]);
+  }, [orgId, selectedIntegracao, selectedWeek]);
+
+  const handleImportComplete = () => {
+    fetchTransacoes();
+  };
 
   const fetchIntegracoes = async () => {
     try {
+      if (!orgId) {
+        setIntegracoes([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('plataformas_configuracao')
-        .select('id, nome, ativo, plataforma, robot_target_platform')
+        .select('id, nome, ativo, plataforma, robot_target_platform, org_id')
+        .eq('org_id', orgId)
         .or('plataforma.eq.repsol,and(plataforma.eq.robot,robot_target_platform.eq.repsol)')
         .order('nome');
       if (error) throw error;
       setIntegracoes((data || []) as Integracao[]);
-      if (data && data.length > 0) setSelectedIntegracao(data[0].id);
+      if (
+        selectedIntegracao !== 'all' &&
+        data &&
+        data.length > 0 &&
+        !data.some((int) => int.id === selectedIntegracao)
+      ) {
+        setSelectedIntegracao(data[0].id);
+      }
     } catch (error) {
       console.error('Erro ao carregar integrações Repsol:', error);
     }
@@ -135,6 +154,7 @@ export const RepsolDataTab: React.FC = () => {
       const weekStartUtc = `${format(weekStart, 'yyyy-MM-dd')}T00:00:00Z`;
       const weekEndUtc = `${format(weekEnd, 'yyyy-MM-dd')}T23:59:59Z`;
       query = query.gte('transaction_date', weekStartUtc).lte('transaction_date', weekEndUtc);
+      if (orgId) query = query.eq('org_id', orgId);
       if (selectedIntegracao !== 'all') query = query.eq('integracao_id', selectedIntegracao);
 
       const { data, error } = await query;
@@ -258,6 +278,16 @@ export const RepsolDataTab: React.FC = () => {
             className="pl-10"
           />
         </div>
+
+        <Button
+          variant="outline"
+          className="gap-2"
+          onClick={() => setShowImportDialog(true)}
+          disabled={integracoes.length === 0}
+        >
+          <Upload className="h-4 w-4" />
+          Importar
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -328,6 +358,17 @@ export const RepsolDataTab: React.FC = () => {
           />
         )}
       </div>
+
+      {showImportDialog && (
+        <ImportRobotCsvDialog
+          open={showImportDialog}
+          onOpenChange={setShowImportDialog}
+          integracaoId={
+            selectedIntegracao !== 'all' ? selectedIntegracao : integracoes[0]?.id || ''
+          }
+          onImportComplete={handleImportComplete}
+        />
+      )}
     </div>
   );
 };

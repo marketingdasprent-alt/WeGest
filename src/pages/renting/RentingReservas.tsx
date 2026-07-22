@@ -29,6 +29,7 @@ import { ReservasStats } from '@/components/renting/reservas/ReservasStats';
 import {
   csvEscape,
   formatDateTime,
+  matchesCodigo,
   normalizeMatricula,
 } from '@/components/renting/reservas/reservasUtils';
 
@@ -102,11 +103,11 @@ const RentingReservas = () => {
         const condutorNif = r.condutor_id ? (motoristaNifById.get(r.condutor_id) ?? '') : '';
         const clienteNif = r.cliente_id ? (clienteNifById.get(r.cliente_id) ?? '') : '';
         const matches =
-          String(r.codigo).includes(searchRaw) ||
+          matchesCodigo(r.codigo, searchRaw) ||
           normalizeMatricula(r.matricula ?? '').includes(matriculaNorm) ||
           (r.condutor_nome ?? '').toLowerCase().includes(searchLower) ||
-          condutorNif.includes(searchRaw) ||
-          clienteNif.includes(searchRaw);
+          condutorNif.startsWith(searchRaw) ||
+          clienteNif.startsWith(searchRaw);
         if (!matches) return false;
       }
       if (filtros.estacao !== 'todas') {

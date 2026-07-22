@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { buildSupabaseFunctionUrl } from '@/utils/supabaseFunctionUrl';
 import { toast } from 'sonner';
 import { useOrgId } from '@/contexts/TenantContext';
 import {
@@ -70,8 +71,7 @@ export const ImportRobotCsvDialog: React.FC<ImportRobotCsvDialogProps> = ({
       const token = sessionData?.session?.access_token;
       if (!token) throw new Error('Sessão inválida. Inicie sessão novamente.');
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const url = `https://${projectId}.supabase.co/functions/v1/robot-manual-import`;
+      const url = buildSupabaseFunctionUrl('robot-manual-import');
 
       const response = await fetch(url, {
         method: 'POST',
@@ -113,8 +113,7 @@ export const ImportRobotCsvDialog: React.FC<ImportRobotCsvDialogProps> = ({
       const token = sessionData?.session?.access_token;
       if (!token) throw new Error('Sessão inválida.');
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const url = `https://${projectId}.supabase.co/functions/v1/bolt-import-csv`;
+      const url = buildSupabaseFunctionUrl('bolt-import-csv');
 
       const response = await fetch(url, {
         method: 'POST',
@@ -158,8 +157,7 @@ export const ImportRobotCsvDialog: React.FC<ImportRobotCsvDialogProps> = ({
       const token = sessionData?.session?.access_token;
       if (!token) throw new Error('Sessão inválida.');
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const url = `https://${projectId}.supabase.co/functions/v1/${platform}-import-csv`;
+      const url = buildSupabaseFunctionUrl(`${platform}-import-csv`);
 
       const response = await fetch(url, {
         method: 'POST',
