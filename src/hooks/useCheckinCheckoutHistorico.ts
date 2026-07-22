@@ -315,8 +315,12 @@ export function useCheckinCheckoutHistorico(enabled: boolean) {
       if (legacyRes.error) throw legacyRes.error;
       if (eventosRes.error) throw eventosRes.error;
 
-      const rentingById = new Map<string, any>((rentingRes.data ?? []).map((c: any) => [c.id, c]));
-      const legacyById = new Map<string, any>((legacyRes.data ?? []).map((c: any) => [c.id, c]));
+      const rentingById = new Map<string, any>(
+        (rentingRes.data ?? []).map((c: any): [string, any] => [c.id, c])
+      );
+      const legacyById = new Map<string, any>(
+        (legacyRes.data ?? []).map((c: any): [string, any] => [c.id, c])
+      );
 
       // Momentos realizados por contrato (para os badges).
       const momentos = new Map<string, { checkinAt: string | null; checkoutAt: string | null }>();

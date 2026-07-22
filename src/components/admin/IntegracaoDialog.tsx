@@ -402,12 +402,13 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                     key={platform.id}
                     type="button"
                     onClick={() => {
-                      if (platform.id === 'keyinvoice') {
+                      const plataformaId = platform.id;
+                      if (plataformaId === 'keyinvoice') {
                         handleClose(false);
                         onOpenFaturacao?.();
                         return;
                       }
-                      setFormData((prev) => ({ ...prev, plataforma: platform.id }));
+                      setFormData((prev) => ({ ...prev, plataforma: plataformaId }));
                     }}
                     className={cn(
                       'flex flex-col items-center justify-center gap-3 rounded-xl border-2 p-6 transition-all hover:shadow-md cursor-pointer bg-card',
