@@ -106,7 +106,7 @@ const RentingMovimentacoes = () => {
   );
 
   const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
-    usePagination(filtered, 50, `${matriculaSearch}|${JSON.stringify(filtros)}`);
+    usePagination(filtered, 50, `${matriculaSearch}|${JSON.stringify(filtros)}`, 'page');
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {

@@ -69,17 +69,23 @@ export function calcularDataFimLongaDuracao(
 }
 
 /** Um contrato é renovável se for rent-a-car ou TVDE de longa duração, versão
- *  actual e activo. Rent-a-car exige data_fim; TVDE pode não ter (contratos
+ *  actual e **em curso**. Rent-a-car exige data_fim; TVDE pode não ter (contratos
  *  antigos, criados antes da data_fim automática de longa duração) — nesse
  *  caso a 1.ª renovação arranca o ciclo a partir de hoje (a RPC usa
- *  COALESCE(data_fim, now())) e daí em diante comporta-se como rent-a-car. */
+ *  COALESCE(data_fim, now())) e daí em diante comporta-se como rent-a-car.
+ *
+ *  Exige 'em_curso' (e não 'agendado'): renovar pressupõe que a viatura está
+ *  com o cliente e que o período anterior correu. Renovar um contrato apenas
+ *  agendado propagava o estado 'agendado' para o período novo — era assim que
+ *  contratos renovados ficavam por abrir. A RPC renovar_contrato_renting
+ *  aplica a mesma regra server-side. */
 export function contratoRenovavel(c: ContratoRenovavelInput): boolean {
   return (
     (c.regime === 'rent_a_car' || c.regime === 'tvde') &&
     !!c.is_longa_duracao &&
     !c.substituido_em &&
     !c.deleted_at &&
-    (c.estado_operacional === 'em_curso' || c.estado_operacional === 'agendado') &&
+    c.estado_operacional === 'em_curso' &&
     (!!c.data_fim || c.regime === 'tvde')
   );
 }

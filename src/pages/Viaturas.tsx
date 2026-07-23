@@ -54,6 +54,8 @@ import { useViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
 interface ViaturasTipo {
   id: string;
@@ -120,6 +122,8 @@ export default function Viaturas() {
   const [printing, setPrinting] = useState(false);
 
   const isMobile = useIsMobile();
+  const { hasAccessToResource } = usePermissions();
+  const podeEliminar = hasAccessToResource(RECURSOS.VIATURAS_ELIMINAR);
 
   // Ocupação atual (reservas/contratos/movimentos/reparações ativos) para
   // derivar o estado de cada viatura. Uma reserva/contrato marcado para o
@@ -309,7 +313,8 @@ export default function Viaturas() {
   } = usePagination(
     filteredViaturas,
     25,
-    `${searchTerm}|${statusFilter}|${categoriaFilter}|${combustivelFilter}|${tipoFilter}`
+    `${searchTerm}|${statusFilter}|${categoriaFilter}|${combustivelFilter}|${tipoFilter}`,
+    'page'
   );
 
   const getCategoriaColor = (categoria: string | null | undefined) =>
@@ -340,7 +345,7 @@ export default function Viaturas() {
   };
 
   const handleDelete = async () => {
-    if (!selectedViatura) return;
+    if (!selectedViatura || !podeEliminar) return;
     setDeleteLoading(true);
     try {
       const { error } = await supabase.from('viaturas').delete().eq('id', selectedViatura.id);
@@ -623,9 +628,15 @@ export default function Viaturas() {
                     <Button size="icon" variant="ghost" onClick={() => handleViewPage(viatura)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant="ghost" onClick={() => handleDeleteClick(viatura)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    {podeEliminar && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleDeleteClick(viatura)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
                   </div>
                 </div>
                 {(isExpired(viatura.inspecao_validade) || isExpired(viatura.seguro_validade)) && (
@@ -793,14 +804,16 @@ export default function Viaturas() {
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={() => handleDeleteClick(viatura)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {podeEliminar && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          onClick={() => handleDeleteClick(viatura)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

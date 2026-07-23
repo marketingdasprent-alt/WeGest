@@ -23,6 +23,7 @@ interface ViaturaDocumentosCardProps {
   onUpload: (tipo: string, file: File) => void;
   onView: (doc: ViaturaDocument) => void;
   onDelete: (doc: ViaturaDocument) => void;
+  podeEliminar: boolean;
 }
 
 export function ViaturaDocumentosCard({
@@ -34,6 +35,7 @@ export function ViaturaDocumentosCard({
   onUpload,
   onView,
   onDelete,
+  podeEliminar,
 }: ViaturaDocumentosCardProps) {
   return (
     <Card>
@@ -103,14 +105,16 @@ export function ViaturaDocumentosCard({
                       >
                         <Eye className="h-3.5 w-3.5" />
                       </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-destructive"
-                        onClick={() => onDelete(existingDoc)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      {podeEliminar && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive"
+                          onClick={() => onDelete(existingDoc)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ) : (

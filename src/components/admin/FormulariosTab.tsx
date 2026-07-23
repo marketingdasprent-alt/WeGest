@@ -6,6 +6,7 @@ import { CreateFormularioDialog } from '@/components/formularios/CreateFormulari
 import { EditFormularioDialog } from '@/components/formularios/EditFormularioDialog';
 import { Button } from '@/components/ui/button';
 import { Plus, Loader2 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Formulario {
   id: string;
@@ -25,6 +26,8 @@ export const FormulariosTab = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingFormulario, setEditingFormulario] = useState<Formulario | null>(null);
   const { toast } = useToast();
+  // Só admins gerem formulários (a RLS da tabela `formularios` exige-o).
+  const { isAdmin } = usePermissions();
 
   useEffect(() => {
     fetchFormularios();
@@ -244,6 +247,7 @@ export const FormulariosTab = () => {
               onEdit={() => setEditingFormulario(formulario)}
               onDelete={() => handleDelete(formulario.id)}
               onToggleAtivo={() => handleToggleActive(formulario.id, formulario.ativo)}
+              podeGerir={isAdmin}
             />
           ))}
         </div>

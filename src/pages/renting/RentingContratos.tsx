@@ -190,7 +190,7 @@ const RentingContratos = () => {
   ]);
 
   const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
-    usePagination(filtered, 50, `${search}|${JSON.stringify(filtros)}`);
+    usePagination(filtered, 50, `${search}|${JSON.stringify(filtros)}`, 'page');
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {

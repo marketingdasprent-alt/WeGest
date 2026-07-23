@@ -249,7 +249,7 @@ const WebAppRoutes = () => {
           <Route
             path="/dasprent-funcionarios"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireAdmin={true}>
                 <DashboardLayout>
                   <DasprentFuncionarios />
                 </DashboardLayout>

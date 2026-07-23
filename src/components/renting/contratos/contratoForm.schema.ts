@@ -187,6 +187,18 @@ export const contratoFormSchema = z
       }),
   })
   .superRefine((d, ctx) => {
+    // Tarifa obrigatória em qualquer contrato faturável (todos menos 'slot').
+    // Sem tarifa, o TVDE não resolve o preço semanal por modelo e o contrato
+    // nunca gera cobranças — foi exatamente esta a causa de 22 contratos TVDE
+    // por faturar (auditoria 2026-07). 'slot' são vagas sem faturação.
+    if (d.regime !== 'slot' && !d.tarifa_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['tarifa_id'],
+        message: 'Tarifa obrigatória',
+      });
+    }
+
     // TVDE: data de fim OPCIONAL — sem ela o contrato fica em aberto e a 1.ª
     // renovação (RPC renovar_contrato_renting) fecha o período até hoje e
     // arranca o ciclo mensal. Quando fornecida, valida-se só a ordem.
