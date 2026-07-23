@@ -128,12 +128,13 @@ Deno.serve(async (req) => {
 
     const { data: intConfig } = await supabase
       .from('plataformas_configuracao')
-      .select('org_id, robot_target_platform')
+      .select('org_id, robot_target_platform, nome')
       .eq('id', integracao_id)
       .single();
     if (!intConfig) return jsonError('Integração não encontrada.', 404);
 
     const orgId = intConfig.org_id;
+    const integracaoNome = intConfig.nome ?? null;
 
     const { data: viaturas } = await supabase
       .from('viaturas')
@@ -255,6 +256,7 @@ Deno.serve(async (req) => {
 
       upsertMap.set(txId, {
         integracao_id,
+        integracao_nome: integracaoNome,
         org_id: orgId,
         transaction_id: txId,
         contrato: contrato || null,
