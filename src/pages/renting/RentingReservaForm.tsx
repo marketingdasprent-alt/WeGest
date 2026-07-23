@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import { useForm, useFieldArray, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
@@ -105,6 +106,7 @@ const DEFAULT_VALUES: ReservaFormValues = {
 
 const RentingReservaForm = () => {
   const navigate = useNavigate();
+  const goBack = useGoBack('/renting/reservas');
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const isEdit = !!id && id !== 'nova';
@@ -824,12 +826,7 @@ const RentingReservaForm = () => {
           }
           icon={CalendarCheck}
         >
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate('/renting/reservas')}
-            className="gap-2"
-          >
+          <Button type="button" variant="outline" onClick={goBack} className="gap-2">
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>

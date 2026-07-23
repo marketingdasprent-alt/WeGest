@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -61,6 +62,7 @@ import {
 
 const RentingClienteForm = () => {
   const navigate = useNavigate();
+  const goBack = useGoBack('/renting/clientes');
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
 
@@ -220,12 +222,7 @@ const RentingClienteForm = () => {
           }
           icon={User}
         >
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate('/renting/clientes')}
-            className="gap-2"
-          >
+          <Button type="button" variant="outline" onClick={goBack} className="gap-2">
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>

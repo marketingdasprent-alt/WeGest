@@ -230,7 +230,8 @@ export default function Motoristas() {
     usePagination(
       filteredMotoristas,
       50,
-      `${searchTerm}|${statusFilter}|${cidadeFilter}|${gestorFilter}`
+      `${searchTerm}|${statusFilter}|${cidadeFilter}|${gestorFilter}`,
+      'page'
     );
 
   const handleRowClick = (motorista: Motorista) => {

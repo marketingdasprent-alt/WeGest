@@ -88,10 +88,6 @@ export const RECURSOS = {
 
   // Dashboard / Contabilidade
   DASHBOARD_CHECKIN_HISTORICO: 'dashboard_checkin_historico',
-
-  // Email
-  EMAIL_VER: 'email_ver',
-  EMAIL_GERIR: 'email_gerir',
 } as const;
 
 export type RecursoKey = (typeof RECURSOS)[keyof typeof RECURSOS];

@@ -312,7 +312,8 @@ export default function Viaturas() {
   } = usePagination(
     filteredViaturas,
     25,
-    `${searchTerm}|${statusFilter}|${categoriaFilter}|${combustivelFilter}|${tipoFilter}`
+    `${searchTerm}|${statusFilter}|${categoriaFilter}|${combustivelFilter}|${tipoFilter}`,
+    'page'
   );
 
   const getCategoriaColor = (categoria: string | null | undefined) =>

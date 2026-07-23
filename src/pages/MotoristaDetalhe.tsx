@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import { format } from 'date-fns';
 import {
   FileSignature,
@@ -58,6 +59,7 @@ export default function MotoristaDetalhe() {
   const navigate = useNavigate();
   const location = useLocation();
   const returnUrl = (location.state as any)?.listaUrl || '/motoristas';
+  const goBack = useGoBack(returnUrl);
   const { toast } = useToast();
   const [motorista, setMotorista] = useState<Motorista | null>(null);
   const [loading, setLoading] = useState(true);
@@ -231,12 +233,7 @@ export default function MotoristaDetalhe() {
       {/* Header com Ações */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card p-6 rounded-xl border shadow-sm">
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate(returnUrl)}
-            className="rounded-full"
-          >
+          <Button variant="ghost" size="icon" onClick={goBack} className="rounded-full">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
