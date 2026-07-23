@@ -11,6 +11,7 @@ import { useConsumirTokenRealizacao, useRealizarFromToken } from '@/hooks/useRea
 import { formatMatricula } from '@/components/calendario/calendarioUtils';
 import { errorMessage } from '@/utils/errorMessage';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTipoCombustivel } from '@/hooks/useTipoCombustivel';
 import {
   type FilePreview,
   tipoLabel,
@@ -53,34 +54,6 @@ const makeFileHandlers = (setter: React.Dispatch<React.SetStateAction<FilePrevie
     setter((prev) => prev.filter((f) => f.id !== id));
   },
 });
-
-/** Tipo de combustível da viatura (nome do catálogo, com fallback ao texto
- *  legado) — decide se se mostra o nível de combustível, de bateria, ou ambos
- *  (híbridos). Mesma resolução usada em useViaturas.ts. */
-function useTipoCombustivel(viaturaId: string | null | undefined) {
-  return useQuery({
-    queryKey: ['viatura-tipo-combustivel', viaturaId],
-    enabled: !!viaturaId,
-    queryFn: async (): Promise<string | null> => {
-      const { data } = await supabase
-        .from('viaturas')
-        .select('combustivel, combustivel_id')
-        .eq('id', viaturaId!)
-        .maybeSingle();
-      if (!data) return null;
-      if (data.combustivel_id) {
-        const { data: cat } = await supabase
-          .from('viatura_combustiveis')
-          .select('nome')
-          .eq('id', data.combustivel_id as string)
-          .maybeSingle();
-        if (cat?.nome) return cat.nome as string;
-      }
-      return (data.combustivel as string | null) ?? null;
-    },
-    staleTime: 60_000,
-  });
-}
 
 // ── Componente principal ─────────────────────────────────────────────────────
 

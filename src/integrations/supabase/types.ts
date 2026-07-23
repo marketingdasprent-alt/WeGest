@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -11,31 +11,6 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
   }
   public: {
     Tables: {
@@ -3051,6 +3026,7 @@ export type Database = {
           eletricidade_entrada: string | null
           eletricidade_saida: string | null
           emissor_id: string | null
+          entrega_via_any_rent: boolean
           estacao_entrega_id: string | null
           estacao_origem_viatura_id: string | null
           estacao_recolha_id: string | null
@@ -3127,6 +3103,7 @@ export type Database = {
           eletricidade_entrada?: string | null
           eletricidade_saida?: string | null
           emissor_id?: string | null
+          entrega_via_any_rent?: boolean
           estacao_entrega_id?: string | null
           estacao_origem_viatura_id?: string | null
           estacao_recolha_id?: string | null
@@ -3203,6 +3180,7 @@ export type Database = {
           eletricidade_entrada?: string | null
           eletricidade_saida?: string | null
           emissor_id?: string | null
+          entrega_via_any_rent?: boolean
           estacao_entrega_id?: string | null
           estacao_origem_viatura_id?: string | null
           estacao_recolha_id?: string | null
@@ -5509,6 +5487,7 @@ export type Database = {
           data_pagamento: string | null
           descricao: string
           fatura_url: string | null
+          grupo_id: string | null
           id: string
           motorista_id: string
           org_id: string | null
@@ -5529,6 +5508,7 @@ export type Database = {
           data_pagamento?: string | null
           descricao: string
           fatura_url?: string | null
+          grupo_id?: string | null
           id?: string
           motorista_id: string
           org_id?: string | null
@@ -5549,6 +5529,7 @@ export type Database = {
           data_pagamento?: string | null
           descricao?: string
           fatura_url?: string | null
+          grupo_id?: string | null
           id?: string
           motorista_id?: string
           org_id?: string | null
@@ -5769,62 +5750,69 @@ export type Database = {
       }
       motorista_resumo_semanal: {
         Row: {
-          id: string
-          org_id: string
-          motorista_id: string
           contrato_id: string
-          viatura_id: string
-          semana_inicio: string
-          semana_fim: string
           custo_aluguer: number
-          receita_bolt: number
-          receita_uber: number
-          receita_outras: number
           despesa_caucao: number
-          despesa_seguros: number
           despesa_outros: number
+          despesa_seguros: number
           gerado_em: string
+          id: string
+          motorista_id: string
+          org_id: string
+          receita_bolt: number
+          receita_outras: number
+          receita_uber: number
+          semana_fim: string
+          semana_inicio: string
+          viatura_id: string
         }
         Insert: {
-          id?: string
-          org_id?: string
-          motorista_id: string
           contrato_id: string
-          viatura_id: string
-          semana_inicio: string
-          semana_fim: string
           custo_aluguer?: number
-          receita_bolt?: number
-          receita_uber?: number
-          receita_outras?: number
           despesa_caucao?: number
-          despesa_seguros?: number
           despesa_outros?: number
+          despesa_seguros?: number
           gerado_em?: string
+          id?: string
+          motorista_id: string
+          org_id?: string
+          receita_bolt?: number
+          receita_outras?: number
+          receita_uber?: number
+          semana_fim: string
+          semana_inicio: string
+          viatura_id: string
         }
         Update: {
-          id?: string
-          org_id?: string
-          motorista_id?: string
           contrato_id?: string
-          viatura_id?: string
-          semana_inicio?: string
-          semana_fim?: string
           custo_aluguer?: number
-          receita_bolt?: number
-          receita_uber?: number
-          receita_outras?: number
           despesa_caucao?: number
-          despesa_seguros?: number
           despesa_outros?: number
+          despesa_seguros?: number
           gerado_em?: string
+          id?: string
+          motorista_id?: string
+          org_id?: string
+          receita_bolt?: number
+          receita_outras?: number
+          receita_uber?: number
+          semana_fim?: string
+          semana_inicio?: string
+          viatura_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "motorista_resumo_semanal_org_id_fkey"
-            columns: ["org_id"]
+            foreignKeyName: "motorista_resumo_semanal_contrato_id_fkey"
+            columns: ["contrato_id"]
             isOneToOne: false
-            referencedRelation: "organizacoes"
+            referencedRelation: "contrato_renting_totais"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "motorista_resumo_semanal_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos_renting"
             referencedColumns: ["id"]
           },
           {
@@ -5835,10 +5823,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "motorista_resumo_semanal_contrato_id_fkey"
-            columns: ["contrato_id"]
+            foreignKeyName: "motorista_resumo_semanal_org_id_fkey"
+            columns: ["org_id"]
             isOneToOne: false
-            referencedRelation: "contratos_renting"
+            referencedRelation: "organizacoes"
             referencedColumns: ["id"]
           },
           {
@@ -6036,6 +6024,7 @@ export type Database = {
           documento_tipo: string | null
           documento_validade: string | null
           email: string | null
+          foto_url: string | null
           gestor_responsavel: string | null
           iban: string | null
           id: string
@@ -6088,6 +6077,7 @@ export type Database = {
           documento_tipo?: string | null
           documento_validade?: string | null
           email?: string | null
+          foto_url?: string | null
           gestor_responsavel?: string | null
           iban?: string | null
           id?: string
@@ -6140,6 +6130,7 @@ export type Database = {
           documento_tipo?: string | null
           documento_validade?: string | null
           email?: string | null
+          foto_url?: string | null
           gestor_responsavel?: string | null
           iban?: string | null
           id?: string
@@ -6803,6 +6794,7 @@ export type Database = {
           cookies_json: string | null
           created_at: string | null
           criado_por: string | null
+          email_api_key_encrypted: string | null
           email_provider: string | null
           email_provider_config: Json | null
           email_reply_to: string | null
@@ -6823,6 +6815,8 @@ export type Database = {
           redirect_uri: string | null
           robot_target_platform: string | null
           sync_automatico: boolean | null
+          sync_dia_semana: number
+          sync_hora: number
           uber_access_token: string | null
           uber_environment: string | null
           uber_refresh_token: string | null
@@ -6848,6 +6842,7 @@ export type Database = {
           cookies_json?: string | null
           created_at?: string | null
           criado_por?: string | null
+          email_api_key_encrypted?: string | null
           email_provider?: string | null
           email_provider_config?: Json | null
           email_reply_to?: string | null
@@ -6868,6 +6863,8 @@ export type Database = {
           redirect_uri?: string | null
           robot_target_platform?: string | null
           sync_automatico?: boolean | null
+          sync_dia_semana?: number
+          sync_hora?: number
           uber_access_token?: string | null
           uber_environment?: string | null
           uber_refresh_token?: string | null
@@ -6893,6 +6890,7 @@ export type Database = {
           cookies_json?: string | null
           created_at?: string | null
           criado_por?: string | null
+          email_api_key_encrypted?: string | null
           email_provider?: string | null
           email_provider_config?: Json | null
           email_reply_to?: string | null
@@ -6913,6 +6911,8 @@ export type Database = {
           redirect_uri?: string | null
           robot_target_platform?: string | null
           sync_automatico?: boolean | null
+          sync_dia_semana?: number
+          sync_hora?: number
           uber_access_token?: string | null
           uber_environment?: string | null
           uber_refresh_token?: string | null
@@ -9992,6 +9992,53 @@ export type Database = {
           },
         ]
       }
+      via_verde_sync_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          integracao_id: string
+          org_id: string
+          periodo_fim: string | null
+          periodo_inicio: string | null
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          integracao_id: string
+          org_id: string
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          integracao_id?: string
+          org_id?: string
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "via_verde_sync_queue_integracao_id_fkey"
+            columns: ["integracao_id"]
+            isOneToOne: false
+            referencedRelation: "plataformas_configuracao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       via_verde_transacoes: {
         Row: {
           amount: number | null
@@ -10001,6 +10048,7 @@ export type Database = {
           created_at: string | null
           id: string
           integracao_id: string | null
+          integracao_nome: string | null
           matricula: string | null
           motorista_id: string | null
           nr_equipamento: string | null
@@ -10020,6 +10068,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           integracao_id?: string | null
+          integracao_nome?: string | null
           matricula?: string | null
           motorista_id?: string | null
           nr_equipamento?: string | null
@@ -10039,6 +10088,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           integracao_id?: string | null
+          integracao_nome?: string | null
           matricula?: string | null
           motorista_id?: string | null
           nr_equipamento?: string | null
@@ -10176,7 +10226,6 @@ export type Database = {
       }
       viatura_danos: {
         Row: {
-          categoria_id: string | null
           cobranca_id: string | null
           condutor_cliente_id: string | null
           contrato_id: string | null
@@ -10202,7 +10251,6 @@ export type Database = {
           viatura_id: string
         }
         Insert: {
-          categoria_id?: string | null
           cobranca_id?: string | null
           condutor_cliente_id?: string | null
           contrato_id?: string | null
@@ -10228,7 +10276,6 @@ export type Database = {
           viatura_id: string
         }
         Update: {
-          categoria_id?: string | null
           cobranca_id?: string | null
           condutor_cliente_id?: string | null
           contrato_id?: string | null
@@ -10254,13 +10301,6 @@ export type Database = {
           viatura_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "viatura_danos_categoria_id_fkey"
-            columns: ["categoria_id"]
-            isOneToOne: false
-            referencedRelation: "assistencia_categorias"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "viatura_danos_cobranca_id_fkey"
             columns: ["cobranca_id"]
@@ -10743,46 +10783,46 @@ export type Database = {
       }
       viatura_resumo_semanal: {
         Row: {
-          id: string
-          org_id: string
-          viatura_id: string
-          semana_inicio: string
-          semana_fim: string
-          receita_aluguer: number
-          receita_outros: number
           despesa_combustivel: number
-          despesa_portagens: number
           despesa_danos: number
           despesa_outros: number
+          despesa_portagens: number
           gerado_em: string
+          id: string
+          org_id: string
+          receita_aluguer: number
+          receita_outros: number
+          semana_fim: string
+          semana_inicio: string
+          viatura_id: string
         }
         Insert: {
-          id?: string
-          org_id?: string
-          viatura_id: string
-          semana_inicio: string
-          semana_fim: string
-          receita_aluguer?: number
-          receita_outros?: number
           despesa_combustivel?: number
-          despesa_portagens?: number
           despesa_danos?: number
           despesa_outros?: number
+          despesa_portagens?: number
           gerado_em?: string
+          id?: string
+          org_id?: string
+          receita_aluguer?: number
+          receita_outros?: number
+          semana_fim: string
+          semana_inicio: string
+          viatura_id: string
         }
         Update: {
-          id?: string
-          org_id?: string
-          viatura_id?: string
-          semana_inicio?: string
-          semana_fim?: string
-          receita_aluguer?: number
-          receita_outros?: number
           despesa_combustivel?: number
-          despesa_portagens?: number
           despesa_danos?: number
           despesa_outros?: number
+          despesa_portagens?: number
           gerado_em?: string
+          id?: string
+          org_id?: string
+          receita_aluguer?: number
+          receita_outros?: number
+          semana_fim?: string
+          semana_inicio?: string
+          viatura_id?: string
         }
         Relationships: [
           {
@@ -11408,6 +11448,15 @@ export type Database = {
         Returns: string
       }
       gerar_token_realizacao: { Args: { p_evento_id: string }; Returns: string }
+      get_assistentes_disponiveis: {
+        Args: never
+        Returns: {
+          cargo_id: string
+          cargo_nome: string
+          nome: string
+          user_id: string
+        }[]
+      }
       get_cartao_historico_consumo: {
         Args: { p_numero: string; p_tipo: string }
         Returns: {
@@ -11458,6 +11507,17 @@ export type Database = {
           nome: string
         }[]
       }
+      get_minha_org_motorista: { Args: never; Returns: string }
+      get_motorista_contrato_ativo: {
+        Args: never
+        Returns: {
+          codigo: number
+          contrato_id: string
+          data_inicio: string
+          matricula: string
+          regime: string
+        }[]
+      }
       get_obe_historico_portagens: {
         Args: { p_nr_equipamento: string }
         Returns: {
@@ -11498,6 +11558,34 @@ export type Database = {
           periodo_fim: string
           periodo_inicio: string
           ultima_data: string
+        }[]
+      }
+      get_viatura_historico_portagens: {
+        Args: {
+          p_data_fim?: string
+          p_data_inicio?: string
+          p_viatura_id: string
+        }
+        Returns: {
+          amount: number
+          barreira_entrada: string
+          barreira_saida: string
+          contrato_codigo: number
+          contrato_id: string
+          motorista_id: string
+          motorista_nome: string
+          operador: string
+          tipo_evento: string
+          transaction_date: string
+          transaction_id: string
+        }[]
+      }
+      get_viaturas_motorista_atual: {
+        Args: { p_org_id?: string }
+        Returns: {
+          motorista_id: string
+          motorista_nome: string
+          viatura_id: string
         }[]
       }
       has_permission:
@@ -11651,6 +11739,27 @@ export type Database = {
         }[]
       }
       verificar_lista_espera_disponibilidade: { Args: never; Returns: number }
+      via_verde_sync_queue_claim: {
+        Args: { p_max: number }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          integracao_id: string
+          org_id: string
+          periodo_fim: string | null
+          periodo_inicio: string | null
+          started_at: string | null
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "via_verde_sync_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       viatura_ocupacao_intervalos: {
         Args: { p_from?: string; p_to?: string; p_viatura_id: string }
         Returns: {
@@ -11705,10 +11814,10 @@ export type Database = {
         | "cancelada"
         | "expirada"
       tipo_documento_enum:
-        | "Cartão Cidadão"
+        | "CartÃ£o CidadÃ£o"
         | "Passaporte"
-        | "Autorização de Residência"
-        | "Carta de Condução"
+        | "AutorizaÃ§Ã£o de ResidÃªncia"
+        | "Carta de ConduÃ§Ã£o"
         | "Outro"
     }
     CompositeTypes: {
@@ -11835,9 +11944,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: ["admin", "gestor_tvde", "gestor_comercial", "colaborador"],
@@ -11871,10 +11977,10 @@ export const Constants = {
         "expirada",
       ],
       tipo_documento_enum: [
-        "Cartão Cidadão",
+        "CartÃ£o CidadÃ£o",
         "Passaporte",
-        "Autorização de Residência",
-        "Carta de Condução",
+        "AutorizaÃ§Ã£o de ResidÃªncia",
+        "Carta de ConduÃ§Ã£o",
         "Outro",
       ],
     },

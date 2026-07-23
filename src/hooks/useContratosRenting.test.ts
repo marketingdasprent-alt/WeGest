@@ -8,6 +8,8 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   useCreateContratoRenting,
   useFecharContrato,
+  useMarcarRealizacaoDireta,
+  usePreencherDadosSaidaAnyRent,
   resolveFechoContratoToast,
   type FecharContratoArgs,
 } from './useContratosRenting';
@@ -416,5 +418,116 @@ describe('useFecharContrato', () => {
 
     expect(fechouAgora).toBe(true);
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Contrato fechado' }));
+  });
+});
+
+// ─── useMarcarRealizacaoDireta: atalho "Any Rent" ──────────
+
+describe('useMarcarRealizacaoDireta', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('marca em_curso e entrega_via_any_rent=true (bypass Any Rent)', async () => {
+    const chains = setupSupabase({
+      contratos_renting: { data: null, error: null },
+    });
+    (supabase.auth as unknown as { getUser: ReturnType<typeof vi.fn> }).getUser = vi
+      .fn()
+      .mockResolvedValue({ data: { user: { id: 'user-1' } } });
+
+    const { result } = renderHook(() => useMarcarRealizacaoDireta(), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({ contratoId: 'c1' });
+    });
+
+    // A flag identifica este contrato como "sem check-in" — é o que
+    // restringe o banner de preenchimento manual (AnyRentDadosSaidaAlert)
+    // só a contratos que passaram por este atalho.
+    expect(chains.contratos_renting.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        estado_operacional: 'em_curso',
+        entrega_via_any_rent: true,
+      })
+    );
+  });
+});
+
+// ─── usePreencherDadosSaidaAnyRent: preenchimento manual (Any Rent) ────
+
+describe('usePreencherDadosSaidaAnyRent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('grava km/combustível/bateria de saída no contrato', async () => {
+    const chains = setupSupabase({
+      contratos_renting: { data: null, error: null },
+    });
+    (supabase.auth as unknown as { getUser: ReturnType<typeof vi.fn> }).getUser = vi
+      .fn()
+      .mockResolvedValue({ data: { user: { id: 'user-1' } } });
+
+    const { result } = renderHook(() => usePreencherDadosSaidaAnyRent(), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        contratoId: 'c1',
+        kmSaida: 45120,
+        combustivelSaida: '3/4',
+        eletricidadeSaida: null,
+      });
+    });
+
+    expect(chains.contratos_renting.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        km_saida: 45120,
+        combustivel_saida: '3/4',
+        eletricidade_saida: null,
+      })
+    );
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Dados de saída preenchidos' })
+    );
+  });
+
+  it('surfaces o erro do Postgres no toast quando o update falha', async () => {
+    const dbError = { message: 'some constraint violated', code: '23514', details: '', hint: null };
+    setupSupabase({
+      contratos_renting: { data: null, error: dbError },
+    });
+    (supabase.auth as unknown as { getUser: ReturnType<typeof vi.fn> }).getUser = vi
+      .fn()
+      .mockResolvedValue({ data: { user: { id: 'user-1' } } });
+
+    const { result } = renderHook(() => usePreencherDadosSaidaAnyRent(), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      try {
+        await result.current.mutateAsync({
+          contratoId: 'c1',
+          kmSaida: 45120,
+          combustivelSaida: '3/4',
+          eletricidadeSaida: null,
+        });
+      } catch {
+        // esperado
+      }
+    });
+
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Erro',
+        description: expect.stringContaining('some constraint violated'),
+        variant: 'destructive',
+      })
+    );
   });
 });

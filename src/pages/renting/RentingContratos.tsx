@@ -35,6 +35,7 @@ import {
   normalizeMatricula,
 } from '@/components/renting/contratos/contratosUtils';
 import { RenovacoesBanner } from '@/components/renting/contratos/RenovacoesBanner';
+import { AnyRentPendentesBanner } from '@/components/renting/contratos/AnyRentPendentesBanner';
 
 import {
   CONTRATO_ESTADO_FIN_LABELS,
@@ -268,6 +269,12 @@ const RentingContratos = () => {
       />
 
       <RenovacoesBanner
+        contratos={contratos}
+        getClienteNome={getClienteNome}
+        getCondutorNome={getCondutorNome}
+      />
+
+      <AnyRentPendentesBanner
         contratos={contratos}
         getClienteNome={getClienteNome}
         getCondutorNome={getCondutorNome}
