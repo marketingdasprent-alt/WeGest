@@ -17,7 +17,12 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CommandMenu } from '@/components/ui/command-menu';
 import { CommandGroup, CommandItem } from '@/components/ui/command';
-import { MENU_ITEMS, type MenuItem, type SubMenuItem, type SubSubMenuItem } from './sidebarMenuItems';
+import {
+  MENU_ITEMS,
+  type MenuItem,
+  type SubMenuItem,
+  type SubSubMenuItem,
+} from './sidebarMenuItems';
 
 export const SidebarMenu: React.FC = () => {
   const { isAdmin, hasAccessToResource, cargo, loading } = usePermissions();
@@ -71,8 +76,11 @@ export const SidebarMenu: React.FC = () => {
   // permissão/org) até às folhas com url — 3 níveis (item > subItem >
   // subSubItem) — sem duplicar a lista de navegação num sítio novo.
   const commandItems = useMemo(() => {
-    const flat: { label: string; url: string; icon?: React.ComponentType<{ className?: string }> }[] =
-      [];
+    const flat: {
+      label: string;
+      url: string;
+      icon?: React.ComponentType<{ className?: string }>;
+    }[] = [];
     for (const item of visibleMenuItems) {
       if (!item.subItems?.length) {
         if (item.url) flat.push({ label: item.label, url: item.url, icon: item.icon });

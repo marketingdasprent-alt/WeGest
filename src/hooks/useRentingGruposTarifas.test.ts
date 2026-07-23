@@ -188,12 +188,11 @@ describe('calcularFaturacaoRenting', () => {
   });
 
   it('rent-a-car diário: valor = dias × preço, arredondado a 2 casas, com descrição', () => {
-    const fat = calcularFaturacaoRenting(
-      'rent_a_car',
-      false,
-      3,
-      { preco_dia: 33.333, preco_semana: null, preco_mes: null }
-    );
+    const fat = calcularFaturacaoRenting('rent_a_car', false, 3, {
+      preco_dia: 33.333,
+      preco_semana: null,
+      preco_mes: null,
+    });
 
     expect(fat).toEqual({
       valor: 100,

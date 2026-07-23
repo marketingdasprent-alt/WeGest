@@ -1,23 +1,20 @@
 import { useState } from 'react';
 import { Bell } from 'lucide-react';
-import { usePermissions } from '@/hooks/usePermissions';
-import { useNotificacoes } from '@/hooks/useNotificacoes';
+import { useNotificacoesContext } from '@/contexts/NotificacoesContext';
 import { NotificationCenter, type NotificationFilter } from '@/components/ui/notification-center';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 /**
  * Sino persistente no header, sempre visível (ao contrário do NotificacoesPopup,
- * que só aparece por alguns segundos por aviso). Usa o mesmo `useNotificacoes`
+ * que só aparece por alguns segundos por aviso). Usa o mesmo NotificacoesContext
  * (só activas/não-resolvidas) — não existe ainda uma query de histórico
  * paginado, por isso os separadores "Não resolvidas"/"Todas" mostram a mesma
  * lista por agora; `hasMore`/`onLoadMore` ficam sempre a false/no-op até essa
  * query existir.
  */
 export function NotificationBell() {
-  const { tipoUtilizador, loading } = usePermissions();
-  const enabled = !loading && tipoUtilizador !== 'motorista';
-  const { notificacoes, resolver } = useNotificacoes(enabled);
+  const { notificacoes, resolver, enabled } = useNotificacoesContext();
 
   const [open, setOpen] = useState(false);
   const [filtro, setFiltro] = useState<NotificationFilter>('unread');
