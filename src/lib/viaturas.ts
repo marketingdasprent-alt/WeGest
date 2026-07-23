@@ -3,6 +3,7 @@ export interface ViaturaStatsSummary {
   disponiveis: number;
   emUso: number;
   manutencao: number;
+  inativas: number;
   vendidas: number;
   slot: number;
   slotDisponiveis: number;

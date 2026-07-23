@@ -46,6 +46,7 @@ const SELECT_COLUMNS = `
   is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias,
   franquia_valor, caucao_valor, kms_incluidos, km_adicional_valor,
   km_saida, km_entrada,
+  combustivel_saida, eletricidade_saida,
   dua_original_com_motorista, dua_devolvida_em, dua_observacoes,
   voucher_codigo,
   numero_processo, voo_referencia,

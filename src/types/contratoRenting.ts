@@ -156,6 +156,10 @@ export type ContratoRenting = {
    *  fechar/renovar. O mês seguinte arranca com este km_entrada. */
   km_saida: number | null;
   km_entrada: number | null;
+  /** Nível de combustível/bateria na entrega ao motorista (ex.: "3/4", "100%").
+   *  Um dos dois fica preenchido consoante o tipo de combustível da viatura. */
+  combustivel_saida: string | null;
+  eletricidade_saida: string | null;
 
   /** DUA original — o motorista levou a DUA física da viatura. A flag e a nota
    *  vêm do formulário; `dua_devolvida_em` é escrito só no fecho (quando o
@@ -198,10 +202,13 @@ export type ContratoRentingInsert = Omit<
   | 'contrato_anterior_id'
   | 'substituido_em'
   | 'motivo_versao'
-  // km_saida/km_entrada só são escritos server-side pela RPC de renovação
-  // (renovar_contrato_renting), nunca pelo formulário de criar/editar.
+  // km_saida/km_entrada e combustivel_saida/eletricidade_saida só são
+  // escritos server-side pela RPC de renovação (renovar_contrato_renting) ou
+  // no fluxo de entrega, nunca pelo formulário de criar/editar.
   | 'km_saida'
   | 'km_entrada'
+  | 'combustivel_saida'
+  | 'eletricidade_saida'
   // Os campos DUA são escritos no fluxo de entrega/recolha da viatura
   // (RealizarEntregaPage) e no fecho, nunca no formulário do contrato.
   | 'dua_original_com_motorista'

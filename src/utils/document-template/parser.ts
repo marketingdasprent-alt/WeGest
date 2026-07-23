@@ -254,6 +254,7 @@ export const replaceDynamicFields = (
     'viatura_marca_modelo',
     'viatura_grupo',
     'viatura_kms',
+    'viatura_combustivel_saida',
     'local_entrega',
     'local_recolha',
     'tarifa_diaria',
