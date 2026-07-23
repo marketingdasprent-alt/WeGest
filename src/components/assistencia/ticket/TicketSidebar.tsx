@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { Ticket, Anexo, Viatura, Motorista } from './types';
 import { AssistenteResponsavelField } from './AssistenteResponsavelField';
+import { TicketDanosCard } from './TicketDanosCard';
 
 interface Props {
   ticket: Ticket;
@@ -96,6 +97,8 @@ export const TicketSidebar: React.FC<Props> = ({
         </Button>
       </CardContent>
     </Card>
+
+    <TicketDanosCard ticketId={ticket.id} />
 
     <Card>
       <CardHeader className="py-3">
