@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { buildCargoPermissoes } from "../_shared/register-org/buildCargoPermissoes.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -259,13 +260,7 @@ serve(async (req) => {
     }
 
     if (recursos && recursos.length > 0) {
-      const permissoes = recursos.map((r) => ({
-        cargo_id: cargo.id,
-        recurso_id: r.id,
-        org_id: org.id,
-        tem_acesso: true,
-        pode_editar: true,
-      }));
+      const permissoes = buildCargoPermissoes(cargo.id, org.id, recursos);
 
       const { error: permissoesError } = await supabase
         .from("cargo_permissoes")

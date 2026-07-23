@@ -83,6 +83,7 @@ export const DocumentTemplatePreviewDialog: React.FC<Props> = ({
       viatura_marca_modelo: 'Toyota Corolla',
       viatura_grupo: 'Grupo B',
       viatura_kms: '15.000',
+      viatura_combustivel_saida: '3/4',
       local_entrega: 'Aeroporto de Lisboa',
       local_recolha: 'Aeroporto de Lisboa',
       tarifa_diaria: '25,00 €',

@@ -21,8 +21,8 @@ const Sobre = () => {
               Sobre a <span className="text-primary">WeGest</span>
             </h1>
             <p className="text-xl text-gray-400">
-              A empresa TVDE que mais cresce em Portugal, comprometida com o sucesso dos nossos
-              motoristas parceiros.
+              Construímos o WeGest a gerir a nossa própria frota TVDE e rent-a-car — hoje
+              disponibilizamos o mesmo sistema a outras empresas do sector.
             </p>
           </motion.div>
         </div>
@@ -52,6 +52,11 @@ const Sobre = () => {
                 Com uma frota moderna e uma equipa de suporte sempre disponível, trabalhamos todos
                 os dias para que os nossos parceiros possam alcançar os seus objetivos
                 profissionais.
+              </p>
+              <p className="text-gray-400 mt-4">
+                Essa operação corre inteira no sistema que construímos — desde então, outras
+                empresas de TVDE e rent-a-car pediram para usar o mesmo software na sua própria
+                frota, e é isso que hoje também oferecemos.
               </p>
             </motion.div>
             <motion.div

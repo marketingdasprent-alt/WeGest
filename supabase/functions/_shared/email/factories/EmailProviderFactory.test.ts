@@ -38,7 +38,11 @@ function makeMockSupabase(opts: {
 const originalEnvGet = Deno.env.get;
 
 function withEnv(vars: Record<string, string | undefined>, fn: () => Promise<void>) {
-  Deno.env.get = (key: string) => vars[key] ?? originalEnvGet(key);
+  // `key in vars` (não `vars[key] ??`) — uma chave listada com valor
+  // `undefined` tem de devolver `undefined` sem cair no `originalEnvGet`
+  // real, que exige --allow-env e no CI (deno test --allow-read) rebenta
+  // com "NotCapable" em vez de simular a env var como não definida.
+  Deno.env.get = (key: string) => (key in vars ? vars[key] : originalEnvGet(key));
   return fn().finally(() => {
     Deno.env.get = originalEnvGet;
   });

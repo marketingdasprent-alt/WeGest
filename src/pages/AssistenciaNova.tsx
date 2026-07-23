@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { AssistenteResponsavelSelect } from '@/components/assistencia/ticket/AssistenteResponsavelField';
 import {
   Table,
   TableBody,
@@ -49,6 +50,7 @@ import {
   Zap,
   Flame,
   Eraser,
+  UserCog,
 } from 'lucide-react';
 import { AssistenciaMultimediaUpload } from '@/components/assistencia/AssistenciaMultimediaUpload';
 import { matchesSearch } from '@/lib/utils';
@@ -96,6 +98,7 @@ export default function AssistenciaNova() {
   const [substituteSearchTerm, setSubstituteSearchTerm] = useState('');
   const [motoristaId, setMotoristaId] = useState<string | null>(null);
   const [mediaFiles, setMediaFiles] = useState<any[]>([]);
+  const [atribuidoA, setAtribuidoA] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     categoria_id: '',
@@ -259,6 +262,7 @@ export default function AssistenciaNova() {
           estado_limpeza: formData.estado_limpeza,
           valor_orcamento: formData.valor_orcamento ? parseFloat(formData.valor_orcamento) : null,
           criado_por: user?.id,
+          atribuido_a: atribuidoA,
         })
         .select()
         .single();
@@ -661,7 +665,7 @@ export default function AssistenciaNova() {
 
                 <div className="space-y-2">
                   <Label htmlFor="adblue" className="flex items-center gap-2">
-                    <Droplet className="h-4 w-4" /> Nível AdBlue (Obrigatório)
+                    <Droplet className="h-4 w-4" /> Nível AdBlue
                   </Label>
                   <Select
                     value={formData.adblue_nivel}
@@ -725,6 +729,13 @@ export default function AssistenciaNova() {
                       <SelectItem value="muito_suja">Muito Suja</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <UserCog className="h-4 w-4" /> Assistente responsável (opcional)
+                  </Label>
+                  <AssistenteResponsavelSelect value={atribuidoA} onChange={setAtribuidoA} />
                 </div>
 
                 {isGas && (

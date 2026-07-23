@@ -26,38 +26,18 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, Pencil, Trash2, Users, Eye, Edit2, ShieldOff } from 'lucide-react';
 import type { Cargo } from '@/hooks/useRBAC';
-import { PermissionsSelector, type Permission } from './PermissionsSelector';
+import { PermissionsSelector, BOOLEAN_RECURSOS, type Permission } from './PermissionsSelector';
 import { buildCargoPermissoesRows } from './cargoPermissoesRows';
 
 // ── Resumo visual das permissões do grupo ────────────────────────────────────
 
 interface GrupoPermSummaryProps {
-  cargoId: string;
+  // Contagem já resolvida no fetchGrupos (para atualizar em tempo real ao
+  // guardar/apagar, sem depender de um fetch por-grupo que não reagia).
+  summary: { ver: number; editar: number } | undefined;
 }
 
-const GrupoPermSummary: React.FC<GrupoPermSummaryProps> = ({ cargoId }) => {
-  const [summary, setSummary] = useState<{ ver: number; editar: number } | null>(null);
-
-  useEffect(() => {
-    supabase
-      .from('cargo_permissoes')
-      .select('*')
-      .eq('cargo_id', cargoId)
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('Erro ao carregar sumário:', error);
-          return;
-        }
-        if (data) {
-          // Filtra apenas os que têm algum tipo de acesso
-          const acessos = data.filter((p: any) => p.tem_acesso === true);
-          const editar = acessos.filter((p: any) => p.pode_editar === true).length;
-          const ver = acessos.length - editar;
-          setSummary({ ver, editar });
-        }
-      });
-  }, [cargoId]);
-
+const GrupoPermSummary: React.FC<GrupoPermSummaryProps> = ({ summary }) => {
   if (!summary) return <span className="text-xs text-muted-foreground">—</span>;
 
   if (summary.ver === 0 && summary.editar === 0) {
@@ -92,6 +72,7 @@ const GrupoPermSummary: React.FC<GrupoPermSummaryProps> = ({ cargoId }) => {
 export const GruposTab = () => {
   const [grupos, setGrupos] = useState<Cargo[]>([]);
   const [membrosCount, setMembrosCount] = useState<Record<string, number>>({});
+  const [permCounts, setPermCounts] = useState<Record<string, { ver: number; editar: number }>>({});
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingGrupo, setEditingGrupo] = useState<Cargo | null>(null);
@@ -126,6 +107,26 @@ export const GruposTab = () => {
           counts[p.cargo_id] = (counts[p.cargo_id] || 0) + 1;
         });
         setMembrosCount(counts);
+
+        // Contar permissões (ver/editar) por grupo — numa só query, para os
+        // badges atualizarem sempre que se recarrega (ex.: após guardar).
+        const { data: perms } = await supabase
+          .from('cargo_permissoes')
+          .select('cargo_id, tem_acesso, pode_editar, recursos!inner(nome)')
+          .in('cargo_id', ids);
+        const pc: Record<string, { ver: number; editar: number }> = {};
+        ids.forEach((id) => (pc[id] = { ver: 0, editar: 0 }));
+        (perms || []).forEach((p: any) => {
+          if (!p.tem_acesso) return;
+          // Recursos Sim/Não (ex.: "Disponível para assistência") não contam
+          // como "ver"/"editar" — são outro tipo de controlo. (O embed pode vir
+          // como objeto ou array conforme o PostgREST.)
+          const nome = Array.isArray(p.recursos) ? p.recursos[0]?.nome : p.recursos?.nome;
+          if (BOOLEAN_RECURSOS.has(nome)) return;
+          if (p.pode_editar) pc[p.cargo_id].editar += 1;
+          else pc[p.cargo_id].ver += 1;
+        });
+        setPermCounts(pc);
       }
     } catch (error: any) {
       toast({
@@ -310,7 +311,7 @@ export const GruposTab = () => {
 
                   {/* Resumo de permissões */}
                   <div className="hidden md:flex items-center min-w-[180px]">
-                    <GrupoPermSummary cargoId={grupo.id} />
+                    <GrupoPermSummary summary={permCounts[grupo.id]} />
                   </div>
 
                   {/* Acções */}
@@ -344,7 +345,10 @@ export const GruposTab = () => {
 
       {/* Dialog criar/editar */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-w-3xl max-h-[90vh] overflow-y-auto"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>
               {editingGrupo ? `Editar Grupo: ${editingGrupo.nome}` : 'Novo Grupo'}

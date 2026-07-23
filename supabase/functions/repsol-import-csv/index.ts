@@ -15,6 +15,12 @@ function sanitizeCard(card: string): string {
   return (card || '').replace(/\D/g, '');
 }
 
+const stripAcc = (s: string) =>
+  (s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
 function parseRepsolDate(raw: string, time: string = ''): string | null {
   if (!raw) return null;
   let s = raw.trim();
@@ -115,16 +121,88 @@ function detectSeparator(lines: string[]): string {
   return semilons >= commas ? ';' : ',';
 }
 
+function mergeDecimalFragments(fields: string[], expectedCount: number): string[] {
+  if (fields.length <= expectedCount) return fields;
+
+  const mergesToDo = fields.length - expectedCount;
+  if (mergesToDo <= 0) return fields;
+
+  const pairScores: { idx: number; score: number }[] = [];
+  for (let i = 0; i < fields.length - 1; i++) {
+    const current = fields[i].trim();
+    const next = fields[i + 1].trim();
+    let score = 0;
+
+    if (/^\d{1,2}$/.test(next)) {
+      score += 3;
+      if (/\d$/.test(current)) score += 2;
+      if (/^\d+$/.test(current)) score += 1;
+    }
+
+    if (score > 0) pairScores.push({ idx: i, score });
+  }
+
+  pairScores.sort((a, b) => b.score - a.score);
+  const mergeIndices = new Set(pairScores.slice(0, mergesToDo).map((p) => p.idx));
+
+  const merged: string[] = [];
+  let i = 0;
+  while (i < fields.length) {
+    if (mergeIndices.has(i) && i + 1 < fields.length) {
+      merged.push(`${fields[i].trim()},${fields[i + 1].trim()}`);
+      i += 2;
+    } else {
+      merged.push(fields[i]);
+      i++;
+    }
+  }
+
+  return merged;
+}
+
+function findHeaderIndex(lines: string[]): number {
+  const markers = [
+    'num_tarjet',
+    'tarjeta',
+    'fec_oper',
+    'fecha',
+    'imp_total',
+    'num_litro',
+    'nom_estab',
+    'conductor',
+    'matricula',
+  ];
+
+  for (let i = 0; i < lines.length; i++) {
+    const norm = stripAcc(lines[i]);
+    const hits = markers.filter((m) => norm.includes(m)).length;
+    if (hits >= 2) return i;
+  }
+
+  return lines.findIndex((l) => l.trim().length > 0);
+}
+
 function parseCsv(text: string): Record<string, string>[] {
   const clean = text.replace(/^\uFEFF/, '');
-  const lines = clean.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) return [];
-  const sep = detectSeparator(lines);
-  const headers = parseCsvLine(lines[0], sep).map((h) => h.trim());
+  const allLines = clean.split(/\r?\n/);
+  const headerIdx = findHeaderIndex(allLines);
+  if (headerIdx < 0 || headerIdx >= allLines.length - 1) return [];
+
+  const dataLines = allLines.slice(headerIdx).filter((l) => l.trim());
+  if (dataLines.length < 2) return [];
+
+  const sep = detectSeparator([dataLines[0], dataLines[1] || '']);
+  const headers = parseCsvLine(dataLines[0], sep).map((h) => h.trim());
+  const headerCount = headers.length;
   const rows: Record<string, string>[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const vals = parseCsvLine(lines[i], sep).map((v) => v.trim());
+  for (let i = 1; i < dataLines.length; i++) {
+    let vals = parseCsvLine(dataLines[i], sep).map((v) => v.trim());
     if (vals.length < 2) continue;
+
+    if (vals.length > headerCount) {
+      vals = mergeDecimalFragments(vals, headerCount);
+    }
+
     const row: Record<string, string> = {};
     headers.forEach((h, idx) => {
       row[h] = vals[idx] || '';
@@ -136,7 +214,8 @@ function parseCsv(text: string): Record<string, string>[] {
 
 function findField(row: Record<string, string>, candidates: string[]): string {
   for (const c of candidates) {
-    const key = Object.keys(row).find((k) => k.toLowerCase().includes(c.toLowerCase()));
+    const cNorm = stripAcc(c);
+    const key = Object.keys(row).find((k) => stripAcc(k).includes(cNorm));
     if (key && row[key]) return row[key];
   }
   return '';
@@ -178,6 +257,22 @@ function normalizeName(name: string): string {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ');
+}
+
+function stableRowSignature(row: Record<string, string>): string {
+  return Object.keys(row)
+    .sort()
+    .map((key) => `${key}:${(row[key] || '').trim()}`)
+    .join('|');
+}
+
+function hashString(input: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
 Deno.serve(async (req) => {
@@ -270,7 +365,8 @@ Deno.serve(async (req) => {
 
     let imported = 0,
       matched = 0,
-      skipped = 0;
+      skipped = 0,
+      dedupedInPayload = 0;
     const upsertMap = new Map();
 
     for (const row of rows) {
@@ -278,13 +374,26 @@ Deno.serve(async (req) => {
         'num_tarjet',
         'tarjeta',
         'tarjet',
+        'n tarjeta',
+        'n cartao',
         'cartao_dispositivo',
         'cartao',
         'card',
         'PAN',
       ]);
-      const dateStr = findField(row, ['fec_oper', 'fec_factur', 'fec', 'fecha', 'data', 'date']);
-      const timeStr = findField(row, ['hor_oper', 'hor', 'hora', 'time']);
+      // "data operacao"/"fec_oper" tem de vir antes dos genéricos "data"/"fecha":
+      // exports novos trazem DATA FATURA (faturação) e DATA OPERAÇÃO (real) — o
+      // genérico "data" apanhava "DATA FATURA" por vir primeiro no CSV.
+      const dateStr = findField(row, [
+        'fec_oper',
+        'data operacao',
+        'fec_factur',
+        'fec',
+        'fecha',
+        'data',
+        'date',
+      ]);
+      const timeStr = findField(row, ['hor_oper', 'hora operacao', 'hor', 'hora', 'time']);
       const amountStr = findField(row, [
         'imp_total',
         'imp',
@@ -324,7 +433,9 @@ Deno.serve(async (req) => {
       const qty = parseNumber(qtyStr);
       const safeStation = (station || '').replace(/\W/g, '').toLowerCase();
       const safeMatricula = (matriculaRaw || '').replace(/\W/g, '').toLowerCase();
-      const txId = `repsol-${sanitizeCard(cardNumber)}-${dateStr.replace(/\D/g, '')}-${amountStr.replace(/\D/g, '')}-${qtyStr.replace(/\D/g, '')}-${safeStation}-${safeMatricula}`;
+      const safeProduct = (product || '').replace(/\W/g, '').toLowerCase();
+      const safeDriver = (driverName || '').replace(/\W/g, '').toLowerCase();
+      const txId = `repsol-${hashString(stableRowSignature(row))}`;
 
       const sanitized = sanitizeCard(cardNumber);
       let motoristaId = sanitized ? cardMap.get(sanitized) : null;
@@ -337,6 +448,7 @@ Deno.serve(async (req) => {
       if (motoristaId) matched++;
 
       // Usar Map para pre-deduplicar as transações gémeas do pacote.
+      if (upsertMap.has(txId)) dedupedInPayload++;
       upsertMap.set(txId, {
         integracao_id,
         org_id: orgId,
@@ -369,6 +481,7 @@ Deno.serve(async (req) => {
         imported,
         matched,
         skipped,
+        deduped_in_payload: dedupedInPayload,
         total: rows.length,
         // debug_headers: nomes das colunas recebidas — alimenta o diagnóstico do
         // wizard quando linhas são ignoradas (mostra as colunas no toast).

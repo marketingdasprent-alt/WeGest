@@ -312,10 +312,10 @@ const RentingClientes = () => {
       // Pesquisa global (sempre activa)
       if (search.trim()) {
         const hit =
-          c.codigo.toString().includes(search) ||
+          (/^\d+$/.test(search.trim()) && c.codigo === Number(search.trim())) ||
           matchesSearch(c.nome, search) ||
           matchesSearch(c.nome_comercial, search) ||
-          (c.nif && c.nif.includes(search)) ||
+          (c.nif && c.nif.startsWith(search)) ||
           (c.telefone && c.telefone.includes(search)) ||
           matchesSearch(c.email, search) ||
           matchesSearch(c.morada, search);

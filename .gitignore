@@ -44,4 +44,9 @@ docs/**/*.md
 .claude/skills/
 .claude/settings.local.json
 
+# Worktrees git NUNCA dentro da árvore do projeto (var/tsc/eslint/vitest
+# varrem tudo em src/**; um worktree aninhado já causou testes a crashar por
+# 2 instâncias de React). Vivem em pasta irmã: ../wegest-worktrees/.
+.claude/worktrees/
+
 .sisyphus/

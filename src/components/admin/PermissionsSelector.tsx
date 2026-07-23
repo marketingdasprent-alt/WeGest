@@ -72,6 +72,7 @@ const MODULOS = [
 const RECURSO_LABELS: Record<string, string> = {
   // Dashboard
   dashboard_ver: 'Aceder ao Dashboard',
+  dashboard_checkin_historico: 'Ver histórico de check-in / check-out',
   // Renting
   renting_clientes: 'Gestão de clientes de renting',
   renting_contratos: 'Gestão de contratos de renting',
@@ -132,6 +133,7 @@ const RECURSO_LABELS: Record<string, string> = {
   assistencia_criar: 'Criar tickets de assistência',
   assistencia_categorias: 'Gerir categorias de assistência',
   assistencia_tickets: 'Gestão completa de assistência',
+  assistencia_disponivel: 'Disponível para assistência',
   // Administração
   admin_utilizadores: 'Gerir utilizadores e contas',
   admin_convites: 'Gerir Convites',
@@ -149,6 +151,11 @@ const RECURSO_LABELS: Record<string, string> = {
 function getLabel(nome: string): string {
   return RECURSO_LABELS[nome] || nome;
 }
+
+// Recursos que são um SIM/NÃO por grupo (não os 3 níveis Nenhum/Ver/Editar).
+// "Disponível para assistência": tem_acesso=true → o grupo fica selecionável
+// como assistente responsável nos tickets. Só há 2 estados (sim/não).
+export const BOOLEAN_RECURSOS = new Set(['assistencia_disponivel']);
 
 // ── Level Toggle ─────────────────────────────────────────────────────────────
 
@@ -185,6 +192,42 @@ const LevelToggle: React.FC<LevelToggleProps> = ({ value, onChange }) => {
         >
           {icon}
           <span className="hidden sm:inline">{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
+// ── Boolean Toggle (Sim / Não) ───────────────────────────────────────────────
+
+interface BooleanToggleProps {
+  value: boolean;
+  onChange: (v: boolean) => void;
+}
+
+const BooleanToggle: React.FC<BooleanToggleProps> = ({ value, onChange }) => {
+  const opts: { key: boolean; label: string }[] = [
+    { key: false, label: 'Não' },
+    { key: true, label: 'Sim' },
+  ];
+  return (
+    <div className="flex rounded-md border border-border overflow-hidden shrink-0">
+      {opts.map(({ key, label }) => (
+        <button
+          key={String(key)}
+          type="button"
+          onClick={() => onChange(key)}
+          className={cn(
+            'flex items-center gap-1 px-3 py-1 text-xs font-medium transition-colors',
+            'border-r border-border last:border-r-0',
+            value === key
+              ? key
+                ? 'bg-green-500 text-white'
+                : 'bg-muted text-muted-foreground'
+              : 'bg-background text-muted-foreground hover:bg-muted'
+          )}
+        >
+          {label}
         </button>
       ))}
     </div>
@@ -281,9 +324,11 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
   const getRecursosForModulo = (moduloKey: string): Recurso[] =>
     recursos.filter((r) => r.categoria === moduloKey);
 
-  // Stats por módulo
+  // Stats por módulo (ignora recursos booleanos Sim/Não — são outro controlo)
   const getModuloStats = (moduloKey: string) => {
-    const moduloRecursos = getRecursosForModulo(moduloKey);
+    const moduloRecursos = getRecursosForModulo(moduloKey).filter(
+      (r) => !BOOLEAN_RECURSOS.has(r.nome)
+    );
     let editar = 0,
       ver = 0;
     moduloRecursos.forEach((r) => {
@@ -294,8 +339,11 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
     return { editar, ver, total: moduloRecursos.length };
   };
 
+  // Ações rápidas só nos recursos de 3 níveis; os Sim/Não são geridos à parte.
   const setAllModuloLevel = (moduloKey: string, nivel: NivelAcesso) => {
-    const moduloRecursos = getRecursosForModulo(moduloKey);
+    const moduloRecursos = getRecursosForModulo(moduloKey).filter(
+      (r) => !BOOLEAN_RECURSOS.has(r.nome)
+    );
     let updated = [...permissions];
     moduloRecursos.forEach((r) => {
       updated = updated.filter((p) => p.recurso_id !== r.id);
@@ -335,7 +383,7 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
         </div>
       </div>
 
-      <Accordion type="multiple" className="w-full" defaultValue={['Motoristas', 'Viaturas']}>
+      <Accordion type="multiple" className="w-full">
         {modulosComRecursos.map((modulo) => {
           const Icon = modulo.icon;
           const stats = getModuloStats(modulo.key);
@@ -440,10 +488,17 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
                               </span>
                             )}
                           </div>
-                          <LevelToggle
-                            value={nivel}
-                            onChange={(v) => updatePermission(recurso.id, v)}
-                          />
+                          {BOOLEAN_RECURSOS.has(recurso.nome) ? (
+                            <BooleanToggle
+                              value={nivel !== 'nenhum'}
+                              onChange={(v) => updatePermission(recurso.id, v ? 'ver' : 'nenhum')}
+                            />
+                          ) : (
+                            <LevelToggle
+                              value={nivel}
+                              onChange={(v) => updatePermission(recurso.id, v)}
+                            />
+                          )}
                         </div>
                       );
                     })}

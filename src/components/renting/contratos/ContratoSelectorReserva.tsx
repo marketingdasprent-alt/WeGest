@@ -12,18 +12,11 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 
 import { useReservas } from '@/hooks/useReservas';
 import { useContratosRenting } from '@/hooks/useContratosRenting';
-import { formatDateTime, normalizeMatricula } from './contratosUtils';
+import { formatDateTime, matchesCodigo, normalizeMatricula } from './contratosUtils';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
 interface ContratoSelectorReservaProps {
@@ -71,7 +64,7 @@ export const ContratoSelectorReserva: React.FC<ContratoSelectorReservaProps> = (
       // Search por matrícula ou código
       if (searchNorm) {
         const m = normalizeMatricula(r.matricula ?? '');
-        const codigoMatch = String(r.codigo).includes(search.trim());
+        const codigoMatch = matchesCodigo(r.codigo, search);
         if (!m.includes(searchNorm) && !codigoMatch) return false;
       }
       return true;

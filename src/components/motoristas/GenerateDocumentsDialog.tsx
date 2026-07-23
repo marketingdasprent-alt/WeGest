@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, FileText, CheckCircle2, Search, User } from 'lucide-react';
+import { Loader2, FileText, CheckCircle2, Search, User, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { gerarContratoAtomico } from '@/hooks/useContratos';
@@ -29,6 +29,11 @@ import {
   uploadDocumentToStorage,
 } from '@/utils/generateDocumentFromTemplate';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import {
+  useDocumentosSuplementares,
+  getDocumentoSuplementarSignedUrl,
+} from '@/hooks/useDocumentosSuplementares';
+import { filtrarSuplementaresAtivos } from '@/utils/document-template/filtrarSuplementaresAtivos';
 import { empresaDocData } from '@/config/empresas';
 import { resolveCartaoFrota } from '@/utils/document-template/resolveCartaoFrota';
 import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
@@ -97,6 +102,7 @@ export const GenerateDocumentsDialog = ({
   uploadFirstToStorage = false,
 }: GenerateDocumentsDialogProps) => {
   const { empresas, getById } = useClientesEmpresas();
+  const { data: suplementares = [] } = useDocumentosSuplementares();
   const defaultEmpresaId = empresas[0]?.id || '';
 
   // Estado para seleção de motorista (quando não passado nas props)
@@ -175,7 +181,7 @@ export const GenerateDocumentsDialog = ({
         (m) =>
           matchesSearch(m.nome, searchTerm) ||
           matchesSearch(m.email, searchTerm) ||
-          (m.nif && m.nif.includes(searchTerm))
+          (m.nif && m.nif.startsWith(searchTerm))
       );
       setFilteredMotoristas(filtered);
     }
@@ -257,6 +263,15 @@ export const GenerateDocumentsDialog = ({
       }
       return next;
     });
+  };
+
+  const handleDownloadSuplementar = async (path: string) => {
+    const url = await getDocumentoSuplementarSignedUrl(path);
+    if (!url) {
+      toast.error('Não foi possível gerar o link do ficheiro.');
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const filteredTemplates = templates.filter(
@@ -748,6 +763,36 @@ export const GenerateDocumentsDialog = ({
                     )}
                   </ScrollArea>
                 </div>
+
+                {(() => {
+                  const suplementaresDaEmpresa = filtrarSuplementaresAtivos(
+                    suplementares,
+                    selectedEmpresa
+                  );
+                  if (suplementaresDaEmpresa.length === 0) return null;
+                  return (
+                    <div className="space-y-2">
+                      <Label>Documentos Suplementares</Label>
+                      <div className="border rounded-md p-3 space-y-2">
+                        {suplementaresDaEmpresa.map((doc) => (
+                          <div key={doc.id} className="flex items-center justify-between gap-2">
+                            <span className="text-sm truncate">{doc.nome}</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0"
+                              onClick={() => handleDownloadSuplementar(doc.ficheiro_url)}
+                              title="Descarregar"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <p className="text-xs text-muted-foreground text-center">
                   {visibleSelectedCount} documento(s) selecionado(s)

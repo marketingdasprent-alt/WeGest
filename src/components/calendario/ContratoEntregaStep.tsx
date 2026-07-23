@@ -556,6 +556,7 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
       queryClient.invalidateQueries({ queryKey: ['viaturas-calendario'] });
       queryClient.invalidateQueries({ queryKey: ['viaturas-pendentes-recolha'] });
       queryClient.invalidateQueries({ queryKey: ['motorista-viaturas'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'checkin-checkout-historico'] });
       if (fazerDepois) {
         queryClient.invalidateQueries({ queryKey: ['contratos-checkout-pendentes'] });
       }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 // Must be defined before importing Dashboard. vi.mock is hoisted automatically.
@@ -209,6 +209,32 @@ describe('Dashboard — variantes por papel', () => {
     await waitFor(() => {
       expect(screen.queryByText('Atividade & Rentabilidade')).toBeNull();
       expect(screen.getByText('Atividade')).toBeTruthy();
+    });
+  });
+});
+
+describe('Dashboard — intervalo de datas personalizado', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('botão "Personalizado" abre um calendário de intervalo (não fica só nos presets)', async () => {
+    mockPermissions({ isAdmin: true, cargo: 'Administrador' });
+    mockVariant('executivo');
+
+    render(<Dashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Disponíveis')).toBeTruthy();
+    });
+
+    const trigger = screen.getByRole('button', { name: /Personalizado/i });
+    fireEvent.click(trigger);
+
+    // O DayPicker (modo range) desenha uma grelha de dias — confirma que o
+    // calendário chegou a montar, não só que o botão existe.
+    await waitFor(() => {
+      expect(document.querySelector('table')).toBeTruthy();
     });
   });
 });

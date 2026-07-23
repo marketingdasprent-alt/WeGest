@@ -2,6 +2,19 @@ import type jsPDF from 'jspdf';
 import type { RGB, TableCellData, TableCtx } from './types';
 
 /**
+ * Linha do traço "_______" onde a assinatura deve assentar. Localiza-se por
+ * CONTEÚDO, nunca por posição — o placeholder {{assinatura_*}} pode vir antes
+ * ou depois do traço consoante o template (ex.: "Contrato Aluguer" tem o
+ * traço primeiro; "Folha de Danos" tem o placeholder primeiro). Assumir
+ * sempre a 1.ª linha da célula ancorava a assinatura à linha errada nesse
+ * segundo caso, deixando-a deslocada do traço.
+ */
+export function findTracoLineIndex(lines: Array<{ text: string }>): number {
+  const idx = lines.findIndex((l) => /^_{3,}$/.test(l.text.trim()));
+  return idx === -1 ? 0 : idx;
+}
+
+/**
  * Desenha uma tabela (vetorial) a partir de TableCellData[][]. Suporta:
  * larguras de coluna iguais (+ colspan), wrap de texto, alinhamento,
  * cor de fundo/texto, bordas (opcional) e quebra de página por linha.
@@ -72,11 +85,15 @@ export function renderTable(
         pdf.setLineWidth(0.2);
         pdf.rect(cl.cx, y, cl.cw, rowH, 'S');
       }
-      // Assinatura: desenhada SOBRE a primeira linha
+      // Assinatura: desenhada SOBRE a linha do traço "_______" (não
+      // necessariamente a 1.ª linha da célula — ver findTracoLineIndex).
       const sigImg = cl.cell.signatureSrc ? ctx.signatures?.get(cl.cell.signatureSrc) : undefined;
       if (sigImg && sigImg.width > 0 && sigImg.height > 0) {
-        const firstLineH = cl.wrapped[0]?.h ?? 4;
-        const tracoBaselineY = y + pad + firstLineH * 0.82;
+        const tracoIdx = findTracoLineIndex(cl.wrapped);
+        let yAntesTraco = 0;
+        for (let i = 0; i < tracoIdx; i++) yAntesTraco += cl.wrapped[i].h;
+        const tracoLineH = cl.wrapped[tracoIdx]?.h ?? 4;
+        const tracoBaselineY = y + pad + yAntesTraco + tracoLineH * 0.82;
         const maxSigW = Math.min(cl.cw - pad * 2, 38);
         const maxSigH = Math.max(6, Math.min(12, tracoBaselineY - (y + 0.5)));
         const aspect = sigImg.width / sigImg.height;

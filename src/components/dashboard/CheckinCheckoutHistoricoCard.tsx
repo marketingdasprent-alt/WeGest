@@ -1,40 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { Camera, LogIn, LogOut, Loader2, ImageOff } from 'lucide-react';
+import { Camera, LogIn, LogOut, ImageOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { supabase } from '@/integrations/supabase/client';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import {
   useCheckinCheckoutHistorico,
+  useMediaSignedUrl,
   type CheckinCheckoutSession,
+  type SessionMedia,
 } from '@/hooks/useCheckinCheckoutHistorico';
 import { CheckinCheckoutDetailDialog } from './CheckinCheckoutDetailDialog';
 
-const BUCKET = 'contrato-media';
-const PAGE_SIZE = 10;
+const PREVIEW_SIZE = 5;
 
-function ThumbnailImage({ path }: { path: string }) {
-  const [src, setSrc] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    supabase.storage
-      .from(BUCKET)
-      .createSignedUrl(path, 60 * 10)
-      .then(({ data }) => {
-        if (!cancelled && data?.signedUrl) setSrc(data.signedUrl);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [path]);
-
+function ThumbnailImage({ media }: { media: SessionMedia }) {
+  const src = useMediaSignedUrl(media);
   if (!src) return <Skeleton className="w-full h-full rounded-md" />;
-
   return <img src={src} className="w-full h-full object-cover" alt="" />;
 }
 
@@ -47,9 +38,10 @@ function SessionRow({
 }) {
   const viatura = session.contrato?.viatura;
   const nomeCondutor = session.contrato?.cliente?.nome ?? session.contrato?.motorista_nome;
-  const hasCheckin = session.mediaCheckin.length > 0;
-  const hasCheckout = session.mediaCheckout.length > 0;
-  const totalFotos = session.mediaCheckin.length + session.mediaCheckout.length;
+  // Badge vem do evento realizado (fonte de verdade do momento).
+  const hasCheckin = !!session.checkinAt;
+  const hasCheckout = !!session.checkoutAt;
+  const totalFotos = session.fotos.length;
 
   const dataFormatada = (() => {
     try {
@@ -66,8 +58,8 @@ function SessionRow({
     >
       {/* Thumbnail */}
       <div className="w-12 h-12 rounded-md overflow-hidden shrink-0 border bg-muted">
-        {session.thumbnailPath ? (
-          <ThumbnailImage path={session.thumbnailPath} />
+        {session.thumbnail ? (
+          <ThumbnailImage media={session.thumbnail} />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <ImageOff className="h-5 w-5 text-muted-foreground/40" />
@@ -122,11 +114,16 @@ interface Props {
 
 export const CheckinCheckoutHistoricoCard: React.FC<Props> = ({ enabled }) => {
   const { data: sessions = [], isLoading } = useCheckinCheckoutHistorico(enabled);
-  const [showAll, setShowAll] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<CheckinCheckoutSession | null>(null);
 
-  const visibleSessions = showAll ? sessions : sessions.slice(0, PAGE_SIZE);
-  const hasMore = sessions.length > PAGE_SIZE;
+  const previewSessions = sessions.slice(0, PREVIEW_SIZE);
+  const hasMore = sessions.length > PREVIEW_SIZE;
+
+  const openDetail = (s: CheckinCheckoutSession) => {
+    setListOpen(false);
+    setSelectedSession(s);
+  };
 
   return (
     <>
@@ -155,36 +152,31 @@ export const CheckinCheckoutHistoricoCard: React.FC<Props> = ({ enabled }) => {
                   </div>
                 </div>
               ))}
-              <div className="flex items-center justify-center py-2 text-xs text-muted-foreground gap-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />A carregar...
-              </div>
             </div>
           ) : sessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
               <Camera className="h-10 w-10 text-muted-foreground/30" />
               <p className="text-sm text-muted-foreground">
-                Ainda não há registos de check-in ou check-out.
+                Ainda não há check-ins ou check-outs com fotografias.
               </p>
             </div>
           ) : (
             <>
-              <ScrollArea className={showAll ? 'max-h-[520px]' : undefined}>
-                <div className="space-y-2 pr-1">
-                  {visibleSessions.map((s) => (
-                    <SessionRow key={s.key} session={s} onClick={() => setSelectedSession(s)} />
-                  ))}
-                </div>
-              </ScrollArea>
+              <div className="space-y-2">
+                {previewSessions.map((s) => (
+                  <SessionRow key={s.key} session={s} onClick={() => openDetail(s)} />
+                ))}
+              </div>
 
-              {hasMore && !showAll && (
+              {hasMore && (
                 <div className="pt-3 text-center">
                   <Button
                     variant="ghost"
                     size="sm"
                     className="text-xs text-muted-foreground"
-                    onClick={() => setShowAll(true)}
+                    onClick={() => setListOpen(true)}
                   >
-                    Ver todos ({sessions.length})
+                    Mostrar todos ({sessions.length})
                   </Button>
                 </div>
               )}
@@ -192,6 +184,29 @@ export const CheckinCheckoutHistoricoCard: React.FC<Props> = ({ enabled }) => {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal com a lista completa */}
+      <Dialog open={listOpen} onOpenChange={setListOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="h-5 w-5 text-primary" />
+              Histórico Check-in / Check-out
+              <Badge variant="secondary" className="ml-1 text-xs font-normal">
+                {sessions.length}
+              </Badge>
+            </DialogTitle>
+            <DialogDescription>
+              Todos os check-ins e check-outs com fotografias. Clica para ver o detalhe.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 overflow-y-auto max-h-[65vh] pr-1 -mr-1">
+            {sessions.map((s) => (
+              <SessionRow key={s.key} session={s} onClick={() => openDetail(s)} />
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <CheckinCheckoutDetailDialog
         open={selectedSession !== null}

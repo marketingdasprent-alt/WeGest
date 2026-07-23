@@ -46,6 +46,8 @@ export function useViaturaFinanceiraReceitas(viaturaId: string | undefined) {
           'id, regime, data_inicio, data_fim, tarifa_id, tarifa_diaria, valor_total_manual, estado_operacional'
         )
         .eq('viatura_id', viaturaId)
+        .is('deleted_at', null)
+        .is('substituido_em', null)
         .in('estado_operacional', ['agendado', 'em_curso']);
 
       const temTarifa = (c: (typeof contratosAtivos)[number]) =>

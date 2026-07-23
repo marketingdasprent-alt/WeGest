@@ -33,6 +33,10 @@ export function useViaturaVinculosAtivos(viaturaId?: string | null) {
           .select('id')
           .eq('viatura_id', viaturaId!)
           .is('deleted_at', null)
+          // Sem isto, uma versão substituída (troca/upgrade/downgrade) continua
+          // a bater aqui — estado_operacional fica congelado em 'agendado'/
+          // 'em_curso' para sempre nessa linha, só substituido_em muda.
+          .is('substituido_em', null)
           .in('estado_operacional', ['agendado', 'em_curso'])
           .limit(1),
         supabase
