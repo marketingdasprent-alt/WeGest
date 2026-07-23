@@ -1,209 +1,23 @@
-import React, { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  BarChart3,
-  User,
-  FileText,
-  Settings,
-  Menu,
-  ClipboardCheck,
-  ChevronDown,
-  Wrench,
-  Car,
-  Wallet,
-  CalendarDays,
-  Mail,
-  KeyRound,
-  CalendarCheck,
-  Users,
-  Layers,
-  Tag,
-  ShieldCheck,
-  PackagePlus,
-  Percent,
-  Fuel,
-  CarFront,
-  Calculator,
-  CreditCard,
-  Wifi,
-  Banknote,
-  Gauge,
-  ExternalLink,
-  Ticket,
-} from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Settings, Menu, ChevronDown, Search } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserMenu } from '@/components/auth/UserMenu';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { NotificationBell } from '@/components/notificacoes/NotificationBell';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { OrgSelector } from '@/components/OrgSelector';
 import { useTenant } from '@/contexts/TenantContext';
-import { REALIZE_ORG_IDS } from '@/config/realize';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
-
-interface SubSubMenuItem {
-  label: string;
-  url: string;
-  icon?: React.ComponentType<{ className?: string }>;
-  recurso?: string;
-}
-
-interface SubMenuItem {
-  label: string;
-  url?: string;
-  icon?: React.ComponentType<{ className?: string }>;
-  recurso?: string;
-  /** Só visível para Admin ou cargo 'Supervisor Gestor TVDE' (ex.: aprovação de pedidos). */
-  requireSupervisorTvde?: boolean;
-  subItems?: SubSubMenuItem[];
-}
-
-interface MenuItem {
-  label: string;
-  url?: string;
-  icon: React.ComponentType<{ className?: string }>;
-  recurso?: string;
-  /** Mostra o item se o utilizador tiver QUALQUER um destes recursos. */
-  recursosAny?: string[];
-  requireAdmin?: boolean;
-  /** Restringe o item a orgs específicas (ex.: ferramentas internas que não fazem sentido para outros tenants). */
-  orgIds?: string[];
-  subItems?: SubMenuItem[];
-}
-
-const MENU_ITEMS: MenuItem[] = [
-  { label: 'Dashboard', url: '/dashboard', icon: LayoutDashboard, recurso: 'motoristas_gestao' },
-  {
-    label: 'Renting',
-    icon: KeyRound,
-    subItems: [
-      {
-        label: 'Contratos',
-        url: '/renting/contratos',
-        icon: FileText,
-        recurso: 'renting_contratos',
-      },
-      {
-        label: 'Reservas',
-        url: '/renting/reservas',
-        icon: CalendarCheck,
-        recurso: 'renting_reservas',
-      },
-      {
-        label: 'Clientes',
-        url: '/renting/clientes',
-        icon: Users,
-        recurso: 'renting_clientes',
-      },
-      {
-        label: 'Pedidos de Kms',
-        url: '/renting/pedidos-kms',
-        icon: Gauge,
-        recurso: 'renting_contratos',
-        requireSupervisorTvde: true,
-      },
-      {
-        label: 'Tarifas',
-        icon: Tag,
-        recurso: 'renting_contratos',
-        subItems: [
-          { label: 'Tarifas', url: '/renting/tarifas', icon: Tag, recurso: 'renting_contratos' },
-          {
-            label: 'Coberturas',
-            url: '/renting/tarifas/coberturas',
-            icon: ShieldCheck,
-            recurso: 'renting_contratos',
-          },
-          {
-            label: 'Extras',
-            url: '/renting/tarifas/extras',
-            icon: PackagePlus,
-            recurso: 'renting_contratos',
-          },
-          {
-            label: 'Taxas',
-            url: '/renting/tarifas/taxas',
-            icon: Percent,
-            recurso: 'renting_contratos',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    label: 'Frota',
-    icon: Car,
-    recurso: 'viaturas_ver',
-    subItems: [
-      { label: 'Viaturas', url: '/viaturas', icon: Car },
-      { label: 'Grupos', url: '/viaturas/grupos', icon: Layers },
-      { label: 'Marcas / Modelos', url: '/viaturas/marcas-modelos', icon: CarFront },
-      { label: 'Combustíveis', url: '/viaturas/combustiveis', icon: Fuel },
-      { label: 'Tipos', url: '/viaturas/tipos', icon: Tag },
-    ],
-  },
-  {
-    label: 'Motoristas',
-    icon: User,
-    recurso: 'motoristas_gestao',
-    subItems: [
-      { label: 'Todos Motoristas', url: '/motoristas', icon: User },
-      { label: 'Aprovação', url: '/motoristas/candidaturas', icon: ClipboardCheck },
-      { label: 'Contratos', url: '/contratos', icon: FileText },
-    ],
-  },
-  {
-    label: 'Administrativo',
-    icon: Wallet,
-    // Mostra com QUALQUER permissão do módulo Administrativo (igual ao AppSidebar).
-    recursosAny: [
-      'financeiro_recibos',
-      'recibos_verdes_adicionar',
-      'administrativo_resumos',
-      'administrativo_importar',
-      'administrativo_plataformas',
-      'administrativo_cartoes',
-    ],
-    subItems: [
-      {
-        label: 'Resumos',
-        url: '/administrativo',
-        icon: Calculator,
-        recurso: 'administrativo_resumos',
-      },
-      {
-        label: 'Faturação',
-        url: '/administrativo/faturacao',
-        icon: Banknote,
-        recurso: 'financeiro_recibos',
-      },
-      {
-        label: 'Cartões Frota',
-        url: '/administrativo/cartoes',
-        icon: CreditCard,
-        recurso: 'administrativo_cartoes',
-      },
-      {
-        label: 'Dispositivos OBE',
-        url: '/administrativo/obe',
-        icon: Wifi,
-        recurso: 'administrativo_cartoes',
-      },
-    ],
-  },
-  { label: 'Movimentações', url: '/calendario', icon: CalendarDays, recurso: 'calendario_ver' },
-  { label: 'Assistência', url: '/assistencia', icon: Wrench, recurso: 'assistencia_tickets' },
-  { label: 'Meus Tickets', url: '/meus-tickets', icon: Ticket, recurso: 'motoristas_crm' },
-  { label: 'Marketing', url: '/marketing', icon: Mail, recurso: 'marketing_ver' },
-  { label: 'CRM', url: '/crm', icon: BarChart3, recurso: 'motoristas_crm' },
-  { label: 'Realize', url: '/realize', icon: ExternalLink, orgIds: REALIZE_ORG_IDS },
-];
+import { CommandMenu } from '@/components/ui/command-menu';
+import { CommandGroup, CommandItem } from '@/components/ui/command';
+import { MENU_ITEMS, type MenuItem, type SubMenuItem, type SubSubMenuItem } from './sidebarMenuItems';
 
 export const SidebarMenu: React.FC = () => {
   const { isAdmin, hasAccessToResource, cargo, loading } = usePermissions();
@@ -214,8 +28,10 @@ export const SidebarMenu: React.FC = () => {
   const userRole = isAdmin ? 'Administrador' : 'Utilizador';
   const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
   const logoSrc = useThemedLogo();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const visibleMenuItems = MENU_ITEMS.map((item) => {
     if (loading) return item;
@@ -250,6 +66,38 @@ export const SidebarMenu: React.FC = () => {
   });
 
   const hasAdminAccess = !loading && (isAdmin || hasAccessToResource('admin_configuracoes'));
+
+  // Pesquisa global (Cmd+K): achata visibleMenuItems (já filtrado por
+  // permissão/org) até às folhas com url — 3 níveis (item > subItem >
+  // subSubItem) — sem duplicar a lista de navegação num sítio novo.
+  const commandItems = useMemo(() => {
+    const flat: { label: string; url: string; icon?: React.ComponentType<{ className?: string }> }[] =
+      [];
+    for (const item of visibleMenuItems) {
+      if (!item.subItems?.length) {
+        if (item.url) flat.push({ label: item.label, url: item.url, icon: item.icon });
+        continue;
+      }
+      for (const sub of item.subItems) {
+        if (sub.subItems?.length) {
+          for (const ss of sub.subItems) {
+            flat.push({ label: `${sub.label} · ${ss.label}`, url: ss.url, icon: ss.icon });
+          }
+        } else if (sub.url) {
+          flat.push({ label: sub.label, url: sub.url, icon: sub.icon });
+        }
+      }
+    }
+    if (hasAdminAccess) {
+      flat.push({ label: 'Definições', url: '/admin/settings', icon: Settings });
+    }
+    return flat;
+  }, [visibleMenuItems, hasAdminAccess]);
+
+  const goTo = (url: string) => {
+    setCommandOpen(false);
+    navigate(url);
+  };
 
   const NavItem = ({
     item,
@@ -313,7 +161,19 @@ export const SidebarMenu: React.FC = () => {
           >
             <img src={logoSrc} alt="Logo" className="h-8 w-auto cursor-pointer" />
           </NavLink>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Pesquisar (Cmd+K)"
+              onClick={(e) => {
+                e.stopPropagation();
+                setCommandOpen(true);
+              }}
+            >
+              <Search className="h-5 w-5" />
+            </Button>
+            <NotificationBell />
             <ThemeToggle />
             <UserMenu />
           </div>
@@ -468,18 +328,56 @@ export const SidebarMenu: React.FC = () => {
 
       {/* User Footer */}
       <div className="p-4 border-t border-border/50 bg-muted/30">
-        <div className="flex items-center w-full bg-background/50 p-2 rounded-xl border border-border/50 overflow-hidden">
-          <UserMenu />
+        <div className="flex items-center gap-1 w-full bg-background/50 p-2 rounded-xl border border-border/50 overflow-hidden">
+          <div className="flex-1 min-w-0">
+            <UserMenu />
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            aria-label="Pesquisar (Cmd+K)"
+            onClick={() => setCommandOpen(true)}
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+          <NotificationBell />
         </div>
       </div>
     </div>
   );
 
-  if (isMobile) return <MobileMenu />;
+  const GlobalCommandMenu = () => (
+    <CommandMenu open={commandOpen} onOpenChange={setCommandOpen} placeholder="Saltar para...">
+      <CommandGroup heading="Navegar">
+        {commandItems.map((item) => {
+          const Icon = item.icon || Search;
+          return (
+            <CommandItem key={item.url} onSelect={() => goTo(item.url)}>
+              <Icon className="mr-2 h-4 w-4" />
+              <span>{item.label}</span>
+            </CommandItem>
+          );
+        })}
+      </CommandGroup>
+    </CommandMenu>
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        <MobileMenu />
+        <GlobalCommandMenu />
+      </>
+    );
+  }
 
   return (
-    <aside className="hidden lg:block w-64 h-screen sticky top-0 overflow-hidden">
-      <SidebarContent />
-    </aside>
+    <>
+      <aside className="hidden lg:block w-64 h-screen sticky top-0 overflow-hidden">
+        <SidebarContent />
+      </aside>
+      <GlobalCommandMenu />
+    </>
   );
 };
