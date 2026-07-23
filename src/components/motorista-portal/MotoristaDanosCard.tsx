@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import { DanoCategoriaBadge } from '@/components/viaturas/DanoCategoriaBadge';
 
 interface Dano {
   id: string;
@@ -15,6 +16,7 @@ interface Dano {
   data_ocorrencia: string | null;
   data_registo: string;
   valor: number;
+  categoria: { id: string; nome: string; cor: string | null } | null;
   viatura: {
     matricula: string;
     marca: string;
@@ -75,6 +77,11 @@ export function MotoristaDanosCard({ motoristaId }: MotoristaDanosCardProps) {
             matricula,
             marca,
             modelo
+          ),
+          categoria:assistencia_categorias (
+            id,
+            nome,
+            cor
           )
         `
         )
@@ -115,6 +122,7 @@ export function MotoristaDanosCard({ motoristaId }: MotoristaDanosCardProps) {
           data_ocorrencia: dano.data_ocorrencia,
           data_registo: dano.data_registo,
           valor: dano.valor || 0,
+          categoria: dano.categoria as Dano['categoria'],
           viatura: dano.viaturas as Dano['viatura'],
           fotos: fotos || [],
           status_pagamento,
@@ -228,6 +236,7 @@ export function MotoristaDanosCard({ motoristaId }: MotoristaDanosCardProps) {
                         <p className="font-bold text-foreground group-hover:text-primary transition-colors truncate">
                           {dano.descricao}
                         </p>
+                        <DanoCategoriaBadge categoria={dano.categoria} />
                         <div className="flex items-center gap-3 mt-1">
                           <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                             {format(new Date(dataDisplay), 'dd MMM yyyy', { locale: pt })}
@@ -275,6 +284,9 @@ export function MotoristaDanosCard({ motoristaId }: MotoristaDanosCardProps) {
               <div>
                 <p className="text-sm text-muted-foreground">Descrição</p>
                 <p className="font-medium">{selectedDano.descricao}</p>
+                <div className="mt-1">
+                  <DanoCategoriaBadge categoria={selectedDano.categoria} />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
