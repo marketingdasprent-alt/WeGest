@@ -95,6 +95,9 @@ describe('contratoRenovavel', () => {
   it('rejeita contrato devolvido/fechado', () => {
     expect(contratoRenovavel({ ...base, estado_operacional: 'devolvido' })).toBe(false);
   });
+  it('rejeita contrato apenas agendado (tem de estar em curso para renovar)', () => {
+    expect(contratoRenovavel({ ...base, estado_operacional: 'agendado' })).toBe(false);
+  });
   it('rejeita rent-a-car sem data_fim', () => {
     expect(contratoRenovavel({ ...base, data_fim: null })).toBe(false);
   });
