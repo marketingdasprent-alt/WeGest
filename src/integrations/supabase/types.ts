@@ -10176,6 +10176,7 @@ export type Database = {
       }
       viatura_danos: {
         Row: {
+          categoria_id: string | null
           cobranca_id: string | null
           condutor_cliente_id: string | null
           contrato_id: string | null
@@ -10201,6 +10202,7 @@ export type Database = {
           viatura_id: string
         }
         Insert: {
+          categoria_id?: string | null
           cobranca_id?: string | null
           condutor_cliente_id?: string | null
           contrato_id?: string | null
@@ -10226,6 +10228,7 @@ export type Database = {
           viatura_id: string
         }
         Update: {
+          categoria_id?: string | null
           cobranca_id?: string | null
           condutor_cliente_id?: string | null
           contrato_id?: string | null
@@ -10251,6 +10254,13 @@ export type Database = {
           viatura_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "viatura_danos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "assistencia_categorias"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "viatura_danos_cobranca_id_fkey"
             columns: ["cobranca_id"]
