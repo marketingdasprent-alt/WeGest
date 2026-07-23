@@ -16,6 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { DanoFotosGallery } from '@/components/viaturas/DanoFotosGallery';
+import { DanoCategoriaBadge } from '@/components/viaturas/DanoCategoriaBadge';
 import type { Motorista } from '@/pages/Motoristas';
 
 interface Dano {
@@ -29,6 +30,7 @@ interface Dano {
   observacoes: string | null;
   viatura_id: string;
   contrato_id: string | null;
+  categoria: { id: string; nome: string; cor: string | null } | null;
   viatura: {
     matricula: string;
     marca: string;
@@ -114,6 +116,11 @@ export function MotoristaTabDanos({ motorista }: MotoristaTabDanosProps) {
             matricula,
             marca,
             modelo
+          ),
+          categoria:assistencia_categorias (
+            id,
+            nome,
+            cor
           )
         `
         )
@@ -141,6 +148,7 @@ export function MotoristaTabDanos({ motorista }: MotoristaTabDanosProps) {
           observacoes: dano.observacoes,
           viatura_id: dano.viatura_id,
           contrato_id: dano.contrato_id,
+          categoria: dano.categoria as Dano['categoria'],
           viatura: dano.viaturas as Dano['viatura'],
           fotos: fotos || [],
         });
@@ -255,6 +263,7 @@ export function MotoristaTabDanos({ motorista }: MotoristaTabDanosProps) {
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="font-medium">{dano.descricao}</p>
+                            <DanoCategoriaBadge categoria={dano.categoria} />
                             <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                               {dano.viatura && (
                                 <>
