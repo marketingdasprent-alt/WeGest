@@ -272,6 +272,11 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
         .from('plataformas_configuracao')
         .select('apify_api_token')
         .eq('plataforma', 'robot')
+        // Sem este filtro, uma integração Via Verde nova podia herdar o
+        // token PARTILHADO do Uber/Bolt/BP/Repsol/EDP em vez do seu próprio
+        // token dedicado — plataforma='robot' sozinho não distingue entre
+        // plataformas, robot_target_platform sim.
+        .eq('robot_target_platform', defaults.robot_target_platform)
         .not('apify_api_token', 'is', null)
         .limit(1);
 
