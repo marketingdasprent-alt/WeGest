@@ -24,6 +24,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { CalendarRange } from 'lucide-react';
+import type { DateRange as DayPickerRange } from 'react-day-picker';
 // Gráfico (recharts ~400KB) carregado em lazy para sair do chunk inicial.
 const AtividadeChart = lazy(() => import('@/components/dashboard/AtividadeChart'));
 import {
@@ -57,7 +61,8 @@ import { deriveViaturaEstado, ESTADOS_EM_USO } from '@/lib/viaturas';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type PeriodPreset = 'semana' | 'mes' | 'trimestre' | 'ano';
+type PeriodPreset = 'semana' | 'mes' | 'trimestre' | 'ano' | 'personalizado';
+type FixedPreset = Exclude<PeriodPreset, 'personalizado'>;
 
 interface DateRange {
   from: Date;
@@ -87,7 +92,7 @@ interface UpgradeData {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function getPeriodRange(preset: PeriodPreset): DateRange {
+function getPeriodRange(preset: FixedPreset): DateRange {
   const now = new Date();
   switch (preset) {
     case 'semana':
@@ -125,6 +130,8 @@ const Dashboard = () => {
 
   const [preset, setPreset] = useState<PeriodPreset>('mes');
   const [range, setRange] = useState<DateRange>(getPeriodRange('mes'));
+  const [customRangeOpen, setCustomRangeOpen] = useState(false);
+  const [customRangeDraft, setCustomRangeDraft] = useState<DayPickerRange | undefined>();
   const [loading, setLoading] = useState(true);
   const [gestorFiltro, setGestorFiltro] = useState<string>('todos');
   const [gestores, setGestores] = useState<{ id: string; nome: string }[]>([]);
@@ -177,9 +184,20 @@ const Dashboard = () => {
 
   // ── Period change ────────────────────────────────────────────────────────
 
-  const handlePreset = (p: PeriodPreset) => {
+  const handlePreset = (p: FixedPreset) => {
     setPreset(p);
     setRange(getPeriodRange(p));
+  };
+
+  // Intervalo customizado: só aplica quando as duas datas (from/to) estão
+  // escolhidas — um clique único no Calendar em modo "range" só define `from`.
+  const handleCustomRangeSelect = (picked: DayPickerRange | undefined) => {
+    setCustomRangeDraft(picked);
+    if (picked?.from && picked?.to) {
+      setPreset('personalizado');
+      setRange({ from: picked.from, to: picked.to });
+      setCustomRangeOpen(false);
+    }
   };
 
   // ── Data fetching ────────────────────────────────────────────────────────
@@ -498,7 +516,7 @@ const Dashboard = () => {
 
   // ── Tooltip customizado ──────────────────────────────────────────────────
 
-  const PRESET_LABELS: Record<PeriodPreset, string> = {
+  const PRESET_LABELS: Record<FixedPreset, string> = {
     semana: 'Esta Semana',
     mes: 'Este Mês',
     trimestre: 'Trimestre',
@@ -514,7 +532,7 @@ const Dashboard = () => {
         description={`Visão geral da operação — ${format(range.from, 'dd MMM', { locale: pt })} a ${format(range.to, 'dd MMM yyyy', { locale: pt })}`}
         icon={LayoutDashboard}
       >
-        {(Object.keys(PRESET_LABELS) as PeriodPreset[]).map((p) => (
+        {(Object.keys(PRESET_LABELS) as FixedPreset[]).map((p) => (
           <Button
             key={p}
             variant={preset === p ? 'default' : 'outline'}
@@ -525,6 +543,29 @@ const Dashboard = () => {
             {PRESET_LABELS[p]}
           </Button>
         ))}
+        <Popover open={customRangeOpen} onOpenChange={setCustomRangeOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant={preset === 'personalizado' ? 'default' : 'outline'}
+              size="sm"
+              className="h-9 gap-1.5 px-4"
+            >
+              <CalendarRange className="h-3.5 w-3.5" />
+              {preset === 'personalizado'
+                ? `${format(range.from, 'dd MMM', { locale: pt })} – ${format(range.to, 'dd MMM', { locale: pt })}`
+                : 'Personalizado'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="range"
+              selected={customRangeDraft}
+              onSelect={handleCustomRangeSelect}
+              numberOfMonths={2}
+              defaultMonth={range.from}
+            />
+          </PopoverContent>
+        </Popover>
         <Select value={gestorFiltro} onValueChange={setGestorFiltro}>
           <SelectTrigger className="h-9 w-auto gap-1.5">
             <UserCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
