@@ -2,6 +2,7 @@ import type jsPDF from 'jspdf';
 import { supabase } from '@/integrations/supabase/client';
 import { empresaDocData, empresaFooterText, type EmpresaConfig } from '@/config/empresas';
 import { resolveCartaoFrota } from './document-template/resolveCartaoFrota';
+import { precisaEletrico } from './combustivel';
 
 import {
   generateDocumentosCombinados,
@@ -321,6 +322,12 @@ export const generateContratoPdf = async ({
     viatura_marca_modelo: viatura ? `${viatura.marca} ${viatura.modelo}`.trim() : '—',
     viatura_grupo: contrato.grupo ?? '—',
     viatura_kms: num(viatura?.km_atual),
+    // Nível de combustível/bateria com que a viatura foi entregue ao
+    // motorista. Elétricas/híbridas mostram a bateria; as restantes, o
+    // combustível — só um dos dois costuma estar preenchido.
+    viatura_combustivel_saida: precisaEletrico(viatura?.combustivel)
+      ? (contrato.eletricidade_saida ?? '—')
+      : (contrato.combustivel_saida ?? '—'),
     local_entrega: localEntrega,
     local_recolha: localRecolha,
     // Financeiro (já formatado; total_final só existe após facturar)

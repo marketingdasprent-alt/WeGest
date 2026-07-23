@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usePermissions } from '@/hooks/usePermissions';
-import { useNotificacoes, type Notificacao } from '@/hooks/useNotificacoes';
+import { useNotificacoesContext } from '@/contexts/NotificacoesContext';
 import { armNotificationSound } from '@/lib/notificationSound';
 import { notificacaoLink, notificacaoLabel } from '@/utils/notificacoes';
 import { Button } from '@/components/ui/button';
@@ -9,17 +8,9 @@ import { cn } from '@/lib/utils';
 import { AlertTriangle, Bell, Eye, List, X } from 'lucide-react';
 
 export const NotificacoesPopup = () => {
-  const { tipoUtilizador, loading } = usePermissions();
   const navigate = useNavigate();
 
-  // Habilita para qualquer utilizador interno (não-motorista). A RLS da tabela
-  // `notificacoes` é a guarda real do que CADA um vê: por cargo (motorista
-  // pendente/escalonamento) OU por destinatário direto (ex.: aviso de viatura
-  // disponível dirigido ao gestor que criou a lista de espera). Restringir aqui
-  // por cargo escondia avisos dirigidos a gestores de outros cargos.
-  const enabled = !loading && tipoUtilizador !== 'motorista';
-
-  const { notificacoes, resolver } = useNotificacoes(enabled);
+  const { notificacoes, resolver, enabled } = useNotificacoesContext();
 
   // Desbloqueia o áudio no primeiro gesto do utilizador (autoplay policy),
   // para que o aviso urgente ao supervisor toque mesmo sem clique imediato.
