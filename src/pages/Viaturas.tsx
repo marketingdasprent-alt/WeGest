@@ -174,6 +174,7 @@ export default function Viaturas() {
         (v) => !v.is_vendida && (ESTADOS_EM_USO as readonly string[]).includes(estadoDe(v))
       ).length,
       manutencao: viaturas.filter((v) => !v.is_vendida && estadoDe(v) === 'manutencao').length,
+      inativas: viaturas.filter((v) => !v.is_vendida && estadoDe(v) === 'inativo').length,
       vendidas: viaturas.filter((v) => v.is_vendida).length,
       slot: viaturas.filter((v) => v.is_slot && !v.is_vendida).length,
       slotDisponiveis: viaturas.filter(
@@ -440,7 +441,7 @@ export default function Viaturas() {
 
       {/* Tipo + SLOT filter cards */}
       {tipos.length > 0 && (
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
           {(() => {
             const todosTotal = viaturas.filter(
               (v) => !v.is_slot && matchesVendaScope(v, statusFilter)

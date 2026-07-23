@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { SINCRONIZACAO_ATIVA } from '@/config/sync';
+import { useOrgId } from '@/contexts/TenantContext';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesUpdate } from '@/integrations/supabase/types';
@@ -52,6 +53,15 @@ import {
 } from 'lucide-react';
 import type { IntegracaoConfig } from './integracoes/types';
 
+// Sync automático do Via Verde: janela fixa Segunda 00:00–05:00 (Lisboa).
+// Fora desta janela os dados podem não estar prontos até às 7h de Segunda
+// (exigência de negócio), e horas de Domingo fazem o cálculo de "semana
+// anterior" em robot-execute contar uma semana a mais (assume dow=1).
+const VIA_VERDE_SYNC_DIA_SEMANA = 1; // Segunda-feira, fixo
+const VIA_VERDE_SYNC_HORAS = [0, 1, 2, 3, 4, 5];
+const clampViaVerdeSyncHora = (h: number | null | undefined) =>
+  VIA_VERDE_SYNC_HORAS.includes(h ?? -1) ? (h as number) : 4;
+
 interface IntegracaoDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -66,6 +76,7 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
   onUpdate,
 }) => {
   const { toast } = useToast();
+  const orgId = useOrgId();
   const [saving, setSaving] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -152,8 +163,8 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
     cron_schedule: 'disabled' as string,
     cron_custom: '',
     robot_target_platform: (integracao.robot_target_platform ?? 'uber') as 'bolt' | 'uber' | 'bp',
-    sync_dia_semana: integracao.sync_dia_semana ?? 1,
-    sync_hora: integracao.sync_hora ?? 4,
+    sync_dia_semana: VIA_VERDE_SYNC_DIA_SEMANA,
+    sync_hora: clampViaVerdeSyncHora(integracao.sync_hora),
   });
 
   // Período do robô ao clicar "Executar Robot" — escolha por-execução, não é
@@ -290,6 +301,37 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
     }
     try {
       setExecutingRobot(true);
+
+      // Via Verde: passa pela fila (via_verde_sync_queue) tal como o sync
+      // automático — evita que um disparo manual ultrapasse o limite de
+      // concorrência do plano Apify dedicado, ou entre em conflito com uma
+      // execução já agendada da mesma integração. via-verde-sync-drain é
+      // invocado de seguida para processar já, sem esperar pelo próximo
+      // tick de 5 min.
+      if (isViaVerde) {
+        const { error: insertError } = await (supabase as any).from('via_verde_sync_queue').insert({
+          integracao_id: integracao.id,
+          org_id: orgId,
+          status: 'pending',
+          periodo_inicio: periodoTipo === 'personalizado' ? periodoInicio : null,
+          periodo_fim: periodoTipo === 'personalizado' ? periodoFim : null,
+        });
+
+        if (insertError && insertError.code !== '23505') {
+          throw new Error(insertError.message);
+        }
+
+        toast({
+          title: insertError ? 'Já estava na fila' : 'Adicionado à fila',
+          description: insertError
+            ? 'Esta integração já tem uma execução pendente ou em curso.'
+            : 'A processar em breve — respeitando o limite de execuções em simultâneo.',
+        });
+
+        await supabase.functions.invoke('via-verde-sync-drain', { body: {} });
+        return;
+      }
+
       const body: Record<string, unknown> = { integracao_id: integracao.id };
       if (periodoTipo === 'personalizado') {
         body.periodo_inicio = periodoInicio;
@@ -343,8 +385,12 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
         updatePayload.auth_mode = 'password';
         if (isViaVerde) {
           updatePayload.sync_automatico = formData.sync_automatico;
-          updatePayload.sync_dia_semana = formData.sync_dia_semana;
-          updatePayload.sync_hora = formData.sync_hora;
+          // Fixo — janela Segunda 00:00-05:00 (ver constante no topo do
+          // ficheiro). Não confiar em formData aqui: garante que mesmo uma
+          // integração antiga com dia/hora fora da janela fica corrigida
+          // ao gravar, independentemente do que o Select mostrava.
+          updatePayload.sync_dia_semana = VIA_VERDE_SYNC_DIA_SEMANA;
+          updatePayload.sync_hora = clampViaVerdeSyncHora(formData.sync_hora);
         }
       } else if (integracao.plataforma === 'uber') {
         // Native Uber integration (webhook + direct API)
@@ -646,25 +692,12 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Dia da semana</Label>
-                      <Select
-                        value={String(formData.sync_dia_semana)}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({ ...prev, sync_dia_semana: Number(value) }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="0">Domingo</SelectItem>
-                          <SelectItem value="1">Segunda-feira</SelectItem>
-                          <SelectItem value="2">Terça-feira</SelectItem>
-                          <SelectItem value="3">Quarta-feira</SelectItem>
-                          <SelectItem value="4">Quinta-feira</SelectItem>
-                          <SelectItem value="5">Sexta-feira</SelectItem>
-                          <SelectItem value="6">Sábado</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                        Segunda-feira
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Fixo — os dados de todos os robôs têm de estar prontos até às 7h de Segunda.
+                      </p>
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">Hora (Lisboa)</Label>
@@ -678,7 +711,7 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Array.from({ length: 24 }, (_, h) => (
+                          {VIA_VERDE_SYNC_HORAS.map((h) => (
                             <SelectItem key={h} value={String(h)}>
                               {String(h).padStart(2, '0')}:00
                             </SelectItem>

@@ -23,10 +23,15 @@ function getLisbonDayHour(): { dayOfWeek: number; hour: number } {
 
 // Multi-tenant: percorre as integrações Via Verde com sync_automatico=true
 // cujo sync_dia_semana/sync_hora corresponde à hora atual em Lisboa, e
-// dispara o robot-execute para cada uma. O cron chama esta função de hora a
-// hora — é aqui que se decide quem está "devido" agora, não no cron em si,
-// já que cada integração pode ter o seu próprio dia/hora configurado.
-// O cálculo do período (semana anterior) acontece dentro do robot-execute.
+// ENFILEIRA cada uma em via_verde_sync_queue (em vez de disparar o
+// robot-execute diretamente) — quem processa a fila, com concorrência
+// limitada, é o via-verde-sync-drain (cron a cada 5 min). Isto evita que
+// muitas integrações devidas na mesma hora disparem em paralelo e
+// ultrapassem a concorrência do plano Apify dedicado do Via Verde.
+// O cron chama esta função de hora a hora — é aqui que se decide quem está
+// "devido" agora, não no cron em si, já que cada integração pode ter o seu
+// próprio dia/hora configurado. O cálculo do período (semana anterior)
+// acontece dentro do robot-execute.
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -59,46 +64,48 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Enfileira cada integração devida — 23505 (violação do índice único
+    // parcial de via_verde_sync_queue) significa "já está pendente/em
+    // execução", tratado como sucesso silencioso, não erro.
     const results = await Promise.all(
       integracoes.map(async (int) => {
-        try {
-          const resp = await fetch(`${SUPABASE_URL}/functions/v1/robot-execute`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ integracao_id: int.id }),
-          });
-          const data = await resp.json();
-          return {
-            integracao_id: int.id,
-            nome: int.nome,
-            org_id: int.org_id,
-            success: resp.ok && data?.success !== false,
-            detail: data,
-          };
-        } catch (err) {
+        const { error: insertError } = await supabase.from('via_verde_sync_queue').insert({
+          integracao_id: int.id,
+          org_id: int.org_id,
+          status: 'pending',
+        });
+        if (insertError && insertError.code !== '23505') {
           return {
             integracao_id: int.id,
             nome: int.nome,
             org_id: int.org_id,
             success: false,
-            error: err instanceof Error ? err.message : String(err),
+            enqueued: false,
+            error: insertError.message as string | undefined,
           };
         }
+        return {
+          integracao_id: int.id,
+          nome: int.nome,
+          org_id: int.org_id,
+          success: true,
+          enqueued: !insertError,
+          error: undefined as string | undefined,
+        };
       })
     );
 
-    const triggered = results.filter((r) => r.success).length;
-    const failed = results.length - triggered;
+    const enqueued = results.filter((r) => r.success && r.enqueued).length;
+    const alreadyQueued = results.filter((r) => r.success && !r.enqueued).length;
+    const failed = results.length - results.filter((r) => r.success).length;
 
     return new Response(
       JSON.stringify({
         success: true,
         dayOfWeek,
         hour,
-        triggered,
+        enqueued,
+        alreadyQueued,
         failed,
         total: results.length,
         results,
