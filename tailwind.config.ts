@@ -85,6 +85,12 @@ export default {
 				md: 'calc(var(--radius) - 2px)',
 				sm: 'calc(var(--radius) - 4px)'
 			},
+			fontFamily: {
+				// Só a landing pública usa isto (font-display / font-body) — o
+				// resto da app fica na stack sans por omissão do Tailwind.
+				display: ['"Space Grotesk"', 'sans-serif'],
+				body: ['Manrope', 'sans-serif']
+			},
 			keyframes: {
 				'accordion-down': {
 					from: {

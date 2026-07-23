@@ -6,6 +6,12 @@ export function normalizeMatricula(m: string): string {
   return m.toLowerCase().replace(/[-\s]/g, '');
 }
 
+/** Compara código (numérico) por igualdade exata, não substring — "585" não deve apanhar 1585/5850 */
+export function matchesCodigo(codigo: number, search: string): boolean {
+  const trimmed = search.trim();
+  return /^\d+$/.test(trimmed) && codigo === Number(trimmed);
+}
+
 /** Total visível de um contrato: prioriza o total calculado em tempo real
  *  (view contrato_renting_totais — tarifa + extras + coberturas + taxas +
  *  IVA), depois o snapshot imutável (facturado), e por fim o valor base

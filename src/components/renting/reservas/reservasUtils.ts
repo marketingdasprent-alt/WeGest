@@ -5,6 +5,12 @@ export function normalizeMatricula(m: string): string {
   return m.toLowerCase().replace(/[-\s]/g, '');
 }
 
+/** Compara código (numérico) por igualdade exata, não substring — "585" não deve apanhar 1585/5850 */
+export function matchesCodigo(codigo: number, search: string): boolean {
+  const trimmed = search.trim();
+  return /^\d+$/.test(trimmed) && codigo === Number(trimmed);
+}
+
 export function formatDateTime(iso: string): string {
   try {
     return format(new Date(iso), 'yyyy-MM-dd HH:mm:ss');

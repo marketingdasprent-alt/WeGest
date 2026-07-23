@@ -259,6 +259,22 @@ function normalizeName(name: string): string {
     .replace(/\s+/g, ' ');
 }
 
+function stableRowSignature(row: Record<string, string>): string {
+  return Object.keys(row)
+    .sort()
+    .map((key) => `${key}:${(row[key] || '').trim()}`)
+    .join('|');
+}
+
+function hashString(input: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -365,8 +381,19 @@ Deno.serve(async (req) => {
         'card',
         'PAN',
       ]);
-      const dateStr = findField(row, ['fec_oper', 'fec_factur', 'fec', 'fecha', 'data', 'date']);
-      const timeStr = findField(row, ['hor_oper', 'hor', 'hora', 'time']);
+      // "data operacao"/"fec_oper" tem de vir antes dos genéricos "data"/"fecha":
+      // exports novos trazem DATA FATURA (faturação) e DATA OPERAÇÃO (real) — o
+      // genérico "data" apanhava "DATA FATURA" por vir primeiro no CSV.
+      const dateStr = findField(row, [
+        'fec_oper',
+        'data operacao',
+        'fec_factur',
+        'fec',
+        'fecha',
+        'data',
+        'date',
+      ]);
+      const timeStr = findField(row, ['hor_oper', 'hora operacao', 'hor', 'hora', 'time']);
       const amountStr = findField(row, [
         'imp_total',
         'imp',
@@ -408,17 +435,7 @@ Deno.serve(async (req) => {
       const safeMatricula = (matriculaRaw || '').replace(/\W/g, '').toLowerCase();
       const safeProduct = (product || '').replace(/\W/g, '').toLowerCase();
       const safeDriver = (driverName || '').replace(/\W/g, '').toLowerCase();
-      const baseTxId = `repsol-${sanitizeCard(cardNumber)}-${dateStr.replace(/\D/g, '')}-${amountStr.replace(/\D/g, '')}-${qtyStr.replace(/\D/g, '')}-${safeStation}-${safeMatricula}`;
-
-      // Compatibilidade: manter o ID antigo para não duplicar reimportações já
-      // existentes. Só desambiguar quando a linha é fraca (muitos campos vazios).
-      const hasStrongIdentity =
-        sanitizeCard(cardNumber).length > 0 ||
-        amount !== null ||
-        qty !== null ||
-        safeStation.length > 0 ||
-        safeMatricula.length > 0;
-      const txId = hasStrongIdentity ? baseTxId : `${baseTxId}-${safeProduct}-${safeDriver}`;
+      const txId = `repsol-${hashString(stableRowSignature(row))}`;
 
       const sanitized = sanitizeCard(cardNumber);
       let motoristaId = sanitized ? cardMap.get(sanitized) : null;

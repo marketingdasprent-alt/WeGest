@@ -31,6 +31,7 @@ import {
   formatCurrency,
   formatDateTime,
   getContratoTotal,
+  matchesCodigo,
   normalizeMatricula,
 } from '@/components/renting/contratos/contratosUtils';
 import { RenovacoesBanner } from '@/components/renting/contratos/RenovacoesBanner';
@@ -127,11 +128,11 @@ const RentingContratos = () => {
         const condutor = condutorInfoByContratoId.get(c.id);
         const clienteNif = clienteNifById.get(c.cliente_id ?? '') ?? '';
         const matches =
-          String(c.codigo).includes(searchRaw) ||
+          matchesCodigo(c.codigo, searchRaw) ||
           normalizeMatricula(c.matricula ?? '').includes(matriculaNorm) ||
           (condutor?.nome.toLowerCase().includes(searchLower) ?? false) ||
-          (condutor?.nif.includes(searchRaw) ?? false) ||
-          clienteNif.includes(searchRaw);
+          (condutor?.nif.startsWith(searchRaw) ?? false) ||
+          clienteNif.startsWith(searchRaw);
         if (!matches) return false;
       }
       if (filtros.estacao !== 'todas') {
