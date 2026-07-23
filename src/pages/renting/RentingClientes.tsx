@@ -415,7 +415,8 @@ const RentingClientes = () => {
     usePagination(
       filtered,
       25,
-      `${search}|${visibleFilters.join(',')}|${codigoFiltro}|${tipoFiltro}|${paisFiltro}|${cidadeFiltro}|${localidadeFiltro}|${codigoPostalFiltro}|${generoFiltro}|${nifFiltro}|${emailFiltro}|${telemovelFiltro}|${expiradosFiltro}`
+      `${search}|${visibleFilters.join(',')}|${codigoFiltro}|${tipoFiltro}|${paisFiltro}|${cidadeFiltro}|${localidadeFiltro}|${codigoPostalFiltro}|${generoFiltro}|${nifFiltro}|${emailFiltro}|${telemovelFiltro}|${expiradosFiltro}`,
+      'page'
     );
 
   const filtrosActivos =

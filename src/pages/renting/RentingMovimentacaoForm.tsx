@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, ArrowRightLeft, Loader2, Trash2 } from 'lucide-react';
@@ -77,6 +78,7 @@ const DEFAULT_VALUES: MovimentoFormValues = {
 
 const RentingMovimentacaoForm = () => {
   const navigate = useNavigate();
+  const goBack = useGoBack('/renting/movimentacoes');
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const isEdit = !!id && id !== 'novo';
@@ -279,12 +281,7 @@ const RentingMovimentacaoForm = () => {
           }
           icon={ArrowRightLeft}
         >
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate('/renting/movimentacoes')}
-            className="gap-2"
-          >
+          <Button type="button" variant="outline" onClick={goBack} className="gap-2">
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>

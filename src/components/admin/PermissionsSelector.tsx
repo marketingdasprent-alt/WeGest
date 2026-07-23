@@ -6,19 +6,18 @@ import {
   Loader2,
   BarChart3,
   Ticket,
-  Users,
+  User,
   Car,
-  FileText,
   Wrench,
   Settings,
   Wallet,
-  Megaphone,
   CalendarDays,
   LayoutDashboard,
   KeyRound,
   Eye,
   Pencil,
   Ban,
+  Mail,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -52,20 +51,23 @@ interface PermissionsSelectorProps {
 }
 
 // ── Módulos com ícones e ordem fixa ──────────────────────────────────────────
+// Nome, ícone e ordem seguem exatamente o menu lateral (SidebarMenu.tsx).
+// `keys` mapeia para `recursos.categoria` na BD — um módulo pode agrupar mais
+// do que uma categoria (ex.: "Contratos" não é aba própria, vive dentro de
+// Renting → Contratos, por isso as suas permissões aparecem aqui também).
 
 const MODULOS = [
-  { key: 'Dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'Renting', label: 'Renting', icon: KeyRound },
-  { key: 'CRM', label: 'CRM', icon: BarChart3 },
-  { key: 'Tickets', label: 'Meus Tickets', icon: Ticket },
-  { key: 'Motoristas', label: 'Motoristas', icon: Users },
-  { key: 'Viaturas', label: 'Viaturas', icon: Car },
-  { key: 'Contratos', label: 'Contratos', icon: FileText },
-  { key: 'Administrativo', label: 'Administrativo', icon: Wallet },
-  { key: 'Marketing', label: 'Marketing', icon: Megaphone },
-  { key: 'Calendário', label: 'Calendário', icon: CalendarDays },
-  { key: 'Assistência', label: 'Assistência', icon: Wrench },
-  { key: 'Administração', label: 'Administração', icon: Settings },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, keys: ['Dashboard'] },
+  { id: 'renting', label: 'Renting', icon: KeyRound, keys: ['Renting', 'Contratos'] },
+  { id: 'frota', label: 'Frota', icon: Car, keys: ['Viaturas'] },
+  { id: 'motoristas', label: 'Motoristas', icon: User, keys: ['Motoristas'] },
+  { id: 'administrativo', label: 'Administrativo', icon: Wallet, keys: ['Administrativo'] },
+  { id: 'movimentacoes', label: 'Movimentações', icon: CalendarDays, keys: ['Calendário'] },
+  { id: 'assistencia', label: 'Assistência', icon: Wrench, keys: ['Assistência'] },
+  { id: 'meus-tickets', label: 'Meus Tickets', icon: Ticket, keys: ['Tickets'] },
+  { id: 'marketing', label: 'Marketing', icon: Mail, keys: ['Marketing'] },
+  { id: 'crm', label: 'CRM', icon: BarChart3, keys: ['CRM'] },
+  { id: 'definicoes', label: 'Definições', icon: Settings, keys: ['Administração'] },
 ];
 
 // Labels amigáveis para os recursos
@@ -78,6 +80,7 @@ const RECURSO_LABELS: Record<string, string> = {
   renting_contratos: 'Gestão de contratos de renting',
   renting_reservas: 'Gestão de reservas de renting',
   renting_movimentacoes: 'Entradas, saídas e trocas de viatura',
+  renting_ver_todos: 'Ver todos os contratos e reservas (ignora privacidade por gestor)',
   // CRM
   crm_ver: 'Ver leads e pipeline',
   crm_exportar: 'Exportar dados de leads',
@@ -118,6 +121,7 @@ const RECURSO_LABELS: Record<string, string> = {
   administrativo_importar: 'Importar dados das plataformas',
   administrativo_plataformas: 'Ver dados das plataformas (Bolt/Uber/BP/Repsol/EDP)',
   administrativo_cartoes: 'Gerir cartões de frota e dispositivos OBE',
+  administrativo_ver_gorjeta: 'Ver a coluna de gorjeta no resumo financeiro dos motoristas',
   // Marketing
   marketing_ver: 'Aceder ao módulo de Marketing',
   // Calendário
@@ -128,6 +132,7 @@ const RECURSO_LABELS: Record<string, string> = {
   calendario_gerir_todos: 'Gerir eventos de todos os gestores',
   calendario_eliminar: 'Eliminar eventos',
   calendario_recolhas: 'Aceder ao painel de recolhas pendentes',
+  calendario_exportar: 'Exportar dados do calendário (Relatórios)',
   // Assistência
   assistencia_ver: 'Ver tickets de assistência',
   assistencia_criar: 'Criar tickets de assistência',
@@ -321,12 +326,12 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
     onChange(updated);
   };
 
-  const getRecursosForModulo = (moduloKey: string): Recurso[] =>
-    recursos.filter((r) => r.categoria === moduloKey);
+  const getRecursosForModulo = (moduloKeys: string[]): Recurso[] =>
+    recursos.filter((r) => moduloKeys.includes(r.categoria));
 
   // Stats por módulo (ignora recursos booleanos Sim/Não — são outro controlo)
-  const getModuloStats = (moduloKey: string) => {
-    const moduloRecursos = getRecursosForModulo(moduloKey).filter(
+  const getModuloStats = (moduloKeys: string[]) => {
+    const moduloRecursos = getRecursosForModulo(moduloKeys).filter(
       (r) => !BOOLEAN_RECURSOS.has(r.nome)
     );
     let editar = 0,
@@ -340,8 +345,8 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
   };
 
   // Ações rápidas só nos recursos de 3 níveis; os Sim/Não são geridos à parte.
-  const setAllModuloLevel = (moduloKey: string, nivel: NivelAcesso) => {
-    const moduloRecursos = getRecursosForModulo(moduloKey).filter(
+  const setAllModuloLevel = (moduloKeys: string[], nivel: NivelAcesso) => {
+    const moduloRecursos = getRecursosForModulo(moduloKeys).filter(
       (r) => !BOOLEAN_RECURSOS.has(r.nome)
     );
     let updated = [...permissions];
@@ -363,7 +368,7 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
     );
   }
 
-  const modulosComRecursos = MODULOS.filter((m) => getRecursosForModulo(m.key).length > 0);
+  const modulosComRecursos = MODULOS.filter((m) => getRecursosForModulo(m.keys).length > 0);
 
   return (
     <div className="space-y-1">
@@ -386,14 +391,14 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
       <Accordion type="multiple" className="w-full">
         {modulosComRecursos.map((modulo) => {
           const Icon = modulo.icon;
-          const stats = getModuloStats(modulo.key);
-          const moduloRecursos = getRecursosForModulo(modulo.key);
+          const stats = getModuloStats(modulo.keys);
+          const moduloRecursos = getRecursosForModulo(modulo.keys);
           const activeCount = stats.editar + stats.ver;
 
           return (
             <AccordionItem
-              key={modulo.key}
-              value={modulo.key}
+              key={modulo.id}
+              value={modulo.id}
               className="border border-border rounded-lg mb-2 overflow-hidden bg-card"
             >
               <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50 [&[data-state=open]]:bg-muted/30">
@@ -433,7 +438,7 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => setAllModuloLevel(modulo.key, 'nenhum')}
+                        onClick={() => setAllModuloLevel(modulo.keys, 'nenhum')}
                       >
                         <Ban className="h-3 w-3 mr-1" />
                         Nenhum
@@ -443,7 +448,7 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                        onClick={() => setAllModuloLevel(modulo.key, 'ver')}
+                        onClick={() => setAllModuloLevel(modulo.keys, 'ver')}
                       >
                         <Eye className="h-3 w-3 mr-1" />
                         Todos ver
@@ -453,7 +458,7 @@ export const PermissionsSelector: React.FC<PermissionsSelectorProps> = ({ cargoI
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-xs text-green-600 hover:text-green-700 hover:bg-green-50"
-                        onClick={() => setAllModuloLevel(modulo.key, 'editar')}
+                        onClick={() => setAllModuloLevel(modulo.keys, 'editar')}
                       >
                         <Pencil className="h-3 w-3 mr-1" />
                         Todos editar

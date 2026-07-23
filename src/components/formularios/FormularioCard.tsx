@@ -26,6 +26,8 @@ interface FormularioCardProps {
   onEdit: (formulario: Formulario) => void;
   onToggleAtivo: (id: string, ativo: boolean) => void;
   onDelete: (id: string) => void;
+  /** Só admins podem gerir formulários (criar/editar/ativar/eliminar) — ver RLS da tabela `formularios`. */
+  podeGerir: boolean;
 }
 
 export const FormularioCard: React.FC<FormularioCardProps> = ({
@@ -33,6 +35,7 @@ export const FormularioCard: React.FC<FormularioCardProps> = ({
   onEdit,
   onToggleAtivo,
   onDelete,
+  podeGerir,
 }) => {
   const { toast } = useToast();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -88,11 +91,13 @@ export const FormularioCard: React.FC<FormularioCardProps> = ({
               {formulario.nome}
             </CardTitle>
             <div className="flex items-center gap-2">
-              <Switch
-                checked={formulario.ativo}
-                onCheckedChange={() => onToggleAtivo(formulario.id, formulario.ativo)}
-                className="data-[state=checked]:bg-green-500"
-              />
+              {podeGerir && (
+                <Switch
+                  checked={formulario.ativo}
+                  onCheckedChange={() => onToggleAtivo(formulario.id, formulario.ativo)}
+                  className="data-[state=checked]:bg-green-500"
+                />
+              )}
               <Badge
                 variant={formulario.ativo ? 'default' : 'secondary'}
                 className={
@@ -164,25 +169,27 @@ export const FormularioCard: React.FC<FormularioCardProps> = ({
           </div>
 
           {/* Ações */}
-          <div className="flex gap-2 pt-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onEdit(formulario)}
-              className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-yellow-500 hover:border-yellow-500/50"
-            >
-              <Edit className="h-3 w-3 mr-1" />
-              Editar
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleDeleteClick}
-              className="border-red-600/50 text-red-400 hover:bg-red-600/10 hover:border-red-500"
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
+          {podeGerir && (
+            <div className="flex gap-2 pt-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onEdit(formulario)}
+                className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-yellow-500 hover:border-yellow-500/50"
+              >
+                <Edit className="h-3 w-3 mr-1" />
+                Editar
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleDeleteClick}
+                className="border-red-600/50 text-red-400 hover:bg-red-600/10 hover:border-red-500"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

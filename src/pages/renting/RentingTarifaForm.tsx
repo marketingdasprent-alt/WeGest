@@ -32,6 +32,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useModelosElegiveisTvde } from '@/hooks/useModelosElegiveisTvde';
 
 interface ModeloComMarca {
@@ -95,6 +96,8 @@ const RentingTarifaForm = () => {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { orgId } = useTenant();
+  const { canEdit } = usePermissions();
+  const podeEliminar = canEdit('renting_contratos');
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -280,6 +283,7 @@ const RentingTarifaForm = () => {
   };
 
   const handleDelete = async () => {
+    if (!podeEliminar) return;
     try {
       const { error } = await supabase.from('renting_tarifas').delete().eq('id', id!);
       if (error) throw error;
@@ -337,7 +341,7 @@ const RentingTarifaForm = () => {
 
           {/* Acções */}
           <div className="flex items-center gap-2 shrink-0">
-            {!isNew && (
+            {!isNew && podeEliminar && (
               <Button
                 variant="ghost"
                 size="sm"

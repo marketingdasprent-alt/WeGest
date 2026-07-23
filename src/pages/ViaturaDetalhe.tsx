@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import {
   ArrowLeft,
   Car,
@@ -113,6 +114,7 @@ const TABS = [
 export default function ViaturaDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const goBack = useGoBack('/viaturas');
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const isNew = id === 'nova';
@@ -288,7 +290,7 @@ export default function ViaturaDetalhe() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/viaturas')}>
+          <Button variant="ghost" size="icon" onClick={goBack}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>

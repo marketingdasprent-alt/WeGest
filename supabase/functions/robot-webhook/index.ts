@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
     if (!integracaoId) {
       return new Response(
         JSON.stringify({ success: false, error: 'integracao_id é obrigatório' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     if (configError || !config) {
       return new Response(
         JSON.stringify({ success: false, error: 'Integração robot não encontrada' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -57,7 +57,9 @@ Deno.serve(async (req) => {
     }
 
     const payloadKeys = Object.keys(payload);
-    console.log(`robot-webhook received for integration ${integracaoId} (${config.robot_target_platform}). Keys: [${payloadKeys.join(', ')}]`);
+    console.log(
+      `robot-webhook received for integration ${integracaoId} (${config.robot_target_platform}). Keys: [${payloadKeys.join(', ')}]`
+    );
     // Log string field sizes to help identify which field contains the CSV
     for (const [k, v] of Object.entries(payload)) {
       if (typeof v === 'string') console.log(`  key="${k}" length=${v.length}`);
@@ -73,17 +75,19 @@ Deno.serve(async (req) => {
     // Helper: find any string value that looks like CSV (has newlines + commas)
     const findCsvInPayload = (obj: any): string | null => {
       console.log('robot-webhook: Searching for CSV in payload keys:', Object.keys(obj).join(', '));
-      
+
       // 1. Check known field names (case-insensitive and partial match)
       const knownPatterns = [/csv/i, /data/i, /content/i, /bolt/i, /result/i, /raw/i];
       for (const [k, v] of Object.entries(obj)) {
         if (typeof v === 'string' && v.length > 50) {
-          if (knownPatterns.some(p => p.test(k))) {
-             // Basic CSV validation: must have at least one comma and one newline
-             if (v.includes(',') && v.includes('\n')) {
-               console.log(`robot-webhook: Found CSV-like content in key "${k}" (length: ${v.length})`);
-               return v;
-             }
+          if (knownPatterns.some((p) => p.test(k))) {
+            // Basic CSV validation: must have at least one comma and one newline
+            if (v.includes(',') && v.includes('\n')) {
+              console.log(
+                `robot-webhook: Found CSV-like content in key "${k}" (length: ${v.length})`
+              );
+              return v;
+            }
           }
         }
       }
@@ -94,7 +98,9 @@ Deno.serve(async (req) => {
           const commaCount = (v.match(/,/g) || []).length;
           const newlineCount = (v.match(/\n/g) || []).length;
           if (commaCount > 5 && newlineCount > 1) {
-            console.log(`robot-webhook: Deep search match found in key "${k}" (commas: ${commaCount}, lines: ${newlineCount})`);
+            console.log(
+              `robot-webhook: Deep search match found in key "${k}" (commas: ${commaCount}, lines: ${newlineCount})`
+            );
             return v;
           }
         }
@@ -112,81 +118,102 @@ Deno.serve(async (req) => {
     };
 
     // Detect Bolt CSV data in payload
-    const boltCsvContent = config.robot_target_platform === 'bolt'
-      ? (payload.dados_csv_bolt || payload.csv_content || payload.data || payload.dados_csv || payload.raw_csv || findCsvInPayload(payload))
-      : payload.dados_csv_bolt;
+    const boltCsvContent =
+      config.robot_target_platform === 'bolt'
+        ? payload.dados_csv_bolt ||
+          payload.csv_content ||
+          payload.data ||
+          payload.dados_csv ||
+          payload.raw_csv ||
+          findCsvInPayload(payload)
+        : payload.dados_csv_bolt;
 
     if (boltCsvContent) {
       console.log('robot-webhook: Bolt CSV data detected, forwarding to bolt-import-csv');
 
-      const boltResponse = await fetch(
-        `${SUPABASE_URL}/functions/v1/bolt-import-csv`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            integracao_id: integracaoId,
-            dados_csv_bolt: boltCsvContent,
-            periodo: payload.periodo || payload.nome_ficheiro || undefined,
-            periodo_inicio: payload.periodo_inicio || undefined,
-            periodo_fim: payload.periodo_fim || undefined,
-          }),
+      const boltResponse = await fetch(`${SUPABASE_URL}/functions/v1/bolt-import-csv`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
         },
-      );
+        body: JSON.stringify({
+          integracao_id: integracaoId,
+          dados_csv_bolt: boltCsvContent,
+          periodo: payload.periodo || payload.nome_ficheiro || undefined,
+          periodo_inicio: payload.periodo_inicio || undefined,
+          periodo_fim: payload.periodo_fim || undefined,
+        }),
+      });
 
       const boltResult = await boltResponse.json();
-      console.log('robot-webhook: bolt-import-csv response:', JSON.stringify(boltResult).substring(0, 500));
+      console.log(
+        'robot-webhook: bolt-import-csv response:',
+        JSON.stringify(boltResult).substring(0, 500)
+      );
 
       return new Response(
         JSON.stringify({
           success: boltResponse.ok,
-          message: boltResponse.ok ? 'Dados Bolt processados com sucesso' : 'Erro ao processar dados Bolt',
+          message: boltResponse.ok
+            ? 'Dados Bolt processados com sucesso'
+            : 'Erro ao processar dados Bolt',
           integracao_id: integracaoId,
           import_result: boltResult,
         }),
-        { status: boltResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        {
+          status: boltResponse.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
       );
     }
 
     // Detect BP fuel CSV data in payload
-    const hasBpData = config.robot_target_platform === 'bp'
-      ? (payload.combustivel_csv || payload.dados_csv_combustivel || payload.csv_content || payload.data || findCsvInPayload(payload))
-      : (payload.combustivel_csv || payload.dados_csv_combustivel);
+    const hasBpData =
+      config.robot_target_platform === 'bp'
+        ? payload.combustivel_csv ||
+          payload.dados_csv_combustivel ||
+          payload.csv_content ||
+          payload.data ||
+          findCsvInPayload(payload)
+        : payload.combustivel_csv || payload.dados_csv_combustivel;
 
     if (hasBpData) {
       console.log('robot-webhook: BP fuel CSV data detected, forwarding to bp-import-csv');
 
       const csvContent = hasBpData;
 
-      const bpResponse = await fetch(
-        `${SUPABASE_URL}/functions/v1/bp-import-csv`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            integracao_id: integracaoId,
-            combustivel_csv: csvContent,
-          }),
+      const bpResponse = await fetch(`${SUPABASE_URL}/functions/v1/bp-import-csv`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
         },
-      );
+        body: JSON.stringify({
+          integracao_id: integracaoId,
+          combustivel_csv: csvContent,
+        }),
+      });
 
       const bpResult = await bpResponse.json();
-      console.log('robot-webhook: bp-import-csv response:', JSON.stringify(bpResult).substring(0, 500));
+      console.log(
+        'robot-webhook: bp-import-csv response:',
+        JSON.stringify(bpResult).substring(0, 500)
+      );
 
       return new Response(
         JSON.stringify({
           success: bpResponse.ok,
-          message: bpResponse.ok ? 'Dados BP processados com sucesso' : 'Erro ao processar dados BP',
+          message: bpResponse.ok
+            ? 'Dados BP processados com sucesso'
+            : 'Erro ao processar dados BP',
           integracao_id: integracaoId,
           import_result: bpResult,
         }),
-        { status: bpResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        {
+          status: bpResponse.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
       );
     }
 
@@ -194,61 +221,66 @@ Deno.serve(async (req) => {
     if (config.robot_target_platform === 'repsol') {
       console.log('robot-webhook: Repsol integration detected, forwarding to repsol-import-csv');
 
-      const knownData = payload.combustivel_csv || payload.dados_csv_combustivel || payload.movimentos || payload.data || findCsvInPayload(payload);
+      const knownData =
+        payload.combustivel_csv ||
+        payload.dados_csv_combustivel ||
+        payload.movimentos ||
+        payload.data ||
+        findCsvInPayload(payload);
       const fallbackArray = !knownData
-        ? Object.values(payload).find(v => Array.isArray(v)) as any[] | undefined
+        ? (Object.values(payload).find((v) => Array.isArray(v)) as any[] | undefined)
         : undefined;
       const repsolData = knownData || fallbackArray;
 
-      const resp = await fetch(
-        `${SUPABASE_URL}/functions/v1/repsol-import-csv`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            integracao_id: integracaoId,
-            combustivel_csv: typeof repsolData === 'string' ? repsolData : null,
-            movimentos: Array.isArray(repsolData) ? repsolData : null,
-          }),
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/repsol-import-csv`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
         },
-      );
-      
+        body: JSON.stringify({
+          integracao_id: integracaoId,
+          combustivel_csv: typeof repsolData === 'string' ? repsolData : null,
+          movimentos: Array.isArray(repsolData) ? repsolData : null,
+        }),
+      });
+
       const result = await resp.json();
       return new Response(
         JSON.stringify({
           success: resp.ok,
-          message: resp.ok ? 'Dados Repsol processados com sucesso' : 'Erro ao processar dados Repsol',
+          message: resp.ok
+            ? 'Dados Repsol processados com sucesso'
+            : 'Erro ao processar dados Repsol',
           integracao_id: integracaoId,
           import_result: result,
         }),
-        { status: resp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        { status: resp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Detect EDP fuel CSV data in payload
     if (config.robot_target_platform === 'edp') {
-      const edpData = payload.combustivel_csv || payload.dados_csv_combustivel || payload.data || findCsvInPayload(payload);
+      const edpData =
+        payload.combustivel_csv ||
+        payload.dados_csv_combustivel ||
+        payload.data ||
+        findCsvInPayload(payload);
       if (edpData) {
         console.log('robot-webhook: EDP fuel data detected, forwarding to edp-import-csv');
-        
-        const resp = await fetch(
-          `${SUPABASE_URL}/functions/v1/edp-import-csv`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              integracao_id: integracaoId,
-              combustivel_csv: edpData,
-            }),
+
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/edp-import-csv`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+            'Content-Type': 'application/json',
           },
-        );
-        
+          body: JSON.stringify({
+            integracao_id: integracaoId,
+            combustivel_csv: edpData,
+          }),
+        });
+
         const result = await resp.json();
         return new Response(
           JSON.stringify({
@@ -257,7 +289,7 @@ Deno.serve(async (req) => {
             integracao_id: integracaoId,
             import_result: result,
           }),
-          { status: resp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          { status: resp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     }
@@ -266,16 +298,18 @@ Deno.serve(async (req) => {
     const uberPagamentosCsv = payload.pagamentos_csv || payload.dados_csv_pagamentos;
     const uberViagensCsv = payload.viagens_csv || payload.dados_csv_atividades;
     // For robot integrations targeting 'uber', also look for generic CSV fields
-    const uberFallbackCsv = config.robot_target_platform === 'uber' && !uberPagamentosCsv && !uberViagensCsv
-      ? (payload.csv_content || findCsvInPayload(payload))
-      : null;
+    const uberFallbackCsv =
+      config.robot_target_platform === 'uber' && !uberPagamentosCsv && !uberViagensCsv
+        ? payload.csv_content || findCsvInPayload(payload)
+        : null;
     const hasUberData = uberPagamentosCsv || uberViagensCsv || uberFallbackCsv;
 
     if (hasUberData) {
       console.log('robot-webhook: Uber CSV data detected, forwarding to uber-import-reports');
 
       // Extract original filename so uber-import-reports can parse the period from it
-      const nomeOriginal: string = payload.nome_ficheiro || payload.filename || payload.nome_original || '';
+      const nomeOriginal: string =
+        payload.nome_ficheiro || payload.filename || payload.nome_original || '';
 
       // Build a clean forward body with the correct field names that uber-import-reports expects
       const forwardBody: Record<string, unknown> = {
@@ -306,31 +340,38 @@ Deno.serve(async (req) => {
         }
       }
 
-      console.log(`robot-webhook: Uber forward — pagamentos=${!!forwardBody.pagamentos_csv}, viagens=${!!forwardBody.viagens_csv}, nome="${nomeOriginal}"`);
-
-      const importResponse = await fetch(
-        `${SUPABASE_URL}/functions/v1/uber-import-reports`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(forwardBody),
-        },
+      console.log(
+        `robot-webhook: Uber forward — pagamentos=${!!forwardBody.pagamentos_csv}, viagens=${!!forwardBody.viagens_csv}, nome="${nomeOriginal}"`
       );
 
+      const importResponse = await fetch(`${SUPABASE_URL}/functions/v1/uber-import-reports`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(forwardBody),
+      });
+
       const importResult = await importResponse.json();
-      console.log('robot-webhook: uber-import-reports response:', JSON.stringify(importResult).substring(0, 500));
+      console.log(
+        'robot-webhook: uber-import-reports response:',
+        JSON.stringify(importResult).substring(0, 500)
+      );
 
       return new Response(
         JSON.stringify({
           success: importResponse.ok,
-          message: importResponse.ok ? 'Dados Uber processados com sucesso' : 'Erro ao processar dados Uber',
+          message: importResponse.ok
+            ? 'Dados Uber processados com sucesso'
+            : 'Erro ao processar dados Uber',
           integracao_id: integracaoId,
           import_result: importResult,
         }),
-        { status: importResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        {
+          status: importResponse.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
       );
     }
 
@@ -340,7 +381,10 @@ Deno.serve(async (req) => {
     //   - { transacoes: [...], periodo_inicio, periodo_fim, ... }
     if (config.robot_target_platform === 'viaverde') {
       const viaVerdeCsv =
-        payload.dados_csv || payload.csv_content || payload.dados_csv_viaverde || findCsvInPayload(payload);
+        payload.dados_csv ||
+        payload.csv_content ||
+        payload.dados_csv_viaverde ||
+        findCsvInPayload(payload);
       const viaVerdeTransacoes = Array.isArray(payload.transacoes) ? payload.transacoes : null;
 
       if (viaVerdeCsv || viaVerdeTransacoes) {
@@ -349,7 +393,7 @@ Deno.serve(async (req) => {
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/via-verde-import`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+            Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -363,22 +407,61 @@ Deno.serve(async (req) => {
         });
 
         const result = await resp.json();
-        console.log('robot-webhook: via-verde-import response:', JSON.stringify(result).substring(0, 500));
+        console.log(
+          'robot-webhook: via-verde-import response:',
+          JSON.stringify(result).substring(0, 500)
+        );
+
+        // Fecha a linha da fila (via_verde_sync_queue) — só agora, com o
+        // callback real do Apify recebido, é que a execução terminou de
+        // facto (dispatch bem sucedido só significava "aceite"). O filtro
+        // .eq('status', 'running') aliado ao índice único parcial da fila
+        // (no máximo uma linha ativa por integração) garante que fecha
+        // sempre a linha certa, sem ambiguidade.
+        await supabase
+          .from('via_verde_sync_queue')
+          .update({
+            status: resp.ok ? 'completed' : 'failed',
+            completed_at: new Date().toISOString(),
+            error_message: resp.ok ? null : result?.error || `HTTP ${resp.status}`,
+          })
+          .eq('integracao_id', integracaoId)
+          .eq('status', 'running');
 
         return new Response(
           JSON.stringify({
             success: resp.ok,
-            message: resp.ok ? 'Dados Via Verde processados com sucesso' : 'Erro ao processar dados Via Verde',
+            message: resp.ok
+              ? 'Dados Via Verde processados com sucesso'
+              : 'Erro ao processar dados Via Verde',
             integracao_id: integracaoId,
             import_result: result,
           }),
-          { status: resp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          { status: resp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     }
 
     // If we reached here, data was technically received but not recognized as a known format
-    console.error(`robot-webhook ERROR: Payload for integration ${integracaoId} (${config.nome}) NOT recognized. Keys received:`, Object.keys(payload).join(', '));
+    console.error(
+      `robot-webhook ERROR: Payload for integration ${integracaoId} (${config.nome}) NOT recognized. Keys received:`,
+      Object.keys(payload).join(', ')
+    );
+
+    // Payload não reconhecido também significa "esta execução terminou"
+    // (com erro) — fechar a linha da fila liberta a vaga de concorrência
+    // em vez de a deixar presa até ao timeout de 15 min.
+    if (config.robot_target_platform === 'viaverde') {
+      await supabase
+        .from('via_verde_sync_queue')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: 'Formato de dados não reconhecido. Nenhum CSV detetado.',
+        })
+        .eq('integracao_id', integracaoId)
+        .eq('status', 'running');
+    }
 
     return new Response(
       JSON.stringify({
@@ -386,16 +469,15 @@ Deno.serve(async (req) => {
         error: 'Formato de dados não reconhecido. Nenhum CSV detetado.',
         integracao_id: integracaoId,
         platform: config.robot_target_platform,
-        keys_received: Object.keys(payload)
+        keys_received: Object.keys(payload),
       }),
-      { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-
   } catch (error) {
     console.error('robot-webhook error:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message || 'Erro interno' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

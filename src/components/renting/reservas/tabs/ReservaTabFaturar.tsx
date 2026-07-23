@@ -49,15 +49,9 @@ import { DocumentosEmitidosExtra } from '@/components/faturacao/DocumentosEmitid
 import { useContactosDocumento } from '@/hooks/useContactosDocumento';
 import { useReservaCondutores } from '@/hooks/useReservaCondutores';
 import type { Reserva } from '@/types/reserva';
+import { estadoCobrancaDisplay } from '@/lib/estadoCobranca';
 
 const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
-
-const ESTADO_COBRANCA_CLASS: Record<string, string> = {
-  pendente: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  emitida: 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  paga: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  anulada: 'border-muted-foreground/30 bg-muted text-muted-foreground',
-};
 
 interface CobrancaRow {
   id: string;
@@ -490,6 +484,7 @@ export function ReservaTabFaturar({ reserva }: Props) {
                   );
                 return visiveis.map((c) => {
                   const inv = invoiceByCobranca.get(c.id);
+                  const creditado = round2(ncPorCobranca?.[c.id] ?? 0);
                   const porEmitir =
                     !c.documento_externo_ref &&
                     c.emite_fatura_fiscal &&
@@ -566,12 +561,22 @@ export function ReservaTabFaturar({ reserva }: Props) {
                         {formatCurrency(c.valor_total)}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={cn('capitalize border', ESTADO_COBRANCA_CLASS[c.estado] ?? '')}
-                        >
-                          {c.estado}
-                        </Badge>
+                        {(() => {
+                          const est = estadoCobrancaDisplay(c.estado, c.valor_total, creditado);
+                          return (
+                            <Badge
+                              variant="outline"
+                              className={cn('capitalize border', est.className)}
+                              title={
+                                est.totalmenteCreditada
+                                  ? 'Fatura integralmente regularizada por nota(s) de crédito. A fatura mantém-se emitida para efeitos fiscais.'
+                                  : undefined
+                              }
+                            >
+                              {est.label}
+                            </Badge>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
                         {formatDate(c.emitida_em || c.created_at)}

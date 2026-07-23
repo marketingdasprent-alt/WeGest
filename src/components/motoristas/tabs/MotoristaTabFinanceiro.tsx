@@ -898,6 +898,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   );
 
   const handleMarcarPago = async (id: string) => {
+    if (!canEdit) return;
     try {
       const { error } = await supabase
         .from('motorista_financeiro')
@@ -912,6 +913,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   };
 
   const handleCancelar = async (id: string) => {
+    if (!canEdit) return;
     try {
       const { error } = await supabase
         .from('motorista_financeiro')
@@ -1352,8 +1354,8 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
                             <HandCoins className="h-4 w-4 mr-1" />
                             Definir Acordo
                           </Button>
-                        ) : movimento.status === 'pendente' ? (
-                          /* Outros pendentes → ✓ / ✗ */
+                        ) : movimento.status === 'pendente' && canEdit ? (
+                          /* Outros pendentes → ✓ / ✗ (só quem pode editar) */
                           <>
                             <Button
                               variant="ghost"

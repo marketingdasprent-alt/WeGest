@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -36,6 +37,7 @@ import {
   useDeleteCliente,
 } from '@/hooks/useClientes';
 
+import { usePermissions } from '@/hooks/usePermissions';
 import { ClienteAnexosTab } from '@/components/renting/ClienteAnexosTab';
 import { ClienteContaCorrenteTab } from '@/components/renting/ClienteContaCorrenteTab';
 import { ClienteReservasContratosTab } from '@/components/renting/ClienteReservasContratosTab';
@@ -60,6 +62,7 @@ import {
 
 const RentingClienteForm = () => {
   const navigate = useNavigate();
+  const goBack = useGoBack('/renting/clientes');
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
 
@@ -69,6 +72,8 @@ const RentingClienteForm = () => {
   const createMutation = useCreateCliente();
   const updateMutation = useUpdateCliente();
   const deleteMutation = useDeleteCliente();
+  const { canEdit } = usePermissions();
+  const podeEliminar = canEdit('renting_clientes');
 
   const [activeTab, setActiveTab] = useState<
     'dados' | 'reservas_contratos' | 'conta_corrente' | 'anexos'
@@ -163,7 +168,7 @@ const RentingClienteForm = () => {
   };
 
   const handleDelete = () => {
-    if (!cliente) return;
+    if (!cliente || !podeEliminar) return;
     setConfirmDeleteOpen(true);
   };
 
@@ -217,16 +222,11 @@ const RentingClienteForm = () => {
           }
           icon={User}
         >
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate('/renting/clientes')}
-            className="gap-2"
-          >
+          <Button type="button" variant="outline" onClick={goBack} className="gap-2">
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>
-          {isEdit && (
+          {isEdit && podeEliminar && (
             <Button
               type="button"
               variant="destructive"

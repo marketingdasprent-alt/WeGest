@@ -8,6 +8,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ViaturaObeDispositivoSection } from './obe/ViaturaObeDispositivoSection';
 import { ViaturaObeHistoricoSection } from './obe/ViaturaObeHistoricoSection';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
 interface Viatura {
   id: string;
@@ -26,6 +28,8 @@ interface ViaturaTabOBEProps {
 }
 
 export function ViaturaTabOBE({ viatura, onUpdate }: ViaturaTabOBEProps) {
+  const { canEdit } = usePermissions();
+  const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
   const [contratoOBE, setContratoOBE] = useState<ViaturaDocument | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
 
@@ -111,7 +115,7 @@ export function ViaturaTabOBE({ viatura, onUpdate }: ViaturaTabOBEProps) {
   };
 
   const handleDeleteContrato = async () => {
-    if (!contratoOBE) return;
+    if (!contratoOBE || !podeEditar) return;
     if (!window.confirm('Tem a certeza que quer remover o Contrato OBE?')) return;
     try {
       await supabase.storage.from('viatura-documentos').remove([contratoOBE.ficheiro_url]);
@@ -176,15 +180,17 @@ export function ViaturaTabOBE({ viatura, onUpdate }: ViaturaTabOBEProps) {
                         <Eye className="h-4 w-4 mr-2" />
                         Visualizar
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive"
-                        onClick={handleDeleteContrato}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Remover
-                      </Button>
+                      {podeEditar && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive"
+                          onClick={handleDeleteContrato}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Remover
+                        </Button>
+                      )}
                     </div>
                   </>
                 ) : (

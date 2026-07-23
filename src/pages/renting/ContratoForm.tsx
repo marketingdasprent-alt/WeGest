@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -55,6 +56,7 @@ import { ContratoTabTaxas } from './contrato/tabs/ContratoTabTaxas';
 
 const ContratoForm = () => {
   const navigate = useNavigate();
+  const goBack = useGoBack('/renting/contratos');
   const {
     isEdit,
     id,
@@ -208,12 +210,7 @@ const ContratoForm = () => {
         description={isEdit ? 'Editar dados do contrato existente' : 'Novo contrato de renting'}
         icon={FileText}
       >
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => navigate('/renting/contratos')}
-          className="gap-2"
-        >
+        <Button type="button" variant="outline" onClick={goBack} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
           Voltar
         </Button>

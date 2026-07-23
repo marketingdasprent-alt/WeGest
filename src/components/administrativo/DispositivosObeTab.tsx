@@ -26,6 +26,8 @@ import {
 } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { SearchableSelect, type SearchableSelectItem } from '@/components/ui/searchable-select';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -203,6 +205,8 @@ const emptyForm = (): FormState => ({
 
 export function DispositivosObeTab() {
   const { toast } = useToast();
+  const { canEdit } = usePermissions();
+  const podeGerir = canEdit(RECURSOS.ADMINISTRATIVO_CARTOES);
   const [dispositivos, setDispositivos] = useState<DispositivoObe[]>([]);
   const [viaturas, setViaturas] = useState<Viatura[]>([]);
   const [motoristaAtualByViatura, setMotoristaAtualByViatura] = useState<Map<string, string>>(
@@ -396,7 +400,7 @@ export function DispositivosObeTab() {
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !podeGerir) return;
     const { error } = await (supabase as any)
       .from('dispositivos_obe')
       .delete()
@@ -612,6 +616,7 @@ export function DispositivosObeTab() {
   };
 
   const handleImportConfirm = async () => {
+    if (!podeGerir) return;
     const valid = importRows.filter((r) => r.erros.length === 0);
     if (valid.length === 0) return;
     const matriculaMap = new Map(viaturas.map((v) => [v.matricula.toUpperCase(), v.id]));
@@ -677,10 +682,12 @@ export function DispositivosObeTab() {
                 <Download className="h-4 w-4 mr-2" />
                 Download Template
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
-                <Upload className="h-4 w-4 mr-2" />
-                Importar Excel
-              </DropdownMenuItem>
+              {podeGerir && (
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Importar Excel
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleExport}>
                 <FileDown className="h-4 w-4 mr-2" />
@@ -820,14 +827,16 @@ export function DispositivosObeTab() {
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget(d)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {podeGerir && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteTarget(d)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

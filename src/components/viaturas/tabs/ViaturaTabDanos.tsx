@@ -39,6 +39,8 @@ import { pt } from 'date-fns/locale';
 import { DanoFotosGallery } from '../DanoFotosGallery';
 import { DanoCategoriaBadge } from '../DanoCategoriaBadge';
 import { useDanoCategorias } from '@/hooks/useDanoCategorias';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
 interface Dano {
   id: string;
@@ -113,6 +115,8 @@ const ESTADOS = [
 ];
 
 export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) {
+  const { canEdit } = usePermissions();
+  const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
   const [danos, setDanos] = useState<Dano[]>([]);
   const [motoristas, setMotoristas] = useState<MotoristaOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -415,6 +419,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
   };
 
   const handleDelete = async (danoId: string) => {
+    if (!podeEditar) return;
     if (
       !confirm(
         'Tem certeza que deseja eliminar este dano? O movimento financeiro associado também será afetado.'
@@ -825,14 +830,16 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
                               ))}
                             </SelectContent>
                           </Select>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="text-destructive"
-                            onClick={() => handleDelete(dano.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {podeEditar && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="text-destructive"
+                              onClick={() => handleDelete(dano.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
 

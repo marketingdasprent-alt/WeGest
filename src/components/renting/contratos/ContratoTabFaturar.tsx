@@ -34,6 +34,7 @@ import { useContratoCondutores } from '@/hooks/useContratoCondutores';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useInvoicesByContrato, useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { baixarDocumentoPdf, clienteRowToFatura, anularCobrancasFaturacao } from '@/lib/faturacao';
+import { estadoCobrancaDisplay } from '@/lib/estadoCobranca';
 import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
 import type { ContratoRenting } from '@/types/contratoRenting';
 import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
@@ -61,12 +62,8 @@ function calcDias(inicio?: string | null, fim?: string | null): number {
   return Math.max(1, Math.ceil(ms / 86400000));
 }
 
-const ESTADO_COBRANCA_CLASS: Record<string, string> = {
-  pendente: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  emitida: 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  paga: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  anulada: 'border-muted-foreground/30 bg-muted text-muted-foreground',
-};
+// Estado mostrado (inclui "Creditada" quando as NCs cobrem a fatura toda) —
+// ver src/lib/estadoCobranca.ts para o porquê de não se usar "Anulada".
 
 interface CobrancaRow {
   id: string;
@@ -745,12 +742,22 @@ export function ContratoTabFaturar({ contrato }: Props) {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={cn('capitalize border', ESTADO_COBRANCA_CLASS[c.estado] ?? '')}
-                        >
-                          {c.estado}
-                        </Badge>
+                        {(() => {
+                          const est = estadoCobrancaDisplay(c.estado, c.valor_total, creditado);
+                          return (
+                            <Badge
+                              variant="outline"
+                              className={cn('capitalize border', est.className)}
+                              title={
+                                est.totalmenteCreditada
+                                  ? 'Fatura integralmente regularizada por nota(s) de crédito. A fatura mantém-se emitida para efeitos fiscais.'
+                                  : undefined
+                              }
+                            >
+                              {est.label}
+                            </Badge>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
                         {formatDate(c.emitida_em || c.created_at)}

@@ -23,6 +23,8 @@ import { Plus, Calendar, Loader2, Trash2, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format, isFuture, isPast } from 'date-fns';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 import { pt } from 'date-fns/locale';
 
 interface Reserva {
@@ -57,6 +59,8 @@ const ESTADOS = [
 ];
 
 export function ViaturaTabReservas({ viaturaId }: ViaturaTabReservasProps) {
+  const { canEdit } = usePermissions();
+  const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,6 +169,7 @@ export function ViaturaTabReservas({ viaturaId }: ViaturaTabReservasProps) {
   };
 
   const handleDelete = async (reservaId: string) => {
+    if (!podeEditar) return;
     if (!confirm('Tem certeza que deseja eliminar esta reserva?')) return;
 
     try {
@@ -341,14 +346,16 @@ export function ViaturaTabReservas({ viaturaId }: ViaturaTabReservasProps) {
                           ))}
                         </SelectContent>
                       </Select>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="text-destructive"
-                        onClick={() => handleDelete(reserva.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {podeEditar && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive"
+                          onClick={() => handleDelete(reserva.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                   {reserva.motivo && (

@@ -6,6 +6,8 @@ import { Loader2, Radio, Link2Off } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { SearchableSelect, type SearchableSelectItem } from '@/components/ui/searchable-select';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
 interface DispositivoObe {
   id: string;
@@ -24,6 +26,8 @@ export function ViaturaObeDispositivoSection({
   viaturaId,
   onChanged,
 }: ViaturaObeDispositivoSectionProps) {
+  const { canEdit } = usePermissions();
+  const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
   const [loading, setLoading] = useState(true);
   const [atual, setAtual] = useState<DispositivoObe | null>(null);
   const [disponiveis, setDisponiveis] = useState<DispositivoObe[]>([]);
@@ -97,7 +101,7 @@ export function ViaturaObeDispositivoSection({
   };
 
   const handleRemover = async () => {
-    if (!atual) return;
+    if (!atual || !podeEditar) return;
     if (
       !window.confirm(
         'Tem a certeza que quer remover a associação deste dispositivo OBE à viatura?'
@@ -162,20 +166,22 @@ export function ViaturaObeDispositivoSection({
               >
                 {atual.ativo ? 'Ativo' : 'Inativo'}
               </Badge>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRemover}
-                disabled={saving}
-                className="text-destructive"
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Link2Off className="h-4 w-4 mr-2" />
-                )}
-                Remover associação
-              </Button>
+              {podeEditar && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRemover}
+                  disabled={saving}
+                  className="text-destructive"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Link2Off className="h-4 w-4 mr-2" />
+                  )}
+                  Remover associação
+                </Button>
+              )}
             </div>
           </div>
         ) : (

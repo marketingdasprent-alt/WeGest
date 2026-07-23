@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useGoBack } from '@/hooks/useGoBack';
 import { useForm, useFieldArray, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,6 +40,7 @@ import {
   useRentingTarifaPrecosModelo,
 } from '@/hooks/useRentingGruposTarifas';
 
+import { usePermissions } from '@/hooks/usePermissions';
 import { ClienteDialog } from '@/components/renting/ClienteDialog';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
 import { CondutorProvisiorioDialog } from '@/components/motoristas/CondutorProvisiorioDialog';
@@ -104,6 +106,7 @@ const DEFAULT_VALUES: ReservaFormValues = {
 
 const RentingReservaForm = () => {
   const navigate = useNavigate();
+  const goBack = useGoBack('/renting/reservas');
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const isEdit = !!id && id !== 'nova';
@@ -139,6 +142,8 @@ const RentingReservaForm = () => {
   const createMutation = useCreateReserva();
   const updateMutation = useUpdateReserva();
   const deleteMutation = useDeleteReserva();
+  const { canEdit } = usePermissions();
+  const podeEliminar = canEdit('renting_reservas');
   const syncCondutoresMutation = useSyncReservaCondutores();
   const syncCoberturasMutation = useSyncReservaCoberturas();
   const syncExtrasMutation = useSyncReservaExtras();
@@ -766,12 +771,12 @@ const RentingReservaForm = () => {
   };
 
   const handleDelete = () => {
-    if (!reserva) return;
+    if (!reserva || !podeEliminar) return;
     setConfirmDeleteOpen(true);
   };
 
   const confirmDelete = () => {
-    if (!reserva) return;
+    if (!reserva || !podeEliminar) return;
     deleteMutation.mutate(reserva.id, {
       onSuccess: () => {
         setConfirmDeleteOpen(false);
@@ -821,16 +826,11 @@ const RentingReservaForm = () => {
           }
           icon={CalendarCheck}
         >
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate('/renting/reservas')}
-            className="gap-2"
-          >
+          <Button type="button" variant="outline" onClick={goBack} className="gap-2">
             <ArrowLeft className="h-4 w-4" />
             Voltar
           </Button>
-          {isEdit && !bloqueadaPorContrato && (
+          {isEdit && !bloqueadaPorContrato && podeEliminar && (
             <Button
               type="button"
               variant="destructive"

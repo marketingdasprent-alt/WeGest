@@ -24,9 +24,13 @@ import { CartaoFormDialog } from './CartaoFormDialog';
 import { CartaoDeleteAlert } from './CartaoDeleteAlert';
 import { CartoesImportDialog } from './CartoesImportDialog';
 import { CartaoHistoricoSheet } from './CartaoHistoricoSheet';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
 export function CartoesFlotaTab() {
   const { toast } = useToast();
+  const { canEdit } = usePermissions();
+  const podeGerir = canEdit(RECURSOS.ADMINISTRATIVO_CARTOES);
   const [cartoes, setCartoes] = useState<CartaoFrota[]>([]);
   const [motoristas, setMotoristas] = useState<MotoristaOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -307,7 +311,7 @@ export function CartoesFlotaTab() {
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !podeGerir) return;
     const { error } = await (supabase as any)
       .from('cartoes_frota')
       .delete()
@@ -376,6 +380,7 @@ export function CartoesFlotaTab() {
   };
 
   const handleImportConfirm = async () => {
+    if (!podeGerir) return;
     const valid = importRows.filter((r) => r.erros.length === 0);
     if (valid.length === 0) return;
     setImporting(true);
