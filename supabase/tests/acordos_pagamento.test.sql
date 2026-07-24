@@ -405,13 +405,13 @@ select throws_ok('vista_sem_permissao', 'P0001', null,
 -- guard foi escrito para apanhar é um utilizador AUTENTICADO, de uma
 -- organização DIFERENTE da parcela/acordo, a tentar fechar a dívida de
 -- outro tenant. Constrói-se aqui uma segunda org + um staff dela com
--- acesso de faturação PRÓPRIO (is_admin=true) — não apenas sem permissão
--- nenhuma — para que o teste também apanhe uma regressão em que o "AND" do
--- guard (org_id = get_current_org_id() AND has_renting_faturacao_access())
--- fosse trocado por um "OR": nesse caso um staff cross-org SEM acesso
--- próprio passaria pelo guard incorrecto pela razão errada (falta de
--- permissão, não a org), sem discriminar qual dos dois guards está mesmo
--- a correr — um staff cross-org COM acesso próprio discrimina isso.
+-- acesso de faturação PRÓPRIO (is_admin=true na SUA org) — não apenas sem
+-- permissão nenhuma — para que o teste apanhe uma regressão em que o "AND"
+-- do guard (org_id = get_current_org_id() AND has_renting_faturacao_access())
+-- fosse trocado por um "OR": nesse caso um staff cross-org COM acesso próprio
+-- passaria pelo guard incorrecto porque has_renting_faturacao_access() retorna
+-- true, tornando (FALSE OR TRUE) = TRUE — discrimina que os dois guards (org
+-- + permissão) estão acoplados e não podem ser reduzidos a um OR.
 do $$
 declare
   v_suffix2  text := replace(gen_random_uuid()::text, '-', '');
@@ -434,7 +434,9 @@ begin
   values (v_user2_id, v_org2_id)
   on conflict (user_id) do update set org_id = excluded.org_id;
 
-  update public.profiles set is_admin = true where id = v_user2_id;
+  insert into public.user_organizacoes (user_id, org_id, is_admin)
+  values (v_user2_id, v_org2_id, true)
+  on conflict (user_id, org_id) do update set is_admin = true;
 
   create temporary table _org2 on commit drop as
     select v_org2_id as org_id, v_user2_id as user_id;
