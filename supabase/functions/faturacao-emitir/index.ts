@@ -45,7 +45,7 @@ const PROVIDERS: Record<string, FaturacaoProvider> = {
 const DEFAULT_PROVIDER = 'keyinvoice';
 
 interface Body {
-  action?: 'emit' | 'health' | 'pdf';
+  action?: 'emit' | 'health' | 'pdf' | 'preflight';
   // emit
   tipo?: 'FT' | 'FR' | 'NC' | 'RC';
   cliente?: Cliente;
@@ -55,6 +55,12 @@ interface Body {
   observacoes?: string;
   referencia_externa?: string;
   documento_referencia?: string;
+  /**
+   * Organização em nome da qual emitir. SÓ é aceite de um chamador service-role
+   * (workers internos). De um utilizador seria escalada de tenant — emitiria
+   * pela conta de faturação de outra organização.
+   */
+  org_id?: string;
   // pdf
   provider_doctype?: string;
   provider_docnum?: string;
@@ -82,16 +88,33 @@ function callerClient(req: Request) {
   });
 }
 
-/** Resolve { provider, cfg } da org do chamador. Sem org → só fallback de secrets. */
-async function getOrgConfig(req: Request): Promise<{ provider: string; cfg: ProviderConfig }> {
+/** Resolve { provider, cfg } da org. Sem org → sem chave (falha cedo e claro). */
+async function getOrgConfig(
+  req: Request,
+  orgIdExplicito?: string
+): Promise<{ provider: string; cfg: ProviderConfig; orgId: string | null }> {
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const serviceRoleKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  // `Boolean(serviceRoleKey)` evita que, com a env var por definir, o literal
+  // "Bearer undefined" passe a autenticar como service role.
+  const isServiceRole = Boolean(serviceRoleKey) && authHeader === `Bearer ${serviceRoleKey}`;
+
   let orgId: string | null = null;
-  try {
-    const { data } = await callerClient(req).rpc('get_current_org_id');
-    orgId = (data as string) ?? null;
-  } catch {
-    /* segue sem org */
+
+  if (isServiceRole && orgIdExplicito) {
+    // Worker interno a emitir em nome de uma org concreta.
+    orgId = orgIdExplicito;
+  } else if (!isServiceRole) {
+    // Utilizador normal: a org vem SEMPRE do JWT, nunca do body.
+    try {
+      const { data } = await callerClient(req).rpc('get_current_org_id');
+      orgId = (data as string) ?? null;
+    } catch {
+      /* segue sem org */
+    }
   }
-  if (!orgId) return { provider: DEFAULT_PROVIDER, cfg: { apiKey: null, settings: null } };
+
+  if (!orgId) return { provider: DEFAULT_PROVIDER, cfg: { apiKey: null, settings: null }, orgId: null };
 
   const service = createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
   const { data: row } = await service
@@ -104,7 +127,7 @@ async function getOrgConfig(req: Request): Promise<{ provider: string; cfg: Prov
 
   const settings = ((row as any)?.config ?? null) as Record<string, unknown> | null;
   const provider = String((settings?.provider as string) || DEFAULT_PROVIDER).toLowerCase();
-  return { provider, cfg: { apiKey: (row as any)?.client_secret ?? null, settings } };
+  return { provider, cfg: { apiKey: (row as any)?.client_secret ?? null, settings }, orgId };
 }
 
 function pickAdapter(provider: string): FaturacaoProvider {
@@ -134,12 +157,41 @@ serve(async (req) => {
         provider = String(payload.provider || DEFAULT_PROVIDER).toLowerCase();
         cfg = { apiKey: payload.apiKey ?? null, settings: { provider, ...(payload.settings ?? {}) } };
       } else {
-        ({ provider, cfg } = await getOrgConfig(req));
+        ({ provider, cfg } = await getOrgConfig(req, payload.org_id));
       }
       await pickAdapter(provider).health(cfg);
       return json({ ok: true, provider });
     } catch (e) {
       return json({ ok: false, error: (e as Error).message });
+    }
+  }
+
+  // ── preflight ──
+  // Responde "esta org consegue emitir Recibos?" ANTES de se criar um acordo.
+  // Falhar aqui custa um diálogo de erro; falhar depois de receber dinheiro
+  // custa um problema contabilístico.
+  if (payload.action === 'preflight') {
+    try {
+      const { provider, cfg } = await getOrgConfig(req, payload.org_id);
+      const settings = (cfg.settings ?? {}) as Record<string, any>;
+      const doctypes = (settings.doctypes ?? {}) as Record<string, unknown>;
+      const rcConfigurado = Boolean(String(doctypes.RC ?? '').trim());
+
+      if (!rcConfigurado) {
+        return json({
+          ok: false,
+          provider,
+          rc_configurado: false,
+          error:
+            'O documento "Recibo" não está configurado. Sem ele, os pagamentos das ' +
+            'parcelas não podem ser registados legalmente.',
+        });
+      }
+
+      await pickAdapter(provider).health(cfg);
+      return json({ ok: true, provider, rc_configurado: true });
+    } catch (e) {
+      return json({ ok: false, rc_configurado: false, error: (e as Error).message });
     }
   }
 
@@ -149,7 +201,7 @@ serve(async (req) => {
       if (!payload.provider_doctype || !payload.provider_docnum) {
         return json({ success: false, error: 'pdf: provider_doctype e provider_docnum obrigatórios' });
       }
-      const { provider, cfg } = await getOrgConfig(req);
+      const { provider, cfg } = await getOrgConfig(req, payload.org_id);
       const base64 = await pickAdapter(provider).pdf(
         {
           doctype: payload.provider_doctype,
@@ -178,7 +230,7 @@ serve(async (req) => {
   }
 
   try {
-    const { provider, cfg } = await getOrgConfig(req);
+    const { provider, cfg, orgId } = await getOrgConfig(req, payload.org_id);
     const adapter = pickAdapter(provider);
 
     const emitInput: EmitInput = {
@@ -198,13 +250,22 @@ serve(async (req) => {
       return s + comDesc * (1 + (Number(it.taxa_iva) || 0) / 100);
     }, 0);
 
-    // Gravar espelho local — JWT do chamador p/ RLS + trigger org_id
-    const supabase = callerClient(req);
+    // Worker (service role) grava com service role e org_id explícito — o trigger
+    // set_invoice_org_id não consegue resolver a org sem sessão de utilizador.
+    // (Mesma guarda contra env var por definir que em getOrgConfig.)
+    const emitServiceRoleKey = env('SUPABASE_SERVICE_ROLE_KEY');
+    const isServiceRole =
+      Boolean(emitServiceRoleKey) &&
+      (req.headers.get('Authorization') ?? '') === `Bearer ${emitServiceRoleKey}`;
+    const supabase = isServiceRole
+      ? createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '')
+      : callerClient(req);
     const cliente = payload.cliente ?? ({} as Cliente);
 
     const { data: invoice, error: dbErr } = await supabase
       .from('invoices')
       .insert({
+        ...(isServiceRole && orgId ? { org_id: orgId } : {}),
         contrato_id: payload.contrato_id ?? null,
         cobranca_id: payload.cobranca_id ?? null,
         tipo: payload.tipo,
@@ -242,6 +303,10 @@ serve(async (req) => {
 
     return json({ success: true, invoice, provider: providerMeta });
   } catch (e) {
-    return json({ success: false, error: (e as Error).message });
+    // O adapter só lança DEPOIS de o provider responder com erro de negócio,
+    // ou antes de sequer chamar (config em falta). Nos dois casos não foi criado
+    // documento nenhum — o worker pode reagendar sem risco de duplicar.
+    // Falhas de transporte (timeout) rebentam no fetch do worker, não aqui.
+    return json({ success: false, error: (e as Error).message, classe: 'known_failed' });
   }
 });
