@@ -1,6 +1,6 @@
 -- supabase/tests/acordos_pagamento.test.sql
 begin;
-select plan(10);
+select plan(18);
 
 -- ── META: RLS e isolamento multi-tenant ────────────────────────────────
 select has_table('public', 'acordos_pagamento', 'tabela acordos_pagamento existe');
@@ -212,6 +212,74 @@ update public.acordos_pagamento
  where cobranca_id = (select cobranca_id from _ctx);
 select throws_ok('titular_imutavel', null,
   'titular_id do acordo e imutavel apos criacao e rejeitado pelo trigger');
+
+-- ── Task 3: saldo por liquidar + acordo_criar ──────────────────────────
+
+-- ── Saldo por liquidar ─────────────────────────────────────────────────
+select is(
+  public.cobranca_saldo_por_liquidar((select cobranca_id from _ctx)),
+  (select valor_total from public.contrato_cobrancas where id = (select cobranca_id from _ctx)),
+  'sem recibos nem NC, saldo por liquidar iguala o total');
+
+-- ── acordo_criar rejeita soma errada ───────────────────────────────────
+-- Usa _ctx2, não _ctx: _ctx já tem um acordo vivo (inserido acima, no bloco
+-- "parcela paga sem prova de liquidação"), e acordo_criar verifica "já existe
+-- acordo vivo" ANTES de verificar a soma das parcelas. Num cobranca com
+-- acordo vivo, o erro apanhado seria sempre esse, nunca o de soma errada —
+-- o que faria este teste passar pela razão errada. _ctx2 ainda não tem
+-- nenhum acordo neste ponto do ficheiro.
+prepare soma_errada as
+select public.acordo_criar(
+  (select cobranca_id from _ctx2), 'cliente', (select destinatario_id from _ctx2),
+  '[{"numero":1,"data_vencimento":"2026-08-15","valor":1.00}]'::jsonb,
+  'mensal', 15::smallint, 3::smallint, null);
+select throws_ok('soma_errada', 'P0001',
+  'acordo_criar rejeita plano cuja soma nao bate certo com o saldo');
+
+-- ── acordo_criar rejeita cobrança já com acordo vivo ───────────────────
+-- (a Task 2 já inseriu um acordo vivo sobre esta cobrança)
+prepare acordo_duplicado as
+select public.acordo_criar(
+  (select cobranca_id from _ctx), 'cliente', (select destinatario_id from _ctx),
+  '[{"numero":1,"data_vencimento":"2026-08-15","valor":300.00}]'::jsonb,
+  'mensal', 15::smallint, 3::smallint, null);
+select throws_ok('acordo_duplicado', 'P0001',
+  'acordo_criar rejeita cobranca que ja tem acordo vivo');
+
+-- ── Cessão: responsável ≠ titular lança DOIS movimentos ────────────────
+-- `_ctx2` já foi criada pelo seed hermético da Task 2 (segunda cobrança
+-- 'emitida' sem acordo + um segundo cliente para assumir a dívida). Ainda
+-- não tem nenhum acordo (o teste de soma errada acima falhou antes de
+-- inserir nada), por isso este é o primeiro e único acordo criado sobre ela.
+
+select lives_ok($$
+  select public.acordo_criar(
+    (select cobranca_id from _ctx2), 'condutor', (select outro_cliente_id from _ctx2),
+    (select jsonb_build_array(jsonb_build_object(
+       'numero', 1, 'data_vencimento', '2026-08-15',
+       'valor', public.cobranca_saldo_por_liquidar((select cobranca_id from _ctx2))))),
+    'mensal', 15::smallint, 3::smallint, null)
+$$, 'acordo_criar com responsavel diferente do titular corre sem erro');
+
+select is(
+  (select count(*)::int from public.conta_movimentos
+    where origem = 'cessao' and acordo_id is not null),
+  2, 'cessao lancou exactamente dois movimentos (credito + debito)');
+
+select is(
+  (select tipo from public.conta_movimentos
+    where origem = 'cessao' and entidade_id = (select destinatario_id from _ctx2)),
+  'credito', 'titular recebeu o CREDITO da cessao');
+
+select is(
+  (select tipo from public.conta_movimentos
+    where origem = 'cessao' and entidade_id = (select outro_cliente_id from _ctx2)),
+  'debito', 'responsavel recebeu o DEBITO da cessao');
+
+select is(
+  (select cessao_aplicada from public.acordos_pagamento
+    where cobranca_id = (select cobranca_id from _ctx2)),
+  true, 'acordo ficou com cessao_aplicada = true');
 
 select * from finish();
 rollback;
