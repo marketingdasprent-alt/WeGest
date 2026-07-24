@@ -1,6 +1,6 @@
 -- supabase/tests/acordos_pagamento.test.sql
 begin;
-select plan(30);
+select plan(33);
 
 -- ── META: RLS e isolamento multi-tenant ────────────────────────────────
 select has_table('public', 'acordos_pagamento', 'tabela acordos_pagamento existe');
@@ -398,6 +398,73 @@ select public.acordo_vista_devedor((select acordo_id from _acordo3));
 select throws_ok('vista_sem_permissao', 'P0001', null,
   'vista do devedor rejeita quem nao esta ligado ao acordo');
 
+-- ── Autorização: staff autenticado de OUTRA organização é rejeitado ────
+-- As duas RPCs acima são SECURITY DEFINER e por isso ignoram a RLS de quem
+-- chama — o guard interno é a ÚNICA barreira. As duas asserções acima (sem
+-- sessão nenhuma) cobrem o caso mais fácil de barrar; a ameaça real que o
+-- guard foi escrito para apanhar é um utilizador AUTENTICADO, de uma
+-- organização DIFERENTE da parcela/acordo, a tentar fechar a dívida de
+-- outro tenant. Constrói-se aqui uma segunda org + um staff dela com
+-- acesso de faturação PRÓPRIO (is_admin=true) — não apenas sem permissão
+-- nenhuma — para que o teste também apanhe uma regressão em que o "AND" do
+-- guard (org_id = get_current_org_id() AND has_renting_faturacao_access())
+-- fosse trocado por um "OR": nesse caso um staff cross-org SEM acesso
+-- próprio passaria pelo guard incorrecto pela razão errada (falta de
+-- permissão, não a org), sem discriminar qual dos dois guards está mesmo
+-- a correr — um staff cross-org COM acesso próprio discrimina isso.
+do $$
+declare
+  v_suffix2  text := replace(gen_random_uuid()::text, '-', '');
+  v_org2_id  uuid;
+  v_user2_id uuid;
+begin
+  insert into public.organizacoes (nome, codigo)
+  values ('Org Acordos Teste B ' || v_suffix2, 'ap-test-b-' || v_suffix2)
+  returning id into v_org2_id;
+
+  insert into auth.users (id, email)
+  values (gen_random_uuid(), 'ap-test-b-' || v_suffix2 || '@wegest-test.pt')
+  returning id into v_user2_id;
+
+  -- Sobrescreve a org activa que o trigger handle_new_user_org possa ter
+  -- atribuído por omissão (ex.: a org "activa" mais antiga já existente na
+  -- base) — para este teste a org activa TEM de ser esta segunda org,
+  -- senão o "cross-org" estaria silenciosamente a testar a org errada.
+  insert into public.user_org_ativa (user_id, org_id)
+  values (v_user2_id, v_org2_id)
+  on conflict (user_id) do update set org_id = excluded.org_id;
+
+  update public.profiles set is_admin = true where id = v_user2_id;
+
+  create temporary table _org2 on commit drop as
+    select v_org2_id as org_id, v_user2_id as user_id;
+end $$;
+
+select set_config('request.jwt.claim.sub', (select user_id::text from _org2), true);
+select set_config('request.jwt.claims',
+  jsonb_build_object('sub', (select user_id from _org2), 'role', 'authenticated')::text,
+  true);
+
+-- Confirma que a segunda org resolve mesmo para este segundo utilizador
+-- ANTES de a usar para testar as RPCs — sem isto, um throws_ok a seguir
+-- podia estar "verde" só porque get_current_org_id() continuava NULL (o
+-- mesmo efeito do caso sem sessão já coberto acima), não porque o guard
+-- discriminou de facto uma org diferente da da parcela.
+select is(
+  public.get_current_org_id(),
+  (select org_id from _org2),
+  'staff da segunda organizacao autentica e resolve para a SUA org (nao para a org da parcela)');
+
+prepare liquidar_cross_org as
+select public.acordo_parcela_liquidar((select parcela_id from _parcela3), null);
+select throws_ok('liquidar_cross_org', 'P0001', null,
+  'acordo_parcela_liquidar rejeita staff autenticado de outra organizacao (mesmo com acesso de faturacao proprio)');
+
+prepare vista_cross_org as
+select public.acordo_vista_devedor((select acordo_id from _acordo3));
+select throws_ok('vista_cross_org', 'P0001', null,
+  'vista do devedor rejeita staff autenticado de outra organizacao (mesmo com acesso de faturacao proprio)');
+
 -- Impersona o motorista responsável (o devedor) — cobre as duas
 -- implementações de auth.uid(), tal como em rls_org_isolation.test.sql.
 select set_config('request.jwt.claim.sub', (select devedor_user_id::text from _ctx3), true);
@@ -436,13 +503,34 @@ select is(
   'paga', 'cobranca fecha porque o saldo real (nao a contagem de parcelas) chegou a zero');
 
 -- Idempotência: reprocessar a mesma parcela (retry do worker) não faz nada demais.
+-- As asserções anteriores (lives_ok + estado continua 'paga') não discriminam
+-- nada: mesmo que o early return "IF v_parcela.estado = 'paga' THEN RETURN"
+-- fosse apagado da migração, o UPDATE corria outra vez, não rebentava e
+-- deixava estado='paga' na mesma — ficava tudo verde com o invariante
+-- desaparecido. Comparar `now()`/pago_em também não ajudaria: dentro de uma
+-- única transacção pgTAP, `now()` é o timestamp da transacção e é IGUAL nas
+-- duas chamadas, com ou sem early return.
+--
+-- Em vez disso, a segunda chamada passa um p_invoice_id DIFERENTE do da
+-- primeira (que foi NULL, ver chamada de liquidação acima) e depois
+-- confirma-se que invoice_rc_id NÃO foi reescrito. O early return acontece
+-- ANTES de qualquer escrita — por isso uma implementação genuinamente
+-- idempotente deixa invoice_rc_id como estava (NULL); uma implementação
+-- partida (early return removido) executa o UPDATE de novo e sobrescreve
+-- invoice_rc_id com este novo valor — o que faria a asserção seguinte falhar.
+-- Nota: invoice_rc_id tem FK para public.invoices(id) (20260724100000), e o
+-- sentinel abaixo não existe lá de propósito — se o early return
+-- desaparecer, o UPDATE nem chega a "suceder silenciosamente": rebenta logo
+-- com violação de FK, e é o PRÓPRIO lives_ok a apanhar a regressão.
 select lives_ok($$
-  select public.acordo_parcela_liquidar((select parcela_id from _parcela3), null)
-$$, 'acordo_parcela_liquidar e idempotente ao repetir sobre parcela ja paga');
+  select public.acordo_parcela_liquidar((select parcela_id from _parcela3),
+    '00000000-0000-0000-0000-00000000beef')
+$$, 'segunda chamada a acordo_parcela_liquidar nao rebenta');
 
-select is(
-  (select estado from public.acordo_parcelas where id = (select parcela_id from _parcela3)),
-  'paga', 'parcela permanece paga apos a segunda chamada');
+select ok(
+  (select invoice_rc_id is distinct from '00000000-0000-0000-0000-00000000beef'::uuid
+     from public.acordo_parcelas where id = (select parcela_id from _parcela3)),
+  'segunda chamada nao reescreveu a parcela (early return antes de qualquer escrita)');
 
 -- Rejeita liquidar sem recibo — reaproveita o acordo (ainda 'ativo') de
 -- _ctx, que continua sem nenhuma parcela até este ponto do ficheiro (ver
