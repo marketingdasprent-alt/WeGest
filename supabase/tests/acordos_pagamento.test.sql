@@ -1,6 +1,6 @@
 -- supabase/tests/acordos_pagamento.test.sql
 begin;
-select plan(9);
+select plan(10);
 
 -- ── META: RLS e isolamento multi-tenant ────────────────────────────────
 select has_table('public', 'acordos_pagamento', 'tabela acordos_pagamento existe');
@@ -40,7 +40,23 @@ select is(
 --                          org_id tornou-se NOT NULL em 20260513100004, com o
 --                          mesmo problema de DEFAULT que clientes — passado
 --                          explicitamente. (contratos_renting.viatura_id é
---                          NOT NULL → precisa de uma viatura real)
+--                          NOT NULL → precisa de uma viatura real). marca_id/
+--                          modelo_id (20260519300007, FK opcional para
+--                          viatura_marcas/viatura_modelos) são passados a par
+--                          do texto: viatura_marcas exige org_id+nome e
+--                          viatura_modelos exige org_id+marca_id+nome
+--                          (20260519300001) — sem uma linha de catálogo válida
+--                          um trigger de sincronização de marca/modelo por id
+--                          (quando presente) anularia o texto e violava o
+--                          NOT NULL de viaturas.marca/modelo.
+--   auth.users            → id, email (padrão de rls_org_isolation.test.sql
+--                          linhas 83-85). contratos_renting.created_by tem
+--                          DEFAULT auth.uid(), NULL fora de sessão autenticada;
+--                          o trigger AFTER INSERT de cascata (cascata_open)
+--                          usa COALESCE(NEW.created_by, auth.uid()) para
+--                          preencher calendario_eventos.criado_por, que é
+--                          NOT NULL sem default — por isso created_by tem de
+--                          vir de um utilizador real, passado explicitamente.
 --   contratos_renting    (20260518000010) → cliente_id, viatura_id,
 --                          data_inicio, data_fim  (org_id tem o mesmo default
 --                          problemático — passado explicitamente). reserva_id
@@ -70,9 +86,12 @@ do $$
 declare
   v_suffix        text := replace(gen_random_uuid()::text, '-', '');
   v_org_id        uuid;
+  v_marca_id      uuid;
+  v_modelo_id     uuid;
   v_viatura_id    uuid;
   v_titular_id    uuid;
   v_outro_id      uuid;
+  v_user_id       uuid;
   v_reserva_id    uuid;
   v_contrato_id   uuid;
   v_cobranca1_id  uuid;
@@ -82,8 +101,17 @@ begin
   values ('Org Acordos Teste ' || v_suffix, 'ap-test-' || v_suffix)
   returning id into v_org_id;
 
-  insert into public.viaturas (org_id, matricula, marca, modelo)
-  values (v_org_id, 'AP' || upper(substr(v_suffix, 1, 8)), 'Marca Teste', 'Modelo Teste')
+  insert into public.viatura_marcas (org_id, nome)
+  values (v_org_id, 'Marca Teste ' || v_suffix)
+  returning id into v_marca_id;
+
+  insert into public.viatura_modelos (org_id, marca_id, nome)
+  values (v_org_id, v_marca_id, 'Modelo Teste ' || v_suffix)
+  returning id into v_modelo_id;
+
+  insert into public.viaturas (org_id, matricula, marca_id, modelo_id, marca, modelo)
+  values (v_org_id, 'AP' || upper(substr(v_suffix, 1, 8)), v_marca_id, v_modelo_id,
+          'Marca Teste ' || v_suffix, 'Modelo Teste ' || v_suffix)
   returning id into v_viatura_id;
 
   insert into public.clientes (org_id, nome)
@@ -94,14 +122,18 @@ begin
   values (v_org_id, 'Cliente Outro Teste ' || v_suffix)
   returning id into v_outro_id;
 
+  insert into auth.users (id, email)
+  values (gen_random_uuid(), 'ap-test-' || v_suffix || '@wegest-test.pt')
+  returning id into v_user_id;
+
   insert into public.reservas (org_id, viatura_id, data_inicio, data_fim, cliente_id)
   values (v_org_id, v_viatura_id, now(), now() + interval '30 days', v_titular_id)
   returning id into v_reserva_id;
 
   insert into public.contratos_renting
-    (org_id, reserva_id, cliente_id, viatura_id, data_inicio, data_fim)
+    (org_id, reserva_id, cliente_id, viatura_id, data_inicio, data_fim, created_by)
   values
-    (v_org_id, v_reserva_id, v_titular_id, v_viatura_id, now(), now() + interval '30 days')
+    (v_org_id, v_reserva_id, v_titular_id, v_viatura_id, now(), now() + interval '30 days', v_user_id)
   returning id into v_contrato_id;
 
   insert into public.contrato_cobrancas
@@ -140,10 +172,12 @@ select throws_ok('xor_invalido', null,
   'papel motorista com responsavel_cliente_id preenchido e rejeitado');
 
 -- ── Constraint: parcela paga sem prova de liquidação ───────────────────
+-- org_id omitido de propósito: exerce trg_acordos_set_org_id a derivá-lo a
+-- partir da cobrança (é este acordo que a asserção final inspeciona).
 insert into public.acordos_pagamento
-  (org_id, cobranca_id, titular_id, titular_nome,
+  (cobranca_id, titular_id, titular_nome,
    responsavel_cliente_id, responsavel_papel, responsavel_nome, valor_total, frequencia)
-select org_id, cobranca_id, destinatario_id, 'Titular',
+select cobranca_id, destinatario_id, 'Titular',
        destinatario_id, 'cliente', 'Responsavel', 300, 'mensal'
   from _ctx;
 
@@ -170,6 +204,14 @@ select is(
   (select count(*)::int from public.acordos_pagamento a join _ctx c on true
     where a.cobranca_id = c.cobranca_id and a.org_id = c.org_id),
   1, 'trigger preencheu org_id a partir da cobranca');
+
+-- ── Trigger: titular fiscal é imutável ─────────────────────────────────
+prepare titular_imutavel as
+update public.acordos_pagamento
+   set titular_id = (select outro_cliente_id from _ctx2)
+ where cobranca_id = (select cobranca_id from _ctx);
+select throws_ok('titular_imutavel', null,
+  'titular_id do acordo e imutavel apos criacao e rejeitado pelo trigger');
 
 select * from finish();
 rollback;

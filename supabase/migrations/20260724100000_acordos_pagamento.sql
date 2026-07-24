@@ -150,6 +150,26 @@ CREATE TRIGGER trg_parcelas_updated_at
   BEFORE UPDATE ON public.acordo_parcelas
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+-- ── Titular fiscal é IMUTÁVEL (padrão de fn_contrato_cobranca_protege) ────
+-- É o NIF que vai em todos os recibos; mudar por engano o titular_id ou o
+-- titular_nif depois de criado o acordo emitia recibos ao destinatário errado.
+CREATE OR REPLACE FUNCTION public.fn_acordo_protege_titular()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.titular_id IS DISTINCT FROM OLD.titular_id
+  OR NEW.titular_nif IS DISTINCT FROM OLD.titular_nif THEN
+    RAISE EXCEPTION
+      'Titular do acordo é imutável — é o NIF de todos os recibos emitidos.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_acordos_protege_titular
+  BEFORE UPDATE ON public.acordos_pagamento
+  FOR EACH ROW EXECUTE FUNCTION public.fn_acordo_protege_titular();
+
 -- ── RLS ──────────────────────────────────────────────────────────────────
 ALTER TABLE public.acordos_pagamento ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.acordo_parcelas   ENABLE ROW LEVEL SECURITY;
