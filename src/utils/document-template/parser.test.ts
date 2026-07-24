@@ -48,4 +48,35 @@ describe('htmlToText', () => {
     const elements = htmlToText(html);
     expect(elements.every((e) => e.type !== 'text' || e.text === '\n')).toBe(true);
   });
+
+  it('converte a quebra de página do editor num elemento "pagebreak"', () => {
+    const html =
+      '<p>Página um.</p>' +
+      '<div data-page-break="true" class="page-break"></div>' +
+      '<p>Página dois.</p>';
+
+    const elements = htmlToText(html);
+    const tipos = elements.map((e) => e.type);
+
+    expect(tipos).toContain('pagebreak');
+    // Entre os dois parágrafos, e uma só vez.
+    expect(tipos.filter((t) => t === 'pagebreak')).toHaveLength(1);
+    const idxQuebra = elements.findIndex((e) => e.type === 'pagebreak');
+    expect(elements.findIndex((e) => e.text === 'Página um.')).toBeLessThan(idxQuebra);
+    expect(elements.findIndex((e) => e.text === 'Página dois.')).toBeGreaterThan(idxQuebra);
+  });
+
+  it('a decoração da quebra de página nunca chega ao documento', () => {
+    // O nó guardado tem um rótulo só para o editor ("Página" + contador CSS).
+    const html =
+      '<div data-page-break="true" class="page-break" contenteditable="false">' +
+      '<span class="page-break-label">Página</span>' +
+      '</div>';
+
+    const elements = htmlToText(html);
+
+    expect(elements).toHaveLength(1);
+    expect(elements[0].type).toBe('pagebreak');
+    expect(elements.map((e) => e.text).join('')).not.toContain('Página');
+  });
 });

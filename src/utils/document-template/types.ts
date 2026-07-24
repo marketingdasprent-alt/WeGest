@@ -100,7 +100,8 @@ export interface TableCellData {
 }
 
 export interface DocEl {
-  type: 'text' | 'image' | 'table' | 'hr';
+  /** `pagebreak` = quebra de página manual inserida no editor de templates. */
+  type: 'text' | 'image' | 'table' | 'hr' | 'pagebreak';
   text?: string;
   src?: string;
   rows?: TableCellData[][];
