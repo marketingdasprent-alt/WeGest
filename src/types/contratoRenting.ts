@@ -161,6 +161,11 @@ export type ContratoRenting = {
   combustivel_saida: string | null;
   eletricidade_saida: string | null;
 
+  /** true quando a entrega foi marcada via o atalho "Any Rent" (sem
+   *  check-in) — restringe o banner/botão de preenchimento manual de
+   *  km/combustível/bateria de saída só a estes contratos. */
+  entrega_via_any_rent: boolean;
+
   /** DUA original — o motorista levou a DUA física da viatura. A flag e a nota
    *  vêm do formulário; `dua_devolvida_em` é escrito só no fecho (quando o
    *  gestor confirma a devolução). Aviso de devolução ativo enquanto
@@ -202,13 +207,15 @@ export type ContratoRentingInsert = Omit<
   | 'contrato_anterior_id'
   | 'substituido_em'
   | 'motivo_versao'
-  // km_saida/km_entrada e combustivel_saida/eletricidade_saida só são
-  // escritos server-side pela RPC de renovação (renovar_contrato_renting) ou
-  // no fluxo de entrega, nunca pelo formulário de criar/editar.
+  // km_saida/km_entrada, combustivel_saida/eletricidade_saida e
+  // entrega_via_any_rent só são escritos server-side pela RPC de renovação
+  // (renovar_contrato_renting), pelo fluxo de entrega, ou pelo atalho "Any
+  // Rent" — nunca pelo formulário de criar/editar.
   | 'km_saida'
   | 'km_entrada'
   | 'combustivel_saida'
   | 'eletricidade_saida'
+  | 'entrega_via_any_rent'
   // Os campos DUA são escritos no fluxo de entrega/recolha da viatura
   // (RealizarEntregaPage) e no fecho, nunca no formulário do contrato.
   | 'dua_original_com_motorista'

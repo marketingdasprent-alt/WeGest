@@ -37,6 +37,8 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { DanoFotosGallery } from '../DanoFotosGallery';
+import { DanoCategoriaBadge } from '../DanoCategoriaBadge';
+import { useDanoCategorias } from '@/hooks/useDanoCategorias';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 
@@ -51,6 +53,8 @@ interface Dano {
   valor: number;
   motorista_id: string | null;
   contrato_id: string | null;
+  categoria_id: string | null;
+  categoria: { id: string; nome: string; cor: string | null } | null;
   motorista?: {
     id: string;
     nome: string;
@@ -128,6 +132,8 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
   const [dataOcorrencia, setDataOcorrencia] = useState('');
   const [motoristaId, setMotoristaId] = useState('');
   const [contratoId, setContratoId] = useState<string | null>(null);
+  const [categoriaId, setCategoriaId] = useState('');
+  const { data: categorias = [] } = useDanoCategorias();
 
   // Fotos temporárias (antes de guardar)
   const [fotosTemp, setFotosTemp] = useState<File[]>([]);
@@ -220,6 +226,11 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
             id,
             nome,
             codigo
+          ),
+          categoria:assistencia_categorias (
+            id,
+            nome,
+            cor
           )
         `
         )
@@ -328,6 +339,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
           data_ocorrencia: dataOcorrencia || null,
           motorista_id: motoristaId || null,
           contrato_id: contratoId,
+          categoria_id: categoriaId || null,
         })
         .select()
         .single();
@@ -387,6 +399,25 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
     }
   };
 
+  const handleUpdateCategoria = async (danoId: string, novaCategoriaId: string) => {
+    try {
+      const { error } = await supabase
+        .from('viatura_danos')
+        .update({
+          categoria_id: novaCategoriaId === 'none' ? null : novaCategoriaId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', danoId);
+
+      if (error) throw error;
+      toast.success('Categoria atualizada!');
+      loadDanos();
+    } catch (error) {
+      console.error('Erro ao atualizar categoria:', error);
+      toast.error('Erro ao atualizar categoria');
+    }
+  };
+
   const handleDelete = async (danoId: string) => {
     if (!podeEditar) return;
     if (
@@ -421,6 +452,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
     setDataOcorrencia('');
     setMotoristaId('');
     setContratoId(null);
+    setCategoriaId('');
     // Limpar fotos temporárias
     previewUrls.forEach((url) => URL.revokeObjectURL(url));
     setFotosTemp([]);
@@ -514,6 +546,26 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+
+                <div>
+                  <Label>Categoria</Label>
+                  <Select
+                    value={categoriaId || 'none'}
+                    onValueChange={(val) => setCategoriaId(val === 'none' ? '' : val)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecionar categoria (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem categoria</SelectItem>
+                      {categorias.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -709,6 +761,9 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
                               </Badge>
                             )}
                           </div>
+                          <div className="mb-1">
+                            <DanoCategoriaBadge categoria={dano.categoria} />
+                          </div>
                           <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-muted-foreground">
                             {locLabel && <span>{locLabel}</span>}
                             {locLabel && <span>•</span>}
@@ -738,6 +793,26 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
                           )}
                         </div>
                         <div className="flex items-center gap-2">
+                          <Select
+                            value={dano.categoria_id || 'none'}
+                            onValueChange={(v) => handleUpdateCategoria(dano.id, v)}
+                          >
+                            <SelectTrigger className="w-[140px]">
+                              {dano.categoria ? (
+                                <DanoCategoriaBadge categoria={dano.categoria} />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Sem categoria</span>
+                              )}
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Sem categoria</SelectItem>
+                              {categorias.map((cat) => (
+                                <SelectItem key={cat.id} value={cat.id}>
+                                  {cat.nome}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <Select
                             value={dano.estado}
                             onValueChange={(v) => handleUpdateEstado(dano.id, v)}

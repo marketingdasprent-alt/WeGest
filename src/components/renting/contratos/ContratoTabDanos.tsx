@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { DanoFotosGallery } from '@/components/viaturas/DanoFotosGallery';
+import { DanoCategoriaBadge } from '@/components/viaturas/DanoCategoriaBadge';
 
 interface ContratoTabDanosProps {
   /** Contrato de renting cujos danos (entrega/recolha) se mostram. */
@@ -27,6 +28,7 @@ interface DanoContrato {
   data_ocorrencia: string | null;
   valor: number | null;
   observacoes: string | null;
+  categoria: { id: string; nome: string; cor: string | null } | null;
   fotos: DanoFoto[];
 }
 
@@ -54,7 +56,12 @@ export const ContratoTabDanos: React.FC<ContratoTabDanosProps> = ({ contratoId }
     try {
       const { data, error } = await supabase
         .from('viatura_danos')
-        .select('id, descricao, localizacao, created_at, data_ocorrencia, valor, observacoes')
+        .select(
+          `
+          id, descricao, localizacao, created_at, data_ocorrencia, valor, observacoes,
+          categoria:assistencia_categorias (id, nome, cor)
+        `
+        )
         .eq('contrato_renting_id', contratoId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -133,6 +140,11 @@ export const ContratoTabDanos: React.FC<ContratoTabDanosProps> = ({ contratoId }
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="font-medium">{dano.descricao}</p>
+                {dano.categoria && (
+                  <div className="mt-1">
+                    <DanoCategoriaBadge categoria={dano.categoria} />
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-muted-foreground">
                   {locLabel && <span>{locLabel}</span>}
                   {locLabel && <span>•</span>}

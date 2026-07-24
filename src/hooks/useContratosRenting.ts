@@ -47,6 +47,7 @@ const SELECT_COLUMNS = `
   franquia_valor, caucao_valor, kms_incluidos, km_adicional_valor,
   km_saida, km_entrada,
   combustivel_saida, eletricidade_saida,
+  entrega_via_any_rent,
   dua_original_com_motorista, dua_devolvida_em, dua_observacoes,
   voucher_codigo,
   numero_processo, voo_referencia,
@@ -623,7 +624,11 @@ export function useMarcarRealizacaoDireta() {
       // origem: só avança agendado→em_curso.
       const { error } = await supabase
         .from('contratos_renting')
-        .update({ estado_operacional: 'em_curso', updated_by: user?.id ?? null })
+        .update({
+          estado_operacional: 'em_curso',
+          entrega_via_any_rent: true,
+          updated_by: user?.id ?? null,
+        })
         .eq('id', contratoId)
         .eq('estado_operacional', 'agendado');
       if (error) throw error;
@@ -637,6 +642,60 @@ export function useMarcarRealizacaoDireta() {
       toast({
         title: 'Entrega marcada como realizada',
         description: 'Sem fotos/km — apenas o estado do contrato foi actualizado.',
+      });
+    },
+    onError: (error: unknown) => {
+      const { title, description } = contratoErrorMessage(error);
+      toast({ title, description, variant: 'destructive' });
+    },
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// Preencher manualmente km/combustível/bateria de saída — só para
+// contratos marcados com entrega_via_any_rent=true (ver
+// useMarcarRealizacaoDireta), que saltaram o check-in e por isso nunca
+// tiveram estes campos escritos. Ver AnyRentDadosSaidaAlert.tsx para a UI.
+// ────────────────────────────────────────────────────────────
+
+export interface PreencherDadosSaidaAnyRentArgs {
+  contratoId: string;
+  kmSaida: number;
+  combustivelSaida: string | null;
+  eletricidadeSaida: string | null;
+}
+
+export function usePreencherDadosSaidaAnyRent() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({
+      contratoId,
+      kmSaida,
+      combustivelSaida,
+      eletricidadeSaida,
+    }: PreencherDadosSaidaAnyRentArgs): Promise<void> => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const { error } = await supabase
+        .from('contratos_renting')
+        .update({
+          km_saida: kmSaida,
+          combustivel_saida: combustivelSaida,
+          eletricidade_saida: eletricidadeSaida,
+          updated_by: user?.id ?? null,
+        })
+        .eq('id', contratoId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      toast({
+        title: 'Dados de saída preenchidos',
+        description: 'Km, combustível/bateria registados no contrato.',
       });
     },
     onError: (error: unknown) => {
