@@ -1,6 +1,6 @@
 -- supabase/tests/acordos_pagamento.test.sql
 begin;
-select plan(43);
+select plan(44);
 
 -- ── META: RLS e isolamento multi-tenant ────────────────────────────────
 select has_table('public', 'acordos_pagamento', 'tabela acordos_pagamento existe');
@@ -575,6 +575,16 @@ select is(
       and policyname='rls_org_isolation' and permissive='RESTRICTIVE'),
   1, 'faturacao_outbox tem a policy RESTRICTIVE rls_org_isolation');
 
+-- Hermeticidade: parquear linhas de outras orgs para que as contagens abaixo
+-- reflictam apenas o que este teste criou. O claim conta 'em_curso' e escolhe
+-- candidatas 'pendente' em TODA a tabela, sem filtro de org_id — numa base já
+-- povoada por outra execução/organização, essas linhas alheias contaminariam
+-- a capacidade e a ordem de escolha (proxima_tentativa ASC). O rollback final
+-- desfaz isto.
+update public.faturacao_outbox
+   set estado = 'sucesso'
+ where org_id is distinct from (select org_id from _acordo_ctx);
+
 -- ── Claim nunca reclama, no total, mais do que p_max ───────────────────
 -- FOR UPDATE SKIP LOCKED por si só só impede duas invocações agarrarem a
 -- MESMA linha — não impede que, em conjunto, reclamem mais do que p_max.
@@ -601,7 +611,8 @@ select is(
   2, 'claim(2) com 3 linhas pendentes e 0 em_curso reclama exactamente 2');
 
 select is(
-  (select count(*)::int from public.faturacao_outbox where estado = 'pendente'),
+  (select count(*)::int from public.faturacao_outbox
+    where estado = 'pendente' and org_id = (select org_id from _acordo_ctx)),
   1, 'a terceira linha pendente fica por reclamar — p_max nao e excedido no total');
 
 -- Drena a linha que sobrou, para as próximas asserções partirem de uma
@@ -662,6 +673,23 @@ select (select org_id from _acordo_ctx), 'RC', 'RC:parcela:' || parcela_id::text
   from _parcela_outbox_presa;
 
 select public.faturacao_outbox_claim(0);
+
+-- O reaper corre incondicionalmente sobre TODA a tabela (sem filtro de
+-- org_id) e a sua guarda é só "estado = 'em_curso' AND started_at < now() -
+-- interval '10 minutes'". Sem a asserção abaixo, uma regressão que apagasse
+-- ou invertesse esse predicado de started_at suspenderia TODAS as linhas
+-- em_curso — incluindo trabalho saudável em curso — e nenhuma asserção deste
+-- ficheiro apanharia isso, porque só se prova acima que a linha presa (esta,
+-- deliberadamente stale) fica suspensa, nunca que uma linha saudável fica
+-- de fora. `_parcela_outbox` foi reclamada pelo claim(10) do bloco de dedupe
+-- (linha "claim reclama a linha pendente", acima) com started_at = now() da
+-- MESMA transacção — dentro de uma única transacção pgTAP, now() é constante,
+-- por isso este started_at nunca é "< now() - 10min" e o reaper tem de a
+-- deixar em_curso.
+select is(
+  (select estado from public.faturacao_outbox
+    where parcela_id = (select parcela_id from _parcela_outbox)),
+  'em_curso', 'reaper nao varre linhas em_curso saudaveis (started_at recente)');
 
 select is(
   (select estado from public.faturacao_outbox
