@@ -27,6 +27,26 @@ CREATE INDEX IF NOT EXISTS idx_conta_movimentos_acordo
 CREATE INDEX IF NOT EXISTS idx_motorista_financeiro_acordo
   ON public.motorista_financeiro (acordo_id) WHERE acordo_id IS NOT NULL;
 
+-- ── mt_motorista_fin_insert alargada para faturação ─────────────────────
+-- acordo_criar autoriza-se sempre por has_renting_faturacao_access() — todos
+-- os outros INSERT que faz (acordos_pagamento, acordo_parcelas,
+-- conta_movimentos) já aceitam esse acesso. A policy original de
+-- motorista_financeiro (20260513100005_update_rls_multitenancy.sql,
+-- mt_motorista_fin_insert) só permite admin, motoristas_gestao ou
+-- assistencia_tickets — um utilizador só com acesso de faturação (sem
+-- nenhuma dessas três permissões) recebia um erro cru de RLS ao ceder uma
+-- dívida a um motorista, e a funcionalidade de cessão a motorista ficava
+-- morta para esse papel. Reproduz-se a policy tal como estava e acrescenta-se
+-- a alternativa, sem tocar no gate de org_id nem nas condições já existentes.
+DROP POLICY IF EXISTS "mt_motorista_fin_insert" ON public.motorista_financeiro;
+CREATE POLICY "mt_motorista_fin_insert" ON public.motorista_financeiro FOR INSERT TO authenticated
+  WITH CHECK (org_id = get_current_org_id() AND (
+    is_current_user_admin()
+    OR has_permission(auth.uid(), 'motoristas_gestao')
+    OR has_permission(auth.uid(), 'assistencia_tickets')
+    OR public.has_renting_faturacao_access()
+  ));
+
 -- Saldo ainda por liquidar de uma cobrança:
 --   total − recibos ativos que a referenciam − notas de crédito ativas.
 --
@@ -116,6 +136,23 @@ BEGIN
     RAISE EXCEPTION 'Esta fatura já tem um acordo de pagamento ativo.';
   END IF;
 
+  -- Uma cessão cancelada não é uma cessão revertida: cancelar o acordo só
+  -- muda o `estado`, não desfaz o crédito ao titular nem o débito ao
+  -- responsável já lançados em conta_movimentos/motorista_financeiro. Criar
+  -- um segundo acordo sobre a mesma cobrança lançaria uma SEGUNDA cessão
+  -- inteira, duplicando o crédito ao titular — e cobranca_saldo_por_liquidar
+  -- nunca veria essa duplicação, porque só subtrai recibos e notas de
+  -- crédito, nunca movimentos de cessão.
+  -- `cessao_aplicada = true` é exactamente a flag que assinala que a cessão
+  -- deste acordo ainda está por reverter. Um futuro `acordo_cancelar()` há-de
+  -- lançar o par crédito/débito compensatório e só então pôr
+  -- `cessao_aplicada = false`, o que liberta esta guarda.
+  IF EXISTS (SELECT 1 FROM public.acordos_pagamento
+              WHERE cobranca_id = p_cobranca_id
+                AND estado = 'cancelado' AND cessao_aplicada = true) THEN
+    RAISE EXCEPTION 'Existe uma cessão de dívida por reverter nesta fatura. Reverta o acordo cancelado antes de criar um novo.';
+  END IF;
+
   IF p_parcelas IS NULL OR jsonb_array_length(p_parcelas) = 0 THEN
     RAISE EXCEPTION 'O plano tem de ter pelo menos uma parcela.';
   END IF;
@@ -171,9 +208,9 @@ BEGIN
 
     IF p_responsavel_papel = 'motorista' THEN
       INSERT INTO public.motorista_financeiro
-        (motorista_id, tipo, categoria, descricao, valor, data_movimento, status, acordo_id)
+        (org_id, motorista_id, tipo, categoria, descricao, valor, data_movimento, status, acordo_id)
       VALUES
-        (p_responsavel_id, 'debito', 'outro',
+        (v_org, p_responsavel_id, 'debito', 'outro',
          'Dívida assumida (cedida por ' || COALESCE(v_titular.nome, '—') || ')',
          v_saldo, current_date, 'pendente', v_acordo);
     ELSE

@@ -1,6 +1,6 @@
 -- supabase/tests/acordos_pagamento.test.sql
 begin;
-select plan(18);
+select plan(19);
 
 -- ── META: RLS e isolamento multi-tenant ────────────────────────────────
 select has_table('public', 'acordos_pagamento', 'tabela acordos_pagamento existe');
@@ -168,7 +168,7 @@ insert into public.acordos_pagamento
    valor_total, frequencia)
 select org_id, cobranca_id, destinatario_id, 'T', destinatario_id, null, 'motorista', 'R', 100, 'mensal'
   from _ctx;
-select throws_ok('xor_invalido', null,
+select throws_ok('xor_invalido', null, null,
   'papel motorista com responsavel_cliente_id preenchido e rejeitado');
 
 -- ── Constraint: parcela paga sem prova de liquidação ───────────────────
@@ -185,7 +185,7 @@ prepare paga_sem_prova as
 insert into public.acordo_parcelas (org_id, acordo_id, numero, data_vencimento, valor, estado)
 select a.org_id, a.id, 1, current_date, 300, 'paga'
   from public.acordos_pagamento a order by a.created_at desc limit 1;
-select throws_ok('paga_sem_prova', null,
+select throws_ok('paga_sem_prova', null, null,
   'parcela paga sem recibo_id e rejeitada pelo CHECK');
 
 -- ── Índice: dois acordos vivos na mesma cobrança ───────────────────────
@@ -196,7 +196,7 @@ insert into public.acordos_pagamento
 select org_id, cobranca_id, destinatario_id, 'Titular',
        destinatario_id, 'cliente', 'Responsavel', 300, 'mensal'
   from _ctx;
-select throws_ok('segundo_acordo', null,
+select throws_ok('segundo_acordo', null, null,
   'segundo acordo vivo na mesma cobranca e rejeitado pelo indice unico parcial');
 
 -- ── org_id preenchido pelo trigger a partir da cobrança ────────────────
@@ -210,7 +210,7 @@ prepare titular_imutavel as
 update public.acordos_pagamento
    set titular_id = (select outro_cliente_id from _ctx2)
  where cobranca_id = (select cobranca_id from _ctx);
-select throws_ok('titular_imutavel', null,
+select throws_ok('titular_imutavel', null, null,
   'titular_id do acordo e imutavel apos criacao e rejeitado pelo trigger');
 
 -- ── Task 3: saldo por liquidar + acordo_criar ──────────────────────────
@@ -233,7 +233,7 @@ select public.acordo_criar(
   (select cobranca_id from _ctx2), 'cliente', (select destinatario_id from _ctx2),
   '[{"numero":1,"data_vencimento":"2026-08-15","valor":1.00}]'::jsonb,
   'mensal', 15::smallint, 3::smallint, null);
-select throws_ok('soma_errada', 'P0001',
+select throws_ok('soma_errada', 'P0001', null,
   'acordo_criar rejeita plano cuja soma nao bate certo com o saldo');
 
 -- ── acordo_criar rejeita cobrança já com acordo vivo ───────────────────
@@ -243,7 +243,7 @@ select public.acordo_criar(
   (select cobranca_id from _ctx), 'cliente', (select destinatario_id from _ctx),
   '[{"numero":1,"data_vencimento":"2026-08-15","valor":300.00}]'::jsonb,
   'mensal', 15::smallint, 3::smallint, null);
-select throws_ok('acordo_duplicado', 'P0001',
+select throws_ok('acordo_duplicado', 'P0001', null,
   'acordo_criar rejeita cobranca que ja tem acordo vivo');
 
 -- ── Cessão: responsável ≠ titular lança DOIS movimentos ────────────────
@@ -261,25 +261,52 @@ select lives_ok($$
     'mensal', 15::smallint, 3::smallint, null)
 $$, 'acordo_criar com responsavel diferente do titular corre sem erro');
 
+-- Todas as três asserções abaixo estão amarradas ao acordo desta cobrança
+-- (_ctx2): o teste tem de dar o mesmo resultado numa base vazia e numa base
+-- já cheia de outros movimentos de cessão de outras execuções/organizações.
 select is(
   (select count(*)::int from public.conta_movimentos
-    where origem = 'cessao' and acordo_id is not null),
+    where origem = 'cessao' and acordo_id is not null
+      and acordo_id in (select id from public.acordos_pagamento
+                          where cobranca_id = (select cobranca_id from _ctx2))),
   2, 'cessao lancou exactamente dois movimentos (credito + debito)');
 
 select is(
   (select tipo from public.conta_movimentos
-    where origem = 'cessao' and entidade_id = (select destinatario_id from _ctx2)),
+    where origem = 'cessao' and entidade_id = (select destinatario_id from _ctx2)
+      and acordo_id in (select id from public.acordos_pagamento
+                          where cobranca_id = (select cobranca_id from _ctx2))),
   'credito', 'titular recebeu o CREDITO da cessao');
 
 select is(
   (select tipo from public.conta_movimentos
-    where origem = 'cessao' and entidade_id = (select outro_cliente_id from _ctx2)),
+    where origem = 'cessao' and entidade_id = (select outro_cliente_id from _ctx2)
+      and acordo_id in (select id from public.acordos_pagamento
+                          where cobranca_id = (select cobranca_id from _ctx2))),
   'debito', 'responsavel recebeu o DEBITO da cessao');
 
 select is(
   (select cessao_aplicada from public.acordos_pagamento
     where cobranca_id = (select cobranca_id from _ctx2)),
   true, 'acordo ficou com cessao_aplicada = true');
+
+-- ── acordo_criar rejeita cessao cancelada mas ainda por reverter ───────
+-- Cancela o acordo de _ctx2 sem reverter os movimentos de cessão já lançados
+-- acima (cessao_aplicada continua true) — é exactamente o cenário que a
+-- guarda de "cessão por reverter" em acordo_criar tem de apanhar. Feito por
+-- último para não perturbar as contagens das asserções de cessão anteriores.
+update public.acordos_pagamento set estado = 'cancelado'
+ where cobranca_id = (select cobranca_id from _ctx2);
+
+prepare cessao_por_reverter as
+select public.acordo_criar(
+  (select cobranca_id from _ctx2), 'cliente', (select destinatario_id from _ctx2),
+  (select jsonb_build_array(jsonb_build_object(
+     'numero', 1, 'data_vencimento', '2026-08-15',
+     'valor', public.cobranca_saldo_por_liquidar((select cobranca_id from _ctx2))))),
+  'mensal', 15::smallint, 3::smallint, null);
+select throws_ok('cessao_por_reverter', 'P0001', null,
+  'acordo_criar rejeita novo acordo enquanto houver cessao cancelada por reverter');
 
 select * from finish();
 rollback;
