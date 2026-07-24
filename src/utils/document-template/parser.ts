@@ -475,6 +475,15 @@ export const htmlToText = (html: string): DocEl[] => {
     if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as HTMLElement;
       const tag = el.tagName.toLowerCase();
+
+      // Quebra de página manual (botão "Nova página" no editor). Tem de ser
+      // testada ANTES do switch: o nó é uma <div> com filhos decorativos (a
+      // faixa cinzenta e o rótulo do editor) que nunca podem ir para o PDF.
+      if (el.hasAttribute?.('data-page-break')) {
+        elements.push({ type: 'pagebreak', style: {} });
+        return;
+      }
+
       const style: any = { ...inheritedStyle };
 
       // Font style
