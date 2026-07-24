@@ -1,6 +1,6 @@
 -- supabase/tests/acordos_pagamento.test.sql
 begin;
-select plan(33);
+select plan(43);
 
 -- ── META: RLS e isolamento multi-tenant ────────────────────────────────
 select has_table('public', 'acordos_pagamento', 'tabela acordos_pagamento existe');
@@ -555,6 +555,123 @@ prepare liquidar_sem_recibo as
 select public.acordo_parcela_liquidar((select parcela_id from _parcela_sem_recibo), null);
 select throws_ok('liquidar_sem_recibo', 'P0001', null,
   'acordo_parcela_liquidar rejeita parcela sem recibo associado');
+
+-- ── Task 5: faturacao_outbox + claim atómico ───────────────────────────
+-- Reaproveita o acordo (ainda 'ativo') e a org de _ctx via _acordo_ctx,
+-- criada na secção anterior — mas com parcelas NOVAS e dedicadas (numero
+-- 2 em diante). numero=1 desse acordo já pertence a _parcela_sem_recibo, e
+-- nenhuma asserção depois daquele bloco volta a olhar para este acordo, por
+-- isso acrescentar linhas aqui não perturba nada anterior. Continua-se
+-- impersonado como service_role (herdado do bloco de liquidação acima) —
+-- irrelevante para o que se segue, porque este ficheiro nunca faz
+-- `set role`: tudo corre sob o role de ligação (dono das tabelas), que a
+-- RLS não restringe. As policies de faturacao_outbox só importam fora
+-- deste ficheiro, num cliente real ligado como authenticated/service_role.
+select has_table('public', 'faturacao_outbox', 'tabela faturacao_outbox existe');
+
+select is(
+  (select count(*)::int from pg_policies
+    where schemaname='public' and tablename='faturacao_outbox'
+      and policyname='rls_org_isolation' and permissive='RESTRICTIVE'),
+  1, 'faturacao_outbox tem a policy RESTRICTIVE rls_org_isolation');
+
+-- ── Claim nunca reclama, no total, mais do que p_max ───────────────────
+-- FOR UPDATE SKIP LOCKED por si só só impede duas invocações agarrarem a
+-- MESMA linha — não impede que, em conjunto, reclamem mais do que p_max.
+-- Não há concorrência real numa única sessão pgTAP, mas isto exercita
+-- directamente o mecanismo que a impede: a contagem de 'em_curso' +
+-- LIMIT v_capacity. Com 3 linhas pendentes e 0 em_curso, p_max=2 só pode
+-- devolver 2 — se o LIMIT fosse removido ou a contagem ignorada, isto
+-- devolveria as 3.
+create temporary table _parcelas_capacidade on commit drop as
+with novas as (
+  insert into public.acordo_parcelas (org_id, acordo_id, numero, data_vencimento, valor)
+  select org_id, acordo_id, n, current_date, 50
+    from _acordo_ctx, generate_series(2, 4) as n
+  returning id, numero
+)
+select id as parcela_id, numero from novas;
+
+insert into public.faturacao_outbox (org_id, tipo, idempotency_key, parcela_id, payload)
+select (select org_id from _acordo_ctx), 'RC', 'RC:parcela:' || parcela_id::text, parcela_id, '{}'::jsonb
+  from _parcelas_capacidade;
+
+select is(
+  (select count(*)::int from public.faturacao_outbox_claim(2)),
+  2, 'claim(2) com 3 linhas pendentes e 0 em_curso reclama exactamente 2');
+
+select is(
+  (select count(*)::int from public.faturacao_outbox where estado = 'pendente'),
+  1, 'a terceira linha pendente fica por reclamar — p_max nao e excedido no total');
+
+-- Drena a linha que sobrou, para as próximas asserções partirem de uma
+-- fila sem pendentes soltos a interferir na contagem seguinte.
+select is(
+  (select count(*)::int from public.faturacao_outbox_claim(10)),
+  1, 'claim(10) drena a linha pendente que restava');
+
+-- ── idempotency_key duplicada é rejeitada pelo esquema (23505) ─────────
+-- Prova a defesa central da outbox: um segundo enqueue para a MESMA
+-- parcela nunca chega a existir como linha 'pendente' — dedupe por
+-- catch de 23505, não por um SELECT-antes-de-INSERT com race.
+create temporary table _parcela_outbox on commit drop as
+with nova as (
+  insert into public.acordo_parcelas (org_id, acordo_id, numero, data_vencimento, valor)
+  select org_id, acordo_id, 5, current_date, 50 from _acordo_ctx
+  returning id
+)
+select id as parcela_id from nova;
+
+insert into public.faturacao_outbox (org_id, tipo, idempotency_key, parcela_id, payload)
+select (select org_id from _acordo_ctx), 'RC', 'RC:parcela:' || parcela_id::text, parcela_id, '{}'::jsonb
+  from _parcela_outbox;
+
+prepare idk_duplicada as
+insert into public.faturacao_outbox (org_id, tipo, idempotency_key, parcela_id, payload)
+select (select org_id from _acordo_ctx), 'RC', 'RC:parcela:' || parcela_id::text, parcela_id, '{}'::jsonb
+  from _parcela_outbox;
+select throws_ok('idk_duplicada', '23505', null,
+  'idempotency_key duplicada e rejeitada — dupla emissao impossivel no esquema');
+
+select is(
+  (select count(*)::int from public.faturacao_outbox_claim(10)),
+  1, 'claim reclama a linha pendente');
+
+select is(
+  (select estado from public.faturacao_outbox where parcela_id = (select parcela_id from _parcela_outbox)),
+  'em_curso', 'linha reclamada ficou em_curso');
+
+-- ── Reaper: linha presa em em_curso vai para suspenso, nunca de volta a pendente ──
+-- Simula um drain anterior que morreu a meio (crash/timeout): a linha ficou
+-- 'em_curso' com started_at há mais de 10 minutos. O reaper corre
+-- incondicionalmente no início do claim, antes de qualquer cálculo de
+-- capacidade — por isso usa-se p_max=0 para isolar só o efeito do reaper
+-- (nao ha folga nenhuma para reclamar mais nada a seguir).
+create temporary table _parcela_outbox_presa on commit drop as
+with nova as (
+  insert into public.acordo_parcelas (org_id, acordo_id, numero, data_vencimento, valor)
+  select org_id, acordo_id, 6, current_date, 50 from _acordo_ctx
+  returning id
+)
+select id as parcela_id from nova;
+
+insert into public.faturacao_outbox
+  (org_id, tipo, idempotency_key, parcela_id, payload, estado, started_at)
+select (select org_id from _acordo_ctx), 'RC', 'RC:parcela:' || parcela_id::text, parcela_id, '{}'::jsonb,
+       'em_curso', now() - interval '11 minutes'
+  from _parcela_outbox_presa;
+
+select public.faturacao_outbox_claim(0);
+
+select is(
+  (select estado from public.faturacao_outbox
+    where parcela_id = (select parcela_id from _parcela_outbox_presa)),
+  'suspenso', 'linha presa em em_curso ha mais de 10 min foi para suspenso pelo reaper');
+
+select is(
+  (select needs_reconcile from public.faturacao_outbox
+    where parcela_id = (select parcela_id from _parcela_outbox_presa)),
+  true, 'reaper marca needs_reconcile — resultado desconhecido no provider nunca e reemitido sozinho');
 
 -- Repõe o ambiente antes do finish() (por higiene; o rollback final já o
 -- desfaria de qualquer forma).
