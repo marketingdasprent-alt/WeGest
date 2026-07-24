@@ -1,6 +1,6 @@
 -- supabase/tests/acordos_pagamento.test.sql
 begin;
-select plan(19);
+select plan(30);
 
 -- ── META: RLS e isolamento multi-tenant ────────────────────────────────
 select has_table('public', 'acordos_pagamento', 'tabela acordos_pagamento existe');
@@ -77,6 +77,12 @@ select is(
 --   _ctx2 → outra cobrança 'emitida' sem acordo (mesmo titular, período
 --           diferente) + um SEGUNDO cliente (outro_cliente_id), candidato a
 --           assumir a dívida nos testes de cessão da Task 3
+--   _ctx3 → uma TERCEIRA cobrança 'emitida' sem acordo, dedicada aos testes
+--           de liquidação da Task 4 (ver secção correspondente mais abaixo:
+--           por essa altura _ctx e _ctx2 já ficaram com acordos vivos/
+--           cancelados que não servem de base a esses testes) + um motorista
+--           (motoristas_ativos) ligado ao MESMO utilizador do seed
+--           (v_user_id), para poder autenticar como o devedor
 --
 -- Atenção: inserir uma cobrança já em estado 'emitida' dispara
 -- fn_cobranca_posta_movimento, que cria um débito em conta_movimentos. Isso é
@@ -96,6 +102,8 @@ declare
   v_contrato_id   uuid;
   v_cobranca1_id  uuid;
   v_cobranca2_id  uuid;
+  v_cobranca3_id  uuid;
+  v_motorista_id  uuid;
 begin
   insert into public.organizacoes (nome, codigo)
   values ('Org Acordos Teste ' || v_suffix, 'ap-test-' || v_suffix)
@@ -152,12 +160,33 @@ begin
      'cliente', 'Cliente Titular Teste', 300, 'emitida')
   returning id into v_cobranca2_id;
 
+  -- Terceira cobrança, dedicada aos testes de liquidação da Task 4 — ver
+  -- nota na secção "O seed produz" acima.
+  insert into public.contrato_cobrancas
+    (org_id, contrato_id, periodo_de, periodo_ate, destinatario_id,
+     destinatario_papel, destinatario_nome, valor_sem_iva, estado)
+  values
+    (v_org_id, v_contrato_id, current_date + 14, current_date + 20, v_titular_id,
+     'cliente', 'Cliente Titular Teste', 300, 'emitida')
+  returning id into v_cobranca3_id;
+
+  -- Motorista ligado ao MESMO utilizador do seed (v_user_id), para servir de
+  -- "devedor" nos testes de autorização de acordo_vista_devedor.
+  insert into public.motoristas_ativos (org_id, nome, user_id)
+  values (v_org_id, 'Motorista Devedor Teste ' || v_suffix, v_user_id)
+  returning id into v_motorista_id;
+
   create temporary table _ctx on commit drop as
     select v_cobranca1_id as cobranca_id, v_org_id as org_id, v_titular_id as destinatario_id;
 
   create temporary table _ctx2 on commit drop as
     select v_cobranca2_id as cobranca_id, v_org_id as org_id, v_titular_id as destinatario_id,
            v_outro_id as outro_cliente_id;
+
+  create temporary table _ctx3 on commit drop as
+    select v_cobranca3_id as cobranca_id, v_org_id as org_id, v_titular_id as destinatario_id,
+           v_motorista_id as motorista_id, v_user_id as devedor_user_id,
+           (select valor_total from public.contrato_cobrancas where id = v_cobranca3_id) as valor_total;
 end $$;
 
 -- ── Constraint: XOR do responsável ─────────────────────────────────────
@@ -307,6 +336,141 @@ select public.acordo_criar(
   'mensal', 15::smallint, 3::smallint, null);
 select throws_ok('cessao_por_reverter', 'P0001', null,
   'acordo_criar rejeita novo acordo enquanto houver cessao cancelada por reverter');
+
+-- ── Task 4: liquidação de parcela + vista do devedor ────────────────────
+-- _ctx já tem um acordo vivo sem nenhuma parcela (o insert de "parcela paga
+-- sem prova", mais acima, foi rejeitado de propósito pelo CHECK e não deixou
+-- nada) e o acordo de _ctx2 ficou 'cancelado' com uma cessão por reverter
+-- (último teste da Task 3, imediatamente acima) — acordo_parcela_liquidar
+-- nunca promove um acordo cancelado (guard "AND estado <> 'cancelado'" na
+-- migração), por isso a asserção "acordo passou a liquidado" do desenho
+-- original da Task 4 nunca passaria em cima de nenhum dos dois. Constrói-se
+-- aqui um terceiro par cobrança+acordo (_ctx3/_acordo3, responsável
+-- 'motorista' ligado a v_user_id) dedicado só a este bloco — não depende de
+-- nenhum estado deixado pelas secções anteriores, nem as perturba.
+create temporary table _acordo3 on commit drop as
+with novo as (
+  insert into public.acordos_pagamento
+    (cobranca_id, titular_id, titular_nome,
+     responsavel_motorista_id, responsavel_papel, responsavel_nome,
+     valor_total, frequencia)
+  select cobranca_id, destinatario_id, 'Titular Liquidacao Teste',
+         motorista_id, 'motorista', 'Motorista Devedor Teste',
+         valor_total, 'mensal'
+    from _ctx3
+  returning id, org_id, cobranca_id, valor_total
+)
+select id as acordo_id, org_id, cobranca_id, valor_total from novo;
+
+create temporary table _parcela3 on commit drop as
+with nova as (
+  insert into public.acordo_parcelas (org_id, acordo_id, numero, data_vencimento, valor)
+  select org_id, acordo_id, 1, current_date, valor_total from _acordo3
+  returning id
+)
+select id as parcela_id from nova;
+
+-- Simula o dinheiro já recebido (recibo activo, valor = saldo total da
+-- cobrança) e a parcela em 'liquidacao_pendente' — o estado que antecede
+-- acordo_parcela_liquidar num fluxo real (RC ainda por confirmar).
+insert into public.recibos (org_id, entidade_id, valor, data_recibo, metodo, referencia, estado)
+select a.org_id, (select destinatario_id from _ctx3), a.valor_total, current_date,
+       'transferencia', a.cobranca_id::text, 'ativo'
+  from _acordo3 a;
+
+update public.acordo_parcelas
+   set estado = 'liquidacao_pendente',
+       recibo_id = (select id from public.recibos
+                     where referencia = (select cobranca_id::text from _acordo3)
+                     order by created_at desc limit 1)
+ where id = (select parcela_id from _parcela3);
+
+-- Sem nenhuma identidade impersonada (o ambiente por omissão do pgTAP): nem
+-- service_role nem staff da org, e sem sessão de motorista nenhuma — as duas
+-- RPCs têm de falhar fechado para quem não está autorizado.
+prepare liquidar_sem_permissao as
+select public.acordo_parcela_liquidar((select parcela_id from _parcela3), null);
+select throws_ok('liquidar_sem_permissao', 'P0001', null,
+  'acordo_parcela_liquidar rejeita chamada sem permissao de servico/faturacao');
+
+prepare vista_sem_permissao as
+select public.acordo_vista_devedor((select acordo_id from _acordo3));
+select throws_ok('vista_sem_permissao', 'P0001', null,
+  'vista do devedor rejeita quem nao esta ligado ao acordo');
+
+-- Impersona o motorista responsável (o devedor) — cobre as duas
+-- implementações de auth.uid(), tal como em rls_org_isolation.test.sql.
+select set_config('request.jwt.claim.sub', (select devedor_user_id::text from _ctx3), true);
+select set_config('request.jwt.claims',
+  jsonb_build_object('sub', (select devedor_user_id from _ctx3), 'role', 'authenticated')::text,
+  true);
+
+select ok(
+  NOT (public.acordo_vista_devedor((select acordo_id from _acordo3)) ? 'titular_nif'),
+  'vista do devedor nao expoe o NIF do titular');
+
+select is(
+  (public.acordo_vista_devedor((select acordo_id from _acordo3)) -> 'parcelas' -> 0 ->> 'estado'),
+  'paga', 'vista do devedor mostra liquidacao_pendente como paga');
+
+-- Impersona o serviço (o mesmo caminho de um worker que reprocessa o
+-- recibo→RC): limpa o sub do devedor e assume o role claim.
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', jsonb_build_object('role', 'service_role')::text, true);
+
+select lives_ok($$
+  select public.acordo_parcela_liquidar((select parcela_id from _parcela3), null)
+$$, 'acordo_parcela_liquidar corre sem erro');
+
+select is(
+  (select estado from public.acordo_parcelas where id = (select parcela_id from _parcela3)),
+  'paga', 'parcela passou a paga');
+
+select is(
+  (select estado from public.acordos_pagamento where id = (select acordo_id from _acordo3)),
+  'liquidado', 'acordo com todas as parcelas pagas passou a liquidado');
+
+select is(
+  (select estado::text from public.contrato_cobrancas where id = (select cobranca_id from _acordo3)),
+  'paga', 'cobranca fecha porque o saldo real (nao a contagem de parcelas) chegou a zero');
+
+-- Idempotência: reprocessar a mesma parcela (retry do worker) não faz nada demais.
+select lives_ok($$
+  select public.acordo_parcela_liquidar((select parcela_id from _parcela3), null)
+$$, 'acordo_parcela_liquidar e idempotente ao repetir sobre parcela ja paga');
+
+select is(
+  (select estado from public.acordo_parcelas where id = (select parcela_id from _parcela3)),
+  'paga', 'parcela permanece paga apos a segunda chamada');
+
+-- Rejeita liquidar sem recibo — reaproveita o acordo (ainda 'ativo') de
+-- _ctx, que continua sem nenhuma parcela até este ponto do ficheiro (ver
+-- nota no topo desta secção). Continua impersonado como service_role, para
+-- que o guard de autorização não seja o que intercepta esta chamada.
+create temporary table _acordo_ctx on commit drop as
+select a.id as acordo_id, a.org_id
+  from public.acordos_pagamento a
+ where a.cobranca_id = (select cobranca_id from _ctx);
+
+create temporary table _parcela_sem_recibo on commit drop as
+with nova as (
+  insert into public.acordo_parcelas (org_id, acordo_id, numero, data_vencimento, valor)
+  select org_id, acordo_id, 1, current_date, 100 from _acordo_ctx
+  returning id
+)
+select id as parcela_id from nova;
+
+prepare liquidar_sem_recibo as
+select public.acordo_parcela_liquidar((select parcela_id from _parcela_sem_recibo), null);
+select throws_ok('liquidar_sem_recibo', 'P0001', null,
+  'acordo_parcela_liquidar rejeita parcela sem recibo associado');
+
+-- Repõe o ambiente antes do finish() (por higiene; o rollback final já o
+-- desfaria de qualquer forma).
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claim.role', '', true);
+select set_config('request.jwt.claims', '', true);
 
 select * from finish();
 rollback;
