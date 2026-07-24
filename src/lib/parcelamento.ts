@@ -85,11 +85,15 @@ export function gerarPlanoParcelas(input: GerarPlanoInput): ParcelaPlano[] {
   const ancora = parseISO(dataInicio);
   const restante = round2(total - valorEntrada);
 
-  // Divide por igual e empurra o resto de arredondamento para a última parcela,
-  // para que a soma feche SEMPRE ao cêntimo com o total.
-  const base = Math.floor((restante * 100) / numParcelas) / 100;
-  const valores = Array.from({ length: numParcelas }, () => base);
-  valores[numParcelas - 1] = round2(restante - base * (numParcelas - 1));
+  // Aritmética em CÊNTIMOS INTEIROS. Dividir em euros com vírgula flutuante
+  // corta um cêntimo a mais mesmo em divisões exactas — 0.57 * 100 dá
+  // 56.99999999999999, e o Math.floor arredonda para baixo. O sintoma é
+  // silencioso: a soma continua certa (a última parcela absorve), mas as
+  // parcelas do meio ficam com menos um cêntimo do que o negociado.
+  const centimosRestante = Math.round(restante * 100);
+  const centimosBase = Math.floor(centimosRestante / numParcelas);
+  const valores = Array.from({ length: numParcelas }, () => centimosBase / 100);
+  valores[numParcelas - 1] = (centimosRestante - centimosBase * (numParcelas - 1)) / 100;
 
   const dia = diaVencimento ?? ancora.getUTCDate();
   const diaAtual = ancora.getUTCDate();

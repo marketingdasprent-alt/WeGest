@@ -53,6 +53,19 @@ describe('gerarPlanoParcelas', () => {
     expect(somaParcelas(p)).toBe(1000);
   });
 
+  it('divide em partes exactamente iguais quando o total é divisível (sem artefacto de vírgula flutuante)', () => {
+    // 1024.10 * 100 não é inteiro em IEEE754 — dividir em euros dava [512.04, 512.06].
+    const p = gerarPlanoParcelas({
+      valorTotal: 1024.1,
+      numParcelas: 2,
+      frequencia: 'mensal',
+      dataInicio: '2026-07-24',
+      diaVencimento: 15,
+    });
+    expect(p.map((x) => x.valor)).toEqual([512.05, 512.05]);
+    expect(somaParcelas(p)).toBe(1024.1);
+  });
+
   it('encolhe o dia 31 para o último dia de meses curtos', () => {
     const p = gerarPlanoParcelas({
       valorTotal: 200,
