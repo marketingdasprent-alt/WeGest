@@ -30,6 +30,7 @@ export const RECURSOS = {
   VIATURAS_FINANCEIRO: 'viaturas_financeiro',
   VIATURAS_MARCAS_MODELOS: 'viaturas_marcas_modelos',
   VIATURAS_GRUPOS: 'viaturas_grupos',
+  VIATURAS_ALTERAR_ESTADO: 'viaturas_alterar_estado',
   // Contratos
   CONTRATOS_VER: 'contratos_ver',
   CONTRATOS_CRIAR: 'contratos_criar',
