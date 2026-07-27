@@ -2,7 +2,17 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Receipt, Lock, FileText, Download, Loader2, Send, RotateCcw, Mail } from 'lucide-react';
+import {
+  Receipt,
+  Lock,
+  FileText,
+  Download,
+  Loader2,
+  Send,
+  RotateCcw,
+  Mail,
+  CalendarClock,
+} from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -50,7 +60,12 @@ import {
 import { NovaFaturaDialog } from '@/components/faturacao/NovaFaturaDialog';
 import { EnviarDocumentoEmailDialog } from '@/components/faturacao/EnviarDocumentoEmailDialog';
 import { DocumentosEmitidosExtra } from '@/components/faturacao/DocumentosEmitidosExtra';
+import {
+  ParcelamentoDialog,
+  type ParcelamentoFaturaAlvo,
+} from '@/components/faturacao/ParcelamentoDialog';
 import { useContactosDocumento } from '@/hooks/useContactosDocumento';
+import { useAcordoAtivoPorCobranca } from '@/hooks/useAcordosPagamento';
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -93,6 +108,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
   const [anularOpen, setAnularOpen] = useState(false);
   const [anularBusy, setAnularBusy] = useState(false);
   const [enviarInvoice, setEnviarInvoice] = useState<InvoiceMetadata | null>(null);
+  const [parcelamentoAlvo, setParcelamentoAlvo] = useState<ParcelamentoFaturaAlvo | null>(null);
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
@@ -660,6 +676,10 @@ export function ContratoTabFaturar({ contrato }: Props) {
                 return visiveis.map((c) => {
                   const creditado = round2(ncPorCobranca?.[c.id] ?? 0);
                   const saldo = round2((c.valor_total ?? 0) - creditado);
+                  // Saldo por liquidar (p/ gate + seed do ParcelamentoDialog) — MESMA fórmula
+                  // que toolbarCobrancas usa para `saldoPagar`: total − recibos ativos − NC ativas.
+                  const pago = round2(recibosPorCobranca?.[c.id] ?? 0);
+                  const saldoPagar = round2((c.valor_total ?? 0) - pago - creditado);
                   const inv = invoiceByCobranca.get(c.id);
                   const porEmitir =
                     !c.documento_externo_ref &&
@@ -699,6 +719,13 @@ export function ContratoTabFaturar({ contrato }: Props) {
                                 >
                                   <Mail className="h-3.5 w-3.5" />
                                 </Button>
+                                <AcaoParcelar
+                                  cobranca={c}
+                                  contratoId={contrato.id}
+                                  invoice={inv}
+                                  saldoPagar={saldoPagar}
+                                  onAbrir={setParcelamentoAlvo}
+                                />
                               </>
                             )}
                           </div>
@@ -817,6 +844,15 @@ export function ContratoTabFaturar({ contrato }: Props) {
         entidades={contactosEnvio}
       />
 
+      <ParcelamentoDialog
+        open={!!parcelamentoAlvo}
+        onOpenChange={(o) => {
+          if (!o) setParcelamentoAlvo(null);
+        }}
+        alvo={parcelamentoAlvo}
+        onCriado={refetchAll}
+      />
+
       <AlertDialog
         open={anularOpen}
         onOpenChange={(o) => {
@@ -850,5 +886,56 @@ export function ContratoTabFaturar({ contrato }: Props) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+/**
+ * Ícone "Parcelar fatura" — célula própria porque `useAcordoAtivoPorCobranca` é um
+ * hook e não pode ser chamado condicionalmente dentro do `.map()` da tabela.
+ */
+function AcaoParcelar({
+  cobranca,
+  contratoId,
+  invoice,
+  saldoPagar,
+  onAbrir,
+}: {
+  cobranca: CobrancaRow;
+  contratoId: string;
+  invoice: InvoiceMetadata;
+  /**
+   * valor_total − recibos ativos − NC ativas, calculado pelo chamador com a mesma
+   * fórmula de `toolbarCobrancas` — nunca recalcular aqui a partir só de
+   * `cobranca.valor_total`, que ignoraria recibos já emitidos.
+   */
+  saldoPagar: number;
+  onAbrir: (alvo: ParcelamentoFaturaAlvo) => void;
+}) {
+  const { data: acordoAtivo } = useAcordoAtivoPorCobranca(cobranca.id);
+  if (invoice.tipo !== 'FT' || acordoAtivo || saldoPagar <= 0.005) return null;
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="h-6 w-6 shrink-0"
+      title="Parcelar fatura"
+      onClick={() =>
+        onAbrir({
+          cobrancaId: cobranca.id,
+          contratoId,
+          numeroDocumento: cobranca.documento_externo_ref || invoice.numero || '',
+          dataDocumento: invoice.data_emissao || '',
+          valorTotal: cobranca.valor_total ?? 0,
+          saldoPagar,
+          titularId: cobranca.destinatario_id,
+          titularNome: cobranca.destinatario_nome,
+          titularNif: invoice.cliente_nif,
+        })
+      }
+    >
+      <CalendarClock className="h-3.5 w-3.5" />
+    </Button>
   );
 }
