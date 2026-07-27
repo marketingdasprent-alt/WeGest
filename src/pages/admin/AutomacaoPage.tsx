@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Switch } from '@/components/ui/switch';
 import { Bot, AlertTriangle, CheckCircle2, Clock, RotateCw } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -25,6 +26,8 @@ import {
   useFailedJobs,
   useRetryFailedJob,
   useIgnorarFailedJob,
+  useAutomacaoEstatisticasPorRegra,
+  useToggleAutomationRule,
   type FailedJob,
 } from '@/hooks/useAutomationQueue';
 import { ExecucaoDrillDownSheet } from '@/components/admin/automacao/ExecucaoDrillDownSheet';
@@ -370,6 +373,78 @@ function FalhasTab() {
   );
 }
 
+function RegrasTab() {
+  const { data: regras = [], isLoading } = useAutomacaoEstatisticasPorRegra();
+  const toggleRule = useToggleAutomationRule();
+  const { toast } = useToast();
+
+  const handleToggle = async (id: string, ativo: boolean) => {
+    try {
+      await toggleRule.mutateAsync({ id, ativo });
+      toast({ title: ativo ? 'Regra ligada' : 'Regra desligada' });
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: error instanceof Error ? error.message : 'Não foi possível atualizar a regra.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Estatísticas por automação</CardTitle>
+        <CardDescription>Execuções, falhas e duração média de cada regra — liga ou desliga aqui.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : regras.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Ainda sem regras configuradas.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Automação</TableHead>
+                <TableHead>Execuções</TableHead>
+                <TableHead>Última execução</TableHead>
+                <TableHead>Tempo médio</TableHead>
+                <TableHead>Falhas</TableHead>
+                <TableHead>Estado</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {regras.map((regra) => (
+                <TableRow key={regra.rule_id}>
+                  <TableCell className="font-medium">{regra.nome}</TableCell>
+                  <TableCell className="tabular-nums">{regra.execucoes}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {regra.ultima_execucao ? format(parseISO(regra.ultima_execucao), 'dd MMM HH:mm', { locale: pt }) : '—'}
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {regra.duracao_media_ms != null ? `${(regra.duracao_media_ms / 1000).toFixed(1)}s` : '—'}
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    <Badge variant={regra.falhas > 0 ? 'destructive' : 'secondary'}>{regra.falhas}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={regra.ativo}
+                      onCheckedChange={(checked) => handleToggle(regra.rule_id, checked)}
+                      disabled={toggleRule.isPending}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AutomacaoPage() {
   const [tab, setTab] = useState('visao-geral');
 
@@ -402,7 +477,9 @@ export default function AutomacaoPage() {
         <TabsContent value="falhas">
           <FalhasTab />
         </TabsContent>
-        <TabsContent value="regras">{/* Task 10 */}</TabsContent>
+        <TabsContent value="regras">
+          <RegrasTab />
+        </TabsContent>
       </Tabs>
     </div>
   );

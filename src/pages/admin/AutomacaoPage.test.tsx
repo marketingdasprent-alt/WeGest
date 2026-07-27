@@ -33,6 +33,9 @@ function chainable(result: unknown) {
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: vi.fn((table: string) => ({
+      update: vi.fn(() => ({
+        eq: vi.fn(() => Promise.resolve({ error: null })),
+      })),
       select: vi.fn(() => {
         if (table === 'automation_runs') {
           return chainable({
@@ -117,6 +120,24 @@ vi.mock('@/integrations/supabase/client', () => ({
                 ultimo_evento_log: 'executada',
                 duracao_ms: 2000,
                 detalhe: { notificacoes_criadas: 3, emails_enviados: 1 },
+              },
+            ],
+            error: null,
+          });
+        }
+        if (table === 'automacao_estatisticas_por_regra') {
+          return chainable({
+            data: [
+              {
+                rule_id: 'rule-1',
+                nome: 'Regra Estatística Teste',
+                event_type: 'viatura.seguro_expirando',
+                ativo: true,
+                cooldown_minutos: 1440,
+                execucoes: 5,
+                falhas: 1,
+                ultima_execucao: '2026-07-27T08:00:00.000Z',
+                duracao_media_ms: 2500,
               },
             ],
             error: null,
@@ -260,5 +281,21 @@ describe('AutomacaoPage', () => {
       expect(mockRpc).toHaveBeenCalledWith('retry_failed_job', { p_id: 'fj-1' });
     });
     expect(mockToastFn).toHaveBeenCalledWith(expect.objectContaining({ title: 'Reagendado' }));
+  });
+
+  it('mostra estatísticas por regra e permite ligar/desligar', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+
+    const switchRegra = screen.getByRole('switch');
+    fireEvent.click(switchRegra);
+
+    await waitFor(() => {
+      expect(mockToastFn).toHaveBeenCalledWith(expect.objectContaining({ title: 'Regra desligada' }));
+    });
   });
 });
