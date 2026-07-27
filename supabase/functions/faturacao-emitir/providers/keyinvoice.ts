@@ -33,6 +33,7 @@ import type {
   PdfInput,
   ProviderConfig,
 } from '../types.ts';
+import { EmissaoAmbiguaError } from '../types.ts';
 
 const env = (k: string) => Deno.env.get(k);
 
@@ -155,6 +156,11 @@ export const keyInvoiceProvider: FaturacaoProvider = {
     await authenticate(r.apiKey, r.endpoint);
   },
 
+  hasDoctype(tipo: EmitInput['tipo'], cfg) {
+    const r = resolve(cfg);
+    return Boolean(r.doctypes[tipo]);
+  },
+
   async emit(input: EmitInput, cfg): Promise<EmitDocResult> {
     const r = resolve(cfg);
     if (input.tipo === 'RC' && !r.doctypes.RC) {
@@ -197,8 +203,17 @@ export const keyInvoiceProvider: FaturacaoProvider = {
       ...(input.documento_referencia ? { DocReference: input.documento_referencia } : {}),
     };
 
-    const res = await call(r.endpoint, 'insertDocument', doc, { sid });
+    let res: KIResponse;
+    try {
+      res = await call(r.endpoint, 'insertDocument', doc, { sid });
+    } catch (e) {
+      // A chamada em si falhou a nível de TRANSPORTE (rede, resposta não-JSON)
+      // — não se sabe se o KeyInvoice chegou a criar o documento antes da
+      // falha. NUNCA reemitir sem reconciliar primeiro.
+      throw new EmissaoAmbiguaError(`insertDocument: falha de transporte — ${(e as Error).message}`);
+    }
     if (!ok(res) || !res.Data) {
+      // O provider RESPONDEU e recusou o pedido — confirma-se que nada foi criado.
       throw new Error(`insertDocument falhou: ${res?.ErrorMessage || 'sem Data'}`);
     }
     const { DocType, DocSeries, DocNum, FullDocNumber } = res.Data as {

@@ -71,4 +71,17 @@ export interface FaturacaoProvider {
   emit(input: EmitInput, cfg: ProviderConfig): Promise<EmitDocResult>;
   /** Devolve o PDF (base64) de um documento já emitido. */
   pdf(input: PdfInput, cfg: ProviderConfig): Promise<string>;
+  /** Confirma se o provider tem o doctype do tipo indicado configurado (config da org OU fallback do deployment). Usado no pré-voo, antes de se aceitar criar um acordo de parcelamento. */
+  hasDoctype(tipo: EmitInput['tipo'], cfg: ProviderConfig): boolean;
 }
+
+/**
+ * Erro que um adapter lança quando NÃO é possível confirmar se um documento
+ * chegou a ser criado no provider antes da falha (timeout, ligação perdida,
+ * resposta ilegível). Distinto de um Error normal, que significa que o
+ * provider respondeu e recusou, ou que a falha ocorreu antes de qualquer
+ * tentativa de criação — nesses dois casos sabe-se que nada foi criado.
+ * Um chamador NUNCA deve reemitir automaticamente depois deste erro; precisa
+ * de reconciliar (confirmar manualmente no provider) primeiro.
+ */
+export class EmissaoAmbiguaError extends Error {}

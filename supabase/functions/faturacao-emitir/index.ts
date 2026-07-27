@@ -8,7 +8,10 @@
 // o adapter correspondente. KeyInvoice é apenas um dos providers possíveis.
 //
 // Resolução da config (por org):
-//   1) descobre a org do chamador via RPC get_current_org_id() (JWT do chamador);
+//   1) descobre a org do chamador via RPC get_current_org_id() (JWT do chamador) —
+//      EXCETO quando o chamador é service-role E indica org_id explícito no body,
+//      caso em que se usa esse org_id diretamente (workers internos, sem sessão de
+//      utilizador para o RPC resolver — ver getOrgConfig);
 //   2) lê a linha `plataformas_configuracao` (plataforma='faturacao', ativo) com
 //      SERVICE ROLE (a RLS é admin-only; o utilizador que fatura pode não ser admin);
 //   3) despacha para o adapter com a config da org (chave + settings).
@@ -23,12 +26,15 @@
 //   'emit'  (default) — cria o documento e grava em `invoices`.
 //   'health' — confirma que a chave autentica. Aceita credenciais de teste no
 //              body ({ provider, apiKey, settings }) para testar ANTES de gravar.
+//   'preflight' — confirma que a org tem o Recibo (RC) configurado e a chave
+//                 autentica, ANTES de se criar um acordo de parcelamento.
 //   'pdf'    — devolve o PDF (base64). Body: { provider_doctype, provider_docnum, serie?, signed? }
 // ============================================================
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { keyInvoiceProvider } from './providers/keyinvoice.ts';
 import type { Cliente, EmitInput, FaturacaoProvider, Item, ProviderConfig } from './types.ts';
+import { EmissaoAmbiguaError } from './types.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -173,9 +179,8 @@ serve(async (req) => {
   if (payload.action === 'preflight') {
     try {
       const { provider, cfg } = await getOrgConfig(req, payload.org_id);
-      const settings = (cfg.settings ?? {}) as Record<string, any>;
-      const doctypes = (settings.doctypes ?? {}) as Record<string, unknown>;
-      const rcConfigurado = Boolean(String(doctypes.RC ?? '').trim());
+      const adapter = pickAdapter(provider);
+      const rcConfigurado = adapter.hasDoctype('RC', cfg);
 
       if (!rcConfigurado) {
         return json({
@@ -188,7 +193,7 @@ serve(async (req) => {
         });
       }
 
-      await pickAdapter(provider).health(cfg);
+      await adapter.health(cfg);
       return json({ ok: true, provider, rc_configurado: true });
     } catch (e) {
       return json({ ok: false, rc_configurado: false, error: (e as Error).message });
@@ -229,6 +234,7 @@ serve(async (req) => {
     });
   }
 
+  let docEmitido = false;
   try {
     const { provider, cfg, orgId } = await getOrgConfig(req, payload.org_id);
     const adapter = pickAdapter(provider);
@@ -242,6 +248,9 @@ serve(async (req) => {
       documento_referencia: payload.documento_referencia,
     };
     const doc = await adapter.emit(emitInput, cfg);
+    // A partir daqui o documento fiscal JÁ EXISTE no provider — qualquer falha
+    // seguinte (gravar o espelho local, etc.) nunca pode ser 'known_failed'.
+    docEmitido = true;
 
     // Total calculado a partir dos itens enviados (provider-agnostic)
     const total = payload.itens.reduce((s, it) => {
@@ -303,10 +312,18 @@ serve(async (req) => {
 
     return json({ success: true, invoice, provider: providerMeta });
   } catch (e) {
-    // O adapter só lança DEPOIS de o provider responder com erro de negócio,
-    // ou antes de sequer chamar (config em falta). Nos dois casos não foi criado
-    // documento nenhum — o worker pode reagendar sem risco de duplicar.
-    // Falhas de transporte (timeout) rebentam no fetch do worker, não aqui.
-    return json({ success: false, error: (e as Error).message, classe: 'known_failed' });
+    // known_failed = provado que nada foi criado (o provider respondeu e
+    //   recusou, ou a falha ocorreu antes de sequer tentar criar) — seguro
+    //   reagendar.
+    // unknown = não se sabe se foi criado (falha de transporte durante a
+    //   criação, OU falha DEPOIS de o adapter confirmar sucesso) — nunca
+    //   reemitir sem reconciliar primeiro; o risco é um SEGUNDO documento
+    //   fiscal legal sobre o mesmo pagamento.
+    const ambiguo = docEmitido || e instanceof EmissaoAmbiguaError;
+    return json({
+      success: false,
+      error: (e as Error).message,
+      classe: ambiguo ? 'unknown' : 'known_failed',
+    });
   }
 });
