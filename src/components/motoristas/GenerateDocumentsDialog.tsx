@@ -265,6 +265,24 @@ export const GenerateDocumentsDialog = ({
     });
   };
 
+  // Marca/desmarca todos os templates da empresa atualmente selecionada de
+  // uma vez — evita ter de clicar template a template quando o utilizador
+  // quer sempre o mesmo conjunto padrão.
+  const templatesDaEmpresa = templates.filter((t) => t.cliente_empresa_id === selectedEmpresa);
+  const todosSelecionados =
+    templatesDaEmpresa.length > 0 && templatesDaEmpresa.every((t) => selectedTemplates.has(t.id));
+  const toggleSelecionarTodos = () => {
+    setSelectedTemplates((prev) => {
+      const next = new Set(prev);
+      if (todosSelecionados) {
+        templatesDaEmpresa.forEach((t) => next.delete(t.id));
+      } else {
+        templatesDaEmpresa.forEach((t) => next.add(t.id));
+      }
+      return next;
+    });
+  };
+
   const handleDownloadSuplementar = async (path: string) => {
     const url = await getDocumentoSuplementarSignedUrl(path);
     if (!url) {
@@ -729,7 +747,20 @@ export const GenerateDocumentsDialog = ({
 
                 {/* Lista de Templates para Seleção */}
                 <div className="space-y-2">
-                  <Label>Documentos a Gerar</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Documentos a Gerar</Label>
+                    {templatesDaEmpresa.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-xs"
+                        onClick={toggleSelecionarTodos}
+                      >
+                        {todosSelecionados ? 'Limpar seleção' : 'Selecionar todos'}
+                      </Button>
+                    )}
+                  </div>
                   <ScrollArea className="h-[180px] border rounded-md p-3">
                     {templates.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">

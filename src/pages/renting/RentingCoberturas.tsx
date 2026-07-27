@@ -348,7 +348,7 @@ const RentingCoberturas = () => {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>
-                Nome <span className="text-red-500">*</span>
+                Nome <span className="text-destructive">*</span>
               </Label>
               <Input
                 value={form.nome}
@@ -368,7 +368,7 @@ const RentingCoberturas = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>
-                  Preço/dia (€) <span className="text-red-500">*</span>
+                  Preço/dia (€) <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   type="number"

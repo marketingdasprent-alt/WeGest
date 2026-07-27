@@ -1,7 +1,7 @@
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Phone, Mail, MapPin } from 'lucide-react';
 import type { Motorista } from '@/pages/Motoristas';
+import { MotoristaStatusBadge } from '@/lib/statusBadges';
 
 interface MotoristaCardProps {
   motorista: Motorista;
@@ -22,12 +22,10 @@ export function MotoristaCard({ motorista, onClick }: MotoristaCardProps) {
               <span className="font-mono text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                 #{String(motorista.codigo).padStart(3, '0')}
               </span>
-              <Badge
-                variant={motorista.status_ativo ? 'default' : 'secondary'}
+              <MotoristaStatusBadge
+                statusAtivo={motorista.status_ativo}
                 className="text-[10px] px-1.5 py-0"
-              >
-                {motorista.status_ativo ? 'Ativo' : 'Inativo'}
-              </Badge>
+              />
             </div>
 
             <h3 className="font-semibold text-base truncate">{motorista.nome}</h3>

@@ -178,7 +178,7 @@ export function MotoristaFormDadosPessoais({
         render={({ field }) => (
           <FormItem>
             <FormLabel>
-              Nome Completo <span className="text-red-500">*</span>
+              Nome Completo <span className="text-destructive">*</span>
             </FormLabel>
             <FormControl>
               <Input placeholder="Ex: João Silva" {...field} className="h-11" />
@@ -195,7 +195,7 @@ export function MotoristaFormDadosPessoais({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                NIF <span className="text-red-500">*</span>
+                NIF <span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <Input
@@ -340,7 +340,7 @@ export function MotoristaFormDadosPessoais({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Data de Contratação <span className="text-red-500">*</span>
+                Data de Contratação <span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <Input type="date" {...field} className="h-11" />

@@ -287,7 +287,7 @@ export const EventoDialog: React.FC<Props> = ({ evento, userId, onClose }) => {
               <div className="space-y-1.5">
                 <div className="flex items-center h-5">
                   <Label htmlFor="data">
-                    Data <span className="text-red-500">*</span>
+                    Data <span className="text-destructive">*</span>
                   </Label>
                 </div>
                 <DatePickerField id="data" value={data} onChange={setData} />

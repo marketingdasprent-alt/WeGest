@@ -86,7 +86,7 @@ export const SectionEntregaRecolha: React.FC<SectionEntregaRecolhaProps> = ({ fo
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Data Início <span className="text-red-500">*</span>
+                  Data Início <span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
                   <Input
@@ -141,7 +141,7 @@ export const SectionEntregaRecolha: React.FC<SectionEntregaRecolhaProps> = ({ fo
                       'Próxima renovação'
                     ) : (
                       <>
-                        Data Fim <span className="text-red-500">*</span>
+                        Data Fim <span className="text-destructive">*</span>
                       </>
                     )}
                   </FormLabel>

@@ -258,9 +258,9 @@ const ContratoForm = () => {
       </StickyPageHeader>
 
       {condutoresRascunho.length > 0 && (
-        <Alert className="mb-3 border-amber-300 bg-amber-50 dark:bg-amber-950/20">
-          <AlertTriangle className="h-4 w-4 text-amber-600" />
-          <AlertDescription className="text-amber-700 dark:text-amber-400">
+        <Alert className="mb-3 border-warning/40 bg-warning/10">
+          <AlertTriangle className="h-4 w-4 text-warning" />
+          <AlertDescription className="text-warning/90">
             <strong>Contrato bloqueado.</strong> O seguinte condutor tem perfil incompleto (sem NIF
             / carta de condução):{' '}
             {condutoresRascunho
@@ -378,9 +378,9 @@ const ContratoForm = () => {
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                   <TabsList className="w-full justify-start overflow-x-auto">
                     <TabsTrigger value="geral">Geral</TabsTrigger>
-                    <TabsTrigger value="coberturas">Coberturas</TabsTrigger>
-                    <TabsTrigger value="extras">Extras</TabsTrigger>
-                    <TabsTrigger value="taxas">Taxas</TabsTrigger>
+                    {isEdit && contrato && <TabsTrigger value="coberturas">Coberturas</TabsTrigger>}
+                    {isEdit && contrato && <TabsTrigger value="extras">Extras</TabsTrigger>}
+                    {isEdit && contrato && <TabsTrigger value="taxas">Taxas</TabsTrigger>}
                     {isEdit && contrato && <TabsTrigger value="faturar">Faturar</TabsTrigger>}
                     <TabsTrigger value="danos">Danos</TabsTrigger>
                     {isEdit && contrato && <TabsTrigger value="historico">Histórico</TabsTrigger>}
@@ -405,17 +405,23 @@ const ContratoForm = () => {
                     />
                   </TabsContent>
 
-                  <TabsContent value="coberturas" className="mt-4">
-                    <ContratoTabCoberturas form={form} coberturas={coberturas} />
-                  </TabsContent>
+                  {isEdit && contrato && (
+                    <TabsContent value="coberturas" className="mt-4">
+                      <ContratoTabCoberturas form={form} coberturas={coberturas} />
+                    </TabsContent>
+                  )}
 
-                  <TabsContent value="extras" className="mt-4">
-                    <ContratoTabExtras form={form} extras={extrasCatalogo} />
-                  </TabsContent>
+                  {isEdit && contrato && (
+                    <TabsContent value="extras" className="mt-4">
+                      <ContratoTabExtras form={form} extras={extrasCatalogo} />
+                    </TabsContent>
+                  )}
 
-                  <TabsContent value="taxas" className="mt-4">
-                    <ContratoTabTaxas form={form} taxas={taxasCatalogo} />
-                  </TabsContent>
+                  {isEdit && contrato && (
+                    <TabsContent value="taxas" className="mt-4">
+                      <ContratoTabTaxas form={form} taxas={taxasCatalogo} />
+                    </TabsContent>
+                  )}
 
                   {isEdit && contrato && (
                     <TabsContent value="faturar" className="mt-4">

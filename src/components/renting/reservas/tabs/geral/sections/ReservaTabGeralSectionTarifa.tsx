@@ -62,7 +62,7 @@ export function ReservaTabGeralSectionTarifa({
                 <FormItem>
                   <FormLabel>
                     {isTvde ? 'Tarifa TVDE' : 'Tarifa Rent-a-Car'}{' '}
-                    <span className="text-red-500">*</span>
+                    <span className="text-destructive">*</span>
                   </FormLabel>
                   <Select
                     value={field.value ?? ''}

@@ -360,7 +360,7 @@ export const GruposTab = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="nome">
-                  Nome do grupo <span className="text-red-500">*</span>
+                  Nome do grupo <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="nome"

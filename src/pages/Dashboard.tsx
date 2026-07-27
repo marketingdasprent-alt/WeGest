@@ -1,96 +1,111 @@
-import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import {
+  CircleCheck,
   Car,
+  CalendarClock,
   Wrench,
-  ClipboardCheck,
   TrendingUp,
-  TrendingDown,
+  FileText,
+  ShieldAlert,
+  Wallet,
+  UserPlus,
   RefreshCw,
-  Euro,
   LayoutDashboard,
-  UserCheck,
+  MapPin,
+  CalendarRange,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { AlertListCard } from '@/components/ui/alert-list-card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarRange } from 'lucide-react';
 import type { DateRange as DayPickerRange } from 'react-day-picker';
-// Gráfico (recharts ~400KB) carregado em lazy para sair do chunk inicial.
-const AtividadeChart = lazy(() => import('@/components/dashboard/AtividadeChart'));
 import {
   format,
   startOfWeek,
   startOfMonth,
-  startOfQuarter,
   startOfYear,
-  subMonths,
-  subWeeks,
   endOfMonth,
-  endOfWeek,
-  parseISO,
+  endOfDay,
+  subMonths,
+  addMonths,
+  differenceInCalendarDays,
   eachMonthOfInterval,
   eachWeekOfInterval,
-  addMonths,
-  addDays,
-  subDays,
+  eachDayOfInterval,
 } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
-import { usePermissions } from '@/hooks/usePermissions';
 import { useDashboardVariant } from '@/hooks/useDashboardVariant';
-import { useOrgId } from '@/contexts/TenantContext';
-import { CheckinCheckoutHistoricoCard } from '@/components/dashboard/CheckinCheckoutHistoricoCard';
-import { KpiCard } from '@/components/dashboard/KpiCard';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { Skeleton } from '@/components/ui/skeleton';
 import { fetchViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 import { deriveViaturaEstado, ESTADOS_EM_USO } from '@/lib/viaturas';
+import { useContasAReceber } from '@/hooks/useContasAReceber';
+import { CheckinCheckoutHistoricoCard } from '@/components/dashboard/CheckinCheckoutHistoricoCard';
+import { cn } from '@/lib/utils';
+import type { ChartPoint } from '@/components/dashboard/ReceitaChart';
+import type { FrotaDonutData } from '@/components/dashboard/FrotaDonutChart';
+
+const ReceitaChart = lazy(() => import('@/components/dashboard/ReceitaChart'));
+const FrotaDonutChart = lazy(() => import('@/components/dashboard/FrotaDonutChart'));
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+interface FleetCounts {
+  total: number;
+  disponiveis: number;
+  alugadas: number;
+  reservadas: number;
+  oficina: number;
+}
+
+interface EventoAtividade {
+  tipo: string;
+  data_inicio: string;
+  valor_aluguer: number;
+}
+
+/** Período do gráfico "Atividade". `personalizado` não tem range fixo — vem
+ *  das duas datas escolhidas no calendário. */
 type PeriodPreset = 'semana' | 'mes' | 'trimestre' | 'ano' | 'personalizado';
 type FixedPreset = Exclude<PeriodPreset, 'personalizado'>;
+type Granularidade = 'dia' | 'semana' | 'mes';
 
 interface DateRange {
   from: Date;
   to: Date;
 }
 
-interface FleetCounts {
-  total: number;
-  disponiveis: number;
-  ocupadas: number;
-  manutencao: number;
-}
+type CorAlerta = 'destructive' | 'warning';
 
-interface AtividadePoint {
-  periodo: string;
-  label: string;
-  rentabilidade: number;
-  alugadas: number;
-  devolvidas: number;
-}
-
-interface UpgradeData {
-  count: number;
-  rendaAtual: number;
-  rendaAnterior: number;
+interface CategoriaAlerta {
+  id: string;
+  icon: typeof FileText;
+  cor: CorAlerta;
+  titulo: string;
+  descricao: string;
+  href: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
+}
+
+function normalizarMatricula(m: string | null | undefined): string {
+  return (m ?? '').replace(/[-\s]/g, '').toUpperCase();
+}
+
+const PRESET_LABELS: Record<FixedPreset, string> = {
+  semana: 'Esta Semana',
+  mes: 'Este Mês',
+  trimestre: 'Trimestre',
+  ano: 'Este Ano',
+};
 
 function getPeriodRange(preset: FixedPreset): DateRange {
   const now = new Date();
@@ -100,102 +115,184 @@ function getPeriodRange(preset: FixedPreset): DateRange {
     case 'mes':
       return { from: startOfMonth(now), to: now };
     case 'trimestre':
+      // "Trimestre" = últimos 3 meses corridos (não o trimestre civil) — é o
+      // que a operação usa para comparar, e era o comportamento anterior.
       return { from: subMonths(now, 3), to: now };
     case 'ano':
       return { from: startOfYear(now), to: now };
   }
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
+/** A granularidade não é escolha do utilizador — se fosse, teríamos dois
+ *  controlos de tempo lado a lado a dizer "Semana" e a parecerem o mesmo. Sai
+ *  do tamanho do intervalo, procurando ~5 a 15 barras: um ano ao dia dava 365
+ *  barras ilegíveis, uma semana ao mês dava uma só. */
+function granularidadePara({ from, to }: DateRange): Granularidade {
+  const dias = differenceInCalendarDays(to, from) + 1;
+  if (dias <= 14) return 'dia';
+  if (dias <= 92) return 'semana';
+  return 'mes';
 }
 
-function formatPct(curr: number, prev: number): { pct: number; up: boolean } {
-  if (prev === 0) return { pct: 0, up: curr >= 0 };
-  const pct = ((curr - prev) / Math.abs(prev)) * 100;
-  return { pct: Math.abs(pct), up: pct >= 0 };
+/** Constrói os pontos do gráfico de atividade a partir dos eventos já
+ *  carregados (não faz novas queries) — o intervalo vem do seletor de período
+ *  e os eventos já foram buscados para esse mesmo intervalo. */
+function buildChartPoints(
+  eventos: EventoAtividade[],
+  inicio: Date,
+  fim: Date,
+  granularidade: Granularidade
+): ChartPoint[] {
+  const calcBucket = (
+    bucketStart: Date,
+    bucketEnd: Date,
+    label: string,
+    periodo: string
+  ): ChartPoint => {
+    const bStartStr = bucketStart.toISOString().split('T')[0];
+    const bEndStr = bucketEnd.toISOString().split('T')[0];
+
+    const eventosBucket = eventos.filter((ev) => {
+      const evDate = ev.data_inicio.split('T')[0];
+      return evDate >= bStartStr && evDate <= bEndStr;
+    });
+    const entregasBucket = eventosBucket.filter((ev) => ev.tipo === 'entrega');
+    const alugados = entregasBucket.length;
+    const devolvidos = eventosBucket.filter(
+      (ev) => ev.tipo === 'devolucao' || ev.tipo === 'recolha'
+    ).length;
+    const receitaContratada = entregasBucket.reduce((sum, ev) => sum + ev.valor_aluguer, 0);
+
+    return { periodo, label, receitaContratada, alugados, devolvidos };
+  };
+
+  if (granularidade === 'dia') {
+    const dias = eachDayOfInterval({ start: inicio, end: fim });
+    return dias.map((dia) =>
+      calcBucket(dia, dia, format(dia, 'dd MMM', { locale: pt }), format(dia, 'dd/MM'))
+    );
+  }
+
+  if (granularidade === 'mes') {
+    const meses = eachMonthOfInterval({ start: inicio, end: fim });
+    return meses.map((mesInicio, i) => {
+      // O último balde fecha em `fim` (o mês em curso está incompleto), os
+      // restantes no fim do próprio mês.
+      const mesFim = i + 1 < meses.length ? endOfMonth(mesInicio) : fim;
+      return calcBucket(
+        mesInicio,
+        mesFim,
+        format(mesInicio, 'MMMM yyyy', { locale: pt }),
+        format(mesInicio, 'MMM yy', { locale: pt })
+      );
+    });
+  }
+
+  const semanas = eachWeekOfInterval({ start: inicio, end: fim }, { weekStartsOn: 1 });
+  return semanas.map((semanaInicio, i) => {
+    const semanaFim = i + 1 < semanas.length ? new Date(semanas[i + 1].getTime() - 1) : fim;
+    return calcBucket(
+      semanaInicio,
+      semanaFim,
+      `Semana ${format(semanaInicio, 'dd MMM', { locale: pt })}`,
+      format(semanaInicio, 'dd/MM', { locale: pt })
+    );
+  });
 }
 
-// ── Palette ──────────────────────────────────────────────────────────────────
+/** Anima um valor de 0 até `target` — respeita prefers-reduced-motion.
+ *  Reanima do zero sempre que `target` muda (ex: depois de um refresh), o
+ *  que é uma leitura aceitável de "os dados actualizaram-se". */
+function useCountUp(target: number, durationMs = 850): number {
+  const [display, setDisplay] = useState(0);
+  const prefersReduced = useRef(
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+
+  useEffect(() => {
+    if (prefersReduced.current) {
+      setDisplay(target);
+      return;
+    }
+    let raf: number;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / durationMs);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setDisplay(Math.round(target * eased));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, durationMs]);
+
+  return display;
+}
 
 // ── Dashboard Component ───────────────────────────────────────────────────────
 
 const Dashboard = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { hasPermission, isAdmin } = usePermissions();
   const { isExecutivo } = useDashboardVariant();
-  const orgId = useOrgId();
-  const canSeeCheckinHistorico = hasPermission('dashboard_checkin_historico') || isAdmin;
+  // Query própria (não faz parte do fetchData sequencial abaixo) — dá-lhe o
+  // seu próprio loading, em vez de ficar bloqueada atrás do resto da homepage.
+  const { data: contasAReceber } = useContasAReceber();
 
+  const [loading, setLoading] = useState(true);
+  // `loading` é só a primeira carga (skeleton de página inteira); `atualizando`
+  // são os refetches seguintes, que não podem fazer a página piscar.
+  const [atualizando, setAtualizando] = useState(false);
+  const jaCarregou = useRef(false);
   const [preset, setPreset] = useState<PeriodPreset>('mes');
-  const [range, setRange] = useState<DateRange>(getPeriodRange('mes'));
+  const [range, setRange] = useState<DateRange>(() => getPeriodRange('mes'));
   const [customRangeOpen, setCustomRangeOpen] = useState(false);
   const [customRangeDraft, setCustomRangeDraft] = useState<DayPickerRange | undefined>();
-  const [loading, setLoading] = useState(true);
-  const [gestorFiltro, setGestorFiltro] = useState<string>('todos');
-  const [gestores, setGestores] = useState<{ id: string; nome: string }[]>([]);
 
-  // State for each data section
   const [fleet, setFleet] = useState<FleetCounts>({
     total: 0,
     disponiveis: 0,
-    ocupadas: 0,
-    manutencao: 0,
+    alugadas: 0,
+    reservadas: 0,
+    oficina: 0,
+  });
+  const [frotaDonut, setFrotaDonut] = useState<FrotaDonutData>({
+    disponiveis: 0,
+    ocupados: 0,
+    inativos: 0,
   });
   const [candidaturasPendentes, setCandidaturasPendentes] = useState(0);
-  const [atividadeData, setAtividadeData] = useState<AtividadePoint[]>([]);
-  const [upgradeData, setUpgradeData] = useState<UpgradeData>({
-    count: 0,
-    rendaAtual: 0,
-    rendaAnterior: 0,
-  });
-  const [trocasCount, setTrocasCount] = useState(0);
   const [extintoresAPrazo, setExtintoresAPrazo] = useState<any[]>([]);
   const [contratosAPrazo, setContratosAPrazo] = useState<any[]>([]);
   const [contratosExpirados, setContratosExpirados] = useState<any[]>([]);
+  const [receitaContratadaPeriodo, setReceitaContratadaPeriodo] = useState(0);
+  const [eventosAtividade, setEventosAtividade] = useState<EventoAtividade[]>([]);
+  // Intervalo a que os `eventosAtividade` em memória correspondem — só é
+  // actualizado no fim do fetch, para o gráfico não re-agrupar com o período
+  // novo enquanto os eventos ainda são os do período anterior.
+  const [inicioRef, setInicioRef] = useState(() => startOfMonth(new Date()));
+  const [fimRef, setFimRef] = useState(() => new Date());
 
-  // ── Load gestores ────────────────────────────────────────────────────────
+  // ── Seleção de período ───────────────────────────────────────────────────
 
-  useEffect(() => {
-    if (!orgId) return;
-    // Gestores TVDE da ORG ATIVA via user_organizacoes (per-org). Filtra por NOME
-    // do cargo (não UUID) porque cargos são por-org com ids distintos.
-    supabase
-      .from('user_organizacoes')
-      .select('user_id, cargos(nome), profiles(id, nome)')
-      .eq('org_id', orgId)
-      .then(
-        ({ data }) => {
-          if (!data) return;
-          const lista = (data as any[])
-            .filter((m) => {
-              const c = (m.cargos?.nome || '').toLowerCase();
-              return c.includes('gestor') && c.includes('tvde');
-            })
-            .map((m) => ({ id: m.profiles?.id as string, nome: m.profiles?.nome as string }))
-            .filter((p) => p.id && p.nome)
-            .sort((a, b) => a.nome.localeCompare(b.nome));
-          setGestores(lista);
-        },
-        (err) => console.error('Erro ao carregar gestores:', err)
-      );
-  }, [orgId]);
-
-  // ── Period change ────────────────────────────────────────────────────────
-
-  const handlePreset = (p: FixedPreset) => {
+  const aplicarRange = (p: PeriodPreset, r: DateRange) => {
     setPreset(p);
-    setRange(getPeriodRange(p));
+    setRange(r);
   };
 
-  // Intervalo customizado: só aplica quando as duas datas (from/to) estão
+  const handlePreset = (p: FixedPreset) => {
+    aplicarRange(p, getPeriodRange(p));
+    setCustomRangeOpen(false);
+  };
+
+  // Intervalo personalizado: só aplica quando as duas datas (from/to) estão
   // escolhidas — um clique único no Calendar em modo "range" só define `from`.
   const handleCustomRangeSelect = (picked: DayPickerRange | undefined) => {
     setCustomRangeDraft(picked);
     if (picked?.from && picked?.to) {
-      setPreset('personalizado');
-      setRange({ from: picked.from, to: picked.to });
+      // `to` vem às 00:00 do dia escolhido; sem endOfDay perdiam-se os eventos
+      // desse último dia (a query e os baldes são inclusivos até `to`).
+      aplicarRange('personalizado', { from: picked.from, to: endOfDay(picked.to) });
       setCustomRangeOpen(false);
     }
   };
@@ -204,54 +301,81 @@ const Dashboard = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      setLoading(true);
-      const fromStr = range.from.toISOString();
-      const toStr = range.to.toISOString();
-      const filtrarGestor = gestorFiltro !== 'todos';
+      // Só a PRIMEIRA carga troca a homepage inteira pelo skeleton. Mudar de
+      // período (ou carregar em Atualizar) mantém tudo no ecrã e sinaliza-se
+      // apenas no gráfico — senão a página desaparecia e voltava a cada clique
+      // no seletor, quando na verdade só o gráfico depende do período.
+      if (!jaCarregou.current) setLoading(true);
+      setAtualizando(true);
 
-      // ── 1. Fleet counts ────────────────────────────────────────────────
-      // O estado é derivado das ocupações ativas (contrato / reserva /
-      // movimentação / reparação), igual à listagem da Frota — não do campo
-      // `status` (em_uso manual foi descontinuado).
+      // O período escolhido no seletor alimenta o gráfico "Atividade" e a
+      // receita contratada mostrada na sua legenda — o resto do dashboard
+      // (frota, alertas) é sempre do momento actual, não do período.
+      const now = new Date();
+
+      // ── Frota — o estado é derivado das ocupações ativas (contrato /
+      // reserva / movimentação / reparação), igual à listagem da Frota — não
+      // do campo `status` (em_uso manual foi descontinuado).
       const [{ data: viaturas }, ocupacao] = await Promise.all([
         supabase
           .from('viaturas')
-          .select('id, status, is_slot, is_vendida, matricula, valor_aluguer')
-          .neq('status', 'vendida'),
+          .select('id, status, is_slot, is_vendida, matricula, valor_aluguer'),
         fetchViaturasOcupacao(),
       ]);
 
-      // Estado derivado com is_slot/is_vendida (necessários ao derivador).
-      // "Disponíveis" exclui viaturas slot — os slots são uma categoria à parte
-      // (têm o seu próprio card na Frota) e nunca entram na contagem geral de
-      // disponíveis, tenham ou não motorista vinculado.
-      const estadosFrota = (viaturas ?? []).map((v) => ({
-        estado: deriveViaturaEstado(
-          { status: v.status, is_slot: v.is_slot, is_vendida: v.is_vendida },
-          ocupacao.get(v.id)
-        ),
-        isSlot: !!v.is_slot,
-      }));
+      // Mesma lógica de exclusão que a página Viaturas (src/pages/Viaturas.tsx):
+      // vendidas saem via `is_vendida` (não via `status`, que pode divergir do
+      // booleano). Calcula-se o estado de toda a frota não-vendida uma única
+      // vez — o donut usa-a completa (incl. inativas), o resto do dashboard
+      // exclui as inativas (não contam para a frota operacional; incluí-las
+      // no denominador da Ocupação dava percentagens sem sentido).
+      const estadosFrotaCompleta = (viaturas ?? [])
+        .filter((v) => !v.is_vendida)
+        .map((v) =>
+          deriveViaturaEstado(
+            { status: v.status, is_slot: v.is_slot, is_vendida: v.is_vendida },
+            ocupacao.get(v.id)
+          )
+        );
 
-      const fleetCounts: FleetCounts = {
-        total: viaturas?.length || 0,
-        disponiveis: estadosFrota.filter((e) => e.estado === 'disponivel' && !e.isSlot).length,
-        ocupadas: estadosFrota.filter((e) =>
-          (ESTADOS_EM_USO as readonly string[]).includes(e.estado)
+      setFrotaDonut({
+        disponiveis: estadosFrotaCompleta.filter((e) => e === 'disponivel').length,
+        ocupados: estadosFrotaCompleta.filter((e) => e !== 'disponivel' && e !== 'inativo').length,
+        inativos: estadosFrotaCompleta.filter((e) => e === 'inativo').length,
+      });
+
+      const estadosFrota = estadosFrotaCompleta
+        .filter((e) => e !== 'inativo')
+        .map((estado) => ({ estado }));
+
+      setFleet({
+        total: estadosFrota.length,
+        disponiveis: estadosFrota.filter((e) => e.estado === 'disponivel').length,
+        alugadas: estadosFrota.filter(
+          (e) =>
+            e.estado !== 'em_reserva' && (ESTADOS_EM_USO as readonly string[]).includes(e.estado)
         ).length,
-        manutencao: estadosFrota.filter((e) => e.estado === 'manutencao').length,
-      };
-      setFleet(fleetCounts);
+        reservadas: estadosFrota.filter((e) => e.estado === 'em_reserva').length,
+        oficina: estadosFrota.filter((e) => e.estado === 'manutencao').length,
+      });
 
-      // ── Extintores a expirar (15 dias) ─────────────────────────────────────────
+      // ── Restante — todas independentes entre si (só dependem dos
+      // `viaturas` já carregados acima) — disparadas de uma vez, não em
+      // cascata.
       const limitExtintor = new Date();
       limitExtintor.setDate(limitExtintor.getDate() + 15);
       const extStrStr = limitExtintor.toISOString().split('T')[0];
 
-      const { data: extintoresData } = await supabase
-        .from('viaturas')
-        .select(
-          `
+      const [
+        { data: extintoresData },
+        { data: contratosAtivos, error: contratosErr },
+        { count: pendentes },
+        { data: eventosMesData },
+      ] = await Promise.all([
+        supabase
+          .from('viaturas')
+          .select(
+            `
           id,
           matricula,
           extintor_validade,
@@ -260,12 +384,30 @@ const Dashboard = () => {
             motoristas_ativos(nome)
           )
         `
-        )
-        .not('extintor_validade', 'is', null)
-        .lte('extintor_validade', extStrStr)
-        .order('extintor_validade', { ascending: true });
+          )
+          .not('extintor_validade', 'is', null)
+          .lte('extintor_validade', extStrStr)
+          .order('extintor_validade', { ascending: true }),
+        supabase
+          .from('contratos')
+          .select(
+            'id, numero_contrato, data_inicio, data_fim, duracao_meses, motorista_nome, motorista_id, viatura_id, viaturas:viatura_id(matricula)'
+          )
+          .eq('status', 'ativo')
+          .not('data_inicio', 'is', null),
+        supabase
+          .from('motorista_candidaturas')
+          .select('id', { count: 'exact', head: true })
+          .in('status', ['submetido', 'em_analise']),
+        supabase
+          .from('calendario_eventos')
+          .select('tipo, data_inicio, titulo')
+          .in('tipo', ['entrega', 'devolucao', 'recolha'])
+          .gte('data_inicio', range.from.toISOString())
+          .lte('data_inicio', range.to.toISOString()),
+      ]);
 
-      // Filtrar para pegar apenas o motorista ativo de cada viatura
+      // ── Extintores ────────────────────────────────────────────────────
       const extintoresComMotorista = (extintoresData || []).map((v) => {
         const motoristaAtivo = (v.motorista_viaturas as any[])?.find((mv) => mv.status === 'ativo');
         return {
@@ -275,41 +417,27 @@ const Dashboard = () => {
           motorista_nome: motoristaAtivo?.motoristas_ativos?.nome || 'Livre',
         };
       });
-
       setExtintoresAPrazo(extintoresComMotorista);
 
-      // ── Contratos a renovar (60 dias) — tabela contratos ──────────────────
-      // Renovação = data_inicio + duracao_meses meses; alerta 60 dias antes
-      const { data: contratosAtivos, error: contratosErr } = await supabase
-        .from('contratos')
-        .select(
-          'id, numero_contrato, data_inicio, data_fim, duracao_meses, motorista_nome, motorista_id, viatura_id, viaturas:viatura_id(matricula)'
-        )
-        .eq('status', 'ativo')
-        .not('data_inicio', 'is', null);
-
+      // ── Contratos a renovar/expirados — tabela contratos ───────────────
+      // Renovação = data_inicio + duracao_meses meses; alerta 60 dias antes.
       if (contratosErr) {
         console.error('Erro ao carregar contratos:', contratosErr);
       }
 
-      const now = new Date();
-      now.setHours(0, 0, 0, 0); // Normalizar para meia-noite local
+      const hojeSemHora = new Date();
+      hojeSemHora.setHours(0, 0, 0, 0);
 
       const allContratos = (contratosAtivos || []).map((ct: any) => {
-        // Usa a data de fim REAL (contratos.data_fim, preenchida por trigger a
-        // partir de data_inicio + duracao_meses e editável). Fallback derivado
-        // só por robustez, caso algum contrato antigo ainda não tenha data_fim.
         const fim = ct.data_fim
           ? new Date(ct.data_fim + 'T00:00:00')
           : addMonths(new Date(ct.data_inicio + 'T00:00:00'), ct.duracao_meses ?? 12);
-        const diffDays = Math.ceil((fim.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const diffDays = Math.ceil((fim.getTime() - hojeSemHora.getTime()) / (1000 * 60 * 60 * 24));
         return { ...ct, _renovacao: fim, _diffDays: diffDays };
       });
 
-      // De-duplicar contratos repetidos: a mesma prestação aparece por vezes 2x
-      // na BD (ex.: CT-0551 e CT-0552 são o mesmo motorista/viatura/data) e a
-      // mesma pessoa surgia duas vezes no card. Chave = motorista+viatura+início;
-      // mantém-se o número de contrato mais alto (o mais recente).
+      // De-duplicar contratos repetidos: a mesma prestação aparece por vezes
+      // 2x na BD — chave motorista+viatura+início, mantém-se o mais recente.
       const contratosUnicos = Array.from(
         allContratos
           .reduce((map: Map<string, any>, ct: any) => {
@@ -323,272 +451,183 @@ const Dashboard = () => {
           .values()
       );
 
-      // Contratos a renovar: expiram nos próximos 60 dias
       const contratosRenovar = contratosUnicos
         .filter((ct: any) => ct._diffDays >= 0 && ct._diffDays <= 60)
         .sort((a: any, b: any) => a._renovacao.getTime() - b._renovacao.getTime());
-
-      // Contratos já expirados (data de fim no passado)
       const expirados = contratosUnicos
         .filter((ct: any) => ct._diffDays < 0)
         .sort((a: any, b: any) => a._renovacao.getTime() - b._renovacao.getTime());
 
       setContratosAPrazo(contratosRenovar);
       setContratosExpirados(expirados);
-
-      // ── 2. Candidaturas pendentes ────────────────────────────────────
-      const { count: pendentes } = await supabase
-        .from('motorista_candidaturas')
-        .select('id', { count: 'exact', head: true })
-        .in('status', ['submetido', 'em_analise']);
-
       setCandidaturasPendentes(pendentes || 0);
 
-      // ── 3. Atividade & Rentabilidade (Baseado nos Eventos do Calendário) ─────────────────────────────────
-      let qAtividade = supabase
-        .from('calendario_eventos')
-        .select('tipo, data_inicio, titulo')
-        .in('tipo', ['entrega', 'devolucao', 'recolha'])
-        .gte('data_inicio', fromStr)
-        .lte('data_inicio', toStr);
-      if (filtrarGestor) qAtividade = qAtividade.eq('criado_por', gestorFiltro);
-      const { data: rawEventosAtividade } = await qAtividade;
-
-      const eventosAtividade = rawEventosAtividade || [];
-
-      // Mapeamos os eventos de calendário com a respetiva viatura (para captar o valor de renda)
-      const atividadeComRenda = eventosAtividade.map((ev) => {
-        const matNorm = ev.titulo ? ev.titulo.replace(/[-\s]/g, '').toUpperCase() : '';
-        const vMatch = (viaturas || []).find(
-          (v) => v.matricula && v.matricula.replace(/[-\s]/g, '').toUpperCase() === matNorm
-        );
+      // ── Atividade & receita contratada do período — alimenta o gráfico
+      // "Atividade" e a sua legenda.
+      const eventosComRenda: EventoAtividade[] = (eventosMesData || []).map((ev) => {
+        const matNorm = normalizarMatricula(ev.titulo);
+        const vMatch = (viaturas || []).find((v) => normalizarMatricula(v.matricula) === matNorm);
         return {
-          ...ev,
+          tipo: ev.tipo,
+          data_inicio: ev.data_inicio,
           valor_aluguer: Number(vMatch?.valor_aluguer || 0),
         };
       });
+      setEventosAtividade(eventosComRenda);
+      setInicioRef(range.from);
+      setFimRef(range.to);
 
-      const points = buildAtividadePoints(atividadeComRenda, range);
-      setAtividadeData(points);
-
-      // ── 5. Upgrades/Downgrades ────────────────────────────────────────
-      let qUpgrades = supabase
-        .from('calendario_eventos')
-        .select('id, titulo, matricula_devolver')
-        .eq('tipo', 'upgrade')
-        .gte('data_inicio', fromStr)
-        .lte('data_inicio', toStr);
-      if (filtrarGestor) qUpgrades = qUpgrades.eq('criado_por', gestorFiltro);
-      const { data: upgradeEvents } = await qUpgrades;
-
-      // Find matching vehicles ignoring hyphens and spaces
-      const viaturasCompletas = viaturas || [];
-
-      let rendaAnterior = 0;
-      let rendaAtual = 0;
-
-      for (const event of upgradeEvents || []) {
-        if (event.matricula_devolver) {
-          const matAntigaNormalized = event.matricula_devolver.replace(/[-\s]/g, '').toUpperCase();
-          const vAntiga = viaturasCompletas.find(
-            (v) =>
-              v.matricula && v.matricula.replace(/[-\s]/g, '').toUpperCase() === matAntigaNormalized
-          );
-          if (vAntiga) {
-            rendaAnterior += Number(vAntiga.valor_aluguer || 0);
-          }
-        }
-
-        if (event.titulo) {
-          const matNovaNormalized = event.titulo.replace(/[-\s]/g, '').toUpperCase();
-          const vNova = viaturasCompletas.find(
-            (v) =>
-              v.matricula && v.matricula.replace(/[-\s]/g, '').toUpperCase() === matNovaNormalized
-          );
-          if (vNova) {
-            rendaAtual += Number(vNova.valor_aluguer || 0);
-          }
-        }
-      }
-
-      setUpgradeData({
-        count: (upgradeEvents || []).length,
-        rendaAtual,
-        rendaAnterior,
-      });
-
-      // ── 6. Trocas ─────────────────────────────────────────────────────
-      let qTrocas = supabase
-        .from('calendario_eventos')
-        .select('id', { count: 'exact', head: true })
-        .eq('tipo', 'troca')
-        .gte('data_inicio', fromStr)
-        .lte('data_inicio', toStr);
-      if (filtrarGestor) qTrocas = qTrocas.eq('criado_por', gestorFiltro);
-      const { count: trocas } = await qTrocas;
-
-      setTrocasCount(trocas || 0);
-    } catch (error: any) {
+      setReceitaContratadaPeriodo(
+        eventosComRenda.filter((e) => e.tipo === 'entrega').reduce((s, e) => s + e.valor_aluguer, 0)
+      );
+    } catch (error: unknown) {
       console.error('Erro ao carregar dashboard:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível carregar o dashboard.',
+        description: 'Não foi possível carregar a homepage.',
         variant: 'destructive',
       });
     } finally {
+      jaCarregou.current = true;
       setLoading(false);
+      setAtualizando(false);
     }
-  }, [range, toast, gestorFiltro]);
+  }, [toast, range]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // ── Chart data builders ──────────────────────────────────────────────────
+  // ── Derived ──────────────────────────────────────────────────────────────
 
-  function buildAtividadePoints(
-    eventos: { tipo: string; data_inicio: string; valor_aluguer: number }[],
-    r: DateRange
-  ): AtividadePoint[] {
-    const diffDays = (r.to.getTime() - r.from.getTime()) / (1000 * 60 * 60 * 24);
+  const ocupacaoPct =
+    fleet.total > 0 ? Math.round(((fleet.alugadas + fleet.reservadas) / fleet.total) * 100) : 0;
+  const reservadasPct = fleet.total > 0 ? Math.round((fleet.reservadas / fleet.total) * 100) : 0;
+  const oficinaPct = fleet.total > 0 ? Math.round((fleet.oficina / fleet.total) * 100) : 0;
 
-    const calcBucket = (
-      bucketStart: Date,
-      bucketEnd: Date,
-      label: string,
-      periodo: string
-    ): AtividadePoint => {
-      const bStartStr = bucketStart.toISOString().split('T')[0];
-      const bEndStr = bucketEnd.toISOString().split('T')[0];
+  const totalAlugadosPeriodo = eventosAtividade.filter((e) => e.tipo === 'entrega').length;
+  const totalDevolvidosPeriodo = eventosAtividade.filter(
+    (e) => e.tipo === 'devolucao' || e.tipo === 'recolha'
+  ).length;
+  // Deriva-se do intervalo já aplicado (não do `range` seleccionado) para
+  // acompanhar os eventos em memória — durante um fetch são ainda os antigos.
+  const granularidade = useMemo(
+    () => granularidadePara({ from: inicioRef, to: fimRef }),
+    [inicioRef, fimRef]
+  );
+  const pontosGrafico = useMemo(
+    () => buildChartPoints(eventosAtividade, inicioRef, fimRef, granularidade),
+    [eventosAtividade, inicioRef, fimRef, granularidade]
+  );
+  // Sparkline da Alugadas é sempre semanal, independente da granularidade
+  // escolhida no gráfico principal — é só um mini-contexto, não o gráfico.
+  const pontosSemanais = useMemo(
+    () => buildChartPoints(eventosAtividade, inicioRef, fimRef, 'semana'),
+    [eventosAtividade, inicioRef, fimRef]
+  );
+  const sparkAlugadas = pontosSemanais.slice(-6).map((p) => p.alugados);
 
-      const eventosBucket = eventos.filter((ev) => {
-        const evDate = ev.data_inicio.split('T')[0];
-        return evDate >= bStartStr && evDate <= bEndStr;
-      });
+  const periodoLabel =
+    preset === 'personalizado'
+      ? `${format(range.from, 'dd MMM', { locale: pt })} – ${format(range.to, 'dd MMM yyyy', { locale: pt })}`
+      : PRESET_LABELS[preset];
 
-      // Alugadas correspondentes a novas Entregas
-      const entregas = eventosBucket.filter((ev) => ev.tipo === 'entrega');
-      const alugadas = entregas.length;
+  const disponiveisAnim = useCountUp(fleet.disponiveis);
+  const alugadasAnim = useCountUp(fleet.alugadas);
+  const reservadasAnim = useCountUp(fleet.reservadas);
+  const oficinaAnim = useCountUp(fleet.oficina);
+  const ocupacaoAnim = useCountUp(ocupacaoPct);
 
-      // Devolvidas correspondentes a Recolhas/Devoluções
-      const devolvidas = eventosBucket.filter(
-        (ev) => ev.tipo === 'devolucao' || ev.tipo === 'recolha'
-      ).length;
+  // ── Precisa da tua atenção — categorizado por tipo, não por severidade
+  // fundida. No máximo 4 categorias — nunca uma lista longa. ────────────────
 
-      // Rentabilidade contabiliza apenas as novas Entregas (geraram nova renda garantida)
-      const rentabilidade = entregas.reduce((sum, ev) => sum + ev.valor_aluguer, 0);
+  const categoriasAlerta: CategoriaAlerta[] = useMemo(() => {
+    const categorias: CategoriaAlerta[] = [];
 
-      return { periodo, label, rentabilidade, alugadas, devolvidas };
-    };
-
-    if (diffDays <= 60) {
-      const weeks = eachWeekOfInterval({ start: r.from, end: r.to }, { weekStartsOn: 1 });
-      return weeks.map((weekStart, i) => {
-        const weekEnd = i + 1 < weeks.length ? new Date(weeks[i + 1].getTime() - 1) : r.to;
-        return calcBucket(
-          weekStart,
-          weekEnd,
-          `Semana ${format(weekStart, 'dd MMM', { locale: pt })}`,
-          format(weekStart, 'dd/MM', { locale: pt })
-        );
-      });
-    } else {
-      const months = eachMonthOfInterval({ start: r.from, end: r.to });
-      return months.map((monthStart) => {
-        const monthEnd = endOfMonth(monthStart);
-        return calcBucket(
-          monthStart,
-          monthEnd,
-          format(monthStart, 'MMMM yyyy', { locale: pt }),
-          format(monthStart, 'MMM yy', { locale: pt })
-        );
+    const totalContratos = contratosExpirados.length + contratosAPrazo.length;
+    if (totalContratos > 0) {
+      const pior = contratosExpirados[0] ?? contratosAPrazo[0];
+      const codigo =
+        pior.numero_contrato != null
+          ? `CT-${String(pior.numero_contrato).padStart(4, '0')}`
+          : pior.motorista_nome;
+      const linha = contratosExpirados.includes(pior)
+        ? `${codigo} expirou há ${Math.abs(pior._diffDays)} dia${Math.abs(pior._diffDays) !== 1 ? 's' : ''}`
+        : `${codigo} renova em ${format(pior._renovacao, 'dd MMM', { locale: pt })}`;
+      categorias.push({
+        id: 'contratos',
+        icon: FileText,
+        cor: contratosExpirados.length > 0 ? 'destructive' : 'warning',
+        titulo: 'Contratos',
+        descricao: totalContratos > 1 ? `${linha} e mais ${totalContratos - 1}` : linha,
+        href: totalContratos === 1 ? `/renting/contratos/${pior.id}` : '/renting/contratos',
       });
     }
-  }
 
-  // ── Derived values ───────────────────────────────────────────────────────
+    if (extintoresAPrazo.length > 0) {
+      const algumExpirado = extintoresAPrazo.some(
+        (e) => new Date(e.extintor_validade).getTime() < Date.now()
+      );
+      categorias.push({
+        id: 'seguranca',
+        icon: ShieldAlert,
+        cor: algumExpirado ? 'destructive' : 'warning',
+        titulo: 'Segurança',
+        descricao: `${extintoresAPrazo.length} extintor${extintoresAPrazo.length !== 1 ? 'es' : ''} ${
+          algumExpirado ? 'expirado(s)' : 'a expirar esta semana'
+        }`,
+        href: extintoresAPrazo.length === 1 ? `/viaturas/${extintoresAPrazo[0].id}` : '/viaturas',
+      });
+    }
 
-  const rendaDiff = formatPct(upgradeData.rendaAtual, upgradeData.rendaAnterior);
-  // Como agora o gráfico calcula apenas a renda nova de cada período, faz sentido apresentar a soma dessa renda no topo.
-  const totalRentabilidade = atividadeData.reduce((sum, p) => sum + p.rentabilidade, 0);
-  const totalAlugadas = atividadeData.reduce((sum, p) => sum + p.alugadas, 0);
-  const totalDevolvidas = atividadeData.reduce((sum, p) => sum + p.devolvidas, 0);
+    if (isExecutivo && (contasAReceber?.emAberto?.length ?? 0) > 0) {
+      const emAberto = contasAReceber!.emAberto;
+      const total = emAberto.reduce((s, c) => s + c.saldo, 0);
+      const algumCritico = emAberto.some((c) => c.diasEmAberto > 60);
+      categorias.push({
+        id: 'cobrancas',
+        icon: Wallet,
+        cor: algumCritico ? 'destructive' : 'warning',
+        titulo: 'Cobranças',
+        descricao: `${formatCurrency(total)} há mais de 30 dias`,
+        href: '/administrativo/faturacao',
+      });
+    }
 
-  // ── Tooltip customizado ──────────────────────────────────────────────────
+    if (candidaturasPendentes > 0) {
+      categorias.push({
+        id: 'motoristas',
+        icon: UserPlus,
+        cor: 'warning',
+        titulo: 'Motoristas',
+        descricao: `${candidaturasPendentes} candidatura${candidaturasPendentes !== 1 ? 's' : ''} aguarda${candidaturasPendentes !== 1 ? 'm' : ''} aprovação`,
+        href: '/motoristas/candidaturas',
+      });
+    }
 
-  const PRESET_LABELS: Record<FixedPreset, string> = {
-    semana: 'Esta Semana',
-    mes: 'Este Mês',
-    trimestre: 'Trimestre',
-    ano: 'Este Ano',
-  };
+    return categorias;
+  }, [
+    contratosExpirados,
+    contratosAPrazo,
+    extintoresAPrazo,
+    contasAReceber,
+    isExecutivo,
+    candidaturasPendentes,
+  ]);
 
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
-      <StickyPageHeader
-        title="Dashboard"
-        description={`Visão geral da operação — ${format(range.from, 'dd MMM', { locale: pt })} a ${format(range.to, 'dd MMM yyyy', { locale: pt })}`}
-        icon={LayoutDashboard}
-      >
-        {(Object.keys(PRESET_LABELS) as FixedPreset[]).map((p) => (
-          <Button
-            key={p}
-            variant={preset === p ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => handlePreset(p)}
-            className="h-9 px-4"
-          >
-            {PRESET_LABELS[p]}
-          </Button>
-        ))}
-        <Popover open={customRangeOpen} onOpenChange={setCustomRangeOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant={preset === 'personalizado' ? 'default' : 'outline'}
-              size="sm"
-              className="h-9 gap-1.5 px-4"
-            >
-              <CalendarRange className="h-3.5 w-3.5" />
-              {preset === 'personalizado'
-                ? `${format(range.from, 'dd MMM', { locale: pt })} – ${format(range.to, 'dd MMM', { locale: pt })}`
-                : 'Personalizado'}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="range"
-              selected={customRangeDraft}
-              onSelect={handleCustomRangeSelect}
-              numberOfMonths={2}
-              defaultMonth={range.from}
-            />
-          </PopoverContent>
-        </Popover>
-        <Select value={gestorFiltro} onValueChange={setGestorFiltro}>
-          <SelectTrigger className="h-9 w-auto gap-1.5">
-            <UserCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <SelectValue placeholder="Todos os Gestores" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos os Gestores</SelectItem>
-            {gestores.map((g) => (
-              <SelectItem key={g.id} value={g.id}>
-                {g.nome}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="space-y-4">
+      <StickyPageHeader title="Início" icon={LayoutDashboard}>
         <Button
           variant="ghost"
           size="icon"
           onClick={fetchData}
-          disabled={loading}
+          disabled={atualizando}
           title="Atualizar"
-          className="ml-1"
         >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={cn('h-4 w-4', atualizando && 'animate-spin')} />
         </Button>
         <ThemeToggle />
       </StickyPageHeader>
@@ -597,349 +636,372 @@ const Dashboard = () => {
         <DashboardSkeleton />
       ) : (
         <>
-          {/* ── Linha 1: Viaturas + Candidaturas ─────────────────────── */}
-          <div
-            className={`grid grid-cols-2 gap-4 ${isExecutivo ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}
-          >
-            <KpiCard
-              label="Disponíveis"
-              value={fleet.disponiveis}
-              icon={Car}
-              color="green"
-              onClick={() => navigate('/viaturas?status=disponivel')}
-              footer={
-                <p className="text-xs text-muted-foreground mt-1">de {fleet.total} viaturas</p>
-              }
-            />
+          <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-5">
+            {/* ── Coluna esquerda: KPIs finos + gráfico protagonista ────── */}
+            <div>
+              <div className="flex flex-wrap border-b border-border pb-1 mb-3">
+                <KpiItem
+                  icon={CircleCheck}
+                  cor="success"
+                  label="Disponíveis"
+                  valor={disponiveisAnim}
+                  onClick={() => navigate('/viaturas')}
+                  index={0}
+                >
+                  <p className="text-[11px] text-muted-foreground mt-1.5">
+                    de <b className="text-foreground font-semibold">{fleet.total}</b> viaturas
+                  </p>
+                </KpiItem>
+                <KpiItem
+                  icon={Car}
+                  cor="blue"
+                  label="Alugadas"
+                  valor={alugadasAnim}
+                  onClick={() => navigate('/viaturas')}
+                  index={1}
+                >
+                  <KpiSparkline values={sparkAlugadas} corClass="bg-blue-400" />
+                </KpiItem>
+                <KpiItem
+                  icon={CalendarClock}
+                  cor="violet"
+                  label="Reservadas"
+                  valor={reservadasAnim}
+                  onClick={() => navigate('/viaturas')}
+                  index={2}
+                >
+                  <p className="text-[11px] text-muted-foreground mt-1.5">
+                    <b className="text-foreground font-semibold">{reservadasPct}%</b> da frota
+                  </p>
+                </KpiItem>
+                <KpiItem
+                  icon={Wrench}
+                  cor="orange"
+                  label="Em Oficina"
+                  valor={oficinaAnim}
+                  onClick={() => navigate('/viaturas')}
+                  index={3}
+                >
+                  <p className="text-[11px] text-muted-foreground mt-1.5">
+                    <b className="text-foreground font-semibold">{oficinaPct}%</b> da frota
+                  </p>
+                </KpiItem>
+                <KpiItem
+                  icon={TrendingUp}
+                  cor="blue"
+                  label="Ocupação"
+                  valor={`${ocupacaoAnim}%`}
+                  onClick={() => navigate('/viaturas')}
+                  index={4}
+                >
+                  <KpiBar pct={ocupacaoPct} corClass="bg-blue-400" />
+                </KpiItem>
+              </div>
 
-            <KpiCard
-              label="Ocupadas"
-              value={fleet.ocupadas}
-              icon={Car}
-              color="blue"
-              onClick={() => navigate('/viaturas?status=em_uso')}
-              footer={<p className="text-xs text-muted-foreground mt-1">em circulação</p>}
-            />
-
-            <KpiCard
-              label="Em Reparação"
-              value={fleet.manutencao}
-              icon={Wrench}
-              color="amber"
-              onClick={() => navigate('/viaturas?status=manutencao')}
-              footer={<p className="text-xs text-muted-foreground mt-1">em manutenção</p>}
-            />
-
-            {isExecutivo && (
-              <KpiCard
-                label="Candidatos"
-                value={candidaturasPendentes}
-                icon={ClipboardCheck}
-                color="violet"
-                onClick={() => navigate('/motoristas/candidaturas')}
-                footer={
-                  <div className="flex items-center gap-1 mt-1">
-                    {candidaturasPendentes > 0 ? (
-                      <Badge variant="destructive" className="text-xs px-1.5 py-0">
-                        Pendentes
-                      </Badge>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">sem pendentes</p>
-                    )}
-                  </div>
-                }
-              />
-            )}
-          </div>
-
-          {/* ── Linha 2: Atividade & Rentabilidade + Alertas ────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Atividade & Rentabilidade combinado */}
-            <Card className="lg:col-span-2">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    <CardTitle className="text-base">
-                      {isExecutivo ? 'Atividade & Rentabilidade' : 'Atividade'}
-                    </CardTitle>
-                    <CardDescription>
-                      Evolução de novas entregas de viaturas no período
-                    </CardDescription>
-                  </div>
-                  <div className="flex gap-4 text-sm">
-                    {isExecutivo && (
-                      <div className="text-right">
-                        <div className="text-lg font-bold text-primary">
-                          {formatCurrency(totalRentabilidade)}
-                        </div>
-                        <p className="text-xs text-muted-foreground">nova renda contratada</p>
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-4">
+                <div className="rounded-2xl border border-border bg-card p-4">
+                  <div className="flex items-start justify-between gap-4 mb-1">
+                    <div>
+                      <h2 className="text-sm font-semibold">Atividade</h2>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {isExecutivo && (
+                          <LegendChip corClass="bg-primary">
+                            Receita <b>{formatCurrency(receitaContratadaPeriodo)}</b>
+                          </LegendChip>
+                        )}
+                        <LegendChip corClass="bg-blue-400">
+                          Alugados <b>{totalAlugadosPeriodo}</b>
+                        </LegendChip>
+                        <LegendChip corClass="bg-success">
+                          Devolvidos <b>{totalDevolvidosPeriodo}</b>
+                        </LegendChip>
                       </div>
-                    )}
-                    <div className="flex flex-col items-end text-xs text-muted-foreground">
-                      <span>
-                        Alugadas <strong className="text-foreground">{totalAlugadas}</strong>
-                      </span>
-                      <span>
-                        Devolvidas <strong className="text-foreground">{totalDevolvidas}</strong>
-                      </span>
                     </div>
+                    {/* Único controlo do gráfico: o período. Vive no card, e
+                        não no cabeçalho da página, porque só filtra este
+                        gráfico — a frota e os alertas são sempre do momento
+                        actual. */}
+                    <Popover open={customRangeOpen} onOpenChange={setCustomRangeOpen}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                        >
+                          <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
+                          {periodoLabel}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="end">
+                        <div className="flex flex-col p-2 gap-0.5">
+                          {(Object.keys(PRESET_LABELS) as FixedPreset[]).map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => handlePreset(p)}
+                              className={cn(
+                                'rounded-md px-3 py-1.5 text-left text-sm transition-colors',
+                                preset === p
+                                  ? 'bg-primary/10 font-semibold text-primary'
+                                  : 'hover:bg-muted'
+                              )}
+                            >
+                              {PRESET_LABELS[p]}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="border-t border-border px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Intervalo personalizado
+                        </div>
+                        <Calendar
+                          mode="range"
+                          selected={customRangeDraft}
+                          onSelect={handleCustomRangeSelect}
+                          numberOfMonths={2}
+                          defaultMonth={range.from}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  {/* Enquanto o período novo carrega mantém-se o gráfico
+                      anterior, só esbatido — trocá-lo por um skeleton fazia a
+                      altura do card saltar a cada escolha. */}
+                  <div
+                    className={cn('transition-opacity duration-200', atualizando && 'opacity-40')}
+                  >
+                    <Suspense fallback={<Skeleton className="h-[190px] w-full mt-3" />}>
+                      <ReceitaChart
+                        data={pontosGrafico}
+                        formatCurrency={formatCurrency}
+                        granularidade={granularidade}
+                        mostrarReceita={isExecutivo}
+                      />
+                    </Suspense>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                {atividadeData.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-                    <Euro className="h-10 w-10 mb-2 opacity-20" />
-                    <p className="text-sm">Sem dados no período</p>
-                  </div>
-                ) : (
-                  <Suspense
-                    fallback={
-                      <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
-                        A carregar gráfico…
-                      </div>
-                    }
-                  >
-                    <AtividadeChart
-                      data={atividadeData}
-                      formatCurrency={formatCurrency}
-                      showRentabilidade={isExecutivo}
+
+                <div className="rounded-2xl border border-border bg-card p-4">
+                  <h2 className="text-sm font-semibold mb-1">Estado da Frota</h2>
+                  <Suspense fallback={<Skeleton className="h-[168px] w-full mt-3" />}>
+                    <FrotaDonutChart
+                      disponiveis={frotaDonut.disponiveis}
+                      ocupados={frotaDonut.ocupados}
+                      inativos={frotaDonut.inativos}
                     />
                   </Suspense>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              </div>
+            </div>
 
-            {/* Extintores a Expirar */}
-            <AlertListCard
-              titulo="Extintores a Expirar"
-              descricao="Vencidos ou a expirar (próximos 15 dias)"
-              badge={
-                <Badge
-                  variant="outline"
-                  className="font-mono text-orange-500 border-orange-500/20 bg-orange-500/10"
-                >
-                  {extintoresAPrazo.length} Pendentes
-                </Badge>
-              }
-              emptyMessage="Sem extintores a expirar em breve"
-              items={extintoresAPrazo.map((ext) => {
-                const isExpired = new Date(ext.extintor_validade) < new Date();
-                return {
-                  id: ext.id,
-                  label: ext.matricula,
-                  sublabel: `👤 ${ext.motorista_nome}${isExpired ? ' · vencido' : ''}`,
-                  valor: format(new Date(ext.extintor_validade), 'dd MMM yyyy', { locale: pt }),
-                  severity: isExpired ? 'critical' : 'high',
-                };
-              })}
-            />
-
-            {/* Contratos a Renovar */}
-            <AlertListCard
-              titulo="Contratos a Renovar"
-              descricao="Renovação nos próximos 60 dias"
-              badge={
-                <Badge
-                  variant="outline"
-                  className="font-mono text-blue-500 border-blue-500/20 bg-blue-500/10"
-                >
-                  {contratosAPrazo.length} Pendentes
-                </Badge>
-              }
-              emptyMessage="Sem contratos a renovar em breve"
-              items={contratosAPrazo.map((ct: any) => {
-                const renovacao = ct._renovacao as Date;
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const isExpired = renovacao < today;
-                const viaturaStr = ct.viaturas?.matricula || '—';
-                const codigo =
-                  ct.numero_contrato != null
-                    ? `CT-${String(ct.numero_contrato).padStart(4, '0')} `
-                    : '';
-                return {
-                  id: ct.id,
-                  label: `${codigo}${ct.motorista_nome}`,
-                  sublabel: `🚗 ${viaturaStr}`,
-                  valor: format(renovacao, 'dd MMM yyyy', { locale: pt }),
-                  severity: isExpired ? 'critical' : 'medium',
-                };
-              })}
-            />
+            {/* ── Coluna direita: "Precisa de atenção" ocupa toda a altura,
+                em vez de dividir espaço com outras secções. ─────────────── */}
+            <div className="rounded-2xl border border-border bg-card p-4 h-full">
+              <h2 className="text-[12.5px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                Precisa de atenção
+              </h2>
+              {categoriasAlerta.length === 0 ? (
+                <div className="flex items-center gap-3 rounded-xl border border-success/25 bg-success/5 px-4 py-3.5">
+                  <CircleCheck className="h-5 w-5 text-success shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-success">Tudo em ordem</p>
+                    <p className="text-xs text-muted-foreground">
+                      Nada precisa da tua atenção hoje.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {categoriasAlerta.map((categoria, i) => (
+                    <AlertaCategoriaRow
+                      key={categoria.id}
+                      categoria={categoria}
+                      index={i}
+                      onClick={() => navigate(categoria.href)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* ── Contratos Expirados ──────────────────── */}
-          {contratosExpirados.length > 0 && (
-            <AlertListCard
-              className="border-destructive/30"
-              titulo="Contratos Expirados"
-              descricao="Contratos ativos com prazo ultrapassado"
-              badge={
-                <Badge variant="destructive" className="font-mono">
-                  {contratosExpirados.length} Expirado{contratosExpirados.length !== 1 ? 's' : ''}
-                </Badge>
-              }
-              emptyMessage=""
-              items={contratosExpirados.map((ct: any) => {
-                const renovacao = ct._renovacao as Date;
-                const diasExpirado = Math.abs(
-                  ct._diffDays ||
-                    Math.ceil((new Date().getTime() - renovacao.getTime()) / (1000 * 60 * 60 * 24))
-                );
-                const viaturaStr = ct.viaturas?.matricula || '—';
-                const codigo =
-                  ct.numero_contrato != null
-                    ? `CT-${String(ct.numero_contrato).padStart(4, '0')} `
-                    : '';
-                return {
-                  id: ct.id,
-                  label: `${codigo}${ct.motorista_nome}`,
-                  sublabel: `🚗 ${viaturaStr} · Expirado há ${diasExpirado} dia${diasExpirado !== 1 ? 's' : ''}`,
-                  valor: format(renovacao, 'dd MMM yyyy', { locale: pt }),
-                  severity: 'critical',
-                };
-              })}
-            />
-          )}
-
-          {/* ── Linha 4: Upgrade/Downgrade + Trocas (só executivo) ──── */}
-          {isExecutivo && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Upgrade / Downgrade */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-primary" />
-                    Upgrades / Downgrades
-                  </CardTitle>
-                  <CardDescription>Mudanças de viatura no período selecionado</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Contador */}
-                  <div className="flex items-center gap-4">
-                    <div className="text-4xl font-bold text-primary">{upgradeData.count}</div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">trocas de categoria</p>
-                      <p className="text-xs text-muted-foreground">registadas no calendário</p>
-                    </div>
-                  </div>
-
-                  {/* Comparação de renda */}
-                  <div className="rounded-lg bg-muted/50 p-4 space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Renda de Viaturas
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-0.5">
-                        <p className="text-xs text-muted-foreground">Período Anterior</p>
-                        <p className="text-lg font-bold text-foreground">
-                          {formatCurrency(upgradeData.rendaAnterior)}
-                        </p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-xs text-muted-foreground">Período Atual</p>
-                        <p className="text-lg font-bold text-foreground">
-                          {formatCurrency(upgradeData.rendaAtual)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1 border-t border-border">
-                      {upgradeData.rendaAnterior > 0 ? (
-                        <>
-                          {rendaDiff.up ? (
-                            <TrendingUp className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <TrendingDown className="h-4 w-4 text-red-500" />
-                          )}
-                          <span
-                            className={`text-sm font-semibold ${rendaDiff.up ? 'text-green-500' : 'text-red-500'}`}
-                          >
-                            {rendaDiff.up ? '+' : '-'}
-                            {rendaDiff.pct.toFixed(1)}%
-                          </span>
-                          <span className="text-xs text-muted-foreground">vs período anterior</span>
-                          <span
-                            className={`text-sm font-medium ml-auto ${rendaDiff.up ? 'text-green-500' : 'text-red-500'}`}
-                          >
-                            {rendaDiff.up ? '+' : ''}
-                            {formatCurrency(upgradeData.rendaAtual - upgradeData.rendaAnterior)}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          Sem dados do período anterior
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Trocas */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <RefreshCw className="h-4 w-4 text-orange-500" />
-                    Trocas de Viatura
-                  </CardTitle>
-                  <CardDescription>Substituições de viatura no período selecionado</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Contador grande */}
-                  <div className="flex items-center gap-4">
-                    <div className="text-4xl font-bold text-orange-500">{trocasCount}</div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">substituições</p>
-                      <p className="text-xs text-muted-foreground">registadas no calendário</p>
-                    </div>
-                  </div>
-
-                  {/* Métricas complementares */}
-                  <div className="rounded-lg bg-muted/50 p-4 space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Atividade da Frota
-                    </p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-0.5">
-                        <p className="text-xs text-muted-foreground">Alugadas</p>
-                        <p className="text-lg font-bold text-blue-500">{totalAlugadas}</p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-xs text-muted-foreground">Devolvidas</p>
-                        <p className="text-lg font-bold text-green-500">{totalDevolvidas}</p>
-                      </div>
-                    </div>
-                    <div className="pt-1 border-t border-border">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Saldo líquido</span>
-                        <span
-                          className={`font-semibold ${totalAlugadas - totalDevolvidas >= 0 ? 'text-blue-500' : 'text-red-500'}`}
-                        >
-                          {totalAlugadas - totalDevolvidas >= 0 ? '+' : ''}
-                          {totalAlugadas - totalDevolvidas} viaturas
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {trocasCount === 0 && (
-                    <p className="text-sm text-center text-muted-foreground py-2">
-                      Sem trocas registadas neste período
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+          {/* ── Histórico de check-in/check-out + Car Track (em breve). ─ */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
+            <CheckinCheckoutHistoricoCard enabled />
+            <div className="rounded-2xl border border-border bg-card p-4 flex flex-col items-center justify-center text-center gap-2 min-h-[160px]">
+              <MapPin className="h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm font-semibold">Car Track</p>
+              <p className="text-xs text-muted-foreground max-w-[240px]">
+                Localização e rastreio de viaturas em tempo real. Em breve.
+              </p>
             </div>
-          )}
+          </div>
         </>
       )}
-
-      {canSeeCheckinHistorico && <CheckinCheckoutHistoricoCard enabled={canSeeCheckinHistorico} />}
     </div>
   );
 };
+
+// ── KPI strip — sem caixa em repouso; o chrome (fundo, sombra, risca de
+// cor) só aparece no hover, para parecer atalho e não display estático. ────
+
+const KPI_CORES: Record<string, { icon: string; iconBgHover: string; underline: string }> = {
+  success: {
+    icon: 'text-success',
+    iconBgHover: 'group-hover:bg-success/15',
+    underline: 'bg-success',
+  },
+  blue: {
+    icon: 'text-blue-400',
+    iconBgHover: 'group-hover:bg-blue-500/15',
+    underline: 'bg-blue-400',
+  },
+  violet: {
+    icon: 'text-violet-400',
+    iconBgHover: 'group-hover:bg-violet-500/15',
+    underline: 'bg-violet-400',
+  },
+  orange: {
+    icon: 'text-orange-400',
+    iconBgHover: 'group-hover:bg-orange-500/15',
+    underline: 'bg-orange-400',
+  },
+};
+
+function KpiItem({
+  icon: Icon,
+  cor,
+  label,
+  valor,
+  onClick,
+  index,
+  children,
+}: {
+  icon: typeof Car;
+  cor: keyof typeof KPI_CORES;
+  label: string;
+  valor: number | string;
+  onClick: () => void;
+  index: number;
+  children?: React.ReactNode;
+}) {
+  const c = KPI_CORES[cor];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ animationDelay: `${index * 50}ms` }}
+      className="group relative flex-1 min-w-[135px] text-left px-4 pt-2.5 pb-3 rounded-xl cursor-pointer animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards transition-all hover:bg-background hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10 dark:hover:shadow-black/30"
+    >
+      <span className="flex items-center gap-1.5 mb-1.5">
+        <span
+          className={cn(
+            'flex h-5 w-5 items-center justify-center rounded-md transition-colors',
+            c.icon,
+            c.iconBgHover
+          )}
+        >
+          <Icon className="h-3 w-3" />
+        </span>
+        <span className="text-[11px] font-semibold text-muted-foreground">{label}</span>
+      </span>
+      <span className="block text-[26px] font-bold tabular-nums leading-none tracking-tight">
+        {valor}
+      </span>
+      {children}
+      <span
+        className={cn(
+          'absolute left-4 right-4 bottom-1.5 h-[2px] rounded-full opacity-0 scale-x-[0.4] origin-left transition-all duration-200 group-hover:opacity-100 group-hover:scale-x-100',
+          c.underline
+        )}
+      />
+    </button>
+  );
+}
+
+function KpiBar({ pct, corClass }: { pct: number; corClass: string }) {
+  return (
+    <span className="block h-[3px] w-full rounded-full bg-foreground/[0.07] overflow-hidden mt-2">
+      <span
+        className={cn(
+          'block h-full rounded-full transition-[width] duration-700 ease-out',
+          corClass
+        )}
+        style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+      />
+    </span>
+  );
+}
+
+function KpiSparkline({ values, corClass }: { values: number[]; corClass: string }) {
+  const max = Math.max(1, ...values);
+  return (
+    <span className="flex items-end gap-[2px] h-4 mt-2">
+      {values.map((v, i) => (
+        <span
+          key={i}
+          className={cn(
+            'w-1 rounded-t-[1px]',
+            corClass,
+            i === values.length - 1 ? 'opacity-100' : 'opacity-45'
+          )}
+          style={{ height: `${Math.max(12, (v / max) * 100)}%` }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function LegendChip({ corClass, children }: { corClass: string; children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/30 px-2.5 py-1 text-xs text-muted-foreground">
+      <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', corClass)} />
+      {children}
+    </span>
+  );
+}
+
+// ── Precisa de atenção — linha inteira clicável, sem botão nem caixa
+// tintada em repouso; o hover é o único chrome. ─────────────────────────────
+
+const CORES_ALERTA: Record<CorAlerta, { texto: string; fundo: string }> = {
+  destructive: { texto: 'text-destructive', fundo: 'bg-destructive/10' },
+  warning: { texto: 'text-warning', fundo: 'bg-warning/10' },
+};
+
+function AlertaCategoriaRow({
+  categoria,
+  onClick,
+  index,
+}: {
+  categoria: CategoriaAlerta;
+  onClick: () => void;
+  index: number;
+}) {
+  const c = CORES_ALERTA[categoria.cor];
+  const Icon = categoria.icon;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ animationDelay: `${80 + index * 60}ms` }}
+      className="w-full flex items-start gap-3 py-2.5 px-2 -mx-2 rounded-lg text-left cursor-pointer animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards transition-colors hover:bg-muted/40"
+    >
+      <span
+        className={cn(
+          'flex h-8 w-8 items-center justify-center rounded-lg shrink-0',
+          c.fundo,
+          c.texto
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0">
+        <span className={cn('block text-[11px] font-bold uppercase tracking-wide', c.texto)}>
+          {categoria.titulo}
+        </span>
+        <span className="block text-[13px] font-medium mt-0.5">{categoria.descricao}</span>
+      </span>
+    </button>
+  );
+}
 
 export default Dashboard;

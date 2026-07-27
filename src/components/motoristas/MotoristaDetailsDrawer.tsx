@@ -12,7 +12,7 @@ import {
   Fuel,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { MotoristaStatusBadge } from '@/lib/statusBadges';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SectionCard } from '@/components/ui/section-card';
 import { MotoristaFullModal } from './MotoristaFullModal';
@@ -117,9 +117,7 @@ export function MotoristaDetailsDrawer({
                 <Pencil className="h-4 w-4 mr-2" />
                 Editar
               </Button>
-              <Badge variant={motorista.status_ativo ? 'default' : 'secondary'}>
-                {motorista.status_ativo ? 'Ativo' : 'Inativo'}
-              </Badge>
+              <MotoristaStatusBadge statusAtivo={motorista.status_ativo} />
             </div>
           </div>
         </DialogHeader>

@@ -87,7 +87,7 @@ export function ReservaTabGeralSectionPeriodos({
             render={({ field }) => (
               <FormItem className="max-w-xs">
                 <FormLabel>
-                  Data Início <span className="text-red-500">*</span>
+                  Data Início <span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
                   <Input
@@ -116,7 +116,7 @@ export function ReservaTabGeralSectionPeriodos({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
-                    Estação Início <span className="text-red-500">*</span>
+                    Estação Início <span className="text-destructive">*</span>
                   </FormLabel>
                   <Select
                     value={field.value ?? SENTINEL_NONE}
@@ -149,7 +149,7 @@ export function ReservaTabGeralSectionPeriodos({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
-                    Data Início <span className="text-red-500">*</span>
+                    Data Início <span className="text-destructive">*</span>
                   </FormLabel>
                   <FormControl>
                     <Input
@@ -219,7 +219,7 @@ export function ReservaTabGeralSectionPeriodos({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Estação Fim <span className="text-red-500">*</span>
+                      Estação Fim <span className="text-destructive">*</span>
                     </FormLabel>
                     <Select
                       value={field.value ?? SENTINEL_NONE}
@@ -259,7 +259,7 @@ export function ReservaTabGeralSectionPeriodos({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Data Fim <span className="text-red-500">*</span>
+                      Data Fim <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
                       <Input

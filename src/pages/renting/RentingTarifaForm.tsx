@@ -438,7 +438,7 @@ const RentingTarifaForm = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>
-                  Nome da Tarifa <span className="text-red-500">*</span>
+                  Nome da Tarifa <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   value={form.nome}

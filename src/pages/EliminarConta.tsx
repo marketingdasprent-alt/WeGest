@@ -131,7 +131,7 @@ export default function EliminarConta() {
 
                     <div>
                       <Label htmlFor="email">
-                        Email da conta <span className="text-red-500">*</span>
+                        Email da conta <span className="text-destructive">*</span>
                       </Label>
                       <Input
                         id="email"

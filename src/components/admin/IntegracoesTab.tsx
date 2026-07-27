@@ -925,7 +925,7 @@ export const IntegracoesTab: React.FC = () => {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="wh-nome">
-                Nome <span className="text-red-500">*</span>
+                Nome <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="wh-nome"
@@ -948,7 +948,7 @@ export const IntegracoesTab: React.FC = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="wh-url">
-                URL do Webhook <span className="text-red-500">*</span>
+                URL do Webhook <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="wh-url"
@@ -960,7 +960,7 @@ export const IntegracoesTab: React.FC = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="wh-evento">
-                Evento <span className="text-red-500">*</span>
+                Evento <span className="text-destructive">*</span>
               </Label>
               <Select
                 value={webhookFormData.evento}

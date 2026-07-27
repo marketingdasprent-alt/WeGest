@@ -27,6 +27,7 @@ import {
   Gauge,
   ExternalLink,
   Ticket,
+  Settings2,
 } from 'lucide-react';
 import { REALIZE_ORG_IDS } from '@/config/realize';
 
@@ -67,7 +68,7 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: KeyRound,
     subItems: [
       {
-        label: 'Contratos',
+        label: 'Contratos Renting',
         url: '/renting/contratos',
         icon: FileText,
         recurso: 'renting_contratos',
@@ -125,10 +126,17 @@ export const MENU_ITEMS: MenuItem[] = [
     recurso: 'viaturas_ver',
     subItems: [
       { label: 'Viaturas', url: '/viaturas', icon: Car },
-      { label: 'Grupos', url: '/viaturas/grupos', icon: Layers },
-      { label: 'Marcas / Modelos', url: '/viaturas/marcas-modelos', icon: CarFront },
-      { label: 'Combustíveis', url: '/viaturas/combustiveis', icon: Fuel },
-      { label: 'Tipos', url: '/viaturas/tipos', icon: Tag },
+      {
+        label: 'Configurações',
+        icon: Settings2,
+        recurso: 'viaturas_ver',
+        subItems: [
+          { label: 'Grupos', url: '/viaturas/grupos', icon: Layers },
+          { label: 'Marcas / Modelos', url: '/viaturas/marcas-modelos', icon: CarFront },
+          { label: 'Combustíveis', url: '/viaturas/combustiveis', icon: Fuel },
+          { label: 'Tipos', url: '/viaturas/tipos', icon: Tag },
+        ],
+      },
     ],
   },
   {
@@ -138,7 +146,7 @@ export const MENU_ITEMS: MenuItem[] = [
     subItems: [
       { label: 'Todos Motoristas', url: '/motoristas', icon: User },
       { label: 'Aprovação', url: '/motoristas/candidaturas', icon: ClipboardCheck },
-      { label: 'Contratos', url: '/contratos', icon: FileText },
+      { label: 'Contratos TVDE', url: '/contratos', icon: FileText },
     ],
   },
   {

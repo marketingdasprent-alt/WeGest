@@ -334,7 +334,7 @@ export const CategoriasAssistenciaTab = () => {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="nome">
-                Nome <span className="text-red-500">*</span>
+                Nome <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="nome"

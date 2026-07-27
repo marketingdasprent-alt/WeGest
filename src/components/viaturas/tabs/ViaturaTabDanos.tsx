@@ -505,7 +505,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
               <div className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto">
                 <div>
                   <Label htmlFor="descricao">
-                    Descrição <span className="text-red-500">*</span>
+                    Descrição <span className="text-destructive">*</span>
                   </Label>
                   <Textarea
                     id="descricao"

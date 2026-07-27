@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { MotoristaStatusBadge } from '@/lib/statusBadges';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SectionCard } from '@/components/ui/section-card';
 import { MotoristaTabDados } from '@/components/motoristas/tabs/MotoristaTabDados';
@@ -239,12 +239,10 @@ export default function MotoristaDetalhe() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">{motorista.nome}</h1>
-              <Badge
-                variant={motorista.status_ativo ? 'default' : 'secondary'}
+              <MotoristaStatusBadge
+                statusAtivo={motorista.status_ativo}
                 className={motorista.status_ativo ? 'bg-green-600 hover:bg-green-700' : ''}
-              >
-                {motorista.status_ativo ? 'Ativo' : 'Inativo'}
-              </Badge>
+              />
             </div>
             <p className="text-muted-foreground font-mono text-sm mt-1">
               Código: #{motorista.codigo}

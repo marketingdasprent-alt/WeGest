@@ -76,7 +76,7 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
       <CardContent className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="nome">
-            Nome Completo <span className="text-red-500">*</span>
+            Nome Completo <span className="text-destructive">*</span>
           </Label>
           <Input
             id="nome"
@@ -93,7 +93,7 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
         </div>
         <div className="space-y-2">
           <Label htmlFor="email">
-            Email <span className="text-red-500">*</span>
+            Email <span className="text-destructive">*</span>
           </Label>
           <Input
             id="email"
@@ -116,7 +116,7 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
         </div>
         <div className="space-y-2">
           <Label htmlFor="telefone">
-            Telefone <span className="text-red-500">*</span>
+            Telefone <span className="text-destructive">*</span>
           </Label>
           <PhoneInput
             id="telefone"
@@ -131,7 +131,7 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
         </div>
         <div className="space-y-2">
           <Label htmlFor="nif">
-            NIF <span className="text-red-500">*</span>
+            NIF <span className="text-destructive">*</span>
           </Label>
           <Input
             id="nif"
@@ -154,7 +154,7 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
         </div>
         <div className="space-y-2 sm:col-span-2">
           <Label htmlFor="morada">
-            Morada <span className="text-red-500">*</span>
+            Morada <span className="text-destructive">*</span>
           </Label>
           <Input
             id="morada"
@@ -171,7 +171,7 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
         </div>
         <div className="space-y-2">
           <Label htmlFor="cidade">
-            Cidade <span className="text-red-500">*</span>
+            Cidade <span className="text-destructive">*</span>
           </Label>
           <Input
             id="cidade"
@@ -188,7 +188,7 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
         </div>
         <div className="space-y-2">
           <Label htmlFor="codigoPostal">
-            Código Postal <span className="text-red-500">*</span>
+            Código Postal <span className="text-destructive">*</span>
           </Label>
           <Input
             id="codigoPostal"
@@ -215,7 +215,7 @@ export const DadosPessoaisSection: React.FC<DadosPessoaisSectionProps> = ({
         <div className="space-y-2 sm:col-span-2">
           <Label className="flex items-center gap-2 text-foreground">
             <Home className="h-4 w-4 text-muted-foreground" />
-            Comprovativo de Morada <span className="text-red-500">*</span>
+            Comprovativo de Morada <span className="text-destructive">*</span>
           </Label>
           <DocumentUploader
             folder="comprovativo-morada"

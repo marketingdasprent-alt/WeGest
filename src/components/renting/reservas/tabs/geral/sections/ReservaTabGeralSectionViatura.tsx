@@ -106,7 +106,7 @@ export function ReservaTabGeralSectionViatura({
                 return (
                   <FormItem>
                     <FormLabel>
-                      Viatura <span className="text-red-500">*</span>
+                      Viatura <span className="text-destructive">*</span>
                     </FormLabel>
                     <Popover
                       open={viaturaPopoverOpen}

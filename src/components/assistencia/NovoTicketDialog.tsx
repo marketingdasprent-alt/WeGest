@@ -328,7 +328,7 @@ export const NovoTicketDialog: React.FC<NovoTicketDialogProps> = ({
             {/* Viatura */}
             <div className="space-y-2">
               <Label htmlFor="viatura">
-                Viatura <span className="text-red-500">*</span>
+                Viatura <span className="text-destructive">*</span>
               </Label>
               <Select
                 value={formData.viatura_id}
@@ -398,7 +398,7 @@ export const NovoTicketDialog: React.FC<NovoTicketDialogProps> = ({
             {/* Título */}
             <div className="space-y-2">
               <Label htmlFor="titulo">
-                Título <span className="text-red-500">*</span>
+                Título <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="titulo"

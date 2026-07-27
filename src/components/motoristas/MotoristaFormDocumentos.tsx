@@ -33,7 +33,7 @@ export function MotoristaFormDocumentos({ form, motoristaId }: MotoristaFormDocu
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Tipo <span className="text-red-500">*</span>
+                  Tipo <span className="text-destructive">*</span>
                 </FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
@@ -57,7 +57,7 @@ export function MotoristaFormDocumentos({ form, motoristaId }: MotoristaFormDocu
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Número <span className="text-red-500">*</span>
+                  Número <span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
                   <Input placeholder="Número" {...field} className="bg-background" />
@@ -135,7 +135,7 @@ export function MotoristaFormDocumentos({ form, motoristaId }: MotoristaFormDocu
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Número <span className="text-red-500">*</span>
+                  Número <span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
                   <Input placeholder="Número" {...field} className="bg-background" />
