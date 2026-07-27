@@ -56,8 +56,9 @@ interface ViaturaTabDadosProps {
 }
 
 export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDadosProps) {
-  const { canEdit } = usePermissions();
+  const { canEdit, hasAccessToResource } = usePermissions();
   const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
+  const podeAlterarEstadoInativo = hasAccessToResource(RECURSOS.VIATURAS_ALTERAR_ESTADO);
   const [documents, setDocuments] = useState<ViaturaDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
@@ -439,7 +440,11 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
-              <ViaturaFormIdentificacao form={form} estadoDerivedado={estadoDerivedado} />
+              <ViaturaFormIdentificacao
+                form={form}
+                estadoDerivedado={estadoDerivedado}
+                podeAlterarEstadoInativo={podeAlterarEstadoInativo}
+              />
 
               <Separator />
 
