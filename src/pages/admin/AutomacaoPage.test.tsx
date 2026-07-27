@@ -36,7 +36,26 @@ vi.mock('@/integrations/supabase/client', () => ({
       select: vi.fn(() => {
         if (table === 'automation_runs') {
           return chainable({
-            data: [{ status: 'pending' }, { status: 'pending' }, { status: 'failed' }],
+            data: [
+              {
+                id: 'run-a',
+                status: 'pending',
+                attempt: 0,
+                job_type: 'automation_rule',
+                next_attempt_at: '2026-07-27T09:00:00.000Z',
+                priority: 5,
+                started_at: null,
+              },
+              {
+                id: 'run-b',
+                status: 'pending',
+                attempt: 1,
+                job_type: 'automation_rule',
+                next_attempt_at: '2026-07-27T09:05:00.000Z',
+                priority: 5,
+                started_at: null,
+              },
+            ],
             count: 2,
             error: null,
           });
@@ -186,5 +205,15 @@ describe('AutomacaoPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Histórico de execução')).toBeTruthy();
     });
+  });
+
+  it('mostra a fila de processamento pendente', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Fila' }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('automation_rule').length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText('Prioridade')).toBeTruthy();
   });
 });
