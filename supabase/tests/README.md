@@ -47,6 +47,7 @@ sempre que se cria uma tabela nova com `org_id`.
 | `retry_failed_job.test.sql` | Motor de Automação: `retry_failed_job()` — reagenda `automation_runs`/`notification_queue` a partir de `failed_jobs`, bloqueia quem não é admin nem tem o recurso `automacoes`, e bloqueia reagendar um job de outra organização. |
 | `cobranca_gerada_domain_event.test.sql` | Motor de Automação: uma nova `contrato_cobrancas` publica `cobranca.gerada` em `domain_events`, herdando o `org_id` resolvido pela reserva e o `valor_total` gerado no payload. |
 | `automation_runs_complete_duracao.test.sql` | Motor de Automação: `automation_runs_complete()`/`_fail()` passam a gravar `duracao_ms` real (a partir de `started_at`) e o `detalhe` jsonb recebido (contagens de notificações/emails); uma falha com retry intermédio não grava `duracao_ms` (a execução ainda não terminou). |
+| `automacao_timeline_views.test.sql` | Motor de Automação: views `automacao_timeline_recente` (junta `domain_events`+`automation_runs`+`automation_rules`+último `automation_logs`, incluindo eventos ainda sem run) e `automacao_estatisticas_por_regra` (execuções/falhas/última execução/duração média agregados por regra) para o dashboard admin. |
 
 ## Convenção
 
