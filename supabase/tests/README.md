@@ -36,6 +36,7 @@ sempre que se cria uma tabela nova com `org_id`.
 | Ficheiro | Cobre |
 | -------- | ----- |
 | `rls_org_isolation.test.sql` | Isolamento multi-tenant: (META) toda a tabela com `org_id` tem RLS + a policy RESTRICTIVE `rls_org_isolation`; (COMPORTAMENTO) com 2 orgs/2 users, cada user só vê a sua org e o `WITH CHECK` bloqueia escrita cross-org. |
+| `automation_rules.test.sql` | Motor de Automação: isolamento comportamental de `domain_events`/`automation_rules` por org, e que a policy de permissão (`has_permission`/`is_current_user_admin`) bloqueia quem não tem o recurso `automacoes`. |
 
 ## Convenção
 

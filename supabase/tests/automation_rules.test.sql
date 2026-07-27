@@ -1,0 +1,89 @@
+-- ============================================================
+-- Motor de Automação — domain_events + automation_rules (pgTAP)
+-- ============================================================
+-- Corre com:  supabase start  &&  supabase test db
+--
+-- O isolamento ESTRUTURAL (META: RLS ativa + policy rls_org_isolation)
+-- já é coberto genericamente por rls_org_isolation.test.sql, que descobre
+-- estas tabelas automaticamente por terem org_id. Este ficheiro cobre
+-- COMPORTAMENTO: isolamento real com 2 orgs, e que a policy de permissão
+-- (has_permission/is_current_user_admin) bloqueia quem não tem o recurso
+-- 'automacoes', mesmo dentro da própria organização.
+-- ============================================================
+
+begin;
+select plan(6);
+
+insert into public.organizacoes (id, nome, codigo) values
+  ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'automacao-rules-a'),
+  ('00000000-0000-0000-0000-0000000b0000', 'Org B', 'automacao-rules-b');
+
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000a0001', 'a@automacao-rules.pt'),
+  ('00000000-0000-0000-0000-0000000b0001', 'b@automacao-rules.pt');
+
+insert into public.user_org_ativa (user_id, org_id) values
+  ('00000000-0000-0000-0000-0000000a0001', '00000000-0000-0000-0000-0000000a0000'),
+  ('00000000-0000-0000-0000-0000000b0001', '00000000-0000-0000-0000-0000000b0000');
+
+insert into public.user_organizacoes (user_id, org_id, is_admin) values
+  ('00000000-0000-0000-0000-0000000a0001', '00000000-0000-0000-0000-0000000a0000', true),
+  ('00000000-0000-0000-0000-0000000b0001', '00000000-0000-0000-0000-0000000b0000', false);
+
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo) values
+  ('00000000-0000-0000-0000-000000ru1e01', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_a', 'Regra A', 'teste.evento', 'notificacao'),
+  ('00000000-0000-0000-0000-000000ru1e02', '00000000-0000-0000-0000-0000000b0000', 'teste.regra_b', 'Regra B', 'teste.evento', 'notificacao');
+
+insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by) values
+  ('00000000-0000-0000-0000-000000ev1e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento', 'viaturas', '00000000-0000-0000-0000-000000000001', 'manual'),
+  ('00000000-0000-0000-0000-000000ev1e02', '00000000-0000-0000-0000-0000000b0000', 'teste.evento', 'viaturas', '00000000-0000-0000-0000-000000000002', 'manual');
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000a0001', true);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000a0001","role":"authenticated"}', true);
+
+select is(
+  (select count(*)::int from public.automation_rules),
+  1,
+  'user A (admin da Org A) só vê a regra da sua própria org'
+);
+
+select is(
+  (select codigo from public.automation_rules limit 1),
+  'teste.regra_a',
+  'a regra visível ao user A é especificamente a da Org A'
+);
+
+select is(
+  (select count(*)::int from public.domain_events),
+  1,
+  'user A só vê o evento da sua própria org'
+);
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000b0001', true);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000b0001","role":"authenticated"}', true);
+
+select is(
+  (select count(*)::int from public.automation_rules),
+  0,
+  'user B (sem ser admin, sem o recurso automacoes) não vê nenhuma regra'
+);
+
+select is(
+  (select count(*)::int from public.domain_events),
+  0,
+  'user B (sem ser admin, sem o recurso automacoes) não vê nenhum evento'
+);
+
+reset role;
+
+select is(
+  (select count(*)::int from public.recursos where nome = 'automacoes'),
+  1,
+  'o recurso automacoes existe no catálogo global para poder ser concedido a cargos'
+);
+
+select * from finish();
+rollback;
