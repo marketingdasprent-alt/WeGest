@@ -8,13 +8,15 @@
 -- domain_events/automation_rules). Este ficheiro assume a role por-omissão
 -- da transação de teste (equivalente ao service_role que o Automation
 -- Executor vai usar em produção) e cobre exclusivamente a FILA:
--- claim atómico, um run ativo por regra, retry com backoff, dead-letter
--- ao esgotar tentativas, sweep de runs presos em "running", e que
--- automation_logs regista cada execução/falha.
+-- claim atómico, um run ativo por regra+ENTIDADE (não por org — duas
+-- entidades diferentes podem ter runs ativos em simultâneo para a mesma
+-- regra), retry com backoff, dead-letter ao esgotar tentativas, sweep de
+-- runs presos em "running", e que automation_logs regista cada
+-- execução/falha.
 -- ============================================================
 
 begin;
-select plan(13);
+select plan(14);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'automacao-queue-a'),
@@ -25,17 +27,30 @@ insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_
   ('00000000-0000-0000-0000-000000ru1e02', '00000000-0000-0000-0000-0000000b0000', 'teste.regra_b', 'Regra B', 'teste.evento', 'notificacao');
 
 -- Run principal: só 2 tentativas permitidas, para forçar o dead-letter cedo.
-insert into public.automation_runs (id, rule_id, org_id, job_type, max_attempts) values
-  ('00000000-0000-0000-0000-000000ru2e01', '00000000-0000-0000-0000-000000ru1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 2);
+insert into public.automation_runs (id, rule_id, org_id, job_type, max_attempts, entity_table, entity_id) values
+  ('00000000-0000-0000-0000-000000ru2e01', '00000000-0000-0000-0000-000000ru1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 2, 'viaturas', '00000000-0000-0000-0000-000000ent0001');
 
--- 1. O índice único parcial impede um segundo run ativo para a mesma regra+org.
+-- 1. O índice único parcial impede um segundo run ativo para a mesma regra+entidade.
 select throws_ok(
-  $$ insert into public.automation_runs (rule_id, org_id, job_type)
-     values ('00000000-0000-0000-0000-000000ru1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule') $$,
+  $$ insert into public.automation_runs (rule_id, org_id, job_type, entity_table, entity_id)
+     values ('00000000-0000-0000-0000-000000ru1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 'viaturas', '00000000-0000-0000-0000-000000ent0001') $$,
   '23505',
   null,
-  'não é possível ter dois automation_runs ativos para a mesma regra na mesma org'
+  'não é possível ter dois automation_runs ativos para a mesma regra na mesma entidade'
 );
+
+-- 1b. Mas uma entidade DIFERENTE para a mesma regra não entra em conflito
+-- (a correção: a unicidade é por regra+entidade, não por regra+org).
+insert into public.automation_runs (id, rule_id, org_id, job_type, entity_table, entity_id) values
+  ('00000000-0000-0000-0000-000000ru5e01', '00000000-0000-0000-0000-000000ru1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 'viaturas', '00000000-0000-0000-0000-000000ent0002');
+
+select is(
+  (select count(*)::int from public.automation_runs where id = '00000000-0000-0000-0000-000000ru5e01'),
+  1,
+  'uma entidade diferente para a mesma regra não entra em conflito com o índice único'
+);
+
+delete from public.automation_runs where id = '00000000-0000-0000-0000-000000ru5e01';
 
 -- 2. claim() devolve o run pendente.
 select is(
