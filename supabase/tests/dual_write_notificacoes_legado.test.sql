@@ -1,5 +1,5 @@
 begin;
-select plan(4);
+select plan(6);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000b0000', 'Org Dual Write', 'dual-write-b');
@@ -52,6 +52,28 @@ select is(
   (select count(*)::int from public.notificacoes where org_id = '00000000-0000-0000-0000-0000000b0000' and tipo <> 'viatura_seguro_expirando'),
   0,
   'nenhuma linha extra em notificacoes para o event_type fora da whitelist'
+);
+
+-- Cenário C: cobranca.gerada (I1/I2, só aviso interno — sem emitir/enviar fatura).
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-000000rg00b3', '00000000-0000-0000-0000-0000000b0000', 'teste.cobranca', 'Cobrança Teste', 'cobranca.gerada', 'notificacao',
+   '{"template_codigo":"cobranca.gerada","destinatarios_recurso":"renting_contratos","enviar_email":false}'::jsonb);
+
+insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
+  ('00000000-0000-0000-0000-000000ru00b3', '00000000-0000-0000-0000-000000rg00b3', '00000000-0000-0000-0000-0000000b0000', 'contrato_cobrancas', '00000000-0000-0000-0000-000000ent00b3');
+
+select public.execute_automation_runs();
+
+select is(
+  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru00b3'),
+  1,
+  'cobranca.gerada notifica internamente o admin/quem tem renting_contratos'
+);
+
+select is(
+  (select tipo from public.notificacoes where destinatario_user_id = '00000000-0000-0000-0000-0000000b0001' and tipo = 'cobranca_gerada'),
+  'cobranca_gerada',
+  'cobranca.gerada também escreve em notificacoes com tipo mapeado (dupla escrita)'
 );
 
 select * from finish();
