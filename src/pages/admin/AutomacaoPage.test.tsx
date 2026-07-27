@@ -1,6 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+beforeAll(() => {
+  // O gráfico "Atividade — últimos 14 dias" usa o ResponsiveContainer do
+  // recharts, que precisa de ResizeObserver — inexistente no jsdom.
+  (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
 
 const mockToastFn = vi.fn();
 vi.mock('@/hooks/use-toast', () => ({
@@ -69,6 +79,30 @@ vi.mock('@/integrations/supabase/client', () => ({
         if (table === 'automacao_saude_canais') {
           return chainable({ data: [], error: null });
         }
+        if (table === 'automacao_timeline_recente') {
+          return chainable({
+            data: [
+              {
+                event_id: 'evt-1',
+                event_type: 'viatura.seguro_expirando',
+                occurred_at: '2026-07-27T08:00:00.000Z',
+                entity_table: 'viaturas',
+                entity_id: 'v-1',
+                run_id: 'run-1',
+                rule_id: 'rule-1',
+                regra_nome: 'Regra de Teste',
+                run_status: 'completed',
+                started_at: '2026-07-27T07:59:58.000Z',
+                completed_at: '2026-07-27T08:00:00.000Z',
+                attempt: 1,
+                ultimo_evento_log: 'executada',
+                duracao_ms: 2000,
+                detalhe: { notificacoes_criadas: 3, emails_enviados: 1 },
+              },
+            ],
+            error: null,
+          });
+        }
         // failed_jobs — encadeia .eq().order()
         return {
           eq: vi.fn().mockReturnThis(),
@@ -136,5 +170,21 @@ describe('AutomacaoPage', () => {
     expect(screen.getAllByText('Falhas').length).toBeGreaterThan(0);
     expect(screen.getByText('Jobs bloqueados')).toBeTruthy();
     expect(screen.getByText('APIs indisponíveis')).toBeTruthy();
+  });
+
+  it('mostra a timeline de atividade e abre o drill-down de uma execução', async () => {
+    renderPage();
+    // Radix Tabs ativa a tab no mousedown, não no click.
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Atividade' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra de Teste')).toBeTruthy();
+    });
+    expect(screen.getByText(/3 notif\. · 1 email/)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Regra de Teste'));
+    await waitFor(() => {
+      expect(screen.getByText('Histórico de execução')).toBeTruthy();
+    });
   });
 });
