@@ -84,17 +84,19 @@ export async function registarPagamentoParcela(
   // já usado em HistoricoEnviosDialog.tsx para 'marketing_envio_detalhes'.
   // Regenerar types.ts fica fora do âmbito desta tarefa; o runtime não é
   // afetado (supabase-js não valida nomes de tabela/RPC em tempo de execução).
-  await supabase
+  const { error: parcelaErr } = await supabase
     .from('acordo_parcelas' as any)
     .update({ estado: 'liquidacao_pendente', recibo_id: recibo.id })
     .eq('id', input.parcelaId);
+  if (parcelaErr) throw parcelaErr;
 
   // Cobrança sem documento fiscal não gera recibo fiscal — liquida na mesma.
   if (!input.numeroFaturaOriginal) {
-    await supabase.rpc('acordo_parcela_liquidar' as any, {
+    const { error: liquidarErr } = await supabase.rpc('acordo_parcela_liquidar' as any, {
       p_parcela_id: input.parcelaId,
       p_invoice_id: null,
     });
+    if (liquidarErr) throw liquidarErr;
     return { estado: 'paga' };
   }
 
@@ -119,7 +121,10 @@ export async function registarPagamentoParcela(
   };
 
   // ② Enfileirar ANTES de tentar. Se o browser fechar a meio, o worker recupera.
-  await supabase.from('faturacao_outbox' as any).insert({
+  // Erro aqui (ex.: violação do UNIQUE idempotency_key — já existe um pedido
+  // em curso para esta parcela) tem de PARAR: prosseguir para emitirDocumento()
+  // anularia a garantia anti-duplicação que esta restrição existe para dar.
+  const { error: outboxInsertErr } = await supabase.from('faturacao_outbox' as any).insert({
     org_id: input.orgId,
     tipo: 'RC',
     idempotency_key: `RC:parcela:${input.parcelaId}`,
@@ -128,27 +133,15 @@ export async function registarPagamentoParcela(
     estado: 'em_curso',
     started_at: new Date().toISOString(),
   });
+  if (outboxInsertErr) throw outboxInsertErr;
 
+  // O try/catch cobre APENAS emitirDocumento(): uma falha ali (known_failed ou
+  // unknown) é a única coisa que o bloco catch abaixo sabe classificar. A RPC de
+  // liquidação, mais abaixo, corre FORA deste try de propósito — ver o comentário
+  // junto a essa chamada.
+  let res: Awaited<ReturnType<typeof emitirDocumento>>;
   try {
-    const res = await emitirDocumento(payload);
-    // emitirDocumento() só devolve controlo quando o provider confirmou
-    // sucesso — QUALQUER falha (known_failed ou unknown) chega ao catch
-    // abaixo como excepção, nunca como retorno com success:false. Não existe
-    // "else" a tratar aqui.
-    //
-    // res.invoice pode faltar mesmo com sucesso: é o caso em que o documento
-    // foi emitido no provider mas a gravação do espelho local em `invoices`
-    // falhou depois (o "warning" da edge function). O documento é real;
-    // liquida-se na mesma, só sem o invoice_rc_id para o ligar.
-    await supabase.rpc('acordo_parcela_liquidar' as any, {
-      p_parcela_id: input.parcelaId,
-      p_invoice_id: res.invoice?.id ?? null,
-    });
-    await supabase
-      .from('faturacao_outbox' as any)
-      .update({ estado: 'sucesso', invoice_id: res.invoice?.id ?? null })
-      .eq('idempotency_key', `RC:parcela:${input.parcelaId}`);
-    return { estado: 'paga' };
+    res = await emitirDocumento(payload);
   } catch (e) {
     // `classe`, anexado ao erro por emitirDocumento(), distingue:
     //  • known_failed — confirma-se que nada foi criado. Seguro reagendar
@@ -175,4 +168,39 @@ export async function registarPagamentoParcela(
     }
     return { estado: 'liquidacao_pendente', erro: (e as Error).message };
   }
+
+  // emitirDocumento() só devolve controlo quando o provider confirmou sucesso
+  // — QUALQUER falha (known_failed ou unknown) chega ao catch acima como
+  // excepção, nunca como retorno com success:false. Não existe "else" a
+  // tratar aqui.
+  //
+  // res.invoice pode faltar mesmo com sucesso: é o caso em que o documento
+  // foi emitido no provider mas a gravação do espelho local em `invoices`
+  // falhou depois (o "warning" da edge function). O documento é real;
+  // liquida-se na mesma, só sem o invoice_rc_id para o ligar.
+  //
+  // Esta chamada fica FORA do try/catch acima de propósito: uma falha aqui é
+  // qualitativamente diferente de uma falha em emitirDocumento() — o
+  // documento fiscal já foi emitido no provider, só a promoção local a 'paga'
+  // é que falhou. Tratá-la como known_failed/unknown reagendaria (ou
+  // suspenderia) a emissão como se nada tivesse sido criado, arriscando um
+  // SEGUNDO documento para o mesmo pagamento. Por isso propaga-se sempre —
+  // nunca se devolve {estado: 'paga'} sem a BD confirmar a promoção.
+  const { error: liquidarErr } = await supabase.rpc('acordo_parcela_liquidar' as any, {
+    p_parcela_id: input.parcelaId,
+    p_invoice_id: res.invoice?.id ?? null,
+  });
+  if (liquidarErr) throw liquidarErr;
+
+  // Best-effort: a liquidação (linha acima) já teve sucesso — o pagamento
+  // está correcto independentemente disto. Um erro aqui só atrasa a outbox
+  // em ficar 'sucesso'; o reaper (Tarefa 5) varre ao fim de 10 min.
+  const { error: outboxSucessoErr } = await supabase
+    .from('faturacao_outbox' as any)
+    .update({ estado: 'sucesso', invoice_id: res.invoice?.id ?? null })
+    .eq('idempotency_key', `RC:parcela:${input.parcelaId}`);
+  if (outboxSucessoErr) {
+    console.warn('Falha (não crítica) a marcar outbox como sucesso:', outboxSucessoErr);
+  }
+  return { estado: 'paga' };
 }

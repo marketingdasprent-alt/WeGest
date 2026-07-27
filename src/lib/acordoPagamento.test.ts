@@ -5,13 +5,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // como `const` simples faria a factory correr antes de eles existirem
 // (TDZ). vi.hoisted() garante que a criação corre junto com o hoist do
 // próprio vi.mock — mesmo padrão de FecharContratoDialog.test.tsx.
-const { insertRecibo, insertOutbox, updateOutbox, rpc, emitirDocumento } = vi.hoisted(() => ({
-  insertRecibo: vi.fn(),
-  insertOutbox: vi.fn(),
-  updateOutbox: vi.fn(),
-  rpc: vi.fn(),
-  emitirDocumento: vi.fn(),
-}));
+const { insertRecibo, insertOutbox, updateOutbox, rpc, emitirDocumento, outboxSucessoErroForcado } =
+  vi.hoisted(() => ({
+    insertRecibo: vi.fn(),
+    insertOutbox: vi.fn(),
+    updateOutbox: vi.fn(),
+    rpc: vi.fn(),
+    emitirDocumento: vi.fn(),
+    // Holder mutável só para o teste best-effort: permite forçar um erro
+    // especificamente no update do outbox para 'sucesso', sem afectar os
+    // outros updates de faturacao_outbox (pendente/suspenso no catch) nem o
+    // update de acordo_parcelas — inspecciona-se a própria `linha` (estado)
+    // em vez de espiar por posição de chamada.
+    outboxSucessoErroForcado: { valor: null as { message: string } | null },
+  }));
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
@@ -26,7 +33,15 @@ vi.mock('@/integrations/supabase/client', () => ({
       // nos testes abaixo — sem isto, os dois casos ficam indistinguíveis.
       update: (linha: unknown) => ({
         eq: async (...args: unknown[]) => {
-          if (tabela === 'faturacao_outbox') updateOutbox(linha, ...args);
+          if (tabela === 'faturacao_outbox') {
+            updateOutbox(linha, ...args);
+            if (
+              outboxSucessoErroForcado.valor &&
+              (linha as { estado?: string })?.estado === 'sucesso'
+            ) {
+              return { error: outboxSucessoErroForcado.valor };
+            }
+          }
           return { error: null };
         },
       }),
@@ -66,6 +81,7 @@ beforeEach(() => {
   });
   insertOutbox.mockResolvedValue({ error: null });
   rpc.mockResolvedValue({ error: null });
+  outboxSucessoErroForcado.valor = null;
 });
 
 describe('marcaCorrelacao', () => {
@@ -182,5 +198,39 @@ describe('registarPagamentoParcela', () => {
     const r = await registarPagamentoParcela({ ...base, numeroFaturaOriginal: null });
     expect(emitirDocumento).not.toHaveBeenCalled();
     expect(r.estado).toBe('paga');
+  });
+
+  it('RPC de liquidacao a falhar no caminho feliz (apos RC emitido) rejeita e nunca devolve paga', async () => {
+    // emitirDocumento tem sucesso — o documento fiscal foi mesmo emitido no
+    // provider. Só a RPC que promove a parcela a 'paga' na BD é que falha
+    // (ex.: o seu proprio guard interno rejeita). Sem a verificacao de erro,
+    // isto devolvia {estado: 'paga'} apesar de a BD nunca ter promovido a
+    // parcela — o falso positivo que esta correcao elimina.
+    emitirDocumento.mockResolvedValue({ success: true, invoice: { id: 'inv-9' } });
+    rpc.mockResolvedValueOnce({ error: { message: 'parcela ja paga' } });
+    await expect(registarPagamentoParcela(base)).rejects.toThrow();
+  });
+
+  it('insert na faturacao_outbox a falhar (ex.: idempotency key duplicada) rejeita sem chegar a emitirDocumento', async () => {
+    emitirDocumento.mockResolvedValue({ success: true, invoice: { id: 'inv-9' } });
+    insertOutbox.mockResolvedValueOnce({
+      error: { message: 'duplicate key value violates unique constraint', code: '23505' },
+    });
+    await expect(registarPagamentoParcela(base)).rejects.toThrow();
+    expect(emitirDocumento).not.toHaveBeenCalled();
+  });
+
+  it('outbox a falhar ao marcar sucesso e best-effort: nao impede o retorno paga', async () => {
+    // A liquidacao (RPC) ja teve sucesso neste ponto — este update e só
+    // bookkeeping da outbox. Um erro aqui fica so por um console.warn; o
+    // reaper (Tarefa 5) varre outbox 'em_curso' esquecida ao fim de 10 min.
+    emitirDocumento.mockResolvedValue({ success: true, invoice: { id: 'inv-9' } });
+    outboxSucessoErroForcado.valor = { message: 'falha (simulada) a gravar outbox' };
+    const r = await registarPagamentoParcela(base);
+    expect(r.estado).toBe('paga');
+    expect(rpc).toHaveBeenCalledWith('acordo_parcela_liquidar', {
+      p_parcela_id: 'p-1',
+      p_invoice_id: 'inv-9',
+    });
   });
 });
