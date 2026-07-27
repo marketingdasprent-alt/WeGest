@@ -1,5 +1,5 @@
 begin;
-select plan(6);
+select plan(9);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000b0000', 'Org Dual Write', 'dual-write-b');
@@ -9,6 +9,11 @@ insert into auth.users (id, email) values
 
 insert into public.user_organizacoes (user_id, org_id, is_admin) values
   ('00000000-0000-0000-0000-0000000b0001', '00000000-0000-0000-0000-0000000b0000', true);
+
+-- get_current_org_id() (usado pela RLS de notificacoes) resolve por
+-- user_org_ativa, não por user_organizacoes — necessário para o Cenário D.
+insert into public.user_org_ativa (user_id, org_id) values
+  ('00000000-0000-0000-0000-0000000b0001', '00000000-0000-0000-0000-0000000b0000');
 
 -- Cenário A: event_type conhecido (viatura.seguro_expirando) gera notificacoes.tipo mapeado.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
@@ -21,15 +26,24 @@ insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id
 select public.execute_automation_runs();
 
 select is(
-  (select tipo from public.notificacoes where destinatario_user_id = '00000000-0000-0000-0000-0000000b0001' order by created_at desc limit 1),
+  (select tipo from public.notificacoes where destinatario_id = '00000000-0000-0000-0000-0000000b0001' order by created_at desc limit 1),
   'viatura_seguro_expirando',
-  'event_type mapeado gera notificacoes.tipo correspondente (dupla escrita)'
+  'event_type mapeado gera notificacoes.tipo correspondente em destinatario_id — a coluna "viva" lida pela RLS e por resolver_notificacao (dupla escrita)'
 );
 
 select is(
   (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru00b1'),
   1,
   'continua a criar a notificacao nova em paralelo (não substitui)'
+);
+
+-- O botão "Ver" do popup precisa de link (e viatura_id) apontando para a
+-- viatura concreta — sem isto cai no fallback de candidaturas (bug real
+-- reportado pelo utilizador: "Ver candidatura" num aviso de seguro).
+select is(
+  (select link from public.notificacoes where destinatario_id = '00000000-0000-0000-0000-0000000b0001' and tipo = 'viatura_seguro_expirando'),
+  '/viaturas/00000000-0000-0000-0000-000000ent00b1',
+  'viatura.seguro_expirando preenche link para a viatura concreta'
 );
 
 -- Cenário B: event_type desconhecido não gera notificacoes (whitelist), mas não falha.
@@ -71,10 +85,37 @@ select is(
 );
 
 select is(
-  (select tipo from public.notificacoes where destinatario_user_id = '00000000-0000-0000-0000-0000000b0001' and tipo = 'cobranca_gerada'),
+  (select tipo from public.notificacoes where destinatario_id = '00000000-0000-0000-0000-0000000b0001' and tipo = 'cobranca_gerada'),
   'cobranca_gerada',
-  'cobranca.gerada também escreve em notificacoes com tipo mapeado (dupla escrita)'
+  'cobranca.gerada também escreve em notificacoes com tipo mapeado, em destinatario_id (dupla escrita)'
 );
+
+-- Cenário D: visibilidade real via RLS — exatamente o que useNotificacoes.ts lê
+-- (select('*').eq('resolvida', false), sem qualquer filtro por destinatário no
+-- cliente; toda a restrição vem da policy "ver notificacoes do meu cargo").
+-- Sem um ramo de RLS para estes tipos, as linhas acima existem na tabela mas
+-- nunca chegam ao sino/popup real de nenhum utilizador.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000b0001', true);
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"00000000-0000-0000-0000-0000000b0001","role":"authenticated"}',
+  true
+);
+
+select is(
+  (select count(*)::int from public.notificacoes where resolvida = false and tipo = 'cobranca_gerada'),
+  1,
+  'o destinatário real vê a notificação de cobranca_gerada através da RLS (o que o sino/popup realmente lê)'
+);
+
+select is(
+  (select count(*)::int from public.notificacoes where resolvida = false and tipo = 'viatura_seguro_expirando'),
+  1,
+  'o destinatário real vê a notificação de viatura_seguro_expirando através da RLS'
+);
+
+reset role;
 
 select * from finish();
 rollback;

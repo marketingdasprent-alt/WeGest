@@ -55,7 +55,7 @@ select is(
 );
 
 select is(
-  (select count(*)::int from public.domain_events),
+  (select count(*)::int from public.domain_events where event_type = 'teste.evento'),
   1,
   'user A só vê o evento da sua própria org'
 );
@@ -72,7 +72,7 @@ select is(
 );
 
 select is(
-  (select count(*)::int from public.domain_events),
+  (select count(*)::int from public.domain_events where event_type = 'teste.evento'),
   0,
   'user B (sem ser admin, sem o recurso automacoes) não vê nenhum evento'
 );

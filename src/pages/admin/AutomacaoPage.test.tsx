@@ -283,6 +283,38 @@ describe('AutomacaoPage', () => {
     expect(mockToastFn).toHaveBeenCalledWith(expect.objectContaining({ title: 'Reagendado' }));
   });
 
+  it('botão "Correr agora" chama a RPC, mostra sucesso e fica em cooldown', async () => {
+    mockRpc.mockResolvedValue({ data: { success: true, executado_em: '2026-07-27T09:00:00.000Z' }, error: null });
+    renderPage();
+
+    const botao = await screen.findByRole('button', { name: /Correr agora/i });
+    fireEvent.click(botao);
+
+    await waitFor(() => {
+      expect(mockRpc).toHaveBeenCalledWith('executar_jobs_automacao_manualmente');
+    });
+    await waitFor(() => {
+      expect(mockToastFn).toHaveBeenCalledWith(expect.objectContaining({ title: 'Automações executadas' }));
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Aguarda \d+:\d{2}/ })).toBeDisabled();
+    });
+  });
+
+  it('botão "Correr agora" mostra o erro do rate limit num toast', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'Já correu há pouco — aguarda mais 04:32 antes de repetir.' } });
+    renderPage();
+
+    const botao = await screen.findByRole('button', { name: /Correr agora/i });
+    fireEvent.click(botao);
+
+    await waitFor(() => {
+      expect(mockToastFn).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Não foi possível correr', variant: 'destructive' })
+      );
+    });
+  });
+
   it('mostra estatísticas por regra e permite ligar/desligar', async () => {
     renderPage();
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));

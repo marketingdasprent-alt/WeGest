@@ -216,6 +216,37 @@ export function useToggleAutomationRule() {
   });
 }
 
+/**
+ * Botão "Correr agora": dispara manualmente os scans (expirações de
+ * viatura/motorista, renovação de renting, cobranças atrasadas) e o
+ * Rule Engine/Executor, em vez de esperar o próximo ciclo do cron.
+ * Rate limit de 5 min é imposto no servidor (RPC) — este hook só reflete
+ * o erro que vier de lá.
+ */
+export function useExecutarAutomacoesManualmente() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('executar_jobs_automacao_manualmente');
+      if (error) throw error;
+      return data as { success: boolean; executado_em: string };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['automacao-estatisticas-por-regra'] });
+      queryClient.invalidateQueries({ queryKey: ['automacao-timeline'] });
+      queryClient.invalidateQueries({ queryKey: ['automation-runs-pendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['failed-jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['automation-runs-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['notification-queue-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['domain-events-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['automacao-desempenho-7-dias'] });
+      queryClient.invalidateQueries({ queryKey: ['automacao-utilizacao'] });
+      queryClient.invalidateQueries({ queryKey: ['automacao-saude'] });
+      queryClient.invalidateQueries({ queryKey: ['automacao-atividade-14-dias'] });
+    },
+  });
+}
+
 export interface AtividadeDiaria {
   dia: string;
   eventos: number;
