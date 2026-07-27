@@ -313,6 +313,24 @@ export const IntegracoesTab: React.FC = () => {
       });
     });
 
+    // Cartrack — API REST directa (GPS/frota). Card com botão Play → cartrack-sync.
+    integracoes
+      .filter((i) => i.plataforma === 'cartrack')
+      .forEach((i) => {
+        result.push({
+          id: i.id,
+          type: 'cartrack',
+          nome: i.nome,
+          ativo: i.ativo,
+          ultimoSync: i.ultimo_sync,
+          username: i.client_id,
+          password: i.client_secret,
+          connectionMode: 'api',
+          rawData: i,
+          logoUrl: i.logo_url || '/images/logo-cartrack.png',
+        });
+      });
+
     // Brevo (email) — integração da própria empresa (plataforma='email', email_provider='brevo')
     integracoes
       .filter((i) => i.plataforma === 'email')
@@ -467,6 +485,44 @@ export const IntegracoesTab: React.FC = () => {
     } catch (error: any) {
       toast({
         title: 'Erro ao executar robot',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setExecutingRobots((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  const handleExecuteCartrack = async (card: IntegracaoCardData) => {
+    const integracao = card.rawData as IntegracaoConfig;
+    const id = integracao.id;
+    setExecutingRobots((prev) => new Set(prev).add(id));
+    try {
+      const { data, error } = await supabase.functions.invoke('cartrack-sync', {
+        body: { integracao_id: id },
+      });
+      if (error) {
+        let msg = error.message;
+        try {
+          const body = await error.context?.json?.();
+          msg = body?.error || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      if (!data?.success) throw new Error(data?.error || 'Erro desconhecido');
+      const v = data.vehicles || {};
+      toast({
+        title: 'Cartrack sincronizada',
+        description: `${v.upserted ?? 0} viaturas (${v.matched ?? 0} ligadas, ${v.km_atualizado ?? 0} km atualizados) · ${data.trips?.upserted ?? 0} viagens · ${data.events?.upserted ?? 0} eventos.`,
+      });
+      fetchAll();
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao sincronizar Cartrack',
         description: error.message,
         variant: 'destructive',
       });
@@ -730,6 +786,7 @@ export const IntegracoesTab: React.FC = () => {
             const rawPlataforma = (card.rawData as IntegracaoConfig)?.plataforma;
             const isRobotBacked = rawPlataforma === 'robot' || rawPlataforma === 'via_verde';
             const isUberBacked = rawPlataforma === 'uber';
+            const isCartrackBacked = rawPlataforma === 'cartrack';
             const hasImport = rawPlataforma === 'robot' || isUberBacked;
             return (
               <IntegracaoCard
@@ -737,13 +794,22 @@ export const IntegracoesTab: React.FC = () => {
                 data={card}
                 onEdit={handleCardEdit}
                 onSync={
-                  card.type !== 'via_verde' && card.type !== 'faturacao' && card.type !== 'email'
+                  card.type !== 'via_verde' &&
+                  card.type !== 'faturacao' &&
+                  card.type !== 'email' &&
+                  card.type !== 'cartrack'
                     ? handleCardSync
                     : undefined
                 }
                 onImport={hasImport ? handleCardImport : undefined}
                 onExecute={
-                  isRobotBacked ? handleExecuteRobot : isUberBacked ? handleExecuteUber : undefined
+                  isRobotBacked
+                    ? handleExecuteRobot
+                    : isUberBacked
+                      ? handleExecuteUber
+                      : isCartrackBacked
+                        ? handleExecuteCartrack
+                        : undefined
                 }
                 onDelete={handleDelete}
                 isExecuting={executingRobots.has(card.id)}

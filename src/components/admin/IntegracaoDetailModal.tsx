@@ -44,7 +44,9 @@ import {
   EyeOff,
   ImagePlus,
   Loader2,
+  MapPin,
   Play,
+  RefreshCw,
   Save,
   Trash2,
   X,
@@ -104,13 +106,17 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
   const isEdpSimplified =
     integracao.plataforma === 'robot' && integracao.robot_target_platform === 'edp';
   const isViaVerde = integracao.plataforma === 'via_verde';
+  // Cartrack: API REST directa (GPS/frota). Layout simplificado (username/password),
+  // sincroniza pelo botão abaixo → cartrack-sync.
+  const isCartrack = integracao.plataforma === 'cartrack';
   const isSimplified =
     isUberSimplified ||
     isBoltSimplified ||
     isBpSimplified ||
     isRepsolSimplified ||
     isEdpSimplified ||
-    isViaVerde;
+    isViaVerde ||
+    isCartrack;
 
   const displayIcon = isUberSimplified
     ? Car
@@ -122,11 +128,13 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
           ? Fuel
           : isEdpSimplified
             ? Zap
-            : integracao.plataforma === 'bolt'
-              ? Zap
-              : integracao.plataforma === 'robot'
-                ? Bot
-                : Car;
+            : isCartrack
+              ? MapPin
+              : integracao.plataforma === 'bolt'
+                ? Zap
+                : integracao.plataforma === 'robot'
+                  ? Bot
+                  : Car;
   const displayLabel = isUberSimplified
     ? 'Uber'
     : isBoltSimplified
@@ -139,11 +147,13 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
             ? 'EDP'
             : isViaVerde
               ? 'Via Verde'
-              : integracao.plataforma === 'bolt'
-                ? 'Bolt'
-                : integracao.plataforma === 'robot'
-                  ? 'Robot (Apify)'
-                  : 'Uber';
+              : isCartrack
+                ? 'Cartrack'
+                : integracao.plataforma === 'bolt'
+                  ? 'Bolt'
+                  : integracao.plataforma === 'robot'
+                    ? 'Robot (Apify)'
+                    : 'Uber';
 
   const [formData, setFormData] = useState({
     nome: integracao.nome,
@@ -153,7 +163,9 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
     uber_scopes: (integracao.uber_scopes ?? []).join(' '),
     company_id: integracao.company_id?.toString() || '',
     ativo: integracao.ativo,
-    sync_automatico: integracao.sync_automatico ?? false,
+    // Cartrack é automático por defeito: null conta como ligado (alinhado com
+    // cartrack-scheduled-sync, que sincroniza quando sync_automatico !== false).
+    sync_automatico: integracao.sync_automatico ?? integracao.plataforma === 'cartrack',
     intervalo_sync_horas: integracao.intervalo_sync_horas ?? 24,
     site_url: integracao.webhook_url ?? '',
     apify_actor_id: integracao.apify_actor_id ?? '',
@@ -212,7 +224,9 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
       uber_scopes: (integracao.uber_scopes ?? []).join(' '),
       company_id: integracao.company_id?.toString() || '',
       ativo: integracao.ativo,
-      sync_automatico: integracao.sync_automatico ?? false,
+      // Cartrack é automático por defeito: null conta como ligado (alinhado com
+      // cartrack-scheduled-sync, que sincroniza quando sync_automatico !== false).
+      sync_automatico: integracao.sync_automatico ?? integracao.plataforma === 'cartrack',
       intervalo_sync_horas: integracao.intervalo_sync_horas ?? 24,
       site_url: integracao.plataforma === 'robot' ? (integracao.webhook_url ?? '') : '',
       apify_actor_id: integracao.apify_actor_id ?? '',
@@ -362,6 +376,37 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
     }
   };
 
+  const handleSyncCartrack = async () => {
+    try {
+      setExecutingRobot(true);
+      const body: Record<string, unknown> = { integracao_id: integracao.id };
+      if (periodoTipo === 'personalizado' && periodoInicio && periodoFim) {
+        body.date_from = periodoInicio;
+        body.date_to = periodoFim;
+      }
+      const { data, error } = await supabase.functions.invoke('cartrack-sync', { body });
+      if (error) {
+        let msg = error.message;
+        try {
+          const b = await error.context?.json?.();
+          msg = b?.error || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      if (!data?.success) throw new Error(data?.error || 'Não foi possível sincronizar');
+      const v = data.vehicles || {};
+      toast({
+        title: 'Cartrack sincronizada',
+        description: `${v.upserted ?? 0} viaturas (${v.matched ?? 0} ligadas, ${v.km_atualizado ?? 0} km atualizados) · ${data.trips?.upserted ?? 0} viagens · ${data.events?.upserted ?? 0} eventos.`,
+      });
+      onUpdate();
+    } catch (error: any) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    } finally {
+      setExecutingRobot(false);
+    }
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
@@ -392,6 +437,10 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
           updatePayload.sync_dia_semana = VIA_VERDE_SYNC_DIA_SEMANA;
           updatePayload.sync_hora = clampViaVerdeSyncHora(formData.sync_hora);
         }
+      } else if (isCartrack) {
+        updatePayload.client_id = formData.client_id || null;
+        updatePayload.client_secret = formData.client_secret || null;
+        updatePayload.sync_automatico = formData.sync_automatico;
       } else if (integracao.plataforma === 'uber') {
         // Native Uber integration (webhook + direct API)
         updatePayload.client_id = formData.client_id || null;
@@ -567,9 +616,11 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
               </Badge>
             </DialogTitle>
             <DialogDescription>
-              {isSimplified
-                ? `Integração ${displayLabel} via robot automático. Os dados são importados automaticamente.`
-                : 'Edite a configuração da integração.'}
+              {isCartrack
+                ? 'Integração Cartrack via API REST. Sincronize manualmente pelo botão abaixo.'
+                : isSimplified
+                  ? `Integração ${displayLabel} via robot automático. Os dados são importados automaticamente.`
+                  : 'Edite a configuração da integração.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -665,6 +716,101 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                       {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
+                </div>
+              </>
+            )}
+
+            {/* === CARTRACK FIELDS (username/password Basic Auth) === */}
+            {isCartrack && (
+              <>
+                <div className="space-y-2">
+                  <Label>Username (API Cartrack)</Label>
+                  <Input
+                    value={formData.client_id}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, client_id: e.target.value }))
+                    }
+                    placeholder="Utilizador da API (Fleetweb › API Settings)"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Password</Label>
+                  <div className="relative">
+                    <Input
+                      type={showSecret ? 'text' : 'password'}
+                      value={formData.client_secret}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, client_secret: e.target.value }))
+                      }
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
+                      onClick={() => setShowSecret(!showSecret)}
+                    >
+                      {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-4">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <Label>Sync automático (cada 15 min)</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Atualiza posições, odómetro, viagens e eventos automaticamente.
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={formData.sync_automatico}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({ ...prev, sync_automatico: checked }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2 rounded-lg border border-border p-4">
+                  <Label className="text-xs">Período a sincronizar (viagens/eventos)</Label>
+                  <Select
+                    value={periodoTipo}
+                    onValueChange={(value: 'semana_anterior' | 'personalizado') =>
+                      setPeriodoTipo(value)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="semana_anterior">Últimos 30 dias (predefinido)</SelectItem>
+                      <SelectItem value="personalizado">Personalizado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {periodoTipo === 'personalizado' && (
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">De</Label>
+                        <Input
+                          type="date"
+                          value={periodoInicio}
+                          onChange={(e) => setPeriodoInicio(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Até</Label>
+                        <Input
+                          type="date"
+                          value={periodoFim}
+                          onChange={(e) => setPeriodoFim(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    O estado das viaturas (odómetro, posição) é sempre atualizado por completo. O
+                    período aplica-se apenas ao histórico de viagens e eventos.
+                  </p>
                 </div>
               </>
             )}
@@ -1132,7 +1278,9 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                   <Zap className="mr-2 h-4 w-4" /> Testar Conexão
                 </Button>
               )}
-              {(SINCRONIZACAO_ATIVA || integracao.plataforma === 'via_verde') &&
+              {(SINCRONIZACAO_ATIVA ||
+                integracao.plataforma === 'via_verde' ||
+                integracao.robot_target_platform === 'bolt') &&
                 (integracao.plataforma === 'robot' || integracao.plataforma === 'via_verde') && (
                   <Button variant="outline" onClick={handleExecuteRobot} disabled={executingRobot}>
                     {executingRobot ? (
@@ -1143,6 +1291,16 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                     Executar Robot
                   </Button>
                 )}
+              {isCartrack && (
+                <Button variant="outline" onClick={handleSyncCartrack} disabled={executingRobot}>
+                  {executingRobot ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Sincronizar
+                </Button>
+              )}
               <Button onClick={handleSave} disabled={saving}>
                 {saving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
