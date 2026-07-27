@@ -216,4 +216,49 @@ describe('AutomacaoPage', () => {
     });
     expect(screen.getByText('Prioridade')).toBeTruthy();
   });
+
+  it('clicar em "Ignorar" chama ignorar_failed_job', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Falhas' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Ignorar/i })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Ignorar/i }));
+
+    await waitFor(() => {
+      expect(mockRpc).toHaveBeenCalledWith('ignorar_failed_job', { p_id: 'fj-1' });
+    });
+    expect(mockToastFn).toHaveBeenCalledWith(expect.objectContaining({ title: 'Ignorado' }));
+  });
+
+  it('clicar em "Ver detalhes" mostra o erro completo', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Falhas' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Ver detalhes/i })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Ver detalhes/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Detalhes da falha')).toBeTruthy();
+    });
+    expect(screen.getAllByText(/erro de teste/).length).toBeGreaterThan(0);
+  });
+
+  it('clicar em "Tentar novamente" chama retry_failed_job e mostra um toast', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Falhas' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Tentar novamente/i })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Tentar novamente/i }));
+
+    await waitFor(() => {
+      expect(mockRpc).toHaveBeenCalledWith('retry_failed_job', { p_id: 'fj-1' });
+    });
+    expect(mockToastFn).toHaveBeenCalledWith(expect.objectContaining({ title: 'Reagendado' }));
+  });
 });
