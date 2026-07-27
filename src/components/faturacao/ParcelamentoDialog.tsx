@@ -17,7 +17,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -78,7 +77,6 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
   const [numParcelas, setNumParcelas] = useState('3');
   const [frequencia, setFrequencia] = useState<FrequenciaParcela>('mensal');
   const [diaVencimento, setDiaVencimento] = useState('');
-  const [enviarAviso, setEnviarAviso] = useState(true);
   const [antecedenciaDias, setAntecedenciaDias] = useState('3');
   const [parcelasEditadas, setParcelasEditadas] = useState<ParcelaPlano[] | null>(null);
   const [erroGeracao, setErroGeracao] = useState<string | null>(null);
@@ -99,7 +97,6 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
     setNumParcelas('3');
     setFrequencia('mensal');
     setDiaVencimento('');
-    setEnviarAviso(true);
     setAntecedenciaDias('3');
     setParcelasEditadas(null);
     setErroGeracao(null);
@@ -142,7 +139,29 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
     setParcelasEditadas(novo);
   }
 
-  const cessaoParaTerceiro = !!responsavel && responsavel.papel !== 'cliente';
+  // O titular é frequentemente também condutor do mesmo contrato (mesmo padrão
+  // já visto em ContratoTabFaturar.tsx, que dedupe contrato.cliente_id/
+  // principal.cliente_id por este motivo). O hook só recebe `contratoId` e
+  // devolve TODOS os contrato_condutores — não sabe quem é o titular DESTA
+  // fatura (alvo.titularId vem de cobranca.destinatario_id, que pode divergir
+  // de contrato.cliente_id, ex.: fatura emitida ao condutor principal), por
+  // isso o filtro fica aqui — o único sítio onde titularId está disponível —
+  // e não dentro de useAcordoResponsaveisElegiveis.
+  const elegiveisSemTitular = (elegiveis ?? []).filter(
+    (e) => !(e.papel === 'condutor' && e.id === alvo?.titularId)
+  );
+
+  // Espelha exactamente a condição de cessão do backend (acordo_criar,
+  // 20260724100001_acordos_saldo_e_criar.sql:202 —
+  // `NOT (p_responsavel_papel <> 'motorista' AND p_responsavel_id = destinatario_id)`):
+  // só NÃO há cessão quando o responsável é o próprio titular (papel distinto
+  // de motorista E o mesmo id). Um motorista conta sempre como cessão (livro
+  // financeiro próprio); um "condutor" com o MESMO id do titular (a mesma
+  // pessoa sob outro papel — ver elegiveisSemTitular acima) não é.
+  const cessaoParaTerceiro =
+    !!responsavel &&
+    !!alvo &&
+    (responsavel.papel === 'motorista' || responsavel.id !== alvo.titularId);
 
   // Bloqueia tanto se a mutação do pré-voo rebentou (rede, função indisponível — `data` fica
   // undefined, nunca chega a `ok`/`rc_configurado`) como se respondeu mas com `ok=false`. Nunca
@@ -163,6 +182,12 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
     !!responsavel &&
     !!parcelasEditadas &&
     parcelasEditadas.length > 0 &&
+    // Cada parcela tem de ter um valor positivo — `acordo_parcelas.valor` tem
+    // CHECK (valor > 0) na BD (20260724100000_acordos_pagamento.sql:83).
+    // Limpar uma célula da grelha (o gesto mais natural de edição) dá
+    // exactamente 0 (ver atualizarValorParcela), e `bateCerto` só valida a
+    // SOMA — uma parcela a 0 compensada por outra continua a "bater certo".
+    parcelasEditadas.every((p) => p.valor > 0) &&
     bateCerto &&
     preflight.data?.ok &&
     preflight.data?.rc_configurado &&
@@ -179,7 +204,14 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
         parcelas: parcelasEditadas,
         frequencia,
         diaVencimento: diaVencimento ? parseInt(diaVencimento, 10) : undefined,
-        avisoAntecedenciaDias: enviarAviso ? parseInt(antecedenciaDias, 10) || 3 : 0,
+        // Sem checkbox de opt-out (Finding 1 do gate final): o worker diário
+        // não tem interruptor "não avisar" nenhum (só a antecedência), por
+        // isso desligar aqui era uma promessa falsa — o aviso ia na mesma no
+        // dia de vencimento. Envia-se sempre; só a antecedência varia. Nota:
+        // `=== ''` (não `|| 3`) porque `parseInt('0') || 3` daria 3 em vez de
+        // 0 — 0 é um valor válido (aviso no próprio dia), não deve ser
+        // substituído pelo default.
+        avisoAntecedenciaDias: antecedenciaDias === '' ? 3 : parseInt(antecedenciaDias, 10),
       });
       toast.success('Acordo de pagamento criado.');
       qc.invalidateQueries({ queryKey: ['contrato-cobrancas', alvo.contratoId] });
@@ -257,7 +289,7 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
                   <SelectItem value={`cliente:${alvo.titularId}`}>
                     Cliente — {alvo.titularNome} (titular)
                   </SelectItem>
-                  {(elegiveis ?? []).map((e) => (
+                  {elegiveisSemTitular.map((e) => (
                     <SelectItem key={`${e.papel}:${e.id}`} value={`${e.papel}:${e.id}`}>
                       {e.papel === 'motorista' ? 'Motorista' : 'Condutor'} — {e.nome ?? e.id}
                     </SelectItem>
@@ -267,9 +299,10 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
               {cessaoParaTerceiro && (
                 <p className="text-[11px] text-muted-foreground rounded-md border p-2 mt-1.5">
                   ⓘ A dívida passa para a conta-corrente de{' '}
-                  {elegiveis?.find((e) => e.id === responsavel?.id)?.nome ?? 'quem escolheu'}. Os
-                  recibos continuam a ser emitidos em nome de {alvo.titularNome} (titular da fatura)
-                  — exigência legal.
+                  {elegiveisSemTitular.find((e) => e.id === responsavel?.id)?.nome ??
+                    'quem escolheu'}
+                  . Os recibos continuam a ser emitidos em nome de {alvo.titularNome} (titular da
+                  fatura) — exigência legal.
                 </p>
               )}
             </div>
@@ -332,7 +365,7 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
                     min="1"
                     max="31"
                     value={diaVencimento}
-                    onChange={(e) => setDiaVencimento(e.target.value)}
+                    onChange={(e) => setDiaVencimento(limitarCampoNumerico(e.target.value, 1, 31))}
                     className="h-9"
                     placeholder="Dia do mês, ex.: 15"
                   />
@@ -363,6 +396,7 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
                         <td className="p-2 text-right">
                           <Input
                             type="number"
+                            min="0.01"
                             step="0.01"
                             value={p.valor}
                             onChange={(e) => atualizarValorParcela(i, e.target.value)}
@@ -390,22 +424,20 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
               </div>
             )}
 
-            {/* 6. Aviso */}
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="enviar-aviso"
-                checked={enviarAviso}
-                onCheckedChange={(v) => setEnviarAviso(!!v)}
-              />
-              <Label htmlFor="enviar-aviso" className="text-xs font-normal cursor-pointer">
+            {/* 6. Aviso — envia-se sempre (sem opt-out: um checkbox "não
+                enviar" não desligava nada no worker diário — só mudava a
+                antecedência para 0, o que ainda avisa no próprio dia do
+                vencimento). A antecedência é a única variável. */}
+            <div className="space-y-1.5">
+              <Label htmlFor="antecedencia-dias" className="text-xs font-normal">
                 Enviar aviso{' '}
                 <Input
+                  id="antecedencia-dias"
                   type="number"
                   min="0"
                   max="30"
                   value={antecedenciaDias}
-                  onChange={(e) => setAntecedenciaDias(e.target.value)}
-                  disabled={!enviarAviso}
+                  onChange={(e) => setAntecedenciaDias(limitarCampoNumerico(e.target.value, 0, 30))}
                   className="inline-block w-14 h-6 mx-1 px-1"
                 />{' '}
                 dias antes de cada vencimento
@@ -429,6 +461,26 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
 }
 
 const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
+
+/** Limita um número ao intervalo [min, max]. */
+const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+
+/**
+ * Recorta o valor em texto de um input numérico para [min, max] a cada
+ * alteração — usado em `diaVencimento` (1-31) e `antecedenciaDias` (0-30).
+ * O atributo HTML `min`/`max`, sozinho, não impede escrever um valor fora do
+ * intervalo (não há `<form>` a validar; o "hint" nativo nunca dispara), e a
+ * BD tem um CHECK igual nestes dois campos (dia_vencimento,
+ * aviso_antecedencia_dias — 20260724100000_acordos_pagamento.sql). Vazio
+ * fica vazio — cada campo trata o "sem valor" à sua maneira no envio
+ * (opcional vs. default); só um número fora do intervalo é recortado aqui.
+ */
+function limitarCampoNumerico(valor: string, min: number, max: number): string {
+  if (valor.trim() === '') return '';
+  const n = parseInt(valor, 10);
+  if (!Number.isFinite(n)) return '';
+  return String(clamp(n, min, max));
+}
 
 function Linha({ label, valor, forte }: { label: string; valor: number; forte?: boolean }) {
   return (
