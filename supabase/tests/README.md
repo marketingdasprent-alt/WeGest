@@ -43,6 +43,7 @@ sempre que se cria uma tabela nova com `org_id`.
 | `notifications.test.sql` | Motor de Automação: `notifications` — só o destinatário (ou um admin da própria org) vê/atualiza uma notificação, isolamento entre orgs, e configuração de Realtime (REPLICA IDENTITY FULL + publicação supabase_realtime). |
 | `notification_queue.test.sql` | Motor de Automação: `notification_queue_claim()`/`_complete()`/`_fail()` — claim atómico por canal, retry com backoff, dead-letter em `failed_jobs` (partilhado com `automation_runs`) ao esgotar tentativas. |
 | `execute_automation_runs.test.sql` | Motor de Automação: Automation Executor — resolve destinatários por recurso RBAC (admin ou cargo com acesso), cria `notifications` + `notification_queue` (quando `enviar_email`), conclui `acao_tipo` sem handler sem criar nada, e falha para dead-letter com `acao_config` mal configurado. |
+| `seed_automacao_defaults.test.sql` | Motor de Automação: `seed_automacao_defaults()` — cria as 4 regras por-omissão (seguro/IPO/carta/licença TVDE) para uma org, idempotente, e uma organização nova recebe-as automaticamente via trigger. |
 
 ## Convenção
 
