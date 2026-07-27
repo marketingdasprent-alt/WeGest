@@ -45,6 +45,7 @@ sempre que se cria uma tabela nova com `org_id`.
 | `execute_automation_runs.test.sql` | Motor de Automação: Automation Executor — resolve destinatários por recurso RBAC (admin ou cargo com acesso), cria `notifications` + `notification_queue` (quando `enviar_email`), conclui `acao_tipo` sem handler sem criar nada, e falha para dead-letter com `acao_config` mal configurado. |
 | `seed_automacao_defaults.test.sql` | Motor de Automação: `seed_automacao_defaults()` — cria as 4 regras por-omissão (seguro/IPO/carta/licença TVDE) para uma org, idempotente, e uma organização nova recebe-as automaticamente via trigger. |
 | `retry_failed_job.test.sql` | Motor de Automação: `retry_failed_job()` — reagenda `automation_runs`/`notification_queue` a partir de `failed_jobs`, bloqueia quem não é admin nem tem o recurso `automacoes`, e bloqueia reagendar um job de outra organização. |
+| `cobranca_gerada_domain_event.test.sql` | Motor de Automação: uma nova `contrato_cobrancas` publica `cobranca.gerada` em `domain_events`, herdando o `org_id` resolvido pela reserva e o `valor_total` gerado no payload. |
 
 ## Convenção
 
