@@ -55,6 +55,7 @@ export const RECURSOS = {
   ADMIN_CONFIGURACOES: 'admin_configuracoes',
   ADMIN_FISCAL: 'admin_fiscal',
   ADMIN_MINHA_ORGANIZACAO: 'admin_minha_organizacao',
+  AUTOMACOES: 'automacoes',
 
   // Administrativo (antigo "Financeiro")
   FINANCEIRO_RECIBOS: 'financeiro_recibos',

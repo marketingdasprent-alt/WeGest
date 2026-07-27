@@ -547,6 +547,171 @@ export type Database = {
           },
         ]
       }
+      automation_runs: {
+        Row: {
+          attempt: number
+          completed_at: string | null
+          created_at: string
+          entity_id: string | null
+          entity_table: string | null
+          error_message: string | null
+          id: string
+          job_type: string
+          max_attempts: number
+          next_attempt_at: string
+          org_id: string
+          payload: Json
+          priority: number
+          rule_id: string
+          started_at: string | null
+          status: string
+          trigger_event_id: string | null
+        }
+        Insert: {
+          attempt?: number
+          completed_at?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_table?: string | null
+          error_message?: string | null
+          id?: string
+          job_type?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          org_id: string
+          payload?: Json
+          priority?: number
+          rule_id: string
+          started_at?: string | null
+          status?: string
+          trigger_event_id?: string | null
+        }
+        Update: {
+          attempt?: number
+          completed_at?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_table?: string | null
+          error_message?: string | null
+          id?: string
+          job_type?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          org_id?: string
+          payload?: Json
+          priority?: number
+          rule_id?: string
+          started_at?: string | null
+          status?: string
+          trigger_event_id?: string | null
+        }
+        Relationships: []
+      }
+      failed_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          failed_at: string
+          id: string
+          job_type: string
+          last_error: string | null
+          org_id: string
+          payload: Json | null
+          resolution_note: string | null
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          source_id: string
+          source_table: string
+        }
+        Insert: {
+          attempts: number
+          created_at?: string
+          failed_at?: string
+          id?: string
+          job_type: string
+          last_error?: string | null
+          org_id: string
+          payload?: Json | null
+          resolution_note?: string | null
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_id: string
+          source_table?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          failed_at?: string
+          id?: string
+          job_type?: string
+          last_error?: string | null
+          org_id?: string
+          payload?: Json | null
+          resolution_note?: string | null
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_id?: string
+          source_table?: string
+        }
+        Relationships: []
+      }
+      notification_queue: {
+        Row: {
+          attempt: number
+          canal: string
+          created_at: string
+          destinatario: string
+          error_message: string | null
+          id: string
+          max_attempts: number
+          next_attempt_at: string
+          notification_id: string
+          org_id: string
+          payload_render: Json
+          priority: number
+          started_at: string | null
+          status: string
+          template_codigo: string
+        }
+        Insert: {
+          attempt?: number
+          canal: string
+          created_at?: string
+          destinatario: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          notification_id: string
+          org_id: string
+          payload_render?: Json
+          priority?: number
+          started_at?: string | null
+          status?: string
+          template_codigo: string
+        }
+        Update: {
+          attempt?: number
+          canal?: string
+          created_at?: string
+          destinatario?: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          notification_id?: string
+          org_id?: string
+          payload_render?: Json
+          priority?: number
+          started_at?: string | null
+          status?: string
+          template_codigo?: string
+        }
+        Relationships: []
+      }
       bolt_drivers: {
         Row: {
           created_at: string | null
@@ -11720,6 +11885,10 @@ export type Database = {
           p_pedido_id: string
           p_resposta_motivo?: string
         }
+        Returns: undefined
+      }
+      retry_failed_job: {
+        Args: { p_id: string }
         Returns: undefined
       }
       salvar_precos_modelo_tarifa: {
