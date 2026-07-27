@@ -40,6 +40,7 @@ sempre que se cria uma tabela nova com `org_id`.
 | `automation_queue.test.sql` | Motor de Automação: `automation_runs_claim()`/`_complete()`/`_fail()` — claim atómico, um run ativo por regra+org, retry com backoff exponencial, dead-letter em `failed_jobs` ao esgotar tentativas, sweep de runs presos em `running`, e que `automation_logs` regista cada execução/falha. |
 | `emit_expiry_events.test.sql` | Motor de Automação: `emit_expiry_events()` — deteta viaturas/motoristas a entrar na janela de 15 dias (seguro, IPO, carta, licença TVDE), exclui vendidas/inativas, e não duplica um evento ainda não processado. |
 | `process_domain_events.test.sql` | Motor de Automação: Rule Engine — casa eventos com regras ativas por org+tipo, avalia condições (`=`/`!=`), respeita cooldown por regra+entidade, cria `automation_runs` (ou regista `condicao_nao_satisfeita`/`ignorada_cooldown`), e marca sempre o evento como processado, mesmo quando colide com um run já ativo. |
+| `notifications.test.sql` | Motor de Automação: `notifications` — só o destinatário (ou um admin da própria org) vê/atualiza uma notificação, isolamento entre orgs, e configuração de Realtime (REPLICA IDENTITY FULL + publicação supabase_realtime). |
 
 ## Convenção
 
