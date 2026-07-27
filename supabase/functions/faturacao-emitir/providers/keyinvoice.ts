@@ -212,9 +212,18 @@ export const keyInvoiceProvider: FaturacaoProvider = {
       // falha. NUNCA reemitir sem reconciliar primeiro.
       throw new EmissaoAmbiguaError(`insertDocument: falha de transporte — ${(e as Error).message}`);
     }
-    if (!ok(res) || !res.Data) {
-      // O provider RESPONDEU e recusou o pedido — confirma-se que nada foi criado.
-      throw new Error(`insertDocument falhou: ${res?.ErrorMessage || 'sem Data'}`);
+    if (!ok(res)) {
+      // O provider RESPONDEU e recusou explicitamente o pedido (Status !== 1)
+      // — confirma-se que nada foi criado.
+      throw new Error(`insertDocument falhou: ${res?.ErrorMessage || 'recusado'}`);
+    }
+    if (!res.Data) {
+      // O provider respondeu Status OK mas sem Data — não é uma recusa. É
+      // impossível confirmar se o documento chegou a ser criado; nunca
+      // reemitir sem reconciliar primeiro.
+      throw new EmissaoAmbiguaError(
+        'insertDocument: provider respondeu Status OK sem Data — impossível confirmar se o documento foi criado.'
+      );
     }
     const { DocType, DocSeries, DocNum, FullDocNumber } = res.Data as {
       DocType: string;
