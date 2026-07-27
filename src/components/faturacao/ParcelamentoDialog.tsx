@@ -144,6 +144,20 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
 
   const cessaoParaTerceiro = !!responsavel && responsavel.papel !== 'cliente';
 
+  // Bloqueia tanto se a mutação do pré-voo rebentou (rede, função indisponível — `data` fica
+  // undefined, nunca chega a `ok`/`rc_configurado`) como se respondeu mas com `ok=false`. Nunca
+  // hardcodar "Recibo não configurado": o backend já devolve a mensagem certa em `data.error`
+  // para esse caso (faturacao-emitir/index.ts) — os dois caminhos de falha voltam sempre com
+  // `rc_configurado:false`, por isso essa flag NUNCA distingue "não configurado" de "qualquer
+  // outra falha" (chave inválida, provider em baixo, etc.); só a mensagem do backend distingue.
+  const preflightFalhou =
+    preflight.isError ||
+    (!!preflight.data && !(preflight.data.ok && preflight.data.rc_configurado));
+  const preflightMensagemErro = preflight.isError
+    ? ((preflight.error as Error)?.message ??
+      'Não foi possível confirmar se esta organização pode emitir Recibos. Tenta novamente.')
+    : preflight.data?.error || 'O serviço de faturação não respondeu.';
+
   const podeSubmeter =
     !!alvo &&
     !!responsavel &&
@@ -198,15 +212,11 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
           <div className="flex-1 flex items-center justify-center py-12">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
-        ) : preflight.data && !(preflight.data.ok && preflight.data.rc_configurado) ? (
+        ) : preflightFalhou ? (
           <div className="flex-1 overflow-y-auto px-6 py-6">
             <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
               <p className="font-medium text-destructive">Não é possível parcelar esta fatura</p>
-              <p className="mt-1 text-muted-foreground">
-                {preflight.data.rc_configurado === false
-                  ? 'O documento "Recibo" não está configurado no software de faturação. Sem ele, os pagamentos das parcelas não podem ser registados legalmente.'
-                  : preflight.data.error || 'O serviço de faturação não respondeu.'}
-              </p>
+              <p className="mt-1 text-muted-foreground">{preflightMensagemErro}</p>
               <p className="mt-2 text-xs text-muted-foreground">
                 → Configurar em Integrações › Faturação
               </p>
