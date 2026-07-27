@@ -24,7 +24,13 @@ export interface DocumentoTokenProps {
   valor: number;
 }
 
-export function DocumentoToken({ tipo, icone: Icone, titulo, subtitulo, valor }: DocumentoTokenProps) {
+export function DocumentoToken({
+  tipo,
+  icone: Icone,
+  titulo,
+  subtitulo,
+  valor,
+}: DocumentoTokenProps) {
   const fiscal = tipo === 'fiscal';
   return (
     <div
@@ -36,7 +42,10 @@ export function DocumentoToken({ tipo, icone: Icone, titulo, subtitulo, valor }:
       )}
     >
       <Icone
-        className={cn('h-5 w-5 shrink-0 mt-0.5', fiscal ? 'text-slate-600 dark:text-slate-400' : 'text-amber-600 dark:text-amber-400')}
+        className={cn(
+          'h-5 w-5 shrink-0 mt-0.5',
+          fiscal ? 'text-slate-600 dark:text-slate-400' : 'text-amber-600 dark:text-amber-400'
+        )}
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
