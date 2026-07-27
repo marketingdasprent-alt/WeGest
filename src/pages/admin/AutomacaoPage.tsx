@@ -1,21 +1,22 @@
+import { useState, lazy, Suspense, type ComponentType } from 'react';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useToast } from '@/hooks/use-toast';
-import { Bot, RotateCw, Activity } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
-import { pt } from 'date-fns/locale';
+import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Bot, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import {
   useAutomationRunsCounts,
   useNotificationQueueCounts,
-  useFailedJobs,
-  useRetryFailedJob,
   useDomainEventsSummary,
-  useNotificationsSummary,
-  useRecentAutomationLogs,
+  useAutomacaoDesempenho7Dias,
+  useAutomacaoUtilizacao,
+  useAutomacaoSaude,
+  useAutomacaoAtividade14Dias,
+  useFailedJobs,
 } from '@/hooks/useAutomationQueue';
+
+const AtividadeChart14Dias = lazy(() => import('@/components/admin/automacao/AtividadeChart14Dias'));
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Pendentes',
@@ -25,206 +26,162 @@ const STATUS_LABEL: Record<string, string> = {
   failed: 'Falhados',
 };
 
-const EVENTO_LABEL: Record<string, string> = {
-  executada: 'Executada',
-  falhou: 'Falhou',
-  ignorada_cooldown: 'Ignorada (cooldown)',
-  condicao_nao_satisfeita: 'Condição não satisfeita',
-};
-
-const EVENTO_VARIANT: Record<string, 'default' | 'destructive' | 'secondary'> = {
-  executada: 'default',
-  falhou: 'destructive',
-  ignorada_cooldown: 'secondary',
-  condicao_nao_satisfeita: 'secondary',
-};
-
-function StatusCountsCard({ title, counts }: { title: string; counts: Record<string, number> | undefined }) {
-  const entries = Object.entries(counts ?? {});
+function MetricCard({
+  label,
+  value,
+  icon: Icon,
+  tone = 'default',
+}: {
+  label: string;
+  value: string;
+  icon?: ComponentType<{ className?: string }>;
+  tone?: 'default' | 'success' | 'warning' | 'destructive';
+}) {
+  const toneClass = {
+    default: 'text-foreground',
+    success: 'text-green-600 dark:text-green-400',
+    warning: 'text-amber-600 dark:text-amber-400',
+    destructive: 'text-destructive',
+  }[tone];
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-wrap gap-4">
-        {entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Sem registos.</p>
-        ) : (
-          entries.map(([status, count]) => (
-            <div key={status} className="flex flex-col items-center gap-1 min-w-[80px]">
-              <span className="text-2xl font-bold tabular-nums">{count}</span>
-              <span className="text-xs text-muted-foreground">{STATUS_LABEL[status] ?? status}</span>
-            </div>
-          ))
-        )}
+      <CardContent className="pt-6 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className={`text-2xl font-bold tabular-nums ${toneClass}`}>{value}</p>
+        </div>
+        {Icon && <Icon className={`h-5 w-5 ${toneClass}`} />}
       </CardContent>
     </Card>
   );
 }
 
-function SummaryCard({ title, items }: { title: string; items: Array<{ label: string; value: number }> }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-wrap gap-4">
-        {items.map((item) => (
-          <div key={item.label} className="flex flex-col items-center gap-1 min-w-[80px]">
-            <span className="text-2xl font-bold tabular-nums">{item.value}</span>
-            <span className="text-xs text-muted-foreground">{item.label}</span>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-export default function AutomacaoPage() {
-  const { toast } = useToast();
+function VisaoGeralTab() {
   const { data: runCounts } = useAutomationRunsCounts();
   const { data: queueCounts } = useNotificationQueueCounts();
-  const { data: failedJobs = [], isLoading: loadingFailedJobs } = useFailedJobs();
-  const retryFailedJob = useRetryFailedJob();
   const { data: eventCounts } = useDomainEventsSummary();
-  const { data: notifCounts } = useNotificationsSummary();
-  const { data: recentLogs = [] } = useRecentAutomationLogs();
+  const { data: desempenho } = useAutomacaoDesempenho7Dias();
+  const { data: utilizacao } = useAutomacaoUtilizacao();
+  const { data: saude } = useAutomacaoSaude();
+  const { data: atividade14Dias, isLoading: loadingChart } = useAutomacaoAtividade14Dias();
+  const { data: failedJobs = [] } = useFailedJobs();
 
-  const handleRetry = async (id: string) => {
-    try {
-      await retryFailedJob.mutateAsync(id);
-      toast({ title: 'Reagendado', description: 'O job foi posto novamente em pendente.' });
-    } catch (error) {
-      toast({
-        title: 'Erro',
-        description: error instanceof Error ? error.message : 'Não foi possível reagendar o job.',
-        variant: 'destructive',
-      });
-    }
-  };
+  const pendentes = runCounts?.pending ?? 0;
+  const successRatePct = desempenho?.successRate != null ? Math.round(desempenho.successRate * 100) : null;
+  const duracaoMedia = desempenho?.duracaoMediaMs != null ? `${(desempenho.duracaoMediaMs / 1000).toFixed(1)}s` : '—';
+  const utilizacaoPct = utilizacao != null ? Math.round(utilizacao * 100) : 0;
+  const canaisIndisponiveis = (saude?.canais ?? []).filter((c) => c.falhasUltimaHora >= 3);
 
   return (
     <div className="space-y-6">
-      <StickyPageHeader
-        title="Automação — Fila & Falhas"
-        description="Estado do motor de automação: regras, filas de execução e envios que precisam de atenção."
-        icon={Bot}
-      />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <StatusCountsCard title="Automation Runs" counts={runCounts} />
-        <StatusCountsCard title="Fila de Notificações" counts={queueCounts} />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <SummaryCard
-          title="Eventos (Event Bus)"
-          items={[
-            { label: 'Total', value: eventCounts?.total ?? 0 },
-            { label: 'Processados', value: eventCounts?.processados ?? 0 },
-            { label: 'Por processar', value: eventCounts?.porProcessar ?? 0 },
-          ]}
-        />
-        <SummaryCard
-          title="Notificações"
-          items={[
-            { label: 'Total', value: notifCounts?.total ?? 0 },
-            { label: 'Não lidas', value: notifCounts?.naoLidas ?? 0 },
-            { label: 'Resolvidas', value: notifCounts?.resolvidas ?? 0 },
-          ]}
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Falhas por resolver</CardTitle>
-          <CardDescription>
-            Jobs que esgotaram as tentativas automáticas — reagenda manualmente depois de corrigir a causa.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loadingFailedJobs ? (
-            <p className="text-sm text-muted-foreground">A carregar...</p>
-          ) : failedJobs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sem falhas por resolver.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Origem</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Tentativas</TableHead>
-                  <TableHead>Último erro</TableHead>
-                  <TableHead>Falhou em</TableHead>
-                  <TableHead className="text-right">Ação</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {failedJobs.map((job) => (
-                  <TableRow key={job.id}>
-                    <TableCell><Badge variant="outline">{job.source_table}</Badge></TableCell>
-                    <TableCell>{job.job_type}</TableCell>
-                    <TableCell className="tabular-nums">{job.attempts}</TableCell>
-                    <TableCell className="max-w-[320px] truncate text-sm text-muted-foreground" title={job.last_error ?? ''}>
-                      {job.last_error ?? '—'}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {format(parseISO(job.failed_at), 'dd MMM yyyy HH:mm', { locale: pt })}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleRetry(job.id)}
-                        disabled={retryFailedJob.isPending}
-                      >
-                        <RotateCw className="h-3.5 w-3.5 mr-1.5" />
-                        Tentar novamente
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-4 w-4" />
-            Atividade recente
-          </CardTitle>
-          <CardDescription>
-            Últimas 20 execuções do Rule Engine — o que casou, o que falhou, o que foi ignorado.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {recentLogs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ainda sem atividade registada.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {recentLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex items-center justify-between gap-3 text-sm py-1.5 border-b border-border last:border-0"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Badge variant={EVENTO_VARIANT[log.evento] ?? 'secondary'} className="shrink-0">
-                      {EVENTO_LABEL[log.evento] ?? log.evento}
-                    </Badge>
-                    <span className="truncate text-muted-foreground">{log.regra_nome ?? '—'}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {format(parseISO(log.created_at), 'dd MMM HH:mm:ss', { locale: pt })}
-                  </span>
-                </div>
-              ))}
+      <div>
+        <h3 className="text-sm font-semibold text-muted-foreground mb-3">Estado Geral</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <MetricCard
+            label="Automation Runs"
+            value={String(Object.values(runCounts ?? {}).reduce((a, b) => a + b, 0))}
+            icon={Bot}
+          />
+          <MetricCard label="Event Bus" value={String(eventCounts?.total ?? 0)} />
+          <MetricCard label="Fila" value={String(Object.values(queueCounts ?? {}).reduce((a, b) => a + b, 0))} />
+          <MetricCard
+            label="Success Rate"
+            value={successRatePct != null ? `${successRatePct}%` : '—'}
+            icon={CheckCircle2}
+            tone={successRatePct == null ? 'default' : successRatePct >= 90 ? 'success' : 'warning'}
+          />
+          <MetricCard
+            label="Falhas"
+            value={String(failedJobs.length)}
+            icon={AlertTriangle}
+            tone={failedJobs.length > 0 ? 'destructive' : 'default'}
+          />
+          <MetricCard label="Tempo médio de execução" value={duracaoMedia} icon={Clock} />
+          <MetricCard label="Jobs pendentes" value={String(pendentes)} />
+          <MetricCard label="Jobs em retry" value={String(saude?.retriesPendentes ?? 0)} />
+        </div>
+        <Card className="mt-3">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">Utilização</span>
+              <span className="text-sm text-muted-foreground tabular-nums">{utilizacaoPct}%</span>
             </div>
+            <Progress value={utilizacaoPct} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-muted-foreground mb-3">Saúde do Sistema</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <MetricCard
+            label="Falhas"
+            value={String(saude?.falhasNaoResolvidas ?? 0)}
+            tone={(saude?.falhasNaoResolvidas ?? 0) > 0 ? 'destructive' : 'success'}
+          />
+          <MetricCard label="Retries" value={String(saude?.retriesPendentes ?? 0)} />
+          <MetricCard
+            label="Jobs bloqueados"
+            value={String(saude?.bloqueados ?? 0)}
+            tone={(saude?.bloqueados ?? 0) > 0 ? 'warning' : 'success'}
+          />
+          <MetricCard
+            label="APIs indisponíveis"
+            value={canaisIndisponiveis.length > 0 ? canaisIndisponiveis.map((c) => c.canal).join(', ') : 'Nenhuma'}
+            tone={canaisIndisponiveis.length > 0 ? 'destructive' : 'success'}
+          />
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Atividade — últimos 14 dias</CardTitle>
+          <CardDescription>Eventos recebidos, automações executadas e falhas por dia.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingChart ? (
+            <Skeleton className="h-[220px] w-full" />
+          ) : (
+            <Suspense fallback={<Skeleton className="h-[220px] w-full" />}>
+              <AtividadeChart14Dias data={atividade14Dias ?? []} />
+            </Suspense>
           )}
         </CardContent>
       </Card>
     </div>
   );
 }
+
+export default function AutomacaoPage() {
+  const [tab, setTab] = useState('visao-geral');
+
+  return (
+    <div className="space-y-6">
+      <StickyPageHeader
+        title="Automação"
+        description="Estado, saúde e controlo do motor de automações do WeGest."
+        icon={Bot}
+      />
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
+          <TabsTrigger value="atividade">Atividade</TabsTrigger>
+          <TabsTrigger value="fila">Fila</TabsTrigger>
+          <TabsTrigger value="falhas">Falhas</TabsTrigger>
+          <TabsTrigger value="regras">Regras</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="visao-geral">
+          <VisaoGeralTab />
+        </TabsContent>
+        <TabsContent value="atividade">{/* Task 7 */}</TabsContent>
+        <TabsContent value="fila">{/* Task 8 */}</TabsContent>
+        <TabsContent value="falhas">{/* Task 9 */}</TabsContent>
+        <TabsContent value="regras">{/* Task 10 */}</TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+export { STATUS_LABEL };

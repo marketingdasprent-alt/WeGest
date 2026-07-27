@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const mockToastFn = vi.fn();
@@ -8,27 +8,43 @@ vi.mock('@/hooks/use-toast', () => ({
 }));
 
 const mockRpc = vi.fn();
+
+function chainable(result: unknown) {
+  const builder: Record<string, unknown> = {
+    eq: () => builder,
+    gte: () => builder,
+    order: () => builder,
+    limit: () => builder,
+    then: (resolve: (v: unknown) => void) => resolve(result),
+  };
+  return builder;
+}
+
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: vi.fn((table: string) => ({
       select: vi.fn(() => {
         if (table === 'automation_runs') {
-          return Promise.resolve({
+          return chainable({
             data: [{ status: 'pending' }, { status: 'pending' }, { status: 'failed' }],
+            count: 2,
             error: null,
           });
         }
         if (table === 'notification_queue') {
-          return Promise.resolve({ data: [{ status: 'sent' }], error: null });
+          return chainable({ data: [{ status: 'sent' }], error: null });
         }
         if (table === 'domain_events') {
-          return Promise.resolve({
-            data: [{ processed_at: '2026-07-27T08:00:00.000Z' }, { processed_at: null }],
+          return chainable({
+            data: [
+              { processed_at: '2026-07-27T08:00:00.000Z', occurred_at: '2026-07-27T08:00:00.000Z' },
+              { processed_at: null, occurred_at: '2026-07-27T09:00:00.000Z' },
+            ],
             error: null,
           });
         }
         if (table === 'notifications') {
-          return Promise.resolve({
+          return chainable({
             data: [
               { lida: false, resolvida: false },
               { lida: true, resolvida: true },
@@ -37,23 +53,21 @@ vi.mock('@/integrations/supabase/client', () => ({
           });
         }
         if (table === 'automation_logs') {
-          // .select().order().limit()
-          return {
-            order: vi.fn().mockReturnThis(),
-            limit: vi.fn(() =>
-              Promise.resolve({
-                data: [
-                  {
-                    id: 'log-1',
-                    evento: 'executada',
-                    created_at: '2026-07-27T08:00:00.000Z',
-                    automation_rules: { nome: 'Regra de Teste' },
-                  },
-                ],
-                error: null,
-              })
-            ),
-          };
+          return chainable({
+            data: [
+              {
+                id: 'log-1',
+                evento: 'executada',
+                created_at: '2026-07-27T08:00:00.000Z',
+                duracao_ms: 2500,
+                automation_rules: { nome: 'Regra de Teste' },
+              },
+            ],
+            error: null,
+          });
+        }
+        if (table === 'automacao_saude_canais') {
+          return chainable({ data: [], error: null });
         }
         // failed_jobs — encadeia .eq().order()
         return {
@@ -98,56 +112,29 @@ describe('AutomacaoPage', () => {
     mockRpc.mockResolvedValue({ data: null, error: null });
   });
 
-  it('mostra as contagens de automation_runs e notification_queue por estado', async () => {
+  it('mostra as tabs do painel e os cartões da Visão Geral', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Visão Geral' })).toBeTruthy();
+    });
+    expect(screen.getByRole('tab', { name: 'Atividade' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Fila' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Falhas' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Regras' })).toBeTruthy();
+    expect(screen.getByText('Success Rate')).toBeTruthy();
+    expect(screen.getByText('Utilização')).toBeTruthy();
+  });
+
+  it('mostra os cartões de Estado Geral e Saúde do Sistema', async () => {
     renderPage();
 
     await waitFor(() => {
       expect(screen.getByText('Automation Runs')).toBeTruthy();
     });
-    expect(screen.getByText('Fila de Notificações')).toBeTruthy();
-  });
-
-  it('mostra a lista de falhas por resolver', async () => {
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('erro de teste')).toBeTruthy();
-    });
-    expect(screen.getByText('automation_runs')).toBeTruthy();
-  });
-
-  it('clicar em "Tentar novamente" chama retry_failed_job e mostra um toast', async () => {
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Tentar novamente/i })).toBeTruthy();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /Tentar novamente/i }));
-
-    await waitFor(() => {
-      expect(mockRpc).toHaveBeenCalledWith('retry_failed_job', { p_id: 'fj-1' });
-    });
-    expect(mockToastFn).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Reagendado' })
-    );
-  });
-
-  it('mostra o resumo de eventos e notificações', async () => {
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Eventos (Event Bus)')).toBeTruthy();
-    });
-    expect(screen.getByText('Notificações')).toBeTruthy();
-  });
-
-  it('mostra a atividade recente com o nome da regra', async () => {
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Regra de Teste')).toBeTruthy();
-    });
-    expect(screen.getByText('Executada')).toBeTruthy();
+    expect(screen.getByText('Event Bus')).toBeTruthy();
+    expect(screen.getAllByText('Falhas').length).toBeGreaterThan(0);
+    expect(screen.getByText('Jobs bloqueados')).toBeTruthy();
+    expect(screen.getByText('APIs indisponíveis')).toBeTruthy();
   });
 });
