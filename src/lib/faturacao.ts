@@ -52,7 +52,16 @@ export async function emitirDocumento(payload: CreateFaturaPayload): Promise<Emi
     body: { action: 'emit', ...payload },
   });
   if (error) throw new Error(error.message || 'Falha a contactar o serviço de faturação');
-  if (!data?.success) throw new Error(data?.error || 'Falha ao emitir documento fiscal');
+  if (!data?.success) {
+    const err = new Error(data?.error || 'Falha ao emitir documento fiscal');
+    // `classe` (known_failed | unknown) vem da edge function e distingue se é
+    // seguro reagendar automaticamente. Anexada ao erro — não ao tipo de
+    // retorno, que só existe no caminho de sucesso — para chamadores que
+    // precisem dela (acordoPagamento.ts). Propriedade extra e inerte para
+    // todos os chamadores existentes, que só leem `.message`.
+    (err as Error & { classe?: string }).classe = data?.classe;
+    throw err;
+  }
   return data;
 }
 

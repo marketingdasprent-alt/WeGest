@@ -42,6 +42,9 @@ export interface CreateFaturaPayload {
 export interface EmitResult {
   success: boolean;
   error?: string;
+  /** known_failed = confirma-se que nada foi criado, seguro reagendar. unknown
+   *  = não se sabe se foi criado, nunca reemitir sem reconciliar primeiro. */
+  classe?: 'known_failed' | 'unknown';
   warning?: string;
   invoice?: InvoiceMetadata;
   /** Identificação devolvida pelo provider de faturação. */
