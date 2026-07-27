@@ -1,6 +1,6 @@
 -- supabase/tests/acordos_pagamento.test.sql
 begin;
-select plan(44);
+select plan(46);
 
 -- ── META: RLS e isolamento multi-tenant ────────────────────────────────
 select has_table('public', 'acordos_pagamento', 'tabela acordos_pagamento existe');
@@ -706,6 +706,64 @@ select is(
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.role', '', true);
 select set_config('request.jwt.claims', '', true);
+
+-- ── Task 10: acordos_manutencao_diaria (worker diário) ─────────────────
+-- Seed dedicado: reaproveita a cobrança de _ctx3 — o acordo original desse
+-- contexto (_acordo3, Task 4) já ficou 'liquidado' bem acima neste ficheiro,
+-- e o índice único parcial (uq_acordo_vivo_por_cobranca) só proíbe um
+-- SEGUNDO acordo 'ativo'/'incumprimento' em simultâneo, por isso um novo
+-- acordo sobre a mesma cobrança não colide aqui.
+--
+-- Este novo acordo nasce 'ativo' com UMA ÚNICA parcela já inserida
+-- directamente como 'paga' (prova via um recibo novo e dedicado) — nunca
+-- passa por acordo_parcela_liquidar (que já promoveria o acordo sozinho),
+-- por isso fica 'ativo' até a manutenção diária abaixo o apanhar.
+--
+-- Sem este seed, a chamada de manutenção não teria NADA para liquidar, e
+-- "a segunda passagem não liquida nada" passaria de forma vazia — 0 tanto
+-- na 1ª como na 2ª chamada, quer o código estivesse certo quer estivesse
+-- partido (o mesmo risco de asserção vazia já discutido para
+-- acordo_parcela_liquidar mais acima neste ficheiro). Com este seed, a
+-- PRIMEIRA chamada (lives_ok, abaixo) tem trabalho real a fazer — liquida
+-- _acordo_manut — e só depois disso é que a segunda chamada, ao já não
+-- encontrar nenhum acordo 'ativo'/'incumprimento' elegível, devolve
+-- liquidados = 0 de forma genuína.
+create temporary table _acordo_manut on commit drop as
+with novo as (
+  insert into public.acordos_pagamento
+    (cobranca_id, titular_id, titular_nome,
+     responsavel_cliente_id, responsavel_papel, responsavel_nome, valor_total, frequencia)
+  select cobranca_id, destinatario_id, 'Titular Manutencao Teste',
+         destinatario_id, 'cliente', 'Responsavel Manutencao Teste', valor_total, 'mensal'
+    from _ctx3
+  returning id, org_id, cobranca_id, valor_total
+)
+select id as acordo_id, org_id, cobranca_id, valor_total from novo;
+
+create temporary table _recibo_manut on commit drop as
+with novo as (
+  insert into public.recibos (org_id, entidade_id, valor, data_recibo, metodo, referencia, estado)
+  select org_id, (select destinatario_id from _ctx3), valor_total, current_date,
+         'transferencia', cobranca_id::text, 'ativo'
+    from _acordo_manut
+  returning id
+)
+select id as recibo_id from novo;
+
+insert into public.acordo_parcelas (org_id, acordo_id, numero, data_vencimento, valor, estado, recibo_id)
+select a.org_id, a.acordo_id, 1, current_date, a.valor_total, 'paga', (select recibo_id from _recibo_manut)
+  from _acordo_manut a;
+
+select lives_ok($$ select public.acordos_manutencao_diaria(current_date) $$,
+  'acordos_manutencao_diaria corre sem erro');
+
+-- Idempotência: correr duas vezes não muda nada na segunda passagem. O seed
+-- acima garante que a primeira chamada (imediatamente acima) teve mesmo algo
+-- para liquidar (_acordo_manut passou de 'ativo' a 'liquidado'); sem isso,
+-- esta asserção passaria vazia.
+select is(
+  (select (public.acordos_manutencao_diaria(current_date))->>'liquidados')::int,
+  0, 'segunda passagem da manutencao nao volta a liquidar nada');
 
 select * from finish();
 rollback;
