@@ -21,6 +21,40 @@ vi.mock('@/integrations/supabase/client', () => ({
         if (table === 'notification_queue') {
           return Promise.resolve({ data: [{ status: 'sent' }], error: null });
         }
+        if (table === 'domain_events') {
+          return Promise.resolve({
+            data: [{ processed_at: '2026-07-27T08:00:00.000Z' }, { processed_at: null }],
+            error: null,
+          });
+        }
+        if (table === 'notifications') {
+          return Promise.resolve({
+            data: [
+              { lida: false, resolvida: false },
+              { lida: true, resolvida: true },
+            ],
+            error: null,
+          });
+        }
+        if (table === 'automation_logs') {
+          // .select().order().limit()
+          return {
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn(() =>
+              Promise.resolve({
+                data: [
+                  {
+                    id: 'log-1',
+                    evento: 'executada',
+                    created_at: '2026-07-27T08:00:00.000Z',
+                    automation_rules: { nome: 'Regra de Teste' },
+                  },
+                ],
+                error: null,
+              })
+            ),
+          };
+        }
         // failed_jobs — encadeia .eq().order()
         return {
           eq: vi.fn().mockReturnThis(),
@@ -97,5 +131,23 @@ describe('AutomacaoPage', () => {
     expect(mockToastFn).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Reagendado' })
     );
+  });
+
+  it('mostra o resumo de eventos e notificações', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Eventos (Event Bus)')).toBeTruthy();
+    });
+    expect(screen.getByText('Notificações')).toBeTruthy();
+  });
+
+  it('mostra a atividade recente com o nome da regra', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra de Teste')).toBeTruthy();
+    });
+    expect(screen.getByText('Executada')).toBeTruthy();
   });
 });

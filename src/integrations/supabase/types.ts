@@ -547,6 +547,155 @@ export type Database = {
           },
         ]
       }
+      domain_events: {
+        Row: {
+          id: string
+          org_id: string
+          event_type: string
+          entity_table: string
+          entity_id: string
+          payload: Json
+          occurred_at: string
+          emitted_by: string
+          correlation_id: string | null
+          processed_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          event_type: string
+          entity_table: string
+          entity_id: string
+          payload?: Json
+          occurred_at?: string
+          emitted_by: string
+          correlation_id?: string | null
+          processed_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          event_type?: string
+          entity_table?: string
+          entity_id?: string
+          payload?: Json
+          occurred_at?: string
+          emitted_by?: string
+          correlation_id?: string | null
+          processed_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      automation_logs: {
+        Row: {
+          id: string
+          run_id: string | null
+          rule_id: string | null
+          org_id: string
+          evento: string
+          detalhe: Json
+          notification_ids: string[]
+          duracao_ms: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          run_id?: string | null
+          rule_id?: string | null
+          org_id: string
+          evento: string
+          detalhe?: Json
+          notification_ids?: string[]
+          duracao_ms?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          run_id?: string | null
+          rule_id?: string | null
+          org_id?: string
+          evento?: string
+          detalhe?: Json
+          notification_ids?: string[]
+          duracao_ms?: number | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_logs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          id: string
+          org_id: string
+          destinatario_user_id: string
+          template_codigo: string
+          severidade: string
+          titulo: string
+          mensagem: string | null
+          link: string | null
+          entity_table: string | null
+          entity_id: string | null
+          payload: Json
+          lida: boolean
+          lida_em: string | null
+          resolvida: boolean
+          resolvida_por: string | null
+          resolvida_em: string | null
+          rule_run_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          destinatario_user_id: string
+          template_codigo: string
+          severidade?: string
+          titulo: string
+          mensagem?: string | null
+          link?: string | null
+          entity_table?: string | null
+          entity_id?: string | null
+          payload?: Json
+          lida?: boolean
+          lida_em?: string | null
+          resolvida?: boolean
+          resolvida_por?: string | null
+          resolvida_em?: string | null
+          rule_run_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          destinatario_user_id?: string
+          template_codigo?: string
+          severidade?: string
+          titulo?: string
+          mensagem?: string | null
+          link?: string | null
+          entity_table?: string | null
+          entity_id?: string | null
+          payload?: Json
+          lida?: boolean
+          lida_em?: string | null
+          resolvida?: boolean
+          resolvida_por?: string | null
+          resolvida_em?: string | null
+          rule_run_id?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       automation_runs: {
         Row: {
           attempt: number
