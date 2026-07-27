@@ -4,7 +4,8 @@ export type PlataformaIntegracao =
   | 'via_verde'
   | 'combustivel'
   | 'robot'
-  | 'email';
+  | 'email'
+  | 'cartrack';
 
 // Available platforms for creation — internally stored as 'robot' with robot_target_platform
 // (exceto 'viaverde', que é manual: armazenada como plataforma='viaverde', sem robot/credenciais;
@@ -17,7 +18,8 @@ export type PlataformaOperacional =
   | 'repsol'
   | 'edp'
   | 'viaverde'
-  | 'brevo';
+  | 'brevo'
+  | 'cartrack';
 
 export interface IntegracaoConfig {
   id: string;
@@ -71,12 +73,16 @@ export const UBER_DEFAULTS = {
 };
 
 // Pre-configured defaults for Bolt integrations (stored as robot internally)
+// Usa o mesmo token/conta Apify do Via Verde (VIAVERDE_DEFAULTS abaixo) —
+// é onde o actor "bolt-integracao" novo está criado; o token partilhado
+// antigo não tem acesso a este actor (404) e a conta anterior deste actor
+// esgotou o limite mensal do Apify.
 export const BOLT_DEFAULTS = {
-  apify_actor_id: 'eaeRDaDAU3jqGqWoc',
+  apify_actor_id: 'gdH4FPg9daQE2C3io',
   site_url: 'https://fleets.bolt.eu/',
   auth_mode: 'password' as const,
   robot_target_platform: 'bolt',
-  apify_api_token: 'apify_api_zyXNhVu0c2aYqhETTy6fgfDI5ZNrOA3DM0vc',
+  apify_api_token: 'apify_api_rZZQbfp7yP3gfexNRAHYQKJ0zK1zTK2wwwoH',
 };
 
 // Pre-configured defaults for BP integrations (stored as robot internally)

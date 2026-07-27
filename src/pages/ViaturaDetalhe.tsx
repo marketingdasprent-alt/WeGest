@@ -17,6 +17,7 @@ import {
   CalendarPlus,
   Eye,
   ArrowRightLeft,
+  MapPin,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +34,7 @@ import { ViaturaTabMultas } from '@/components/viaturas/tabs/ViaturaTabMultas';
 import { ViaturaTabOBE } from '@/components/viaturas/tabs/ViaturaTabOBE';
 import { ViaturaTabAnexos } from '@/components/viaturas/tabs/ViaturaTabAnexos';
 import { ViaturaTabFinanceira } from '@/components/viaturas/tabs/ViaturaTabFinanceira';
+import { ViaturaTabGeolocalizacao } from '@/components/viaturas/tabs/ViaturaTabGeolocalizacao';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCategoriaBadgeClass, getStatusBadgeClass, getStatusLabel } from '@/lib/viaturas';
@@ -108,6 +110,7 @@ const TABS = [
   { id: 'multas', label: 'Multas', icon: Receipt },
   { id: 'financeiro', label: 'Financeiro', icon: Wallet },
   { id: 'obe', label: 'OBE', icon: Radio },
+  { id: 'geolocalizacao', label: 'Geolocalização', icon: MapPin },
   { id: 'anexos', label: 'Anexos', icon: Paperclip },
 ];
 
@@ -490,6 +493,10 @@ export default function ViaturaDetalhe() {
 
         <TabsContent value="obe" className="mt-0">
           <ViaturaTabOBE viatura={viatura} onUpdate={loadViatura} />
+        </TabsContent>
+
+        <TabsContent value="geolocalizacao" className="mt-0">
+          <ViaturaTabGeolocalizacao viaturaId={viatura?.id} matricula={viatura?.matricula} />
         </TabsContent>
 
         <TabsContent value="anexos" className="mt-0">
