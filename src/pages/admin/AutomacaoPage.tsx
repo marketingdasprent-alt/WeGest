@@ -5,11 +5,41 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
-import { Bot, AlertTriangle, CheckCircle2, Clock, RotateCw, PlayCircle } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Bot,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  RotateCw,
+  PlayCircle,
+  Settings2,
+} from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -29,11 +59,19 @@ import {
   useAutomacaoEstatisticasPorRegra,
   useToggleAutomationRule,
   useExecutarAutomacoesManualmente,
+  useAutomationRuleConfig,
+  useRecursosDisponiveis,
+  useAtualizarConfigRegra,
   type FailedJob,
+  type AutomationRuleAcaoConfig,
 } from '@/hooks/useAutomationQueue';
 import { ExecucaoDrillDownSheet } from '@/components/admin/automacao/ExecucaoDrillDownSheet';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
-const AtividadeChart14Dias = lazy(() => import('@/components/admin/automacao/AtividadeChart14Dias'));
+const AtividadeChart14Dias = lazy(
+  () => import('@/components/admin/automacao/AtividadeChart14Dias')
+);
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Pendentes',
@@ -84,8 +122,10 @@ function VisaoGeralTab() {
   const { data: failedJobs = [] } = useFailedJobs();
 
   const pendentes = runCounts?.pending ?? 0;
-  const successRatePct = desempenho?.successRate != null ? Math.round(desempenho.successRate * 100) : null;
-  const duracaoMedia = desempenho?.duracaoMediaMs != null ? `${(desempenho.duracaoMediaMs / 1000).toFixed(1)}s` : '—';
+  const successRatePct =
+    desempenho?.successRate != null ? Math.round(desempenho.successRate * 100) : null;
+  const duracaoMedia =
+    desempenho?.duracaoMediaMs != null ? `${(desempenho.duracaoMediaMs / 1000).toFixed(1)}s` : '—';
   const utilizacaoPct = utilizacao != null ? Math.round(utilizacao * 100) : 0;
   const canaisIndisponiveis = (saude?.canais ?? []).filter((c) => c.falhasUltimaHora >= 3);
 
@@ -100,7 +140,10 @@ function VisaoGeralTab() {
             icon={Bot}
           />
           <MetricCard label="Event Bus" value={String(eventCounts?.total ?? 0)} />
-          <MetricCard label="Fila" value={String(Object.values(queueCounts ?? {}).reduce((a, b) => a + b, 0))} />
+          <MetricCard
+            label="Fila"
+            value={String(Object.values(queueCounts ?? {}).reduce((a, b) => a + b, 0))}
+          />
           <MetricCard
             label="Success Rate"
             value={successRatePct != null ? `${successRatePct}%` : '—'}
@@ -144,7 +187,11 @@ function VisaoGeralTab() {
           />
           <MetricCard
             label="APIs indisponíveis"
-            value={canaisIndisponiveis.length > 0 ? canaisIndisponiveis.map((c) => c.canal).join(', ') : 'Nenhuma'}
+            value={
+              canaisIndisponiveis.length > 0
+                ? canaisIndisponiveis.map((c) => c.canal).join(', ')
+                : 'Nenhuma'
+            }
             tone={canaisIndisponiveis.length > 0 ? 'destructive' : 'success'}
           />
         </div>
@@ -153,7 +200,9 @@ function VisaoGeralTab() {
       <Card>
         <CardHeader>
           <CardTitle>Atividade — últimos 14 dias</CardTitle>
-          <CardDescription>Eventos recebidos, automações executadas e falhas por dia.</CardDescription>
+          <CardDescription>
+            Eventos recebidos, automações executadas e falhas por dia.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {loadingChart ? (
@@ -177,7 +226,9 @@ function AtividadeTab() {
     <Card>
       <CardHeader>
         <CardTitle>Atividade recente</CardTitle>
-        <CardDescription>Últimos 20 eventos — o que foi recebido, o que a Rule Engine fez com eles.</CardDescription>
+        <CardDescription>
+          Últimos 20 eventos — o que foi recebido, o que a Rule Engine fez com eles.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {timeline.length === 0 ? (
@@ -204,7 +255,8 @@ function AtividadeTab() {
                     <span className="truncate">{item.regra_nome ?? item.event_type}</span>
                     {item.detalhe?.notificacoes_criadas != null && (
                       <span className="text-xs text-muted-foreground shrink-0">
-                        {String(item.detalhe.notificacoes_criadas)} notif. · {String(item.detalhe.emails_enviados ?? 0)} email
+                        {String(item.detalhe.notificacoes_criadas)} notif. ·{' '}
+                        {String(item.detalhe.emails_enviados ?? 0)} email
                       </span>
                     )}
                   </div>
@@ -217,7 +269,10 @@ function AtividadeTab() {
           </div>
         )}
       </CardContent>
-      <ExecucaoDrillDownSheet runId={runIdAberto} onOpenChange={(open) => !open && setRunIdAberto(null)} />
+      <ExecucaoDrillDownSheet
+        runId={runIdAberto}
+        onOpenChange={(open) => !open && setRunIdAberto(null)}
+      />
     </Card>
   );
 }
@@ -229,7 +284,9 @@ function FilaTab() {
     <Card>
       <CardHeader>
         <CardTitle>Fila de processamento</CardTitle>
-        <CardDescription>Automações à espera do próximo ciclo do Automation Executor.</CardDescription>
+        <CardDescription>
+          Automações à espera do próximo ciclo do Automation Executor.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -238,7 +295,9 @@ function FilaTab() {
             <Skeleton className="h-8 w-full" />
           </div>
         ) : pendentes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Fila vazia — nada à espera de processamento.</p>
+          <p className="text-sm text-muted-foreground">
+            Fila vazia — nada à espera de processamento.
+          </p>
         ) : (
           <Table>
             <TableHeader>
@@ -254,7 +313,9 @@ function FilaTab() {
               {pendentes.map((run) => (
                 <TableRow key={run.id}>
                   <TableCell>{run.job_type}</TableCell>
-                  <TableCell><Badge variant="secondary">{STATUS_LABEL[run.status] ?? run.status}</Badge></TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{STATUS_LABEL[run.status] ?? run.status}</Badge>
+                  </TableCell>
                   <TableCell className="tabular-nums">{run.attempt}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {format(parseISO(run.next_attempt_at), 'dd MMM HH:mm:ss', { locale: pt })}
@@ -272,6 +333,8 @@ function FilaTab() {
 
 function FalhasTab() {
   const { toast } = useToast();
+  const { canEdit } = usePermissions();
+  const podeGerir = canEdit(RECURSOS.AUTOMACOES);
   const { data: failedJobs = [], isLoading } = useFailedJobs();
   const retryFailedJob = useRetryFailedJob();
   const ignorarFailedJob = useIgnorarFailedJob();
@@ -329,10 +392,15 @@ function FalhasTab() {
             <TableBody>
               {failedJobs.map((job) => (
                 <TableRow key={job.id}>
-                  <TableCell><Badge variant="outline">{job.source_table}</Badge></TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{job.source_table}</Badge>
+                  </TableCell>
                   <TableCell>{job.job_type}</TableCell>
                   <TableCell className="tabular-nums">{job.attempts}</TableCell>
-                  <TableCell className="max-w-[280px] truncate text-sm text-muted-foreground" title={job.last_error ?? ''}>
+                  <TableCell
+                    className="max-w-[280px] truncate text-sm text-muted-foreground"
+                    title={job.last_error ?? ''}
+                  >
                     {job.last_error ?? '—'}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
@@ -342,11 +410,21 @@ function FalhasTab() {
                     <Button size="sm" variant="ghost" onClick={() => setDetalheAberto(job)}>
                       Ver detalhes
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => handleRetry(job.id)} disabled={retryFailedJob.isPending}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleRetry(job.id)}
+                      disabled={!podeGerir || retryFailedJob.isPending}
+                    >
                       <RotateCw className="h-3.5 w-3.5 mr-1.5" />
                       Tentar novamente
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => handleIgnorar(job.id)} disabled={ignorarFailedJob.isPending}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleIgnorar(job.id)}
+                      disabled={!podeGerir || ignorarFailedJob.isPending}
+                    >
                       Ignorar
                     </Button>
                   </TableCell>
@@ -360,13 +438,23 @@ function FalhasTab() {
         <SheetContent>
           <SheetHeader>
             <SheetTitle>Detalhes da falha</SheetTitle>
-            <SheetDescription>Registo completo do job que esgotou as tentativas automáticas.</SheetDescription>
+            <SheetDescription>
+              Registo completo do job que esgotou as tentativas automáticas.
+            </SheetDescription>
           </SheetHeader>
           <div className="mt-4 space-y-2 text-sm">
-            <p><strong>Origem:</strong> {detalheAberto?.source_table}</p>
-            <p><strong>Tipo:</strong> {detalheAberto?.job_type}</p>
-            <p><strong>Tentativas:</strong> {detalheAberto?.attempts}</p>
-            <p className="whitespace-pre-wrap"><strong>Erro:</strong> {detalheAberto?.last_error ?? '—'}</p>
+            <p>
+              <strong>Origem:</strong> {detalheAberto?.source_table}
+            </p>
+            <p>
+              <strong>Tipo:</strong> {detalheAberto?.job_type}
+            </p>
+            <p>
+              <strong>Tentativas:</strong> {detalheAberto?.attempts}
+            </p>
+            <p className="whitespace-pre-wrap">
+              <strong>Erro:</strong> {detalheAberto?.last_error ?? '—'}
+            </p>
           </div>
         </SheetContent>
       </Sheet>
@@ -374,10 +462,29 @@ function FalhasTab() {
   );
 }
 
+const MODULOS_REGRA: Record<string, string> = {
+  viatura: 'Viaturas',
+  motorista: 'Motoristas',
+  cobranca: 'Financeiro',
+  contrato_renting: 'Renting',
+  utilizador: 'Utilizadores',
+};
+
+function moduloDaRegra(eventType: string): string {
+  const prefixo = eventType.split('.')[0];
+  return MODULOS_REGRA[prefixo] ?? 'Outros';
+}
+
 function RegrasTab() {
+  const { canEdit } = usePermissions();
+  const podeGerir = canEdit(RECURSOS.AUTOMACOES);
   const { data: regras = [], isLoading } = useAutomacaoEstatisticasPorRegra();
   const toggleRule = useToggleAutomationRule();
   const { toast } = useToast();
+  const [moduloFiltro, setModuloFiltro] = useState('todos');
+  const [regraAConfigurar, setRegraAConfigurar] = useState<{ id: string; nome: string } | null>(
+    null
+  );
 
   const handleToggle = async (id: string, ativo: boolean) => {
     try {
@@ -392,49 +499,102 @@ function RegrasTab() {
     }
   };
 
+  const modulosPresentes = Array.from(
+    new Set(regras.map((r) => moduloDaRegra(r.event_type)))
+  ).sort();
+  const regrasFiltradas =
+    moduloFiltro === 'todos'
+      ? regras
+      : regras.filter((r) => moduloDaRegra(r.event_type) === moduloFiltro);
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Estatísticas por automação</CardTitle>
-        <CardDescription>Execuções, falhas e duração média de cada regra — liga ou desliga aqui.</CardDescription>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle>Estatísticas por automação</CardTitle>
+            <CardDescription>
+              Execuções, falhas e duração média de cada regra — liga ou desliga aqui.
+            </CardDescription>
+          </div>
+          {modulosPresentes.length > 1 && (
+            <Select value={moduloFiltro} onValueChange={setModuloFiltro}>
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue placeholder="Módulo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os módulos</SelectItem>
+                {modulosPresentes.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
           <Skeleton className="h-24 w-full" />
         ) : regras.length === 0 ? (
           <p className="text-sm text-muted-foreground">Ainda sem regras configuradas.</p>
+        ) : regrasFiltradas.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhuma regra neste módulo.</p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Automação</TableHead>
+                <TableHead>Módulo</TableHead>
                 <TableHead>Execuções</TableHead>
                 <TableHead>Última execução</TableHead>
                 <TableHead>Tempo médio</TableHead>
                 <TableHead>Falhas</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead className="text-right">Destinatários</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {regras.map((regra) => (
+              {regrasFiltradas.map((regra) => (
                 <TableRow key={regra.rule_id}>
                   <TableCell className="font-medium">{regra.nome}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{moduloDaRegra(regra.event_type)}</Badge>
+                  </TableCell>
                   <TableCell className="tabular-nums">{regra.execucoes}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {regra.ultima_execucao ? format(parseISO(regra.ultima_execucao), 'dd MMM HH:mm', { locale: pt }) : '—'}
+                    {regra.ultima_execucao
+                      ? format(parseISO(regra.ultima_execucao), 'dd MMM HH:mm', { locale: pt })
+                      : '—'}
                   </TableCell>
                   <TableCell className="tabular-nums">
-                    {regra.duracao_media_ms != null ? `${(regra.duracao_media_ms / 1000).toFixed(1)}s` : '—'}
+                    {regra.duracao_media_ms != null
+                      ? `${(regra.duracao_media_ms / 1000).toFixed(1)}s`
+                      : '—'}
                   </TableCell>
                   <TableCell className="tabular-nums">
-                    <Badge variant={regra.falhas > 0 ? 'destructive' : 'secondary'}>{regra.falhas}</Badge>
+                    <Badge variant={regra.falhas > 0 ? 'destructive' : 'secondary'}>
+                      {regra.falhas}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <Switch
                       checked={regra.ativo}
                       onCheckedChange={(checked) => handleToggle(regra.rule_id, checked)}
-                      disabled={toggleRule.isPending}
+                      disabled={!podeGerir || toggleRule.isPending}
                     />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={!podeGerir}
+                      onClick={() => setRegraAConfigurar({ id: regra.rule_id, nome: regra.nome })}
+                    >
+                      <Settings2 className="h-3.5 w-3.5 mr-1.5" />
+                      Configurar
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -442,7 +602,155 @@ function RegrasTab() {
           </Table>
         )}
       </CardContent>
+      <ConfigurarRegraSheet
+        regra={regraAConfigurar}
+        onOpenChange={(open) => !open && setRegraAConfigurar(null)}
+      />
     </Card>
+  );
+}
+
+const ESTRATEGIA_LABELS: Record<string, string> = {
+  recurso: 'Por permissão (todos os admins + quem tiver o recurso abaixo)',
+  gestor_responsavel: 'Gestor responsável específico (cai para admins se não houver um definido)',
+};
+
+function ConfigurarRegraSheet({
+  regra,
+  onOpenChange,
+}: {
+  regra: { id: string; nome: string } | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const { data: config, isLoading } = useAutomationRuleConfig(regra?.id ?? null);
+  const { data: recursos = [] } = useRecursosDisponiveis();
+  const atualizar = useAtualizarConfigRegra();
+
+  const [destinatariosRecurso, setDestinatariosRecurso] = useState('');
+  const [destinatariosEstrategia, setDestinatariosEstrategia] = useState('recurso');
+  const [enviarEmail, setEnviarEmail] = useState(false);
+  const [cooldownMinutos, setCooldownMinutos] = useState(0);
+
+  useEffect(() => {
+    if (!config) return;
+    setDestinatariosRecurso(config.acao_config.destinatarios_recurso ?? '');
+    setDestinatariosEstrategia(config.acao_config.destinatarios_estrategia ?? 'recurso');
+    setEnviarEmail(config.acao_config.enviar_email ?? false);
+    setCooldownMinutos(config.cooldown_minutos);
+  }, [config]);
+
+  const handleGuardar = async () => {
+    if (!regra || !config) return;
+    const novoAcaoConfig: AutomationRuleAcaoConfig = {
+      ...config.acao_config,
+      destinatarios_recurso: destinatariosRecurso || undefined,
+      destinatarios_estrategia: destinatariosEstrategia,
+      enviar_email: enviarEmail,
+    };
+    try {
+      await atualizar.mutateAsync({ id: regra.id, acaoConfig: novoAcaoConfig, cooldownMinutos });
+      toast({ title: 'Configuração guardada' });
+      onOpenChange(false);
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description:
+          error instanceof Error ? error.message : 'Não foi possível guardar a configuração.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const cooldownTexto =
+    cooldownMinutos <= 0
+      ? 'Sem cooldown — reage sempre que a condição for satisfeita'
+      : cooldownMinutos % 1440 === 0
+        ? `${cooldownMinutos / 1440} dia(s)`
+        : cooldownMinutos % 60 === 0
+          ? `${cooldownMinutos / 60} hora(s)`
+          : `${cooldownMinutos} minuto(s)`;
+
+  return (
+    <Sheet open={!!regra} onOpenChange={onOpenChange}>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>Configurar: {regra?.nome}</SheetTitle>
+          <SheetDescription>
+            Quem recebe esta automação e com que frequência — sem precisar de mexer em código.
+          </SheetDescription>
+        </SheetHeader>
+
+        {isLoading || !config ? (
+          <Skeleton className="mt-6 h-64 w-full" />
+        ) : (
+          <div className="mt-6 space-y-5">
+            <div className="space-y-2">
+              <Label>Como escolher os destinatários</Label>
+              <Select value={destinatariosEstrategia} onValueChange={setDestinatariosEstrategia}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(ESTRATEGIA_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Recurso/permissão que recebe (além dos admins)</Label>
+              <Select value={destinatariosRecurso} onValueChange={setDestinatariosRecurso}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolhe um recurso" />
+                </SelectTrigger>
+                <SelectContent>
+                  {recursos.map((r) => (
+                    <SelectItem key={r.id} value={r.nome}>
+                      {r.nome}
+                      {r.categoria ? ` · ${r.categoria}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Quem tiver este recurso atribuído ao cargo (Definições → Grupos) recebe a
+                notificação, além de qualquer administrador.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <Label className="text-sm">Enviar também por email</Label>
+                <p className="text-xs text-muted-foreground">
+                  Requer um template de email configurado para este código.
+                </p>
+              </div>
+              <Switch checked={enviarEmail} onCheckedChange={setEnviarEmail} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Cooldown (minutos entre avisos repetidos para a mesma entidade)</Label>
+              <Input
+                type="number"
+                min={0}
+                step={60}
+                value={cooldownMinutos}
+                onChange={(e) => setCooldownMinutos(Math.max(0, Number(e.target.value) || 0))}
+              />
+              <p className="text-xs text-muted-foreground">{cooldownTexto}</p>
+            </div>
+
+            <Button onClick={handleGuardar} disabled={atualizar.isPending} className="w-full">
+              {atualizar.isPending ? 'A guardar…' : 'Guardar'}
+            </Button>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -459,6 +767,8 @@ function formatCountdown(ms: number): string {
 
 function CorrerAgoraButton() {
   const { toast } = useToast();
+  const { canEdit } = usePermissions();
+  const podeGerir = canEdit(RECURSOS.AUTOMACOES);
   const executar = useExecutarAutomacoesManualmente();
   const [cooldownEnd, setCooldownEnd] = useState<number | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
@@ -487,6 +797,8 @@ function CorrerAgoraButton() {
       });
     }
   };
+
+  if (!podeGerir) return null;
 
   return (
     <Button onClick={handleClick} disabled={executar.isPending || emCooldown} size="sm">

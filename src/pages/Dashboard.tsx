@@ -645,7 +645,7 @@ const Dashboard = () => {
                   cor="success"
                   label="Disponíveis"
                   valor={disponiveisAnim}
-                  onClick={() => navigate('/viaturas')}
+                  onClick={() => navigate('/viaturas?status=disponivel')}
                   index={0}
                 >
                   <p className="text-[11px] text-muted-foreground mt-1.5">
@@ -657,7 +657,7 @@ const Dashboard = () => {
                   cor="blue"
                   label="Alugadas"
                   valor={alugadasAnim}
-                  onClick={() => navigate('/viaturas')}
+                  onClick={() => navigate('/viaturas?status=alugadas')}
                   index={1}
                 >
                   <KpiSparkline values={sparkAlugadas} corClass="bg-blue-400" />
@@ -667,7 +667,7 @@ const Dashboard = () => {
                   cor="violet"
                   label="Reservadas"
                   valor={reservadasAnim}
-                  onClick={() => navigate('/viaturas')}
+                  onClick={() => navigate('/viaturas?status=em_reserva')}
                   index={2}
                 >
                   <p className="text-[11px] text-muted-foreground mt-1.5">
@@ -679,7 +679,7 @@ const Dashboard = () => {
                   cor="orange"
                   label="Em Oficina"
                   valor={oficinaAnim}
-                  onClick={() => navigate('/viaturas')}
+                  onClick={() => navigate('/viaturas?status=manutencao')}
                   index={3}
                 >
                   <p className="text-[11px] text-muted-foreground mt-1.5">
@@ -691,7 +691,7 @@ const Dashboard = () => {
                   cor="blue"
                   label="Ocupação"
                   valor={`${ocupacaoAnim}%`}
-                  onClick={() => navigate('/viaturas')}
+                  onClick={() => navigate('/viaturas?status=em_uso')}
                   index={4}
                 >
                   <KpiBar pct={ocupacaoPct} corClass="bg-blue-400" />

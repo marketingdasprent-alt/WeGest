@@ -238,30 +238,35 @@ export const CheckinCheckoutDetailDialog: React.FC<Props> = ({ open, onOpenChang
   });
 
   const isLegacy = session?.sistema === 'legacy';
-  const reservaId = session?.contrato?.reserva_id ?? null;
+  // `reserva_condutores` é o instantâneo do momento da reserva e fica
+  // desatualizado assim que o condutor muda a meio do contrato — a troca
+  // (RPC trocar_condutor) só mexe em `contrato_condutores`. É essa a fonte
+  // usada aqui, pelo `contrato.id` (o contrato_renting), não pela reserva.
+  const contratoId = !isLegacy ? (session?.contrato?.id ?? null) : null;
 
   const { data: condutores = [] } = useQuery({
-    queryKey: ['checkin-detail-condutores', reservaId],
-    enabled: open && !!reservaId && !isLegacy,
+    queryKey: ['checkin-detail-condutores', contratoId],
+    enabled: open && !!contratoId && !isLegacy,
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('reserva_condutores')
+        .from('contrato_condutores')
         .select(
           `id, is_principal,
           clientes:cliente_id ( id, nome, nif, email, telefone, morada, codigo_postal, cidade, data_nascimento ),
-          motoristas:motorista_id ( id, nome, nif, email, telefone, morada, cidade )`
+          motoristas_ativos:motorista_id ( id, nome, nif, email, telefone, morada, codigo_postal, cidade )`
         )
-        .eq('reserva_id', reservaId as string)
+        .eq('contrato_id', contratoId as string)
+        .is('data_fim', null)
         .order('is_principal', { ascending: false });
       if (error) return [];
       return (data ?? [])
         .map((c: any) => {
-          const p = c.clientes ?? c.motoristas ?? {};
+          const p = c.clientes ?? c.motoristas_ativos ?? {};
           return {
             id: c.id,
             isPrincipal: c.is_principal as boolean,
-            tipo: c.clientes ? 'Cliente' : c.motoristas ? 'Motorista' : null,
+            tipo: c.clientes ? 'Cliente' : c.motoristas_ativos ? 'Motorista' : null,
             nome: p.nome ?? null,
             nif: p.nif ?? null,
             email: p.email ?? null,

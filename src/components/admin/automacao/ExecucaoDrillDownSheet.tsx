@@ -1,4 +1,10 @@
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { useRunLogHistory } from '@/hooks/useAutomationQueue';
 import { format, parseISO } from 'date-fns';
@@ -42,14 +48,19 @@ export function ExecucaoDrillDownSheet({
                 </p>
                 {log.detalhe?.notificacoes_criadas != null && (
                   <p className="text-xs text-muted-foreground">
-                    {String(log.detalhe.notificacoes_criadas)} notificação(ões), {String(log.detalhe.emails_enviados ?? 0)} email(s)
+                    {String(log.detalhe.notificacoes_criadas)} notificação(ões),{' '}
+                    {String(log.detalhe.emails_enviados ?? 0)} email(s)
                   </p>
                 )}
-                {log.detalhe?.erro != null && <p className="text-xs text-destructive">{String(log.detalhe.erro)}</p>}
+                {log.detalhe?.erro != null && (
+                  <p className="text-xs text-destructive">{String(log.detalhe.erro)}</p>
+                )}
               </div>
             </div>
           ))}
-          {logs.length === 0 && <p className="text-sm text-muted-foreground">Sem histórico para esta execução.</p>}
+          {logs.length === 0 && (
+            <p className="text-sm text-muted-foreground">Sem histórico para esta execução.</p>
+          )}
         </div>
       </SheetContent>
     </Sheet>

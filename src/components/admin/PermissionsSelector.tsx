@@ -152,6 +152,7 @@ const RECURSO_LABELS: Record<string, string> = {
   admin_configuracoes: 'Configurações do sistema',
   admin_fiscal: 'Definições fiscais (IVA)',
   admin_minha_organizacao: 'Gerir minha organização',
+  automacoes: 'Motor de automação e notificações',
 };
 
 function getLabel(nome: string): string {

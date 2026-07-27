@@ -1,4 +1,14 @@
-import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import {
+  ComposedChart,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 import type { AtividadeDiaria } from '@/hooks/useAutomationQueue';
 
 const COLORS = { eventos: '#3b82f6', executadas: '#22c55e', falhas: '#ef4444' };
@@ -12,9 +22,29 @@ export default function AtividadeChart14Dias({ data }: { data: AtividadeDiaria[]
         <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
         <Tooltip />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="eventos" fill={COLORS.eventos} radius={[4, 4, 0, 0]} name="Eventos" opacity={0.85} />
-        <Line type="monotone" dataKey="executadas" stroke={COLORS.executadas} strokeWidth={2} dot={{ r: 3 }} name="Executadas" />
-        <Line type="monotone" dataKey="falhas" stroke={COLORS.falhas} strokeWidth={2} dot={{ r: 3 }} name="Falhas" />
+        <Bar
+          dataKey="eventos"
+          fill={COLORS.eventos}
+          radius={[4, 4, 0, 0]}
+          name="Eventos"
+          opacity={0.85}
+        />
+        <Line
+          type="monotone"
+          dataKey="executadas"
+          stroke={COLORS.executadas}
+          strokeWidth={2}
+          dot={{ r: 3 }}
+          name="Executadas"
+        />
+        <Line
+          type="monotone"
+          dataKey="falhas"
+          stroke={COLORS.falhas}
+          strokeWidth={2}
+          dot={{ r: 3 }}
+          name="Falhas"
+        />
       </ComposedChart>
     </ResponsiveContainer>
   );

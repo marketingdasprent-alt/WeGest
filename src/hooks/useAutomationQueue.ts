@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-async function countByStatus(table: 'automation_runs' | 'notification_queue'): Promise<Record<string, number>> {
+async function countByStatus(
+  table: 'automation_runs' | 'notification_queue'
+): Promise<Record<string, number>> {
   const { data, error } = await supabase.from(table).select('status');
   if (error) throw error;
   const counts: Record<string, number> = {};
@@ -216,6 +218,86 @@ export function useToggleAutomationRule() {
   });
 }
 
+export interface AutomationRuleAcaoConfig {
+  template_codigo: string;
+  titulo: string;
+  destinatarios_recurso?: string;
+  destinatarios_estrategia?: string;
+  enviar_email?: boolean;
+}
+
+export interface AutomationRuleConfig {
+  id: string;
+  acao_config: AutomationRuleAcaoConfig;
+  cooldown_minutos: number;
+}
+
+/** Config completa de UMA regra (acao_config + cooldown) — só pedida quando
+ * o editor abre, a estatísticas por regra não a inclui. */
+export function useAutomationRuleConfig(ruleId: string | null) {
+  return useQuery({
+    queryKey: ['automation-rule-config', ruleId],
+    queryFn: async (): Promise<AutomationRuleConfig> => {
+      const { data, error } = await supabase
+        .from('automation_rules')
+        .select('id, acao_config, cooldown_minutos')
+        .eq('id', ruleId as string)
+        .single();
+      if (error) throw error;
+      return data as AutomationRuleConfig;
+    },
+    enabled: !!ruleId,
+  });
+}
+
+export interface Recurso {
+  id: string;
+  nome: string;
+  categoria: string | null;
+}
+
+/** Catálogo de recursos/permissões — para o utilizador escolher quem
+ * recebe cada automação sem precisar de saber o nome técnico de cor. */
+export function useRecursosDisponiveis() {
+  return useQuery({
+    queryKey: ['recursos-disponiveis'],
+    queryFn: async (): Promise<Recurso[]> => {
+      const { data, error } = await supabase
+        .from('recursos')
+        .select('id, nome, categoria')
+        .order('nome', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Recurso[];
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useAtualizarConfigRegra() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      acaoConfig,
+      cooldownMinutos,
+    }: {
+      id: string;
+      acaoConfig: AutomationRuleAcaoConfig;
+      cooldownMinutos: number;
+    }) => {
+      const { error } = await supabase
+        .from('automation_rules')
+        .update({ acao_config: acaoConfig, cooldown_minutos: cooldownMinutos })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['automacao-estatisticas-por-regra'] });
+      queryClient.invalidateQueries({ queryKey: ['automation-rule-config', variables.id] });
+    },
+  });
+}
+
 /**
  * Botão "Correr agora": dispara manualmente os scans (expirações de
  * viatura/motorista, renovação de renting, cobranças atrasadas) e o
@@ -328,7 +410,10 @@ export function useAutomacaoUtilizacao() {
     queryFn: async (): Promise<number | null> => {
       const desdeIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const [pendentesRes, concluidosRes] = await Promise.all([
-        supabase.from('automation_runs').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase
+          .from('automation_runs')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending'),
         supabase
           .from('automation_runs')
           .select('id', { count: 'exact', head: true })
@@ -447,7 +532,10 @@ export function useRecentAutomationLogs(limit = 20) {
         .limit(limit);
       if (error) throw error;
       return (data ?? []).map((row) => {
-        const rule = row.automation_rules as unknown as { nome: string } | { nome: string }[] | null;
+        const rule = row.automation_rules as unknown as
+          | { nome: string }
+          | { nome: string }[]
+          | null;
         const regra_nome = Array.isArray(rule) ? (rule[0]?.nome ?? null) : (rule?.nome ?? null);
         return { id: row.id, evento: row.evento, created_at: row.created_at, regra_nome };
       });

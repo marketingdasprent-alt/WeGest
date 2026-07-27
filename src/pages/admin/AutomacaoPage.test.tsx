@@ -1,6 +1,45 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
+
+// Select do Radix usa Popper/portal — mockar para evitar problemas no jsdom
+// (mesmo padrão já usado em AuditoriaPage.test.tsx).
+vi.mock('@/components/ui/select', () => {
+  const React = require('react');
+  return {
+    Select: ({ value, onValueChange, children }: any) => (
+      <div data-testid="select-root" data-value={value}>
+        {React.Children.map(children, (child: ReactNode) =>
+          React.cloneElement(child as any, { _value: value, _onValueChange: onValueChange })
+        )}
+      </div>
+    ),
+    SelectTrigger: ({ children, ...props }: any) => (
+      <button type="button" role="combobox" {...props}>
+        {children}
+      </button>
+    ),
+    SelectValue: ({ _value, placeholder }: any) => <span>{_value || placeholder}</span>,
+    SelectContent: ({ children, _onValueChange }: any) => (
+      <div role="listbox">
+        {React.Children.map(children, (child: ReactNode) =>
+          React.cloneElement(child as any, { _onValueChange })
+        )}
+      </div>
+    ),
+    SelectItem: ({ value, children, _onValueChange }: any) => (
+      <button
+        type="button"
+        role="option"
+        data-value={value}
+        onClick={() => _onValueChange?.(value)}
+      >
+        {children}
+      </button>
+    ),
+  };
+});
 
 beforeAll(() => {
   // O gráfico "Atividade — últimos 14 dias" usa o ResponsiveContainer do
@@ -17,6 +56,9 @@ vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: mockToastFn }),
 }));
 
+const canEdit = vi.fn();
+vi.mock('@/hooks/usePermissions', () => ({ usePermissions: () => ({ canEdit }) }));
+
 const mockRpc = vi.fn();
 
 function chainable(result: unknown) {
@@ -25,6 +67,7 @@ function chainable(result: unknown) {
     gte: () => builder,
     order: () => builder,
     limit: () => builder,
+    single: () => Promise.resolve(result),
     then: (resolve: (v: unknown) => void) => resolve(result),
   };
   return builder;
@@ -65,6 +108,30 @@ vi.mock('@/integrations/supabase/client', () => ({
         }
         if (table === 'notification_queue') {
           return chainable({ data: [{ status: 'sent' }], error: null });
+        }
+        if (table === 'recursos') {
+          return chainable({
+            data: [
+              { id: 'rec-1', nome: 'motoristas_gestao', categoria: 'Motoristas' },
+              { id: 'rec-2', nome: 'renting_contratos', categoria: 'Renting' },
+            ],
+            error: null,
+          });
+        }
+        if (table === 'automation_rules') {
+          return chainable({
+            data: {
+              id: 'rule-1',
+              acao_config: {
+                template_codigo: 'teste',
+                titulo: 'Regra Estatística Teste',
+                destinatarios_recurso: 'motoristas_gestao',
+                enviar_email: false,
+              },
+              cooldown_minutos: 1440,
+            },
+            error: null,
+          });
         }
         if (table === 'domain_events') {
           return chainable({
@@ -139,6 +206,17 @@ vi.mock('@/integrations/supabase/client', () => ({
                 ultima_execucao: '2026-07-27T08:00:00.000Z',
                 duracao_media_ms: 2500,
               },
+              {
+                rule_id: 'rule-2',
+                nome: 'Nova cobrança gerada',
+                event_type: 'cobranca.gerada',
+                ativo: true,
+                cooldown_minutos: 0,
+                execucoes: 1,
+                falhas: 0,
+                ultima_execucao: '2026-07-27T08:00:00.000Z',
+                duracao_media_ms: 1200,
+              },
             ],
             error: null,
           });
@@ -184,6 +262,7 @@ describe('AutomacaoPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRpc.mockResolvedValue({ data: null, error: null });
+    canEdit.mockReturnValue(true);
   });
 
   it('mostra as tabs do painel e os cartões da Visão Geral', async () => {
@@ -284,7 +363,10 @@ describe('AutomacaoPage', () => {
   });
 
   it('botão "Correr agora" chama a RPC, mostra sucesso e fica em cooldown', async () => {
-    mockRpc.mockResolvedValue({ data: { success: true, executado_em: '2026-07-27T09:00:00.000Z' }, error: null });
+    mockRpc.mockResolvedValue({
+      data: { success: true, executado_em: '2026-07-27T09:00:00.000Z' },
+      error: null,
+    });
     renderPage();
 
     const botao = await screen.findByRole('button', { name: /Correr agora/i });
@@ -294,7 +376,9 @@ describe('AutomacaoPage', () => {
       expect(mockRpc).toHaveBeenCalledWith('executar_jobs_automacao_manualmente');
     });
     await waitFor(() => {
-      expect(mockToastFn).toHaveBeenCalledWith(expect.objectContaining({ title: 'Automações executadas' }));
+      expect(mockToastFn).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Automações executadas' })
+      );
     });
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Aguarda \d+:\d{2}/ })).toBeDisabled();
@@ -302,7 +386,10 @@ describe('AutomacaoPage', () => {
   });
 
   it('botão "Correr agora" mostra o erro do rate limit num toast', async () => {
-    mockRpc.mockResolvedValue({ data: null, error: { message: 'Já correu há pouco — aguarda mais 04:32 antes de repetir.' } });
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'Já correu há pouco — aguarda mais 04:32 antes de repetir.' },
+    });
     renderPage();
 
     const botao = await screen.findByRole('button', { name: /Correr agora/i });
@@ -323,11 +410,78 @@ describe('AutomacaoPage', () => {
       expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
     });
 
-    const switchRegra = screen.getByRole('switch');
+    const switchRegra = screen.getAllByRole('switch')[0];
     fireEvent.click(switchRegra);
 
     await waitFor(() => {
-      expect(mockToastFn).toHaveBeenCalledWith(expect.objectContaining({ title: 'Regra desligada' }));
+      expect(mockToastFn).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Regra desligada' })
+      );
     });
+  });
+
+  it('filtra as regras por módulo (derivado do event_type)', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+    expect(screen.getByText('Nova cobrança gerada')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('option', { name: 'Financeiro' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Regra Estatística Teste')).toBeNull();
+    });
+    expect(screen.getByText('Nova cobrança gerada')).toBeTruthy();
+  });
+
+  it('abre o editor "Configurar" pré-preenchido e guarda a nova configuração', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+
+    const botoesConfigurar = screen.getAllByRole('button', { name: /Configurar/i });
+    fireEvent.click(botoesConfigurar[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Configurar: Regra Estatística Teste/)).toBeTruthy();
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /Guardar/i }));
+
+    await waitFor(() => {
+      expect(mockToastFn).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Configuração guardada' })
+      );
+    });
+  });
+
+  it('utilizador só com "Ver" (sem can_edit automacoes) não consegue mexer nos controlos', async () => {
+    canEdit.mockReturnValue(false);
+    renderPage();
+
+    // O botão "Correr agora" nem chega a renderizar para quem só tem acesso de leitura.
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Visão Geral' })).toBeTruthy();
+    });
+    expect(screen.queryByRole('button', { name: /Correr agora/i })).toBeNull();
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+    await waitFor(() => {
+      for (const s of screen.getAllByRole('switch')) expect(s).toBeDisabled();
+    });
+    for (const b of screen.getAllByRole('button', { name: /Configurar/i }))
+      expect(b).toBeDisabled();
+
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Falhas' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Tentar novamente/i })).toBeDisabled();
+    });
+    expect(screen.getByRole('button', { name: /Ignorar/i })).toBeDisabled();
   });
 });

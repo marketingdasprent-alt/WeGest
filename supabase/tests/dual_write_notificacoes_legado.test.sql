@@ -1,5 +1,5 @@
 begin;
-select plan(9);
+select plan(13);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000b0000', 'Org Dual Write', 'dual-write-b');
@@ -90,6 +90,34 @@ select is(
   'cobranca.gerada também escreve em notificacoes com tipo mapeado, em destinatario_id (dupla escrita)'
 );
 
+-- Cenário E: utilizador.criado e contrato_renting.renovacao_proxima —
+-- adicionados depois dos 5 originais, tinham ficado de fora do mapeamento
+-- (462 notificações já existiam só em `notifications`, zero visíveis no
+-- sino real, até este fix).
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-000000rg00b4', '00000000-0000-0000-0000-0000000b0000', 'teste.utilizador', 'Utilizador Teste', 'utilizador.criado', 'notificacao',
+   '{"template_codigo":"utilizador.criado","destinatarios_recurso":"admin_utilizadores","enviar_email":false}'::jsonb),
+  ('00000000-0000-0000-0000-000000rg00b5', '00000000-0000-0000-0000-0000000b0000', 'teste.renovacao', 'Renovação Teste', 'contrato_renting.renovacao_proxima', 'notificacao',
+   '{"template_codigo":"contrato_renting.renovacao_proxima","destinatarios_recurso":"renting_contratos","enviar_email":false}'::jsonb);
+
+insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
+  ('00000000-0000-0000-0000-000000ru00b4', '00000000-0000-0000-0000-000000rg00b4', '00000000-0000-0000-0000-0000000b0000', 'profiles', '00000000-0000-0000-0000-000000b0001'),
+  ('00000000-0000-0000-0000-000000ru00b5', '00000000-0000-0000-0000-000000rg00b5', '00000000-0000-0000-0000-0000000b0000', 'contratos_renting', '00000000-0000-0000-0000-000000ent00b5');
+
+select public.execute_automation_runs();
+
+select is(
+  (select tipo || ' -> ' || link from public.notificacoes where destinatario_id = '00000000-0000-0000-0000-0000000b0001' and tipo = 'utilizador_criado'),
+  'utilizador_criado -> /admin/utilizadores',
+  'utilizador.criado escreve em notificacoes com link genérico para a página de utilizadores'
+);
+
+select is(
+  (select tipo || ' -> ' || link from public.notificacoes where destinatario_id = '00000000-0000-0000-0000-0000000b0001' and tipo = 'contrato_renting_renovacao_proxima'),
+  'contrato_renting_renovacao_proxima -> /renting/contratos/00000000-0000-0000-0000-000000ent00b5',
+  'contrato_renting.renovacao_proxima escreve em notificacoes com link para o contrato concreto'
+);
+
 -- Cenário D: visibilidade real via RLS — exatamente o que useNotificacoes.ts lê
 -- (select('*').eq('resolvida', false), sem qualquer filtro por destinatário no
 -- cliente; toda a restrição vem da policy "ver notificacoes do meu cargo").
@@ -113,6 +141,18 @@ select is(
   (select count(*)::int from public.notificacoes where resolvida = false and tipo = 'viatura_seguro_expirando'),
   1,
   'o destinatário real vê a notificação de viatura_seguro_expirando através da RLS'
+);
+
+select is(
+  (select count(*)::int from public.notificacoes where resolvida = false and tipo = 'utilizador_criado'),
+  1,
+  'o destinatário real vê a notificação de utilizador_criado através da RLS'
+);
+
+select is(
+  (select count(*)::int from public.notificacoes where resolvida = false and tipo = 'contrato_renting_renovacao_proxima'),
+  1,
+  'o destinatário real vê a notificação de contrato_renting_renovacao_proxima através da RLS'
 );
 
 reset role;
