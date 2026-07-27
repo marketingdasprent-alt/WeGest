@@ -861,6 +861,117 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_rules: {
+        Row: {
+          acao_config: Json
+          acao_tipo: string
+          ativo: boolean
+          codigo: string
+          condicoes: Json
+          cooldown_minutos: number
+          created_at: string
+          criado_por: string | null
+          descricao: string | null
+          event_type: string
+          id: string
+          nome: string
+          org_id: string
+          prioridade: string
+          updated_at: string
+        }
+        Insert: {
+          acao_config?: Json
+          acao_tipo: string
+          ativo?: boolean
+          codigo: string
+          condicoes?: Json
+          cooldown_minutos?: number
+          created_at?: string
+          criado_por?: string | null
+          descricao?: string | null
+          event_type: string
+          id?: string
+          nome: string
+          org_id: string
+          prioridade?: string
+          updated_at?: string
+        }
+        Update: {
+          acao_config?: Json
+          acao_tipo?: string
+          ativo?: boolean
+          codigo?: string
+          condicoes?: Json
+          cooldown_minutos?: number
+          created_at?: string
+          criado_por?: string | null
+          descricao?: string | null
+          event_type?: string
+          id?: string
+          nome?: string
+          org_id?: string
+          prioridade?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      notification_delivery: {
+        Row: {
+          aberto_em: string | null
+          canal: string
+          clicado_em: string | null
+          created_at: string
+          destinatario: string
+          entregue_em: string | null
+          enviado_em: string | null
+          erro: string | null
+          falhou_em: string | null
+          id: string
+          notification_id: string | null
+          notification_queue_id: string | null
+          org_id: string
+          provider: string | null
+          provider_message_id: string | null
+          status: string
+        }
+        Insert: {
+          aberto_em?: string | null
+          canal: string
+          clicado_em?: string | null
+          created_at?: string
+          destinatario: string
+          entregue_em?: string | null
+          enviado_em?: string | null
+          erro?: string | null
+          falhou_em?: string | null
+          id?: string
+          notification_id?: string | null
+          notification_queue_id?: string | null
+          org_id: string
+          provider?: string | null
+          provider_message_id?: string | null
+          status?: string
+        }
+        Update: {
+          aberto_em?: string | null
+          canal?: string
+          clicado_em?: string | null
+          created_at?: string
+          destinatario?: string
+          entregue_em?: string | null
+          enviado_em?: string | null
+          erro?: string | null
+          falhou_em?: string | null
+          id?: string
+          notification_id?: string | null
+          notification_queue_id?: string | null
+          org_id?: string
+          provider?: string | null
+          provider_message_id?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       bolt_drivers: {
         Row: {
           created_at: string | null
@@ -11527,6 +11638,52 @@ export type Database = {
         }
         Relationships: []
       }
+      automacao_timeline_recente: {
+        Row: {
+          attempt: number | null
+          completed_at: string | null
+          detalhe: Json | null
+          duracao_ms: number | null
+          entity_id: string | null
+          entity_table: string | null
+          event_id: string | null
+          event_type: string | null
+          occurred_at: string | null
+          org_id: string | null
+          regra_nome: string | null
+          rule_id: string | null
+          run_id: string | null
+          run_status: string | null
+          started_at: string | null
+          ultimo_evento_log: string | null
+        }
+        Relationships: []
+      }
+      automacao_estatisticas_por_regra: {
+        Row: {
+          ativo: boolean | null
+          cooldown_minutos: number | null
+          duracao_media_ms: number | null
+          event_type: string | null
+          execucoes: number | null
+          falhas: number | null
+          nome: string | null
+          org_id: string | null
+          rule_id: string | null
+          ultima_execucao: string | null
+        }
+        Relationships: []
+      }
+      automacao_saude_canais: {
+        Row: {
+          canal: string | null
+          enviados_ultima_hora: number | null
+          falhas_ultima_hora: number | null
+          org_id: string | null
+          tempo_resposta_medio_ms: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       aprovar_candidatura_motorista: {
@@ -12039,6 +12196,25 @@ export type Database = {
       retry_failed_job: {
         Args: { p_id: string }
         Returns: undefined
+      }
+      ignorar_failed_job: {
+        Args: { p_id: string }
+        Returns: {
+          attempts: number
+          created_at: string
+          failed_at: string
+          id: string
+          job_type: string
+          last_error: string | null
+          org_id: string
+          payload: Json | null
+          resolution_note: string | null
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          source_id: string
+          source_table: string
+        }
       }
       salvar_precos_modelo_tarifa: {
         Args: { p_linhas: Json; p_tarifa_id: string }
