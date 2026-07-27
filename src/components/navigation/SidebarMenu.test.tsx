@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: vi.fn(),
@@ -44,6 +45,15 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 
+function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
 function mockPermissions(hasAccessToResource: (recurso: string) => boolean) {
   vi.mocked(usePermissions).mockReturnValue({
     isAdmin: false,
@@ -69,26 +79,18 @@ describe('SidebarMenu — sino e pesquisa global (desktop)', () => {
 
   it('monta o sino de notificações no rodapé do sidebar (não é só um toast)', () => {
     mockPermissions(() => true);
-    render(
-      <MemoryRouter>
-        <SidebarMenu />
-      </MemoryRouter>
-    );
+    renderWithProviders(<SidebarMenu />);
     expect(screen.getByTestId('notification-bell-stub')).toBeTruthy();
   });
 
   it('Cmd+K abre a pesquisa global e lista só os itens (incl. sub-itens) a que o utilizador tem acesso', () => {
     // Só acesso a viaturas_ver (Frota) — Renting/Administrativo/etc ficam de fora.
     mockPermissions((recurso) => recurso === 'viaturas_ver');
-    render(
-      <MemoryRouter>
-        <SidebarMenu />
-      </MemoryRouter>
-    );
+    renderWithProviders(<SidebarMenu />);
 
     fireEvent.keyDown(document, { key: 'k', metaKey: true });
 
-    expect(screen.getByPlaceholderText('Saltar para...')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Pesquisar ou saltar para...')).toBeTruthy();
     const dialog = within(screen.getByRole('dialog'));
     expect(dialog.getByText('Viaturas')).toBeTruthy();
     expect(dialog.queryByText('Contratos')).toBeNull();
@@ -96,13 +98,9 @@ describe('SidebarMenu — sino e pesquisa global (desktop)', () => {
 
   it('botão de pesquisa no rodapé também abre o CommandMenu', () => {
     mockPermissions(() => true);
-    render(
-      <MemoryRouter>
-        <SidebarMenu />
-      </MemoryRouter>
-    );
+    renderWithProviders(<SidebarMenu />);
 
     fireEvent.click(screen.getByLabelText('Pesquisar (Cmd+K)'));
-    expect(screen.getByPlaceholderText('Saltar para...')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Pesquisar ou saltar para...')).toBeTruthy();
   });
 });

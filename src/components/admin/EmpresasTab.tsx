@@ -292,7 +292,7 @@ export const EmpresasTab: React.FC = () => {
             {/* Basic info */}
             <div className="space-y-1.5">
               <Label>
-                Nome Curto <span className="text-red-500">*</span>
+                Nome Curto <span className="text-destructive">*</span>
               </Label>
               <Input
                 value={form.nome}

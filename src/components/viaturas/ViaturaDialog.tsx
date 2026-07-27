@@ -269,7 +269,7 @@ export function ViaturaDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Matrícula <span className="text-red-500">*</span>
+                      Matrícula <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
                       <Input placeholder="AA-00-BB" {...field} className="uppercase" />
@@ -315,7 +315,7 @@ export function ViaturaDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Marca <span className="text-red-500">*</span>
+                      Marca <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
                       <Input placeholder="Tesla" {...field} />
@@ -331,7 +331,7 @@ export function ViaturaDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Modelo <span className="text-red-500">*</span>
+                      Modelo <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
                       <Input placeholder="Model 3" {...field} />

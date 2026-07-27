@@ -230,7 +230,7 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, row, onSuccess }
 
           <div className="space-y-2">
             <Label htmlFor="fat-key">
-              Chave da API <span className="text-red-500">*</span>
+              Chave da API <span className="text-destructive">*</span>
             </Label>
             <div className="relative">
               <Input

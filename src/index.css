@@ -1,14 +1,13 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* Só na app nativa: compensar status bar e barra de navegação Android */
-html[data-native-app="true"] .native-header {
+html[data-native-app='true'] .native-header {
   padding-top: env(safe-area-inset-top);
   height: calc(4rem + env(safe-area-inset-top)) !important;
 }
-html[data-native-app="true"] .native-bottom {
+html[data-native-app='true'] .native-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -38,6 +37,15 @@ html[data-native-app="true"] .native-bottom {
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
+
+    /* Estados semânticos (avisos/sucesso) — antes disto cada ficheiro
+       escrevia bg-amber-500/text-green-600 à mão, com tom diferente
+       consoante o ficheiro. Usar sempre estes tokens em vez de cores
+       Tailwind soltas para avisos/callouts/badges de estado. */
+    --warning: 38 92% 50%;
+    --warning-foreground: 20 91% 14%;
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
 
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
@@ -85,6 +93,11 @@ html[data-native-app="true"] .native-bottom {
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
+    --warning: 38 92% 55%;
+    --warning-foreground: 20 91% 10%;
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 100%;
+
     --border: 222 47% 18%;
     --input: 222 47% 18%;
     --ring: 174 100% 38.4%;
@@ -105,7 +118,6 @@ html[data-native-app="true"] .native-bottom {
     --sidebar-ring: 174 100% 38.4%;
   }
 }
-
 
 @layer base {
   * {
@@ -143,7 +155,7 @@ html[data-native-app="true"] .native-bottom {
 
   button,
   a,
-  [role="button"] {
+  [role='button'] {
     -webkit-touch-callout: none;
     user-select: none;
   }
@@ -169,7 +181,7 @@ html[data-native-app="true"] .native-bottom {
   }
 
   @media (max-width: 640px) {
-    [role="listbox"] {
+    [role='listbox'] {
       max-height: 200px;
       overflow-y: auto;
     }
@@ -209,16 +221,16 @@ html[data-native-app="true"] .native-bottom {
  * alvos de toque atuais mantêm-se exatamente como estão.
  * ============================================================ */
 @media (min-width: 1024px) and (pointer: fine) {
-  html:not([data-native-app="true"]) {
+  html:not([data-native-app='true']) {
     font-size: clamp(12px, 0.833vw, 16px);
   }
 
   /* Os campos de formulário acompanham a escala no desktop. O 16px
      fixo definido acima existe apenas para impedir o zoom automático
      do iOS ao focar inputs em ecrãs táteis — irrelevante com rato. */
-  html:not([data-native-app="true"]) input,
-  html:not([data-native-app="true"]) textarea,
-  html:not([data-native-app="true"]) select {
+  html:not([data-native-app='true']) input,
+  html:not([data-native-app='true']) textarea,
+  html:not([data-native-app='true']) select {
     font-size: 1rem;
   }
 }
@@ -231,7 +243,7 @@ html[data-native-app="true"] .native-bottom {
   .auth-screen__background {
     position: absolute;
     inset: 0;
-    background: 
+    background:
       radial-gradient(circle at 0% 0%, hsl(var(--primary) / 0.15) 0%, transparent 50%),
       radial-gradient(circle at 100% 100%, hsl(var(--primary) / 0.1) 0%, transparent 50%),
       linear-gradient(180deg, hsl(var(--background)), hsl(var(--card)));
@@ -240,8 +252,11 @@ html[data-native-app="true"] .native-bottom {
   .auth-screen__pattern {
     position: absolute;
     inset: 0;
-    background-image: 
-      radial-gradient(circle at 2px 2px, hsl(var(--border) / 0.3) 1px, transparent 0);
+    background-image: radial-gradient(
+      circle at 2px 2px,
+      hsl(var(--border) / 0.3) 1px,
+      transparent 0
+    );
     background-size: 24px 24px;
     mask-image: radial-gradient(circle at center, black, transparent 80%);
     opacity: 0.5;
@@ -280,11 +295,15 @@ html[data-native-app="true"] .native-bottom {
   }
 
   .login-colaborador .auth-screen__pattern {
-    background-image: radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.07) 1px, transparent 0);
+    background-image: radial-gradient(
+      circle at 2px 2px,
+      rgba(255, 255, 255, 0.07) 1px,
+      transparent 0
+    );
   }
 
   .login-colaborador .auth-panel {
-    background: rgba(255, 255, 255, 0.10) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
     border-color: rgba(255, 255, 255, 0.18) !important;
   }
 
@@ -308,8 +327,8 @@ html[data-native-app="true"] .native-bottom {
     @apply border-white/30 bg-white/10 text-white hover:bg-white/20;
   }
 
-  .login-colaborador [class*="CardTitle"],
-  .login-colaborador [class*="CardDescription"],
+  .login-colaborador [class*='CardTitle'],
+  .login-colaborador [class*='CardDescription'],
   .login-colaborador label,
   .login-colaborador .text-card-foreground,
   .login-colaborador .text-foreground,
@@ -321,7 +340,7 @@ html[data-native-app="true"] .native-bottom {
     color: rgba(255, 255, 255, 0.65) !important;
   }
 
-  .login-colaborador [class*="border-t"] {
+  .login-colaborador [class*='border-t'] {
     border-color: rgba(255, 255, 255, 0.15) !important;
   }
 
@@ -353,7 +372,7 @@ html[data-native-app="true"] .native-bottom {
   /* Esconder TODOS os overlays possíveis */
   [data-radix-dialog-overlay],
   [data-radix-alert-dialog-overlay],
-  [class*="bg-black"],
+  [class*='bg-black'],
   .fixed.inset-0.bg-black\/80 {
     display: none !important;
     visibility: hidden !important;
@@ -383,7 +402,7 @@ html[data-native-app="true"] .native-bottom {
   }
 
   /* Dialog ocupa página inteira - forçar fundo branco */
-  [role="dialog"],
+  [role='dialog'],
   [data-radix-dialog-content] {
     position: static !important;
     max-width: 100% !important;
@@ -402,7 +421,7 @@ html[data-native-app="true"] .native-bottom {
   }
 
   /* Conteúdo interno do Dialog */
-  [role="dialog"] *,
+  [role='dialog'] *,
   [data-radix-dialog-content] * {
     color: inherit !important;
   }
@@ -424,16 +443,25 @@ html[data-native-app="true"] .native-bottom {
 
   /* Excepções para backgrounds coloridos específicos */
   .print-content .bg-green-50,
-  .print-content .print\:bg-green-50 { background-color: #f0fdf4 !important; }
+  .print-content .print\:bg-green-50 {
+    background-color: #f0fdf4 !important;
+  }
   .print-content .bg-red-50,
-  .print-content .print\:bg-red-50 { background-color: #fef2f2 !important; }
+  .print-content .print\:bg-red-50 {
+    background-color: #fef2f2 !important;
+  }
   .print-content .bg-blue-50,
-  .print-content .print\:bg-blue-50 { background-color: #eff6ff !important; }
+  .print-content .print\:bg-blue-50 {
+    background-color: #eff6ff !important;
+  }
   .print-content .bg-gray-50,
-  .print-content .print\:bg-gray-50 { background-color: #f9fafb !important; }
+  .print-content .print\:bg-gray-50 {
+    background-color: #f9fafb !important;
+  }
 
   /* Fundo branco garantido */
-  html, body {
+  html,
+  body {
     background: white !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
@@ -445,27 +473,39 @@ html[data-native-app="true"] .native-bottom {
   }
 
   /* Cores legíveis na impressão */
-  .text-green-600, .text-green-700 { color: #059669 !important; }
-  .text-red-600, .text-red-700 { color: #dc2626 !important; }
-  .text-orange-600 { color: #ea580c !important; }
-  .text-primary { color: #1d4ed8 !important; }
-  .text-muted-foreground { color: #6b7280 !important; }
-  
+  .text-green-600,
+  .text-green-700 {
+    color: #059669 !important;
+  }
+  .text-red-600,
+  .text-red-700 {
+    color: #dc2626 !important;
+  }
+  .text-orange-600 {
+    color: #ea580c !important;
+  }
+  .text-primary {
+    color: #1d4ed8 !important;
+  }
+  .text-muted-foreground {
+    color: #6b7280 !important;
+  }
+
   /* Separadores mais compactos */
   .print-content hr,
-  .print-content [data-orientation="horizontal"] {
+  .print-content [data-orientation='horizontal'] {
     margin-top: 0.25rem !important;
     margin-bottom: 0.25rem !important;
   }
 }
 
 /* Native app: push center dialogs below the status bar (viewport-fit=cover) */
-html[data-native-app="true"] [role="dialog"]:not(.inset-y-0) {
+html[data-native-app='true'] [role='dialog']:not(.inset-y-0) {
   margin-top: env(safe-area-inset-top);
   max-height: calc(90vh - env(safe-area-inset-top)) !important;
 }
 /* Native app: side sheets get internal safe area padding instead */
-html[data-native-app="true"] [role="dialog"].inset-y-0 {
+html[data-native-app='true'] [role='dialog'].inset-y-0 {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 }

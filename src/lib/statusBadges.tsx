@@ -95,3 +95,17 @@ export function BoltSyncStatusBadge({ status }: BoltSyncStatusBadgeProps) {
       return <Badge variant="secondary">{status || '-'}</Badge>;
   }
 }
+
+// ── MOTORISTA (status_ativo) ─────────────────────────────────────
+interface MotoristaStatusBadgeProps {
+  statusAtivo: boolean | null | undefined;
+  className?: string;
+}
+
+export function MotoristaStatusBadge({ statusAtivo, className }: MotoristaStatusBadgeProps) {
+  return (
+    <Badge variant={statusAtivo ? 'default' : 'secondary'} className={className}>
+      {statusAtivo ? 'Ativo' : 'Inativo'}
+    </Badge>
+  );
+}

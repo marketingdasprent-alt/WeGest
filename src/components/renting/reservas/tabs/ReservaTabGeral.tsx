@@ -358,7 +358,7 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
             render={({ field }) => (
               <FormItem className="max-w-xs">
                 <FormLabel>
-                  Valor mensal (€) <span className="text-red-500">*</span>
+                  Valor mensal (€) <span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
                   <Input

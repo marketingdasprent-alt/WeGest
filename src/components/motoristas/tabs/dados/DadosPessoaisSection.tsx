@@ -98,7 +98,7 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           render={({ field }) => (
             <FormItem className="sm:col-span-2">
               <FormLabel>
-                Nome Completo <span className="text-red-500">*</span>
+                Nome Completo <span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <Input {...field} />
@@ -113,7 +113,7 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                NIF <span className="text-red-500">*</span>
+                NIF <span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <Input {...field} />
@@ -128,7 +128,7 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Email <span className="text-red-500">*</span>
+                Email <span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <Input type="email" {...field} />
@@ -143,7 +143,7 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           render={({ field }) => (
             <FormItem className="sm:col-span-2">
               <FormLabel>
-                IBAN <span className="text-red-500">*</span>
+                IBAN <span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <Input placeholder="PT50..." {...field} />
@@ -158,7 +158,7 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
           render={({ field }) => (
             <FormItem className="sm:col-span-2">
               <FormLabel>
-                Telefone <span className="text-red-500">*</span>
+                Telefone <span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <PhoneInput

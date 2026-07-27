@@ -471,7 +471,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </p>
                   <div className="space-y-2">
                     <Label htmlFor="login">
-                      Email <span className="text-red-500">*</span>
+                      Email <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="login"
@@ -483,7 +483,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password">
-                      Password <span className="text-red-500">*</span>
+                      Password <span className="text-destructive">*</span>
                     </Label>
                     <div className="relative">
                       <Input
@@ -519,7 +519,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </p>
                   <div className="space-y-2">
                     <Label htmlFor="brevo-api-key">
-                      API Key <span className="text-red-500">*</span>
+                      API Key <span className="text-destructive">*</span>
                     </Label>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
@@ -571,7 +571,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="brevo-sender-name">
-                      Sender Name <span className="text-red-500">*</span>
+                      Sender Name <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="brevo-sender-name"
@@ -584,7 +584,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="brevo-sender-email">
-                      Sender Email <span className="text-red-500">*</span>
+                      Sender Email <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="brevo-sender-email"
@@ -616,7 +616,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </p>
                   <div className="space-y-2">
                     <Label htmlFor="login">
-                      Email <span className="text-red-500">*</span>
+                      Email <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="login"
@@ -628,7 +628,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password">
-                      Password <span className="text-red-500">*</span>
+                      Password <span className="text-destructive">*</span>
                     </Label>
                     <div className="relative">
                       <Input
@@ -691,7 +691,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
             {/* Name */}
             <div className="space-y-2">
               <Label htmlFor="nome">
-                Nome da Integração <span className="text-red-500">*</span>
+                Nome da Integração <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="nome"

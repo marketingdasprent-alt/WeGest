@@ -924,7 +924,7 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
               <div className="space-y-1.5">
                 <div className="flex items-center h-5">
                   <Label htmlFor="data">
-                    Data <span className="text-red-500">*</span>
+                    Data <span className="text-destructive">*</span>
                   </Label>
                 </div>
                 <DatePickerField id="data" value={data} onChange={setData} />
@@ -948,7 +948,7 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
 
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5">
-                Estação <span className="text-red-500">*</span>
+                Estação <span className="text-destructive">*</span>
               </Label>
               <SearchableDropdown
                 items={estacoes.map((e) => ({

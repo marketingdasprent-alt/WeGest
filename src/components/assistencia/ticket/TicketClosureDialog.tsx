@@ -115,7 +115,7 @@ export const TicketClosureDialog: React.FC<Props> = ({
             <div className="space-y-2">
               <Label>
                 KM Final{' '}
-                {!closureData.km_fim_indisponivel && <span className="text-red-500">*</span>}
+                {!closureData.km_fim_indisponivel && <span className="text-destructive">*</span>}
               </Label>
               <Input
                 type="number"

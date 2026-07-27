@@ -16,7 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CommandMenu } from '@/components/ui/command-menu';
-import { CommandGroup, CommandItem } from '@/components/ui/command';
+import { CommandGroup, CommandItem, CommandSeparator } from '@/components/ui/command';
+import { useGlobalSearch, ENTITY_CONFIG, type SearchResult } from '@/hooks/useGlobalSearch';
 import {
   MENU_ITEMS,
   type MenuItem,
@@ -34,6 +35,8 @@ export const SidebarMenu: React.FC = () => {
   const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const { data: searchResults } = useGlobalSearch({ term: searchTerm, enabled: commandOpen });
   const logoSrc = useThemedLogo();
   const location = useLocation();
   const navigate = useNavigate();
@@ -356,7 +359,34 @@ export const SidebarMenu: React.FC = () => {
   );
 
   const GlobalCommandMenu = () => (
-    <CommandMenu open={commandOpen} onOpenChange={setCommandOpen} placeholder="Saltar para...">
+    <CommandMenu
+      open={commandOpen}
+      onOpenChange={(next) => {
+        setCommandOpen(next);
+        if (!next) setSearchTerm('');
+      }}
+      placeholder="Pesquisar ou saltar para..."
+      onSearchChange={setSearchTerm}
+    >
+      {searchResults &&
+        (Object.keys(ENTITY_CONFIG) as (keyof typeof ENTITY_CONFIG)[]).map((entity) => {
+          const results: SearchResult[] = searchResults[entity];
+          if (results.length === 0) return null;
+          return (
+            <CommandGroup key={entity} heading={ENTITY_CONFIG[entity].heading}>
+              {results.map((result) => (
+                <CommandItem key={result.id} onSelect={() => goTo(result.href)}>
+                  <Search className="mr-2 h-4 w-4" />
+                  <span>{result.label}</span>
+                  {result.subtitle && (
+                    <span className="ml-2 text-xs text-muted-foreground">{result.subtitle}</span>
+                  )}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          );
+        })}
+      {searchResults && searchTerm.trim().length >= 2 && <CommandSeparator />}
       <CommandGroup heading="Navegar">
         {commandItems.map((item) => {
           const Icon = item.icon || Search;

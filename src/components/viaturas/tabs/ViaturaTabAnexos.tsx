@@ -229,7 +229,7 @@ export function ViaturaTabAnexos({ viaturaId }: ViaturaTabAnexosProps) {
             <div className="space-y-4 pt-4">
               <div>
                 <Label>
-                  Ficheiro <span className="text-red-500">*</span>
+                  Ficheiro <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   type="file"
