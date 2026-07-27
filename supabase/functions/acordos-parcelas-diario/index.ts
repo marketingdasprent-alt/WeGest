@@ -35,6 +35,7 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { EmailProviderFactory } from '../_shared/email/factories/EmailProviderFactory.ts';
+import type { EmailSendResult } from '../_shared/email/types/index.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,19 +65,40 @@ serve(async (req) => {
   const service = createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
   const appUrl = env('APP_URL') ?? '';
   const hoje = hojeEmLisboa();
-  const r = { vencidas: 0, avisadas: 0, incumprimentos: 0, liquidados: 0, revisao: 0 };
+  const r = {
+    vencidas: 0,
+    avisadas: 0,
+    incumprimentos: 0,
+    liquidados: 0,
+    revisao: 0,
+    erros: [] as string[],
+  };
+
+  // O pg_cron chama esta function via net.http_post "fire-and-forget" —
+  // ninguém lê a resposta HTTP. Sem isto, um erro de BD num dos passos ficava
+  // invisível para sempre: a function continua a devolver 200 com contadores
+  // a zero, indistinguível de "não havia nada a fazer hoje". registarErro()
+  // grava a falha nos logs (console.error, visível na consola da function) E
+  // no campo `erros` da resposta, sem abortar os passos seguintes.
+  const registarErro = (passo: string, error: { message: string } | null | undefined) => {
+    if (!error) return;
+    const msg = `${passo}: ${error.message}`;
+    console.error(`acordos-parcelas-diario: ${msg}`);
+    r.erros.push(msg);
+  };
 
   // ── ① VENCIDAS ────────────────────────────────────────────────────────
-  const { data: vencidas } = await service
+  const { data: vencidas, error: vencidasError } = await service
     .from('acordo_parcelas')
     .update({ estado: 'vencida' })
     .in('estado', ['agendada', 'avisada'])
     .lt('data_vencimento', hoje)
     .select('id');
+  registarErro('Passo ①', vencidasError);
   r.vencidas = vencidas?.length ?? 0;
 
   // ── ② AVISOS ──────────────────────────────────────────────────────────
-  const { data: aAvisar } = await service
+  const { data: aAvisar, error: aAvisarError } = await service
     .from('acordo_parcelas')
     .select(
       // aviso_tentativas TEM de vir no select — é incrementado em caso de falha.
@@ -92,6 +114,7 @@ serve(async (req) => {
     .lt('aviso_tentativas', 3)
     .eq('acordo.estado', 'ativo')
     .gte('data_vencimento', hoje);
+  registarErro('Passo ②', aAvisarError);
 
   for (const p of (aAvisar ?? []) as any[]) {
     const a = p.acordo;
@@ -137,67 +160,86 @@ serve(async (req) => {
       p_cobranca_id: a.cobranca_id,
     });
 
+    // NÃO é documento fiscal — dito no assunto e no corpo, porque o email
+    // sobrevive fora da app e é reencaminhado a contabilistas.
+    const assunto =
+      `Aviso de vencimento (não é fatura) · Parcela ${p.numero} ` +
+      `do acordo ACD-${a.codigo} · ${eur(p.valor)}`;
+
+    const corpoHtml =
+      `<p>Olá ${a.responsavel_nome},</p>` +
+      `<p><strong>Aviso de vencimento — não é fatura nem recibo.</strong></p>` +
+      `<p>Parcela ${p.numero} · <strong>${eur(p.valor)}</strong> · ` +
+      `vence a ${dataPT(p.data_vencimento)}.</p>` +
+      `<p>Falta pagar ${eur(Number(faltaPagar ?? 0))} de ${eur(Number(a.valor_total))}.</p>` +
+      (appUrl ? `<p><a href="${appUrl}/acordos/${a.id}">Ver o plano de pagamentos</a></p>` : '');
+
+    // Try estreito: cobre só a tentativa de envio (resolver o provider +
+    // enviar), nunca a gravação do log nem a actualização da parcela. O
+    // resultado (sucesso OU erro, veio de result.success===false ou de uma
+    // excepção) fica normalizado em `result` para o mesmo shape em ambos os
+    // casos, para poder ser registado UMA VEZ em baixo, nos dois desfechos.
+    let result: EmailSendResult;
     try {
-      // NÃO é documento fiscal — dito no assunto e no corpo, porque o email
-      // sobrevive fora da app e é reencaminhado a contabilistas.
-      const assunto =
-        `Aviso de vencimento (não é fatura) · Parcela ${p.numero} ` +
-        `do acordo ACD-${a.codigo} · ${eur(p.valor)}`;
-
-      const corpoHtml =
-        `<p>Olá ${a.responsavel_nome},</p>` +
-        `<p><strong>Aviso de vencimento — não é fatura nem recibo.</strong></p>` +
-        `<p>Parcela ${p.numero} · <strong>${eur(p.valor)}</strong> · ` +
-        `vence a ${dataPT(p.data_vencimento)}.</p>` +
-        `<p>Falta pagar ${eur(Number(faltaPagar ?? 0))} de ${eur(Number(a.valor_total))}.</p>` +
-        (appUrl ? `<p><a href="${appUrl}/acordos/${a.id}">Ver o plano de pagamentos</a></p>` : '');
-
       // Resolve o provider de email DESTA organização (Brevo com a API key e
       // remetente configurados nela, ou o fallback legado global se ainda
       // não tiver integração própria) — nunca uma conta Brevo fixa.
       const { provider, sender } = await EmailProviderFactory.getProvider(p.org_id, service);
-      const result = await provider.send({
+      result = await provider.send({
         to: [{ email, name: a.responsavel_nome }],
         subject: assunto,
         html: corpoHtml,
         senderOverride: sender,
       });
-      if (!result.success) throw new Error(result.error || 'Falha ao enviar email');
+    } catch (e) {
+      result = { success: false, error: (e as Error).message };
+    }
 
-      // Mesmo registo (email_sends) que todos os outros tipos de email do
-      // sistema — dá visibilidade operacional consistente. Uma falha aqui
-      // não deve derrubar o aviso que já foi enviado com sucesso.
-      const { error: logError } = await service.from('email_sends').insert({
-        org_id: p.org_id,
-        origem: 'acordo_aviso',
-        email,
-        status: 'sent',
-        last_event: 'sent',
-        last_event_at: new Date().toISOString(),
-        brevo_message_id: result.providerMessageId ?? null,
-      });
-      if (logError) {
-        console.error(
-          'acordos-parcelas-diario: falha ao gravar log em email_sends:',
-          logError.message
-        );
-      }
+    // Mesmo registo (email_sends) que EmailService.log() faz para todos os
+    // outros tipos de email do sistema — SEMPRE, sucesso ou erro. Sem isto,
+    // uma falha de envio não deixava nenhum rasto em email_sends: só
+    // aviso_erro em acordo_parcelas, que é substituído a cada nova tentativa
+    // e limpo (null) assim que a parcela acaba por ter sucesso — o histórico
+    // de falhas desaparecia, não ficava só noutro sítio.
+    const { error: logError } = await service.from('email_sends').insert({
+      org_id: p.org_id,
+      origem: 'acordo_aviso',
+      email,
+      status: result.success ? 'sent' : 'erro',
+      last_event: result.success ? 'sent' : 'erro',
+      last_event_at: new Date().toISOString(),
+      brevo_message_id: result.providerMessageId ?? null,
+      error_message: result.error ?? null,
+    });
+    if (logError) {
+      console.error(
+        'acordos-parcelas-diario: falha ao gravar log em email_sends:',
+        logError.message
+      );
+    }
 
+    if (result.success) {
       await service
         .from('acordo_parcelas')
         .update({ estado: 'avisada', aviso_enviado_em: new Date().toISOString(), aviso_erro: null })
         .eq('id', p.id);
       r.avisadas++;
-    } catch (e) {
+    } else {
       await service
         .from('acordo_parcelas')
-        .update({ aviso_tentativas: (p.aviso_tentativas ?? 0) + 1, aviso_erro: (e as Error).message })
+        .update({
+          aviso_tentativas: (p.aviso_tentativas ?? 0) + 1,
+          aviso_erro: result.error || 'Falha ao enviar email',
+        })
         .eq('id', p.id);
     }
   }
 
   // ── ③ INCUMPRIMENTO, ④ LIQUIDADOS, ⑤ DIVERGÊNCIA ──────────────────────
-  const { data: manutencao } = await service.rpc('acordos_manutencao_diaria', { p_hoje: hoje });
+  const { data: manutencao, error: manutencaoError } = await service.rpc('acordos_manutencao_diaria', {
+    p_hoje: hoje,
+  });
+  registarErro('Passo ③④⑤', manutencaoError);
   if (manutencao) {
     r.incumprimentos = manutencao.incumprimentos ?? 0;
     r.liquidados = manutencao.liquidados ?? 0;
