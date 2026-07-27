@@ -107,7 +107,7 @@ const RECURSO_LABELS: Record<string, string> = {
   viaturas_financeiro: 'Ver dados financeiros das viaturas',
   viaturas_marcas_modelos: 'Criar/editar marcas, modelos e versões',
   viaturas_grupos: 'Criar/editar grupos, tarifas, coberturas, extras e taxas (renting)',
-  viaturas_alterar_estado: 'Reativar viaturas inativas',
+  viaturas_alterar_estado: 'Alterar Estado da Viatura',
   // Contratos
   contratos_ver: 'Ver contratos',
   contratos_criar: 'Criar novos contratos',
