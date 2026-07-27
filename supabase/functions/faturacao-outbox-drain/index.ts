@@ -26,6 +26,19 @@ const env = (k: string) => Deno.env.get(k);
 const MAX_POR_ORG = 2;
 const MAX_POR_CICLO = 10;
 
+/** Tempo máximo de espera pela resposta de faturacao-emitir. Essa função faz
+ *  vários round-trips SEQUENCIAIS a uma API externa (autenticar, resolver
+ *  cliente, taxas, criar o documento) antes de responder — por isso um valor
+ *  generoso, mas limitado: bem abaixo do intervalo do cron (5 min) e do
+ *  limiar do reaper para linhas presas em 'em_curso' (10 min, ver
+ *  faturacao_outbox_claim), para que uma chamada pendurada não bloqueie o
+ *  resto do ciclo. Sem precedente direto no repositório para fetch entre
+ *  edge functions; o mais próximo é o readyTimeout de 10s do FTP em
+ *  via-verde-test-connection, mas essa é uma ligação única — não uma cadeia
+ *  de vários pedidos sequenciais — daí o valor maior aqui.
+ */
+const TIMEOUT_EMITIR_MS = 30_000;
+
 interface Linha {
   id: string;
   org_id: string;
@@ -90,77 +103,113 @@ serve(async (req) => {
     await comLimite(MAX_POR_ORG, doOrg, async (linha) => {
       contadores.processadas++;
 
-      // Rede de segurança: o reaper já suspende as linhas de resultado
-      // desconhecido, mas nada reclamado com needs_reconcile chega a emitir.
-      if (linha.needs_reconcile) {
-        await suspender(linha, 'Resultado desconhecido — requer verificação manual');
-        return;
-      }
-
-      let res: RespostaEmitir;
+      // Isolamento por linha (mesmo espírito do via-verde-sync-drain, que
+      // isola cada item da fila com o seu próprio try/catch): uma excepção
+      // inesperada em QUALQUER ponto do processamento desta linha — por ex. a
+      // própria chamada RPC de liquidação a REJEITAR por falha de rede, e não
+      // só a resolver com {error} — nunca pode propagar para fora deste
+      // callback. Propagar rejeitaria a promise deste "trabalhador" dentro de
+      // comLimite e, por essa via, o Promise.all global — abortando o resto
+      // do ciclo (linhas irmãs e outras organizações ainda por processar) em
+      // vez de isolar só esta linha.
       try {
-        const r = await fetch(`${env('SUPABASE_URL')}/functions/v1/faturacao-emitir`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}`,
-          },
-          body: JSON.stringify({ ...linha.payload, org_id: orgId }),
-        });
-        res = await r.json();
-      } catch (e) {
-        // Falha de TRANSPORTE a chamar a PRÓPRIA função (não o provider) — não
-        // se sabe se o provider chegou a ser contactado. NÃO reemitir.
-        await suspender(linha, `Falha de comunicação: ${(e as Error).message}`);
-        return;
-      }
+        // Rede de segurança: o reaper já suspende as linhas de resultado
+        // desconhecido, mas nada reclamado com needs_reconcile chega a emitir.
+        if (linha.needs_reconcile) {
+          await suspender(linha, 'Resultado desconhecido — requer verificação manual');
+          return;
+        }
 
-      if (res.success) {
-        // res.invoice pode faltar mesmo com sucesso: falhou só a gravação do
-        // espelho local em `invoices`, o documento fiscal é real (ver Task 6/7)
-        // — NUNCA tratar isto como falha, ou o próximo tick reemitiria e
-        // arriscaria um segundo documento sobre o mesmo pagamento.
-        if (linha.parcela_id) {
-          await service.rpc('acordo_parcela_liquidar', {
-            p_parcela_id: linha.parcela_id,
-            p_invoice_id: res.invoice?.id ?? null,
+        let res: RespostaEmitir;
+        try {
+          const r = await fetch(`${env('SUPABASE_URL')}/functions/v1/faturacao-emitir`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify({ ...linha.payload, org_id: orgId }),
+            // Sem isto, uma faturacao-emitir pendurada bloqueia esta vaga de
+            // concorrência indefinidamente. A rejeição por timeout cai no
+            // catch abaixo, que já trata qualquer falha de transporte da
+            // mesma forma seguro (suspende, nunca reemite).
+            signal: AbortSignal.timeout(TIMEOUT_EMITIR_MS),
           });
+          res = await r.json();
+        } catch (e) {
+          // Falha de TRANSPORTE a chamar a PRÓPRIA função (não o provider) —
+          // não se sabe se o provider chegou a ser contactado. Inclui o
+          // timeout acima. NÃO reemitir.
+          await suspender(linha, `Falha de comunicação: ${(e as Error).message}`);
+          return;
+        }
+
+        if (res.success) {
+          // res.invoice pode faltar mesmo com sucesso: falhou só a gravação do
+          // espelho local em `invoices`, o documento fiscal é real (ver Task 6/7)
+          // — NUNCA tratar isto como falha, ou o próximo tick reemitiria e
+          // arriscaria um segundo documento sobre o mesmo pagamento.
+          let liquidarErr: { message: string } | null = null;
+          if (linha.parcela_id) {
+            const { error } = await service.rpc('acordo_parcela_liquidar', {
+              p_parcela_id: linha.parcela_id,
+              p_invoice_id: res.invoice?.id ?? null,
+            });
+            liquidarErr = error;
+          }
+          await service
+            .from('faturacao_outbox')
+            .update({
+              estado: 'sucesso',
+              invoice_id: res.invoice?.id ?? null,
+              // O documento fiscal FOI emitido com sucesso — isto nunca é
+              // razão para reemitir. Mas se a RPC de liquidação falhou, a
+              // parcela pode ter ficado presa em 'liquidacao_pendente' apesar
+              // do documento existir; sinaliza para revisão humana em vez de
+              // esconder a divergência.
+              needs_reconcile: !!liquidarErr,
+              ultimo_erro: liquidarErr
+                ? `Documento emitido mas falhou liquidar: ${liquidarErr.message}`
+                : null,
+            })
+            .eq('id', linha.id);
+          contadores.sucesso++;
+          return;
+        }
+
+        // `classe` (ver Task 6) distingue known_failed (nada foi criado, seguro
+        // reagendar) de unknown/ausente (não se sabe — NUNCA reagendar sem
+        // reconciliar primeiro). Isto é a regra central deste ficheiro; sem esta
+        // verificação qualquer falha reagendaria, incluindo as ambíguas.
+        if (res.classe !== 'known_failed') {
+          await suspender(linha, res.error ?? 'Resultado desconhecido do provider');
+          return;
+        }
+
+        const proxima = proximaTentativa(linha.tentativas, new Date());
+        if (!proxima) {
+          await service
+            .from('faturacao_outbox')
+            .update({ estado: 'falhado', ultimo_erro: res.error ?? 'Erro do provider' })
+            .eq('id', linha.id);
+          contadores.suspensas++;
+          return;
         }
         await service
           .from('faturacao_outbox')
-          .update({ estado: 'sucesso', invoice_id: res.invoice?.id ?? null, ultimo_erro: null })
+          .update({
+            estado: 'pendente',
+            proxima_tentativa: proxima.toISOString(),
+            ultimo_erro: res.error ?? 'Erro do provider',
+          })
           .eq('id', linha.id);
-        contadores.sucesso++;
-        return;
+        contadores.reagendadas++;
+      } catch (erro) {
+        console.error(`faturacao-outbox-drain: linha ${linha.id} falhou inesperadamente:`, erro);
+        await suspender(linha, `Erro inesperado: ${(erro as Error).message}`).catch((erroSuspender) =>
+          console.error(`faturacao-outbox-drain: falha a suspender linha ${linha.id}:`, erroSuspender)
+        );
       }
-
-      // `classe` (ver Task 6) distingue known_failed (nada foi criado, seguro
-      // reagendar) de unknown/ausente (não se sabe — NUNCA reagendar sem
-      // reconciliar primeiro). Isto é a regra central deste ficheiro; sem esta
-      // verificação qualquer falha reagendaria, incluindo as ambíguas.
-      if (res.classe !== 'known_failed') {
-        await suspender(linha, res.error ?? 'Resultado desconhecido do provider');
-        return;
-      }
-
-      const proxima = proximaTentativa(linha.tentativas, new Date());
-      if (!proxima) {
-        await service
-          .from('faturacao_outbox')
-          .update({ estado: 'falhado', ultimo_erro: res.error ?? 'Erro do provider' })
-          .eq('id', linha.id);
-        contadores.suspensas++;
-        return;
-      }
-      await service
-        .from('faturacao_outbox')
-        .update({
-          estado: 'pendente',
-          proxima_tentativa: proxima.toISOString(),
-          ultimo_erro: res.error ?? 'Erro do provider',
-        })
-        .eq('id', linha.id);
-      contadores.reagendadas++;
     });
   }
 
