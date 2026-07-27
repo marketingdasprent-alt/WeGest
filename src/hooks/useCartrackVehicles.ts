@@ -116,7 +116,9 @@ export function useCartrackLive(
 
 /** Chave de normalização de matrícula para cruzar live ↔ BD. */
 export function plateKey(s: string | null | undefined): string {
-  return String(s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return String(s ?? '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
 }
 
 /** Só as viaturas com coordenadas válidas (para desenhar no mapa). */

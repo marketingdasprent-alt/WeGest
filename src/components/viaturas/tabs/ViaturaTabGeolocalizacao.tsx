@@ -213,7 +213,9 @@ export function ViaturaTabGeolocalizacao({ viaturaId, matricula }: Props) {
         <Stat
           icon={Power}
           label="Estado"
-          value={view.ignition == null ? '—' : view.ignition ? 'Ignição ligada' : 'Ignição desligada'}
+          value={
+            view.ignition == null ? '—' : view.ignition ? 'Ignição ligada' : 'Ignição desligada'
+          }
           sub={view.speed != null && view.speed > 0 ? `${Math.round(view.speed)} km/h` : 'Parada'}
         />
         <Stat icon={Clock} label="Última posição" value={fmtDate(view.last_position_at)} />

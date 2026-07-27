@@ -212,23 +212,23 @@ export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
           {(SINCRONIZACAO_ATIVA || data.type === 'via_verde' || data.type === 'cartrack') &&
             data.ativo &&
             onExecute && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              disabled={isExecuting}
-              onClick={(e) => {
-                e.stopPropagation();
-                onExecute(data);
-              }}
-            >
-              {isExecuting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-              ) : (
-                <Play className="h-3.5 w-3.5 text-emerald-500" />
-              )}
-            </Button>
-          )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                disabled={isExecuting}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onExecute(data);
+                }}
+              >
+                {isExecuting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                ) : (
+                  <Play className="h-3.5 w-3.5 text-emerald-500" />
+                )}
+              </Button>
+            )}
           {onImport ? (
             <Button
               variant="outline"

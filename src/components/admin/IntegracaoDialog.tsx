@@ -726,9 +726,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                         variant="outline"
                         onClick={handleTestCartrackConnection}
                         disabled={
-                          cartrackTestState === 'testing' ||
-                          !formData.login ||
-                          !formData.password
+                          cartrackTestState === 'testing' || !formData.login || !formData.password
                         }
                       >
                         {cartrackTestState === 'testing' ? (

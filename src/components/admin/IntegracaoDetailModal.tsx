@@ -225,8 +225,8 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
       company_id: integracao.company_id?.toString() || '',
       ativo: integracao.ativo,
       // Cartrack é automático por defeito: null conta como ligado (alinhado com
-    // cartrack-scheduled-sync, que sincroniza quando sync_automatico !== false).
-    sync_automatico: integracao.sync_automatico ?? integracao.plataforma === 'cartrack',
+      // cartrack-scheduled-sync, que sincroniza quando sync_automatico !== false).
+      sync_automatico: integracao.sync_automatico ?? integracao.plataforma === 'cartrack',
       intervalo_sync_horas: integracao.intervalo_sync_horas ?? 24,
       site_url: integracao.plataforma === 'robot' ? (integracao.webhook_url ?? '') : '',
       apify_actor_id: integracao.apify_actor_id ?? '',
