@@ -38,6 +38,7 @@ sempre que se cria uma tabela nova com `org_id`.
 | `rls_org_isolation.test.sql` | Isolamento multi-tenant: (META) toda a tabela com `org_id` tem RLS + a policy RESTRICTIVE `rls_org_isolation`; (COMPORTAMENTO) com 2 orgs/2 users, cada user só vê a sua org e o `WITH CHECK` bloqueia escrita cross-org. |
 | `automation_rules.test.sql` | Motor de Automação: isolamento comportamental de `domain_events`/`automation_rules` por org, e que a policy de permissão (`has_permission`/`is_current_user_admin`) bloqueia quem não tem o recurso `automacoes`. |
 | `automation_queue.test.sql` | Motor de Automação: `automation_runs_claim()`/`_complete()`/`_fail()` — claim atómico, um run ativo por regra+org, retry com backoff exponencial, dead-letter em `failed_jobs` ao esgotar tentativas, sweep de runs presos em `running`, e que `automation_logs` regista cada execução/falha. |
+| `emit_expiry_events.test.sql` | Motor de Automação: `emit_expiry_events()` — deteta viaturas/motoristas a entrar na janela de 15 dias (seguro, IPO, carta, licença TVDE), exclui vendidas/inativas, e não duplica um evento ainda não processado. |
 
 ## Convenção
 
