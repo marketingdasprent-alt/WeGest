@@ -45,6 +45,7 @@ interface KIResponse {
   Sid?: string;
   Data?: any;
   ErrorMessage?: string;
+  __httpStatus?: number;
 }
 
 const ok = (d: KIResponse) => Number(d?.Status) === 1;
@@ -85,7 +86,12 @@ async function call(
   });
   const text = await res.text();
   try {
-    return JSON.parse(text) as KIResponse;
+    const parsed = JSON.parse(text) as KIResponse;
+    // Guarda o status HTTP real na resposta — um corpo JSON pode vir de um
+    // gateway/WAF à frente do KeyInvoice (Cloudflare, ALB, nginx) em vez do
+    // próprio KeyInvoice, e só o status HTTP permite distinguir os dois casos.
+    parsed.__httpStatus = res.status;
+    return parsed;
   } catch {
     throw new Error(`KeyInvoice devolveu resposta não-JSON (${method}): ${text.slice(0, 200)}`);
   }
@@ -213,8 +219,18 @@ export const keyInvoiceProvider: FaturacaoProvider = {
       throw new EmissaoAmbiguaError(`insertDocument: falha de transporte — ${(e as Error).message}`);
     }
     if (!ok(res)) {
-      // O provider RESPONDEU e recusou explicitamente o pedido (Status !== 1)
-      // — confirma-se que nada foi criado.
+      const status = res.__httpStatus ?? 0;
+      if (status < 200 || status >= 300) {
+        // HTTP não-2xx: o corpo pode vir de um gateway/WAF à frente do
+        // KeyInvoice, não do próprio KeyInvoice — não se pode confiar que
+        // "Status ausente" significa "KeyInvoice recusou". Nunca reemitir
+        // sem reconciliar.
+        throw new EmissaoAmbiguaError(
+          `insertDocument: HTTP ${status} — impossível confirmar se o documento foi criado.`
+        );
+      }
+      // 2xx com Status !== 1: o provider RESPONDEU e recusou explicitamente
+      // o pedido — confirma-se que nada foi criado.
       throw new Error(`insertDocument falhou: ${res?.ErrorMessage || 'recusado'}`);
     }
     if (!res.Data) {
