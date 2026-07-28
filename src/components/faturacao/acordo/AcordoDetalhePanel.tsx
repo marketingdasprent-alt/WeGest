@@ -2,7 +2,8 @@
 import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAcordoDetalhe } from '@/hooks/useAcordoDetalhe';
-import { AcordoStatusBadge } from '@/components/faturacao/AcordoStatusBadge';
+import { useAcordoVistaDevedor } from '@/hooks/useAcordoVistaDevedor';
+import { AcordoStatusBadge, type AcordoEstado } from '@/components/faturacao/AcordoStatusBadge';
 import { ParcelaTimelineItem } from './ParcelaTimelineItem';
 import { RegistarPagamentoDialog } from './RegistarPagamentoDialog';
 import { DocumentoPreviewDialog } from './DocumentoPreviewDialog';
@@ -11,10 +12,30 @@ import type { ParcelaDetalhe } from '@/hooks/useAcordoDetalhe';
 
 interface Props {
   acordoId: string;
+  /**
+   * 'staff' (default) usa useAcordoDetalhe (vista interna completa, RLS de staff) —
+   * comportamento inalterado desde a 4B, usado na rota /acordos/:id. 'devedor' usa
+   * useAcordoVistaDevedor (RPC acordo_vista_devedor, SECURITY DEFINER, campos já
+   * reduzidos do lado do servidor: sem titular_nif, sem estado de outbox/API) e
+   * esconde toda a acção interna (Registar pagamento, Ver recibo, PDF do aviso,
+   * reconciliação de suspenso) e qualquer referência ao titular fiscal.
+   */
+  modo?: 'staff' | 'devedor';
 }
 
-export function AcordoDetalhePanel({ acordoId }: Props) {
-  const { data: acordo, isLoading, error } = useAcordoDetalhe(acordoId);
+export function AcordoDetalhePanel({ acordoId, modo = 'staff' }: Props) {
+  const modoStaff = modo !== 'devedor';
+  // Cada hook só corre com o id quando é o modo activo — o outro recebe undefined e
+  // fica sem RPC/query a disparar (ver comentário em useAcordoVistaDevedor.ts sobre
+  // não usar `enabled`: aqui o "desligar" é feito ao nível do argumento, não da opção
+  // enabled do useQuery, por isso continua seguro mesmo com essa mudança).
+  const staffQuery = useAcordoDetalhe(modoStaff ? acordoId : undefined);
+  const devedorQuery = useAcordoVistaDevedor(modoStaff ? undefined : acordoId);
+  const acordoStaff = modoStaff ? staffQuery.data : undefined;
+  const acordoDevedor = modoStaff ? undefined : devedorQuery.data;
+  const acordo = acordoStaff ?? acordoDevedor;
+  const isLoading = modoStaff ? staffQuery.isLoading : devedorQuery.isLoading;
+  const error = modoStaff ? staffQuery.error : devedorQuery.error;
   const [parcelaAlvo, setParcelaAlvo] = useState<ParcelaDetalhe | null>(null);
   const [invoiceIdPreview, setInvoiceIdPreview] = useState<string | null>(null);
 
@@ -55,7 +76,7 @@ export function AcordoDetalhePanel({ acordoId }: Props) {
               {formatCurrency(resumo.faltaPagar)}
             </p>
           </div>
-          <AcordoStatusBadge estado={acordo.estado} />
+          <AcordoStatusBadge estado={acordo.estado as AcordoEstado} />
         </div>
         <p className="text-sm text-muted-foreground">
           {resumo.pagas} de {resumo.total} parcelas pagas
@@ -63,49 +84,62 @@ export function AcordoDetalhePanel({ acordoId }: Props) {
             ? ` · próxima em ${resumo.proximaData.split('-').reverse().join('/')}`
             : ''}
         </p>
-        <div className="grid grid-cols-2 gap-4 pt-2 text-sm">
-          <div>
-            <p className="text-xs text-muted-foreground">Responsável</p>
-            <p>{acordo.responsavelNome}</p>
+        {/* Responsável/titular fiscal: só em modo staff — a vista do devedor
+            (AcordoVistaDevedor) nem sequer traz estes campos (nunca expõe NIF). */}
+        {modoStaff && acordoStaff && (
+          <div className="grid grid-cols-2 gap-4 pt-2 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Responsável</p>
+              <p>{acordoStaff.responsavelNome}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Titular fiscal</p>
+              <p>
+                {acordoStaff.titularNome}
+                {acordoStaff.titularNif ? ` · NIF ${acordoStaff.titularNif}` : ''}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Titular fiscal</p>
-            <p>
-              {acordo.titularNome}
-              {acordo.titularNif ? ` · NIF ${acordo.titularNif}` : ''}
-            </p>
-          </div>
-        </div>
+        )}
       </div>
 
       <ol className="relative ml-3 space-y-5 border-l border-border/60">
         {acordo.parcelas.map((parcela) => (
           <ParcelaTimelineItem
-            key={parcela.id}
+            key={parcela.numero}
             acordo={acordo}
             parcela={parcela}
+            modo={modo}
             onRegistarPagamento={setParcelaAlvo}
             onVerDocumento={setInvoiceIdPreview}
           />
         ))}
       </ol>
 
-      <RegistarPagamentoDialog
-        open={!!parcelaAlvo}
-        onOpenChange={(o) => {
-          if (!o) setParcelaAlvo(null);
-        }}
-        acordo={acordo}
-        parcela={parcelaAlvo}
-      />
+      {/* Diálogos de acção (registar pagamento / ver recibo): só existem em modo
+          staff. Em modo devedor nunca abrem — o ParcelaTimelineItem já esconde os
+          botões que os disparariam — mas nem sequer os montamos, para não termos de
+          fingir um `acordo: AcordoDetalhe` completo a partir da vista reduzida. */}
+      {modoStaff && acordoStaff && (
+        <>
+          <RegistarPagamentoDialog
+            open={!!parcelaAlvo}
+            onOpenChange={(o) => {
+              if (!o) setParcelaAlvo(null);
+            }}
+            acordo={acordoStaff}
+            parcela={parcelaAlvo}
+          />
 
-      <DocumentoPreviewDialog
-        open={!!invoiceIdPreview}
-        onOpenChange={(o) => {
-          if (!o) setInvoiceIdPreview(null);
-        }}
-        invoiceId={invoiceIdPreview}
-      />
+          <DocumentoPreviewDialog
+            open={!!invoiceIdPreview}
+            onOpenChange={(o) => {
+              if (!o) setInvoiceIdPreview(null);
+            }}
+            invoiceId={invoiceIdPreview}
+          />
+        </>
+      )}
     </div>
   );
 }

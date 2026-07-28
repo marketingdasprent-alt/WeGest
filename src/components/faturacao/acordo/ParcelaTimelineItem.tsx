@@ -5,16 +5,26 @@ import { ParcelaStatusBadge } from '@/components/faturacao/ParcelaStatusBadge';
 import { formatCurrency } from '@/utils/formatters';
 import { gerarAvisoVencimentoPdf } from '@/utils/avisoVencimentoPdf';
 import type { AcordoDetalhe, ParcelaDetalhe } from '@/hooks/useAcordoDetalhe';
+import type { AcordoVistaDevedor, AcordoVistaDevedorParcela } from '@/hooks/useAcordoVistaDevedor';
 
 const dataPT = (iso: string) => iso.split('-').reverse().join('/');
 
 const ABERTAS: ParcelaDetalhe['estado'][] = ['agendada', 'avisada', 'vencida'];
 
 interface Props {
-  acordo: AcordoDetalhe;
-  parcela: ParcelaDetalhe;
-  onRegistarPagamento: (parcela: ParcelaDetalhe) => void;
-  onVerDocumento: (invoiceId: string) => void;
+  acordo: AcordoDetalhe | AcordoVistaDevedor;
+  parcela: ParcelaDetalhe | AcordoVistaDevedorParcela;
+  onRegistarPagamento?: (parcela: ParcelaDetalhe) => void;
+  onVerDocumento?: (invoiceId: string) => void;
+  /**
+   * 'staff' (default) mostra todas as acções internas (Registar pagamento, Ver
+   * recibo, PDF do aviso). 'devedor' esconde-as TODAS incondicionalmente — o
+   * devedor só visualiza o próprio acordo (via RPC acordo_vista_devedor), nunca
+   * actua sobre ele. A gating é feita pelo `modo`, não pela presença/ausência dos
+   * campos: mesmo que um dia a vista do devedor passasse a incluir algum destes
+   * campos, isso não deve, por si só, fazer aparecer um botão de acção.
+   */
+  modo?: 'staff' | 'devedor';
 }
 
 export function ParcelaTimelineItem({
@@ -22,8 +32,16 @@ export function ParcelaTimelineItem({
   parcela,
   onRegistarPagamento,
   onVerDocumento,
+  modo = 'staff',
 }: Props) {
-  const aberta = ABERTAS.includes(parcela.estado);
+  const modoStaff = modo !== 'devedor';
+  // Cast seguro: o AcordoDetalhePanel só passa `acordo`/`parcela` com estes dados
+  // completos quando modo é 'staff' (fonte useAcordoDetalhe); em modo 'devedor' estes
+  // valores nunca chegam a ser lidos, porque todos os blocos que os usam estão
+  // atrás de `modoStaff &&`.
+  const parcelaStaff = parcela as ParcelaDetalhe;
+  const acordoStaff = acordo as AcordoDetalhe;
+  const aberta = ABERTAS.includes(parcelaStaff.estado);
 
   return (
     <li className="ml-6">
@@ -33,64 +51,64 @@ export function ParcelaTimelineItem({
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-foreground">Parcela {parcela.numero}</span>
-          <ParcelaStatusBadge estado={parcela.estado} />
+          <ParcelaStatusBadge estado={parcelaStaff.estado} />
           <span className="text-xs text-muted-foreground tabular-nums">
             {formatCurrency(parcela.valor)} · vence {dataPT(parcela.dataVencimento)}
           </span>
         </div>
 
-        {parcela.estado === 'liquidacao_pendente' && !parcela.suspenso && (
+        {modoStaff && parcelaStaff.estado === 'liquidacao_pendente' && !parcelaStaff.suspenso && (
           <p className="text-xs text-indigo-700 dark:text-indigo-300">
             ⏳ Pagamento registado — recibo por emitir. Nova tentativa automática em breve.
           </p>
         )}
 
-        {parcela.suspenso && (
+        {modoStaff && parcelaStaff.suspenso && (
           <p className="text-xs text-destructive">
             ⚠ Recibo suspenso — precisa de verificação. A ligação ao software de faturação falhou e
             não é possível confirmar se o recibo chegou a ser emitido.
           </p>
         )}
 
-        {parcela.avisoEnviadoEm && (
+        {modoStaff && parcelaStaff.avisoEnviadoEm && (
           <p className="text-xs text-muted-foreground">
-            Aviso enviado {dataPT(parcela.avisoEnviadoEm.slice(0, 10))}
+            Aviso enviado {dataPT(parcelaStaff.avisoEnviadoEm.slice(0, 10))}
           </p>
         )}
 
         <div className="flex items-center gap-2">
-          {aberta && (
+          {modoStaff && aberta && (
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="h-7 gap-1.5 text-xs"
-              onClick={() => onRegistarPagamento(parcela)}
+              onClick={() => onRegistarPagamento?.(parcelaStaff)}
             >
               Registar pagamento
             </Button>
           )}
-          {parcela.invoiceRcId && (
+          {modoStaff && parcelaStaff.invoiceRcId && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 gap-1.5 text-xs"
-              onClick={() => onVerDocumento(parcela.invoiceRcId!)}
+              onClick={() => onVerDocumento?.(parcelaStaff.invoiceRcId!)}
             >
               <Eye className="h-3.5 w-3.5" />
               Ver recibo
             </Button>
           )}
-          {parcela.avisoEnviadoEm && (
+          {modoStaff && parcelaStaff.avisoEnviadoEm && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 gap-1.5 text-xs"
               onClick={() => {
-                const pdf = gerarAvisoVencimentoPdf(acordo, parcela);
-                pdf.save(`aviso-parcela-${parcela.numero}-acordo-${acordo.codigo}.pdf`);
+                const pdf = gerarAvisoVencimentoPdf(acordoStaff, parcelaStaff);
+                pdf.save(`aviso-parcela-${parcelaStaff.numero}-acordo-${acordoStaff.codigo}.pdf`);
               }}
             >
               <Download className="h-3.5 w-3.5" />
