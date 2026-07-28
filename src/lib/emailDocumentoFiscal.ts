@@ -35,4 +35,6 @@ export async function enviarDocumentoFiscalEmail({
 
   if (error) throw new Error(error.message || 'Falha ao contactar o serviço de email');
   if (data && data.success === false) throw new Error(data.error || 'Falha ao enviar o documento');
+
+  await supabase.from('invoices').update({ enviado_em: new Date().toISOString() }).eq('id', invoice.id);
 }

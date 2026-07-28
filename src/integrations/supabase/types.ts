@@ -5119,6 +5119,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           data_emissao: string | null
+          enviado_em: string | null
           erro_msg: string | null
           id: string
           numero: string | null
@@ -5142,6 +5143,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           data_emissao?: string | null
+          enviado_em?: string | null
           erro_msg?: string | null
           id?: string
           numero?: string | null
@@ -5165,6 +5167,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           data_emissao?: string | null
+          enviado_em?: string | null
           erro_msg?: string | null
           id?: string
           numero?: string | null
