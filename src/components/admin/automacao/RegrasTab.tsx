@@ -23,7 +23,10 @@ import { Settings2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { useAutomacaoEstatisticasPorRegra, useToggleAutomationRule } from '@/hooks/useAutomationQueue';
+import {
+  useAutomacaoEstatisticasPorRegra,
+  useToggleAutomationRule,
+} from '@/hooks/useAutomationQueue';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { ConfigurarRegraSheet } from './ConfigurarRegraSheet';
