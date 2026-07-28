@@ -68,6 +68,7 @@ function chainable(result: unknown) {
     gte: () => builder,
     order: () => builder,
     limit: () => builder,
+    in: () => builder,
     single: () => Promise.resolve(result),
     then: (resolve: (v: unknown) => void) => resolve(result),
   };
@@ -118,6 +119,24 @@ vi.mock('@/integrations/supabase/client', () => ({
             data: [
               { id: 'cargo-1', nome: 'Gestores' },
               { id: 'cargo-2', nome: 'Financeiro' },
+            ],
+            error: null,
+          });
+        }
+        if (table === 'user_organizacoes') {
+          return chainable({
+            data: [
+              { user_id: 'user-1', cargo_id: 'cargo-1' },
+              { user_id: 'user-2', cargo_id: 'cargo-1' },
+            ],
+            error: null,
+          });
+        }
+        if (table === 'profiles') {
+          return chainable({
+            data: [
+              { id: 'user-1', nome: 'Ana Gestora', email: 'ana@exemplo.pt' },
+              { id: 'user-2', nome: 'Bruno Gestor', email: 'bruno@exemplo.pt' },
             ],
             error: null,
           });
@@ -467,7 +486,7 @@ describe('AutomacaoPage', () => {
     });
   });
 
-  it('mostra os cargos como checkboxes e grava os cargo_ids escolhidos ao guardar', async () => {
+  it('mostra os cargos como botões e grava os cargo_ids escolhidos ao guardar', async () => {
     renderPage();
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
 
@@ -482,10 +501,10 @@ describe('AutomacaoPage', () => {
     });
 
     // Gestores (cargo-1) já vem selecionado pelo acao_config mockado.
-    expect(await screen.findByRole('checkbox', { name: /Gestores/i })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: /Financeiro/i })).not.toBeChecked();
+    expect(await screen.findByRole('button', { name: 'Gestores', pressed: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Financeiro', pressed: false })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /Financeiro/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Financeiro', pressed: false }));
     fireEvent.click(await screen.findByRole('button', { name: /Guardar/i }));
 
     await waitFor(() => {
@@ -497,6 +516,44 @@ describe('AutomacaoPage', () => {
     expect(capturedUpdatePayload?.acao_config).toMatchObject({
       destinatarios_estrategia: 'cargo',
       destinatarios_cargo_ids: expect.arrayContaining(['cargo-1', 'cargo-2']),
+    });
+  });
+
+  it('liga "Escolher pessoas específicas" e grava destinatarios_modo/user_ids', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Configurar/i })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Configurar: Regra Estatística Teste/)).toBeTruthy();
+    });
+
+    await screen.findByRole('button', { name: 'Gestores', pressed: true });
+
+    // "Escolher pessoas específicas" é o 1.º switch (o 2.º é "Enviar também por email").
+    fireEvent.click(screen.getAllByRole('switch')[0]);
+
+    expect(
+      await screen.findByRole('button', { name: /Ana Gestora/, pressed: false })
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Ana Gestora/, pressed: false }));
+
+    fireEvent.click(await screen.findByRole('button', { name: /Guardar/i }));
+
+    await waitFor(() => {
+      expect(mockToastFn).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Configuração guardada' })
+      );
+    });
+
+    expect(capturedUpdatePayload?.acao_config).toMatchObject({
+      destinatarios_modo: 'individual',
+      destinatarios_user_ids: ['user-1'],
     });
   });
 

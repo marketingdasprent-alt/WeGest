@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense, type ComponentType } from 'react';
+import { cn } from '@/lib/utils';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +23,6 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import {
@@ -35,6 +35,7 @@ import {
 import {
   Bot,
   AlertTriangle,
+  Check,
   CheckCircle2,
   Clock,
   RotateCw,
@@ -62,9 +63,11 @@ import {
   useExecutarAutomacoesManualmente,
   useAutomationRuleConfig,
   useCargosDisponiveis,
+  useUtilizadoresPorCargo,
   useAtualizarConfigRegra,
   type FailedJob,
   type AutomationRuleAcaoConfig,
+  type UtilizadorPorCargo,
 } from '@/hooks/useAutomationQueue';
 import { ExecucaoDrillDownSheet } from '@/components/admin/automacao/ExecucaoDrillDownSheet';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -611,10 +614,16 @@ function RegrasTab() {
   );
 }
 
-const ESTRATEGIA_LABELS: Record<string, string> = {
-  cargo: 'Por grupo/cargo (todos os admins + cargos escolhidos abaixo)',
-  gestor_responsavel: 'Gestor responsável específico (cai para admins se não houver um definido)',
-};
+// Referência estável — um `[]` inline como default de desestruturação cria
+// um array novo a cada render, o que fazia o useEffect de limpeza (que
+// depende de utilizadoresDoCargo) disparar para sempre.
+const SEM_UTILIZADORES: UtilizadorPorCargo[] = [];
+
+function iniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/);
+  const primeiras = partes.length > 1 ? [partes[0], partes[partes.length - 1]] : [partes[0]];
+  return primeiras.map((p) => p[0]?.toUpperCase() ?? '').join('');
+}
 
 function ConfigurarRegraSheet({
   regra,
@@ -629,7 +638,9 @@ function ConfigurarRegraSheet({
   const atualizar = useAtualizarConfigRegra();
 
   const [destinatariosCargoIds, setDestinatariosCargoIds] = useState<string[]>([]);
-  const [destinatariosEstrategia, setDestinatariosEstrategia] = useState('cargo');
+  const [destinatariosModo, setDestinatariosModo] = useState<'grupo' | 'individual'>('grupo');
+  const [destinatariosUserIds, setDestinatariosUserIds] = useState<string[]>([]);
+  const { data: utilizadoresDoCargo = SEM_UTILIZADORES } = useUtilizadoresPorCargo(destinatariosCargoIds);
   const [enviarEmail, setEnviarEmail] = useState(false);
   const [enviarEmailDigest, setEnviarEmailDigest] = useState(false);
   const [cooldownMinutos, setCooldownMinutos] = useState(0);
@@ -637,18 +648,29 @@ function ConfigurarRegraSheet({
   useEffect(() => {
     if (!config) return;
     setDestinatariosCargoIds(config.acao_config.destinatarios_cargo_ids ?? []);
-    setDestinatariosEstrategia(config.acao_config.destinatarios_estrategia ?? 'cargo');
+    setDestinatariosModo(config.acao_config.destinatarios_modo ?? 'grupo');
+    setDestinatariosUserIds(config.acao_config.destinatarios_user_ids ?? []);
     setEnviarEmail(config.acao_config.enviar_email ?? false);
     setEnviarEmailDigest(config.acao_config.enviar_email_digest ?? false);
     setCooldownMinutos(config.cooldown_minutos);
   }, [config]);
+
+  // Se um cargo for desmarcado, tira também da seleção individual quem já
+  // não pertence a nenhum dos cargos escolhidos (evita lixo escondido).
+  useEffect(() => {
+    setDestinatariosUserIds((prev) =>
+      prev.filter((id) => utilizadoresDoCargo.some((u) => u.id === id))
+    );
+  }, [utilizadoresDoCargo]);
 
   const handleGuardar = async () => {
     if (!regra || !config) return;
     const novoAcaoConfig: AutomationRuleAcaoConfig = {
       ...config.acao_config,
       destinatarios_cargo_ids: destinatariosCargoIds,
-      destinatarios_estrategia: destinatariosEstrategia,
+      destinatarios_estrategia: 'cargo',
+      destinatarios_modo: destinatariosModo,
+      destinatarios_user_ids: destinatariosModo === 'individual' ? destinatariosUserIds : undefined,
       enviar_email: enviarEmail,
       enviar_email_digest: enviarEmail ? enviarEmailDigest : false,
     };
@@ -690,43 +712,88 @@ function ConfigurarRegraSheet({
         ) : (
           <div className="mt-6 space-y-5">
             <div className="space-y-2">
-              <Label>Como escolher os destinatários</Label>
-              <Select value={destinatariosEstrategia} onValueChange={setDestinatariosEstrategia}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(ESTRATEGIA_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Grupos que recebem (além dos admins)</Label>
+              <div className="flex flex-wrap gap-2">
+                {cargos.map((c) => {
+                  const selecionado = destinatariosCargoIds.includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      aria-pressed={selecionado}
+                      onClick={() =>
+                        setDestinatariosCargoIds((prev) =>
+                          selecionado ? prev.filter((id) => id !== c.id) : [...prev, c.id]
+                        )
+                      }
+                      className={cn(
+                        'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                        selecionado
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                      )}
+                    >
+                      {c.nome}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Quem pertencer a um destes grupos (Definições → Grupos) recebe a notificação, além
+                de qualquer administrador.
+              </p>
             </div>
 
-            {destinatariosEstrategia === 'cargo' && (
-              <div className="space-y-2">
-                <Label>Grupos/cargos que recebem (além dos admins)</Label>
-                <div className="space-y-2 rounded-md border p-3">
-                  {cargos.map((c) => (
-                    <label key={c.id} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={destinatariosCargoIds.includes(c.id)}
-                        onCheckedChange={(checked) =>
-                          setDestinatariosCargoIds((prev) =>
-                            checked ? [...prev, c.id] : prev.filter((id) => id !== c.id)
-                          )
-                        }
-                      />
-                      {c.nome}
-                    </label>
-                  ))}
+            {destinatariosCargoIds.length > 0 && (
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <Label className="text-sm">Escolher pessoas específicas</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Em vez de todos os utilizadores destes grupos, escolhe só quem deve receber.
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Quem pertencer a um destes cargos (Definições → Grupos) recebe a notificação,
-                  além de qualquer administrador.
-                </p>
+                <Switch
+                  checked={destinatariosModo === 'individual'}
+                  onCheckedChange={(checked) => setDestinatariosModo(checked ? 'individual' : 'grupo')}
+                />
+              </div>
+            )}
+
+            {destinatariosModo === 'individual' && utilizadoresDoCargo.length > 0 && (
+              <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-2">
+                {utilizadoresDoCargo.map((u) => {
+                  const selecionado = destinatariosUserIds.includes(u.id);
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      aria-pressed={selecionado}
+                      onClick={() =>
+                        setDestinatariosUserIds((prev) =>
+                          selecionado ? prev.filter((id) => id !== u.id) : [...prev, u.id]
+                        )
+                      }
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors',
+                        selecionado ? 'bg-primary/10 ring-1 ring-primary/40' : 'hover:bg-muted'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                          selecionado ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                        )}
+                      >
+                        {iniciais(u.nome)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{u.nome}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{u.email}</span>
+                      </span>
+                      {selecionado && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
