@@ -28,6 +28,7 @@ describe('enviarContratoDocumentoEmail', () => {
       mensagem: 'Olá',
       pdf,
       filename: 'Contrato_123.pdf',
+      orgId: 'org-1',
     });
 
     expect(invoke).toHaveBeenCalledWith('send-documento-fiscal-email', {
@@ -38,6 +39,7 @@ describe('enviarContratoDocumentoEmail', () => {
         mensagem: 'Olá',
         pdfBase64: 'JVBERi0xLjM=',
         filename: 'Contrato_123.pdf',
+        org_id: 'org-1',
       },
     });
   });
@@ -53,6 +55,7 @@ describe('enviarContratoDocumentoEmail', () => {
         mensagem: 'Msg',
         pdf,
         filename: 'a.pdf',
+        orgId: 'org-1',
       })
     ).rejects.toThrow('falhou a rede');
   });
@@ -68,6 +71,7 @@ describe('enviarContratoDocumentoEmail', () => {
         mensagem: 'Msg',
         pdf,
         filename: 'a.pdf',
+        orgId: 'org-1',
       })
     ).rejects.toThrow('Brevo rejeitou');
   });
@@ -82,6 +86,7 @@ describe('enviarContratoDocumentoEmail', () => {
         mensagem: 'Msg',
         pdf,
         filename: 'a.pdf',
+        orgId: 'org-1',
       })
     ).rejects.toThrow('Não foi possível preparar o PDF');
     expect(invoke).not.toHaveBeenCalled();

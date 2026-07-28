@@ -48,6 +48,8 @@ interface Props {
   contextoLabel: string;
   /** Cliente e/ou condutor resolvidos do contrato. */
   entidades: ContactoEntidade[];
+  /** Organização do contrato — a edge function usa-a para resolver a integração de email. */
+  orgId: string;
 }
 
 /** Envio por email do PDF do contrato — mesmo padrão/UX de
@@ -60,6 +62,7 @@ export function EnviarContratoEmailDialog({
   filename,
   contextoLabel,
   entidades,
+  orgId,
 }: Props) {
   const [entidadeTipo, setEntidadeTipo] = useState<string>('cliente');
   const [email, setEmail] = useState('');
@@ -111,6 +114,7 @@ export function EnviarContratoEmailDialog({
         mensagem,
         pdf,
         filename,
+        orgId,
       });
       toast.success(`Documento enviado para ${dest}.`);
       onOpenChange(false);
