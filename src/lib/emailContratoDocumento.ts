@@ -14,6 +14,7 @@ export interface EnviarContratoDocumentoArgs {
   mensagem: string;
   pdf: jsPDF;
   filename: string;
+  orgId: string;
 }
 
 export async function enviarContratoDocumentoEmail({
@@ -23,6 +24,7 @@ export async function enviarContratoDocumentoEmail({
   mensagem,
   pdf,
   filename,
+  orgId,
 }: EnviarContratoDocumentoArgs): Promise<void> {
   const datauri = pdf.output('datauristring');
   const marcador = 'base64,';
@@ -32,9 +34,21 @@ export async function enviarContratoDocumentoEmail({
 
   const { data, error } = await supabase.functions.invoke<{ success?: boolean; error?: string }>(
     'send-documento-fiscal-email',
-    { body: { to, toNome, subject, mensagem, pdfBase64, filename } }
+    { body: { to, toNome, subject, mensagem, pdfBase64, filename, org_id: orgId } }
   );
 
-  if (error) throw new Error(error.message || 'Falha ao contactar o serviço de email');
+  if (error) {
+    // FunctionsHttpError não expõe o corpo JSON em error.message (fica só a
+    // string genérica "Edge Function returned a non-2xx status code") — a
+    // razão real vem em error.context (a Response).
+    let mensagem = error.message || 'Falha ao contactar o serviço de email';
+    try {
+      const body = await error.context?.json?.();
+      mensagem = body?.error || mensagem;
+    } catch {
+      // corpo não é JSON válido — mantém a mensagem genérica
+    }
+    throw new Error(mensagem);
+  }
   if (data && data.success === false) throw new Error(data.error || 'Falha ao enviar o documento');
 }
