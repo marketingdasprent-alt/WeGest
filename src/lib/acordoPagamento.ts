@@ -11,7 +11,6 @@ import { emitirDocumento, clienteRowToFatura } from './faturacao';
 
 export interface RegistarPagamentoInput {
   parcelaId: string;
-  orgId: string;
   acordoId: string;
   /** Conta-corrente onde entra o crédito: o RESPONSÁVEL pelo acordo. */
   entidadeId: string;
