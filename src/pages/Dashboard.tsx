@@ -14,7 +14,6 @@ import {
   UserPlus,
   RefreshCw,
   LayoutDashboard,
-  MapPin,
   CalendarRange,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,6 +44,7 @@ import { fetchViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 import { deriveViaturaEstado, ESTADOS_EM_USO } from '@/lib/viaturas';
 import { useContasAReceber } from '@/hooks/useContasAReceber';
 import { CheckinCheckoutHistoricoCard } from '@/components/dashboard/CheckinCheckoutHistoricoCard';
+import { CartrackMapCard } from '@/components/dashboard/CartrackMapCard';
 import { cn } from '@/lib/utils';
 import type { ChartPoint } from '@/components/dashboard/ReceitaChart';
 import type { FrotaDonutData } from '@/components/dashboard/FrotaDonutChart';
@@ -823,16 +823,10 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* ── Histórico de check-in/check-out + Car Track (em breve). ─ */}
+          {/* ── Histórico de check-in/check-out + mapa Car Track (posições reais). ─ */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
             <CheckinCheckoutHistoricoCard enabled />
-            <div className="rounded-2xl border border-border bg-card p-4 flex flex-col items-center justify-center text-center gap-2 min-h-[160px]">
-              <MapPin className="h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm font-semibold">Car Track</p>
-              <p className="text-xs text-muted-foreground max-w-[240px]">
-                Localização e rastreio de viaturas em tempo real. Em breve.
-              </p>
-            </div>
+            <CartrackMapCard />
           </div>
         </>
       )}

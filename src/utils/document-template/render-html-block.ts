@@ -76,6 +76,7 @@ export async function renderHtmlBlock(
       isImage?: boolean;
       isTable?: boolean;
       isHr?: boolean;
+      isPageBreak?: boolean;
     }>;
   }> = [];
 
@@ -87,11 +88,17 @@ export async function renderHtmlBlock(
       isImage?: boolean;
       isTable?: boolean;
       isHr?: boolean;
+      isPageBreak?: boolean;
     }>;
   } | null = null;
 
   for (const element of contentElements) {
-    if (element.type === 'image' || element.type === 'table' || element.type === 'hr') {
+    if (
+      element.type === 'image' ||
+      element.type === 'table' ||
+      element.type === 'hr' ||
+      element.type === 'pagebreak'
+    ) {
       if (currentGroup && currentGroup.segments.length > 0) {
         groupedElements.push(currentGroup);
         currentGroup = null;
@@ -105,6 +112,7 @@ export async function renderHtmlBlock(
             isImage: element.type === 'image',
             isTable: element.type === 'table',
             isHr: element.type === 'hr',
+            isPageBreak: element.type === 'pagebreak',
           },
         ],
       });
@@ -139,16 +147,57 @@ export async function renderHtmlBlock(
 
   let yPos = startY;
 
+  const novaPagina = () => {
+    pdf.addPage();
+    if (bg) pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
+    yPos = topMargin;
+  };
+
+  /**
+   * Salta para a folha seguinte se `altura` já não couber nesta. Tem de ser
+   * chamado ANTES de desenhar seja o que for — sem isto o yPos continuava a
+   * crescer para lá do fim da folha e o conteúdo saía fora da página (ou por
+   * baixo do papel timbrado).
+   */
+  const garantirEspaco = (altura: number) => {
+    if (yPos + altura > pageHeight - bottomMargin) novaPagina();
+  };
+
+  // Quebra de página manual: fica PENDENTE até haver mesmo conteúdo para
+  // desenhar. Assim uma quebra deixada no fim do template (ou seguida só de
+  // parágrafos vazios) não produz uma folha em branco no PDF.
+  let pendingPageBreak = false;
+  const flushPageBreak = () => {
+    if (!pendingPageBreak) return;
+    novaPagina();
+    pendingPageBreak = false;
+  };
+
   // Renderizar conteúdo agrupado
   for (const group of groupedElements) {
+    // Quebra de página manual
+    if (group.segments[0].isPageBreak) {
+      pendingPageBreak = true;
+      continue;
+    }
+
     // Quebra de linha
     if (group.segments.length === 1 && group.segments[0].text === '\n') {
-      yPos += 10 * 0.352777778 * lineFactor;
+      // Linhas em branco logo a seguir a uma quebra de página são absorvidas —
+      // a página nova começa sempre na margem de topo.
+      if (pendingPageBreak) continue;
+      const alturaLinha = 10 * 0.352777778 * lineFactor;
+      // Encher a folha de linhas em branco tem de empurrar para a folha
+      // seguinte, como num processador de texto — era isto que faltava e fazia
+      // parecer que o documento tinha um limite intransponível.
+      garantirEspaco(alturaLinha);
+      yPos += alturaLinha;
       continue;
     }
 
     // Imagem
     if (group.segments[0].isImage) {
+      flushPageBreak();
       const imgElement = group.segments[0].style;
       try {
         const img = await loadImage(imgElement.src);
@@ -164,11 +213,7 @@ export async function renderHtmlBlock(
           imgWidth = imgHeight * imgAspect;
         }
 
-        if (yPos + imgHeight > pageHeight - bottomMargin) {
-          pdf.addPage();
-          if (bg) pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
-          yPos = topMargin;
-        }
+        garantirEspaco(imgHeight);
 
         let xPos = leftMargin;
         if (group.align === 'center') {
@@ -187,6 +232,7 @@ export async function renderHtmlBlock(
 
     // Tabela
     if (group.segments[0].isTable) {
+      flushPageBreak();
       const tableEl = group.segments[0].style as DocEl;
       if (tableEl.rows && tableEl.rows.length > 0) {
         yPos = renderTable(pdf, tableEl.rows, leftMargin, yPos, maxWidth, !!tableEl.bordered, {
@@ -203,6 +249,7 @@ export async function renderHtmlBlock(
 
     // Divisória (<hr>)
     if (group.segments[0].isHr) {
+      flushPageBreak();
       yPos += 1;
       pdf.setDrawColor(224, 226, 232);
       pdf.setLineWidth(0.3);
@@ -211,9 +258,22 @@ export async function renderHtmlBlock(
       continue;
     }
 
-    // Renderizar grupo de texto com quebra automática
+    // Renderizar grupo de texto com quebra automática.
+    // Um grupo só de espaços não desenha nada — não pode materializar sozinho
+    // uma quebra de página pendente (voltaria a criar a folha em branco).
+    if (pendingPageBreak && !group.segments.some((seg) => seg.text.trim().length > 0)) {
+      continue;
+    }
+    flushPageBreak();
+
     const align = group.align;
     const maxFontSize = Math.max(...group.segments.map((seg) => seg.style.fontSize || 10));
+    const lineHeight = maxFontSize * 0.352777778 * lineFactor;
+
+    // A PRIMEIRA linha do parágrafo também tem de caber. Antes só se verificava
+    // ao mudar de linha dentro do parágrafo, por isso um parágrafo que
+    // começasse já fora da folha era desenhado fora da página.
+    garantirEspaco(lineHeight);
 
     const renderLine = (
       segments: Array<{ text: string; style: any; width: number }>,
@@ -281,13 +341,7 @@ export async function renderHtmlBlock(
           currentLineWidth += wordWidth;
         } else {
           if (currentLineSegments.length > 0) {
-            const lineHeight = maxFontSize * 0.352777778 * lineFactor;
-            if (yPos + lineHeight > pageHeight - bottomMargin) {
-              pdf.addPage();
-              if (bg) pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
-              yPos = topMargin;
-            }
-
+            garantirEspaco(lineHeight);
             renderLine(currentLineSegments, align, yPos);
             yPos += lineHeight;
           }
@@ -298,8 +352,10 @@ export async function renderHtmlBlock(
       }
     }
 
-    // Renderizar última linha do grupo
+    // Renderizar última linha do grupo — também tem de caber (a última linha de
+    // um parágrafo era desenhada sem verificação nenhuma).
     if (currentLineSegments.length > 0) {
+      garantirEspaco(lineHeight);
       renderLine(currentLineSegments, align, yPos);
     }
   }

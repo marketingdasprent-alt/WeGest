@@ -149,6 +149,10 @@ const RentingReservaForm = () => {
   const syncExtrasMutation = useSyncReservaExtras();
   const syncTaxasMutation = useSyncReservaTaxas();
 
+  // Clicou "Criar Contrato" com alterações por gravar: guarda-se primeiro e só
+  // depois se navega (ver handleCriarContrato / onSuccess do update).
+  const criarContratoAposGuardarRef = useRef(false);
+
   const [activeTab, setActiveTab] = useState('geral');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [anexosPendentes, setAnexosPendentes] = useState<AnexoPendente[]>([]);
@@ -456,45 +460,63 @@ const RentingReservaForm = () => {
 
   const { data: temConflito } = useReservaConflito(conflitoArgs);
 
-  // "Criar Contrato" está sempre presente em edição, mas só fica activo quando a
-  // reserva GUARDADA tem os campos obrigatórios e não há alterações por gravar —
-  // o contrato é gerado a partir da reserva persistida (reserva_id), não do form.
-  // Completude por regime. O condutor pode ser cliente (rent-a-car) ou
-  // motorista (TVDE), por isso aceitamos qualquer condutor guardado — exigir
-  // `cliente_id` bloqueava o TVDE. As estações só são obrigatórias no aluguer
-  // (rent-a-car); o TVDE não as usa. (Slot não chega aqui — gera prestação.)
-  const temCondutor = !!reserva?.cliente_id || condutoresAtuais.length > 0;
-  const temEstacoes = !!(reserva?.estacao_entrega_id && reserva?.estacao_recolha_id);
+  // "Criar Contrato" está sempre presente em edição e só fica inactivo quando
+  // faltam mesmo dados. Alterações por gravar NÃO bloqueiam: o contrato nasce
+  // da reserva PERSISTIDA (reserva_id), por isso o botão guarda primeiro e só
+  // depois navega (handleCriarContrato) — antes exigia um "Guardar" manual que
+  // o utilizador não tinha como adivinhar, agravado pelos efeitos da aba Geral
+  // que marcam o formulário como sujo sozinhos ao abrir.
+  //
+  // A completude é lida do FORMULÁRIO (não da reserva em BD): é isso que vai
+  // ser gravado no clique. Completude por regime — o condutor pode ser cliente
+  // (rent-a-car) ou motorista (TVDE), por isso aceitamos qualquer condutor;
+  // exigir `cliente_id` bloqueava o TVDE. As estações só são obrigatórias no
+  // aluguer (rent-a-car); o TVDE não as usa. (Slot não chega aqui — gera
+  // prestação.)
+  const regimeWatched = form.watch('regime');
+  const grupoWatched = form.watch('grupo');
+  const clienteIdWatched = form.watch('cliente_id');
+  const condutoresWatched = form.watch('condutores');
+  const estacaoEntregaWatched = form.watch('estacao_entrega_id');
+  const estacaoRecolhaWatched = form.watch('estacao_recolha_id');
+
+  const temCondutor = !!clienteIdWatched || (condutoresWatched?.length ?? 0) > 0;
+  const temEstacoes = !!(estacaoEntregaWatched && estacaoRecolhaWatched);
   // grupo é obrigatório: sem grupo não há tarifa e o contrato fica inválido.
-  const temGrupo = !!reserva?.grupo;
+  const temGrupo = !!grupoWatched;
   const reservaCompleta = !!(
     reserva &&
-    reserva.viatura_id &&
+    viaturaId &&
     temGrupo &&
     temCondutor &&
-    (reserva.regime === 'rent_a_car' ? temEstacoes : true)
+    (regimeWatched === 'rent_a_car' ? temEstacoes : true)
   );
-  const podeCriarContrato = reservaCompleta && !form.formState.isDirty;
+  const podeCriarContrato = reservaCompleta;
   // A reserva é só a porta de entrada: depois de gerar contrato, a fonte de
   // verdade passa a ser o contrato. A reserva fica read-only — para mudar
   // viatura/dados, edita-se o contrato (que versiona). Slot não gera
   // contrato_renting, por isso nunca é bloqueada por aqui.
   const bloqueadaPorContrato = isEdit && !!contratoExistente;
   const motivoContratoBloqueado = !reservaCompleta
-    ? reserva?.viatura_id && !temGrupo
+    ? viaturaId && !temGrupo
       ? 'A viatura selecionada não tem grupo — atribui um grupo na ficha da viatura e volta a selecionar.'
-      : reserva?.regime === 'rent_a_car'
-        ? 'Preenche condutor, viatura e estações (entrega e recolha) e guarda a reserva.'
-        : 'Preenche condutor e viatura e guarda a reserva.'
-    : form.formState.isDirty
-      ? 'Guarda as alterações antes de criar o contrato.'
-      : undefined;
+      : regimeWatched === 'rent_a_car'
+        ? 'Preenche condutor, viatura e estações (entrega e recolha).'
+        : 'Preenche condutor e viatura.'
+    : undefined;
+  // Aviso (não bloqueio): com alterações por gravar, o clique guarda-as antes
+  // de navegar — o utilizador fica a saber o que vai acontecer.
+  const tituloCriarContrato =
+    motivoContratoBloqueado ??
+    (form.formState.isDirty
+      ? 'As alterações por gravar são guardadas automaticamente antes de criar o contrato.'
+      : undefined);
 
   // Os condutores PERSISTEM ao trocar de regime — não se apaga a lista (senão o
   // condutor "desaparece"). A tabela de condutores mostra clientes (rent-a-car) ou
   // motoristas (TVDE/slot) conforme o tipo gravado em cada linha; o utilizador
   // remove manualmente os que não interessam ao novo regime.
-  const regimeWatched = form.watch('regime');
+  // (`regimeWatched` é declarado acima, junto às validações de "Criar Contrato".)
 
   // Auto‑activa longa duração + intervalo 30d para TVDE/slot; desmarca ao
   // voltar a rent-a-car. SÓ quando o UTILIZADOR troca de regime de facto — o
@@ -664,13 +686,15 @@ const RentingReservaForm = () => {
       // Espelha o padrão do ContratoForm — sem isto, o array `values.condutores`
       // fica só no form e nunca chega à BD (motorista "desaparece" após guardar).
       // O array já passou pela validação Zod do handleSubmit — cast seguro.
+      // Devolvem promessas que NUNCA rejeitam (o erro já é reportado por toast
+      // nas próprias mutations) — assim o fluxo "guardar e criar contrato" pode
+      // esperar por elas sem risco de unhandled rejection.
       const condutoresFinal = values.condutores as CondutorFormItem[];
-      const syncCondutores = (reservaId: string) => {
-        syncCondutoresMutation.mutate({
-          reservaId,
-          desejados: condutoresFinal,
-        });
-      };
+      const syncCondutores = (reservaId: string) =>
+        syncCondutoresMutation
+          .mutateAsync({ reservaId, desejados: condutoresFinal })
+          .then(() => undefined)
+          .catch(() => undefined);
 
       // Persiste coberturas/extras/taxas (m:n com os catálogos) — mesmo padrão
       // do ContratoForm. Nº de dias para os extras periódicos/coberturas: TVDE
@@ -693,11 +717,18 @@ const RentingReservaForm = () => {
       const custoExtras = extrasFinal.reduce((s, e) => s + calcExtraTotal(e, diasRelacoes), 0);
       const subtotalTaxas =
         (baseAluguer ?? values.valor_total ?? 0) + custoCoberturas + custoExtras;
-      const syncRelacoesExtra = (reservaId: string) => {
-        syncCoberturasMutation.mutate({ reservaId, desejadas: coberturasFinal });
-        syncExtrasMutation.mutate({ reservaId, desejados: extrasFinal, dias: diasRelacoes });
-        syncTaxasMutation.mutate({ reservaId, desejadas: taxasFinal, subtotal: subtotalTaxas });
-      };
+      const syncRelacoesExtra = (reservaId: string) =>
+        Promise.all([
+          syncCoberturasMutation
+            .mutateAsync({ reservaId, desejadas: coberturasFinal })
+            .catch(() => undefined),
+          syncExtrasMutation
+            .mutateAsync({ reservaId, desejados: extrasFinal, dias: diasRelacoes })
+            .catch(() => undefined),
+          syncTaxasMutation
+            .mutateAsync({ reservaId, desejadas: taxasFinal, subtotal: subtotalTaxas })
+            .catch(() => undefined),
+        ]).then(() => undefined);
 
       if (isEdit && reserva) {
         // Editar: ficar na própria página (utilizador vê toast e continua a trabalhar).
@@ -707,9 +738,27 @@ const RentingReservaForm = () => {
         updateMutation.mutate(
           { id: reserva.id, ...payload, gestor_id: values.gestor_id ?? null },
           {
-            onSuccess: () => {
-              syncCondutores(reserva.id);
-              syncRelacoesExtra(reserva.id);
+            onSuccess: async () => {
+              const irParaContrato = criarContratoAposGuardarRef.current;
+              criarContratoAposGuardarRef.current = false;
+              // Marca o formulário como gravado (defaults := valores actuais).
+              // Sem isto ficava eternamente "sujo" — os efeitos automáticos da
+              // aba Geral sujam-no ao abrir e nada o voltava a limpar.
+              form.reset(form.getValues());
+
+              if (!irParaContrato) {
+                void syncCondutores(reserva.id);
+                void syncRelacoesExtra(reserva.id);
+                return;
+              }
+              // A caminho do contrato: espera que as relações fiquem gravadas
+              // antes de navegar. O formulário do contrato lê os condutores da
+              // reserva UMA só vez — navegar antes trazia a lista antiga.
+              await Promise.all([syncCondutores(reserva.id), syncRelacoesExtra(reserva.id)]);
+              navigate(`/renting/contratos/novo?reserva_id=${reserva.id}`);
+            },
+            onError: () => {
+              criarContratoAposGuardarRef.current = false;
             },
           }
         );
@@ -718,8 +767,8 @@ const RentingReservaForm = () => {
         // Permite clicar logo "Criar Contrato" sem voltar à lista.
         createMutation.mutate(payload, {
           onSuccess: async (created) => {
-            syncCondutores(created.id);
-            syncRelacoesExtra(created.id);
+            void syncCondutores(created.id);
+            void syncRelacoesExtra(created.id);
             // Upload em batch dos anexos pendentes — best-effort.
             if (anexosPendentes.length > 0) {
               for (const p of anexosPendentes) {
@@ -768,6 +817,22 @@ const RentingReservaForm = () => {
         : 'Verifica os campos obrigatórios assinalados.',
       variant: 'destructive',
     });
+  };
+
+  // "Criar Contrato": com o formulário limpo navega directo; com alterações por
+  // gravar guarda-as antes (o contrato é gerado a partir da reserva persistida).
+  // Se a validação falhar, o onInvalid explica o motivo e ficamos na reserva.
+  const handleCriarContrato = () => {
+    if (!reserva) return;
+    if (!form.formState.isDirty) {
+      navigate(`/renting/contratos/novo?reserva_id=${reserva.id}`);
+      return;
+    }
+    criarContratoAposGuardarRef.current = true;
+    void form.handleSubmit(onSubmit, (errors) => {
+      criarContratoAposGuardarRef.current = false;
+      onInvalid(errors);
+    })();
   };
 
   const handleDelete = () => {
@@ -880,12 +945,16 @@ const RentingReservaForm = () => {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => navigate(`/renting/contratos/novo?reserva_id=${reserva.id}`)}
-                disabled={!podeCriarContrato}
-                title={motivoContratoBloqueado}
+                onClick={handleCriarContrato}
+                disabled={!podeCriarContrato || isPending}
+                title={tituloCriarContrato}
                 className="gap-2"
               >
-                <FileText className="h-4 w-4" />
+                {isPending && criarContratoAposGuardarRef.current ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
                 Criar Contrato
               </Button>
             ))}

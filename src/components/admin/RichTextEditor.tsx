@@ -9,7 +9,7 @@ import Underline from '@tiptap/extension-underline';
 import { FontFamily } from '@tiptap/extension-font-family';
 import ImageResize from 'tiptap-extension-resize-image';
 import { TableKit } from '@tiptap/extension-table';
-import { Extension } from '@tiptap/core';
+import { Extension, Node } from '@tiptap/core';
 import { Button } from '@/components/ui/button';
 import {
   Bold,
@@ -32,6 +32,7 @@ import {
   Columns3,
   Rows3,
   Trash2,
+  FilePlus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -67,6 +68,45 @@ const FontSize = Extension.create({
         },
       },
     ];
+  },
+});
+
+/**
+ * Quebra de página manual ("Nova página"). Nó atómico: guarda-se no HTML do
+ * template como `<div data-page-break>` e é o gerador de PDF que lhe dá
+ * significado (parser.ts → 'pagebreak'). No editor é só um separador tracejado
+ * — o rótulo é decoração, nunca chega ao PDF.
+ */
+const PageBreak = Node.create({
+  name: 'pageBreak',
+  group: 'block',
+  atom: true,
+  selectable: true,
+
+  parseHTML() {
+    return [{ tag: 'div[data-page-break]' }];
+  },
+
+  renderHTML() {
+    // O número da folha vem de um contador CSS (ver .page-break-label em
+    // index.css) — assim não é preciso recalcular nada em JS quando se
+    // acrescenta ou apaga uma quebra.
+    return [
+      'div',
+      { 'data-page-break': 'true', class: 'page-break', contenteditable: 'false' },
+      ['span', { class: 'page-break-label' }, 'Página'],
+    ];
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      'Mod-Enter': () =>
+        this.editor
+          .chain()
+          .focus()
+          .insertContent([{ type: 'pageBreak' }, { type: 'paragraph' }])
+          .run(),
+    };
   },
 });
 
@@ -158,6 +198,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
           },
         }),
         Underline,
+        PageBreak,
         ImageResize,
         TableKit.configure({
           table: { resizable: true, HTMLAttributes: { class: 'pdf-table' } },
@@ -495,6 +536,23 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
               title="Eliminar tabela"
             >
               <Trash2 className="h-4 w-4" />
+            </ToolbarButton>
+          </div>
+
+          {/* Nova página — quebra manual; a folha seguinte sai com o mesmo
+              tamanho e margens da primeira, tanto no editor como no PDF. */}
+          <div className="flex gap-1 border-r pr-2">
+            <ToolbarButton
+              onClick={() =>
+                editor
+                  .chain()
+                  .focus()
+                  .insertContent([{ type: 'pageBreak' }, { type: 'paragraph' }])
+                  .run()
+              }
+              title="Adicionar página (Ctrl+Enter)"
+            >
+              <FilePlus className="h-4 w-4" />
             </ToolbarButton>
           </div>
 
