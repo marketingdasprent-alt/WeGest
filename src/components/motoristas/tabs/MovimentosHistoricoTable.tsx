@@ -27,6 +27,24 @@ function isReparacaoAguardaAcordo(m: MovimentoFinanceiro) {
   );
 }
 
+/**
+ * Débito de cessão de dívida lançado por `acordo_criar` (migração
+ * 20260724100001_acordos_saldo_e_criar.sql) quando o responsável de um acordo
+ * de pagamento é um motorista: `categoria: 'outro'`, `descricao` a começar por
+ * "Dívida assumida (cedida por ". Verificado contra o INSERT real, não
+ * assumido — sem coluna dedicada, é o par categoria+prefixo da descrição que
+ * identifica isto de forma fiável (a categoria 'outro' sozinha é ambígua,
+ * usada para vários lançamentos manuais).
+ *
+ * NOTA: hoje esta função nunca deteta nada em produção — `acordo_criar`
+ * recusa sempre um responsável motorista (TVDE fatura-se fora do WeGest), por
+ * isso este ramo do backend está morto. Mantido aqui por coerência com esse
+ * código e por defensividade caso a regra alguma vez mude.
+ */
+function isCessaoAssumida(m: MovimentoFinanceiro): boolean {
+  return m.categoria === 'outro' && m.descricao.startsWith('Dívida assumida (cedida por');
+}
+
 export interface MovimentosHistoricoTableProps {
   movimentos: MovimentoFinanceiro[];
   movimentoFaturaMap: Map<string, string>;
@@ -170,10 +188,19 @@ export function MovimentosHistoricoTable({
                   </div>
                 </TableCell>
                 <TableCell>
-                  {movimento.categoria
-                    ? CATEGORIAS.find((c) => c.value === movimento.categoria)?.label ||
-                      movimento.categoria
-                    : '-'}
+                  {isCessaoAssumida(movimento) ? (
+                    <Badge
+                      variant="outline"
+                      className="border-0 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                    >
+                      Cessão
+                    </Badge>
+                  ) : movimento.categoria ? (
+                    CATEGORIAS.find((c) => c.value === movimento.categoria)?.label ||
+                    movimento.categoria
+                  ) : (
+                    '-'
+                  )}
                 </TableCell>
                 <TableCell>
                   <Badge variant={movimento.tipo === 'credito' ? 'default' : 'secondary'}>

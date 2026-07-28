@@ -123,6 +123,131 @@ export function useCriarAcordo() {
   });
 }
 
+/**
+ * Parcelas que já contam como "pagas" para efeitos de progresso/próxima data no
+ * cartão-resumo: 'liquidacao_pendente' entra aqui porque o dinheiro já
+ * entrou (só falta o documento fiscal) — mesma leitura que a RPC
+ * `acordo_vista_devedor` já faz para o devedor (ver useAcordoVistaDevedor.ts).
+ */
+const PARCELA_ESTADOS_LIQUIDADOS = new Set(['paga', 'liquidacao_pendente']);
+
+export interface AcordoAtivoResumo {
+  id: string;
+  codigo: number;
+  estado: string;
+  /** Saldo por liquidar — vem de `cobranca_saldo_por_liquidar`, a mesma fonte usada em toda a feature (nunca recalculado a partir das parcelas). */
+  faltaPagar: number;
+  parcelasPagas: number;
+  parcelasTotal: number;
+  /** Vencimento da próxima parcela ainda não liquidada; null se todas já liquidadas. */
+  proximaData: string | null;
+  /**
+   * Nº de OUTROS acordos ativos/em incumprimento desta entidade, além deste.
+   * Normalmente 0 — `uq_acordo_vivo_por_cobranca` só impede duplicar por
+   * cobrança, não por entidade, por isso em teoria uma entidade pode ter
+   * acordos vivos em cobranças diferentes ao mesmo tempo. Em vez de construir
+   * uma lista especulativa para um caso nunca visto na prática, mostra-se
+   * sempre o acordo mais antigo (o que precisa de atenção há mais tempo) e
+   * conta-se os restantes aqui, sem os esconder.
+   */
+  outrosAtivos: number;
+}
+
+/**
+ * Acordo ativo (ou em incumprimento) de UMA entidade — cliente ou motorista —
+ * como titular OU responsável. Não existe hoje uma listagem "todos os acordos
+ * de X" (só `useAcordoDetalhe(id)`, que precisa de um id já conhecido, e
+ * `useAcordoAtivoPorCobranca(cobrancaId)`, que precisa de uma cobrança já
+ * conhecida) — esta é essa query, pequena e dedicada, partilhada pelos dois
+ * ecrãs de conta-corrente (cliente e motorista) que precisam do mesmo
+ * cartão-resumo, em vez de duplicar a mesma lógica de fetch nos dois
+ * componentes.
+ *
+ * NOTA: um motorista nunca pode hoje ser titular (titular_id referencia
+ * `clientes`, não `motoristas_ativos`) nem responsável (`acordo_criar`
+ * recusa sempre `p_responsavel_papel = 'motorista'` — TVDE fatura-se fora do
+ * WeGest). Para `tipo: 'motorista'` esta query está correctamente ligada ao
+ * schema (filtra `responsavel_motorista_id`) mas, com as regras de negócio
+ * actuais, nunca devolve resultado — implementado por defensividade/
+ * coerência de schema, não por haver um caminho vivo hoje.
+ */
+export function useAcordoAtivoResumoPorEntidade(
+  tipo: 'cliente' | 'motorista',
+  entidadeId: string | null | undefined
+) {
+  return useQuery({
+    queryKey: [...QUERY_KEY_BASE, 'ativo-entidade', tipo, entidadeId ?? null],
+    queryFn: async (): Promise<AcordoAtivoResumo | null> => {
+      if (!entidadeId) return null;
+
+      let query = supabase
+        .from('acordos_pagamento' as any)
+        .select('id, codigo, estado, cobranca_id')
+        .in('estado', ['ativo', 'incumprimento'])
+        .order('created_at', { ascending: true });
+      query =
+        tipo === 'motorista'
+          ? query.eq('responsavel_motorista_id', entidadeId)
+          : query.or(`titular_id.eq.${entidadeId},responsavel_cliente_id.eq.${entidadeId}`);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      // `acordos_pagamento` não existe em types.ts — mesmo padrão `as any` +
+      // passo por `unknown` do resto deste ficheiro (ver useAcordoAtivoPorCobranca).
+      const acordos = (data ?? []) as unknown as Array<{
+        id: string;
+        codigo: number;
+        estado: string;
+        cobranca_id: string;
+      }>;
+      if (acordos.length === 0) return null;
+
+      const principal = acordos[0];
+
+      const { data: parcelas, error: parcelasErr } = await supabase
+        .from('acordo_parcelas' as any)
+        .select('data_vencimento, estado')
+        .eq('acordo_id', principal.id)
+        .order('numero', { ascending: true });
+      if (parcelasErr) throw parcelasErr;
+      const listaParcelas = (parcelas ?? []) as unknown as Array<{
+        data_vencimento: string;
+        estado: string;
+      }>;
+
+      const parcelasPagas = listaParcelas.filter((p) =>
+        PARCELA_ESTADOS_LIQUIDADOS.has(p.estado)
+      ).length;
+      const proxima = listaParcelas.find(
+        (p) => !PARCELA_ESTADOS_LIQUIDADOS.has(p.estado) && p.estado !== 'cancelada'
+      );
+
+      // Fonte única de verdade do saldo por liquidar — a mesma RPC que
+      // acordo_criar e useAcordoDetalhe já usam. Nunca recalcular a partir da
+      // soma das parcelas: a dívida de registo pode divergir (ex.: NC lançada
+      // por fora do acordo).
+      const { data: faltaPagarRpc, error: faltaErr } = await supabase.rpc(
+        'cobranca_saldo_por_liquidar' as any,
+        { p_cobranca_id: principal.cobranca_id }
+      );
+      if (faltaErr) throw faltaErr;
+
+      return {
+        id: principal.id,
+        codigo: principal.codigo,
+        estado: principal.estado,
+        faltaPagar: Number(faltaPagarRpc ?? 0),
+        parcelasPagas,
+        parcelasTotal: listaParcelas.length,
+        proximaData: proxima?.data_vencimento ?? null,
+        outrosAtivos: acordos.length - 1,
+      };
+    },
+    enabled: !!entidadeId,
+    staleTime: 15_000,
+  });
+}
+
 export interface PreflightResult {
   ok: boolean;
   provider?: string;

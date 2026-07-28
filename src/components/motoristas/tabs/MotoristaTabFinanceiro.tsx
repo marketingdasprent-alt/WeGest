@@ -1,12 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
-import { AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, TrendingUp, TrendingDown, HandCoins } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { toggleSort, type SortDirection } from '@/components/ui/sortable-table-head';
 import { FinanceiroSection } from '@/components/ui/financeiro-section';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Motorista } from '@/pages/Motoristas';
 import { useCanEditFinanceiro } from '@/hooks/useCanEditFinanceiro';
+import { useAcordoAtivoResumoPorEntidade } from '@/hooks/useAcordosPagamento';
+import { formatDate } from '@/utils/formatters';
 import {
   NovoMovimentoFinanceiroOverlay,
   type MovimentoFinanceiro,
@@ -23,9 +27,72 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(value);
 }
 
+/**
+ * Cartão de acordo de pagamento ativo deste motorista (§7.5 da spec: valor por
+ * pagar, próxima data, progresso N/M). Mesmo padrão visual (border-t-4) do
+ * resumo Créditos/Débitos já existente neste ficheiro, em vez de copiar o
+ * `border-l-4` de `ClienteContaCorrenteTab.tsx` — este ecrã já tem o seu
+ * próprio estilo de cartão de resumo, não se está a introduzir um novo.
+ *
+ * NOTA: hoje um motorista nunca pode ser titular nem responsável de um acordo
+ * (ver comentário de `useAcordoAtivoResumoPorEntidade` em
+ * `useAcordosPagamento.ts` — `acordo_criar` recusa sempre responsável
+ * motorista, TVDE fatura-se fora do WeGest). Este cartão está correctamente
+ * ligado ao schema mas, com as regras de negócio actuais, nunca é renderizado
+ * — mantido por coerência com o pedido da tarefa e por defensividade caso
+ * essa regra alguma vez mude.
+ */
+function AcordoResumoCard({
+  acordo,
+  onVerAcordo,
+}: {
+  acordo: NonNullable<ReturnType<typeof useAcordoAtivoResumoPorEntidade>['data']>;
+  onVerAcordo: () => void;
+}) {
+  const emIncumprimento = acordo.estado === 'incumprimento';
+  return (
+    <Card
+      className={`overflow-hidden border-t-4 ${emIncumprimento ? 'border-t-red-500' : 'border-t-amber-500'}`}
+    >
+      <CardContent className="pt-6">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className={`p-2 rounded-lg shrink-0 ${emIncumprimento ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-600'}`}
+            >
+              <HandCoins className="h-6 w-6" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm text-muted-foreground">
+                Acordo de pagamento{emIncumprimento ? ' — em incumprimento' : ''}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                Acordo #{acordo.codigo} · {acordo.parcelasPagas}/{acordo.parcelasTotal} parcelas
+                {acordo.proximaData ? ` · próxima em ${formatDate(acordo.proximaData)}` : ''}
+                {acordo.outrosAtivos > 0 ? ` · +${acordo.outrosAtivos} outro(s) acordo(s)` : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Por pagar</p>
+              <p className="text-2xl font-bold text-red-600">{formatCurrency(acordo.faltaPagar)}</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={onVerAcordo}>
+              Ver acordo
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
 
 export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: string }) {
+  const navigate = useNavigate();
+  const { data: acordoAtivo } = useAcordoAtivoResumoPorEntidade('motorista', motoristaId);
   const [movimentos, setMovimentos] = useState<MovimentoFinanceiro[]>([]);
   const [loading, setLoading] = useState(true);
   const [novoMovimentoOpen, setNovoMovimentoOpen] = useState(false);
@@ -338,6 +405,14 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
             </CardContent>
           </Card>
         </div>
+
+        {/* Cartão de acordo — só quando há um acordo ativo/em incumprimento deste motorista */}
+        {acordoAtivo && (
+          <AcordoResumoCard
+            acordo={acordoAtivo}
+            onVerAcordo={() => navigate(`/acordos/${acordoAtivo.id}`)}
+          />
+        )}
 
         <RecorrenciasAtivasList
           recorrencias={recorrencias}
