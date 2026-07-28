@@ -79,16 +79,23 @@ serve(async (req) => {
 
     console.log(`[bolt-auto-map-vehicles] Iniciando auto-mapeamento${integracao_id ? ` para integração ${integracao_id}` : ''}`);
 
-    // Obter org_id da integração
-    let orgId: string | null = null;
-    if (integracao_id) {
+    // Obter org_id da integração. Quando integracao_id não é passado no
+    // pedido, esta função processa veículos de VÁRIAS integrações (e
+    // portanto várias orgs) na mesma corrida — por isso o org_id é
+    // resolvido por veículo (orgIdCache), nunca assumido globalmente.
+    const orgIdCache = new Map<string, string | null>();
+    const resolveOrgId = async (integId: string | null | undefined): Promise<string | null> => {
+      if (!integId) return null;
+      if (orgIdCache.has(integId)) return orgIdCache.get(integId)!;
       const { data: integConfig } = await supabase
         .from("plataformas_configuracao")
         .select("org_id")
-        .eq("id", integracao_id)
+        .eq("id", integId)
         .single();
-      orgId = integConfig?.org_id || null;
-    }
+      const resolved = integConfig?.org_id || null;
+      orgIdCache.set(integId, resolved);
+      return resolved;
+    };
 
     const result: AutoMapResult = {
       success: true,
@@ -101,7 +108,7 @@ serve(async (req) => {
     // Buscar veículos Bolt sem mapeamento
     let query = supabase
       .from("bolt_vehicles")
-      .select("id, vehicle_uuid, license_plate, brand, model, year, color, dados_raw")
+      .select("id, vehicle_uuid, license_plate, brand, model, year, color, dados_raw, integracao_id")
       .is("viatura_id", null);
 
     if (integracao_id) {
@@ -135,16 +142,23 @@ serve(async (req) => {
           continue;
         }
 
+        const vehicleOrgId = await resolveOrgId(vehicle.integracao_id ?? integracao_id);
+        if (!vehicleOrgId) {
+          result.skipped++;
+          result.errors.push(`Veículo ${vehicle.vehicle_uuid}: não foi possível determinar a organização — pulado.`);
+          continue;
+        }
+
         const normalizedPlate = normalizePlate(plateToUse);
         const formattedPlate = formatPlate(plateToUse);
 
-        // Procurar viatura existente por matrícula (normalizada, filtrar por org)
-        let viaturaQuery = supabase
+        // Procurar viatura existente por matrícula (normalizada, sempre filtrada por org)
+        const { data: existingViatura } = await supabase
           .from("viaturas")
           .select("id, matricula")
-          .or(`matricula.ilike.${normalizedPlate},matricula.ilike.${formattedPlate},matricula.ilike.${vehicle.license_plate}`);
-        if (orgId) viaturaQuery = viaturaQuery.eq("org_id", orgId);
-        const { data: existingViatura } = await viaturaQuery.maybeSingle();
+          .or(`matricula.ilike.${normalizedPlate},matricula.ilike.${formattedPlate},matricula.ilike.${vehicle.license_plate}`)
+          .eq("org_id", vehicleOrgId)
+          .maybeSingle();
 
         let viaturaId: string;
 
@@ -170,7 +184,7 @@ serve(async (req) => {
               modelo: modelo,
               ano: vehicle.year || rawData?.year || null,
               cor: cor,
-              ...(orgId ? { org_id: orgId } : {}),
+              org_id: vehicleOrgId,
               observacoes: "Criada automaticamente via sincronização Bolt",
             })
             .select("id")
