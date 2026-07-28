@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      login_attempts: {
+        Row: {
+          id: string
+          email: string
+          org_codigo: string | null
+          success: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          org_codigo?: string | null
+          success?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          org_codigo?: string | null
+          success?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
       _backup_viaturas_20260710: {
         Row: {
           combustivel: string | null
