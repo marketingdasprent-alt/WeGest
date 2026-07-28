@@ -22,6 +22,7 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import {
@@ -60,7 +61,7 @@ import {
   useToggleAutomationRule,
   useExecutarAutomacoesManualmente,
   useAutomationRuleConfig,
-  useRecursosDisponiveis,
+  useCargosDisponiveis,
   useAtualizarConfigRegra,
   type FailedJob,
   type AutomationRuleAcaoConfig,
@@ -611,7 +612,7 @@ function RegrasTab() {
 }
 
 const ESTRATEGIA_LABELS: Record<string, string> = {
-  recurso: 'Por permissão (todos os admins + quem tiver o recurso abaixo)',
+  cargo: 'Por grupo/cargo (todos os admins + cargos escolhidos abaixo)',
   gestor_responsavel: 'Gestor responsável específico (cai para admins se não houver um definido)',
 };
 
@@ -624,19 +625,21 @@ function ConfigurarRegraSheet({
 }) {
   const { toast } = useToast();
   const { data: config, isLoading } = useAutomationRuleConfig(regra?.id ?? null);
-  const { data: recursos = [] } = useRecursosDisponiveis();
+  const { data: cargos = [] } = useCargosDisponiveis();
   const atualizar = useAtualizarConfigRegra();
 
-  const [destinatariosRecurso, setDestinatariosRecurso] = useState('');
-  const [destinatariosEstrategia, setDestinatariosEstrategia] = useState('recurso');
+  const [destinatariosCargoIds, setDestinatariosCargoIds] = useState<string[]>([]);
+  const [destinatariosEstrategia, setDestinatariosEstrategia] = useState('cargo');
   const [enviarEmail, setEnviarEmail] = useState(false);
+  const [enviarEmailDigest, setEnviarEmailDigest] = useState(false);
   const [cooldownMinutos, setCooldownMinutos] = useState(0);
 
   useEffect(() => {
     if (!config) return;
-    setDestinatariosRecurso(config.acao_config.destinatarios_recurso ?? '');
-    setDestinatariosEstrategia(config.acao_config.destinatarios_estrategia ?? 'recurso');
+    setDestinatariosCargoIds(config.acao_config.destinatarios_cargo_ids ?? []);
+    setDestinatariosEstrategia(config.acao_config.destinatarios_estrategia ?? 'cargo');
     setEnviarEmail(config.acao_config.enviar_email ?? false);
+    setEnviarEmailDigest(config.acao_config.enviar_email_digest ?? false);
     setCooldownMinutos(config.cooldown_minutos);
   }, [config]);
 
@@ -644,9 +647,10 @@ function ConfigurarRegraSheet({
     if (!regra || !config) return;
     const novoAcaoConfig: AutomationRuleAcaoConfig = {
       ...config.acao_config,
-      destinatarios_recurso: destinatariosRecurso || undefined,
+      destinatarios_cargo_ids: destinatariosCargoIds,
       destinatarios_estrategia: destinatariosEstrategia,
       enviar_email: enviarEmail,
+      enviar_email_digest: enviarEmail ? enviarEmailDigest : false,
     };
     try {
       await atualizar.mutateAsync({ id: regra.id, acaoConfig: novoAcaoConfig, cooldownMinutos });
@@ -701,26 +705,30 @@ function ConfigurarRegraSheet({
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label>Recurso/permissão que recebe (além dos admins)</Label>
-              <Select value={destinatariosRecurso} onValueChange={setDestinatariosRecurso}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Escolhe um recurso" />
-                </SelectTrigger>
-                <SelectContent>
-                  {recursos.map((r) => (
-                    <SelectItem key={r.id} value={r.nome}>
-                      {r.nome}
-                      {r.categoria ? ` · ${r.categoria}` : ''}
-                    </SelectItem>
+            {destinatariosEstrategia === 'cargo' && (
+              <div className="space-y-2">
+                <Label>Grupos/cargos que recebem (além dos admins)</Label>
+                <div className="space-y-2 rounded-md border p-3">
+                  {cargos.map((c) => (
+                    <label key={c.id} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={destinatariosCargoIds.includes(c.id)}
+                        onCheckedChange={(checked) =>
+                          setDestinatariosCargoIds((prev) =>
+                            checked ? [...prev, c.id] : prev.filter((id) => id !== c.id)
+                          )
+                        }
+                      />
+                      {c.nome}
+                    </label>
                   ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Quem tiver este recurso atribuído ao cargo (Definições → Grupos) recebe a
-                notificação, além de qualquer administrador.
-              </p>
-            </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Quem pertencer a um destes cargos (Definições → Grupos) recebe a notificação,
+                  além de qualquer administrador.
+                </p>
+              </div>
+            )}
 
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
@@ -731,6 +739,20 @@ function ConfigurarRegraSheet({
               </div>
               <Switch checked={enviarEmail} onCheckedChange={setEnviarEmail} />
             </div>
+
+            {enviarEmail && (
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <Label className="text-sm">Agrupar num resumo diário</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Em vez de 1 email por aviso, junta tudo o que a pessoa tem pendente num único
+                    email por dia. Recomendado sempre que muitos itens possam ficar prontos de
+                    uma vez (ex.: um backlog).
+                  </p>
+                </div>
+                <Switch checked={enviarEmailDigest} onCheckedChange={setEnviarEmailDigest} />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Cooldown (minutos entre avisos repetidos para a mesma entidade)</Label>

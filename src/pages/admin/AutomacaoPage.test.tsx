@@ -60,6 +60,7 @@ const canEdit = vi.fn();
 vi.mock('@/hooks/usePermissions', () => ({ usePermissions: () => ({ canEdit }) }));
 
 const mockRpc = vi.fn();
+let capturedUpdatePayload: Record<string, unknown> | null = null;
 
 function chainable(result: unknown) {
   const builder: Record<string, unknown> = {
@@ -76,8 +77,11 @@ function chainable(result: unknown) {
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: vi.fn((table: string) => ({
-      update: vi.fn(() => ({
-        eq: vi.fn(() => Promise.resolve({ error: null })),
+      update: vi.fn((payload: unknown) => ({
+        eq: vi.fn(() => {
+          if (table === 'automation_rules') capturedUpdatePayload = payload as Record<string, unknown>;
+          return Promise.resolve({ error: null });
+        }),
       })),
       select: vi.fn(() => {
         if (table === 'automation_runs') {
@@ -109,11 +113,11 @@ vi.mock('@/integrations/supabase/client', () => ({
         if (table === 'notification_queue') {
           return chainable({ data: [{ status: 'sent' }], error: null });
         }
-        if (table === 'recursos') {
+        if (table === 'cargos') {
           return chainable({
             data: [
-              { id: 'rec-1', nome: 'motoristas_gestao', categoria: 'Motoristas' },
-              { id: 'rec-2', nome: 'renting_contratos', categoria: 'Renting' },
+              { id: 'cargo-1', nome: 'Gestores' },
+              { id: 'cargo-2', nome: 'Financeiro' },
             ],
             error: null,
           });
@@ -125,7 +129,8 @@ vi.mock('@/integrations/supabase/client', () => ({
               acao_config: {
                 template_codigo: 'teste',
                 titulo: 'Regra Estatística Teste',
-                destinatarios_recurso: 'motoristas_gestao',
+                destinatarios_estrategia: 'cargo',
+                destinatarios_cargo_ids: ['cargo-1'],
                 enviar_email: false,
               },
               cooldown_minutos: 1440,
@@ -261,6 +266,7 @@ function renderPage() {
 describe('AutomacaoPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    capturedUpdatePayload = null;
     mockRpc.mockResolvedValue({ data: null, error: null });
     canEdit.mockReturnValue(true);
   });
@@ -458,6 +464,39 @@ describe('AutomacaoPage', () => {
       expect(mockToastFn).toHaveBeenCalledWith(
         expect.objectContaining({ title: 'Configuração guardada' })
       );
+    });
+  });
+
+  it('mostra os cargos como checkboxes e grava os cargo_ids escolhidos ao guardar', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Configurar/i })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Configurar: Regra Estatística Teste/)).toBeTruthy();
+    });
+
+    // Gestores (cargo-1) já vem selecionado pelo acao_config mockado.
+    expect(await screen.findByRole('checkbox', { name: /Gestores/i })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Financeiro/i })).not.toBeChecked();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Financeiro/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Guardar/i }));
+
+    await waitFor(() => {
+      expect(mockToastFn).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Configuração guardada' })
+      );
+    });
+
+    expect(capturedUpdatePayload?.acao_config).toMatchObject({
+      destinatarios_estrategia: 'cargo',
+      destinatarios_cargo_ids: expect.arrayContaining(['cargo-1', 'cargo-2']),
     });
   });
 
