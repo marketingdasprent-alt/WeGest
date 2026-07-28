@@ -224,6 +224,11 @@ export function FaturacaoContent() {
 
   async function abrirParcelarParaRow(row: FaturacaoRow) {
     if (!row.cobrancaId) return;
+    const invoice = docFiscalDaLinha(row);
+    if (!invoice || invoice.tipo !== 'FT') {
+      toast.error('Só é possível parcelar uma Factura (FT) por liquidar.');
+      return;
+    }
     setDialogOpen(false);
     const r = await resolverCobranca(row.cobrancaId);
     if (!r) {
@@ -237,7 +242,6 @@ export function FaturacaoContent() {
       toast.info('Esta fatura já está liquidada.');
       return;
     }
-    const invoice = docFiscalDaLinha(row);
     setParcelamentoAlvo({
       cobrancaId: r.cob.id,
       contratoId: r.cob.contrato_id,

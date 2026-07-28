@@ -200,13 +200,20 @@ serve(async (req) => {
           `Aviso de vencimento (não é fatura) · Parcela ${p.numero} ` +
           `do acordo ACD-${a.codigo} · ${eur(p.valor)}`;
 
+        // Responsável-aware: motoristas usam o portal do motorista (não têm acesso
+        // à rota de staff); clientes não têm login/portal nesta app (estado
+        // permanente e confirmado), por isso mantêm a rota de staff.
+        const rota = a.responsavel_motorista_id
+          ? `/motorista/painel/acordos/${a.id}`
+          : `/acordos/${a.id}`;
+
         const corpoHtml =
           `<p>Olá ${a.responsavel_nome},</p>` +
           `<p><strong>Aviso de vencimento — não é fatura nem recibo.</strong></p>` +
           `<p>Parcela ${p.numero} · <strong>${eur(p.valor)}</strong> · ` +
           `vence a ${dataPT(p.data_vencimento)}.</p>` +
           `<p>Falta pagar ${eur(Number(faltaPagar ?? 0))} de ${eur(Number(a.valor_total))}.</p>` +
-          (appUrl ? `<p><a href="${appUrl}/acordos/${a.id}">Ver o plano de pagamentos</a></p>` : '');
+          (appUrl ? `<p><a href="${appUrl}${rota}">Ver o plano de pagamentos</a></p>` : '');
 
         // Try estreito: cobre só a tentativa de envio (resolver o provider +
         // enviar), nunca a gravação do log nem a actualização da parcela. O

@@ -89,7 +89,13 @@ export function ParcelaTimelineItem({
                 const numero = window.prompt('Nº do documento já emitido no provider:');
                 if (!numero) return;
                 associarDocumento.mutate(
-                  { parcelaId: parcelaStaff.id, numeroDocumento: numero },
+                  {
+                    parcelaId: parcelaStaff.id,
+                    numeroDocumento: numero,
+                    cobrancaId: acordoStaff.cobrancaId,
+                    contratoId: acordoStaff.contratoId,
+                    valor: parcelaStaff.valor,
+                  },
                   {
                     onSuccess: () => toast.success('Documento associado — parcela liquidada.'),
                     onError: (e) =>

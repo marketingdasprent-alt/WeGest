@@ -509,7 +509,7 @@ const WebAppRoutes = () => {
           <Route
             path="/acordos/:id"
             element={
-              <ProtectedRoute requiredResource="renting_contratos">
+              <ProtectedRoute requiredResource={['renting_contratos', 'financeiro_recibos']}>
                 <DashboardLayout>
                   <AcordoDetalhe />
                 </DashboardLayout>

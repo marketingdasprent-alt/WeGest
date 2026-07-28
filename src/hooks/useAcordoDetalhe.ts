@@ -164,6 +164,9 @@ export function useAcordoDetalhe(acordoId: string | null | undefined) {
 export interface AssociarDocumentoInput {
   parcelaId: string;
   numeroDocumento: string;
+  cobrancaId: string;
+  contratoId: string | null;
+  valor: number;
 }
 
 /**
@@ -171,6 +174,21 @@ export interface AssociarDocumentoInput {
  * foi emitido. Grava a referência em `invoices` (mirror local) e promove a parcela via
  * acordo_parcela_liquidar — SEM tocar na API do provider (é exactamente o cenário onde
  * a API já confirmou, só falta o registo local).
+ *
+ * A linha de `invoices` grava também cobranca_id/contrato_id/total (além de
+ * tipo/numero/status) — sem isso a linha ficava invisível a qualquer lookup
+ * por-cobrança no resto da app (ex.: docFiscalDaLinha/invoiceByCobranca em
+ * FaturacaoTab.tsx). data_emissao é a data de HOJE (data em que este registo foi
+ * feito), não a data real de emissão no provider — desconhecida numa reconciliação
+ * manual como esta; é a proxy honesta, não uma data precisa inventada.
+ *
+ * Depois da liquidação ter sucesso, fecha também a linha de faturacao_outbox desta
+ * parcela (estava 'suspenso'/needs_reconcile) — sem isto a parcela ficava liquidada
+ * mas a outbox continuava a assinalar uma suspensão já resolvida. Esta actualização é
+ * best-effort (nunca lança): a liquidação já teve sucesso nesse ponto, um erro aqui
+ * só deixa a linha da outbox desactualizada, um problema menor e recuperável — não
+ * motivo para falhar a mutação inteira e confundir quem acabou de reconciliar com
+ * sucesso (mesmo padrão de registarPagamentoParcela em src/lib/acordoPagamento.ts).
  *
  * `as any` no insert: o tipo gerado (types.ts) marca `org_id` como obrigatório no
  * Insert, mas está desactualizado face à migração 20260613000003 — existe um trigger
@@ -187,10 +205,24 @@ export interface AssociarDocumentoInput {
 export function useAssociarDocumentoExistente() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ parcelaId, numeroDocumento }: AssociarDocumentoInput) => {
+    mutationFn: async ({
+      parcelaId,
+      numeroDocumento,
+      cobrancaId,
+      contratoId,
+      valor,
+    }: AssociarDocumentoInput) => {
       const { data: invoice, error: invoiceErr } = await supabase
         .from('invoices')
-        .insert({ tipo: 'RC', numero: numeroDocumento, status: 'emitida' } as any)
+        .insert({
+          tipo: 'RC',
+          numero: numeroDocumento,
+          status: 'emitida',
+          cobranca_id: cobrancaId,
+          contrato_id: contratoId,
+          total: valor,
+          data_emissao: new Date().toISOString().slice(0, 10),
+        } as any)
         .select('id')
         .single();
       if (invoiceErr) throw invoiceErr;
@@ -199,6 +231,21 @@ export function useAssociarDocumentoExistente() {
         p_invoice_id: invoice.id,
       });
       if (liquidarErr) throw liquidarErr;
+
+      // Best-effort: a liquidação (acima) já teve sucesso — a parcela está
+      // correctamente liquidada independentemente disto. Um erro aqui só deixa a
+      // linha da outbox desactualizada (não crítico, recuperável).
+      const { error: outboxErr } = await supabase
+        .from('faturacao_outbox' as any)
+        .update({ estado: 'sucesso', invoice_id: invoice.id, needs_reconcile: false, ultimo_erro: null })
+        .eq('parcela_id', parcelaId)
+        .eq('estado', 'suspenso');
+      if (outboxErr) {
+        console.warn(
+          `Falha (não crítica) a fechar a linha de outbox da parcela ${parcelaId}:`,
+          outboxErr
+        );
+      }
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['acordo-detalhe'] });
