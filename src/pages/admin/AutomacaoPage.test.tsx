@@ -80,7 +80,8 @@ vi.mock('@/integrations/supabase/client', () => ({
     from: vi.fn((table: string) => ({
       update: vi.fn((payload: unknown) => ({
         eq: vi.fn(() => {
-          if (table === 'automation_rules') capturedUpdatePayload = payload as Record<string, unknown>;
+          if (table === 'automation_rules')
+            capturedUpdatePayload = payload as Record<string, unknown>;
           return Promise.resolve({ error: null });
         }),
       })),
@@ -538,9 +539,7 @@ describe('AutomacaoPage', () => {
     // "Escolher pessoas específicas" é o 1.º switch (o 2.º é "Enviar também por email").
     fireEvent.click(screen.getAllByRole('switch')[0]);
 
-    expect(
-      await screen.findByRole('button', { name: /Ana Gestora/, pressed: false })
-    ).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Ana Gestora/, pressed: false })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Ana Gestora/, pressed: false }));
 
     fireEvent.click(await screen.findByRole('button', { name: /Guardar/i }));

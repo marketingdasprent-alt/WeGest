@@ -642,7 +642,8 @@ function ConfigurarRegraSheet({
   const [destinatariosCargoIds, setDestinatariosCargoIds] = useState<string[]>([]);
   const [destinatariosModo, setDestinatariosModo] = useState<'grupo' | 'individual'>('grupo');
   const [destinatariosUserIds, setDestinatariosUserIds] = useState<string[]>([]);
-  const { data: utilizadoresDoCargo = SEM_UTILIZADORES } = useUtilizadoresPorCargo(destinatariosCargoIds);
+  const { data: utilizadoresDoCargo = SEM_UTILIZADORES } =
+    useUtilizadoresPorCargo(destinatariosCargoIds);
   const [enviarEmail, setEnviarEmail] = useState(false);
   const [enviarEmailDigest, setEnviarEmailDigest] = useState(false);
   const [cooldownMinutos, setCooldownMinutos] = useState(0);
@@ -712,9 +713,7 @@ function ConfigurarRegraSheet({
       <SheetContent className="flex flex-col">
         <SheetHeader className="shrink-0">
           <SheetTitle>Configurar: {regra?.nome}</SheetTitle>
-          <SheetDescription>
-            Quem recebe esta automação e com que frequência
-          </SheetDescription>
+          <SheetDescription>Quem recebe esta automação e com que frequência</SheetDescription>
         </SheetHeader>
 
         {isLoading || !config ? (
@@ -764,7 +763,9 @@ function ConfigurarRegraSheet({
                 </div>
                 <Switch
                   checked={destinatariosModo === 'individual'}
-                  onCheckedChange={(checked) => setDestinatariosModo(checked ? 'individual' : 'grupo')}
+                  onCheckedChange={(checked) =>
+                    setDestinatariosModo(checked ? 'individual' : 'grupo')
+                  }
                 />
               </div>
             )}
@@ -791,14 +792,18 @@ function ConfigurarRegraSheet({
                       <span
                         className={cn(
                           'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-                          selecionado ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                          selecionado
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground'
                         )}
                       >
                         {iniciais(u.nome)}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{u.nome}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{u.email}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {u.email}
+                        </span>
                       </span>
                       {selecionado && <Check className="h-4 w-4 shrink-0 text-primary" />}
                     </button>
@@ -823,8 +828,8 @@ function ConfigurarRegraSheet({
                   <Label className="text-sm">Agrupar num resumo diário</Label>
                   <p className="text-xs text-muted-foreground">
                     Em vez de 1 email por aviso, junta tudo o que a pessoa tem pendente num único
-                    email por dia. Recomendado sempre que muitos itens possam ficar prontos de
-                    uma vez (ex.: um backlog).
+                    email por dia. Recomendado sempre que muitos itens possam ficar prontos de uma
+                    vez (ex.: um backlog).
                   </p>
                 </div>
                 <Switch checked={enviarEmailDigest} onCheckedChange={setEnviarEmailDigest} />

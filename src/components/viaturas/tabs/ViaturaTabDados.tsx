@@ -228,7 +228,9 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       extintor_validade: data.extintor_validade || null,
       tipo_id: data.tipo_id || null,
       proxima_manutencao_data: data.proxima_manutencao_data || null,
-      proxima_manutencao_km: data.proxima_manutencao_km ? parseInt(data.proxima_manutencao_km) : null,
+      proxima_manutencao_km: data.proxima_manutencao_km
+        ? parseInt(data.proxima_manutencao_km)
+        : null,
     };
 
     const ok = await onSave(payload);
