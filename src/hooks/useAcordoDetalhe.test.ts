@@ -163,7 +163,6 @@ describe('useRegistarPagamento', () => {
     const { result } = renderHook(() => useRegistarPagamento(), { wrapper });
     const input = {
       parcelaId: 'p-2',
-      orgId: 'o-1',
       acordoId: 'a-1',
       entidadeId: 't-1',
       contratoId: null,

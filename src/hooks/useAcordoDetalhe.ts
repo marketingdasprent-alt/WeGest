@@ -162,15 +162,23 @@ export function useAcordoDetalhe(acordoId: string | null | undefined) {
 }
 
 /**
- * Wrapper fino sobre registarPagamentoParcela() (src/lib/acordoPagamento.ts) — só
- * invalida a query do acordo no onSuccess. NÃO dá toast (convenção da feature: toast
- * fica sempre no componente chamador).
+ * Wrapper fino sobre registarPagamentoParcela() (src/lib/acordoPagamento.ts) — invalida
+ * a query do acordo no onSettled. NÃO dá toast (convenção da feature: toast fica sempre
+ * no componente chamador).
  */
 export function useRegistarPagamento() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: RegistarPagamentoInput) => registarPagamentoParcela(input),
-    onSuccess: (_result, input) => {
+    // onSettled (não onSuccess): registarPagamentoParcela() tem uma assimetria
+    // deliberada — se a emissão do documento fiscal falhar, resolve com
+    // {estado:'liquidacao_pendente'} (caminho normal); mas se a promoção a 'paga'
+    // falhar DEPOIS do documento já ter sido emitido com sucesso, a função lança por
+    // desenho ("nunca devolver 'paga' sem a BD confirmar a promoção"). Nesse caso o
+    // recibo e o documento fiscal já existem — o pagamento pode ter mesmo acontecido —
+    // por isso é preciso invalidar também quando a mutação rejeita, ou a UI nunca
+    // reflete o estado real após essa falha.
+    onSettled: (_result, _error, input) => {
       qc.invalidateQueries({ queryKey: [...QUERY_KEY_BASE, input.acordoId] });
     },
   });

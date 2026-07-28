@@ -14,9 +14,14 @@ interface Props {
 }
 
 /**
- * Pré-visualização de um documento fiscal (Recibo). Mesmo padrão de
- * FaturacaoMovimentoDialog.tsx:99-111 (window.open síncrono, no gesto do clique,
- * antes do await — window.open depois de um await é bloqueado por pop-up blocker).
+ * Pré-visualização de um documento fiscal (Recibo).
+ *
+ * NOTA: idealmente o window.open() dispararia dentro do handler de clique que
+ * muda `invoiceId` (gesto síncrono, como em FaturacaoMovimentoDialog.tsx:99-105) —
+ * aqui dispara de um useEffect a reagir à mudança da prop, uma gesto-distância
+ * que o Chrome tolera mas que navegadores mais estritos (Safari) podem bloquear.
+ * abrirDocumentoPdf() já cai para download quando a janela é null, por isso o
+ * pior caso é perder o preview automático, nunca o documento em si.
  */
 export function DocumentoPreviewDialog({ open, onOpenChange, invoiceId }: Props) {
   const [loading, setLoading] = useState(false);
@@ -40,6 +45,11 @@ export function DocumentoPreviewDialog({ open, onOpenChange, invoiceId }: Props)
       } catch (e) {
         toast.error(`Erro ao obter o documento: ${(e as Error).message}`);
         w?.close();
+        // Limpa o estado do pai (invoiceIdPreview) tal como no caminho de sucesso —
+        // sem isto, um novo clique no MESMO documento não muda o valor de `invoiceId`,
+        // o useEffect (keyed em [open, invoiceId]) nunca volta a disparar, e o dialog
+        // fica morto para essa retry.
+        onOpenChange(false);
       } finally {
         setLoading(false);
       }

@@ -32,7 +32,18 @@ interface Props {
 }
 
 const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
-const hojeISO = () => new Date().toISOString().slice(0, 10);
+// Data em Lisboa, não UTC — new Date().toISOString() dá o dia UTC, que é o dia
+// ANTERIOR entre as 00h e a 01h de hora de verão de Lisboa (UTC+1), o que erraria
+// o campo fiscal recibos.data_recibo. Mesmo padrão de hojeEmLisboa() em
+// supabase/functions/acordos-parcelas-diario/index.ts (aqui replicado, não
+// importado — este ficheiro é frontend TS, aquele é Deno).
+const hojeISO = () =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Lisbon',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 
 export function RegistarPagamentoDialog({ open, onOpenChange, acordo, parcela }: Props) {
   const registarPagamento = useRegistarPagamento();
@@ -52,7 +63,14 @@ export function RegistarPagamentoDialog({ open, onOpenChange, acordo, parcela }:
   }, [open, parcela]);
 
   const valorNum = round2(parseFloat(valor.replace(',', '.')) || 0);
-  const podeSubmeter = !!parcela && valorNum > 0 && !!metodo && !registarPagamento.isPending;
+  // Teto no valor da parcela: o campo continua editável para acertar cêntimos/taxas
+  // bancárias (spec §2.3), mas o `max` do <Input> é só uma dica HTML — sem <form> a
+  // envolver o dialog (ver comentário equivalente em ParcelamentoDialog.tsx) não há
+  // validação nativa a bloquear um valor fora do intervalo. Este `excede` é o guarda
+  // real a nível de JS. Epsilon igual ao resto da feature (RecibosDialog.tsx).
+  const excede = !!parcela && valorNum > parcela.valor + 0.005;
+  const podeSubmeter =
+    !!parcela && valorNum > 0 && !excede && !!metodo && !registarPagamento.isPending;
 
   async function handleRegistar() {
     if (!parcela || !podeSubmeter) return;
@@ -83,7 +101,14 @@ export function RegistarPagamentoDialog({ open, onOpenChange, acordo, parcela }:
       );
       onOpenChange(false);
     } catch (e) {
-      toast.error(`Erro ao registar pagamento: ${(e as Error).message}`);
+      // Assimetria deliberada em registarPagamentoParcela() (src/lib/acordoPagamento.ts):
+      // se falhar a promoção a 'paga' DEPOIS do recibo/documento já terem sido emitidos
+      // com sucesso, a função lança em vez de resolver — o pagamento pode já ter
+      // acontecido de facto. Por isso a mensagem não afirma que falhou.
+      toast.error(
+        `Não foi possível confirmar o registo do pagamento: ${(e as Error).message}. ` +
+          'Verifica o estado desta parcela antes de tentar novamente.'
+      );
     }
   }
 
@@ -109,11 +134,22 @@ export function RegistarPagamentoDialog({ open, onOpenChange, acordo, parcela }:
               <Input
                 type="number"
                 min="0.01"
+                max={parcela?.valor}
                 step="0.01"
                 value={valor}
                 onChange={(e) => setValor(e.target.value)}
                 className="h-9"
               />
+              {excede && (
+                <p className="text-[11px] text-destructive">
+                  O valor excede a parcela ({formatCurrency(parcela?.valor ?? 0)}).
+                </p>
+              )}
+              {!excede && parcela && valorNum !== parcela.valor && (
+                <p className="text-[11px] text-muted-foreground">
+                  Valor diferente do agendado ({formatCurrency(parcela.valor)}).
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Data</Label>
