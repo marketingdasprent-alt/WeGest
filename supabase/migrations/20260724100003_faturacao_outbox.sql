@@ -36,6 +36,8 @@ CREATE INDEX idx_faturacao_outbox_due ON public.faturacao_outbox (proxima_tentat
   WHERE estado = 'pendente';
 CREATE INDEX idx_faturacao_outbox_atencao ON public.faturacao_outbox (org_id)
   WHERE estado IN ('falhado','suspenso');
+CREATE INDEX idx_faturacao_outbox_estado ON public.faturacao_outbox (estado);
+CREATE INDEX idx_faturacao_outbox_parcela ON public.faturacao_outbox (parcela_id);
 
 CREATE TRIGGER trg_faturacao_outbox_updated_at
   BEFORE UPDATE ON public.faturacao_outbox

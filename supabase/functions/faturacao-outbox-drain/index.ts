@@ -74,7 +74,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   const service = createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-  const contadores = { processadas: 0, sucesso: 0, suspensas: 0, reagendadas: 0 };
+  const contadores = { processadas: 0, sucesso: 0, suspensas: 0, falhadas: 0, reagendadas: 0 };
 
   const { data: linhas, error } = await service.rpc('faturacao_outbox_claim', {
     p_max: MAX_POR_CICLO,
@@ -192,7 +192,7 @@ serve(async (req) => {
             .from('faturacao_outbox')
             .update({ estado: 'falhado', ultimo_erro: res.error ?? 'Erro do provider' })
             .eq('id', linha.id);
-          contadores.suspensas++;
+          contadores.falhadas++;
           return;
         }
         await service

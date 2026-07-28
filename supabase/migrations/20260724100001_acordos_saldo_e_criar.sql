@@ -72,6 +72,7 @@ AS $$
     0)::numeric(12,2);
 $$;
 
+REVOKE ALL ON FUNCTION public.cobranca_saldo_por_liquidar(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.cobranca_saldo_por_liquidar(uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.cobranca_saldo_por_liquidar(uuid) IS
@@ -145,7 +146,7 @@ BEGIN
   -- NovaFaturaDialog, ReservaFaturarDialog) gravam sempre `descricao` a
   -- começar por "Factura-Recibo — " / "Fatura-Recibo — " no momento da
   -- criação — independente de invoices. `v_cob` já está carregado acima.
-  IF v_cob.descricao ILIKE 'factura-recibo%' OR v_cob.descricao ILIKE 'fatura-recibo%' THEN
+  IF TRIM(v_cob.descricao) ILIKE 'factura-recibo%' OR TRIM(v_cob.descricao) ILIKE 'fatura-recibo%' THEN
     RAISE EXCEPTION 'Faturas-Recibo (FR) já estão liquidadas e não podem ser parceladas.';
   END IF;
 
@@ -184,6 +185,13 @@ BEGIN
 
   IF p_parcelas IS NULL OR jsonb_array_length(p_parcelas) = 0 THEN
     RAISE EXCEPTION 'O plano tem de ter pelo menos uma parcela.';
+  END IF;
+
+  -- Limite alinhado com o campo "Nº de parcelas" do ParcelamentoDialog (UI),
+  -- que já usa max="24" — reforçado aqui porque acordo_criar tem GRANT para
+  -- `authenticated` e a UI não é fronteira de confiança.
+  IF jsonb_array_length(p_parcelas) > 24 THEN
+    RAISE EXCEPTION 'O plano não pode ter mais de 24 parcelas.';
   END IF;
 
   SELECT COALESCE(SUM((e->>'valor')::numeric), 0) INTO v_soma
@@ -257,6 +265,8 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION public.acordo_criar(
+  uuid, text, uuid, jsonb, text, smallint, smallint, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.acordo_criar(
   uuid, text, uuid, jsonb, text, smallint, smallint, text) TO authenticated;
 

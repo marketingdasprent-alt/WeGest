@@ -84,4 +84,9 @@ export interface FaturacaoProvider {
  * Um chamador NUNCA deve reemitir automaticamente depois deste erro; precisa
  * de reconciliar (confirmar manualmente no provider) primeiro.
  */
-export class EmissaoAmbiguaError extends Error {}
+export class EmissaoAmbiguaError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EmissaoAmbiguaError';
+  }
+}

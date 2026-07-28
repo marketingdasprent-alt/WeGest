@@ -44,6 +44,14 @@ const corsHeaders = {
 
 const env = (k: string) => Deno.env.get(k);
 
+/** Confirma se o pedido vem autenticado com a service role key (workers internos).
+ *  `Boolean(serviceRoleKey)` evita que, com a env var por definir, o literal
+ *  "Bearer undefined" passe a autenticar como service role. */
+function isServiceRoleRequest(req: Request): boolean {
+  const serviceRoleKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  return Boolean(serviceRoleKey) && (req.headers.get('Authorization') ?? '') === `Bearer ${serviceRoleKey}`;
+}
+
 // Registo de providers — adicionar aqui novos adapters (ex.: moloni, invoicexpress).
 const PROVIDERS: Record<string, FaturacaoProvider> = {
   keyinvoice: keyInvoiceProvider,
@@ -99,11 +107,7 @@ async function getOrgConfig(
   req: Request,
   orgIdExplicito?: string
 ): Promise<{ provider: string; cfg: ProviderConfig; orgId: string | null }> {
-  const authHeader = req.headers.get('Authorization') ?? '';
-  const serviceRoleKey = env('SUPABASE_SERVICE_ROLE_KEY');
-  // `Boolean(serviceRoleKey)` evita que, com a env var por definir, o literal
-  // "Bearer undefined" passe a autenticar como service role.
-  const isServiceRole = Boolean(serviceRoleKey) && authHeader === `Bearer ${serviceRoleKey}`;
+  const isServiceRole = isServiceRoleRequest(req);
 
   let orgId: string | null = null;
 
@@ -264,11 +268,7 @@ serve(async (req) => {
 
     // Worker (service role) grava com service role e org_id explícito — o trigger
     // set_invoice_org_id não consegue resolver a org sem sessão de utilizador.
-    // (Mesma guarda contra env var por definir que em getOrgConfig.)
-    const emitServiceRoleKey = env('SUPABASE_SERVICE_ROLE_KEY');
-    const isServiceRole =
-      Boolean(emitServiceRoleKey) &&
-      (req.headers.get('Authorization') ?? '') === `Bearer ${emitServiceRoleKey}`;
+    const isServiceRole = isServiceRoleRequest(req);
     const supabase = isServiceRole
       ? createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '')
       : callerClient(req);

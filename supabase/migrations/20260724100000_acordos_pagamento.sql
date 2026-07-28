@@ -108,7 +108,9 @@ CREATE TABLE public.acordo_parcelas (
     CHECK (estado <> 'paga' OR recibo_id IS NOT NULL)
 );
 
-CREATE INDEX idx_parcelas_acordo ON public.acordo_parcelas (acordo_id, numero);
+-- Sem índice explícito para (acordo_id, numero): a constraint
+-- acordo_parcelas_numero_unico UNIQUE (acordo_id, numero) acima já cria um
+-- índice equivalente automaticamente; um CREATE INDEX aqui seria duplicado.
 CREATE INDEX idx_parcelas_vencimento ON public.acordo_parcelas (org_id, data_vencimento)
   WHERE estado IN ('agendada','avisada');
 
