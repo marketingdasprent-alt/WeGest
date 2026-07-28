@@ -38,6 +38,9 @@ export function AcordoDetalhePanel({ acordoId, modo = 'staff' }: Props) {
   const error = modoStaff ? staffQuery.error : devedorQuery.error;
   const [parcelaAlvo, setParcelaAlvo] = useState<ParcelaDetalhe | null>(null);
   const [invoiceIdPreview, setInvoiceIdPreview] = useState<string | null>(null);
+  // Janela do preview: aberta SINCRONAMENTE no clique (ParcelaTimelineItem), nunca
+  // aqui — ver comentário em DocumentoPreviewDialog.tsx sobre o popup-blocker.
+  const [previewWindow, setPreviewWindow] = useState<Window | null>(null);
 
   const resumo = useMemo(() => {
     if (!acordo) return null;
@@ -111,7 +114,10 @@ export function AcordoDetalhePanel({ acordoId, modo = 'staff' }: Props) {
             parcela={parcela}
             modo={modo}
             onRegistarPagamento={setParcelaAlvo}
-            onVerDocumento={setInvoiceIdPreview}
+            onVerDocumento={(invoiceId, win) => {
+              setPreviewWindow(win);
+              setInvoiceIdPreview(invoiceId);
+            }}
           />
         ))}
       </ol>
@@ -134,9 +140,13 @@ export function AcordoDetalhePanel({ acordoId, modo = 'staff' }: Props) {
           <DocumentoPreviewDialog
             open={!!invoiceIdPreview}
             onOpenChange={(o) => {
-              if (!o) setInvoiceIdPreview(null);
+              if (!o) {
+                setInvoiceIdPreview(null);
+                setPreviewWindow(null);
+              }
             }}
             invoiceId={invoiceIdPreview}
+            previewWindow={previewWindow}
           />
         </>
       )}

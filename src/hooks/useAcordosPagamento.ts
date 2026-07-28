@@ -69,11 +69,11 @@ export function useAcordoResponsaveisElegiveis(contratoId: string | null | undef
       // oferecer motorista como candidato elegível: seria um caminho
       // garantido a falhar, com um erro cru da BD mostrado ao utilizador.
       return (data ?? [])
-        .filter((c: any) => !c.motorista_id)
+        .filter((c) => !c.motorista_id && !!c.cliente_id)
         .map(
-          (c: any): ResponsavelElegivel => ({
+          (c): ResponsavelElegivel => ({
             papel: 'condutor',
-            id: c.cliente_id,
+            id: c.cliente_id as string,
             nome: c.clientes?.nome ?? null,
           })
         );

@@ -22,6 +22,7 @@ import {
 import { useRegistarPagamento } from '@/hooks/useAcordoDetalhe';
 import { METODO_OPTIONS } from '@/components/administrativo/faturacao';
 import { formatCurrency } from '@/utils/formatters';
+import { round2 } from '@/utils/financeiro';
 import type { AcordoDetalhe, ParcelaDetalhe } from '@/hooks/useAcordoDetalhe';
 
 interface Props {
@@ -31,7 +32,6 @@ interface Props {
   parcela: ParcelaDetalhe | null;
 }
 
-const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
 // Data em Lisboa, não UTC — new Date().toISOString() dá o dia UTC, que é o dia
 // ANTERIOR entre as 00h e a 01h de hora de verão de Lisboa (UTC+1), o que erraria
 // o campo fiscal recibos.data_recibo. Mesmo padrão de hojeEmLisboa() em
@@ -130,8 +130,11 @@ export function RegistarPagamentoDialog({ open, onOpenChange, acordo, parcela }:
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">Valor</Label>
+              <Label htmlFor="pagamento-valor" className="text-xs">
+                Valor
+              </Label>
               <Input
+                id="pagamento-valor"
                 type="number"
                 min="0.01"
                 max={parcela?.valor}
@@ -152,8 +155,11 @@ export function RegistarPagamentoDialog({ open, onOpenChange, acordo, parcela }:
               )}
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Data</Label>
+              <Label htmlFor="pagamento-data" className="text-xs">
+                Data
+              </Label>
               <Input
+                id="pagamento-data"
                 type="date"
                 value={data}
                 onChange={(e) => setData(e.target.value)}
@@ -163,9 +169,11 @@ export function RegistarPagamentoDialog({ open, onOpenChange, acordo, parcela }:
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Método de pagamento</Label>
+            <Label htmlFor="pagamento-metodo" className="text-xs">
+              Método de pagamento
+            </Label>
             <Select value={metodo} onValueChange={setMetodo}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger id="pagamento-metodo" className="h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -11,26 +11,26 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   invoiceId: string | null;
+  /**
+   * Janela já aberta SINCRONAMENTE pelo chamador (ParcelaTimelineItem), dentro do
+   * próprio onClick, antes de qualquer await — nunca aberta aqui. Um `window.open()`
+   * disparado de dentro deste useEffect (que só corre depois de o estado do pai
+   * mudar, já fora da pilha síncrona do gesto do utilizador) é exactamente o padrão
+   * que o popup-blocker do Safari bloqueia, mesmo sendo consequência directa de um
+   * clique. `null` quando o popup já foi bloqueado no próprio clique — abrirDocumentoPdf()
+   * cai para download nesse caso, por isso o pior caso é perder o preview automático,
+   * nunca o documento em si.
+   */
+  previewWindow: Window | null;
 }
 
-/**
- * Pré-visualização de um documento fiscal (Recibo).
- *
- * NOTA: idealmente o window.open() dispararia dentro do handler de clique que
- * muda `invoiceId` (gesto síncrono, como em FaturacaoMovimentoDialog.tsx:99-105) —
- * aqui dispara de um useEffect a reagir à mudança da prop, uma gesto-distância
- * que o Chrome tolera mas que navegadores mais estritos (Safari) podem bloquear.
- * abrirDocumentoPdf() já cai para download quando a janela é null, por isso o
- * pior caso é perder o preview automático, nunca o documento em si.
- */
-export function DocumentoPreviewDialog({ open, onOpenChange, invoiceId }: Props) {
+/** Pré-visualização de um documento fiscal (Recibo). */
+export function DocumentoPreviewDialog({ open, onOpenChange, invoiceId, previewWindow }: Props) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open || !invoiceId) return;
-    // A janela abre-se JÁ, no efeito disparado pelo clique que mudou `open` — antes
-    // de qualquer await, para não ser bloqueada.
-    const w = window.open('', '_blank');
+    const w = previewWindow;
     setLoading(true);
     (async () => {
       try {

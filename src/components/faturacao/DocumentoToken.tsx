@@ -10,7 +10,7 @@
  */
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { formatCurrency } from '@/utils/formatters';
+import { formatCurrency, formatDate } from '@/utils/formatters';
 
 export type DocumentoTokenTipo = 'fiscal' | 'nao_fiscal';
 
@@ -22,6 +22,8 @@ export interface DocumentoTokenProps {
   /** Ex.: "Fatura original · 12/07/2026". */
   subtitulo: string;
   valor: number;
+  /** Data de emissão do documento (ISO ou Date). Opcional — nem todo o consumidor a tem. */
+  dataDocumento?: string | Date | null;
 }
 
 export function DocumentoToken({
@@ -30,6 +32,7 @@ export function DocumentoToken({
   titulo,
   subtitulo,
   valor,
+  dataDocumento,
 }: DocumentoTokenProps) {
   const fiscal = tipo === 'fiscal';
   return (
@@ -50,6 +53,11 @@ export function DocumentoToken({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-sm">{titulo}</span>
+          {dataDocumento && (
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              {formatDate(dataDocumento)}
+            </span>
+          )}
           <span
             className={cn(
               'text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5',

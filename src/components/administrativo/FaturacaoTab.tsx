@@ -246,12 +246,14 @@ export function FaturacaoContent() {
       cobrancaId: r.cob.id,
       contratoId: r.cob.contrato_id,
       numeroDocumento: r.cob.documento_externo_ref || row.numeroDoc || '',
-      dataDocumento: invoice?.data_emissao || row.dataMovimento || '',
+      // `invoice` (não `invoice?.`): o gate acima já devolveu se `invoice` fosse
+      // null — chegado aqui está sempre definido (é uma const, nunca reatribuído).
+      dataDocumento: invoice.data_emissao || row.dataMovimento || '',
       valorTotal: total,
       saldoPagar,
       titularId: r.cob.destinatario_id,
       titularNome: r.cob.destinatario_nome,
-      titularNif: invoice?.cliente_nif ?? null,
+      titularNif: invoice.cliente_nif ?? null,
     });
   }
 

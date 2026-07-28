@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { formatCurrency } from '@/utils/formatters';
+import { round2 } from '@/utils/financeiro';
 import { cn } from '@/lib/utils';
 import { DocumentoToken } from './DocumentoToken';
 import {
@@ -64,6 +65,9 @@ type ResponsavelSelecao =
   | { papel: 'condutor' | 'motorista'; id: string };
 
 const hojeISO = () => new Date().toISOString().slice(0, 10);
+
+/** Teto de nº de parcelas — espelha o limite server-side em acordo_criar (RPC); nunca deve divergir. */
+const MAX_PARCELAS = 36;
 
 export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props) {
   const qc = useQueryClient();
@@ -105,7 +109,13 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
   const planoGerado = useMemo((): ParcelaPlano[] | null => {
     if (!alvo) return null;
     const n = parseInt(numParcelas, 10);
-    if (!Number.isFinite(n) || n < 1) return null;
+    if (!Number.isFinite(n) || n < 1) {
+      // Campo vazio/inválido: limpa um erro anterior (ex.: de uma geração que
+      // falhou com outro nº de parcelas) — sem isto ficava um erro obsoleto
+      // visível mesmo depois de a grelha desaparecer por outro motivo.
+      setErroGeracao(null);
+      return null;
+    }
     try {
       setErroGeracao(null);
       return gerarPlanoParcelas({
@@ -267,6 +277,7 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
               titulo={alvo.numeroDocumento}
               subtitulo={`Fatura original · ${alvo.titularNome}${alvo.titularNif ? ` · NIF ${alvo.titularNif}` : ''}`}
               valor={alvo.valorTotal}
+              dataDocumento={alvo.dataDocumento}
             />
 
             {/* 2. Total / Já liquidado / A parcelar */}
@@ -278,7 +289,9 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
 
             {/* 3. Quem assume */}
             <div className="space-y-1.5">
-              <Label className="text-xs">Quem assume o pagamento</Label>
+              <Label htmlFor="responsavel-select" className="text-xs">
+                Quem assume o pagamento
+              </Label>
               <Select
                 value={responsavel ? `${responsavel.papel}:${responsavel.id}` : ''}
                 onValueChange={(v) => {
@@ -286,7 +299,7 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
                   setResponsavel({ papel: papel as ResponsavelSelecao['papel'], id });
                 }}
               >
-                <SelectTrigger className="h-9">
+                <SelectTrigger id="responsavel-select" className="h-9">
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
@@ -314,8 +327,11 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
             {/* 4. Entrada + parcelas + frequência + dia */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Entrada (opcional)</Label>
+                <Label htmlFor="entrada-valor" className="text-xs">
+                  Entrada (opcional)
+                </Label>
                 <Input
+                  id="entrada-valor"
                   type="number"
                   min="0"
                   step="0.01"
@@ -326,8 +342,11 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Data da entrada</Label>
+                <Label htmlFor="entrada-data" className="text-xs">
+                  Data da entrada
+                </Label>
                 <Input
+                  id="entrada-data"
                   type="date"
                   value={entradaData}
                   onChange={(e) => setEntradaData(e.target.value)}
@@ -336,23 +355,30 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Nº de parcelas</Label>
+                <Label htmlFor="num-parcelas" className="text-xs">
+                  Nº de parcelas
+                </Label>
                 <Input
+                  id="num-parcelas"
                   type="number"
                   min="1"
-                  max="24"
+                  max={MAX_PARCELAS}
                   value={numParcelas}
-                  onChange={(e) => setNumParcelas(e.target.value)}
+                  onChange={(e) =>
+                    setNumParcelas(limitarCampoNumerico(e.target.value, 1, MAX_PARCELAS))
+                  }
                   className="h-9"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Frequência</Label>
+                <Label htmlFor="frequencia-select" className="text-xs">
+                  Frequência
+                </Label>
                 <Select
                   value={frequencia}
                   onValueChange={(v) => setFrequencia(v as FrequenciaParcela)}
                 >
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger id="frequencia-select" className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -363,8 +389,11 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
               </div>
               {frequencia === 'mensal' && (
                 <div className="space-y-1.5 col-span-2">
-                  <Label className="text-xs">Dia de vencimento (opcional)</Label>
+                  <Label htmlFor="dia-vencimento" className="text-xs">
+                    Dia de vencimento (opcional)
+                  </Label>
                   <Input
+                    id="dia-vencimento"
                     type="number"
                     min="1"
                     max="31"
@@ -379,7 +408,14 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
 
             {erroGeracao && <p className="text-[11px] text-destructive">{erroGeracao}</p>}
 
-            {/* 5. Grelha editável */}
+            {/* 5. Grelha editável — se não há parcelas geradas nem erro, o nº de parcelas
+                está vazio/inválido (ver planoGerado): diz-se isso em vez de deixar o
+                espaço em branco sem explicação. */}
+            {!erroGeracao && !(parcelasEditadas && parcelasEditadas.length > 0) && (
+              <p className="text-[11px] text-muted-foreground rounded-md border border-dashed p-3 text-center">
+                Indica o número de parcelas para ver a pré-visualização.
+              </p>
+            )}
             {parcelasEditadas && parcelasEditadas.length > 0 && (
               <div className="rounded-md border">
                 <table className="w-full text-sm">
@@ -463,8 +499,6 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
     </Dialog>
   );
 }
-
-const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
 
 /** Limita um número ao intervalo [min, max]. */
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));

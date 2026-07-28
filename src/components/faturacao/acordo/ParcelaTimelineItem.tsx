@@ -21,7 +21,15 @@ interface Props {
   acordo: AcordoDetalhe | AcordoVistaDevedor;
   parcela: ParcelaDetalhe | AcordoVistaDevedorParcela;
   onRegistarPagamento?: (parcela: ParcelaDetalhe) => void;
-  onVerDocumento?: (invoiceId: string) => void;
+  /**
+   * `win`: janela já aberta SINCRONAMENTE (dentro deste próprio onClick, antes de
+   * qualquer await) — o chamador só lhe muda o `location.href` depois de obter o
+   * PDF. Nunca abrir a janela dentro de um useEffect/callback assíncrono: alguns
+   * navegadores (Safari) só toleram `window.open()` na pilha de chamada síncrona
+   * do gesto do utilizador; um efeito disparado por uma mudança de estado já não
+   * conta, mesmo que seja consequência direta do clique.
+   */
+  onVerDocumento?: (invoiceId: string, win: Window | null) => void;
   /**
    * 'staff' (default) mostra todas as acções internas (Registar pagamento, Ver
    * recibo, PDF do aviso). 'devedor' esconde-as TODAS incondicionalmente — o
@@ -148,7 +156,12 @@ export function ParcelaTimelineItem({
               variant="ghost"
               size="sm"
               className="h-7 gap-1.5 text-xs"
-              onClick={() => onVerDocumento?.(parcelaStaff.invoiceRcId!)}
+              onClick={() => {
+                // Abre a janela JÁ, síncrono dentro do clique — antes de qualquer
+                // await no chamador (ver comentário no tipo de onVerDocumento acima).
+                const win = window.open('', '_blank');
+                onVerDocumento?.(parcelaStaff.invoiceRcId!, win);
+              }}
             >
               <Eye className="h-3.5 w-3.5" />
               Ver recibo

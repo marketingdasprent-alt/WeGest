@@ -199,8 +199,10 @@ export interface AssociarDocumentoInput {
  * uma permissão DIFERENTE de has_renting_faturacao_access() usada no resto desta
  * funcionalidade (incl. no guard interno de acordo_parcela_liquidar). Um gestor com
  * acesso de faturação mas sem acesso a contratos pode ver este botão e ter o INSERT
- * silenciosamente rejeitado pela RLS — por isso o `{error}` de AMBAS as chamadas é
- * verificado e propagado (throw), nunca assumido como sucesso.
+ * silenciosamente rejeitado pela RLS — por isso o `{error}` do insert e da RPC de
+ * liquidação (as duas chamadas de que depende o sucesso da mutação) é sempre
+ * verificado e propagado (throw), nunca assumido como sucesso. A terceira chamada
+ * (update da outbox) é deliberadamente diferente — ver comentário acima dela.
  */
 export function useAssociarDocumentoExistente() {
   const qc = useQueryClient();
@@ -280,6 +282,10 @@ export function useReemitirDocumento() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['acordo-detalhe'] });
+      // Mesmo motivo que useAssociarDocumentoExistente acima: repor a linha da
+      // outbox para 'pendente' também pode mudar o que um motorista vê na própria
+      // vista (acordo_vista_devedor).
+      qc.invalidateQueries({ queryKey: ['acordo-vista-devedor'] });
     },
   });
 }

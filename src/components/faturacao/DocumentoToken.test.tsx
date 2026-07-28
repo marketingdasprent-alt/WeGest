@@ -52,4 +52,31 @@ describe('DocumentoToken', () => {
     );
     expect(screen.queryByText(/Não substitui fatura nem recibo/)).toBeNull();
   });
+
+  it('mostra a data do documento quando fornecida', () => {
+    render(
+      <DocumentoToken
+        tipo="fiscal"
+        icone={FileText}
+        titulo="FT 2026/143"
+        subtitulo="Fatura original"
+        valor={1200}
+        dataDocumento="2026-07-12"
+      />
+    );
+    expect(screen.getByText('12/07/2026')).toBeTruthy();
+  });
+
+  it('não mostra nenhuma data quando dataDocumento não é fornecida', () => {
+    render(
+      <DocumentoToken
+        tipo="fiscal"
+        icone={FileText}
+        titulo="FT 2026/143"
+        subtitulo="Fatura original"
+        valor={1200}
+      />
+    );
+    expect(screen.queryByText(/^\d{2}\/\d{2}\/\d{4}$/)).toBeNull();
+  });
 });
