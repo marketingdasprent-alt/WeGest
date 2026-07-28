@@ -107,6 +107,7 @@ const RECURSO_LABELS: Record<string, string> = {
   viaturas_financeiro: 'Ver dados financeiros das viaturas',
   viaturas_marcas_modelos: 'Criar/editar marcas, modelos e versões',
   viaturas_grupos: 'Criar/editar grupos, tarifas, coberturas, extras e taxas (renting)',
+  viaturas_imobilizar: 'Bloquear/desbloquear viaturas (imobilizador Cartrack)',
   // Contratos
   contratos_ver: 'Ver contratos',
   contratos_criar: 'Criar novos contratos',
@@ -160,7 +161,7 @@ function getLabel(nome: string): string {
 // Recursos que são um SIM/NÃO por grupo (não os 3 níveis Nenhum/Ver/Editar).
 // "Disponível para assistência": tem_acesso=true → o grupo fica selecionável
 // como assistente responsável nos tickets. Só há 2 estados (sim/não).
-export const BOOLEAN_RECURSOS = new Set(['assistencia_disponivel']);
+export const BOOLEAN_RECURSOS = new Set(['assistencia_disponivel', 'viaturas_imobilizar']);
 
 // ── Level Toggle ─────────────────────────────────────────────────────────────
 

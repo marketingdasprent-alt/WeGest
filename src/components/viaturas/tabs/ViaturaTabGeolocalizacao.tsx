@@ -9,9 +9,31 @@ import { format, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MapPin, Gauge, Fuel, Power, Clock, Loader2, RefreshCw } from 'lucide-react';
+import {
+  MapPin,
+  Gauge,
+  Fuel,
+  Power,
+  Clock,
+  Loader2,
+  RefreshCw,
+  Lock,
+  Unlock,
+  ShieldAlert,
+} from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   useCartrackVehicleByViatura,
   useCartrackLive,
@@ -84,15 +106,79 @@ interface Props {
 
 export function ViaturaTabGeolocalizacao({ viaturaId, matricula }: Props) {
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+  const podeImobilizar = hasPermission('viaturas_imobilizar');
   const { data: v, isLoading, error, refetch } = useCartrackVehicleByViatura(viaturaId);
   const [syncing, setSyncing] = useState(false);
   const [live, setLive] = useState(false);
+
+  // Imobilizador (bloquear/libertar) — só para quem tem a permissão.
+  const [immStatus, setImmStatus] = useState<boolean | null>(null);
+  const [immLoading, setImmLoading] = useState(false);
+  const [acting, setActing] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: livePositions } = useCartrackLive(v?.integracao_id, {
     registration: v?.registration,
     enabled: live && !!v,
     intervalMs: 10_000,
   });
+
+  // Carrega o estado do imobilizador quando há viatura ligada + permissão.
+  useEffect(() => {
+    let cancel = false;
+    async function loadImm() {
+      if (!podeImobilizar || !v?.integracao_id || !v?.registration) {
+        setImmStatus(null);
+        return;
+      }
+      setImmLoading(true);
+      try {
+        const { data } = await supabase.functions.invoke('cartrack-immobilise', {
+          body: { integracao_id: v.integracao_id, registration: v.registration, action: 'status' },
+        });
+        if (!cancel) setImmStatus(data?.success ? (data.immobilise_status ?? null) : null);
+      } catch {
+        if (!cancel) setImmStatus(null);
+      } finally {
+        if (!cancel) setImmLoading(false);
+      }
+    }
+    loadImm();
+    return () => {
+      cancel = true;
+    };
+  }, [podeImobilizar, v?.integracao_id, v?.registration]);
+
+  const handleImmobilise = async () => {
+    if (!v?.integracao_id || !v?.registration) return;
+    setActing(true);
+    try {
+      const proximo = !immStatus; // true = bloquear, false = libertar
+      const { data, error: fnErr } = await supabase.functions.invoke('cartrack-immobilise', {
+        body: {
+          integracao_id: v.integracao_id,
+          registration: v.registration,
+          viatura_id: viaturaId,
+          action: 'set',
+          immobilise: proximo,
+        },
+      });
+      if (fnErr || !data?.success) {
+        throw new Error(data?.error || fnErr?.message || 'Falha no comando');
+      }
+      setImmStatus(proximo);
+      toast({
+        title: proximo ? 'Viatura bloqueada' : 'Viatura libertada',
+        description: data.message || 'Comando enviado ao terminal Cartrack.',
+      });
+    } catch (e: any) {
+      toast({ title: 'Erro no imobilizador', description: e.message, variant: 'destructive' });
+    } finally {
+      setActing(false);
+      setConfirmOpen(false);
+    }
+  };
 
   const handleSync = async () => {
     if (!v?.integracao_id) return;
@@ -221,6 +307,52 @@ export function ViaturaTabGeolocalizacao({ viaturaId, matricula }: Props) {
         <Stat icon={Clock} label="Última posição" value={fmtDate(view.last_position_at)} />
       </div>
 
+      {/* Imobilizador — só para quem tem a permissão viaturas_imobilizar */}
+      {podeImobilizar && (
+        <Card className={immStatus ? 'border-destructive/40 bg-destructive/5' : 'border-border'}>
+          <CardContent className="p-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div
+                className={`h-9 w-9 rounded-lg flex items-center justify-center ${
+                  immStatus
+                    ? 'bg-destructive/10 text-destructive'
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {immStatus ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Imobilizador</p>
+                <p className="text-xs text-muted-foreground">
+                  {immLoading
+                    ? 'A verificar estado…'
+                    : immStatus == null
+                      ? 'Estado indisponível (a viatura pode não ter imobilizador)'
+                      : immStatus
+                        ? 'Viatura BLOQUEADA'
+                        : 'Viatura livre'}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant={immStatus ? 'outline' : 'destructive'}
+              size="sm"
+              disabled={acting || immLoading}
+              onClick={() => setConfirmOpen(true)}
+            >
+              {acting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : immStatus ? (
+                <Unlock className="h-4 w-4 mr-2" />
+              ) : (
+                <Lock className="h-4 w-4 mr-2" />
+              )}
+              {immStatus ? 'Libertar' : 'Bloquear'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Mapa (só esta viatura) */}
       <Card className="overflow-hidden">
         <CardContent className="p-0">
@@ -269,6 +401,41 @@ export function ViaturaTabGeolocalizacao({ viaturaId, matricula }: Props) {
           )}
         </CardContent>
       </Card>
+
+      {/* Confirmação — ação sensível */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-destructive" />
+              {immStatus ? 'Libertar viatura?' : 'Bloquear viatura?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {immStatus
+                ? `Vai libertar o imobilizador de ${view.registration || matricula}. A viatura poderá arrancar normalmente.`
+                : `Vai bloquear a ignição de ${view.registration || matricula} via Cartrack. Se o motor estiver ligado, só faz efeito quando desligar — use apenas com a viatura parada.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={acting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleImmobilise();
+              }}
+              disabled={acting}
+              className={
+                immStatus
+                  ? ''
+                  : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+              }
+            >
+              {acting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {immStatus ? 'Libertar' : 'Bloquear'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

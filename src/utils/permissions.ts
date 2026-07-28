@@ -30,6 +30,7 @@ export const RECURSOS = {
   VIATURAS_FINANCEIRO: 'viaturas_financeiro',
   VIATURAS_MARCAS_MODELOS: 'viaturas_marcas_modelos',
   VIATURAS_GRUPOS: 'viaturas_grupos',
+  VIATURAS_IMOBILIZAR: 'viaturas_imobilizar', // Bloquear/libertar via Cartrack
   // Contratos
   CONTRATOS_VER: 'contratos_ver',
   CONTRATOS_CRIAR: 'contratos_criar',
