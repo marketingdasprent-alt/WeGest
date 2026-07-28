@@ -20,6 +20,7 @@ import {
   FileMinus,
   Eye,
   Ban,
+  CalendarClock,
 } from 'lucide-react';
 import { formatCurrency, formatDateTime, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,15 @@ interface Props {
   /** Ações sobre a fatura desta linha (quando é uma cobrança/fatura). */
   onFazerRecibo?: () => void;
   onNotaCredito?: () => void;
+  /**
+   * Parcelar a fatura desta linha (abre o ParcelamentoDialog) OU navegar para o
+   * acordo já existente — o pai decide qual dos dois consoante já exista um
+   * acordo vivo sobre a cobrança (useAcordoAtivoPorCobranca). Este componente
+   * não sabe distinguir os dois casos, só dispara a ação.
+   */
+  onParcelar?: () => void;
+  /** Texto do botão de parcelamento — "Parcelar" ou "Ver plano de pagamentos". */
+  parcelarLabel?: string;
   /** Anular o recibo / nota de crédito desta linha (estorno na conta-corrente). */
   onAnular?: () => void;
 }
@@ -58,6 +68,8 @@ export function FaturacaoMovimentoDialog({
   onOpenChange,
   onFazerRecibo,
   onNotaCredito,
+  onParcelar,
+  parcelarLabel,
   onAnular,
 }: Props) {
   const { data: orgDef } = useOrgDefinicoes();
@@ -235,7 +247,7 @@ export function FaturacaoMovimentoDialog({
               fiscal é emitida no {providerLabel}.
             </p>
 
-            {podeAgir && (onFazerRecibo || onNotaCredito) && (
+            {podeAgir && (onFazerRecibo || onNotaCredito || onParcelar) && (
               <div className="flex flex-wrap gap-2 border-t pt-3">
                 {onFazerRecibo && (
                   <Button
@@ -257,6 +269,17 @@ export function FaturacaoMovimentoDialog({
                     onClick={onNotaCredito}
                   >
                     <FileMinus className="h-4 w-4" /> Nota de crédito
+                  </Button>
+                )}
+                {onParcelar && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={onParcelar}
+                  >
+                    <CalendarClock className="h-4 w-4" /> {parcelarLabel ?? 'Parcelar'}
                   </Button>
                 )}
               </div>

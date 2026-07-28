@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -33,6 +34,11 @@ import type { InvoiceMetadata } from '@/types/faturacao';
 import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
 import type { ReciboCobrancaAlvo } from '@/components/faturacao/RecibosDialog';
 import type { NotaCreditoCobranca } from '@/components/renting/contratos/NotaCreditoDialog';
+import {
+  ParcelamentoDialog,
+  type ParcelamentoFaturaAlvo,
+} from '@/components/faturacao/ParcelamentoDialog';
+import { useAcordoAtivoPorCobranca } from '@/hooks/useAcordosPagamento';
 import { FaturacaoToolbarSection } from './faturacao/sections/FaturacaoToolbarSection';
 import { FaturacaoListaSection } from './faturacao/sections/FaturacaoListaSection';
 import { FaturacaoDialogsSection } from './faturacao/sections/FaturacaoDialogsSection';
@@ -50,6 +56,7 @@ const emptyKpi = (dl = '') => emptyResumo(dl);
 type InvoiceDocs = { ft?: InvoiceMetadata; nc?: InvoiceMetadata; rc?: InvoiceMetadata };
 
 export function FaturacaoContent() {
+  const navigate = useNavigate();
   const { data: estacoes = [] } = useEstacoes();
   const estacoesMap = useMemo(() => {
     const m: Record<string, string> = {};
@@ -125,6 +132,10 @@ export function FaturacaoContent() {
   const [anularRow, setAnularRow] = useState<FaturacaoRow | null>(null);
   const [anularBusy, setAnularBusy] = useState(false);
   const [anularMotivo, setAnularMotivo] = useState('');
+  const [parcelamentoAlvo, setParcelamentoAlvo] = useState<ParcelamentoFaturaAlvo | null>(null);
+  // Decide se o botão de parcelamento abre o ParcelamentoDialog (sem acordo vivo)
+  // ou navega para o acordo já existente (useAcordoAtivoPorCobranca, Fase 4A).
+  const { data: acordoAtivo } = useAcordoAtivoPorCobranca(selectedRow?.cobrancaId ?? null);
 
   async function resolverCobranca(cobrancaId: string) {
     const { data: cob } = await supabase
@@ -208,6 +219,35 @@ export function FaturacaoContent() {
       destinatario_nome: r.cob.destinatario_nome,
       contrato_id: r.cob.contrato_id ?? null,
       documento_externo_ref: r.cob.documento_externo_ref,
+    });
+  }
+
+  async function abrirParcelarParaRow(row: FaturacaoRow) {
+    if (!row.cobrancaId) return;
+    setDialogOpen(false);
+    const r = await resolverCobranca(row.cobrancaId);
+    if (!r) {
+      toast.error('Cobrança não encontrada.');
+      return;
+    }
+    const total = Math.round((Number(r.cob.valor_total) || 0) * 100) / 100;
+    // Mesma fórmula que abrirReciboParaRow: total − recibos ativos − NC ativas.
+    const saldoPagar = Math.round((total - r.pago - r.creditado) * 100) / 100;
+    if (saldoPagar <= 0.005) {
+      toast.info('Esta fatura já está liquidada.');
+      return;
+    }
+    const invoice = docFiscalDaLinha(row);
+    setParcelamentoAlvo({
+      cobrancaId: r.cob.id,
+      contratoId: r.cob.contrato_id,
+      numeroDocumento: r.cob.documento_externo_ref || row.numeroDoc || '',
+      dataDocumento: invoice?.data_emissao || row.dataMovimento || '',
+      valorTotal: total,
+      saldoPagar,
+      titularId: r.cob.destinatario_id,
+      titularNome: r.cob.destinatario_nome,
+      titularNif: invoice?.cliente_nif ?? null,
     });
   }
 
@@ -690,6 +730,14 @@ export function FaturacaoContent() {
         onDialogOpenChange={setDialogOpen}
         onFazerRecibo={selectedRow ? () => abrirReciboParaRow(selectedRow) : undefined}
         onNotaCredito={selectedRow ? () => abrirNcParaRow(selectedRow) : undefined}
+        onParcelar={
+          selectedRow
+            ? acordoAtivo
+              ? () => navigate(`/acordos/${acordoAtivo.id}`)
+              : () => abrirParcelarParaRow(selectedRow)
+            : undefined
+        }
+        parcelarLabel={acordoAtivo ? 'Ver plano de pagamentos' : 'Parcelar'}
         onAnular={selectedRow ? () => abrirAnular(selectedRow) : undefined}
         reciboOpen={reciboOpen}
         onReciboOpenChange={setReciboOpen}
@@ -711,6 +759,15 @@ export function FaturacaoContent() {
             setAnularMotivo('');
           }
         }}
+      />
+
+      <ParcelamentoDialog
+        open={!!parcelamentoAlvo}
+        onOpenChange={(o) => {
+          if (!o) setParcelamentoAlvo(null);
+        }}
+        alvo={parcelamentoAlvo}
+        onCriado={() => setReloadToken((t) => t + 1)}
       />
 
       <FaturacaoAlertasSection

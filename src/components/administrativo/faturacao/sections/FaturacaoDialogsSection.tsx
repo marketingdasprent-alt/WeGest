@@ -15,6 +15,9 @@ interface FaturacaoDialogsSectionProps {
   onDialogOpenChange: (open: boolean) => void;
   onFazerRecibo: (() => void) | undefined;
   onNotaCredito: (() => void) | undefined;
+  /** Parcelar a fatura desta linha OU navegar para o acordo já existente (ver FaturacaoMovimentoDialog). */
+  onParcelar: (() => void) | undefined;
+  parcelarLabel: string | undefined;
   onAnular: (() => void) | undefined;
 
   /** Diálogo de Recibo */
@@ -45,6 +48,8 @@ export function FaturacaoDialogsSection({
   onDialogOpenChange,
   onFazerRecibo,
   onNotaCredito,
+  onParcelar,
+  parcelarLabel,
   onAnular,
   reciboOpen,
   onReciboOpenChange,
@@ -69,6 +74,8 @@ export function FaturacaoDialogsSection({
         onOpenChange={onDialogOpenChange}
         onFazerRecibo={onFazerRecibo}
         onNotaCredito={onNotaCredito}
+        onParcelar={onParcelar}
+        parcelarLabel={parcelarLabel}
         onAnular={onAnular}
       />
 
