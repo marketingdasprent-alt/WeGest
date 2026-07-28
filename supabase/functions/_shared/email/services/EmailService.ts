@@ -20,6 +20,25 @@ import {
   type EliminacaoContaInput,
 } from '../templates/eliminacaoConta.ts';
 import { passwordRecoveryTemplate, magicLinkTemplate, motoristaOnboardingTemplate } from '../templates/authEmail.ts';
+import { jobFalhaTemplate, viaVerdeSyncFalhaTemplate, type JobFalhaInput } from '../templates/jobFalha.ts';
+import { documentoViaturaTemplate, type DocumentoViaturaInput } from '../templates/documentoViatura.ts';
+import { candidaturaPendenteTemplate, type CandidaturaPendenteInput } from '../templates/candidatura.ts';
+import { reservaSemCheckinTemplate, type ReservaSemCheckinInput } from '../templates/reservaSemCheckin.ts';
+import { contratoTemplate, type ContratoInput } from '../templates/contrato.ts';
+import {
+  reparacaoConcluidaTemplate,
+  reparacaoAbertaDemoradaTemplate,
+  type ReparacaoConcluidaInput,
+  type ReparacaoAbertaDemoradaInput,
+} from '../templates/reparacao.ts';
+import { fichaIncompletaTemplate, type FichaIncompletaInput } from '../templates/fichaIncompleta.ts';
+import {
+  faturaClienteTemplate,
+  cobrancaAtrasoTemplate,
+  type FaturaClienteInput,
+  type CobrancaAtrasoInput,
+} from '../templates/financeiro.ts';
+import { loginSuspeitoTemplate, type LoginSuspeitoInput } from '../templates/seguranca.ts';
 import type { EmailAttachment, EmailMessage, EmailSendResult } from '../types/index.ts';
 
 // deno-lint-ignore no-explicit-any
@@ -217,6 +236,181 @@ export class EmailService {
     const message: EmailMessage = { to: [{ email: args.to }], subject, html };
 
     return this.send(orgId, 'auth', message);
+  }
+
+  async sendJobFalha(
+    orgId: string,
+    args: JobFalhaInput & { to: string; toNome?: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = jobFalhaTemplate(args);
+    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html };
+
+    return this.send(orgId, 'job_falha', message);
+  }
+
+  async sendViaVerdeSyncFalha(
+    orgId: string,
+    args: Omit<JobFalhaInput, 'jobNome'> & { to: string; toNome?: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = viaVerdeSyncFalhaTemplate(args);
+    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html };
+
+    return this.send(orgId, 'via_verde_sync_falha', message);
+  }
+
+  async sendDocumentoViatura(
+    orgId: string,
+    args: DocumentoViaturaInput & { to: string; toNome?: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = documentoViaturaTemplate(args);
+    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html };
+
+    return this.send(orgId, `documento_viatura_${args.tipo}`, message);
+  }
+
+  async sendCandidaturaPendente(
+    orgId: string,
+    args: CandidaturaPendenteInput & { to: string; toNome?: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = candidaturaPendenteTemplate(args);
+    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html };
+
+    return this.send(orgId, 'candidatura_pendente', message);
+  }
+
+  async sendReservaSemCheckin(
+    orgId: string,
+    args: ReservaSemCheckinInput & { to: string; toNome?: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = reservaSemCheckinTemplate(args);
+    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html };
+
+    return this.send(orgId, 'reserva_sem_checkin', message);
+  }
+
+  async sendContrato(
+    orgId: string,
+    args: ContratoInput & { to: string; toNome?: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = contratoTemplate(args);
+    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html };
+
+    return this.send(orgId, `contrato_${args.tipo}`, message);
+  }
+
+  async sendReparacaoConcluida(
+    orgId: string,
+    args: ReparacaoConcluidaInput & { to: string; toNome?: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = reparacaoConcluidaTemplate(args);
+    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html };
+
+    return this.send(orgId, 'reparacao_concluida', message);
+  }
+
+  async sendReparacaoAbertaDemorada(
+    orgId: string,
+    args: ReparacaoAbertaDemoradaInput & { to: string; toNome?: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = reparacaoAbertaDemoradaTemplate(args);
+    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html };
+
+    return this.send(orgId, 'reparacao_aberta_demorada', message);
+  }
+
+  async sendFichaIncompleta(
+    orgId: string,
+    args: FichaIncompletaInput & { to: string; toNome?: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = fichaIncompletaTemplate(args);
+    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html };
+
+    return this.send(orgId, 'ficha_incompleta', message);
+  }
+
+  async sendFaturaCliente(
+    orgId: string,
+    args: FaturaClienteInput & {
+      to: string;
+      toNome?: string;
+      pdfBase64?: string;
+      filename?: string;
+    }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = faturaClienteTemplate(args);
+    const attachments: EmailAttachment[] | undefined =
+      args.pdfBase64 && args.filename ? [{ content: args.pdfBase64, name: args.filename }] : undefined;
+    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html, attachments };
+
+    return this.send(orgId, 'fatura_cliente', message);
+  }
+
+  async sendCobrancaAtraso(
+    orgId: string,
+    args: CobrancaAtrasoInput & { to: string; toNome?: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = cobrancaAtrasoTemplate(args);
+    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html };
+
+    return this.send(orgId, 'cobranca_atraso', message);
+  }
+
+  async sendLoginSuspeito(
+    orgId: string,
+    args: LoginSuspeitoInput & { to: string; toNome?: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = loginSuspeitoTemplate(args);
+    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html };
+
+    return this.send(orgId, 'login_suspeito', message);
   }
 
   private async send(
