@@ -109,6 +109,9 @@ function mockFromChain(table: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   fromMock.mockImplementation(mockFromChain);
+  // Default: cobranca_saldo_por_liquidar devolve 250 — sobreposto no teste
+  // dedicado a faltaPagar quando é preciso um valor diferente.
+  rpcMock.mockResolvedValue({ data: 250, error: null });
 });
 
 describe('useAcordoDetalhe', () => {
@@ -143,6 +146,14 @@ describe('useAcordoDetalhe', () => {
     const { result } = renderHook(() => useAcordoDetalhe('a-1'), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.contratoId).toBe('ct-1');
+  });
+
+  it('faltaPagar vem da RPC cobranca_saldo_por_liquidar (fonte única de verdade, nunca somado das parcelas)', async () => {
+    rpcMock.mockResolvedValue({ data: 250, error: null });
+    const { result } = renderHook(() => useAcordoDetalhe('a-1'), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(rpcMock).toHaveBeenCalledWith('cobranca_saldo_por_liquidar', { p_cobranca_id: 'c-1' });
+    expect(result.current.data?.faltaPagar).toBe(250);
   });
 });
 

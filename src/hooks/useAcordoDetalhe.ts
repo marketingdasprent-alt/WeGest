@@ -22,6 +22,7 @@ export interface AcordoDetalhe {
   codigo: number;
   estado: 'ativo' | 'liquidado' | 'incumprimento' | 'cancelado';
   valorTotal: number;
+  faltaPagar: number;
   titularId: string;
   titularNome: string;
   titularNif: string | null;
@@ -92,6 +93,20 @@ export function useAcordoDetalhe(acordoId: string | null | undefined) {
         numeroFaturaOriginal = (invoice as { numero: string } | null)?.numero ?? null;
       }
 
+      // Fonte única de verdade do saldo por liquidar — a MESMA RPC que acordo_criar e
+      // o worker diário já usam (cobranca_saldo_por_liquidar). Nunca recalcular a
+      // partir da soma das parcelas no componente: a dívida de registo vive em
+      // contrato_cobrancas e pode divergir da soma das parcelas (ex.: uma nota de
+      // crédito lançada por fora do acordo). RPC criada na mesma migração
+      // (20260724100001) das restantes tabelas desta feature ainda sem tipos
+      // gerados — daqui o `as any`, tal como o resto das chamadas a esta RPC em
+      // src/lib/acordoPagamento.ts.
+      const { data: faltaPagarRpc, error: faltaPagarErr } = await supabase.rpc(
+        'cobranca_saldo_por_liquidar' as any,
+        { p_cobranca_id: a.cobranca_id }
+      );
+      if (faltaPagarErr) throw faltaPagarErr;
+
       // contrato_id vive em contrato_cobrancas, não em acordos_pagamento. Uma
       // segunda query separada (em vez de um embed PostgREST
       // `contrato_cobrancas!inner(contrato_id)` a partir de acordos_pagamento)
@@ -117,6 +132,7 @@ export function useAcordoDetalhe(acordoId: string | null | undefined) {
         codigo: a.codigo,
         estado: a.estado,
         valorTotal: Number(a.valor_total),
+        faltaPagar: Number(faltaPagarRpc ?? 0),
         titularId: a.titular_id,
         titularNome: a.titular_nome,
         titularNif: a.titular_nif,
