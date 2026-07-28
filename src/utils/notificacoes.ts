@@ -30,5 +30,6 @@ export const notificacaoLabel = (n: Notificacao): string => {
   if (n.tipo === 'cobranca_gerada') return 'Ver cobrança';
   if (n.tipo === 'contrato_renting_renovacao_proxima') return 'Ver contrato';
   if (n.tipo === 'utilizador_criado') return 'Ver utilizadores';
+  if (n.tipo === 'sistema_limite_email_atingido') return 'Ver automações';
   return 'Ver candidatura';
 };

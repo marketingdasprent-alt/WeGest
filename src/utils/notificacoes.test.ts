@@ -63,6 +63,11 @@ describe('notificacaoLink', () => {
     });
     expect(notificacaoLink(n)).toBe('/renting/contratos/c-1');
   });
+
+  it('sistema_limite_email_atingido usa o link já preenchido pelo motor', () => {
+    const n = fixture({ tipo: 'sistema_limite_email_atingido', link: '/admin/automacao' });
+    expect(notificacaoLink(n)).toBe('/admin/automacao');
+  });
 });
 
 describe('notificacaoLabel', () => {
@@ -96,6 +101,12 @@ describe('notificacaoLabel', () => {
 
   it('utilizador_criado mostra "Ver utilizadores"', () => {
     expect(notificacaoLabel(fixture({ tipo: 'utilizador_criado' }))).toBe('Ver utilizadores');
+  });
+
+  it('sistema_limite_email_atingido mostra "Ver automações"', () => {
+    expect(notificacaoLabel(fixture({ tipo: 'sistema_limite_email_atingido' }))).toBe(
+      'Ver automações'
+    );
   });
 
   it('tipo desconhecido continua a cair em "Ver candidatura"', () => {
