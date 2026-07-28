@@ -2,6 +2,9 @@ export interface ViaturaStatsSummary {
   total: number;
   disponiveis: number;
   emUso: number;
+  // Subconjunto de `emUso` que exclui reservadas — espelha o KPI "Alugadas"
+  // da homepage (que separa alugadas de reservadas em dois cartões próprios).
+  alugadas: number;
   manutencao: number;
   inativas: number;
   vendidas: number;

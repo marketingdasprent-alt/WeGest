@@ -52,6 +52,38 @@ export function ViaturaFormTecnico({ form }: ViaturaFormTecnicoProps) {
           )}
         />
       </div>
+
+      <h3 className="text-sm font-medium text-muted-foreground mb-4 mt-6">
+        Próxima Manutenção Preventiva
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <FormField
+          control={form.control}
+          name="proxima_manutencao_data"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Data</FormLabel>
+              <FormControl>
+                <Input type="date" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="proxima_manutencao_km"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Km</FormLabel>
+              <FormControl>
+                <Input type="number" placeholder="Ex.: 60000" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
     </div>
   );
 }

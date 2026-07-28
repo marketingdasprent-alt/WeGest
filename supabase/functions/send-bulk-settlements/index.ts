@@ -13,10 +13,13 @@ interface SettlementData {
   faturado_bolt: number;
   faturado_uber: number;
   liquido: number;
-  combustivel: number;
+  // Nem toda a origem de acerto sabe combustível/reparações por motorista
+  // (ex.: motorista_resumo_semanal não os agrega) — ficam opcionais para
+  // não obrigar quem chama a fingir um valor que não tem.
+  combustivel?: number;
   aluguer: number;
-  reparacoes: number;
-  outros_custos: number;
+  reparacoes?: number;
+  outros_custos?: number;
   periodo: string;
 }
 
@@ -88,19 +91,20 @@ serve(async (req) => {
                 <td>Aluguer de Viatura</td>
                 <td class="text-red">-${formatCurrency(s.aluguer)}</td>
               </tr>
+              ${(s.combustivel ?? 0) > 0 ? `
               <tr>
                 <td>Custos de Combustível</td>
-                <td class="text-red">-${formatCurrency(s.combustivel)}</td>
-              </tr>
-              ${s.reparacoes > 0 ? `
+                <td class="text-red">-${formatCurrency(s.combustivel!)}</td>
+              </tr>` : ''}
+              ${(s.reparacoes ?? 0) > 0 ? `
               <tr>
                 <td>Reparações</td>
-                <td class="text-red">-${formatCurrency(s.reparacoes)}</td>
+                <td class="text-red">-${formatCurrency(s.reparacoes!)}</td>
               </tr>` : ''}
-              ${s.outros_custos > 0 ? `
+              ${(s.outros_custos ?? 0) > 0 ? `
               <tr>
                 <td>Outros Custos/Ajustes</td>
-                <td class="text-red">-${formatCurrency(s.outros_custos)}</td>
+                <td class="text-red">-${formatCurrency(s.outros_custos!)}</td>
               </tr>` : ''}
               <tr class="total-row font-bold">
                 <td>VALOR LÍQUIDO A RECEBER</td>

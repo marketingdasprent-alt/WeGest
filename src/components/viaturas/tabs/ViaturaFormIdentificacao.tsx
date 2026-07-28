@@ -16,11 +16,13 @@ import type { ViaturaFormData } from './viaturaTabDados.types';
 interface ViaturaFormIdentificacaoProps {
   form: UseFormReturn<ViaturaFormData>;
   estadoDerivedado: string | null;
+  podeAlterarEstadoInativo: boolean;
 }
 
 export function ViaturaFormIdentificacao({
   form,
   estadoDerivedado,
+  podeAlterarEstadoInativo,
 }: ViaturaFormIdentificacaoProps) {
   return (
     <div>
@@ -62,7 +64,9 @@ export function ViaturaFormIdentificacao({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Estado</FormLabel>
-              {estadoDerivedado && estadoDerivedado !== 'disponivel' ? (
+              {estadoDerivedado &&
+              estadoDerivedado !== 'disponivel' &&
+              !(estadoDerivedado === 'inativo' && podeAlterarEstadoInativo) ? (
                 <div className="flex items-center gap-2.5 py-1.5">
                   <Badge
                     className={`${getStatusBadgeClass(estadoDerivedado)} whitespace-nowrap px-2.5 py-0.5 text-xs font-medium`}

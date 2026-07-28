@@ -65,6 +65,8 @@ const Login = () => {
         password,
       });
 
+      void supabase.from('login_attempts').insert({ email, org_codigo: orgCode, success: !error });
+
       if (error) throw error;
 
       // 3. Verificar se a org existe e o user pertence a ela

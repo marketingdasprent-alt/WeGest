@@ -19,8 +19,12 @@ vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: mockToastFn }),
 }));
 
+// `navigate` tem de ser uma referência ESTÁVEL entre renders (senão os
+// KpiItem, que o usam no onClick, mudavam de handler a cada render) e permite
+// asserir para onde cada KPI navega.
+const mockNavigate = vi.fn();
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
 }));
 
 vi.mock('@/hooks/useViaturasOcupacao', () => ({
@@ -211,6 +215,30 @@ describe('Homepage — KPIs, estado da frota, atenção, atividade, check-in/che
 
     // Cada KPI é um botão real (navegável), não um display estático.
     expect(screen.getByRole('button', { name: /Disponíveis/i })).toBeTruthy();
+  });
+
+  it('cada KPI de frota navega para Viaturas já filtrado pelo estado certo', async () => {
+    mockVariant('executivo');
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Disponíveis/i })).toBeTruthy();
+    });
+
+    const casos: [RegExp, string][] = [
+      [/Disponíveis/i, '/viaturas?status=disponivel'],
+      [/Alugadas/i, '/viaturas?status=alugadas'],
+      [/Reservadas/i, '/viaturas?status=em_reserva'],
+      [/Em Oficina/i, '/viaturas?status=manutencao'],
+      [/Ocupação/i, '/viaturas?status=em_uso'],
+    ];
+
+    for (const [nome, destino] of casos) {
+      mockNavigate.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: nome }));
+      expect(mockNavigate).toHaveBeenCalledWith(destino);
+    }
   });
 
   it('"Estado da Frota" mostra o donut com as 3 fatias (inclui inativas)', async () => {
