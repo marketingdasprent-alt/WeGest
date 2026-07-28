@@ -4,7 +4,7 @@
 -- Corre com:  supabase start  &&  supabase test db
 --
 -- Cobre o Automation Executor: para acao_tipo='notificacao', resolve
--- destinatários por recurso RBAC (admin OU cargo com tem_acesso=true),
+-- destinatários por cargo direto (admin OU cargo escolhido na regra),
 -- cria uma notifications por destinatário, enfileira email quando
 -- enviar_email=true, e falha para dead-letter quando o acao_config
 -- está mal configurado. Outros acao_tipo só concluem, sem ação.
@@ -21,16 +21,9 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000a0002', 'permitido@exec-runs.pt'),
   ('00000000-0000-0000-0000-0000000a0003', 'sem-permissao@exec-runs.pt');
 
-insert into public.recursos (nome, descricao, categoria) values
-  ('teste.recurso_viaturas', 'Recurso de teste', 'teste');
-
 insert into public.cargos (id, nome, org_id) values
   ('00000000-0000-0000-0000-000000cg0001', 'Cargo Permitido', '00000000-0000-0000-0000-0000000a0000'),
   ('00000000-0000-0000-0000-000000cg0002', 'Cargo Sem Permissao', '00000000-0000-0000-0000-0000000a0000');
-
-insert into public.cargo_permissoes (cargo_id, recurso_id, tem_acesso, org_id)
-select '00000000-0000-0000-0000-000000cg0001', id, true, '00000000-0000-0000-0000-0000000a0000'
-from public.recursos where nome = 'teste.recurso_viaturas';
 
 insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
   ('00000000-0000-0000-0000-0000000a0001', '00000000-0000-0000-0000-0000000a0000', true, null),
@@ -38,7 +31,8 @@ insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) value
   ('00000000-0000-0000-0000-0000000a0003', '00000000-0000-0000-0000-0000000a0000', false, '00000000-0000-0000-0000-000000cg0002');
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
-  ('00000000-0000-0000-0000-000000rg0001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_notif', 'Regra de Notificação', 'teste.evento', 'notificacao', '{"template_codigo":"teste.notif","destinatarios_recurso":"teste.recurso_viaturas","enviar_email":true}'::jsonb);
+  ('00000000-0000-0000-0000-000000rg0001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_notif', 'Regra de Notificação', 'teste.evento', 'notificacao',
+   jsonb_build_object('template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000cg0001'), 'enviar_email', true));
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-000000ru0001', '00000000-0000-0000-0000-000000rg0001', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-000000ent0001');
@@ -52,25 +46,25 @@ select is(
   'run de acao_tipo=notificacao é concluído com sucesso'
 );
 
--- 2. O admin recebe uma notificação (mesmo sem o recurso concedido).
+-- 2. O admin recebe uma notificação (mesmo sem pertencer ao cargo escolhido).
 select is(
   (select count(*)::int from public.notifications where destinatario_user_id = '00000000-0000-0000-0000-0000000a0001'),
   1,
   'o admin da org recebe a notificação'
 );
 
--- 3. O utilizador com o recurso concedido recebe uma notificação.
+-- 3. O utilizador do cargo escolhido na regra recebe uma notificação.
 select is(
   (select count(*)::int from public.notifications where destinatario_user_id = '00000000-0000-0000-0000-0000000a0002'),
   1,
-  'o utilizador com o recurso concedido recebe a notificação'
+  'o utilizador do cargo escolhido recebe a notificação'
 );
 
--- 4. O utilizador sem o recurso NÃO recebe notificação.
+-- 4. O utilizador de outro cargo NÃO recebe notificação.
 select is(
   (select count(*)::int from public.notifications where destinatario_user_id = '00000000-0000-0000-0000-0000000a0003'),
   0,
-  'o utilizador sem o recurso não recebe a notificação'
+  'o utilizador de outro cargo não recebe a notificação'
 );
 
 -- 5. As notificações ficam ligadas ao run que as gerou.
@@ -112,7 +106,7 @@ select is(
 
 -- Cenário C: acao_config sem template_codigo falha para dead-letter (max_attempts=1).
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
-  ('00000000-0000-0000-0000-000000rg0003', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_ma', 'Regra Mal Configurada', 'teste.evento3', 'notificacao', '{"destinatarios_recurso":"teste.recurso_viaturas"}'::jsonb);
+  ('00000000-0000-0000-0000-000000rg0003', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_ma', 'Regra Mal Configurada', 'teste.evento3', 'notificacao', '{}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, max_attempts) values
   ('00000000-0000-0000-0000-000000ru0003', '00000000-0000-0000-0000-000000rg0003', '00000000-0000-0000-0000-0000000a0000', 1);
