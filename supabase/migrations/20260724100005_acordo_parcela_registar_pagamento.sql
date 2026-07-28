@@ -55,11 +55,16 @@ BEGIN
     RAISE EXCEPTION 'Sem permissão para registar pagamento nesta parcela.';
   END IF;
 
-  -- Guarda de reentrância: fecha o caminho de duplicação. Uma parcela só
-  -- pode ter UM pagamento registado — nem um duplo clique nem um retry após
-  -- liquidacao_pendente conseguem passar daqui para a frente.
-  IF v_parcela.recibo_id IS NOT NULL OR v_parcela.estado IN ('paga', 'liquidacao_pendente') THEN
-    RAISE EXCEPTION 'Esta parcela já tem um pagamento registado (recibo %).', v_parcela.recibo_id;
+  -- Guarda de reentrância: fecha o caminho de duplicação. Lista de PERMISSÃO
+  -- (não de bloqueio) — mesma forma de acordo_cancelar, nesta mesma migração
+  -- — para que um estado novo do enum (ou 'cancelada', que a versão anterior
+  -- desta guarda não cobria) seja recusado por omissão, em vez de aceite por
+  -- omissão. Uma parcela 'cancelada' (de um acordo já cancelado por
+  -- acordo_cancelar) não pode receber um pagamento — a cessão já foi
+  -- revertida, e um recibo aqui criaria um crédito real sem contrapartida.
+  IF v_parcela.recibo_id IS NOT NULL
+     OR v_parcela.estado NOT IN ('agendada', 'avisada', 'vencida') THEN
+    RAISE EXCEPTION 'Esta parcela já tem um pagamento registado ou não está aberta a pagamento (estado: %).', v_parcela.estado;
   END IF;
 
   INSERT INTO public.recibos (

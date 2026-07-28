@@ -77,20 +77,22 @@ describe('useAcordoAtivoPorCobranca', () => {
 });
 
 describe('useAcordoResponsaveisElegiveis', () => {
-  it('mapeia condutor (cliente_id) e motorista para o mesmo shape, com o papel correto', async () => {
+  it('mapeia condutor (cliente_id) e filtra fora as linhas de motorista', async () => {
+    // TVDE fatura-se fora do WeGest — acordo_criar recusa sempre
+    // responsavel_papel='motorista' (20260724100001), por isso uma linha de
+    // contrato_condutores ligada a um motorista nunca deve ser oferecida como
+    // candidato elegível: seria um caminho garantido a falhar.
     selectResponsaveis.mockResolvedValue({
       data: [
         {
           cliente_id: 'cli-1',
           motorista_id: null,
           clientes: { nome: 'Maria Sousa' },
-          motoristas_ativos: null,
         },
         {
           cliente_id: null,
           motorista_id: 'mot-1',
           clientes: null,
-          motoristas_ativos: { nome: 'João Motorista' },
         },
       ],
       error: null,
@@ -99,10 +101,7 @@ describe('useAcordoResponsaveisElegiveis', () => {
       wrapper,
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual([
-      { papel: 'condutor', id: 'cli-1', nome: 'Maria Sousa' },
-      { papel: 'motorista', id: 'mot-1', nome: 'João Motorista' },
-    ]);
+    expect(result.current.data).toEqual([{ papel: 'condutor', id: 'cli-1', nome: 'Maria Sousa' }]);
   });
 });
 

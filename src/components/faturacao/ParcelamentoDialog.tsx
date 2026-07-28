@@ -155,9 +155,13 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
   // 20260724100001_acordos_saldo_e_criar.sql:202 —
   // `NOT (p_responsavel_papel <> 'motorista' AND p_responsavel_id = destinatario_id)`):
   // só NÃO há cessão quando o responsável é o próprio titular (papel distinto
-  // de motorista E o mesmo id). Um motorista conta sempre como cessão (livro
-  // financeiro próprio); um "condutor" com o MESMO id do titular (a mesma
-  // pessoa sob outro papel — ver elegiveisSemTitular acima) não é.
+  // de motorista E o mesmo id). Um "condutor" com o MESMO id do titular (a
+  // mesma pessoa sob outro papel — ver elegiveisSemTitular acima) não é
+  // cessão. O termo `=== 'motorista'` já não é alcançável por aqui — TVDE
+  // fatura-se fora do WeGest e useAcordoResponsaveisElegiveis filtra motorista
+  // fora antes de chegar a este componente (nunca é oferecido no Select acima)
+  // — mas fica como defesa em profundidade, a espelhar exactamente a condição
+  // do backend, sem custo por nunca ser verdadeiro na prática.
   const cessaoParaTerceiro =
     !!responsavel &&
     !!alvo &&

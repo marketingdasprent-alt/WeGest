@@ -60,18 +60,23 @@ export function useAcordoResponsaveisElegiveis(contratoId: string | null | undef
       if (!contratoId) return [];
       const { data, error } = await supabase
         .from('contrato_condutores')
-        .select('cliente_id, motorista_id, motoristas_ativos(nome), clientes(nome)')
+        .select('cliente_id, motorista_id, clientes(nome)')
         .eq('contrato_id', contratoId)
         .is('data_fim', null);
       if (error) throw error;
-      return (data ?? []).map((c: any): ResponsavelElegivel => {
-        const isMotorista = !!c.motorista_id;
-        return {
-          papel: isMotorista ? 'motorista' : 'condutor',
-          id: isMotorista ? c.motorista_id : c.cliente_id,
-          nome: isMotorista ? (c.motoristas_ativos?.nome ?? null) : (c.clientes?.nome ?? null),
-        };
-      });
+      // TVDE fatura-se fora do WeGest — acordo_criar recusa sempre
+      // responsavel_papel='motorista' (ver migration 20260724100001). Nunca
+      // oferecer motorista como candidato elegível: seria um caminho
+      // garantido a falhar, com um erro cru da BD mostrado ao utilizador.
+      return (data ?? [])
+        .filter((c: any) => !c.motorista_id)
+        .map(
+          (c: any): ResponsavelElegivel => ({
+            papel: 'condutor',
+            id: c.cliente_id,
+            nome: c.clientes?.nome ?? null,
+          })
+        );
     },
     enabled: !!contratoId,
     staleTime: 30_000,

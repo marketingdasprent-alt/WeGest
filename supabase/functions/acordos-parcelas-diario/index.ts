@@ -155,6 +155,7 @@ serve(async (req) => {
           // Falha real da consulta (BD/permissões) — distinta de "sem email
           // configurado". Confundir as duas mascarava uma falha de
           // infraestrutura como uma lacuna de dados da entidade responsável.
+          registarErro(`Passo ② (email, parcela ${p.id})`, emailLookupError);
           await service
             .from('acordo_parcelas')
             .update({

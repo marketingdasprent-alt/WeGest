@@ -143,16 +143,18 @@ verify_jwt = true
 [functions.quadro-live]
 verify_jwt = false
 
-# Drena o outbox de eventos de faturação. Chamada só pelo pg_cron via
-# net.http_post com a anon key (mesmo padrão já usado por outras funções
-# invocadas por automatismos do lado da BD, ex.: send-recibo-anulado-email)
-# → sem sessão de utilizador, tem de aceitar anon.
+# Worker do outbox de emissão fiscal. Chamado só pelo pg_cron via net.http_post
+# com a anon key — que já é um JWT validamente assinado, por isso
+# verify_jwt=true não impede o cron (não precisa da chave service_role para
+# isso). true fecha o disparo público não-autenticado: repetir esta chamada
+# de fora queima a escada de backoff da outbox mais depressa do que
+# desenhado.
 [functions.faturacao-outbox-drain]
-verify_jwt = false
+verify_jwt = true
 
-# Worker diário do ciclo de vida das parcelas de acordos de pagamento.
-# Chamada só pelo pg_cron via net.http_post com a anon key (mesmo padrão já
-# usado por outras funções invocadas por automatismos do lado da BD, ex.:
-# send-recibo-anulado-email) → sem sessão de utilizador, tem de aceitar anon.
+# Worker diário do ciclo de vida das parcelas de acordos de pagamento. Mesma
+# razão do faturacao-outbox-drain acima — a anon key do cron já satisfaz
+# verify_jwt=true; deixar false expunha um gatilho público que podia queimar
+# o orçamento de 3 tentativas de aviso por parcela.
 [functions.acordos-parcelas-diario]
-verify_jwt = false
+verify_jwt = true
