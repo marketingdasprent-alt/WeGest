@@ -188,9 +188,12 @@ BEGIN
   END IF;
 
   -- Limite alinhado com o campo "Nº de parcelas" do ParcelamentoDialog (UI),
-  -- que já usa max="24" — reforçado aqui porque acordo_criar tem GRANT para
-  -- `authenticated` e a UI não é fronteira de confiança.
-  IF jsonb_array_length(p_parcelas) > 24 THEN
+  -- que usa max="24" — reforçado aqui porque acordo_criar tem GRANT para
+  -- `authenticated` e a UI não é fronteira de confiança. Conta só elementos
+  -- com numero>0: a entrada (numero=0) não é uma "parcela" para este limite,
+  -- o campo da UI também não a inclui.
+  IF (SELECT count(*) FROM jsonb_array_elements(p_parcelas) e
+       WHERE (e->>'numero')::int > 0) > 24 THEN
     RAISE EXCEPTION 'O plano não pode ter mais de 24 parcelas.';
   END IF;
 

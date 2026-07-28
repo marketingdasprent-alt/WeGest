@@ -66,8 +66,11 @@ type ResponsavelSelecao =
 
 const hojeISO = () => new Date().toISOString().slice(0, 10);
 
-/** Teto de nº de parcelas — espelha o limite server-side em acordo_criar (RPC); nunca deve divergir. */
-const MAX_PARCELAS = 36;
+/**
+ * Teto de nº de parcelas (excluindo entrada) — espelha o limite server-side em
+ * acordo_criar (RPC), que conta só elementos com numero>0; nunca deve divergir.
+ */
+const MAX_PARCELAS = 24;
 
 export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props) {
   const qc = useQueryClient();

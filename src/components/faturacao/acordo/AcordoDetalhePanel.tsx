@@ -115,7 +115,14 @@ export function AcordoDetalhePanel({ acordoId, modo = 'staff' }: Props) {
             modo={modo}
             onRegistarPagamento={setParcelaAlvo}
             onVerDocumento={(invoiceId, win) => {
-              setPreviewWindow(win);
+              // Fecha a janela anterior se o utilizador clicar 2x seguidas antes do
+              // primeiro preview resolver — sem isto, a 2ª janela nunca é referenciada
+              // de novo (o efeito do dialog está keyed em [open, invoiceId], que não
+              // muda) e fica órfã, permanentemente em branco.
+              setPreviewWindow((prev) => {
+                prev?.close();
+                return win;
+              });
               setInvoiceIdPreview(invoiceId);
             }}
           />
