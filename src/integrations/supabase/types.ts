@@ -11856,6 +11856,7 @@ export type Database = {
         }
       }
       execute_gestor_assignment: { Args: never; Returns: number }
+      executar_jobs_automacao_manualmente: { Args: never; Returns: Json }
       fn_checkin_abrir_motorista_viatura: {
         Args: {
           p_data_inicio: string

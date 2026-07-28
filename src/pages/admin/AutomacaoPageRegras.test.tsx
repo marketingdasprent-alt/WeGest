@@ -1,10 +1,12 @@
+// Continuação de AutomacaoPage.test.tsx — separado em ficheiro próprio
+// para ficar abaixo do limite de linhas do ESLint (max-lines). Cobre a
+// tab "Regras" e o ConfigurarRegraSheet; o mock setup é replicado (não
+// importado) porque vi.mock() só funciona corretamente por ficheiro.
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-// Select do Radix usa Popper/portal — mockar para evitar problemas no jsdom
-// (mesmo padrão já usado em AuditoriaPage.test.tsx).
 vi.mock('@/components/ui/select', () => {
   const React = require('react');
   return {
@@ -42,8 +44,6 @@ vi.mock('@/components/ui/select', () => {
 });
 
 beforeAll(() => {
-  // O gráfico "Atividade — últimos 14 dias" usa o ResponsiveContainer do
-  // recharts, que precisa de ResizeObserver — inexistente no jsdom.
   (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
     observe() {}
     unobserve() {}
@@ -98,17 +98,8 @@ vi.mock('@/integrations/supabase/client', () => ({
                 priority: 5,
                 started_at: null,
               },
-              {
-                id: 'run-b',
-                status: 'pending',
-                attempt: 1,
-                job_type: 'automation_rule',
-                next_attempt_at: '2026-07-27T09:05:00.000Z',
-                priority: 5,
-                started_at: null,
-              },
             ],
-            count: 2,
+            count: 1,
             error: null,
           });
         }
@@ -159,63 +150,19 @@ vi.mock('@/integrations/supabase/client', () => ({
           });
         }
         if (table === 'domain_events') {
-          return chainable({
-            data: [
-              { processed_at: '2026-07-27T08:00:00.000Z', occurred_at: '2026-07-27T08:00:00.000Z' },
-              { processed_at: null, occurred_at: '2026-07-27T09:00:00.000Z' },
-            ],
-            error: null,
-          });
+          return chainable({ data: [], error: null });
         }
         if (table === 'notifications') {
-          return chainable({
-            data: [
-              { lida: false, resolvida: false },
-              { lida: true, resolvida: true },
-            ],
-            error: null,
-          });
+          return chainable({ data: [], error: null });
         }
         if (table === 'automation_logs') {
-          return chainable({
-            data: [
-              {
-                id: 'log-1',
-                evento: 'executada',
-                created_at: '2026-07-27T08:00:00.000Z',
-                duracao_ms: 2500,
-                automation_rules: { nome: 'Regra de Teste' },
-              },
-            ],
-            error: null,
-          });
+          return chainable({ data: [], error: null });
         }
         if (table === 'automacao_saude_canais') {
           return chainable({ data: [], error: null });
         }
         if (table === 'automacao_timeline_recente') {
-          return chainable({
-            data: [
-              {
-                event_id: 'evt-1',
-                event_type: 'viatura.seguro_expirando',
-                occurred_at: '2026-07-27T08:00:00.000Z',
-                entity_table: 'viaturas',
-                entity_id: 'v-1',
-                run_id: 'run-1',
-                rule_id: 'rule-1',
-                regra_nome: 'Regra de Teste',
-                run_status: 'completed',
-                started_at: '2026-07-27T07:59:58.000Z',
-                completed_at: '2026-07-27T08:00:00.000Z',
-                attempt: 1,
-                ultimo_evento_log: 'executada',
-                duracao_ms: 2000,
-                detalhe: { notificacoes_criadas: 3, emails_enviados: 1 },
-              },
-            ],
-            error: null,
-          });
+          return chainable({ data: [], error: null });
         }
         if (table === 'automacao_estatisticas_por_regra') {
           return chainable({
@@ -283,7 +230,7 @@ function renderPage() {
   );
 }
 
-describe('AutomacaoPage', () => {
+describe('AutomacaoPage — Regras e permissões', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedUpdatePayload = null;
@@ -291,140 +238,155 @@ describe('AutomacaoPage', () => {
     canEdit.mockReturnValue(true);
   });
 
-  it('mostra as tabs do painel e os cartões da Visão Geral', async () => {
+  it('mostra estatísticas por regra e permite ligar/desligar', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+
+    const switchRegra = screen.getAllByRole('switch')[0];
+    fireEvent.click(switchRegra);
+
+    await waitFor(() => {
+      expect(mockToastFn).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Regra desligada' })
+      );
+    });
+  });
+
+  it('filtra as regras por módulo (derivado do event_type)', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+    expect(screen.getByText('Nova cobrança gerada')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('option', { name: 'Financeiro' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Regra Estatística Teste')).toBeNull();
+    });
+    expect(screen.getByText('Nova cobrança gerada')).toBeTruthy();
+  });
+
+  it('abre o editor "Configurar" pré-preenchido e guarda a nova configuração', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+
+    const botoesConfigurar = screen.getAllByRole('button', { name: /Configurar/i });
+    fireEvent.click(botoesConfigurar[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Configurar: Regra Estatística Teste/)).toBeTruthy();
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /Guardar/i }));
+
+    await waitFor(() => {
+      expect(mockToastFn).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Configuração guardada' })
+      );
+    });
+  });
+
+  it('mostra os cargos como botões e grava os cargo_ids escolhidos ao guardar', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Configurar/i })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Configurar: Regra Estatística Teste/)).toBeTruthy();
+    });
+
+    // Gestores (cargo-1) já vem selecionado pelo acao_config mockado.
+    expect(await screen.findByRole('button', { name: 'Gestores', pressed: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Financeiro', pressed: false })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Financeiro', pressed: false }));
+    fireEvent.click(await screen.findByRole('button', { name: /Guardar/i }));
+
+    await waitFor(() => {
+      expect(mockToastFn).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Configuração guardada' })
+      );
+    });
+
+    expect(capturedUpdatePayload?.acao_config).toMatchObject({
+      destinatarios_estrategia: 'cargo',
+      destinatarios_cargo_ids: expect.arrayContaining(['cargo-1', 'cargo-2']),
+    });
+  });
+
+  it('liga "Escolher pessoas específicas" e grava destinatarios_modo/user_ids', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Configurar/i })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Configurar: Regra Estatística Teste/)).toBeTruthy();
+    });
+
+    await screen.findByRole('button', { name: 'Gestores', pressed: true });
+
+    // "Escolher pessoas específicas" é o 1.º switch (o 2.º é "Enviar também por email").
+    fireEvent.click(screen.getAllByRole('switch')[0]);
+
+    expect(await screen.findByRole('button', { name: /Ana Gestora/, pressed: false })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Ana Gestora/, pressed: false }));
+
+    fireEvent.click(await screen.findByRole('button', { name: /Guardar/i }));
+
+    await waitFor(() => {
+      expect(mockToastFn).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Configuração guardada' })
+      );
+    });
+
+    expect(capturedUpdatePayload?.acao_config).toMatchObject({
+      destinatarios_modo: 'individual',
+      destinatarios_user_ids: ['user-1'],
+    });
+  });
+
+  it('utilizador só com "Ver" (sem can_edit automacoes) não consegue mexer nos controlos', async () => {
+    canEdit.mockReturnValue(false);
     renderPage();
 
+    // O botão "Correr agora" nem chega a renderizar para quem só tem acesso de leitura.
     await waitFor(() => {
       expect(screen.getByRole('tab', { name: 'Visão Geral' })).toBeTruthy();
     });
-    expect(screen.getByRole('tab', { name: 'Atividade' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Fila' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Falhas' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Regras' })).toBeTruthy();
-    expect(screen.getByText('Success Rate')).toBeTruthy();
-    expect(screen.getByText('Utilização')).toBeTruthy();
-  });
+    expect(screen.queryByRole('button', { name: /Correr agora/i })).toBeNull();
 
-  it('mostra os cartões de Estado Geral e Saúde do Sistema', async () => {
-    renderPage();
-
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
     await waitFor(() => {
-      expect(screen.getByText('Automation Runs')).toBeTruthy();
+      for (const s of screen.getAllByRole('switch')) expect(s).toBeDisabled();
     });
-    expect(screen.getByText('Event Bus')).toBeTruthy();
-    expect(screen.getAllByText('Falhas').length).toBeGreaterThan(0);
-    expect(screen.getByText('Jobs bloqueados')).toBeTruthy();
-    expect(screen.getByText('APIs indisponíveis')).toBeTruthy();
-  });
+    for (const b of screen.getAllByRole('button', { name: /Configurar/i }))
+      expect(b).toBeDisabled();
 
-  it('mostra a timeline de atividade e abre o drill-down de uma execução', async () => {
-    renderPage();
-    // Radix Tabs ativa a tab no mousedown, não no click.
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Atividade' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Regra de Teste')).toBeTruthy();
-    });
-    expect(screen.getByText(/3 notif\. · 1 email/)).toBeTruthy();
-
-    fireEvent.click(screen.getByText('Regra de Teste'));
-    await waitFor(() => {
-      expect(screen.getByText('Histórico de execução')).toBeTruthy();
-    });
-  });
-
-  it('mostra a fila de processamento pendente', async () => {
-    renderPage();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Fila' }));
-
-    await waitFor(() => {
-      expect(screen.getAllByText('automation_rule').length).toBeGreaterThan(0);
-    });
-    expect(screen.getByText('Prioridade')).toBeTruthy();
-  });
-
-  it('clicar em "Ignorar" chama ignorar_failed_job', async () => {
-    renderPage();
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Falhas' }));
-
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Ignorar/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Tentar novamente/i })).toBeDisabled();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Ignorar/i }));
-
-    await waitFor(() => {
-      expect(mockRpc).toHaveBeenCalledWith('ignorar_failed_job', { p_id: 'fj-1' });
-    });
-    expect(mockToastFn).toHaveBeenCalledWith(expect.objectContaining({ title: 'Ignorado' }));
-  });
-
-  it('clicar em "Ver detalhes" mostra o erro completo', async () => {
-    renderPage();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Falhas' }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Ver detalhes/i })).toBeTruthy();
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Ver detalhes/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Detalhes da falha')).toBeTruthy();
-    });
-    expect(screen.getAllByText(/erro de teste/).length).toBeGreaterThan(0);
-  });
-
-  it('clicar em "Tentar novamente" chama retry_failed_job e mostra um toast', async () => {
-    renderPage();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Falhas' }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Tentar novamente/i })).toBeTruthy();
-    });
-    fireEvent.click(screen.getByRole('button', { name: /Tentar novamente/i }));
-
-    await waitFor(() => {
-      expect(mockRpc).toHaveBeenCalledWith('retry_failed_job', { p_id: 'fj-1' });
-    });
-    expect(mockToastFn).toHaveBeenCalledWith(expect.objectContaining({ title: 'Reagendado' }));
-  });
-
-  it('botão "Correr agora" chama a RPC, mostra sucesso e fica em cooldown', async () => {
-    mockRpc.mockResolvedValue({
-      data: { success: true, executado_em: '2026-07-27T09:00:00.000Z' },
-      error: null,
-    });
-    renderPage();
-
-    const botao = await screen.findByRole('button', { name: /Correr agora/i });
-    fireEvent.click(botao);
-
-    await waitFor(() => {
-      expect(mockRpc).toHaveBeenCalledWith('executar_jobs_automacao_manualmente');
-    });
-    await waitFor(() => {
-      expect(mockToastFn).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Automações executadas' })
-      );
-    });
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Aguarda \d+:\d{2}/ })).toBeDisabled();
-    });
-  });
-
-  it('botão "Correr agora" mostra o erro do rate limit num toast', async () => {
-    mockRpc.mockResolvedValue({
-      data: null,
-      error: { message: 'Já correu há pouco — aguarda mais 04:32 antes de repetir.' },
-    });
-    renderPage();
-
-    const botao = await screen.findByRole('button', { name: /Correr agora/i });
-    fireEvent.click(botao);
-
-    await waitFor(() => {
-      expect(mockToastFn).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Não foi possível correr', variant: 'destructive' })
-      );
-    });
+    expect(screen.getByRole('button', { name: /Ignorar/i })).toBeDisabled();
   });
 });
