@@ -50,7 +50,7 @@ BEGIN
        AND a.precisa_revisao = false
        AND abs(a.valor_total - public.cobranca_saldo_por_liquidar(a.cobranca_id)
                - COALESCE((SELECT SUM(p.valor) FROM public.acordo_parcelas p
-                            WHERE p.acordo_id = a.id AND p.estado = 'paga'), 0)) >= 0.005
+                            WHERE p.acordo_id = a.id AND p.estado IN ('paga', 'liquidacao_pendente')), 0)) >= 0.005
   )
   UPDATE public.acordos_pagamento a SET precisa_revisao = true
     FROM alvo WHERE a.id = alvo.id;

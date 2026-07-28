@@ -142,3 +142,17 @@ verify_jwt = true
 # Segurança: resolve org só via token; devolve apenas campos não-sensíveis.
 [functions.quadro-live]
 verify_jwt = false
+
+# Drena o outbox de eventos de faturação. Chamada só pelo pg_cron via
+# net.http_post com a anon key (mesmo padrão já usado por outras funções
+# invocadas por automatismos do lado da BD, ex.: send-recibo-anulado-email)
+# → sem sessão de utilizador, tem de aceitar anon.
+[functions.faturacao-outbox-drain]
+verify_jwt = false
+
+# Worker diário do ciclo de vida das parcelas de acordos de pagamento.
+# Chamada só pelo pg_cron via net.http_post com a anon key (mesmo padrão já
+# usado por outras funções invocadas por automatismos do lado da BD, ex.:
+# send-recibo-anulado-email) → sem sessão de utilizador, tem de aceitar anon.
+[functions.acordos-parcelas-diario]
+verify_jwt = false

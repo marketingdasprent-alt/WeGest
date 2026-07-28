@@ -224,13 +224,16 @@ serve(async (req) => {
 
   // ── emit ──
   if (!payload?.tipo || !['FT', 'FR', 'NC', 'RC'].includes(payload.tipo)) {
-    return json({ success: false, error: 'tipo inválido (FT|FR|NC|RC)' });
+    return json({ success: false, error: 'tipo inválido (FT|FR|NC|RC)', classe: 'known_failed' });
   }
-  if (!payload.itens?.length) return json({ success: false, error: 'Sem itens para faturar' });
+  if (!payload.itens?.length) {
+    return json({ success: false, error: 'Sem itens para faturar', classe: 'known_failed' });
+  }
   if ((payload.tipo === 'NC' || payload.tipo === 'RC') && !payload.documento_referencia) {
     return json({
       success: false,
       error: `${payload.tipo === 'RC' ? 'Recibo' : 'Nota de Crédito'} exige documento_referencia`,
+      classe: 'known_failed',
     });
   }
 
