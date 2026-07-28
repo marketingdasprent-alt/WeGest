@@ -221,9 +221,13 @@ export function useToggleAutomationRule() {
 export interface AutomationRuleAcaoConfig {
   template_codigo: string;
   titulo: string;
-  destinatarios_recurso?: string;
+  destinatarios_cargo_ids?: string[];
   destinatarios_estrategia?: string;
   enviar_email?: boolean;
+  /** Agrupa num resumo diário (1 email/dia por pessoa) em vez de enviar
+   * logo — evita repetir o incidente de 1 email por item quando um
+   * backlog grande é processado de uma vez. */
+  enviar_email_digest?: boolean;
 }
 
 export interface AutomationRuleConfig {
@@ -250,24 +254,25 @@ export function useAutomationRuleConfig(ruleId: string | null) {
   });
 }
 
-export interface Recurso {
+export interface Cargo {
   id: string;
   nome: string;
-  categoria: string | null;
 }
 
-/** Catálogo de recursos/permissões — para o utilizador escolher quem
- * recebe cada automação sem precisar de saber o nome técnico de cor. */
-export function useRecursosDisponiveis() {
+/** Cargos da organização atual — RLS já limita a query ao org do
+ * utilizador autenticado (mesmo padrão de useRBAC.ts), sem filtro
+ * explícito aqui. Usado para escolher diretamente que grupos recebem
+ * uma automação, em vez de passar por uma permissão como proxy. */
+export function useCargosDisponiveis() {
   return useQuery({
-    queryKey: ['recursos-disponiveis'],
-    queryFn: async (): Promise<Recurso[]> => {
+    queryKey: ['cargos-disponiveis'],
+    queryFn: async (): Promise<Cargo[]> => {
       const { data, error } = await supabase
-        .from('recursos')
-        .select('id, nome, categoria')
+        .from('cargos')
+        .select('id, nome')
         .order('nome', { ascending: true });
       if (error) throw error;
-      return (data ?? []) as Recurso[];
+      return (data ?? []) as Cargo[];
     },
     staleTime: 5 * 60_000,
   });
