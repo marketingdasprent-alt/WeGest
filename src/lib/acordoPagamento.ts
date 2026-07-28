@@ -58,90 +58,66 @@ export async function registarPagamentoParcela(
     `Parcela ${input.parcelaNumero}/${input.totalParcelas} do acordo ACD-${input.acordoCodigo} · ` +
     marcaCorrelacao(input.parcelaId);
 
-  // ① Dinheiro primeiro. O trigger fn_recibo_posta_movimento posta o crédito.
-  const { data: recibo, error: reciboErr } = await supabase
-    .from('recibos')
-    .insert({
-      org_id: input.orgId,
-      entidade_id: input.entidadeId,
-      contrato_id: input.contratoId,
-      valor: input.valor,
-      data_recibo: input.data,
-      metodo: input.metodo,
-      referencia: input.cobrancaId,
-      observacoes: descricao,
-      estado: 'ativo',
-    })
-    .select()
-    .single();
+  const temDocumentoFiscal = !!input.numeroFaturaOriginal;
+  const idempotencyKey = `RC:parcela:${input.parcelaId}`;
 
-  if (reciboErr) throw reciboErr;
+  const payload = temDocumentoFiscal
+    ? {
+        tipo: 'RC' as const,
+        // TITULAR, não o responsável: o recibo herda o NIF da fatura que referencia.
+        cliente: clienteRowToFatura(input.titular, input.titular.nome),
+        itens: [
+          {
+            descricao: `Recibo de ${input.numeroFaturaOriginal}`,
+            quantidade: 1,
+            preco_unitario: input.valor,
+            // O IVA foi liquidado na fatura original — um recibo não é transmissão tributável.
+            taxa_iva: 0,
+          },
+        ],
+        contrato_id: input.contratoId ?? undefined,
+        cobranca_id: input.cobrancaId,
+        documento_referencia: input.numeroFaturaOriginal,
+        referencia_externa: input.numeroFaturaOriginal,
+        observacoes: descricao,
+      }
+    : null;
 
-  // `acordo_parcelas`, `faturacao_outbox` e a RPC `acordo_parcela_liquidar`
-  // já existem na BD (migrations 20260724100000/2/3) mas `types.ts` ainda não
-  // foi regenerado para os incluir — as tarefas 1-6 deste plano só tocaram
-  // SQL/edge function, nunca este ficheiro gerado. `as any` é o mesmo idioma
-  // já usado em HistoricoEnviosDialog.tsx para 'marketing_envio_detalhes'.
-  // Regenerar types.ts fica fora do âmbito desta tarefa; o runtime não é
-  // afetado (supabase-js não valida nomes de tabela/RPC em tempo de execução).
-  const { error: parcelaErr } = await supabase
-    .from('acordo_parcelas' as any)
-    .update({ estado: 'liquidacao_pendente', recibo_id: recibo.id })
-    .eq('id', input.parcelaId);
-  if (parcelaErr) throw parcelaErr;
+  // ① Registo atómico do pagamento: recibo + parcela + (se fiscal) outbox,
+  // tudo numa única transação com guarda de reentrância — corrige o Critical
+  // de não-atomicidade da revisão final da branch (migração 20260724100005).
+  const { data, error: rpcErr } = await supabase.rpc('acordo_parcela_registar_pagamento' as any, {
+    p_parcela_id: input.parcelaId,
+    p_valor: input.valor,
+    p_data: input.data,
+    p_metodo: input.metodo,
+    p_entidade_id: input.entidadeId,
+    p_contrato_id: input.contratoId,
+    p_cobranca_id: input.cobrancaId,
+    p_descricao: descricao,
+    p_tem_documento_fiscal: temDocumentoFiscal,
+    p_payload: payload,
+  });
+  if (rpcErr) throw rpcErr;
 
-  // Cobrança sem documento fiscal não gera recibo fiscal — liquida na mesma.
-  if (!input.numeroFaturaOriginal) {
-    const { error: liquidarErr } = await supabase.rpc('acordo_parcela_liquidar' as any, {
-      p_parcela_id: input.parcelaId,
-      p_invoice_id: null,
-    });
-    if (liquidarErr) throw liquidarErr;
+  const resultado = data as unknown as {
+    recibo_id: string;
+    estado: 'paga' | 'liquidacao_pendente';
+  };
+
+  if (resultado.estado === 'paga') {
+    // Cobrança sem documento fiscal — já liquidada pela própria RPC.
     return { estado: 'paga' };
   }
 
-  const payload = {
-    tipo: 'RC' as const,
-    // TITULAR, não o responsável: o recibo herda o NIF da fatura que referencia.
-    cliente: clienteRowToFatura(input.titular, input.titular.nome),
-    itens: [
-      {
-        descricao: `Recibo de ${input.numeroFaturaOriginal}`,
-        quantidade: 1,
-        preco_unitario: input.valor,
-        // O IVA foi liquidado na fatura original — um recibo não é transmissão tributável.
-        taxa_iva: 0,
-      },
-    ],
-    contrato_id: input.contratoId ?? undefined,
-    cobranca_id: input.cobrancaId,
-    documento_referencia: input.numeroFaturaOriginal,
-    referencia_externa: input.numeroFaturaOriginal,
-    observacoes: descricao,
-  };
-
-  // ② Enfileirar ANTES de tentar. Se o browser fechar a meio, o worker recupera.
-  // Erro aqui (ex.: violação do UNIQUE idempotency_key — já existe um pedido
-  // em curso para esta parcela) tem de PARAR: prosseguir para emitirDocumento()
-  // anularia a garantia anti-duplicação que esta restrição existe para dar.
-  const { error: outboxInsertErr } = await supabase.from('faturacao_outbox' as any).insert({
-    org_id: input.orgId,
-    tipo: 'RC',
-    idempotency_key: `RC:parcela:${input.parcelaId}`,
-    parcela_id: input.parcelaId,
-    payload,
-    estado: 'em_curso',
-    started_at: new Date().toISOString(),
-  });
-  if (outboxInsertErr) throw outboxInsertErr;
-
-  // O try/catch cobre APENAS emitirDocumento(): uma falha ali (known_failed ou
+  // ② A partir daqui existe uma linha de outbox 'em_curso' com a idempotency
+  // key desta parcela. O try/catch cobre APENAS emitirDocumento(): uma falha ali (known_failed ou
   // unknown) é a única coisa que o bloco catch abaixo sabe classificar. A RPC de
   // liquidação, mais abaixo, corre FORA deste try de propósito — ver o comentário
   // junto a essa chamada.
   let res: Awaited<ReturnType<typeof emitirDocumento>>;
   try {
-    res = await emitirDocumento(payload);
+    res = await emitirDocumento(payload!);
   } catch (e) {
     // `classe`, anexado ao erro por emitirDocumento(), distingue:
     //  • known_failed — confirma-se que nada foi criado. Seguro reagendar
@@ -155,7 +131,7 @@ export async function registarPagamentoParcela(
       await supabase
         .from('faturacao_outbox' as any)
         .update({ estado: 'pendente', ultimo_erro: (e as Error).message })
-        .eq('idempotency_key', `RC:parcela:${input.parcelaId}`);
+        .eq('idempotency_key', idempotencyKey);
     } else {
       await supabase
         .from('faturacao_outbox' as any)
@@ -164,7 +140,7 @@ export async function registarPagamentoParcela(
           needs_reconcile: true,
           ultimo_erro: (e as Error).message,
         })
-        .eq('idempotency_key', `RC:parcela:${input.parcelaId}`);
+        .eq('idempotency_key', idempotencyKey);
     }
     return { estado: 'liquidacao_pendente', erro: (e as Error).message };
   }
@@ -198,7 +174,7 @@ export async function registarPagamentoParcela(
   const { error: outboxSucessoErr } = await supabase
     .from('faturacao_outbox' as any)
     .update({ estado: 'sucesso', invoice_id: res.invoice?.id ?? null })
-    .eq('idempotency_key', `RC:parcela:${input.parcelaId}`);
+    .eq('idempotency_key', idempotencyKey);
   if (outboxSucessoErr) {
     console.warn('Falha (não crítica) a marcar outbox como sucesso:', outboxSucessoErr);
   }

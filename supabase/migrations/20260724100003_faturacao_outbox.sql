@@ -51,11 +51,22 @@ CREATE POLICY rls_org_isolation ON public.faturacao_outbox
   USING (org_id = public.get_current_org_id())
   WITH CHECK (org_id IS NULL OR org_id = public.get_current_org_id());
 
--- Só leitura para admins da própria org; a escrita é do worker (service role).
+-- Leitura e escrita para staff com acesso de faturação da própria org — quem
+-- regista o pagamento (INSERT, via a RPC acordo_parcela_registar_pagamento)
+-- também precisa de poder ver o próprio outbox row depois (ex.: para saber se
+-- ficou suspenso) e de poder actualizar o seu estado quando a emissão fiscal
+-- resolve (known_failed→pendente, unknown→suspenso, sucesso). O comentário
+-- anterior ("a escrita é do worker") estava errado — o cliente sempre
+-- escreveu aqui; só não tinha permissão para o UPDATE, e isso falhava em
+-- silêncio (RLS filtra, supabase-js devolve {error:null}).
 CREATE POLICY "mt_outbox_select" ON public.faturacao_outbox
-  FOR SELECT TO authenticated USING (is_current_user_admin());
+  FOR SELECT TO authenticated USING (has_renting_faturacao_access());
 CREATE POLICY "mt_outbox_insert" ON public.faturacao_outbox
   FOR INSERT TO authenticated WITH CHECK (has_renting_faturacao_access());
+CREATE POLICY "mt_outbox_update" ON public.faturacao_outbox
+  FOR UPDATE TO authenticated
+  USING (has_renting_faturacao_access())
+  WITH CHECK (has_renting_faturacao_access());
 CREATE POLICY "Service role full access to faturacao_outbox" ON public.faturacao_outbox
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
