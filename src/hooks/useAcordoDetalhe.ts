@@ -237,7 +237,12 @@ export function useAssociarDocumentoExistente() {
       // linha da outbox desactualizada (não crítico, recuperável).
       const { error: outboxErr } = await supabase
         .from('faturacao_outbox' as any)
-        .update({ estado: 'sucesso', invoice_id: invoice.id, needs_reconcile: false, ultimo_erro: null })
+        .update({
+          estado: 'sucesso',
+          invoice_id: invoice.id,
+          needs_reconcile: false,
+          ultimo_erro: null,
+        })
         .eq('parcela_id', parcelaId)
         .eq('estado', 'suspenso');
       if (outboxErr) {
