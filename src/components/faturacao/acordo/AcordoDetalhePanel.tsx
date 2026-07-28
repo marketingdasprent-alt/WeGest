@@ -82,6 +82,7 @@ export function AcordoDetalhePanel({ acordoId }: Props) {
         {acordo.parcelas.map((parcela) => (
           <ParcelaTimelineItem
             key={parcela.id}
+            acordo={acordo}
             parcela={parcela}
             onRegistarPagamento={setParcelaAlvo}
             onVerDocumento={setInvoiceIdPreview}

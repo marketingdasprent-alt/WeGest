@@ -1,21 +1,28 @@
 // src/components/faturacao/acordo/ParcelaTimelineItem.tsx
-import { CalendarClock, Eye } from 'lucide-react';
+import { CalendarClock, Download, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ParcelaStatusBadge } from '@/components/faturacao/ParcelaStatusBadge';
 import { formatCurrency } from '@/utils/formatters';
-import type { ParcelaDetalhe } from '@/hooks/useAcordoDetalhe';
+import { gerarAvisoVencimentoPdf } from '@/utils/avisoVencimentoPdf';
+import type { AcordoDetalhe, ParcelaDetalhe } from '@/hooks/useAcordoDetalhe';
 
 const dataPT = (iso: string) => iso.split('-').reverse().join('/');
 
 const ABERTAS: ParcelaDetalhe['estado'][] = ['agendada', 'avisada', 'vencida'];
 
 interface Props {
+  acordo: AcordoDetalhe;
   parcela: ParcelaDetalhe;
   onRegistarPagamento: (parcela: ParcelaDetalhe) => void;
   onVerDocumento: (invoiceId: string) => void;
 }
 
-export function ParcelaTimelineItem({ parcela, onRegistarPagamento, onVerDocumento }: Props) {
+export function ParcelaTimelineItem({
+  acordo,
+  parcela,
+  onRegistarPagamento,
+  onVerDocumento,
+}: Props) {
   const aberta = ABERTAS.includes(parcela.estado);
 
   return (
@@ -73,6 +80,21 @@ export function ParcelaTimelineItem({ parcela, onRegistarPagamento, onVerDocumen
             >
               <Eye className="h-3.5 w-3.5" />
               Ver recibo
+            </Button>
+          )}
+          {parcela.avisoEnviadoEm && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() => {
+                const pdf = gerarAvisoVencimentoPdf(acordo, parcela);
+                pdf.save(`aviso-parcela-${parcela.numero}-acordo-${acordo.codigo}.pdf`);
+              }}
+            >
+              <Download className="h-3.5 w-3.5" />
+              PDF do aviso
             </Button>
           )}
         </div>
