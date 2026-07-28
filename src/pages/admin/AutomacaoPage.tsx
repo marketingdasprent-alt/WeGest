@@ -699,18 +699,18 @@ function ConfigurarRegraSheet({
 
   return (
     <Sheet open={!!regra} onOpenChange={onOpenChange}>
-      <SheetContent>
-        <SheetHeader>
+      <SheetContent className="flex flex-col">
+        <SheetHeader className="shrink-0">
           <SheetTitle>Configurar: {regra?.nome}</SheetTitle>
           <SheetDescription>
-            Quem recebe esta automação e com que frequência — sem precisar de mexer em código.
+            Quem recebe esta automação e com que frequência
           </SheetDescription>
         </SheetHeader>
 
         {isLoading || !config ? (
           <Skeleton className="mt-6 h-64 w-full" />
         ) : (
-          <div className="mt-6 space-y-5">
+          <div className="mt-6 min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
             <div className="space-y-2">
               <Label>Grupos que recebem (além dos admins)</Label>
               <div className="flex flex-wrap gap-2">
