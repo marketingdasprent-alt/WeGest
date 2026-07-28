@@ -633,6 +633,8 @@ function ConfigurarRegraSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
+  const { canEdit } = usePermissions();
+  const podeGerir = canEdit(RECURSOS.AUTOMACOES);
   const { data: config, isLoading } = useAutomationRuleConfig(regra?.id ?? null);
   const { data: cargos = [] } = useCargosDisponiveis();
   const atualizar = useAtualizarConfigRegra();
@@ -665,6 +667,14 @@ function ConfigurarRegraSheet({
 
   const handleGuardar = async () => {
     if (!regra || !config) return;
+    if (!podeGerir) {
+      toast({
+        title: 'Sem permissão',
+        description: 'Não tens permissão para configurar automações.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const novoAcaoConfig: AutomationRuleAcaoConfig = {
       ...config.acao_config,
       destinatarios_cargo_ids: destinatariosCargoIds,
@@ -833,9 +843,18 @@ function ConfigurarRegraSheet({
               <p className="text-xs text-muted-foreground">{cooldownTexto}</p>
             </div>
 
-            <Button onClick={handleGuardar} disabled={atualizar.isPending} className="w-full">
+            <Button
+              onClick={handleGuardar}
+              disabled={!podeGerir || atualizar.isPending}
+              className="w-full"
+            >
               {atualizar.isPending ? 'A guardar…' : 'Guardar'}
             </Button>
+            {!podeGerir && (
+              <p className="text-center text-xs text-muted-foreground">
+                Não tens permissão para configurar automações.
+              </p>
+            )}
           </div>
         )}
       </SheetContent>
