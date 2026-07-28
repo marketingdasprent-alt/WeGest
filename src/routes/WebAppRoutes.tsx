@@ -50,6 +50,7 @@ const Privacidade = lazy(() => import('@/pages/Privacidade'));
 const RegistoMotorista = lazy(() => import('@/pages/motorista/RegistoMotorista'));
 const LoginMotorista = lazy(() => import('@/pages/motorista/LoginMotorista'));
 const PainelMotorista = lazy(() => import('@/pages/motorista/PainelMotorista'));
+const MotoristaAcordoDetalhe = lazy(() => import('@/pages/motorista/MotoristaAcordoDetalhe'));
 const Assistencia = lazy(() => import('@/pages/Assistencia'));
 const AssistenciaNova = lazy(() => import('@/pages/AssistenciaNova'));
 const TicketDetails = lazy(() => import('@/pages/TicketDetails'));
@@ -134,6 +135,14 @@ const WebAppRoutes = () => {
             element={
               <ProtectedRoute requiredResource={RECURSOS.MOTORISTA_PAINEL}>
                 <PainelMotorista />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/motorista/painel/acordos/:id"
+            element={
+              <ProtectedRoute requiredResource={RECURSOS.MOTORISTA_PAINEL}>
+                <MotoristaAcordoDetalhe />
               </ProtectedRoute>
             }
           />
