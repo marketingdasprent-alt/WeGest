@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { getContratoTotal, normalizeMatricula, csvEscape, matchesCodigo } from './contratosUtils';
+import {
+  getContratoTotal,
+  normalizeMatricula,
+  csvEscape,
+  matchesCodigo,
+  formatDateTime,
+} from './contratosUtils';
 
 describe('getContratoTotal', () => {
   it('prioriza total_calculado (tempo real, com extras/IVA)', () => {
@@ -67,6 +73,17 @@ describe('matchesCodigo', () => {
 
   it('não faz match quando pesquisa não é numérica', () => {
     expect(matchesCodigo(585, 'abc')).toBe(false);
+  });
+});
+
+describe('formatDateTime', () => {
+  it('formata uma data ISO válida', () => {
+    expect(formatDateTime('2026-07-28T12:09:00')).toBe('2026-07-28 12:09');
+  });
+
+  it('null/undefined dá "—" em vez da data zero do Unix (1970-01-01) — contratos regime Slot/TVDE sem data_fim', () => {
+    expect(formatDateTime(null)).toBe('—');
+    expect(formatDateTime(undefined)).toBe('—');
   });
 });
 

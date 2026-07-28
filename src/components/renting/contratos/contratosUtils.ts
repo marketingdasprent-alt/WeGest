@@ -22,7 +22,8 @@ export function getContratoTotal(
   return c.total_calculado ?? c.total_final ?? c.valor_total_manual ?? null;
 }
 
-export function formatDateTime(iso: string): string {
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
   try {
     return format(new Date(iso), 'yyyy-MM-dd HH:mm');
   } catch {
