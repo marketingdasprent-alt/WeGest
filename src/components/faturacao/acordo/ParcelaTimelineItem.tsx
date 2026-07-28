@@ -1,10 +1,16 @@
 // src/components/faturacao/acordo/ParcelaTimelineItem.tsx
 import { CalendarClock, Download, Eye } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ParcelaStatusBadge } from '@/components/faturacao/ParcelaStatusBadge';
 import { formatCurrency } from '@/utils/formatters';
 import { gerarAvisoVencimentoPdf } from '@/utils/avisoVencimentoPdf';
-import type { AcordoDetalhe, ParcelaDetalhe } from '@/hooks/useAcordoDetalhe';
+import {
+  useAssociarDocumentoExistente,
+  useReemitirDocumento,
+  type AcordoDetalhe,
+  type ParcelaDetalhe,
+} from '@/hooks/useAcordoDetalhe';
 import type { AcordoVistaDevedor, AcordoVistaDevedorParcela } from '@/hooks/useAcordoVistaDevedor';
 
 const dataPT = (iso: string) => iso.split('-').reverse().join('/');
@@ -42,6 +48,8 @@ export function ParcelaTimelineItem({
   const parcelaStaff = parcela as ParcelaDetalhe;
   const acordoStaff = acordo as AcordoDetalhe;
   const aberta = ABERTAS.includes(parcelaStaff.estado);
+  const associarDocumento = useAssociarDocumentoExistente();
+  const reemitirDocumento = useReemitirDocumento();
 
   return (
     <li className="ml-6">
@@ -68,6 +76,46 @@ export function ParcelaTimelineItem({
             ⚠ Recibo suspenso — precisa de verificação. A ligação ao software de faturação falhou e
             não é possível confirmar se o recibo chegou a ser emitido.
           </p>
+        )}
+
+        {modoStaff && parcelaStaff.suspenso && (
+          <div className="flex items-center gap-2 mt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => {
+                const numero = window.prompt('Nº do documento já emitido no provider:');
+                if (!numero) return;
+                associarDocumento.mutate(
+                  { parcelaId: parcelaStaff.id, numeroDocumento: numero },
+                  {
+                    onSuccess: () => toast.success('Documento associado — parcela liquidada.'),
+                    onError: (e) =>
+                      toast.error(`Erro ao associar o documento: ${(e as Error).message}`),
+                  }
+                );
+              }}
+            >
+              Já existe — associar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() =>
+                reemitirDocumento.mutate(parcelaStaff.id, {
+                  onSuccess: () => toast.success('Reposto para nova tentativa automática.'),
+                  onError: (e) =>
+                    toast.error(`Erro ao repor para nova tentativa: ${(e as Error).message}`),
+                })
+              }
+            >
+              Não existe — emitir
+            </Button>
+          </div>
         )}
 
         {modoStaff && parcelaStaff.avisoEnviadoEm && (

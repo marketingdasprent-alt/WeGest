@@ -161,6 +161,77 @@ export function useAcordoDetalhe(acordoId: string | null | undefined) {
   });
 }
 
+export interface AssociarDocumentoInput {
+  parcelaId: string;
+  numeroDocumento: string;
+}
+
+/**
+ * "Já existe — associar": o gestor confirmou manualmente no provider que o recibo já
+ * foi emitido. Grava a referência em `invoices` (mirror local) e promove a parcela via
+ * acordo_parcela_liquidar — SEM tocar na API do provider (é exactamente o cenário onde
+ * a API já confirmou, só falta o registo local).
+ *
+ * `as any` no insert: o tipo gerado (types.ts) marca `org_id` como obrigatório no
+ * Insert, mas está desactualizado face à migração 20260613000003 — existe um trigger
+ * (set_invoice_org_id) que o preenche sozinho a partir do contrato ou da sessão. Não
+ * há necessidade (nem forma simples, aqui) de o passar explicitamente.
+ *
+ * Nota de risco (RLS): o INSERT em `invoices` exige has_renting_contratos_access(),
+ * uma permissão DIFERENTE de has_renting_faturacao_access() usada no resto desta
+ * funcionalidade (incl. no guard interno de acordo_parcela_liquidar). Um gestor com
+ * acesso de faturação mas sem acesso a contratos pode ver este botão e ter o INSERT
+ * silenciosamente rejeitado pela RLS — por isso o `{error}` de AMBAS as chamadas é
+ * verificado e propagado (throw), nunca assumido como sucesso.
+ */
+export function useAssociarDocumentoExistente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ parcelaId, numeroDocumento }: AssociarDocumentoInput) => {
+      const { data: invoice, error: invoiceErr } = await supabase
+        .from('invoices')
+        .insert({ tipo: 'RC', numero: numeroDocumento, status: 'emitida' } as any)
+        .select('id')
+        .single();
+      if (invoiceErr) throw invoiceErr;
+      const { error: liquidarErr } = await supabase.rpc('acordo_parcela_liquidar' as any, {
+        p_parcela_id: parcelaId,
+        p_invoice_id: invoice.id,
+      });
+      if (liquidarErr) throw liquidarErr;
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['acordo-detalhe'] });
+      qc.invalidateQueries({ queryKey: ['acordo-vista-devedor'] });
+    },
+  });
+}
+
+/**
+ * "Não existe — emitir": o gestor confirmou que o recibo NÃO foi emitido. Repõe a
+ * linha da outbox em 'pendente' para o worker de drain (Tarefa 9 do backend) tentar
+ * de novo. `.eq('estado', 'suspenso')` no update é obrigatório: sem ele, um segundo
+ * clique (ou uma corrida com o próprio worker) podia repor uma linha já 'em_curso' ou
+ * já 'sucesso' de volta para 'pendente' e provocar uma segunda emissão sobre a mesma
+ * fatura — exactamente o que o outbox existe para impedir.
+ */
+export function useReemitirDocumento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (parcelaId: string) => {
+      const { error } = await supabase
+        .from('faturacao_outbox' as any)
+        .update({ estado: 'pendente', needs_reconcile: false, ultimo_erro: null })
+        .eq('parcela_id', parcelaId)
+        .eq('estado', 'suspenso');
+      if (error) throw error;
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['acordo-detalhe'] });
+    },
+  });
+}
+
 /**
  * Wrapper fino sobre registarPagamentoParcela() (src/lib/acordoPagamento.ts) — invalida
  * a query do acordo no onSettled. NÃO dá toast (convenção da feature: toast fica sempre
