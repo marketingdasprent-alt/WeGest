@@ -154,43 +154,36 @@ export interface AcordoAtivoResumo {
 }
 
 /**
- * Acordo ativo (ou em incumprimento) de UMA entidade — cliente ou motorista —
- * como titular OU responsável. Não existe hoje uma listagem "todos os acordos
- * de X" (só `useAcordoDetalhe(id)`, que precisa de um id já conhecido, e
- * `useAcordoAtivoPorCobranca(cobrancaId)`, que precisa de uma cobrança já
- * conhecida) — esta é essa query, pequena e dedicada, partilhada pelos dois
- * ecrãs de conta-corrente (cliente e motorista) que precisam do mesmo
- * cartão-resumo, em vez de duplicar a mesma lógica de fetch nos dois
- * componentes.
+ * Acordo ativo (ou em incumprimento) de UM cliente — como titular OU
+ * responsável (`titular_id` ou `responsavel_cliente_id`). Não existe hoje uma
+ * listagem "todos os acordos de X" (só `useAcordoDetalhe(id)`, que precisa de
+ * um id já conhecido, e `useAcordoAtivoPorCobranca(cobrancaId)`, que precisa
+ * de uma cobrança já conhecida) — esta é essa query, pequena e dedicada.
  *
- * NOTA: um motorista nunca pode hoje ser titular (titular_id referencia
- * `clientes`, não `motoristas_ativos`) nem responsável (`acordo_criar`
- * recusa sempre `p_responsavel_papel = 'motorista'` — TVDE fatura-se fora do
- * WeGest). Para `tipo: 'motorista'` esta query está correctamente ligada ao
- * schema (filtra `responsavel_motorista_id`) mas, com as regras de negócio
- * actuais, nunca devolve resultado — implementado por defensividade/
- * coerência de schema, não por haver um caminho vivo hoje.
+ * Só cliente: um motorista nunca pode ser titular de um acordo
+ * (`acordos_pagamento.titular_id` referencia `clientes`, nunca
+ * `motoristas_ativos`) nem responsável (`acordo_criar`,
+ * `20260724100001_acordos_saldo_e_criar.sql:131-133`, recusa sempre
+ * `p_responsavel_papel = 'motorista'` — TVDE fatura-se fora do WeGest; o
+ * próprio `useAcordoResponsaveisElegiveis` acima já filtra motoristas fora da
+ * lista de candidatos, pela mesma razão). Uma versão anterior desta função
+ * tinha um parâmetro `tipo: 'cliente' | 'motorista'` para cobrir também o
+ * financeiro do motorista — removido por ser código morto e inalcançável por
+ * qualquer caminho da aplicação (achado da revisão desta tarefa), não por uma
+ * mudança de regra de negócio.
  */
-export function useAcordoAtivoResumoPorEntidade(
-  tipo: 'cliente' | 'motorista',
-  entidadeId: string | null | undefined
-) {
+export function useAcordoAtivoResumoPorEntidade(clienteId: string | null | undefined) {
   return useQuery({
-    queryKey: [...QUERY_KEY_BASE, 'ativo-entidade', tipo, entidadeId ?? null],
+    queryKey: [...QUERY_KEY_BASE, 'ativo-entidade', clienteId ?? null],
     queryFn: async (): Promise<AcordoAtivoResumo | null> => {
-      if (!entidadeId) return null;
+      if (!clienteId) return null;
 
-      let query = supabase
+      const { data, error } = await supabase
         .from('acordos_pagamento' as any)
         .select('id, codigo, estado, cobranca_id')
         .in('estado', ['ativo', 'incumprimento'])
+        .or(`titular_id.eq.${clienteId},responsavel_cliente_id.eq.${clienteId}`)
         .order('created_at', { ascending: true });
-      query =
-        tipo === 'motorista'
-          ? query.eq('responsavel_motorista_id', entidadeId)
-          : query.or(`titular_id.eq.${entidadeId},responsavel_cliente_id.eq.${entidadeId}`);
-
-      const { data, error } = await query;
       if (error) throw error;
       // `acordos_pagamento` não existe em types.ts — mesmo padrão `as any` +
       // passo por `unknown` do resto deste ficheiro (ver useAcordoAtivoPorCobranca).
@@ -243,7 +236,7 @@ export function useAcordoAtivoResumoPorEntidade(
         outrosAtivos: acordos.length - 1,
       };
     },
-    enabled: !!entidadeId,
+    enabled: !!clienteId,
     staleTime: 15_000,
   });
 }

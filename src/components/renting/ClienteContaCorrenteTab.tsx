@@ -187,7 +187,7 @@ export function ClienteContaCorrenteTab({ clienteId }: ClienteContaCorrenteTabPr
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
   const { data, isLoading, isError } = useContaCorrenteCliente(clienteId);
-  const { data: acordoAtivo } = useAcordoAtivoResumoPorEntidade('cliente', clienteId);
+  const { data: acordoAtivo } = useAcordoAtivoResumoPorEntidade(clienteId);
 
   if (!clienteId) {
     return (
