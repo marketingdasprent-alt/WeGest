@@ -11,7 +11,7 @@
 -- ============================================================
 
 begin;
-select plan(14);
+select plan(16);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'exec-runs-a');
@@ -201,6 +201,37 @@ select is(
   (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru0006' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0002'),
   0,
   'o fallback de gestor_responsavel não inclui quem só tem o recurso RBAC'
+);
+
+-- Cenário G: estratégia cargo, modo individual — só a pessoa escolhida
+-- recebe, mesmo havendo mais gente no mesmo cargo.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000a0005', 'outro-do-cargo@exec-runs.pt');
+
+insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
+  ('00000000-0000-0000-0000-0000000a0005', '00000000-0000-0000-0000-0000000a0000', false, '00000000-0000-0000-0000-000000cg0001');
+
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-000000rg0007', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_individual', 'Regra Individual', 'teste.evento7', 'notificacao',
+   jsonb_build_object('template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000cg0001'), 'destinatarios_modo', 'individual', 'destinatarios_user_ids', jsonb_build_array('00000000-0000-0000-0000-0000000a0002'), 'enviar_email', false));
+
+insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
+  ('00000000-0000-0000-0000-000000ru0007', '00000000-0000-0000-0000-000000rg0007', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-000000ent0007');
+
+select public.execute_automation_runs();
+
+-- 15. Modo individual: a pessoa escolhida em destinatarios_user_ids recebe.
+select is(
+  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru0007' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0002'),
+  1,
+  'modo individual: a pessoa escolhida em destinatarios_user_ids recebe'
+);
+
+-- 16. Modo individual: outra pessoa do MESMO cargo, não escolhida, não recebe.
+select is(
+  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru0007' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0005'),
+  0,
+  'modo individual: outra pessoa do mesmo cargo, não escolhida individualmente, não recebe'
 );
 
 select * from finish();
