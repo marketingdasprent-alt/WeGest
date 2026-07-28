@@ -91,15 +91,30 @@ Deno.serve(async (req) => {
 
     console.log(`[bolt-auto-map-driver-vehicles] Iniciando mapeamento auto-suficiente${integracao_id ? ` para integração ${integracao_id}` : ''}`);
 
-    // Obter org_id da integração para filtrar por org
-    let orgId: string | null = null;
-    if (integracao_id) {
-      const { data: integConfig } = await supabase
-        .from("plataformas_configuracao")
-        .select("org_id")
-        .eq("id", integracao_id)
-        .single();
-      orgId = integConfig?.org_id || null;
+    // Obter org_id da integração para filtrar por org. Ao contrário de
+    // bolt-auto-map-vehicles, esta função pré-carrega motoristas/viaturas/
+    // associações UMA VEZ em mapas partilhados por todo o pedido — por
+    // isso, ao contrário do outro ficheiro, aqui exige-se sempre um
+    // integracao_id/org_id resolúvel, em vez de degradar para uma corrida
+    // sem filtro de org (todos os chamadores atuais, ex. bolt-full-sync,
+    // já passam sempre integracao_id).
+    if (!integracao_id) {
+      return new Response(
+        JSON.stringify({ success: false, error: "integracao_id é obrigatório" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const { data: integConfig } = await supabase
+      .from("plataformas_configuracao")
+      .select("org_id")
+      .eq("id", integracao_id)
+      .single();
+    const orgId: string | null = integConfig?.org_id || null;
+    if (!orgId) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Integração Bolt não encontrada" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const result: AutoMapResult = {
@@ -144,9 +159,10 @@ Deno.serve(async (req) => {
     }
 
     // ── 2. Pre-load all motoristas for matching (filtrar por org) ──
-    let motQuery = supabase.from("motoristas_ativos").select("id, nome, email, telefone");
-    if (orgId) motQuery = motQuery.eq("org_id", orgId);
-    const { data: allMotoristas, error: motoristasError } = await motQuery;
+    const { data: allMotoristas, error: motoristasError } = await supabase
+      .from("motoristas_ativos")
+      .select("id, nome, email, telefone")
+      .eq("org_id", orgId);
     if (motoristasError) throw new Error(`Erro ao buscar motoristas: ${motoristasError.message}`);
 
     const motoristasByEmail = new Map<string, string>();
@@ -164,9 +180,10 @@ Deno.serve(async (req) => {
     }
 
     // ── 3. Pre-load all viaturas for matching (filtrar por org) ──
-    let viatQuery = supabase.from("viaturas").select("id, matricula");
-    if (orgId) viatQuery = viatQuery.eq("org_id", orgId);
-    const { data: allViaturas, error: viaturasError } = await viatQuery;
+    const { data: allViaturas, error: viaturasError } = await supabase
+      .from("viaturas")
+      .select("id, matricula")
+      .eq("org_id", orgId);
     if (viaturasError) throw new Error(`Erro ao buscar viaturas: ${viaturasError.message}`);
 
     const viaturasByPlate = new Map<string, string>();
@@ -175,9 +192,11 @@ Deno.serve(async (req) => {
     }
 
     // ── 4. Pre-load existing active associations (filtrar por org) ──
-    let assocQuery = supabase.from("motorista_viaturas").select("id, motorista_id, viatura_id").is("data_fim", null);
-    if (orgId) assocQuery = assocQuery.eq("org_id", orgId);
-    const { data: existingAssociations, error: assocError } = await assocQuery;
+    const { data: existingAssociations, error: assocError } = await supabase
+      .from("motorista_viaturas")
+      .select("id, motorista_id, viatura_id")
+      .is("data_fim", null)
+      .eq("org_id", orgId);
     if (assocError) throw new Error(`Erro ao buscar associações: ${assocError.message}`);
 
     const activeAssocByMotorista = new Map<string, { id: string; viatura_id: string }>();
@@ -239,7 +258,7 @@ Deno.serve(async (req) => {
                 email: driver.email || null,
                 telefone: driver.phone || null,
                 status_ativo: true,
-                ...(orgId ? { org_id: orgId } : {}),
+                org_id: orgId,
                 observacoes: "Criado automaticamente via sincronização Bolt (driver-vehicles)",
               })
               .select("id")
@@ -283,7 +302,7 @@ Deno.serve(async (req) => {
               marca,
               modelo,
               cor,
-              ...(orgId ? { org_id: orgId } : {}),
+              org_id: orgId,
               observacoes: "Criada automaticamente via sincronização Bolt (driver-vehicles)",
             })
             .select("id")
@@ -355,7 +374,7 @@ Deno.serve(async (req) => {
             viatura_id: viaturaId,
             data_inicio: today,
             status: "ativo",
-            ...(orgId ? { org_id: orgId } : {}),
+            org_id: orgId,
             observacoes: "Criado automaticamente via sincronização Bolt (active_vehicle)",
           });
 

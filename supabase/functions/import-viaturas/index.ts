@@ -264,7 +264,8 @@ serve(async (req) => {
 
     const { data: existingVehicles, error: vehiclesError } = await supabaseAdmin
       .from('viaturas')
-      .select('id, matricula');
+      .select('id, matricula')
+      .eq('org_id', orgId);
 
     if (vehiclesError) throw vehiclesError;
 
@@ -330,6 +331,7 @@ serve(async (req) => {
       }
 
       const payload = {
+        org_id: orgId,
         matricula: formatPlate(plateValue),
         marca: String(getCell(sourceRow, 'Marca')).trim() || 'N/D',
         modelo: String(getCell(sourceRow, 'Modelo')).trim() || 'N/D',
