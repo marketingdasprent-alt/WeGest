@@ -40,6 +40,18 @@ export function DocumentoPreviewDialog({ open, onOpenChange, invoiceId }: Props)
           .eq('id', invoiceId)
           .single();
         if (error) throw error;
+        if (!invoice.provider_doctype || !invoice.provider_docnum) {
+          // Documento associado manualmente (reconciliação de suspenso) — só temos o nº
+          // legal do documento, não os identificadores internos do provider. Não há PDF
+          // para pré-visualizar; dizer isso claramente em vez de tentar e falhar com um
+          // erro de API confuso.
+          toast.info(
+            `Documento ${invoice.numero ?? ''} associado manualmente — sem PDF disponível para pré-visualização.`
+          );
+          w?.close();
+          onOpenChange(false);
+          return;
+        }
         await abrirDocumentoPdf(invoice as InvoiceMetadata, w);
         onOpenChange(false);
       } catch (e) {
