@@ -60,7 +60,7 @@ export const DocumentosSection: React.FC<DocumentosSectionProps> = ({
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="licencaTvdeNumero">
-              Número da Licença TVDE <span className="text-red-500">*</span>
+              Número da Licença TVDE <span className="text-destructive">*</span>
             </Label>
             <Input
               id="licencaTvdeNumero"
@@ -77,7 +77,7 @@ export const DocumentosSection: React.FC<DocumentosSectionProps> = ({
           </div>
           <div className="space-y-2">
             <Label htmlFor="licencaTvdeValidade">
-              Data de Validade <span className="text-red-500">*</span>
+              Data de Validade <span className="text-destructive">*</span>
             </Label>
             <Input
               id="licencaTvdeValidade"
@@ -94,7 +94,7 @@ export const DocumentosSection: React.FC<DocumentosSectionProps> = ({
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label>
-              Upload da Licença TVDE <span className="text-red-500">*</span>
+              Upload da Licença TVDE <span className="text-destructive">*</span>
             </Label>
             <DocumentUploader
               folder="licenca-tvde"
@@ -124,7 +124,7 @@ export const DocumentosSection: React.FC<DocumentosSectionProps> = ({
           <div className="space-y-2">
             <Label className="flex items-center gap-2 text-foreground">
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              Registo Criminal <span className="text-red-500">*</span>
+              Registo Criminal <span className="text-destructive">*</span>
             </Label>
             <DocumentUploader
               folder="registo-criminal"
@@ -144,7 +144,7 @@ export const DocumentosSection: React.FC<DocumentosSectionProps> = ({
           <div className="space-y-2">
             <Label className="flex items-center gap-2 text-foreground">
               <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              Comprovativo de IBAN <span className="text-red-500">*</span>
+              Comprovativo de IBAN <span className="text-destructive">*</span>
             </Label>
             <DocumentUploader
               folder="comprovativo-iban"

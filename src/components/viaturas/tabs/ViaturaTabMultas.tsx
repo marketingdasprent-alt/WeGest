@@ -275,7 +275,7 @@ export function ViaturaTabMultas({ viaturaId }: ViaturaTabMultasProps) {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="data_infracao">
-                      Data da Infração <span className="text-red-500">*</span>
+                      Data da Infração <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="data_infracao"

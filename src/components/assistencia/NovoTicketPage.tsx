@@ -274,7 +274,7 @@ export const NovoTicketPage: React.FC<Props> = ({ onClose, onSuccess }) => {
 
               <div className="space-y-1.5">
                 <Label htmlFor="titulo">
-                  Título <span className="text-red-500">*</span>
+                  Título <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="titulo"

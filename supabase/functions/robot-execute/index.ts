@@ -6,7 +6,10 @@ const corsHeaders = {
 };
 
 // Sincronização automática/Apify DESATIVADA — só import manual por CSV.
+// Exceções (PLATAFORMAS_PERMITIDAS): robôs já validados e autorizados a
+// correr apesar do interruptor geral estar desligado.
 const SYNC_AUTOMATICO_DESATIVADO = true;
+const PLATAFORMAS_PERMITIDAS = ['viaverde', 'bolt'];
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -22,7 +25,7 @@ Deno.serve(async (req) => {
     if (!integracao_id) {
       return new Response(
         JSON.stringify({ success: false, error: 'integracao_id é obrigatório' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -38,17 +41,24 @@ Deno.serve(async (req) => {
     if (configError || !config) {
       return new Response(
         JSON.stringify({ success: false, error: 'Integração robot não encontrada' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // SYNC_AUTOMATICO_DESATIVADO bloqueia Uber/Bolt/BP/Repsol/EDP.
-    // Via Verde é a única plataforma permitida através do block — o robô
-    // Apify dedicado foi criado para esta integração.
-    if (SYNC_AUTOMATICO_DESATIVADO && config.robot_target_platform !== 'viaverde') {
+    // SYNC_AUTOMATICO_DESATIVADO bloqueia Uber/BP/Repsol/EDP. Via Verde e
+    // Bolt (PLATAFORMAS_PERMITIDAS) têm robôs Apify já validados e passam
+    // através do bloqueio.
+    if (
+      SYNC_AUTOMATICO_DESATIVADO &&
+      !PLATAFORMAS_PERMITIDAS.includes(config.robot_target_platform)
+    ) {
       return new Response(
-        JSON.stringify({ success: false, disabled: true, error: 'Sincronização automática desativada. Use o import manual por CSV.' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({
+          success: false,
+          disabled: true,
+          error: 'Sincronização automática desativada. Use o import manual por CSV.',
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -78,14 +88,17 @@ Deno.serve(async (req) => {
     if (!actorId) {
       return new Response(
         JSON.stringify({ success: false, error: 'Actor ID não configurado nesta integração' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     if (!apifyToken) {
       return new Response(
-        JSON.stringify({ success: false, error: 'API Token do Apify não configurado nesta integração' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({
+          success: false,
+          error: 'API Token do Apify não configurado nesta integração',
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -106,7 +119,7 @@ Deno.serve(async (req) => {
       } catch {
         return new Response(
           JSON.stringify({ success: false, error: 'Cookies JSON inválido. Verifique o formato.' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       actorInput.cookies = parsedCookies;
@@ -128,7 +141,8 @@ Deno.serve(async (req) => {
     // não em plataformas_configuracao. URL do portal é fixa.
     // Período por defeito = semana anterior (Seg-Dom ISO).
     if (targetPlatform === 'viaverde') {
-      const VIA_VERDE_EXTRATOS_URL = 'https://www.viaverde.pt/empresas/minha-via-verde/extratos-movimentos';
+      const VIA_VERDE_EXTRATOS_URL =
+        'https://www.viaverde.pt/empresas/minha-via-verde/extratos-movimentos';
       actorInput.startUrl = VIA_VERDE_EXTRATOS_URL;
 
       const { data: conta, error: contaError } = await supabase
@@ -146,7 +160,7 @@ Deno.serve(async (req) => {
             success: false,
             error: 'Nenhuma conta Via Verde com sync_ativo=true encontrada para esta integração.',
           }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -177,7 +191,7 @@ Deno.serve(async (req) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(actorInput),
-      },
+      }
     );
 
     const apifyData = await apifyResponse.json();
@@ -185,8 +199,11 @@ Deno.serve(async (req) => {
     if (!apifyResponse.ok) {
       console.error('Apify error:', apifyData);
       return new Response(
-        JSON.stringify({ success: false, error: `Apify API error [${apifyResponse.status}]: ${JSON.stringify(apifyData)}` }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({
+          success: false,
+          error: `Apify API error [${apifyResponse.status}]: ${JSON.stringify(apifyData)}`,
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -202,13 +219,16 @@ Deno.serve(async (req) => {
         run_id: apifyData.data?.id || apifyData.id,
         message: 'Robot iniciado com sucesso',
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('robot-execute error:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

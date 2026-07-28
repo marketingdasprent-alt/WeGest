@@ -242,7 +242,7 @@ export function ViaturaTabReservas({ viaturaId }: ViaturaTabReservasProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="data_inicio">
-                    Data Início <span className="text-red-500">*</span>
+                    Data Início <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="data_inicio"

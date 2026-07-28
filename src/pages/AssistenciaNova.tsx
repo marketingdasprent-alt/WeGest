@@ -817,7 +817,7 @@ export default function AssistenciaNova() {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="titulo">
-                      Título da Assistência <span className="text-red-500">*</span>
+                      Título da Assistência <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="titulo"

@@ -108,7 +108,7 @@ export function AnyRentDadosSaidaAlert({ contrato }: AnyRentDadosSaidaAlertProps
           <div className="space-y-4 py-1">
             <div className="space-y-2">
               <Label htmlFor="any-rent-km">
-                KM de saída <span className="text-red-500">*</span>
+                KM de saída <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="any-rent-km"
@@ -123,7 +123,7 @@ export function AnyRentDadosSaidaAlert({ contrato }: AnyRentDadosSaidaAlertProps
             {mostraCombustivel && (
               <div className="space-y-2">
                 <Label>
-                  Combustível <span className="text-red-500">*</span>
+                  Combustível <span className="text-destructive">*</span>
                 </Label>
                 <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
                   {COMBUSTIVEL_NIVEL_OPTS.map((nivel) => (
@@ -147,7 +147,7 @@ export function AnyRentDadosSaidaAlert({ contrato }: AnyRentDadosSaidaAlertProps
             {mostraEletrico && (
               <div className="space-y-2">
                 <Label>
-                  Nível da bateria <span className="text-red-500">*</span>
+                  Nível da bateria <span className="text-destructive">*</span>
                 </Label>
                 <div className="grid grid-cols-5 gap-2">
                   {ELETRICO_OPTS.map((nivel) => (

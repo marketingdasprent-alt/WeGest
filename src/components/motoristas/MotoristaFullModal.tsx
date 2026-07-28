@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { User, FileText, Wallet, Car, FileSignature, Receipt, AlertTriangle } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { MotoristaStatusBadge } from '@/lib/statusBadges';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -162,9 +162,7 @@ export function MotoristaFullModal({
                     </span>
                     {motoristaAtivo.nome}
                   </DialogTitle>
-                  <Badge variant={motoristaAtivo.status_ativo ? 'default' : 'secondary'}>
-                    {motoristaAtivo.status_ativo ? 'Ativo' : 'Inativo'}
-                  </Badge>
+                  <MotoristaStatusBadge statusAtivo={motoristaAtivo.status_ativo} />
                 </>
               )}
             </div>

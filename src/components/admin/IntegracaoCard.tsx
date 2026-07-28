@@ -31,7 +31,8 @@ export type IntegracaoCardType =
   | 'combustivel'
   | 'robot'
   | 'faturacao'
-  | 'email';
+  | 'email'
+  | 'cartrack';
 
 export interface IntegracaoCardData {
   id: string;
@@ -94,6 +95,11 @@ const PLATFORM_META: Record<IntegracaoCardType, { label: string; logo: string; c
     logo: '/images/logo-brevo.png',
     color: 'hsl(var(--chart-2))',
   },
+  cartrack: {
+    label: 'Cartrack',
+    logo: '/images/logo-cartrack.png',
+    color: 'hsl(var(--chart-1))',
+  },
 };
 export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
   data,
@@ -135,6 +141,9 @@ export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
                 src={data.logoUrl || meta.logo}
                 alt={meta.label}
                 className="h-full w-full object-contain"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                }}
               />
             </div>
             <div>
@@ -197,26 +206,29 @@ export const IntegracaoCard: React.FC<IntegracaoCardProps> = ({
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${connectionDotColor}`} />
           <span className="text-xs text-muted-foreground">{connectionLabel}</span>
-          {/* Via Verde é a única exceção ao kill-switch SINCRONIZACAO_ATIVA — mesmo
-              motivo do guard em robot-execute (robot_target_platform !== 'viaverde'). */}
-          {(SINCRONIZACAO_ATIVA || data.type === 'via_verde') && data.ativo && onExecute && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              disabled={isExecuting}
-              onClick={(e) => {
-                e.stopPropagation();
-                onExecute(data);
-              }}
-            >
-              {isExecuting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-              ) : (
-                <Play className="h-3.5 w-3.5 text-emerald-500" />
-              )}
-            </Button>
-          )}
+          {/* Via Verde e Cartrack são exceções ao kill-switch SINCRONIZACAO_ATIVA:
+              Via Verde pelo mesmo motivo do guard em robot-execute; Cartrack por ser
+              API REST directa (não robô Apify), o kill-switch não se lhe aplica. */}
+          {(SINCRONIZACAO_ATIVA || data.type === 'via_verde' || data.type === 'cartrack') &&
+            data.ativo &&
+            onExecute && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                disabled={isExecuting}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onExecute(data);
+                }}
+              >
+                {isExecuting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                ) : (
+                  <Play className="h-3.5 w-3.5 text-emerald-500" />
+                )}
+              </Button>
+            )}
           {onImport ? (
             <Button
               variant="outline"

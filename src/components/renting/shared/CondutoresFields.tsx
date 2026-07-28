@@ -536,6 +536,20 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
         )}
 
         <FormField control={form.control} name="condutores" render={() => <FormMessage />} />
+        {/* Só para testes de regressão (ver CondutoresFields.test.tsx) — serializa
+            `fields` (a cópia interna do useFieldArray que a tabela acima
+            desenha), não form.watch(): um form.setValue/replace de instância-pai
+            isolado (o próprio bug do fix a5c928d) atualiza o form state mas NÃO
+            `fields`, por isso só ler daqui apanha essa regressão. */}
+        <span data-testid="condutores-debug" className="hidden">
+          {JSON.stringify(
+            fields.map(({ cliente_id, motorista_id, is_principal }) => ({
+              cliente_id,
+              motorista_id,
+              is_principal,
+            }))
+          )}
+        </span>
       </div>
 
       <Dialog open={!!infoCondutor} onOpenChange={(open) => !open && setInfoCondutor(null)}>

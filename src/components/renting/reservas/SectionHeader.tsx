@@ -54,7 +54,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
       <div className="min-w-0">
         <h3 className="flex items-center gap-1 text-sm font-semibold leading-tight">
           {title}
-          {required && <span className="text-red-500">*</span>}
+          {required && <span className="text-destructive">*</span>}
         </h3>
         {hint && <p className="text-[11px] leading-tight text-muted-foreground">{hint}</p>}
       </div>

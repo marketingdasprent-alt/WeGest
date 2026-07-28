@@ -89,7 +89,7 @@ export function ViaturaFormVeiculo({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Marca <span className="text-red-500">*</span>
+                Marca <span className="text-destructive">*</span>
               </FormLabel>
               <Select
                 // Re-monta quando a opção guardada fica disponível, para o valor

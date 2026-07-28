@@ -101,7 +101,7 @@ export const CartaConducaoSection: React.FC<CartaConducaoSectionProps> = ({
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>
-              Tipo de Documento <span className="text-red-500">*</span>
+              Tipo de Documento <span className="text-destructive">*</span>
             </Label>
             <Select
               value={documentoTipo}
@@ -126,7 +126,7 @@ export const CartaConducaoSection: React.FC<CartaConducaoSectionProps> = ({
           </div>
           <div className="space-y-2">
             <Label htmlFor="documentoNumero">
-              Número do Documento <span className="text-red-500">*</span>
+              Número do Documento <span className="text-destructive">*</span>
             </Label>
             <Input
               id="documentoNumero"
@@ -150,7 +150,7 @@ export const CartaConducaoSection: React.FC<CartaConducaoSectionProps> = ({
           </div>
           <div className="space-y-2">
             <Label htmlFor="documentoValidade">
-              Data de Validade <span className="text-red-500">*</span>
+              Data de Validade <span className="text-destructive">*</span>
             </Label>
             <Input
               id="documentoValidade"
@@ -167,7 +167,7 @@ export const CartaConducaoSection: React.FC<CartaConducaoSectionProps> = ({
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label>
-              Documento de Identificação <span className="text-red-500">*</span>
+              Documento de Identificação <span className="text-destructive">*</span>
             </Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -215,7 +215,7 @@ export const CartaConducaoSection: React.FC<CartaConducaoSectionProps> = ({
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="cartaConducao">
-              Número da Carta <span className="text-red-500">*</span>
+              Número da Carta <span className="text-destructive">*</span>
             </Label>
             <Input
               id="cartaConducao"
@@ -237,7 +237,7 @@ export const CartaConducaoSection: React.FC<CartaConducaoSectionProps> = ({
           </div>
           <div className="space-y-2">
             <Label htmlFor="cartaValidade">
-              Data de Validade <span className="text-red-500">*</span>
+              Data de Validade <span className="text-destructive">*</span>
             </Label>
             <Input
               id="cartaValidade"
@@ -254,7 +254,7 @@ export const CartaConducaoSection: React.FC<CartaConducaoSectionProps> = ({
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label>
-              Categorias <span className="text-red-500">*</span>
+              Categorias <span className="text-destructive">*</span>
             </Label>
             <div className="flex flex-wrap gap-2">
               {CATEGORIAS_CARTA.map((cat) => (
@@ -277,7 +277,7 @@ export const CartaConducaoSection: React.FC<CartaConducaoSectionProps> = ({
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label>
-              Upload da Carta de Condução <span className="text-red-500">*</span>
+              Upload da Carta de Condução <span className="text-destructive">*</span>
             </Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">

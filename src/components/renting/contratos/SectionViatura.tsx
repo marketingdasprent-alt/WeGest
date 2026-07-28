@@ -100,7 +100,7 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
             return (
               <FormItem>
                 <FormLabel className="flex items-center gap-1.5">
-                  Viatura <span className="text-red-500">*</span>
+                  Viatura <span className="text-destructive">*</span>
                   {viaturaLocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
                 </FormLabel>
                 {viaturaLocked ? (

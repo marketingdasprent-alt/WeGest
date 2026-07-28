@@ -193,7 +193,7 @@ export const ListaEsperaDrawer: React.FC<ListaEsperaDrawerProps> = ({
             <div className="rounded-lg border p-3 space-y-3">
               <div className="space-y-1.5">
                 <Label>
-                  Marca e modelo <span className="text-red-500">*</span>
+                  Marca e modelo <span className="text-destructive">*</span>
                 </Label>
                 <SearchableDropdown
                   items={marcaModeloOptions.map((o) => ({ id: o.chave, primary: o.chave }))}

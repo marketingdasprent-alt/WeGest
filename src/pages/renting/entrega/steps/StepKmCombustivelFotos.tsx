@@ -64,7 +64,7 @@ export const StepKmCombustivelFotos: React.FC<StepKmCombustivelFotosProps> = ({
 
         <div className="space-y-2">
           <Label>
-            KM Actual <span className="text-red-500">*</span>
+            KM Actual <span className="text-destructive">*</span>
           </Label>
           <Input
             type="number"
@@ -78,7 +78,7 @@ export const StepKmCombustivelFotos: React.FC<StepKmCombustivelFotosProps> = ({
         {mostraCombustivel && (
           <div className="space-y-2">
             <Label>
-              Combustível <span className="text-red-500">*</span>
+              Combustível <span className="text-destructive">*</span>
             </Label>
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
               {COMBUSTIVEL_NIVEL_OPTS.map((nivel) => (
@@ -102,7 +102,7 @@ export const StepKmCombustivelFotos: React.FC<StepKmCombustivelFotosProps> = ({
         {mostraEletrico && (
           <div className="space-y-2">
             <Label>
-              Nível da Bateria <span className="text-red-500">*</span>
+              Nível da Bateria <span className="text-destructive">*</span>
             </Label>
             <div className="grid grid-cols-5 gap-2">
               {ELETRICO_OPTS.map((nivel) => (

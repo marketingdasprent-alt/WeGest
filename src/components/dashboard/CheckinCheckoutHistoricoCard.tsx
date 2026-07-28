@@ -21,7 +21,7 @@ import {
 } from '@/hooks/useCheckinCheckoutHistorico';
 import { CheckinCheckoutDetailDialog } from './CheckinCheckoutDetailDialog';
 
-const PREVIEW_SIZE = 5;
+const PREVIEW_SIZE = 3;
 
 function ThumbnailImage({ media }: { media: SessionMedia }) {
   const src = useMediaSignedUrl(media);

@@ -326,7 +326,7 @@ const RentingGrupoForm = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div className="md:col-span-1 space-y-2">
           <Label>
-            Nome <span className="text-red-500">*</span>
+            Nome <span className="text-destructive">*</span>
           </Label>
           <Input
             value={form.nome}
@@ -336,7 +336,7 @@ const RentingGrupoForm = () => {
         </div>
         <div className="space-y-2">
           <Label>
-            Código <span className="text-red-500">*</span>
+            Código <span className="text-destructive">*</span>
           </Label>
           <Input
             value={form.codigo}

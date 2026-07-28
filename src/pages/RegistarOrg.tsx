@@ -236,7 +236,7 @@ const RegistarOrg = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="nomeEmpresa">
-                    Nome da Empresa <span className="text-red-500">*</span>
+                    Nome da Empresa <span className="text-destructive">*</span>
                   </Label>
                   <div className="relative">
                     <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -253,7 +253,7 @@ const RegistarOrg = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="codigo">
-                    Código / Subdomínio <span className="text-red-500">*</span>
+                    Código / Subdomínio <span className="text-destructive">*</span>
                   </Label>
                   <div className="relative">
                     <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -289,7 +289,7 @@ const RegistarOrg = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="nif">
-                    NIF <span className="text-red-500">*</span>
+                    NIF <span className="text-destructive">*</span>
                   </Label>
                   <div className="relative">
                     <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -342,7 +342,7 @@ const RegistarOrg = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="adminNome">
-                    Nome completo <span className="text-red-500">*</span>
+                    Nome completo <span className="text-destructive">*</span>
                   </Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -359,7 +359,7 @@ const RegistarOrg = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="adminEmail">
-                    Email <span className="text-red-500">*</span>
+                    Email <span className="text-destructive">*</span>
                   </Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -378,7 +378,7 @@ const RegistarOrg = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="adminPassword">
-                    Password <span className="text-red-500">*</span>
+                    Password <span className="text-destructive">*</span>
                   </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

@@ -32,7 +32,7 @@ export function ViaturaFormIdentificacao({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Matrícula <span className="text-red-500">*</span>
+                Matrícula <span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <Input

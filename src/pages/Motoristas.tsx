@@ -12,10 +12,12 @@ import {
   FileWarning,
   FileSpreadsheet,
   Loader2,
+  Users,
 } from 'lucide-react';
 import { startOfWeek, format as formatDate } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { MotoristaStatusBadge } from '@/lib/statusBadges';
 import { Button } from '@/components/ui/button';
 import { MotoristaFullModal } from '@/components/motoristas/MotoristaFullModal';
 import { MotoristasPlataformaNaoAssociados } from '@/components/motoristas/MotoristasPlataformaNaoAssociados';
@@ -25,6 +27,8 @@ import { PortagensNaoAssociadas } from '@/components/motoristas/PortagensNaoAsso
 import { BpNaoAssociadas } from '@/components/motoristas/BpNaoAssociadas';
 import { GenerateDocumentsDialog } from '@/components/motoristas/GenerateDocumentsDialog';
 import { MotoristaCard } from '@/components/motoristas/MotoristaCard';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
@@ -507,16 +511,74 @@ export default function Motoristas() {
 
       {/* Content - Mobile Cards or Desktop Table */}
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground">A carregar...</div>
+        isMobile ? (
+          <div className="grid gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-lg border p-4 space-y-2">
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-3 w-1/3" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="border rounded-lg p-4 space-y-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4">
+                <Skeleton className="h-4 w-10" />
+                <Skeleton className="h-4 flex-1" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="hidden h-4 w-28 md:block" />
+                <Skeleton className="hidden h-4 w-20 lg:block" />
+              </div>
+            ))}
+          </div>
+        )
       ) : filteredMotoristas.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          {searchTerm ||
-          statusFilter !== 'todos' ||
-          cidadeFilter !== 'todas' ||
-          gestorFilter !== 'todos'
-            ? 'Nenhum motorista encontrado com os filtros aplicados'
-            : 'Nenhum motorista cadastrado'}
-        </div>
+        (() => {
+          const temFiltros =
+            !!searchTerm ||
+            statusFilter !== 'todos' ||
+            cidadeFilter !== 'todas' ||
+            gestorFilter !== 'todos';
+          return (
+            <EmptyState
+              icon={Users}
+              title={
+                temFiltros
+                  ? 'Nenhum motorista encontrado com os filtros aplicados'
+                  : 'Nenhum motorista cadastrado'
+              }
+              description={
+                temFiltros
+                  ? 'Experimenta ajustar ou limpar os filtros.'
+                  : 'Adiciona o primeiro motorista para começar.'
+              }
+              action={
+                temFiltros ? (
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      updateFilters({
+                        search: '',
+                        status: 'todos',
+                        cidade: 'todas',
+                        gestor: 'todos',
+                      })
+                    }
+                  >
+                    Limpar filtros
+                  </Button>
+                ) : (
+                  <Button onClick={handleAddMotorista}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar Motorista
+                  </Button>
+                )
+              }
+            />
+          );
+        })()
       ) : isMobile ? (
         /* Mobile: Card Grid */
         <div className="grid gap-3">
@@ -638,12 +700,10 @@ export default function Motoristas() {
                     {motorista.cidade || '-'}
                   </TableCell>
                   <TableCell className="py-2 text-center">
-                    <Badge
-                      variant={motorista.status_ativo ? 'default' : 'secondary'}
+                    <MotoristaStatusBadge
+                      statusAtivo={motorista.status_ativo}
                       className="text-xs"
-                    >
-                      {motorista.status_ativo ? 'Ativo' : 'Inativo'}
-                    </Badge>
+                    />
                   </TableCell>
                 </TableRow>
               ))}

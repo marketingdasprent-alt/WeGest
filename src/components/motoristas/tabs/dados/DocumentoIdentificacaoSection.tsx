@@ -35,7 +35,7 @@ export function DocumentoIdentificacaoSection({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Tipo de Documento <span className="text-red-500">*</span>
+                Tipo de Documento <span className="text-destructive">*</span>
               </FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
@@ -60,7 +60,7 @@ export function DocumentoIdentificacaoSection({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Nº do Documento <span className="text-red-500">*</span>
+                Nº do Documento <span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <Input {...field} />
@@ -75,7 +75,7 @@ export function DocumentoIdentificacaoSection({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Validade <span className="text-red-500">*</span>
+                Validade <span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <Input type="date" {...field} />

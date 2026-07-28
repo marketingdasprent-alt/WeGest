@@ -328,6 +328,15 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     },
   });
 
+  // Pré-preenche o KM de entrada com o KM de saída já registado no contrato —
+  // evita pedir um valor que o sistema já tem; o utilizador só o edita se o
+  // KM real for diferente. Só actua enquanto o campo ainda está vazio.
+  useEffect(() => {
+    if (!open || km.trim() !== '' || contexto?.kmSaida == null) return;
+    setKm(String(contexto.kmSaida));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, contexto?.kmSaida]);
+
   const addFiles = (list: FileList | null) => {
     if (!list) return;
     const novos: SelectedFile[] = Array.from(list).map((f) => ({
@@ -750,7 +759,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                     <MessageSquareText className="h-3.5 w-3.5" />
                     Motivo{' '}
                     {motivoObrigatorioTroca ? (
-                      <span className="text-red-500">*</span>
+                      <span className="text-destructive">*</span>
                     ) : (
                       '(opcional)'
                     )}
@@ -854,7 +863,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                           <Label htmlFor="km-recolha" className="text-xs">
-                            KM Actual <span className="text-red-500">*</span>
+                            KM Actual <span className="text-destructive">*</span>
                           </Label>
                           <Input
                             id="km-recolha"
@@ -868,7 +877,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                         </div>
                         <div className="space-y-1.5">
                           <Label className="text-xs">
-                            Combustível <span className="text-red-500">*</span>
+                            Combustível <span className="text-destructive">*</span>
                           </Label>
                           <div className="grid grid-cols-5 gap-1">
                             {COMBUSTIVEL_NIVEL_OPTS.map((nivel) => (

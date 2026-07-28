@@ -370,7 +370,7 @@ const RentingTaxas = () => {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>
-                Nome <span className="text-red-500">*</span>
+                Nome <span className="text-destructive">*</span>
               </Label>
               <Input
                 value={form.nome}
@@ -408,7 +408,7 @@ const RentingTaxas = () => {
               {form.tipo_valor === 'percentagem' ? (
                 <div className="space-y-2">
                   <Label>
-                    Percentagem <span className="text-red-500">*</span>
+                    Percentagem <span className="text-destructive">*</span>
                   </Label>
                   <div className="relative">
                     <Input
@@ -429,7 +429,7 @@ const RentingTaxas = () => {
               ) : (
                 <div className="space-y-2">
                   <Label>
-                    Valor (€) <span className="text-red-500">*</span>
+                    Valor (€) <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     type="number"

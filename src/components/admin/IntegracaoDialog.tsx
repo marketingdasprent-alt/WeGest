@@ -56,6 +56,7 @@ const PLATFORMS: { id: PlataformaOperacional | 'keyinvoice'; name: string; logo:
   { id: 'edp', name: 'EDP', logo: '/images/logo-edp.png' },
   { id: 'viaverde', name: 'Via Verde', logo: '/images/logo-via-verde.png' },
   { id: 'brevo', name: 'Brevo (Email)', logo: '/images/logo-brevo.png' },
+  { id: 'cartrack', name: 'Cartrack', logo: '/images/logo-cartrack.png' },
   { id: 'keyinvoice', name: 'KeyInvoice', logo: '/images/logo-keyinvoice.svg' },
 ];
 
@@ -130,6 +131,10 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
     'idle'
   );
   const [brevoTestError, setBrevoTestError] = useState('');
+  const [cartrackTestState, setCartrackTestState] = useState<
+    'idle' | 'testing' | 'success' | 'error'
+  >('idle');
+  const [cartrackTestError, setCartrackTestError] = useState('');
 
   const resetForm = () => {
     setFormData({
@@ -148,6 +153,8 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
     setStep(1);
     setBrevoTestState('idle');
     setBrevoTestError('');
+    setCartrackTestState('idle');
+    setCartrackTestError('');
   };
 
   const handleClose = (nextOpen: boolean) => {
@@ -173,6 +180,8 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
             ? VIAVERDE_DEFAULTS
             : UBER_DEFAULTS;
   const isBrevo = formData.plataforma === 'brevo';
+  // Cartrack: API REST directa (HTTP Basic Auth), não robô Apify.
+  const isCartrack = formData.plataforma === 'cartrack';
   const needsLoginPassword = isUber || isBolt || isBp || isRepsol || isEdp || isViaVerde;
   const selectedPlatform = PLATFORMS.find((p) => p.id === formData.plataforma);
 
@@ -180,9 +189,13 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
   // Via Verde usa robô Apify → precisa de credenciais do portal, tal como as outras.
   // Brevo exige teste de ligação aprovado antes de avançar — email errado
   // e silencioso é pior do que um robot mal configurado (ver brevo-test-connection).
+  // Cartrack exige igualmente teste de ligação aprovado (Basic Auth: credencial
+  // errada é um 401 silencioso no sync).
   const canProceedStep2 = isBrevo
     ? !!(formData.senderName && formData.senderEmail) && brevoTestState === 'success'
-    : !!(formData.login && formData.password);
+    : isCartrack
+      ? !!(formData.login && formData.password) && cartrackTestState === 'success'
+      : !!(formData.login && formData.password);
 
   const handleTestBrevoConnection = async () => {
     if (!formData.apiKey) {
@@ -205,6 +218,33 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
     } catch (err: any) {
       setBrevoTestState('error');
       setBrevoTestError(err.message || 'Não foi possível ligar à Brevo');
+    }
+  };
+
+  const handleTestCartrackConnection = async () => {
+    if (!formData.login || !formData.password) {
+      toast({ title: 'Preencha username e password primeiro', variant: 'destructive' });
+      return;
+    }
+    setCartrackTestState('testing');
+    setCartrackTestError('');
+    try {
+      const { data, error } = await supabase.functions.invoke('cartrack-test-connection', {
+        body: { username: formData.login, password: formData.password },
+      });
+      if (error || !data?.success) {
+        setCartrackTestState('error');
+        setCartrackTestError(data?.error || error?.message || 'Não foi possível ligar à Cartrack');
+        return;
+      }
+      setCartrackTestState('success');
+      toast({
+        title: 'Ligação confirmada',
+        description: `Cartrack válida — ${data.total_viaturas ?? 0} viatura(s) detetada(s).`,
+      });
+    } catch (err: any) {
+      setCartrackTestState('error');
+      setCartrackTestError(err.message || 'Não foi possível ligar à Cartrack');
     }
   };
 
@@ -269,6 +309,28 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
         if (keyError) throw keyError;
 
         toast({ title: 'Integração criada', description: `Brevo "${formData.nome}" criada.` });
+        setSaving(false);
+        onOpenChange(false);
+        onSuccess();
+        return;
+      }
+
+      // Cartrack: API REST directa (HTTP Basic Auth). Sem robô Apify —
+      // username/password guardados em client_id/client_secret (texto simples,
+      // igual às restantes). O sync corre via edge function cartrack-sync.
+      if (isCartrack) {
+        const { error: cartrackError } = await supabase.from('plataformas_configuracao').insert({
+          nome: formData.nome,
+          plataforma: 'cartrack',
+          client_id: formData.login,
+          client_secret: formData.password,
+          ativo: true,
+          // Módulo automático: sync a cada 15 min via pg_cron (cartrack-scheduled-sync).
+          sync_automatico: true,
+        });
+        if (cartrackError) throw cartrackError;
+
+        toast({ title: 'Integração criada', description: `Cartrack "${formData.nome}" criada.` });
         setSaving(false);
         onOpenChange(false);
         onSuccess();
@@ -471,7 +533,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </p>
                   <div className="space-y-2">
                     <Label htmlFor="login">
-                      Email <span className="text-red-500">*</span>
+                      Email <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="login"
@@ -483,7 +545,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password">
-                      Password <span className="text-red-500">*</span>
+                      Password <span className="text-destructive">*</span>
                     </Label>
                     <div className="relative">
                       <Input
@@ -519,7 +581,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </p>
                   <div className="space-y-2">
                     <Label htmlFor="brevo-api-key">
-                      API Key <span className="text-red-500">*</span>
+                      API Key <span className="text-destructive">*</span>
                     </Label>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
@@ -571,7 +633,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="brevo-sender-name">
-                      Sender Name <span className="text-red-500">*</span>
+                      Sender Name <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="brevo-sender-name"
@@ -584,7 +646,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="brevo-sender-email">
-                      Sender Email <span className="text-red-500">*</span>
+                      Sender Email <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="brevo-sender-email"
@@ -609,6 +671,81 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                     />
                   </div>
                 </>
+              ) : isCartrack ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Introduza as credenciais da API Cartrack (Fleetweb ›{' '}
+                    <em>Settings › API Settings</em>) e confirme a ligação antes de continuar.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="login">
+                      Username <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="login"
+                      placeholder="Utilizador da API Cartrack"
+                      value={formData.login}
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, login: e.target.value }));
+                        setCartrackTestState('idle');
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">
+                      Password <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Input
+                          id="password"
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={formData.password}
+                          onChange={(e) => {
+                            setFormData((prev) => ({ ...prev, password: e.target.value }));
+                            setCartrackTestState('idle');
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleTestCartrackConnection}
+                        disabled={
+                          cartrackTestState === 'testing' || !formData.login || !formData.password
+                        }
+                      >
+                        {cartrackTestState === 'testing' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          'Testar ligação'
+                        )}
+                      </Button>
+                    </div>
+                    {cartrackTestState === 'success' && (
+                      <p className="text-xs text-emerald-600 flex items-center gap-1">
+                        <Check className="h-3 w-3" /> Ligação confirmada
+                      </p>
+                    )}
+                    {cartrackTestState === 'error' && (
+                      <p className="text-xs text-destructive">{cartrackTestError}</p>
+                    )}
+                  </div>
+                </>
               ) : (
                 <>
                   <p className="text-sm text-muted-foreground">
@@ -616,7 +753,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </p>
                   <div className="space-y-2">
                     <Label htmlFor="login">
-                      Email <span className="text-red-500">*</span>
+                      Email <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="login"
@@ -628,7 +765,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password">
-                      Password <span className="text-red-500">*</span>
+                      Password <span className="text-destructive">*</span>
                     </Label>
                     <div className="relative">
                       <Input
@@ -691,7 +828,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
             {/* Name */}
             <div className="space-y-2">
               <Label htmlFor="nome">
-                Nome da Integração <span className="text-red-500">*</span>
+                Nome da Integração <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="nome"
@@ -701,8 +838,10 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
               />
             </div>
 
-            {/* Schedule — não aplicável ao Brevo (não há sincronização, só envio sob-demanda) */}
-            {!isBrevo && (
+            {/* Schedule — não aplicável ao Brevo (só envio sob-demanda) nem ao
+                Cartrack (robot-schedule dispara robot-execute, não cartrack-sync;
+                o Cartrack sincroniza pelo botão no detalhe da integração). */}
+            {!isBrevo && !isCartrack && (
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Clock className="h-4 w-4" />
@@ -727,7 +866,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
               </div>
             )}
 
-            {!isBrevo && formData.cron_schedule === 'custom' && (
+            {!isBrevo && !isCartrack && formData.cron_schedule === 'custom' && (
               <div className="space-y-2">
                 <Label htmlFor="cron_custom">Expressão Cron</Label>
                 <Input

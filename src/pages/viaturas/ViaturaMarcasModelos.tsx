@@ -601,7 +601,7 @@ const ViaturaMarcasModelos = () => {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>
-                Nome <span className="text-red-500">*</span>
+                Nome <span className="text-destructive">*</span>
               </Label>
               <Input
                 value={marcaForm.nome}
@@ -644,7 +644,7 @@ const ViaturaMarcasModelos = () => {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>
-                Nome <span className="text-red-500">*</span>
+                Nome <span className="text-destructive">*</span>
               </Label>
               <Input
                 value={modeloForm.nome}
@@ -687,7 +687,7 @@ const ViaturaMarcasModelos = () => {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>
-                Nome <span className="text-red-500">*</span>
+                Nome <span className="text-destructive">*</span>
               </Label>
               <Input
                 value={versaoForm.nome}

@@ -1,19 +1,12 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 // Must be defined before importing Dashboard. vi.mock is hoisted automatically.
 
-vi.mock('@/hooks/usePermissions', () => ({
-  usePermissions: vi.fn(),
-}));
-
 vi.mock('@/hooks/useDashboardVariant', () => ({
   useDashboardVariant: vi.fn(),
-}));
-
-vi.mock('@/contexts/TenantContext', () => ({
-  useOrgId: () => null,
 }));
 
 // toast tem de ser uma referência ESTÁVEL entre renders (tal como no hook
@@ -32,15 +25,6 @@ vi.mock('react-router-dom', () => ({
 
 vi.mock('@/hooks/useViaturasOcupacao', () => ({
   fetchViaturasOcupacao: vi.fn().mockResolvedValue(new Map()),
-}));
-
-// AtividadeChart é lazy-loaded e usa recharts (~400KB) — mock simples.
-vi.mock('@/components/dashboard/AtividadeChart', () => ({
-  default: () => <div data-testid="atividade-chart-mock" />,
-}));
-
-vi.mock('@/components/dashboard/CheckinCheckoutHistoricoCard', () => ({
-  CheckinCheckoutHistoricoCard: () => null,
 }));
 
 vi.mock('@/components/ui/theme-toggle', () => ({
@@ -90,37 +74,29 @@ vi.mock('@/integrations/supabase/client', () => {
 // ── Imports (após mocks) ──────────────────────────────────────────────────────
 
 import Dashboard from './Dashboard';
-import { usePermissions } from '@/hooks/usePermissions';
 import { useDashboardVariant } from '@/hooks/useDashboardVariant';
+import { supabase } from '@/integrations/supabase/client';
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 beforeAll(() => {
-  // Radix UI (Select) precisa de ResizeObserver no jsdom.
+  Element.prototype.scrollIntoView = vi.fn();
+  // O gráfico "Atividade" usa o ResponsiveContainer do recharts, que precisa
+  // de ResizeObserver — inexistente no jsdom.
   (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
     observe() {}
     unobserve() {}
     disconnect() {}
   };
-  Element.prototype.scrollIntoView = vi.fn();
 });
 
-function mockPermissions(opts: { isAdmin: boolean; cargo: string | null }) {
-  vi.mocked(usePermissions).mockReturnValue({
-    isAdmin: opts.isAdmin,
-    cargo: opts.cargo,
-    cargo_id: null,
-    tipoUtilizador: 'colaborador' as const,
-    hasRole: vi.fn(() => opts.isAdmin),
-    hasPermission: vi.fn(() => false),
-    canEdit: vi.fn(() => false),
-    hasAccessToResource: vi.fn(() => false),
-    podeVerTodosRenting: opts.isAdmin,
-    loading: false,
-    roles: opts.isAdmin ? ['admin' as const] : [],
-    recursos: [],
-    recursosEditaveis: [],
-  });
+function renderDashboard() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <Dashboard />
+    </QueryClientProvider>
+  );
 }
 
 function mockVariant(variant: 'executivo' | 'operacional') {
@@ -132,109 +108,312 @@ function mockVariant(variant: 'executivo' | 'operacional') {
   });
 }
 
+// Proxy chainable/thenable — usado para reconstruir o comportamento
+// por-defeito depois de um teste sobrepor `supabase.from` para uma tabela
+// específica.
+function makeGenericProxy(result: unknown = { data: null, error: null, count: 0 }) {
+  const proxy: Record<string, unknown> = {};
+  const methods = [
+    'select',
+    'eq',
+    'neq',
+    'not',
+    'lte',
+    'gte',
+    'in',
+    'order',
+    'or',
+    'single',
+    'limit',
+    'range',
+    'ilike',
+    'like',
+  ];
+  for (const m of methods) {
+    proxy[m] = () => proxy;
+  }
+  proxy.then = (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
+    Promise.resolve(result).then(resolve, reject);
+  return proxy;
+}
+
+/** Faz `supabase.from('contratos')` devolver `count` contratos já expirados
+ *  (para popular a categoria "Contratos" em "Precisa de atenção") — todas
+ *  as outras tabelas mantêm o comportamento por-defeito. */
+function mockContratosExpirados(count: number) {
+  const contratosData = Array.from({ length: count }, (_, i) => ({
+    id: `c${i}`,
+    numero_contrato: i + 1,
+    data_inicio: '2020-01-01',
+    data_fim: '2020-01-02',
+    duracao_meses: 12,
+    motorista_nome: `Motorista ${i}`,
+    motorista_id: `m${i}`,
+    viatura_id: `v${i}`,
+    criado_em: '2020-01-01T09:00:00.000Z',
+    viaturas: { matricula: 'AA-00-AA' },
+  }));
+  const contratosProxy = makeGenericProxy({ data: contratosData, error: null, count });
+  const generico = makeGenericProxy();
+
+  vi.mocked(supabase.from).mockImplementation(((table: string) =>
+    table === 'contratos' ? contratosProxy : generico) as unknown as typeof supabase.from);
+}
+
+/** Faz `supabase.from('contrato_cobrancas')` devolver uma cobrança emitida
+ *  há mais de 30 dias sem pagamentos — para popular a categoria
+ *  "Cobranças" via `useContasAReceber`. */
+function mockCobrancaEmAberto() {
+  const emitidaEm = new Date(Date.now() - 45 * 86_400_000).toISOString();
+  const cobrancasProxy = makeGenericProxy({
+    data: [
+      {
+        id: 'cob1',
+        valor_total: 250,
+        emitida_em: emitidaEm,
+        destinatario_nome: 'Cliente Teste',
+        contrato_id: null,
+      },
+    ],
+    error: null,
+    count: 1,
+  });
+  const generico = makeGenericProxy();
+
+  vi.mocked(supabase.from).mockImplementation(((table: string) =>
+    table === 'contrato_cobrancas' ? cobrancasProxy : generico) as unknown as typeof supabase.from);
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('Dashboard — variantes por papel', () => {
+describe('Homepage — KPIs, estado da frota, atenção, atividade, check-in/check-out', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Restaura o comportamento por-defeito de `from` — alguns testes
+    // sobrepõem-no com mockContratosExpirados()/mockCobrancaEmAberto().
+    vi.mocked(supabase.from).mockImplementation((() =>
+      makeGenericProxy()) as unknown as typeof supabase.from);
   });
 
-  it('variante Executiva mostra cards financeiros (Candidatos, Rentabilidade, Upgrades, Trocas)', async () => {
-    mockPermissions({ isAdmin: true, cargo: 'Administrador' });
+  it('mostra os 5 indicadores de frota, clicáveis, sem dados financeiros', async () => {
     mockVariant('executivo');
 
-    render(<Dashboard />);
-
-    // Esperar que o loading termine e o conteúdo principal apareça.
-    await waitFor(() => {
-      expect(screen.getByText('Disponíveis')).toBeTruthy();
-    });
-
-    // KPI de Candidatos — só executivo
-    expect(screen.getByText('Candidatos')).toBeTruthy();
-
-    // Título do card com Rentabilidade
-    expect(screen.getByText('Atividade & Rentabilidade')).toBeTruthy();
-
-    // KPI de renda contratada
-    expect(screen.getByText('nova renda contratada')).toBeTruthy();
-
-    // Cards financeiros
-    expect(screen.getByText('Upgrades / Downgrades')).toBeTruthy();
-    expect(screen.getByText('Trocas de Viatura')).toBeTruthy();
-  });
-
-  it('variante Operacional esconde cards financeiros mas mostra frota + alertas', async () => {
-    mockPermissions({ isAdmin: false, cargo: 'colaborador' });
-    mockVariant('operacional');
-
-    render(<Dashboard />);
+    renderDashboard();
 
     await waitFor(() => {
-      expect(screen.getByText('Disponíveis')).toBeTruthy();
+      // "Disponíveis" aparece 2x: o KPI e a legenda do donut "Estado da Frota".
+      expect(screen.getAllByText('Disponíveis').length).toBeGreaterThan(0);
     });
+    expect(screen.getByText('Alugadas')).toBeTruthy();
+    expect(screen.getByText('Reservadas')).toBeTruthy();
+    expect(screen.getByText('Em Oficina')).toBeTruthy();
+    expect(screen.getByText('Ocupação')).toBeTruthy();
 
-    // Frota — sempre visível
-    expect(screen.getByText('Disponíveis')).toBeTruthy();
-    expect(screen.getByText('Ocupadas')).toBeTruthy();
-    expect(screen.getByText('Em Reparação')).toBeTruthy();
-
-    // Alertas de compliance — sempre visíveis
-    expect(screen.getByText('Extintores a Expirar')).toBeTruthy();
-    expect(screen.getByText('Contratos a Renovar')).toBeTruthy();
-
-    // ── Cards financeiros NÃO devem aparecer ──
-    expect(screen.queryByText('Candidatos')).toBeNull();
-    expect(screen.queryByText('Atividade & Rentabilidade')).toBeNull();
-    expect(screen.queryByText('nova renda contratada')).toBeNull();
-    expect(screen.queryByText('Upgrades / Downgrades')).toBeNull();
-    expect(screen.queryByText('Trocas de Viatura')).toBeNull();
+    // Cada KPI é um botão real (navegável), não um display estático.
+    expect(screen.getByRole('button', { name: /Disponíveis/i })).toBeTruthy();
   });
 
-  it('variante Operacional mostra título "Atividade" (sem Rentabilidade)', async () => {
-    mockPermissions({ isAdmin: false, cargo: 'colaborador' });
-    mockVariant('operacional');
-
-    render(<Dashboard />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Disponíveis')).toBeTruthy();
-    });
-
-    // O título deve ser "Atividade" e não "Atividade & Rentabilidade" — em
-    // waitFor porque este título depende de isExecutivo assentar no mesmo
-    // commit que "Disponíveis" (mesma fonte, mas React pode ainda re-render
-    // entre os dois em CI mais lento); os outros testes já ficam estáveis
-    // porque "Disponíveis" e a sua própria asserção partilham o commit inicial.
-    await waitFor(() => {
-      expect(screen.queryByText('Atividade & Rentabilidade')).toBeNull();
-      expect(screen.getByText('Atividade')).toBeTruthy();
-    });
-  });
-});
-
-describe('Dashboard — intervalo de datas personalizado', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('botão "Personalizado" abre um calendário de intervalo (não fica só nos presets)', async () => {
-    mockPermissions({ isAdmin: true, cargo: 'Administrador' });
+  it('"Estado da Frota" mostra o donut com as 3 fatias (inclui inativas)', async () => {
     mockVariant('executivo');
 
-    render(<Dashboard />);
+    renderDashboard();
 
     await waitFor(() => {
-      expect(screen.getByText('Disponíveis')).toBeTruthy();
+      expect(screen.getByText('Estado da Frota')).toBeTruthy();
     });
+    // O donut é lazy — espera que o chunk resolva antes de ler a legenda.
+    // Timeout alargado (também no it() abaixo): sob a suite completa
+    // (muitos ficheiros em paralelo), a resolução do import dinâmico +
+    // render do recharts pode ultrapassar os 5s por-defeito do Vitest.
+    await waitFor(
+      () => {
+        expect(screen.getByText('Ocupados')).toBeTruthy();
+      },
+      { timeout: 12000 }
+    );
+    expect(screen.getByText('Inativos')).toBeTruthy();
+  }, 15000);
 
-    const trigger = screen.getByRole('button', { name: /Personalizado/i });
-    fireEvent.click(trigger);
+  it('mostra "Histórico Check-in / Check-out" e o cartão "Car Track"', async () => {
+    mockVariant('executivo');
 
-    // O DayPicker (modo range) desenha uma grelha de dias — confirma que o
-    // calendário chegou a montar, não só que o botão existe.
+    renderDashboard();
+
     await waitFor(() => {
-      expect(document.querySelector('table')).toBeTruthy();
+      expect(screen.getByText('Histórico Check-in / Check-out')).toBeTruthy();
     });
+    // Car Track deixou de ser placeholder — passou a ser o mapa (CartrackMapCard),
+    // que renderiza sempre o título no cabeçalho, seja qual for o estado.
+    expect(screen.getByText('Car Track')).toBeTruthy();
+  });
+
+  it('"Precisa de atenção" mostra o estado positivo quando não há nada', async () => {
+    mockVariant('executivo');
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText('Precisa de atenção')).toBeTruthy();
+    });
+    expect(screen.getByText('Tudo em ordem')).toBeTruthy();
+    expect(screen.getByText('Nada precisa da tua atenção hoje.')).toBeTruthy();
+  });
+
+  it('"Precisa de atenção" categoriza um contrato expirado como linha clicável', async () => {
+    mockVariant('executivo');
+    mockContratosExpirados(1);
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText('Contratos')).toBeTruthy();
+    });
+    expect(screen.getByText(/expirou há/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Contratos/i })).toBeTruthy();
+  });
+
+  it('"Precisa de atenção" mostra a categoria Cobranças só na variante Executiva', async () => {
+    mockVariant('executivo');
+    mockCobrancaEmAberto();
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText('Cobranças')).toBeTruthy();
+    });
+  });
+
+  it('variante Operacional: "Precisa de atenção" nunca mostra Cobranças', async () => {
+    mockVariant('operacional');
+    mockCobrancaEmAberto();
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText('Precisa de atenção')).toBeTruthy();
+    });
+    expect(screen.queryByText('Cobranças')).toBeNull();
+  });
+
+  it('secção "Atividade" mostra o gráfico com legenda e o seletor de período', async () => {
+    mockVariant('executivo');
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Atividade' })).toBeTruthy();
+    });
+    expect(screen.getByRole('button', { name: /Este Mês/i })).toBeTruthy();
+    expect(screen.getByText('Alugados')).toBeTruthy();
+    expect(screen.getByText('Devolvidos')).toBeTruthy();
+  });
+
+  it('o período é o único controlo do gráfico — a granularidade não é escolhida à mão', async () => {
+    mockVariant('executivo');
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Atividade' })).toBeTruthy();
+    });
+    // Não há um segundo controlo de tempo a duplicar o seletor de período.
+    expect(screen.queryByRole('button', { name: 'Dia' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Semana' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mês' })).toBeNull();
+  });
+
+  it('não mostra hero de saudação nem os atalhos antigos', async () => {
+    mockVariant('executivo');
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Disponíveis').length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText(/Bom dia|Boa tarde|Boa noite/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Nova Reserva/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Ver Faturação/i })).toBeNull();
+  });
+
+  it('seletor de período do gráfico oferece os presets e o intervalo personalizado', async () => {
+    mockVariant('executivo');
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Atividade' })).toBeTruthy();
+    });
+
+    // O gatilho mostra o período activo — "Este Mês" por omissão.
+    fireEvent.click(screen.getByRole('button', { name: /Este Mês/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Trimestre' })).toBeTruthy();
+    });
+    expect(screen.getByRole('button', { name: 'Esta Semana' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Este Ano' })).toBeTruthy();
+    expect(screen.getByText('Intervalo personalizado')).toBeTruthy();
+  });
+
+  it('mudar de período não faz a homepage desaparecer — só o gráfico espera', async () => {
+    mockVariant('executivo');
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Disponíveis').length).toBeGreaterThan(0);
+    });
+
+    // Segura o fetch seguinte: com o mock a resolver de imediato, a janela de
+    // loading era invisível e o teste passava mesmo com o bug.
+    let libertar!: () => void;
+    const emEspera = new Promise<void>((resolve) => {
+      libertar = resolve;
+    });
+    vi.mocked(supabase.from).mockImplementation((() =>
+      makeGenericProxy(
+        emEspera.then(() => ({ data: null, error: null, count: 0 }))
+      )) as unknown as typeof supabase.from);
+
+    fireEvent.click(screen.getByRole('button', { name: /Este Mês/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Trimestre' })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Trimestre' }));
+
+    // Com o fetch do trimestre ainda pendente, os KPIs e o gráfico continuam
+    // montados — o DashboardSkeleton não renderiza nenhum destes textos, por
+    // isso encontrá-los prova que a página não foi trocada por ele.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Trimestre/i })).toBeTruthy();
+    });
+    expect(screen.getAllByText('Disponíveis').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Atividade' })).toBeTruthy();
+
+    libertar();
+    await waitFor(() => {
+      expect(screen.getAllByText('Disponíveis').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('escolher um preset fecha o popover e passa a mostrá-lo no botão', async () => {
+    mockVariant('executivo');
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Atividade' })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Este Mês/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Trimestre' })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Trimestre' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /Este Mês/i })).toBeNull();
+    });
+    expect(screen.getByRole('button', { name: /Trimestre/i })).toBeTruthy();
   });
 });

@@ -21,6 +21,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ContratoStatusBadge } from '@/lib/statusBadges';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -456,13 +458,44 @@ export default function Contratos() {
         </div>
 
         {loading ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">Carregando contratos...</p>
+          <div className="rounded-md border p-4 space-y-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 flex-1" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="hidden h-4 w-28 md:block" />
+                <Skeleton className="hidden h-4 w-20 lg:block" />
+              </div>
+            ))}
           </div>
         ) : filteredContratos.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">Nenhum contrato encontrado</p>
-          </div>
+          (() => {
+            const temFiltros =
+              !!searchTerm || empresaFilter !== 'all' || statusFilter !== 'all' || showSubstituidos;
+            return (
+              <EmptyState
+                icon={FileText}
+                title="Nenhum contrato encontrado"
+                description={temFiltros ? 'Experimenta ajustar ou limpar os filtros.' : undefined}
+                action={
+                  temFiltros ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSearchTerm('');
+                        setEmpresaFilter('all');
+                        setStatusFilter('all');
+                        setShowSubstituidos(false);
+                      }}
+                    >
+                      Limpar filtros
+                    </Button>
+                  ) : undefined
+                }
+              />
+            );
+          })()
         ) : (
           <>
             {contratos.length >= 1000 && (

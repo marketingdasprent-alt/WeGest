@@ -380,20 +380,23 @@ export function useContratoForm(): UseContratoFormReturn {
       // novo no próximo render, senão o grupo ficava vazio para sempre
       // (bloqueia tarifa/preço) por uma corrida de carregamento.
       let grupoResolvido = reservaFromQuery.grupo ?? '';
+      const viaturaReserva = viaturas.find((v) => v.id === reservaFromQuery.viatura_id);
       if (!grupoResolvido) {
-        const via = viaturas.find((v) => v.id === reservaFromQuery.viatura_id);
-        if (via?.grupo_id) {
-          const g = grupos.find((gr) => gr.id === via.grupo_id);
+        if (viaturaReserva?.grupo_id) {
+          const g = grupos.find((gr) => gr.id === viaturaReserva.grupo_id);
           if (!g) return; // grupos ainda a carregar — tenta de novo
           grupoResolvido = g.nome;
         }
       }
+      // Fallback do emissor (mesma lógica de aplicarDadosViatura): se a
+      // reserva não trouxe emissor, usa o da viatura em vez de deixar vazio.
+      const emissorResolvido = reservaFromQuery.emissor_id ?? viaturaReserva?.emissor_id ?? '';
       hidratou.current = true;
       form.reset({
         ...DEFAULT_CONTRATO_VALUES,
         reserva_id: reservaFromQuery.id,
         cliente_id: reservaFromQuery.cliente_id ?? '',
-        emissor_id: reservaFromQuery.emissor_id ?? '',
+        emissor_id: emissorResolvido,
         gestor_id: reservaFromQuery.gestor_id ?? null,
         viatura_id: reservaFromQuery.viatura_id ?? '',
         matricula: reservaFromQuery.matricula ?? '',
