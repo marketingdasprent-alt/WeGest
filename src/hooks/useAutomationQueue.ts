@@ -223,6 +223,11 @@ export interface AutomationRuleAcaoConfig {
   titulo: string;
   destinatarios_cargo_ids?: string[];
   destinatarios_estrategia?: string;
+  /** 'grupo' (default): todos os utilizadores dos destinatarios_cargo_ids.
+   * 'individual': só quem estiver em destinatarios_user_ids (sempre um
+   * subconjunto de gente pertencente aos cargos escolhidos). */
+  destinatarios_modo?: 'grupo' | 'individual';
+  destinatarios_user_ids?: string[];
   enviar_email?: boolean;
   /** Agrupa num resumo diário (1 email/dia por pessoa) em vez de enviar
    * logo — evita repetir o incidente de 1 email por item quando um
@@ -275,6 +280,48 @@ export function useCargosDisponiveis() {
       return (data ?? []) as Cargo[];
     },
     staleTime: 5 * 60_000,
+  });
+}
+
+export interface UtilizadorPorCargo {
+  id: string;
+  nome: string;
+  email: string;
+  cargo_id: string;
+}
+
+/** Utilizadores pertencentes a um ou mais cargos — para o admin poder
+ * escolher pessoas específicas dentro de um cargo, em vez do grupo
+ * inteiro. Segue o mesmo padrão em 2 passos de UsersTab.tsx: cargo_id
+ * real e por-org vive em user_organizacoes, não em profiles.cargo_id
+ * (legado single-org). */
+export function useUtilizadoresPorCargo(cargoIds: string[]) {
+  return useQuery({
+    queryKey: ['utilizadores-por-cargo', cargoIds],
+    queryFn: async (): Promise<UtilizadorPorCargo[]> => {
+      const { data: memberships, error: mErr } = await supabase
+        .from('user_organizacoes')
+        .select('user_id, cargo_id')
+        .in('cargo_id', cargoIds);
+      if (mErr) throw mErr;
+      if (!memberships || memberships.length === 0) return [];
+
+      const userIds = memberships.map((m) => m.user_id);
+      const { data: profiles, error: pErr } = await supabase
+        .from('profiles')
+        .select('id, nome, email')
+        .in('id', userIds);
+      if (pErr) throw pErr;
+
+      const cargoPorUser = Object.fromEntries(memberships.map((m) => [m.user_id, m.cargo_id]));
+      return (profiles ?? []).map((p) => ({
+        id: p.id,
+        nome: p.nome,
+        email: p.email,
+        cargo_id: cargoPorUser[p.id],
+      }));
+    },
+    enabled: cargoIds.length > 0,
   });
 }
 
