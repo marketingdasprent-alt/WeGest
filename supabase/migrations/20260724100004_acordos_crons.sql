@@ -74,28 +74,11 @@ COMMENT ON FUNCTION public.acordos_manutencao_diaria(date) IS
   'acordos-parcelas-diario via cron).';
 
 -- ── Crons ────────────────────────────────────────────────────────────────
--- 06:00 UTC dá folga suficiente em qualquer estação para que o cálculo de
--- "hoje" em Europe/Lisbon (feito dentro do worker) não escorregue um dia.
-SELECT cron.schedule(
-  'faturacao-outbox-drain',
-  '*/5 * * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/faturacao-outbox-drain',
-    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrcXp6eGdlZWRzbWpuaHlxdWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg4ODQyMTAsImV4cCI6MjA2NDQ2MDIxMH0.E-x-p5RjQoZfyw6YVwQlWC-Ao27-IPWvyqRIM0PzA-U"}'::jsonb,
-    body := '{}'::jsonb
-  );
-  $$
-);
-
-SELECT cron.schedule(
-  'acordos-parcelas-diario',
-  '0 6 * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/acordos-parcelas-diario',
-    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrcXp6eGdlZWRzbWpuaHlxdWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg4ODQyMTAsImV4cCI6MjA2NDQ2MDIxMH0.E-x-p5RjQoZfyw6YVwQlWC-Ao27-IPWvyqRIM0PzA-U"}'::jsonb,
-    body := '{}'::jsonb
-  );
-  $$
-);
+-- Os 2 cron.schedule() desta secção foram DELIBERADAMENTE retirados daqui
+-- (2026-07-29) — a função acima já está aplicada à BD real de produção, mas
+-- os crons em si ficam de fora até o utilizador dar OK final para ligar a
+-- automação a sério. Vivem agora em
+-- 20260729160000_acordos_crons_ligar.sql, aplicada à parte, só quando for
+-- para ir para o ar. Isto evita que um `supabase db push` de rotina (que
+-- compara pela versão/timestamp do ficheiro, não pelo conteúdo já aplicado)
+-- ligasse os 2 workers automáticos sem ninguém pedir.
