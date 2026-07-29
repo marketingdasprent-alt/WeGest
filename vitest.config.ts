@@ -11,7 +11,10 @@ export default defineConfig({
     // supabase/functions/** são Edge Functions Deno (imports remotos
     // https://deno.land/..., Deno.test) — o loader ESM do Node/Vitest não os
     // executa. Correm com `deno test`, não com `pnpm test`.
-    exclude: [...configDefaults.exclude, 'supabase/**'],
+    // .claude/worktrees/** fica gitignored mas mora dentro do repo — os globs
+    // de teste varrem tudo em src/**, por isso um worktree aninhado aí já
+    // causou testes a crashar por 2 instâncias de React (ver .gitignore).
+    exclude: [...configDefaults.exclude, 'supabase/**', '.claude/worktrees/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

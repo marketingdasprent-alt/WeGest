@@ -3,9 +3,8 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { supabase } from '@/integrations/supabase/client';
 import { abrirDocumentoPdf } from '@/lib/faturacao';
-import type { InvoiceMetadata } from '@/types/faturacao';
+import { fetchInvoiceById } from '@/hooks/useFaturacao';
 
 interface Props {
   open: boolean;
@@ -34,12 +33,7 @@ export function DocumentoPreviewDialog({ open, onOpenChange, invoiceId, previewW
     setLoading(true);
     (async () => {
       try {
-        const { data: invoice, error } = await supabase
-          .from('invoices')
-          .select('*')
-          .eq('id', invoiceId)
-          .single();
-        if (error) throw error;
+        const invoice = await fetchInvoiceById(invoiceId);
         if (!invoice.provider_doctype || !invoice.provider_docnum) {
           // Documento associado manualmente (reconciliação de suspenso) — só temos o nº
           // legal do documento, não os identificadores internos do provider. Não há PDF
@@ -52,7 +46,7 @@ export function DocumentoPreviewDialog({ open, onOpenChange, invoiceId, previewW
           onOpenChange(false);
           return;
         }
-        await abrirDocumentoPdf(invoice as InvoiceMetadata, w);
+        await abrirDocumentoPdf(invoice, w);
         onOpenChange(false);
       } catch (e) {
         toast.error(`Erro ao obter o documento: ${(e as Error).message}`);
