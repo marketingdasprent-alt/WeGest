@@ -198,6 +198,14 @@ $$;
 comment on function public.fn_notificacoes_agrupar() is
   'Agrupa notificações in-app por (org, destinatário, tipo, dia), acumulando as entidades afectadas em `itens`. Urgentes nunca agrupam. Devolve NULL para cancelar o INSERT quando o grupo do dia já existe.';
 
+-- Neste projeto o `REVOKE ... FROM PUBLIC` NÃO retira o EXECUTE ao `anon` —
+-- há um privilégio por omissão a nível de esquema que lhe sobrevive (descoberto
+-- e documentado em 20260728150000_acordos_revoke_anon_explicito.sql). Uma
+-- função de trigger não é invocável por RPC nem fora de contexto de trigger,
+-- por isso isto não corrige nenhuma vulnerabilidade — mantém a superfície
+-- consistente com o resto do esquema, por defesa em profundidade.
+revoke execute on function public.fn_notificacoes_agrupar() from anon, authenticated;
+
 drop trigger if exists trg_notificacoes_agrupar on public.notificacoes;
 create trigger trg_notificacoes_agrupar
   before insert on public.notificacoes
