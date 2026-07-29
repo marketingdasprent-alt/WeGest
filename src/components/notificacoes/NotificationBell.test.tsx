@@ -19,7 +19,7 @@ const mockUseNotificacoesHistorico = vi.fn(() => ({
   isFetchingNextPage: false,
 }));
 vi.mock('@/hooks/useNotificacoesHistorico', () => ({
-  useNotificacoesHistorico: (...args: unknown[]) => mockUseNotificacoesHistorico(...args),
+  useNotificacoesHistorico: () => mockUseNotificacoesHistorico(),
 }));
 
 vi.mock('@/hooks/useNotifications', () => ({
