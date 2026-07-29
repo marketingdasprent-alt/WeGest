@@ -310,6 +310,8 @@ export function FaturacaoContent() {
         toast.success('Nota de crédito anulada (anulamento lançado na conta-corrente).');
       }
       setReloadToken((t) => t + 1);
+      setAnularRow(null);
+      setAnularMotivo('');
     } catch (e: any) {
       console.error('Erro ao anular:', e);
       toast.error(`Erro ao anular: ${e?.message ?? 'tente novamente'}`);
