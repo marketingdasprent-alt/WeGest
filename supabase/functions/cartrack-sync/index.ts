@@ -38,10 +38,19 @@ function normPlate(v: any): string {
 }
 
 // Paginação genérica de um recurso da Fleet API.
+// `onFalha` existe porque, sem ele, uma resposta não-OK da API era
+// indistinguível de "não há dados": o `break` abaixo devolvia lista vazia, o
+// erro ia só para console.error (que não aparece nos logs de invocação) e o
+// contador `errors` do resultado ficava a 0. Foi assim que `trips` e `events`
+// estiveram a 0 com errors:0 sem ninguém poder saber se era limitação do plano
+// Cartrack ou um endpoint errado. O caller decide o que fazer com a falha; a
+// função continua a devolver o que conseguiu ler, para uma falha em trips não
+// arrastar o sync de viaturas que funciona.
 async function fetchAll(
   path: string,
   auth: string,
   extraParams: Record<string, string> = {},
+  onFalha?: (msg: string) => void,
 ): Promise<any[]> {
   let all: any[] = [];
   let page = 1;
@@ -52,7 +61,9 @@ async function fetchAll(
     const resp = await fetch(url, { headers: { Authorization: auth, Accept: "application/json" } });
     if (!resp.ok) {
       const err = await resp.text();
-      console.error(`Cartrack ${path} page ${page} → ${resp.status}: ${err.slice(0, 300)}`);
+      const msg = `${path} → HTTP ${resp.status}: ${err.slice(0, 200)}`;
+      console.error(`Cartrack ${msg} (página ${page})`);
+      onFalha?.(msg);
       break;
     }
     const rows = toArray(await resp.json());
@@ -76,7 +87,21 @@ serve(async (req) => {
 
     // positions_only: sync rápido só de viaturas/posição/odómetro (salta
     // trips/events, que são a parte lenta). Usado pelo botão "atualizar" do mapa.
-    const { integracao_id, date_from, date_to, positions_only } = await req.json();
+    // `incluir_trips` é opt-in de propósito, e a razão é um limite rígido da
+    // plataforma. Enquanto o pedido de trips falhava com 422 (nomes de
+    // parâmetro errados — ver mais abaixo), o sync completo levava ~35 s. Assim
+    // que o 422 foi corrigido e a API passou a devolver viagens a sério, a mesma
+    // invocação passou dos **150 s de IDLE_TIMEOUT** das edge functions, mesmo
+    // com a janela reduzida a 2 dias: são 250 viaturas e milhares de viagens,
+    // gravadas uma a uma. Nenhuma janela realista cabe numa só invocação.
+    //
+    // Trips precisa portanto do mesmo tratamento que a fila do Via Verde já usa
+    // — trabalho em lotes ao longo de várias invocações — e isso é uma tarefa
+    // por si. Até lá o sync de 15 minutos mantém-se rápido e fiável (viaturas,
+    // posição e odómetro, que é o que alimenta o mapa e os alertas de
+    // manutenção), e as viagens obtêm-se sob pedido com
+    // {"incluir_trips": true, "date_from": "...", "date_to": "..."}.
+    const { integracao_id, date_from, date_to, positions_only, incluir_trips } = await req.json();
 
     if (!integracao_id) {
       return new Response(
@@ -124,26 +149,42 @@ serve(async (req) => {
     const matchViatura = (registration: any): string | null =>
       plateToViatura.get(normPlate(registration))?.id ?? null;
 
-    // Janela de datas para trips/events (a API limita tipicamente a 31 dias).
+    // Janela de datas para trips/events.
+    //
+    // 2 dias por omissão, não 30: este sync corre a cada 15 minutos (cron
+    // cartrack-scheduled-sync) e as viagens são gravadas por upsert, logo uma
+    // janela curta e rolante cobre tudo sem lacunas. Com 30 dias a função
+    // passava dos 150 s de limite da plataforma (IDLE_TIMEOUT) assim que o
+    // pedido de trips deixou de falhar — a janela larga só faz sentido num
+    // backfill manual, que se obtém passando date_from/date_to explicitamente.
+    const DIAS_JANELA_PADRAO = 2;
     const now = new Date();
-    const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const defaultFrom = new Date(now.getTime() - DIAS_JANELA_PADRAO * 24 * 60 * 60 * 1000);
     const dateFrom = date_from || defaultFrom.toISOString().slice(0, 10);
     const dateTo = date_to || now.toISOString().slice(0, 10);
 
+    // `erro_api` distingue "a API devolveu lista vazia" de "a API recusou o
+    // pedido". Sem este campo, total:0/errors:0 era ambíguo e escondia um 403.
     const result = {
-      vehicles: { total: 0, upserted: 0, matched: 0, km_atualizado: 0, errors: 0 },
-      trips: { total: 0, upserted: 0, errors: 0 },
-      events: { total: 0, upserted: 0, errors: 0 },
+      vehicles: { total: 0, upserted: 0, matched: 0, km_atualizado: 0, errors: 0, erro_api: null as string | null },
+      trips: { total: 0, upserted: 0, errors: 0, erro_api: null as string | null },
+      events: { total: 0, upserted: 0, errors: 0, erro_api: null as string | null },
+    };
+
+    // Registar a falha de fetch no contador da secção respectiva.
+    const falhaEm = (secao: 'vehicles' | 'trips' | 'events') => (msg: string) => {
+      result[secao].errors++;
+      result[secao].erro_api = msg;
     };
 
     // 3. VEHICLES — registo estático (/vehicles) + estado/posição (/vehicles/status).
     // O /vehicles só traz metadados (matrícula, modelo, chassis, vehicle_id).
     // O odómetro e a posição GPS vêm do /vehicles/status, num objeto `location`
     // aninhado; odometer_in_km=true devolve o odómetro já em km.
-    const vehicles = await fetchAll("vehicles", auth);
+    const vehicles = await fetchAll("vehicles", auth, {}, falhaEm("vehicles"));
     result.vehicles.total = vehicles.length;
 
-    const statuses = await fetchAll("vehicles/status", auth, { odometer_in_km: "true" });
+    const statuses = await fetchAll("vehicles/status", auth, { odometer_in_km: "true" }, falhaEm("vehicles"));
     const statusByVid = new Map<string, any>();
     const statusByReg = new Map<string, any>();
     for (const s of statuses) {
@@ -227,10 +268,23 @@ serve(async (req) => {
       }
     }
 
-    // 4 + 5. TRIPS e EVENTS — histórico (parte lenta). Saltado no positions_only.
-    if (!positions_only) {
+    // 4 + 5. TRIPS e EVENTS — histórico (parte lenta). Saltado no positions_only
+    // e, por omissão, também no sync normal: ver a nota do `incluir_trips` no
+    // topo (excede os 150 s de IDLE_TIMEOUT da plataforma com dados reais).
+    if (!positions_only && incluir_trips === true) {
     // 4. TRIPS — histórico de viagens
-    const trips = await fetchAll("trips", auth, { date_from: dateFrom, date_to: dateTo });
+    // A API de trips exige `start_timestamp`/`end_timestamp` no formato
+    // `Y-m-d H:i:s` — não `date_from`/`date_to`, e não uma data sozinha. Ambos
+    // os requisitos vieram dos 422 que ela própria devolve ("The start_timestamp
+    // is required", depois "does not match the format Y-m-d H:i:s"). Com os
+    // nomes errados a resposta era sempre 422 e, antes de `onFalha` existir,
+    // isso aparecia como trips:0/errors:0 — indistinguível de "não há viagens".
+    const trips = await fetchAll(
+      "trips",
+      auth,
+      { start_timestamp: `${dateFrom} 00:00:00`, end_timestamp: `${dateTo} 23:59:59` },
+      falhaEm("trips"),
+    );
     result.trips.total = trips.length;
 
     for (const t of trips) {
@@ -277,7 +331,17 @@ serve(async (req) => {
     }
 
     // 5. EVENTS — alertas/eventos
-    const events = await fetchAll("vehicle-events", auth, { date_from: dateFrom, date_to: dateTo });
+    // vehicle-events devolve HTTP 403 "Unauthorized for this role" com as
+    // credenciais actuais — é uma limitação do lado da Cartrack (o utilizador
+    // da API não tem esse âmbito), não um erro de parâmetros. Mantém-se a
+    // chamada para a capacidade voltar sozinha se a role for alargada; o
+    // erro_api do resultado diz porque está vazio, em vez de o esconder.
+    const events = await fetchAll(
+      "vehicle-events",
+      auth,
+      { start_timestamp: `${dateFrom} 00:00:00`, end_timestamp: `${dateTo} 23:59:59` },
+      falhaEm("events"),
+    );
     result.events.total = events.length;
 
     for (const e of events) {
