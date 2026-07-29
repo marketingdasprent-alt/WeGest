@@ -69,10 +69,12 @@ export function AcoesLinha({
   if (visiveis.length === 0) return null;
 
   return (
+    // A propagação é parada em cada botão e não aqui: um <div> com onClick é um
+    // elemento não-interactivo a fingir que é um controlo, e não tem como
+    // responder ao teclado. O botão já é interactivo e acessível por teclado, e
+    // é onde a acção acontece — logo é aí que faz sentido travar o clique.
     <div
       className={cn('flex items-center gap-1', alinhamento === 'fim' && 'justify-end', className)}
-      onClick={pararPropagacao ? (e) => e.stopPropagation() : undefined}
-      role={pararPropagacao ? 'presentation' : undefined}
     >
       {visiveis.map((acao) => {
         const Icone = acao.aCarregar ? Loader2 : acao.icone;
@@ -85,7 +87,10 @@ export function AcoesLinha({
             aria-label={acao.rotulo}
             title={acao.rotulo}
             disabled={acao.desativada || acao.aCarregar}
-            onClick={acao.onClick}
+            onClick={(e) => {
+              if (pararPropagacao) e.stopPropagation();
+              acao.onClick();
+            }}
             className={cn(
               compacto && 'h-8 w-8',
               acao.destrutiva && 'text-destructive hover:text-destructive'

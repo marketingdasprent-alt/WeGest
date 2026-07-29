@@ -96,6 +96,8 @@ describe('AcoesLinha', () => {
     const eliminar = vi.fn();
     render(
       <tbody>
+        {/* Linha clicável de propósito: é o cenário que o pararPropagacao existe
+            para resolver. */}
         <tr onClick={cliqueNaLinha}>
           <td>
             <AcoesLinha
@@ -116,6 +118,8 @@ describe('AcoesLinha', () => {
     // pode passar a parar a propagação onde ninguém a parava.
     const cliqueNaLinha = vi.fn();
     render(
+      // Igual ao teste anterior: montagem, não produção.
+      // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
       <div onClick={cliqueNaLinha}>
         <AcoesLinha acoes={[{ icone: Pencil, rotulo: 'Editar', onClick: vi.fn() }]} />
       </div>
