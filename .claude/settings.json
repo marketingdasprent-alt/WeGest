@@ -8,6 +8,7 @@
   },
   "enabledPlugins": {
     "ponytail@ponytail": true,
-    "superpowers@claude-plugins-official": true
+    "superpowers@claude-plugins-official": true,
+    "gsap-skills@gsap-skills": true
   }
 }
