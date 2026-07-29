@@ -459,7 +459,10 @@ export const SeccaoCarta = ({ control }: { control: Control<ClienteFormData> }) 
         name="carta_pais"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>País</FormLabel>
+            <FormLabel>
+              País
+              <RequiredMark />
+            </FormLabel>
             <FormControl>
               <CountrySelect value={field.value || ''} onChange={field.onChange} className="h-11" />
             </FormControl>

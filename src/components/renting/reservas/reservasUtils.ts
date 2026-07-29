@@ -11,7 +11,8 @@ export function matchesCodigo(codigo: number, search: string): boolean {
   return /^\d+$/.test(trimmed) && codigo === Number(trimmed);
 }
 
-export function formatDateTime(iso: string): string {
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
   try {
     return format(new Date(iso), 'yyyy-MM-dd HH:mm:ss');
   } catch {
