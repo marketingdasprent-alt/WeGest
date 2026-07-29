@@ -15,7 +15,8 @@
     "type-check": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "type-check:strict": "tsc -p tsconfig.strict.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "verificar-migracoes": "node scripts/verificar-migracoes.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.2",
