@@ -1,0 +1,12 @@
+-- Fix: o recurso 'automacoes' foi criado com categoria 'sistema'
+-- (20260727100000_automation_events_rules.sql), mas o editor de
+-- permissões (PermissionsSelector.tsx) só agrupa recursos por categoria
+-- contra uma lista estática de módulos — 'sistema' não está nessa lista.
+-- Resultado: não existe NENHUM sítio na interface onde um admin consiga
+-- conceder (ver/editar) este recurso a um cargo — só um UPDATE SQL direto
+-- em cargo_permissoes. Mesma classe de bug já corrigida uma vez para
+-- outros recursos em 20260709190000_fix_recursos_editor_permissoes.sql.
+--
+-- Alinha com admin_utilizadores/admin_configuracoes (mesma categoria),
+-- para aparecer no separador "Definições" do editor de Grupos.
+update public.recursos set categoria = 'Administração' where nome = 'automacoes';

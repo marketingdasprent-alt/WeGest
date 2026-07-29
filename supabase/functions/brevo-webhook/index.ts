@@ -146,6 +146,11 @@ serve(async (req) => {
           await updateCampaignCounters(supabase, send.campanha_id);
         }
       }
+
+      // Motor de Automação: fecha o ciclo de entrega transacional em
+      // notification_delivery (mesmo messageId/eventType/date já
+      // parseados acima — sem duplicar lógica de parsing).
+      await updateNotificationDelivery(supabase, messageId, eventType, date, event);
     }
 
     return new Response(JSON.stringify({ success: true }), {
@@ -160,6 +165,75 @@ serve(async (req) => {
     });
   }
 });
+
+// Motor de Automação — notification_delivery generaliza email_sends para
+// ser agnóstico de canal (ver 20260727130100_notification_queue.sql).
+// Estados novos (diferido/devolvido/spam/bloqueado) foram acrescentados
+// ao CHECK em 20260729100000_hardening_falhas_silenciosas_brevo_correr_agora.sql.
+const DELIVERY_STATUS_MAP: Record<string, string> = {
+  delivered: "entregue",
+  opened: "aberto",
+  click: "clicado",
+  hard_bounce: "devolvido",
+  soft_bounce: "devolvido",
+  spam: "spam",
+  blocked: "bloqueado",
+  deferred: "diferido",
+};
+
+// Mesma lógica de "só avança, nunca recua" do statusPriority de email_sends.
+const DELIVERY_STATUS_PRIORITY: Record<string, number> = {
+  enviado: 0,
+  diferido: 1,
+  entregue: 2,
+  aberto: 3,
+  clicado: 4,
+  falhado: 10,
+  devolvido: 10,
+  spam: 10,
+  bloqueado: 10,
+};
+
+async function updateNotificationDelivery(
+  supabase: ReturnType<typeof createClient>,
+  messageId: string,
+  eventType: string,
+  date: string,
+  event: Record<string, unknown>,
+) {
+  const novoStatus = DELIVERY_STATUS_MAP[eventType];
+  if (!novoStatus) return;
+
+  const { data: delivery } = await supabase
+    .from("notification_delivery")
+    .select("id, status")
+    .eq("provider_message_id", messageId)
+    .maybeSingle();
+
+  if (!delivery) return;
+
+  const prioridadeAtual = DELIVERY_STATUS_PRIORITY[delivery.status as string] ?? 0;
+  const prioridadeNova = DELIVERY_STATUS_PRIORITY[novoStatus] ?? 0;
+  if (prioridadeNova < prioridadeAtual) return;
+
+  const updateFields: Record<string, unknown> = { status: novoStatus };
+  if (novoStatus === "entregue") updateFields.entregue_em = date;
+  if (novoStatus === "aberto") updateFields.aberto_em = date;
+  if (novoStatus === "clicado") updateFields.clicado_em = date;
+  if (["devolvido", "spam", "bloqueado"].includes(novoStatus)) {
+    updateFields.falhou_em = date;
+    updateFields.erro = (event.reason as string) || (event.message as string) || eventType;
+  }
+
+  const { error } = await supabase
+    .from("notification_delivery")
+    .update(updateFields)
+    .eq("id", delivery.id);
+
+  if (error) {
+    console.error("Error updating notification_delivery:", error);
+  }
+}
 
 async function updateCampaignCounters(supabase: ReturnType<typeof createClient>, campanhaId: string) {
   const { data: counts } = await supabase

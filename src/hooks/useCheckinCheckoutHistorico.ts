@@ -39,7 +39,13 @@ export interface CheckinCheckoutSession {
     data_fim: string | null;
     comentarios_entrega: string | null;
     comentarios_recolha: string | null;
+    // Entidade CONTRATANTE do renting (pode ser uma empresa) — não é
+    // necessariamente quem conduz. Sempre null no sistema legado.
     cliente: { id: string; nome: string; nif: string | null } | null;
+    // Quem conduz: no legado vem do contrato; no renting é o condutor
+    // principal ACTUAL do contrato (ver `condutorPorContrato` em
+    // useCheckinCheckoutHistorico — não confundir com `reserva_condutores`,
+    // que fica desatualizado quando o condutor muda a meio do contrato).
     motorista_nome: string | null;
     motorista_nif: string | null;
     motorista_email: string | null;
@@ -122,7 +128,10 @@ export function useMediaSignedUrl(media: SessionMedia | null, expiresIn = 60 * 1
 
 // ── Mapeamento dos contratos ──────────────────────────────────────────────────
 
-function mapContratoRenting(cr: any): CheckinCheckoutSession['contrato'] {
+function mapContratoRenting(
+  cr: any,
+  condutorNome: string | null
+): CheckinCheckoutSession['contrato'] {
   return {
     id: cr.id,
     codigo: cr.codigo ?? null,
@@ -134,7 +143,11 @@ function mapContratoRenting(cr: any): CheckinCheckoutSession['contrato'] {
     cliente: cr.clientes
       ? { id: cr.clientes.id, nome: cr.clientes.nome, nif: cr.clientes.nif ?? null }
       : null,
-    motorista_nome: null,
+    // Condutor principal ACTUAL do contrato (ver condutorPorContrato acima) —
+    // não a entidade contratante. Usa-se o mesmo campo `motorista_nome` do
+    // sistema legado para a lista/preview não precisar de saber qual dos
+    // dois sistemas está a ler.
+    motorista_nome: condutorNome,
     motorista_nif: null,
     motorista_email: null,
     motorista_telefone: null,
@@ -274,8 +287,8 @@ export function useCheckinCheckoutHistorico(enabled: boolean) {
         ),
       ];
 
-      // 4) Detalhes dos contratos + eventos (badges) em paralelo.
-      const [rentingRes, legacyRes, eventosRes] = await Promise.all([
+      // 4) Detalhes dos contratos + eventos (badges) + condutor, em paralelo.
+      const [rentingRes, legacyRes, eventosRes, condutoresRes] = await Promise.all([
         rentingIds.length
           ? supabase
               .from('contratos_renting')
@@ -309,15 +322,41 @@ export function useCheckinCheckoutHistorico(enabled: boolean) {
               .in('tipo', ['entrega', 'recolha', 'devolucao', 'troca'])
               .not('realizado_em', 'is', null)
           : Promise.resolve({ data: [], error: null } as const),
+        // Condutor principal ACTUAL de cada contrato. `clientes` no contrato é
+        // a entidade CONTRATANTE (pode ser uma empresa) — não quem conduz. O
+        // condutor real vive em `contrato_condutores`, com vigência própria:
+        // trocar_condutor() fecha o antigo (`data_fim`) e abre o novo aqui, sem
+        // tocar em `reserva_condutores` (esse fica preso ao condutor da
+        // reserva original e fica desatualizado assim que o condutor muda a
+        // meio do contrato).
+        rentingIds.length
+          ? supabase
+              .from('contrato_condutores')
+              .select('contrato_id, motoristas_ativos(nome), clientes(nome)')
+              .in('contrato_id', rentingIds)
+              .eq('is_principal', true)
+              .is('data_fim', null)
+          : Promise.resolve({ data: [], error: null } as const),
       ]);
 
       if (rentingRes.error) throw rentingRes.error;
       if (legacyRes.error) throw legacyRes.error;
       if (eventosRes.error) throw eventosRes.error;
+      if (condutoresRes.error) throw condutoresRes.error;
 
       const rentingById = new Map<string, any>(
         (rentingRes.data ?? []).map((c: any): [string, any] => [c.id, c])
       );
+
+      const condutorPorContrato = new Map<string, string>();
+      for (const c of condutoresRes.data ?? []) {
+        const nome =
+          (c.motoristas_ativos as { nome: string } | null)?.nome ??
+          (c.clientes as { nome: string } | null)?.nome ??
+          null;
+        if (nome) condutorPorContrato.set(c.contrato_id as string, nome);
+      }
+
       const legacyById = new Map<string, any>(
         (legacyRes.data ?? []).map((c: any): [string, any] => [c.id, c])
       );
@@ -364,7 +403,9 @@ export function useCheckinCheckoutHistorico(enabled: boolean) {
           checkinAt: mom.checkinAt,
           checkoutAt: mom.checkoutAt,
           fotos: agg.fotos,
-          contrato: isRenting ? mapContratoRenting(cr) : mapContratoLegacy(cl),
+          contrato: isRenting
+            ? mapContratoRenting(cr, condutorPorContrato.get(cr.id) ?? null)
+            : mapContratoLegacy(cl),
         });
       }
 

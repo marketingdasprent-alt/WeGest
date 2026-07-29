@@ -456,15 +456,19 @@ const requireUserId = async (req: Request, supabaseUrl: string, anonKey: string)
   return data.claims.sub;
 };
 
-const loadLookups = async (supabase: ReturnType<typeof createClient>, integracaoId: string): Promise<Lookups> => {
+const loadLookups = async (
+  supabase: ReturnType<typeof createClient>,
+  integracaoId: string,
+  orgId: string,
+): Promise<Lookups> => {
   const [
     { data: motoristasData, error: motoristasError },
     { data: viaturasData, error: viaturasError },
     { data: uberDriversData, error: uberDriversError },
     { data: uberVehiclesData, error: uberVehiclesError },
   ] = await Promise.all([
-    supabase.from("motoristas_ativos").select("id, email, telefone, nome").eq("status_ativo", true),
-    supabase.from("viaturas").select("id, matricula"),
+    supabase.from("motoristas_ativos").select("id, email, telefone, nome").eq("status_ativo", true).eq("org_id", orgId),
+    supabase.from("viaturas").select("id, matricula").eq("org_id", orgId),
     supabase.from("uber_drivers").select("uber_driver_id, motorista_id").eq("integracao_id", integracaoId).not("motorista_id", "is", null),
     supabase.from("uber_vehicles").select("uber_vehicle_id, viatura_id").eq("integracao_id", integracaoId).not("viatura_id", "is", null),
   ]);
@@ -1600,7 +1604,7 @@ const processCsvImport = async ({
   });
 
   // Load lookups for motorista/viatura matching
-  const lookups = await loadLookups(supabase, integracaoId);
+  const lookups = await loadLookups(supabase, integracaoId, orgId);
   const syncedAt = new Date().toISOString();
   const rows: Record<string, unknown>[] = [];
   let parseErrors = 0;
@@ -1909,6 +1913,16 @@ Deno.serve(async (req) => {
         return jsonResponse({ success: false, error: "integracao_id é obrigatório para replay" }, 400);
       }
 
+      const { data: replayIntCfg } = await supabase
+        .from("plataformas_configuracao")
+        .select("org_id")
+        .eq("id", integracaoId)
+        .single();
+      if (!replayIntCfg?.org_id) {
+        return jsonResponse({ success: false, error: "Integração Uber não encontrada" }, 404);
+      }
+      const replayOrgId = replayIntCfg.org_id;
+
       const replayLimit = Math.max(1, Math.min(asNumber(parsedBody.limit) ?? 20, 100));
       let query = supabase
         .from("uber_webhook_events")
@@ -1933,7 +1947,7 @@ Deno.serve(async (req) => {
         return jsonResponse({ success: true, message: "Nenhum evento pendente para reprocessar.", replayed: 0 });
       }
 
-      const lookups = await loadLookups(supabase, integracaoId);
+      const lookups = await loadLookups(supabase, integracaoId, replayOrgId);
       const results = [] as ProcessResult[];
       for (const event of replayEvents as StoredWebhookEvent[]) {
         results.push(await processStoredEvent({
@@ -2141,6 +2155,19 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: false, error: "Integração Uber não encontrada" }, 404);
   }
 
+  // get_uber_platform_config não devolve org_id — resolver à parte para o
+  // matching de motorista/viatura em loadLookups (service-role client não
+  // tem sessão, get_current_org_id() ficaria NULL).
+  const { data: webhookIntCfg } = await supabase
+    .from("plataformas_configuracao")
+    .select("org_id")
+    .eq("id", integracaoId)
+    .single();
+  if (!webhookIntCfg?.org_id) {
+    return jsonResponse({ success: false, error: "Integração Uber não encontrada" }, 404);
+  }
+  const webhookOrgId = webhookIntCfg.org_id;
+
   // Use webhook_signing_key (preferred) or fall back to client_secret for backwards compat
   const signingKey = config.webhook_signing_key || config.client_secret;
   if (!signingKey) {
@@ -2208,7 +2235,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: false, error: "Não foi possível guardar o evento" }, 500);
   }
 
-  const lookups = await loadLookups(supabase, integracaoId);
+  const lookups = await loadLookups(supabase, integracaoId, webhookOrgId);
   const result = await processStoredEvent({
     supabase,
     event: insertedEvent as StoredWebhookEvent,

@@ -44,5 +44,8 @@ export function viaturaToFormValues(viatura: Viatura): ViaturaFormData {
     extintor_numero: viatura.extintor_numero || '',
     extintor_validade: viatura.extintor_validade || '',
     tipo_id: viatura.tipo_id || '',
+    proxima_manutencao_data: viatura.proxima_manutencao_data || '',
+    proxima_manutencao_km:
+      viatura.proxima_manutencao_km != null ? String(viatura.proxima_manutencao_km) : '',
   };
 }

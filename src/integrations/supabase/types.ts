@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      login_attempts: {
+        Row: {
+          id: string
+          email: string
+          org_codigo: string | null
+          success: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          org_codigo?: string | null
+          success?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          org_codigo?: string | null
+          success?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
       _backup_viaturas_20260710: {
         Row: {
           combustivel: string | null
@@ -546,6 +570,431 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      domain_events: {
+        Row: {
+          id: string
+          org_id: string
+          event_type: string
+          entity_table: string
+          entity_id: string
+          payload: Json
+          occurred_at: string
+          emitted_by: string
+          correlation_id: string | null
+          processed_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          event_type: string
+          entity_table: string
+          entity_id: string
+          payload?: Json
+          occurred_at?: string
+          emitted_by: string
+          correlation_id?: string | null
+          processed_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          event_type?: string
+          entity_table?: string
+          entity_id?: string
+          payload?: Json
+          occurred_at?: string
+          emitted_by?: string
+          correlation_id?: string | null
+          processed_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      automation_logs: {
+        Row: {
+          id: string
+          run_id: string | null
+          rule_id: string | null
+          org_id: string
+          evento: string
+          detalhe: Json
+          notification_ids: string[]
+          duracao_ms: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          run_id?: string | null
+          rule_id?: string | null
+          org_id: string
+          evento: string
+          detalhe?: Json
+          notification_ids?: string[]
+          duracao_ms?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          run_id?: string | null
+          rule_id?: string | null
+          org_id?: string
+          evento?: string
+          detalhe?: Json
+          notification_ids?: string[]
+          duracao_ms?: number | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_logs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          id: string
+          org_id: string
+          destinatario_user_id: string
+          template_codigo: string
+          severidade: string
+          titulo: string
+          mensagem: string | null
+          link: string | null
+          entity_table: string | null
+          entity_id: string | null
+          payload: Json
+          lida: boolean
+          lida_em: string | null
+          resolvida: boolean
+          resolvida_por: string | null
+          resolvida_em: string | null
+          rule_run_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          destinatario_user_id: string
+          template_codigo: string
+          severidade?: string
+          titulo: string
+          mensagem?: string | null
+          link?: string | null
+          entity_table?: string | null
+          entity_id?: string | null
+          payload?: Json
+          lida?: boolean
+          lida_em?: string | null
+          resolvida?: boolean
+          resolvida_por?: string | null
+          resolvida_em?: string | null
+          rule_run_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          destinatario_user_id?: string
+          template_codigo?: string
+          severidade?: string
+          titulo?: string
+          mensagem?: string | null
+          link?: string | null
+          entity_table?: string | null
+          entity_id?: string | null
+          payload?: Json
+          lida?: boolean
+          lida_em?: string | null
+          resolvida?: boolean
+          resolvida_por?: string | null
+          resolvida_em?: string | null
+          rule_run_id?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      automation_runs: {
+        Row: {
+          attempt: number
+          completed_at: string | null
+          created_at: string
+          entity_id: string | null
+          entity_table: string | null
+          error_message: string | null
+          id: string
+          job_type: string
+          max_attempts: number
+          next_attempt_at: string
+          org_id: string
+          payload: Json
+          priority: number
+          rule_id: string
+          started_at: string | null
+          status: string
+          trigger_event_id: string | null
+        }
+        Insert: {
+          attempt?: number
+          completed_at?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_table?: string | null
+          error_message?: string | null
+          id?: string
+          job_type?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          org_id: string
+          payload?: Json
+          priority?: number
+          rule_id: string
+          started_at?: string | null
+          status?: string
+          trigger_event_id?: string | null
+        }
+        Update: {
+          attempt?: number
+          completed_at?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_table?: string | null
+          error_message?: string | null
+          id?: string
+          job_type?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          org_id?: string
+          payload?: Json
+          priority?: number
+          rule_id?: string
+          started_at?: string | null
+          status?: string
+          trigger_event_id?: string | null
+        }
+        Relationships: []
+      }
+      failed_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          failed_at: string
+          id: string
+          job_type: string
+          last_error: string | null
+          org_id: string
+          payload: Json | null
+          resolution_note: string | null
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          source_id: string
+          source_table: string
+        }
+        Insert: {
+          attempts: number
+          created_at?: string
+          failed_at?: string
+          id?: string
+          job_type: string
+          last_error?: string | null
+          org_id: string
+          payload?: Json | null
+          resolution_note?: string | null
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_id: string
+          source_table?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          failed_at?: string
+          id?: string
+          job_type?: string
+          last_error?: string | null
+          org_id?: string
+          payload?: Json | null
+          resolution_note?: string | null
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_id?: string
+          source_table?: string
+        }
+        Relationships: []
+      }
+      notification_queue: {
+        Row: {
+          attempt: number
+          canal: string
+          created_at: string
+          destinatario: string
+          error_message: string | null
+          id: string
+          max_attempts: number
+          next_attempt_at: string
+          notification_id: string
+          org_id: string
+          payload_render: Json
+          priority: number
+          started_at: string | null
+          status: string
+          template_codigo: string
+        }
+        Insert: {
+          attempt?: number
+          canal: string
+          created_at?: string
+          destinatario: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          notification_id: string
+          org_id: string
+          payload_render?: Json
+          priority?: number
+          started_at?: string | null
+          status?: string
+          template_codigo: string
+        }
+        Update: {
+          attempt?: number
+          canal?: string
+          created_at?: string
+          destinatario?: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          notification_id?: string
+          org_id?: string
+          payload_render?: Json
+          priority?: number
+          started_at?: string | null
+          status?: string
+          template_codigo?: string
+        }
+        Relationships: []
+      }
+      automation_rules: {
+        Row: {
+          acao_config: Json
+          acao_tipo: string
+          ativo: boolean
+          codigo: string
+          condicoes: Json
+          cooldown_minutos: number
+          created_at: string
+          criado_por: string | null
+          descricao: string | null
+          event_type: string
+          id: string
+          nome: string
+          org_id: string
+          prioridade: string
+          updated_at: string
+        }
+        Insert: {
+          acao_config?: Json
+          acao_tipo: string
+          ativo?: boolean
+          codigo: string
+          condicoes?: Json
+          cooldown_minutos?: number
+          created_at?: string
+          criado_por?: string | null
+          descricao?: string | null
+          event_type: string
+          id?: string
+          nome: string
+          org_id: string
+          prioridade?: string
+          updated_at?: string
+        }
+        Update: {
+          acao_config?: Json
+          acao_tipo?: string
+          ativo?: boolean
+          codigo?: string
+          condicoes?: Json
+          cooldown_minutos?: number
+          created_at?: string
+          criado_por?: string | null
+          descricao?: string | null
+          event_type?: string
+          id?: string
+          nome?: string
+          org_id?: string
+          prioridade?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      notification_delivery: {
+        Row: {
+          aberto_em: string | null
+          canal: string
+          clicado_em: string | null
+          created_at: string
+          destinatario: string
+          entregue_em: string | null
+          enviado_em: string | null
+          erro: string | null
+          falhou_em: string | null
+          id: string
+          notification_id: string | null
+          notification_queue_id: string | null
+          org_id: string
+          provider: string | null
+          provider_message_id: string | null
+          status: string
+        }
+        Insert: {
+          aberto_em?: string | null
+          canal: string
+          clicado_em?: string | null
+          created_at?: string
+          destinatario: string
+          entregue_em?: string | null
+          enviado_em?: string | null
+          erro?: string | null
+          falhou_em?: string | null
+          id?: string
+          notification_id?: string | null
+          notification_queue_id?: string | null
+          org_id: string
+          provider?: string | null
+          provider_message_id?: string | null
+          status?: string
+        }
+        Update: {
+          aberto_em?: string | null
+          canal?: string
+          clicado_em?: string | null
+          created_at?: string
+          destinatario?: string
+          entregue_em?: string | null
+          enviado_em?: string | null
+          erro?: string | null
+          falhou_em?: string | null
+          id?: string
+          notification_id?: string | null
+          notification_queue_id?: string | null
+          org_id?: string
+          provider?: string | null
+          provider_message_id?: string | null
+          status?: string
+        }
+        Relationships: []
       }
       bolt_drivers: {
         Row: {
@@ -4694,6 +5143,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           data_emissao: string | null
+          enviado_em: string | null
           erro_msg: string | null
           id: string
           numero: string | null
@@ -4717,6 +5167,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           data_emissao?: string | null
+          enviado_em?: string | null
           erro_msg?: string | null
           id?: string
           numero?: string | null
@@ -4740,6 +5191,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           data_emissao?: string | null
+          enviado_em?: string | null
           erro_msg?: string | null
           id?: string
           numero?: string | null
@@ -11213,6 +11665,52 @@ export type Database = {
         }
         Relationships: []
       }
+      automacao_timeline_recente: {
+        Row: {
+          attempt: number | null
+          completed_at: string | null
+          detalhe: Json | null
+          duracao_ms: number | null
+          entity_id: string | null
+          entity_table: string | null
+          event_id: string | null
+          event_type: string | null
+          occurred_at: string | null
+          org_id: string | null
+          regra_nome: string | null
+          rule_id: string | null
+          run_id: string | null
+          run_status: string | null
+          started_at: string | null
+          ultimo_evento_log: string | null
+        }
+        Relationships: []
+      }
+      automacao_estatisticas_por_regra: {
+        Row: {
+          ativo: boolean | null
+          cooldown_minutos: number | null
+          duracao_media_ms: number | null
+          event_type: string | null
+          execucoes: number | null
+          falhas: number | null
+          nome: string | null
+          org_id: string | null
+          rule_id: string | null
+          ultima_execucao: string | null
+        }
+        Relationships: []
+      }
+      automacao_saude_canais: {
+        Row: {
+          canal: string | null
+          enviados_ultima_hora: number | null
+          falhas_ultima_hora: number | null
+          org_id: string | null
+          tempo_resposta_medio_ms: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       aprovar_candidatura_motorista: {
@@ -11358,6 +11856,7 @@ export type Database = {
         }
       }
       execute_gestor_assignment: { Args: never; Returns: number }
+      executar_jobs_automacao_manualmente: { Args: never; Returns: Json }
       fn_checkin_abrir_motorista_viatura: {
         Args: {
           p_data_inicio: string
@@ -11721,6 +12220,29 @@ export type Database = {
           p_resposta_motivo?: string
         }
         Returns: undefined
+      }
+      retry_failed_job: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      ignorar_failed_job: {
+        Args: { p_id: string }
+        Returns: {
+          attempts: number
+          created_at: string
+          failed_at: string
+          id: string
+          job_type: string
+          last_error: string | null
+          org_id: string
+          payload: Json | null
+          resolution_note: string | null
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          source_id: string
+          source_table: string
+        }
       }
       salvar_precos_modelo_tarifa: {
         Args: { p_linhas: Json; p_tarifa_id: string }

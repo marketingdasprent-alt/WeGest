@@ -27,6 +27,8 @@ export const viaturaSchema = z.object({
   extintor_numero: z.string().optional(),
   extintor_validade: z.string().optional(),
   tipo_id: z.string().optional(),
+  proxima_manutencao_data: z.string().optional(),
+  proxima_manutencao_km: z.string().optional(),
 });
 
 export type ViaturaFormData = z.infer<typeof viaturaSchema>;
@@ -56,6 +58,8 @@ export interface Viatura {
   extintor_numero?: string | null;
   extintor_validade?: string | null;
   tipo_id?: string | null;
+  proxima_manutencao_data?: string | null;
+  proxima_manutencao_km?: number | null;
 }
 
 export interface ViaturaDocument {
