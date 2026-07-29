@@ -149,4 +149,100 @@ describe('NotificationBell', () => {
 
     expect(screen.getByText('Viatura disponível')).toBeTruthy();
   });
+
+  // ── Estado de erro e de carregamento ──────────────────────────────────────
+  // O hook já distinguia "não foi possível ler" de "não tens avisos", mas o
+  // sino passava sempre error={null} e isLoading={false} ao separador das não
+  // resolvidas, pelo que a distinção nunca chegava ao ecrã: uma falha de
+  // leitura aparecia como lista vazia.
+
+  it('uma falha de leitura mostra erro, não "sem notificações"', () => {
+    vi.mocked(useNotificacoesContext).mockReturnValue(
+      contexto({ erro: new Error('Falha de rede'), notificacoes: [] })
+    );
+
+    render(
+      <MemoryRouter>
+        <NotificationBell />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByLabelText('Notificações'));
+
+    expect(screen.getByText('Erro ao carregar notificações')).toBeTruthy();
+    expect(screen.getByText('Falha de rede')).toBeTruthy();
+  });
+
+  it('enquanto carrega não afirma que a lista está vazia', () => {
+    vi.mocked(useNotificacoesContext).mockReturnValue(
+      contexto({ aCarregar: true, notificacoes: [] })
+    );
+
+    render(
+      <MemoryRouter>
+        <NotificationBell />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByLabelText('Notificações'));
+
+    // O estado de carregamento do NotificationCenter são skeletons, e nenhum
+    // deles é a mensagem de lista vazia.
+    expect(screen.queryByText(/Sem notificações|Nenhuma notificação/i)).toBeNull();
+    expect(screen.queryByText('Erro ao carregar notificações')).toBeNull();
+  });
+
+  it('avisa quando a lista está cortada pelo limite de leitura', () => {
+    // useNotificacoes lê no máximo 200 linhas. Com mais do que isso, o
+    // utilizador via só as primeiras e nada dizia que faltavam.
+    vi.mocked(useNotificacoesContext).mockReturnValue(
+      contexto({
+        totalNaoResolvidas: 240,
+        notificacoes: [
+          {
+            id: '1',
+            titulo: 'Aviso',
+            mensagem: null,
+            severidade: 'normal',
+            resolvida: false,
+            created_at: new Date().toISOString(),
+          },
+        ] as never,
+      })
+    );
+
+    render(
+      <MemoryRouter>
+        <NotificationBell />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByLabelText('Notificações'));
+
+    expect(screen.getByText(/A mostrar 1 de 240/)).toBeTruthy();
+  });
+
+  it('não avisa de corte quando a lista está completa', () => {
+    vi.mocked(useNotificacoesContext).mockReturnValue(
+      contexto({
+        totalNaoResolvidas: 1,
+        notificacoes: [
+          {
+            id: '1',
+            titulo: 'Aviso',
+            mensagem: null,
+            severidade: 'normal',
+            resolvida: false,
+            created_at: new Date().toISOString(),
+          },
+        ] as never,
+      })
+    );
+
+    render(
+      <MemoryRouter>
+        <NotificationBell />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByLabelText('Notificações'));
+
+    expect(screen.queryByText(/A mostrar/)).toBeNull();
+  });
 });

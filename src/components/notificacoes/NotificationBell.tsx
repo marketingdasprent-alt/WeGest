@@ -16,7 +16,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
  * quando o popover está aberto E o separador "Todas" está seleccionado.
  */
 export function NotificationBell() {
-  const { notificacoes, resolver, enabled } = useNotificacoesContext();
+  const { notificacoes, resolver, enabled, erro, aCarregar, totalNaoResolvidas } =
+    useNotificacoesContext();
 
   const [open, setOpen] = useState(false);
   const [filtro, setFiltro] = useState<NotificationFilter>('unread');
@@ -52,10 +53,16 @@ export function NotificationBell() {
         align="end"
         className="w-[min(24rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto p-3"
       >
+        {/* Os dois separadores têm fontes de dados diferentes, logo cada um traz
+            o SEU estado de erro e de carregamento. Antes, o separador "Não
+            resolvidas" passava sempre error={null} e isLoading={false}: uma
+            falha de leitura era indistinguível de "não tens avisos", e é
+            precisamente essa a distinção que o hook já expunha. */}
         <NotificationCenter
           notificacoes={mostrarTodas ? notificacoesHistorico : notificacoes}
-          isLoading={mostrarTodas && historico.isLoading}
-          error={mostrarTodas ? (historico.error as Error | null) : null}
+          isLoading={mostrarTodas ? historico.isLoading : aCarregar}
+          error={mostrarTodas ? (historico.error as Error | null) : erro}
+          totalNoServidor={mostrarTodas ? undefined : totalNaoResolvidas}
           filtro={filtro}
           onFiltroChange={setFiltro}
           onMarkAsRead={mostrarTodas ? (id) => markAsRead.mutate(id) : resolver}

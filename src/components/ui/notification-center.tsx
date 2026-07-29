@@ -37,6 +37,12 @@ export interface NotificationCenterProps {
   hasMore: boolean;
   isLoadingMore: boolean;
   unreadCount?: number;
+  /**
+   * Total real de não resolvidas no servidor, quando é maior do que o número de
+   * linhas carregadas. O hook lê no máximo 200; sem isto, quem tem mais do que
+   * 200 avisos via só os primeiros e nada dizia que a lista estava cortada.
+   */
+  totalNoServidor?: number;
 }
 
 // ── Severity config ──────────────────────────────────────────────────────────
@@ -326,6 +332,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   hasMore,
   isLoadingMore,
   unreadCount = 0,
+  totalNoServidor,
 }) => {
   const [gruposAbertos, setGruposAbertos] = React.useState<Set<string>>(new Set());
 
@@ -433,6 +440,14 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
               )
             )}
           </div>
+
+          {/* ── Lista cortada pelo limite de leitura ── */}
+          {typeof totalNoServidor === 'number' && totalNoServidor > notificacoes.length && (
+            <p className="pt-2 text-center text-xs text-muted-foreground">
+              A mostrar {notificacoes.length} de {totalNoServidor}. Resolve as mais antigas para ver
+              as restantes.
+            </p>
+          )}
 
           {/* ── Load more ── */}
           {hasMore && (
