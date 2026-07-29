@@ -11,7 +11,7 @@ import { OrgSelector } from '@/components/OrgSelector';
 import { useTenant } from '@/contexts/TenantContext';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -204,6 +204,9 @@ export const SidebarMenu: React.FC = () => {
         </header>
       </SheetTrigger>
       <SheetContent side="left" className="w-72 p-0 border-r border-border/50">
+        {/* Nome acessível da gaveta. Não pode ser visível — o topo da gaveta é
+            o logótipo — por isso fica sr-only. */}
+        <SheetTitle className="sr-only">Menu principal</SheetTitle>
         <SidebarContent />
       </SheetContent>
     </Sheet>

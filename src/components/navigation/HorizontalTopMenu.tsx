@@ -22,7 +22,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -101,6 +101,9 @@ export const HorizontalTopMenu: React.FC = () => {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-72 p-0">
+                {/* Nome acessível da gaveta. Não pode ser visível — o topo da
+                    gaveta é o logótipo — por isso fica sr-only. */}
+                <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
                 <div className="flex flex-col h-full">
                   {/* Logo in Sheet */}
                   <div className="p-6 border-b">

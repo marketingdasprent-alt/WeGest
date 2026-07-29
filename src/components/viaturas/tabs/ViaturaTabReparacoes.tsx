@@ -25,7 +25,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -711,6 +711,15 @@ export function ViaturaTabReparacoes({ viaturaId, onUpdate }: ViaturaTabReparaco
       {/* Lightbox Unificado */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
         <DialogContent className="max-w-[95vw] w-full h-[90vh] p-0 bg-black/95 border-none flex flex-col items-center justify-center overflow-hidden">
+          {/* Nome acessível do visualizador. Fica sr-only porque um lightbox é
+              propositadamente só a imagem — mas sem título o leitor de ecrã
+              anunciava apenas "diálogo", sem dizer o que se abriu. Traz o nome
+              do ficheiro, que é a única coisa que distingue um do outro. */}
+          <DialogTitle className="sr-only">
+            {currentMediaList[currentMediaIndex]?.nome_ficheiro
+              ? `Pré-visualização: ${currentMediaList[currentMediaIndex].nome_ficheiro}`
+              : 'Pré-visualização do ficheiro'}
+          </DialogTitle>
           <div className="absolute top-4 right-4 z-50 flex gap-2">
             <Button
               variant="ghost"
