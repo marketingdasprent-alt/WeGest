@@ -136,6 +136,23 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
     if (!viatura?.id) return;
     setSaving(true);
     try {
+      // Guard: não permitir marcar vendida com contrato em curso —
+      // fechar o contrato primeiro (evita venda de viatura ainda em uso).
+      if (data.is_vendida) {
+        const { count } = await supabase
+          .from('contratos_renting')
+          .select('id', { count: 'exact', head: true })
+          .eq('viatura_id', viatura.id)
+          .eq('estado_operacional', 'em_curso');
+        if ((count ?? 0) > 0) {
+          toast.error(
+            'Esta viatura tem um contrato em curso. Feche o contrato antes de a marcar como vendida.'
+          );
+          setSaving(false);
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('viaturas')
         .update({
