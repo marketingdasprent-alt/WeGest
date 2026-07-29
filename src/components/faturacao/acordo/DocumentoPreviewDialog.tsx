@@ -24,7 +24,7 @@ interface Props {
   previewWindow: Window | null;
 }
 
-/** Pré-visualização de um documento fiscal (Recibo). */
+/** Pré-visualização de um documento fiscal (qualquer tipo — FT/FR/NC/RC). */
 export function DocumentoPreviewDialog({ open, onOpenChange, invoiceId, previewWindow }: Props) {
   const [loading, setLoading] = useState(false);
 

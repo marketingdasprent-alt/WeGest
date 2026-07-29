@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Mail,
   CalendarClock,
+  Eye,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,7 @@ import { useContratoCondutores } from '@/hooks/useContratoCondutores';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useInvoicesByContrato, useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { baixarDocumentoPdf, clienteRowToFatura, anularCobrancasFaturacao } from '@/lib/faturacao';
+import { DocumentoPreviewDialog } from '@/components/faturacao/acordo/DocumentoPreviewDialog';
 import { estadoCobrancaDisplay } from '@/lib/estadoCobranca';
 import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
 import type { ContratoRenting } from '@/types/contratoRenting';
@@ -108,6 +110,11 @@ export function ContratoTabFaturar({ contrato }: Props) {
   const [anularOpen, setAnularOpen] = useState(false);
   const [anularBusy, setAnularBusy] = useState(false);
   const [enviarInvoice, setEnviarInvoice] = useState<InvoiceMetadata | null>(null);
+  const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  // Fecha a janela anterior se houver duplo-clique antes do preview anterior
+  // resolver — mesmo motivo do fix equivalente em AcordoDetalhePanel.tsx.
+  const [previewWindow, setPreviewWindow] = useState<Window | null>(null);
   const [parcelamentoAlvo, setParcelamentoAlvo] = useState<ParcelamentoFaturaAlvo | null>(null);
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -699,6 +706,27 @@ export function ContratoTabFaturar({ contrato }: Props) {
                                   variant="ghost"
                                   size="icon"
                                   className="h-6 w-6 shrink-0"
+                                  title="Ver documento"
+                                  onClick={() => {
+                                    // Janela aberta SINCRONAMENTE dentro do clique — ver
+                                    // comentário em DocumentoPreviewDialog.tsx sobre o
+                                    // popup-blocker do Safari.
+                                    const win = window.open('', '_blank');
+                                    setPreviewWindow((prev) => {
+                                      prev?.close();
+                                      return win;
+                                    });
+                                    setPreviewInvoiceId(inv.id);
+                                    setPreviewOpen(true);
+                                  }}
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0"
                                   title="Descarregar PDF"
                                   onClick={() => baixarPdf(inv)}
                                   disabled={baixandoId === c.id}
@@ -808,6 +836,19 @@ export function ContratoTabFaturar({ contrato }: Props) {
       </div>
 
       <DocumentosEmitidosExtra invoices={invoicesExtra} onEnviar={setEnviarInvoice} />
+
+      <DocumentoPreviewDialog
+        open={previewOpen}
+        onOpenChange={(o) => {
+          setPreviewOpen(o);
+          if (!o) {
+            setPreviewInvoiceId(null);
+            setPreviewWindow(null);
+          }
+        }}
+        invoiceId={previewInvoiceId}
+        previewWindow={previewWindow}
+      />
 
       <ContratoFaturarDialog
         open={dialogOpen}
