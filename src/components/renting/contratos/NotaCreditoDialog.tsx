@@ -172,6 +172,20 @@ export function NotaCreditoDialog({
             }
           }
           emitiuFiscal = true;
+
+          // Grava o nº real do provider em notas_credito.documento_externo_ref —
+          // mesmo write-back que useFaturacao.ts já faz para contrato_cobrancas
+          // (FT). Sem isto, o campo (já preparado no schema para sync Primavera)
+          // ficava sempre NULL mesmo com o documento fiscal emitido com sucesso.
+          const fullDocNumber = res.provider?.FullDocNumber ?? res.invoice?.numero ?? null;
+          if (fullDocNumber && inserida?.id) {
+            await supabase
+              .from('notas_credito')
+              .update({ documento_externo_ref: fullDocNumber })
+              .eq('id', inserida.id)
+              .is('documento_externo_ref', null);
+          }
+
           toast.success(
             `Nota de crédito ${res.provider?.FullDocNumber ?? numero} emitida no ${providerLabel} (${formatCurrency(valorNum)}).`
           );
