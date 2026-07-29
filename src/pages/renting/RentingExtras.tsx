@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { PackagePlus, Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Button } from '@/components/ui/button';
+import { AcoesLinha } from '@/components/ui/acoes-linha';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -341,26 +342,24 @@ const RentingExtras = () => {
                     </Badge>
                   </TableCell>
                   <TableCell className="py-2">
-                    {podeGerir && (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => openEdit(e)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteTarget(e)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
+                    <AcoesLinha
+                      compacto
+                      acoes={[
+                        {
+                          icone: Pencil,
+                          rotulo: `Editar ${e.nome}`,
+                          onClick: () => openEdit(e),
+                          oculta: !podeGerir,
+                        },
+                        {
+                          icone: Trash2,
+                          rotulo: `Eliminar ${e.nome}`,
+                          onClick: () => setDeleteTarget(e),
+                          destrutiva: true,
+                          oculta: !podeGerir,
+                        },
+                      ]}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
