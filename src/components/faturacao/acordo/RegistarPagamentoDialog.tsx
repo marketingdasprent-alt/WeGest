@@ -63,12 +63,20 @@ export function RegistarPagamentoDialog({ open, onOpenChange, acordo, parcela }:
   }, [open, parcela]);
 
   const valorNum = round2(parseFloat(valor.replace(',', '.')) || 0);
-  // Teto no valor da parcela: o campo continua editável para acertar cêntimos/taxas
-  // bancárias (spec §2.3), mas o `max` do <Input> é só uma dica HTML — sem <form> a
-  // envolver o dialog (ver comentário equivalente em ParcelamentoDialog.tsx) não há
-  // validação nativa a bloquear um valor fora do intervalo. Este `excede` é o guarda
-  // real a nível de JS. Epsilon igual ao resto da feature (RecibosDialog.tsx).
-  const excede = !!parcela && valorNum > parcela.valor + 0.005;
+  // Teto REAL: nem sempre é o valor nominal da parcela. Se um recibo emitido FORA
+  // do parcelamento (ex.: Fatura → Emitir Recibo) já cobriu parte da dívida desta
+  // cobrança, `acordo.faltaPagar` (cobranca_saldo_por_liquidar — a mesma fonte
+  // única de verdade usada no resumo do acordo) fica menor que `parcela.valor`.
+  // Sem este min(), o diálogo deixava registar o valor nominal inteiro mesmo já só
+  // faltando pagar menos do que isso — pagando a mais em recibos do que a fatura
+  // vale (achado ao testar manualmente).
+  const teto = parcela ? Math.min(parcela.valor, acordo.faltaPagar) : 0;
+  // Teto no valor: o campo continua editável para acertar cêntimos/taxas bancárias
+  // (spec §2.3), mas o `max` do <Input> é só uma dica HTML — sem <form> a envolver
+  // o dialog (ver comentário equivalente em ParcelamentoDialog.tsx) não há validação
+  // nativa a bloquear um valor fora do intervalo. Este `excede` é o guarda real a
+  // nível de JS. Epsilon igual ao resto da feature (RecibosDialog.tsx).
+  const excede = !!parcela && valorNum > teto + 0.005;
   const podeSubmeter =
     !!parcela && valorNum > 0 && !excede && !!metodo && !registarPagamento.isPending;
 
@@ -137,7 +145,7 @@ export function RegistarPagamentoDialog({ open, onOpenChange, acordo, parcela }:
                 id="pagamento-valor"
                 type="number"
                 min="0.01"
-                max={parcela?.valor}
+                max={teto}
                 step="0.01"
                 value={valor}
                 onChange={(e) => setValor(e.target.value)}
@@ -145,7 +153,9 @@ export function RegistarPagamentoDialog({ open, onOpenChange, acordo, parcela }:
               />
               {excede && (
                 <p className="text-[11px] text-destructive">
-                  O valor excede a parcela ({formatCurrency(parcela?.valor ?? 0)}).
+                  {parcela && teto < parcela.valor
+                    ? `O valor excede o que falta pagar (${formatCurrency(teto)}) — parte desta parcela já foi coberta por outro recibo.`
+                    : `O valor excede a parcela (${formatCurrency(parcela?.valor ?? 0)}).`}
                 </p>
               )}
               {!excede && parcela && valorNum !== parcela.valor && (
