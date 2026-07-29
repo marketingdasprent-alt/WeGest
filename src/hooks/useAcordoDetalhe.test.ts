@@ -55,6 +55,7 @@ const PARCELAS_ROWS = [
     aviso_enviado_em: '2026-07-25T10:00:00Z',
     invoice_rc_id: 'rc-1',
     recibo_id: 'r-1',
+    nota: null,
   },
   {
     id: 'p-2',
@@ -65,6 +66,7 @@ const PARCELAS_ROWS = [
     aviso_enviado_em: null,
     invoice_rc_id: null,
     recibo_id: null,
+    nota: null,
   },
 ];
 

@@ -1,13 +1,16 @@
 // src/components/faturacao/acordo/ParcelaTimelineItem.tsx
-import { CalendarClock, Download, Eye } from 'lucide-react';
+import { useState } from 'react';
+import { CalendarClock, Download, Eye, StickyNote } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { ParcelaStatusBadge } from '@/components/faturacao/ParcelaStatusBadge';
 import { formatCurrency } from '@/utils/formatters';
 import { gerarAvisoVencimentoPdf } from '@/utils/avisoVencimentoPdf';
 import {
   useAssociarDocumentoExistente,
   useReemitirDocumento,
+  useGravarNotaParcela,
   type AcordoDetalhe,
   type ParcelaDetalhe,
 } from '@/hooks/useAcordoDetalhe';
@@ -58,6 +61,19 @@ export function ParcelaTimelineItem({
   const aberta = ABERTAS.includes(parcelaStaff.estado);
   const associarDocumento = useAssociarDocumentoExistente();
   const reemitirDocumento = useReemitirDocumento();
+  const gravarNota = useGravarNotaParcela();
+  const [editandoNota, setEditandoNota] = useState(false);
+  const [rascunhoNota, setRascunhoNota] = useState(parcelaStaff.nota ?? '');
+
+  function guardarNota() {
+    gravarNota.mutate(
+      { parcelaId: parcelaStaff.id, nota: rascunhoNota },
+      {
+        onSuccess: () => setEditandoNota(false),
+        onError: (e) => toast.error(`Erro ao guardar a nota: ${(e as Error).message}`),
+      }
+    );
+  }
 
   return (
     <li className="ml-6">
@@ -138,6 +154,58 @@ export function ParcelaTimelineItem({
           </p>
         )}
 
+        {modoStaff && !editandoNota && parcelaStaff.nota && (
+          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <StickyNote className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span className="flex-1">{parcelaStaff.nota}</span>
+            <button
+              type="button"
+              className="underline hover:text-foreground"
+              onClick={() => {
+                setRascunhoNota(parcelaStaff.nota ?? '');
+                setEditandoNota(true);
+              }}
+            >
+              editar
+            </button>
+          </p>
+        )}
+
+        {modoStaff && editandoNota && (
+          <div className="flex flex-col gap-1.5">
+            <Textarea
+              value={rascunhoNota}
+              onChange={(e) => setRascunhoNota(e.target.value)}
+              placeholder="Nota interna (ex.: cliente pediu adiamento)"
+              className="min-h-16 text-xs"
+              autoFocus
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={gravarNota.isPending}
+                onClick={guardarNota}
+              >
+                Guardar nota
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => {
+                  setRascunhoNota(parcelaStaff.nota ?? '');
+                  setEditandoNota(false);
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
           {modoStaff && aberta && (
             <Button
@@ -180,6 +248,18 @@ export function ParcelaTimelineItem({
             >
               <Download className="h-3.5 w-3.5" />
               PDF do aviso
+            </Button>
+          )}
+          {modoStaff && !parcelaStaff.nota && !editandoNota && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() => setEditandoNota(true)}
+            >
+              <StickyNote className="h-3.5 w-3.5" />
+              Nota
             </Button>
           )}
         </div>

@@ -939,8 +939,8 @@ export function ContratoTabFaturar({ contrato }: Props) {
               Escolhe abaixo quais faturas anular — um contrato pode ter várias cobranças ativas
               (ciclos de faturação diferentes). Os lançamentos na conta-corrente das selecionadas
               (cobrança, recibos e notas de crédito) são estornados — o saldo fica a zero. Se
-              anulares todas, o contrato volta a <b>"não faturado"</b> e fica re-faturável. Esta ação{' '}
-              <b>não</b> emite Nota de Crédito nem cancela o documento fiscal no software de
+              anulares todas, o contrato volta a <b>"não faturado"</b> e fica re-faturável. Esta
+              ação <b>não</b> emite Nota de Crédito nem cancela o documento fiscal no software de
               faturação; se já tiver sido emitido um documento certificado, faça a reversão fiscal
               (NC) separadamente.
             </AlertDialogDescription>
@@ -970,7 +970,10 @@ export function ContratoTabFaturar({ contrato }: Props) {
                     <span className="font-mono text-xs">
                       {c.documento_externo_ref || c.id.slice(0, 8).toUpperCase()}
                     </span>
-                    <span className="text-muted-foreground truncate flex-1" title={c.destinatario_nome}>
+                    <span
+                      className="text-muted-foreground truncate flex-1"
+                      title={c.destinatario_nome}
+                    >
                       {c.destinatario_nome}
                     </span>
                     <span className="font-medium whitespace-nowrap">

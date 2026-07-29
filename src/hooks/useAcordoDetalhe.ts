@@ -15,6 +15,8 @@ export interface ParcelaDetalhe {
   invoiceRcId: string | null;
   /** liquidacao_pendente + a linha de faturacao_outbox correspondente está 'suspenso'. */
   suspenso: boolean;
+  /** Nota interna livre, só staff — nunca lida por avisos/liquidação/reversão. */
+  nota: string | null;
 }
 
 /** Recibo activo contra a mesma cobrança do acordo, mas emitido POR FORA do
@@ -78,7 +80,7 @@ export function useAcordoDetalhe(acordoId: string | null | undefined) {
       const { data: parcelas, error: parcelasErr } = await supabase
         .from('acordo_parcelas' as any)
         .select(
-          'id, numero, data_vencimento, valor, estado, aviso_enviado_em, invoice_rc_id, recibo_id'
+          'id, numero, data_vencimento, valor, estado, aviso_enviado_em, invoice_rc_id, recibo_id, nota'
         )
         .eq('acordo_id', acordoId)
         .order('numero', { ascending: true });
@@ -194,6 +196,7 @@ export function useAcordoDetalhe(acordoId: string | null | undefined) {
             avisoEnviadoEm: p.aviso_enviado_em,
             invoiceRcId: p.invoice_rc_id,
             suspenso: p.estado === 'liquidacao_pendente' && suspensoPorParcela.has(p.id),
+            nota: p.nota,
           })
         ),
       };
@@ -327,6 +330,28 @@ export function useReemitirDocumento() {
       // outbox para 'pendente' também pode mudar o que um motorista vê na própria
       // vista (acordo_vista_devedor).
       qc.invalidateQueries({ queryKey: ['acordo-vista-devedor'] });
+    },
+  });
+}
+
+/**
+ * Nota interna livre por parcela — puramente informativa (ex.: "cliente
+ * pediu adiamento"), nunca lida por nenhuma lógica de negócio. Só staff:
+ * acordo_vista_devedor (RPC do devedor) não a selecciona, por isso nunca
+ * chega à vista do motorista.
+ */
+export function useGravarNotaParcela() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ parcelaId, nota }: { parcelaId: string; nota: string }) => {
+      const { error } = await supabase
+        .from('acordo_parcelas' as any)
+        .update({ nota: nota.trim() || null })
+        .eq('id', parcelaId);
+      if (error) throw error;
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['acordo-detalhe'] });
     },
   });
 }
