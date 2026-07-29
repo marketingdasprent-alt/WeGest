@@ -13,7 +13,7 @@ import {
   Loader2,
   type LucideIcon,
 } from 'lucide-react';
-import type { Tables } from '@/integrations/supabase/types';
+import { type Notificacao, itensDaNotificacao, totalAgrupado } from '@/types/notificacao';
 import { notificacaoLabel, notificacaoLink } from '@/utils/notificacoes';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,8 +21,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
 // ── Types ────────────────────────────────────────────────────────────────────
-
-type Notificacao = Tables<'notificacoes'>;
+// `Notificacao` vem de src/types/notificacao.ts: é a linha gerada + as colunas
+// do agrupamento (itens/agrupadas), que ainda não estão em types.ts.
 
 export type NotificationFilter = 'all' | 'unread';
 
@@ -100,85 +100,143 @@ function NotificationRow({
   compact?: boolean;
 }) {
   const navigate = useNavigate();
+  const [aberto, setAberto] = React.useState(false);
   const sev = getSeveridadeConfig(n.severidade);
   const SevIcon = sev.icon;
   const urgente = n.severidade === 'urgente';
   const link = notificacaoLink(n);
 
+  // Uma notificação agrupada representa N entidades (ex.: 88 viaturas com o
+  // seguro a expirar). `itens` guarda todas com o respectivo link — é o que
+  // permite agrupar sem perder acesso a nenhuma delas.
+  const itens = itensDaNotificacao(n);
+  const total = totalAgrupado(n);
+
   return (
     <div
       className={cn(
-        'flex items-start gap-3 rounded-lg border border-border transition-colors',
+        'flex flex-col gap-2 rounded-lg border border-border transition-colors',
         compact ? 'p-2 pl-9' : 'p-3',
         sev.bgClass
       )}
     >
-      {!compact && (
-        <div
-          className={cn(
-            'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-            urgente
-              ? 'bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300'
-              : 'bg-primary/10 text-primary'
-          )}
-        >
-          <SevIcon className="h-4 w-4" />
-        </div>
-      )}
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          {!compact && (
-            <p
-              className={cn(
-                'text-sm font-semibold',
-                urgente ? 'text-red-700 dark:text-red-300' : 'text-foreground'
-              )}
-            >
-              {urgente && '🔴 '}
-              {n.titulo}
-            </p>
-          )}
-          <time className={cn('shrink-0 text-xs text-muted-foreground', compact && 'ml-auto')}>
-            {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: pt })}
-          </time>
-        </div>
-
-        {n.mensagem && <p className="mt-0.5 text-sm text-muted-foreground">{n.mensagem}</p>}
-
-        <div className="mt-2 flex items-center gap-2">
-          <Button
-            size="sm"
-            variant={urgente ? 'destructive' : 'default'}
-            className="h-7"
-            onClick={() => navigate(link)}
+      <div className="flex items-start gap-3">
+        {!compact && (
+          <div
+            className={cn(
+              'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+              urgente
+                ? 'bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300'
+                : 'bg-primary/10 text-primary'
+            )}
           >
-            <Eye className="mr-1 h-3 w-3" />
-            {notificacaoLabel(n)}
-          </Button>
-          {!n.resolvida && (
-            <Button size="sm" variant="ghost" className="h-7" onClick={() => onMarkAsRead(n.id)}>
-              <Check className="mr-1 h-3 w-3" />
-              Resolver
+            <SevIcon className="h-4 w-4" />
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            {!compact && (
+              <p
+                className={cn(
+                  'flex items-center gap-2 text-sm font-semibold',
+                  urgente ? 'text-red-700 dark:text-red-300' : 'text-foreground'
+                )}
+              >
+                <span>
+                  {urgente && '🔴 '}
+                  {n.titulo}
+                </span>
+                {total > 1 && (
+                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-bold tabular-nums text-foreground">
+                    {total}
+                  </span>
+                )}
+              </p>
+            )}
+            <time className={cn('shrink-0 text-xs text-muted-foreground', compact && 'ml-auto')}>
+              {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: pt })}
+            </time>
+          </div>
+
+          {n.mensagem && <p className="mt-0.5 text-sm text-muted-foreground">{n.mensagem}</p>}
+
+          <div className="mt-2 flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={urgente ? 'destructive' : 'default'}
+              className="h-7"
+              onClick={() => navigate(link)}
+            >
+              <Eye className="mr-1 h-3 w-3" />
+              {notificacaoLabel(n)}
             </Button>
-          )}
-          {n.resolvida && (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Check className="h-3 w-3" />
-              Resolvida
-            </span>
-          )}
+            {total > 1 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7"
+                onClick={() => setAberto((v) => !v)}
+                aria-expanded={aberto}
+              >
+                {aberto ? (
+                  <ChevronDown className="mr-1 h-3 w-3" />
+                ) : (
+                  <ChevronRight className="mr-1 h-3 w-3" />
+                )}
+                {aberto ? 'Ocultar' : `Ver ${total}`}
+              </Button>
+            )}
+            {!n.resolvida && (
+              <Button size="sm" variant="ghost" className="h-7" onClick={() => onMarkAsRead(n.id)}>
+                <Check className="mr-1 h-3 w-3" />
+                Resolver
+              </Button>
+            )}
+            {n.resolvida && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Check className="h-3 w-3" />
+                Resolvida
+              </span>
+            )}
+          </div>
         </div>
+
+        <button
+          type="button"
+          aria-label="Abrir"
+          onClick={() => navigate(link)}
+          className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
       </div>
 
-      <button
-        type="button"
-        aria-label="Abrir"
-        onClick={() => navigate(link)}
-        className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ChevronRight className="h-4 w-4" />
-      </button>
+      {/* Entidades desta notificação agrupada. Cada uma mantém o seu link —
+          é o que permite colapsar 88 avisos numa linha sem perder o acesso a
+          nenhuma das 88 viaturas. */}
+      {aberto && itens.length > 0 && (
+        <ul className="flex flex-col gap-1 border-t border-border pt-2">
+          {itens.map((item, i) => (
+            <li key={`${item.link ?? item.viatura_id ?? 'item'}-${i}`}>
+              {item.link ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(item.link as string)}
+                  className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <span className="truncate">{item.mensagem || item.link}</span>
+                  <ChevronRight className="h-3 w-3 shrink-0" />
+                </button>
+              ) : (
+                <span className="block px-2 py-1 text-xs text-muted-foreground">
+                  {item.mensagem || 'Sem detalhe'}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
