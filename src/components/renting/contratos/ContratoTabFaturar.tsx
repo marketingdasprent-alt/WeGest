@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,6 +14,7 @@ import {
   Mail,
   CalendarClock,
   Eye,
+  HandCoins,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -953,7 +955,28 @@ function AcaoParcelar({
   onAbrir: (alvo: ParcelamentoFaturaAlvo) => void;
 }) {
   const { data: acordoAtivo } = useAcordoAtivoPorCobranca(cobranca.id);
-  if (invoice.tipo !== 'FT' || acordoAtivo || saldoPagar <= 0.005) return null;
+  const navigate = useNavigate();
+  if (invoice.tipo !== 'FT') return null;
+
+  // Já parcelada: em vez de desaparecer sem mais nada (como fazia antes — o
+  // utilizador não tinha como voltar à central das parcelas a partir daqui),
+  // mostra um ícone que navega para o acordo já existente.
+  if (acordoAtivo) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 shrink-0"
+        title={`Ver acordo de pagamento (ACD-${acordoAtivo.codigo})`}
+        onClick={() => navigate(`/acordos/${acordoAtivo.id}`)}
+      >
+        <HandCoins className="h-3.5 w-3.5" />
+      </Button>
+    );
+  }
+
+  if (saldoPagar <= 0.005) return null;
 
   return (
     <Button
