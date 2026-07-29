@@ -173,6 +173,44 @@ describe('tema escuro', () => {
   });
 });
 
+/**
+ * Estados semânticos. O caso mais grave era o `text-destructive` no tema
+ * escuro: 1,92:1 com 381 ocorrências, o que punha as mensagens de erro
+ * praticamente invisíveis.
+ *
+ * Cada token é medido nos DOIS papéis em que é usado — cor de texto e fundo com
+ * o seu próprio foreground — porque foi precisamente por se assumir um só papel
+ * que os valores ficaram errados: o vermelho do tema escuro tinha sido escolhido
+ * como fundo de botão, e 381 sítios usavam-no como texto.
+ */
+describe.each([
+  ['claro', () => CLARO],
+  ['escuro', () => ESCURO],
+])('estados semânticos no tema %s', (_tema, obter) => {
+  const T = obter();
+
+  it.each(['--destructive', '--warning', '--success'])(
+    '%s legível como cor de texto sobre o fundo e sobre os cartões',
+    (token) => {
+      expect(contraste(T[token], T['--background'])).toBeGreaterThanOrEqual(MIN_TEXTO);
+      expect(contraste(T[token], T['--card'])).toBeGreaterThanOrEqual(MIN_TEXTO);
+    }
+  );
+
+  it.each(['--destructive', '--warning', '--success'])(
+    '%s legível como fundo, com o seu próprio texto por cima',
+    (token) => {
+      expect(contraste(T[token], T[`${token}-foreground`])).toBeGreaterThanOrEqual(MIN_TEXTO);
+    }
+  );
+
+  it('as bordas de estado distinguem-se do fundo (WCAG 1.4.11)', () => {
+    // border-destructive marca campos com erro em 47 sítios: se não se vê a
+    // borda, não se vê qual é o campo errado.
+    expect(contraste(T['--destructive'], T['--background'])).toBeGreaterThanOrEqual(MIN_NAO_TEXTO);
+  });
+});
+
 describe('geometria', () => {
   it('o raio não depende do tema', () => {
     // Havia 0,5rem no :root e 0,75rem no .dark, pelo que todos os cantos da

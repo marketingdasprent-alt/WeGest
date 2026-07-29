@@ -39,16 +39,25 @@ html[data-native-app='true'] .native-bottom {
     --accent: 174 100% 25%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
+    /* A 60,2% media 3,76:1 sobre branco — abaixo dos 4,5:1 exigidos a texto,
+       e text-destructive é o token mais usado do projeto (381 ocorrências:
+       mensagens de erro, asteriscos de campo obrigatório, rótulos de eliminar).
+       A 42% mede 6,05:1, tanto como texto como atrás de texto branco. */
+    --destructive: 0 84.2% 42%;
     --destructive-foreground: 0 0% 98%;
 
     /* Estados semânticos (avisos/sucesso) — antes disto cada ficheiro
        escrevia bg-amber-500/text-green-600 à mão, com tom diferente
        consoante o ficheiro. Usar sempre estes tokens em vez de cores
-       Tailwind soltas para avisos/callouts/badges de estado. */
-    --warning: 38 92% 50%;
-    --warning-foreground: 20 91% 14%;
-    --success: 142 76% 36%;
+       Tailwind soltas para avisos/callouts/badges de estado.
+
+       Escurecidos para servirem como TEXTO sobre fundo claro, que é como são
+       usados (text-warning, text-success) a par de fundos com alfa baixo
+       (bg-warning/10). O âmbar a 50% media 2,14:1 e o verde a 36% media
+       3,35:1 — nenhum dos dois passava. */
+    --warning: 38 92% 32%;
+    --warning-foreground: 0 0% 100%;
+    --success: 142 76% 30%;
     --success-foreground: 0 0% 100%;
 
     --border: 0 0% 89.8%;
@@ -108,13 +117,26 @@ html[data-native-app='true'] .native-bottom {
     --accent: 174 100% 38.4%;
     --accent-foreground: 0 0% 8%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    /* Era 30,6%: um vermelho escuro, pensado como FUNDO de botão com texto
+       branco. Só que o uso dominante é como cor de TEXTO (381 ocorrências), e
+       sobre os cartões escuros media 1,92:1 — ou seja, as mensagens de erro
+       estavam praticamente invisíveis no tema escuro.
 
+       Sobe a 60% (lê-se como texto, 5,03:1 sobre os cartões) e o texto por cima
+       inverte para quase-negro (4,81:1), pela mesma razão e pelo mesmo padrão
+       do --primary aqui em cima. Não há conflito entre os dois papéis: uma vez
+       que a cor do texto acompanha o tema, ambos querem o vermelho claro. */
+    --destructive: 0 70% 60%;
+    --destructive-foreground: 0 0% 8%;
+
+    /* O âmbar já cumpria nos dois papéis no tema escuro (9,67:1 como texto,
+       8,70:1 como fundo com o seu próprio foreground) — fica como está. */
     --warning: 38 92% 55%;
     --warning-foreground: 20 91% 10%;
+    /* O verde lê-se bem como texto (8,27:1); o que falhava era o texto BRANCO
+       por cima dele (2,32:1), que inverte para quase-negro (7,90:1). */
     --success: 142 70% 45%;
-    --success-foreground: 0 0% 100%;
+    --success-foreground: 0 0% 8%;
 
     --border: 222 47% 18%;
     --input: 222 47% 18%;
