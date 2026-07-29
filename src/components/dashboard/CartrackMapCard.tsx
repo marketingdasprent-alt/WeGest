@@ -17,6 +17,7 @@ import {
   useCartrackLive,
   hasValidPosition,
   plateKey,
+  INTERVALO_LIVE_SEGUNDOS,
   type CartrackVehicle,
 } from '@/hooks/useCartrackVehicles';
 
@@ -118,7 +119,6 @@ export const CartrackMapCard: React.FC = () => {
   );
   const { data: livePositions } = useCartrackLive(liveIntegracaoId, {
     enabled: live,
-    intervalMs: 10_000,
   });
 
   // Funde as posições ao vivo sobre os dados da BD (por matrícula).
@@ -215,7 +215,9 @@ export const CartrackMapCard: React.FC = () => {
           size="sm"
           className="h-7 gap-1.5 px-2"
           onClick={() => setLive((s) => !s)}
-          title={live ? 'Desligar tempo real' : 'Seguir em tempo real (10s)'}
+          title={
+            live ? 'Desligar tempo real' : `Seguir em tempo real (${INTERVALO_LIVE_SEGUNDOS}s)`
+          }
         >
           <span
             className={`h-2 w-2 rounded-full ${live ? 'bg-white animate-pulse' : 'bg-emerald-500'}`}

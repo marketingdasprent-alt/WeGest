@@ -81,6 +81,28 @@ export function useCartrackVehicleByViatura(viaturaId?: string | null) {
 // ── Modo "Ao vivo" ──────────────────────────────────────────────
 // Poll leve à API Cartrack (via cartrack-live-position), sem escrever na BD.
 // A Cartrack não tem streaming/push — isto é o mais "tempo real" possível.
+
+/**
+ * Intervalo do modo "Ao vivo", em milissegundos.
+ *
+ * Fonte única: o valor era duplicado à mão em três sítios (este default e as
+ * duas chamadas do hook) e o número aparecia ainda numa quarta forma, escrito
+ * no texto que o utilizador lê ("ao vivo (10s)"). Mudar o intervalo obrigava a
+ * acertar quatro cópias, e a do texto era a que mais facilmente ficava a
+ * mentir. Aqui há um valor; os rótulos derivam dele.
+ *
+ * 30s em vez dos 10s originais: cada poll é uma chamada à API da Cartrack por
+ * cliente com o mapa aberto (10s = 360 chamadas/hora POR utilizador, sem cache
+ * partilhada entre clientes). Um veículo a 50 km/h percorre ~420 m em 30s —
+ * num mapa de frota é indistinguível, e corta o consumo a um terço. O sync
+ * agendado (cartrack-scheduled-sync, 15 min) é outra coisa: escreve na BD e
+ * mantém o odómetro/alertas de manutenção, com apenas 4 chamadas/hora.
+ */
+export const INTERVALO_LIVE_MS = 30_000;
+
+/** O mesmo valor em segundos, para os rótulos da UI não repetirem o número. */
+export const INTERVALO_LIVE_SEGUNDOS = INTERVALO_LIVE_MS / 1000;
+
 export interface LivePosition {
   registration: string | null;
   latitude: number | null;
@@ -95,7 +117,7 @@ export function useCartrackLive(
   integracaoId: string | null | undefined,
   opts: { registration?: string | null; enabled: boolean; intervalMs?: number }
 ) {
-  const { registration, enabled, intervalMs = 10_000 } = opts;
+  const { registration, enabled, intervalMs = INTERVALO_LIVE_MS } = opts;
   return useQuery({
     queryKey: ['cartrack-live', integracaoId, registration ?? 'all'],
     enabled: enabled && !!integracaoId,

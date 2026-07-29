@@ -39,6 +39,7 @@ import {
   useCartrackLive,
   hasValidPosition,
   plateKey,
+  INTERVALO_LIVE_SEGUNDOS,
 } from '@/hooks/useCartrackVehicles';
 
 L.Icon.Default.mergeOptions({
@@ -121,7 +122,6 @@ export function ViaturaTabGeolocalizacao({ viaturaId, matricula }: Props) {
   const { data: livePositions } = useCartrackLive(v?.integracao_id, {
     registration: v?.registration,
     enabled: live && !!v,
-    intervalMs: 10_000,
   });
 
   // Carrega o estado do imobilizador quando há viatura ligada + permissão.
@@ -249,7 +249,9 @@ export function ViaturaTabGeolocalizacao({ viaturaId, matricula }: Props) {
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           Localização Cartrack de <strong>{view.registration || matricula}</strong>
-          {live && <span className="ml-2 text-emerald-600">● ao vivo (10s)</span>}
+          {live && (
+            <span className="ml-2 text-emerald-600">● ao vivo ({INTERVALO_LIVE_SEGUNDOS}s)</span>
+          )}
         </p>
         <div className="flex items-center gap-2">
           <Button
@@ -257,7 +259,9 @@ export function ViaturaTabGeolocalizacao({ viaturaId, matricula }: Props) {
             size="sm"
             className="gap-1.5"
             onClick={() => setLive((s) => !s)}
-            title={live ? 'Desligar tempo real' : 'Seguir em tempo real (10s)'}
+            title={
+              live ? 'Desligar tempo real' : `Seguir em tempo real (${INTERVALO_LIVE_SEGUNDOS}s)`
+            }
           >
             <span
               className={`h-2 w-2 rounded-full ${live ? 'bg-white animate-pulse' : 'bg-emerald-500'}`}
