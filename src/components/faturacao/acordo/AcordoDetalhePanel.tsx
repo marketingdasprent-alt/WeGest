@@ -8,6 +8,7 @@ import { ParcelaTimelineItem } from './ParcelaTimelineItem';
 import { RegistarPagamentoDialog } from './RegistarPagamentoDialog';
 import { DocumentoPreviewDialog } from './DocumentoPreviewDialog';
 import { formatCurrency } from '@/utils/formatters';
+import { metodoLabel } from '@/components/administrativo/faturacao';
 import type { ParcelaDetalhe } from '@/hooks/useAcordoDetalhe';
 
 interface Props {
@@ -105,6 +106,26 @@ export function AcordoDetalhePanel({ acordoId, modo = 'staff' }: Props) {
           </div>
         )}
       </div>
+
+      {/* Recibos emitidos por fora do parcelamento (ex.: Fatura → Emitir Recibo) já
+          contam para FALTA PAGAR acima, mas nenhuma parcela sabe deles — sem este
+          aviso não há como perceber, olhando só para a timeline, porque uma parcela
+          mostra o valor nominal inteiro quando na verdade já falta menos (achado ao
+          testar manualmente). Só em modo staff, mesmo critério de RegistarPagamentoDialog
+          e das restantes acções internas. */}
+      {modoStaff && acordoStaff && acordoStaff.recibosExternos.length > 0 && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-1.5">
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+            Recibo(s) emitido(s) fora deste acordo — já contam para "falta pagar"
+          </p>
+          {acordoStaff.recibosExternos.map((r) => (
+            <p key={r.id} className="text-xs text-muted-foreground">
+              Recibo nº {r.codigo} · {formatCurrency(r.valor)} ·{' '}
+              {r.dataRecibo.split('-').reverse().join('/')} · {metodoLabel(r.metodo)}
+            </p>
+          ))}
+        </div>
+      )}
 
       <ol className="relative ml-3 space-y-5 border-l border-border/60">
         {acordo.parcelas.map((parcela) => (

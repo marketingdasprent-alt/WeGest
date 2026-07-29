@@ -54,6 +54,7 @@ const PARCELAS_ROWS = [
     estado: 'paga',
     aviso_enviado_em: '2026-07-25T10:00:00Z',
     invoice_rc_id: 'rc-1',
+    recibo_id: 'r-1',
   },
   {
     id: 'p-2',
@@ -63,6 +64,7 @@ const PARCELAS_ROWS = [
     estado: 'liquidacao_pendente',
     aviso_enviado_em: null,
     invoice_rc_id: null,
+    recibo_id: null,
   },
 ];
 
@@ -102,6 +104,12 @@ function mockFromChain(table: string) {
         }),
       }),
     };
+  }
+  // Recibos activos contra a cobrança, para detectar os emitidos por fora do
+  // parcelamento (recibosExternos). Vazio por omissão — o teste dedicado a
+  // recibosExternos sobrepõe fromMock directamente.
+  if (table === 'recibos') {
+    return { select: () => ({ eq: () => ({ eq: async () => ({ data: [], error: null }) }) }) };
   }
   throw new Error(`tabela inesperada no teste: ${table}`);
 }
@@ -154,6 +162,40 @@ describe('useAcordoDetalhe', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(rpcMock).toHaveBeenCalledWith('cobranca_saldo_por_liquidar', { p_cobranca_id: 'c-1' });
     expect(result.current.data?.faltaPagar).toBe(250);
+  });
+
+  it('recibosExternos exclui os recibos já ligados a parcelas deste acordo (só os "por fora")', async () => {
+    fromMock.mockImplementation((table: string) => {
+      if (table === 'recibos') {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: async () => ({
+                data: [
+                  // r-1 já está ligado a p-1 (PARCELAS_ROWS) — não é externo.
+                  { id: 'r-1', codigo: 1, valor: 300, data_recibo: '2026-07-20', metodo: 'pix' },
+                  // r-99 não pertence a nenhuma parcela deste acordo — é externo.
+                  {
+                    id: 'r-99',
+                    codigo: 9,
+                    valor: 50,
+                    data_recibo: '2026-07-28',
+                    metodo: 'transferencia',
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return mockFromChain(table);
+    });
+    const { result } = renderHook(() => useAcordoDetalhe('a-1'), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.recibosExternos).toEqual([
+      { id: 'r-99', codigo: 9, valor: 50, dataRecibo: '2026-07-28', metodo: 'transferencia' },
+    ]);
   });
 });
 

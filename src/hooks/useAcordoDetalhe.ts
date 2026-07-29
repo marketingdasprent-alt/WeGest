@@ -17,6 +17,17 @@ export interface ParcelaDetalhe {
   suspenso: boolean;
 }
 
+/** Recibo activo contra a mesma cobrança do acordo, mas emitido POR FORA do
+ *  parcelamento (ex.: Fatura → Emitir Recibo) — não está ligado a nenhuma
+ *  das parcelas deste acordo, mas conta na mesma para `faltaPagar`. */
+export interface RecibiExterno {
+  id: string;
+  codigo: number;
+  valor: number;
+  dataRecibo: string;
+  metodo: string;
+}
+
 export interface AcordoDetalhe {
   id: string;
   codigo: number;
@@ -35,6 +46,8 @@ export interface AcordoDetalhe {
   /** Nº legal da fatura original ligada (FT/FR). Null = sem documento fiscal. */
   numeroFaturaOriginal: string | null;
   parcelas: ParcelaDetalhe[];
+  /** Ver RecibiExterno. Vazio no caso comum (nenhum recibo emitido por fora). */
+  recibosExternos: RecibiExterno[];
 }
 
 /**
@@ -64,7 +77,9 @@ export function useAcordoDetalhe(acordoId: string | null | undefined) {
 
       const { data: parcelas, error: parcelasErr } = await supabase
         .from('acordo_parcelas' as any)
-        .select('id, numero, data_vencimento, valor, estado, aviso_enviado_em, invoice_rc_id')
+        .select(
+          'id, numero, data_vencimento, valor, estado, aviso_enviado_em, invoice_rc_id, recibo_id'
+        )
         .eq('acordo_id', acordoId)
         .order('numero', { ascending: true });
       if (parcelasErr) throw parcelasErr;
@@ -82,6 +97,31 @@ export function useAcordoDetalhe(acordoId: string | null | undefined) {
       const suspensoPorParcela = new Set(
         (outbox ?? []).filter((o: any) => o.estado === 'suspenso').map((o: any) => o.parcela_id)
       );
+
+      // Recibos activos contra a MESMA cobrança, mas emitidos por fora do parcelamento
+      // (ex.: Fatura → Emitir Recibo): contam para faltaPagar (cobranca_saldo_por_liquidar
+      // já os inclui) mas nenhuma parcela sabe deles — daí a confusão de ver uma parcela
+      // com o valor nominal inteiro por pagar quando já só falta menos do que isso
+      // (achado ao testar manualmente). Filtra pelos recibo_id já ligados às parcelas
+      // deste acordo para não listar os próprios recibos do parcelamento como "externos".
+      const parcelaReciboIds = (parcelas ?? [])
+        .map((p: any) => p.recibo_id)
+        .filter((id: string | null): id is string => !!id);
+      const { data: recibosCobranca, error: recibosCobrancaErr } = await supabase
+        .from('recibos')
+        .select('id, codigo, valor, data_recibo, metodo')
+        .eq('referencia', a.cobranca_id)
+        .eq('estado', 'ativo');
+      if (recibosCobrancaErr) throw recibosCobrancaErr;
+      const recibosExternos: RecibiExterno[] = (recibosCobranca ?? [])
+        .filter((r: any) => !parcelaReciboIds.includes(r.id))
+        .map((r: any) => ({
+          id: r.id,
+          codigo: r.codigo,
+          valor: Number(r.valor),
+          dataRecibo: r.data_recibo,
+          metodo: r.metodo,
+        }));
 
       let numeroFaturaOriginal: string | null = null;
       if (a.invoice_id) {
@@ -143,6 +183,7 @@ export function useAcordoDetalhe(acordoId: string | null | undefined) {
         contratoId,
         cobrancaId: a.cobranca_id,
         numeroFaturaOriginal,
+        recibosExternos,
         parcelas: (parcelas ?? []).map(
           (p: any): ParcelaDetalhe => ({
             id: p.id,
