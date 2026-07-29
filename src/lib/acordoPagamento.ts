@@ -167,6 +167,25 @@ export async function registarPagamentoParcela(
   });
   if (liquidarErr) throw liquidarErr;
 
+  // Write-back do nº real emitido no provider (mesmo padrão de
+  // useFaturacao.ts/NotaCreditoDialog.tsx) — sem isto, `recibos.documento_externo_ref`
+  // fica sempre null e a UI (numeroDoc, "Ver documento") não tem como distinguir
+  // os vários recibos de um acordo com parcelamento (todos com a mesma
+  // referência/cobranca_id) — cada um mostrava o mais recente para todos
+  // (achado ao testar manualmente). Best-effort: a liquidação já teve sucesso,
+  // um erro aqui só deixa a referência por preencher, não crítico.
+  const fullDocNumber = res.provider?.FullDocNumber ?? res.invoice?.numero ?? null;
+  if (fullDocNumber) {
+    const { error: reciboRefErr } = await supabase
+      .from('recibos')
+      .update({ documento_externo_ref: fullDocNumber })
+      .eq('id', resultado.recibo_id)
+      .is('documento_externo_ref', null);
+    if (reciboRefErr) {
+      console.warn('Falha (não crítica) a gravar documento_externo_ref no recibo:', reciboRefErr);
+    }
+  }
+
   // Best-effort: a liquidação (linha acima) já teve sucesso — o pagamento
   // está correcto independentemente disto. Um erro aqui só atrasa a outbox
   // em ficar 'sucesso'; o reaper (Tarefa 5) varre ao fim de 10 min.

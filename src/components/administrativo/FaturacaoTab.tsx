@@ -116,6 +116,12 @@ export function FaturacaoContent() {
   const [rawMovimentos, setRawMovimentos] = useState<MovimentoRaw[]>([]);
   const [capped, setCapped] = useState(false);
   const [invoiceByCobranca, setInvoiceByCobranca] = useState<Map<string, InvoiceDocs>>(new Map());
+  // Um acordo de parcelamento gera VÁRIOS recibos para a MESMA cobrança —
+  // invoiceByCobranca só guarda o mais recente por (cobrança, tipo), o que
+  // fazia todas as linhas de recibo de um acordo mostrarem sempre o último
+  // (achado ao testar manualmente). Chave = numeroDoc (documento_externo_ref
+  // do recibo, já escrito de volta) → resolve cada linha ao SEU documento.
+  const [invoiceByNumero, setInvoiceByNumero] = useState<Map<string, InvoiceMetadata>>(new Map());
   const [loading, setLoading] = useState(true);
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
   const profilesRef = useRef<Record<string, string>>({});
@@ -358,7 +364,15 @@ export function FaturacaoContent() {
     if (row.docTipo === 'nota_credito')
       return (row.cobrancaId && invoiceByCobranca.get(row.cobrancaId)?.nc) || null;
     if (row.docTipo === 'recibo')
-      return (row.referencia && invoiceByCobranca.get(row.referencia)?.rc) || null;
+      // Prioriza o documento DESTA linha (numeroDoc = documento_externo_ref do
+      // recibo, único por recibo) — o fallback por cobrança só serve dados
+      // antigos, de antes do write-back existir, e só está certo se a
+      // cobrança tiver tido um único recibo alguma vez.
+      return (
+        (row.numeroDoc !== '—' && invoiceByNumero.get(row.numeroDoc)) ||
+        (row.referencia && invoiceByCobranca.get(row.referencia)?.rc) ||
+        null
+      );
     return null;
   }
 
@@ -507,7 +521,9 @@ export function FaturacaoContent() {
         .eq('status', 'emitida');
       if (error || cancelled) return;
       const m = new Map<string, InvoiceDocs>();
+      const porNumero = new Map<string, InvoiceMetadata>();
       for (const inv of (data ?? []) as InvoiceMetadata[]) {
+        if (inv.numero) porNumero.set(inv.numero, inv);
         if (!inv.cobranca_id) continue;
         const slot = m.get(inv.cobranca_id) ?? {};
         const key: keyof InvoiceDocs = inv.tipo === 'NC' ? 'nc' : inv.tipo === 'RC' ? 'rc' : 'ft';
@@ -515,7 +531,10 @@ export function FaturacaoContent() {
         if (!prev || (inv.created_at ?? '') > (prev.created_at ?? '')) slot[key] = inv;
         m.set(inv.cobranca_id, slot);
       }
-      if (!cancelled) setInvoiceByCobranca(m);
+      if (!cancelled) {
+        setInvoiceByCobranca(m);
+        setInvoiceByNumero(porNumero);
+      }
     })();
     return () => {
       cancelled = true;

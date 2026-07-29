@@ -126,17 +126,21 @@ export function RecibosDialog({
         obs.trim() ||
         `Liquidação de ${cobranca.documento_externo_ref || cobranca.descricao || 'fatura'}`;
 
-      const { error } = await supabase.from('recibos').insert({
-        org_id: orgId,
-        entidade_id: cobranca.destinatario_id,
-        contrato_id: cobranca.contrato_id,
-        valor: valorNum,
-        data_recibo: data,
-        metodo,
-        observacoes: descricao,
-        referencia: cobranca.id,
-        estado: 'ativo',
-      });
+      const { data: reciboInserido, error } = await supabase
+        .from('recibos')
+        .insert({
+          org_id: orgId,
+          entidade_id: cobranca.destinatario_id,
+          contrato_id: cobranca.contrato_id,
+          valor: valorNum,
+          data_recibo: data,
+          metodo,
+          observacoes: descricao,
+          referencia: cobranca.id,
+          estado: 'ativo',
+        })
+        .select('id')
+        .single();
       if (error) throw error;
 
       // Liquidação total → marca a cobrança como paga.
@@ -174,6 +178,21 @@ export function RecibosDialog({
             referencia_externa: cobranca.documento_externo_ref,
             observacoes: descricao,
           });
+          // Write-back do nº real emitido no provider (mesmo padrão de
+          // useFaturacao.ts/NotaCreditoDialog.tsx/acordoPagamento.ts) — sem
+          // isto, documento_externo_ref fica sempre null e a UI não sabe
+          // distinguir este recibo de outros da mesma cobrança/parcelamento.
+          const fullDocNumber = res.provider?.FullDocNumber ?? res.invoice?.numero ?? null;
+          if (fullDocNumber && reciboInserido?.id) {
+            const { error: reciboRefErr } = await supabase
+              .from('recibos')
+              .update({ documento_externo_ref: fullDocNumber })
+              .eq('id', reciboInserido.id)
+              .is('documento_externo_ref', null);
+            if (reciboRefErr) {
+              console.warn('Falha (não crítica) a gravar documento_externo_ref:', reciboRefErr);
+            }
+          }
           if (res.invoice) {
             try {
               await baixarDocumentoPdf(res.invoice);
