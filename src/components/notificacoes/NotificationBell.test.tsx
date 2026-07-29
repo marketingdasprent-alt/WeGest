@@ -6,6 +6,26 @@ vi.mock('@/contexts/NotificacoesContext', () => ({
   useNotificacoesContext: vi.fn(),
 }));
 
+// Separador "Todas" usa uma query à parte (histórico paginado) — mockada
+// aqui como nos outros testes de páginas de notificações, para não
+// precisar de um QueryClientProvider real (os testes desta suite nunca
+// mudam para esse separador).
+const mockUseNotificacoesHistorico = vi.fn(() => ({
+  data: undefined,
+  isLoading: false,
+  error: null,
+  fetchNextPage: vi.fn(),
+  hasNextPage: false,
+  isFetchingNextPage: false,
+}));
+vi.mock('@/hooks/useNotificacoesHistorico', () => ({
+  useNotificacoesHistorico: (...args: unknown[]) => mockUseNotificacoesHistorico(...args),
+}));
+
+vi.mock('@/hooks/useNotifications', () => ({
+  useMarkNotificationRead: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
 import { NotificationBell } from './NotificationBell';
 import { useNotificacoesContext } from '@/contexts/NotificacoesContext';
 
