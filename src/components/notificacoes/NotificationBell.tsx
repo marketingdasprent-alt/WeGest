@@ -27,7 +27,10 @@ export function NotificationBell() {
 
   if (!enabled) return null;
 
-  const unreadCount = notificacoes.length;
+  // O badge conta TIPOS distintos, não linhas — porque é isso que a lista mostra:
+  // o NotificationCenter agrupa por título. Contar linhas dizia "33" e abria 11
+  // grupos; o número tem de descrever o que o utilizador encontra lá dentro.
+  const unreadCount = new Set(notificacoes.map((n) => n.titulo)).size;
   const notificacoesHistorico = historico.data?.pages.flatMap((p) => p.data) ?? [];
 
   return (

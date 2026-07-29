@@ -6,6 +6,11 @@ interface NotificacoesContextValue {
   notificacoes: Notificacao[];
   resolver: (id: string) => Promise<void>;
   enabled: boolean;
+  /** Contagem exacta vinda do servidor — não depende da lista carregada. */
+  totalNaoResolvidas: number;
+  /** Distingue "sem avisos" de "não foi possível ler". */
+  erro: Error | null;
+  aCarregar: boolean;
 }
 
 const NotificacoesContext = createContext<NotificacoesContextValue | null>(null);
@@ -20,10 +25,12 @@ const NotificacoesContext = createContext<NotificacoesContextValue | null>(null)
 export function NotificacoesProvider({ children }: { children: ReactNode }) {
   const { tipoUtilizador, loading } = usePermissions();
   const enabled = !loading && tipoUtilizador !== 'motorista';
-  const { notificacoes, resolver } = useNotificacoes(enabled);
+  const { notificacoes, resolver, totalNaoResolvidas, erro, aCarregar } = useNotificacoes(enabled);
 
   return (
-    <NotificacoesContext.Provider value={{ notificacoes, resolver, enabled }}>
+    <NotificacoesContext.Provider
+      value={{ notificacoes, resolver, enabled, totalNaoResolvidas, erro, aCarregar }}
+    >
       {children}
     </NotificacoesContext.Provider>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { playNotificationSound } from '@/lib/notificationSound';
+import type { NotificacaoItem } from '@/types/notificacao';
 
 export interface Notificacao {
   id: string;
@@ -30,7 +31,23 @@ export interface Notificacao {
   resolvida_por_nome: string | null;
   resolvida_em: string | null;
   created_at: string;
+  /** Entidades desta notificação agrupada — ver src/types/notificacao.ts. */
+  itens?: NotificacaoItem[] | null;
+  /** Quantos avisos esta linha representa (1 = única). */
+  agrupadas?: number | null;
 }
+
+/**
+ * Tecto de notificações activas carregadas de uma vez.
+ *
+ * Antes do agrupamento na origem (migração 20260729200000) este fetch não tinha
+ * limite nenhum e puxava TODAS as não-resolvidas — eram ~270 por pessoa, a cada
+ * 20 segundos. Com o agrupamento são ~11 por dia, por isso 200 é folga larga:
+ * serve de travão contra um cenário inesperado, não de tesoura. Se algum dia
+ * truncar, `totalNaoResolvidas` (contagem exacta vinda do servidor) revela-o em
+ * vez de o esconder.
+ */
+const LIMITE_ATIVAS = 200;
 
 // A tabela `notificacoes` ainda não está nos tipos gerados (types.ts).
 // Regenerar com `supabase gen types` remove a necessidade deste cast.
@@ -48,22 +65,34 @@ const db = supabase as unknown as {
  */
 export const useNotificacoes = (enabled: boolean) => {
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+  const [totalNaoResolvidas, setTotalNaoResolvidas] = useState(0);
+  // Distingue "não há avisos" de "não foi possível saber". Sem isto, uma falha
+  // de rede era engolida para a consola e o sino mostrava "Sem notificações" —
+  // um falso "está tudo tratado" num produto de compliance é pior do que um erro.
+  const [erro, setErro] = useState<Error | null>(null);
+  const [aCarregar, setACarregar] = useState(true);
 
   // IDs já conhecidos — para tocar som só em avisos novos, não nos já existentes.
   const conhecidasRef = useRef<Set<string>>(new Set());
   const primeiroFetchRef = useRef(true);
 
   const fetchAtivas = useCallback(async () => {
-    const { data, error } = await db
+    const { data, error, count } = await db
       .from('notificacoes')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('resolvida', false)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(LIMITE_ATIVAS);
     if (error) {
       console.error('Erro ao carregar notificações:', error);
+      setErro(error instanceof Error ? error : new Error(String(error)));
+      setACarregar(false);
       return;
     }
+    setErro(null);
+    setACarregar(false);
     const lista = (data as Notificacao[]) || [];
+    setTotalNaoResolvidas(typeof count === 'number' ? count : lista.length);
 
     // Som para avisos urgentes novos detetados via polling/foco
     // (exceto no primeiro carregamento, para não tocar ao abrir a app).
@@ -151,5 +180,5 @@ export const useNotificacoes = (enabled: boolean) => {
     [fetchAtivas]
   );
 
-  return { notificacoes, resolver };
+  return { notificacoes, resolver, totalNaoResolvidas, erro, aCarregar };
 };
