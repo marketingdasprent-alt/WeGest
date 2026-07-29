@@ -162,8 +162,8 @@ export const SidebarMenu: React.FC = () => {
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
         <header className="native-header h-16 bg-card/80 backdrop-blur-md border-b border-border sticky top-0 z-[40] lg:hidden flex items-center px-4 w-full">
-          <Button variant="ghost" size="icon" className="mr-4">
-            <Menu className="h-6 w-6" />
+          <Button variant="ghost" size="icon" className="mr-4" aria-label="Abrir menu de navegação">
+            <Menu className="h-6 w-6" aria-hidden="true" />
           </Button>
           <NavLink
             to="/dashboard"

@@ -127,8 +127,9 @@ export const CalendarioGrid: React.FC<Props> = ({
           variant="ghost"
           size="icon"
           onClick={() => onMonthChange(subMonths(currentMonth, 1))}
+          aria-label="Mês anterior"
         >
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft className="h-5 w-5" aria-hidden="true" />
         </Button>
         <h2 className="text-base font-semibold capitalize">
           {format(currentMonth, 'MMMM yyyy', { locale: pt })}
@@ -137,8 +138,9 @@ export const CalendarioGrid: React.FC<Props> = ({
           variant="ghost"
           size="icon"
           onClick={() => onMonthChange(addMonths(currentMonth, 1))}
+          aria-label="Mês seguinte"
         >
-          <ChevronRight className="h-5 w-5" />
+          <ChevronRight className="h-5 w-5" aria-hidden="true" />
         </Button>
       </div>
 

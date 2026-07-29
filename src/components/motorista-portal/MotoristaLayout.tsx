@@ -56,8 +56,9 @@ export const MotoristaLayout: React.FC<MotoristaLayoutProps> = ({
                 size="icon"
                 onClick={() => signOut()}
                 className="text-muted-foreground hover:text-destructive h-9 w-9"
+                aria-label="Terminar sessão"
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
           </header>
