@@ -50,6 +50,16 @@ const PAGE_SIZE = 50,
   LIST_CAP = 1000,
   TODAS = 'todas',
   TODOS = 'todos';
+/** Semana escolhida sobrevive a voltar atrás (o componente remonta e perdia a
+ *  seleção, caindo sempre na semana anterior). sessionStorage, não localStorage
+ *  — é preferência da sessão, não deve persistir para sempre nem entre utilizadores. */
+const SELECTED_WEEK_KEY = 'faturacao-tab-selected-week';
+function lerSemanaGuardada(): Date | null {
+  const raw = sessionStorage.getItem(SELECTED_WEEK_KEY);
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 const getWeekShortcutButtons = () => getWeekShortcuts();
 const emptyKpi = (dl = '') => emptyResumo(dl);
 
@@ -66,9 +76,15 @@ export function FaturacaoContent() {
 
   const [estacaoId, setEstacaoId] = useState<string>(TODAS);
   const [metodo, setMetodo] = useState<string>(TODOS);
-  const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
+  const [selectedWeek, setSelectedWeek] = useState<Date>(
+    () => lerSemanaGuardada() ?? subWeeks(new Date(), 1)
+  );
   const [page, setPage] = useState(1);
   const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    sessionStorage.setItem(SELECTED_WEEK_KEY, selectedWeek.toISOString());
+  }, [selectedWeek]);
 
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
   const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
