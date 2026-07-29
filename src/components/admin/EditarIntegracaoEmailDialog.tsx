@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useEditarIntegracaoEmail } from '@/hooks/useEditarIntegracaoEmail';
 import {
   Dialog,
   DialogContent,
@@ -50,7 +51,7 @@ export function EditarIntegracaoEmailDialog({ open, onOpenChange, row, onSuccess
   const [testState, setTestState] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testError, setTestError] = useState('');
 
-  const [saving, setSaving] = useState(false);
+  const editMutation = useEditarIntegracaoEmail();
 
   useEffect(() => {
     if (!open) return;
@@ -108,26 +109,15 @@ export function EditarIntegracaoEmailDialog({ open, onOpenChange, row, onSuccess
       return;
     }
 
-    setSaving(true);
     try {
-      const { error } = await supabase
-        .from('plataformas_configuracao')
-        .update({
-          nome: nome.trim(),
-          email_sender_name: senderName.trim(),
-          email_sender_email: senderEmail.trim(),
-          email_reply_to: replyTo.trim() || null,
-        })
-        .eq('id', row.id);
-      if (error) throw error;
-
-      if (showApiKeySection && apiKey.trim()) {
-        const { error: keyError } = await supabase.rpc('set_email_api_key', {
-          p_integracao_id: row.id,
-          p_api_key: apiKey.trim(),
-        });
-        if (keyError) throw keyError;
-      }
+      await editMutation.mutateAsync({
+        id: row.id,
+        nome: nome.trim(),
+        senderName: senderName.trim(),
+        senderEmail: senderEmail.trim(),
+        replyTo: replyTo.trim(),
+        apiKey: showApiKeySection && apiKey.trim() ? apiKey.trim() : undefined,
+      });
 
       toast({ title: 'Integração atualizada', description: `Brevo "${nome.trim()}" atualizada.` });
       onOpenChange(false);
@@ -138,8 +128,6 @@ export function EditarIntegracaoEmailDialog({ open, onOpenChange, row, onSuccess
         description: error.message || 'Não foi possível guardar as alterações',
         variant: 'destructive',
       });
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -264,8 +252,8 @@ export function EditarIntegracaoEmailDialog({ open, onOpenChange, row, onSuccess
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? (
+          <Button onClick={handleSave} disabled={editMutation.isPending}>
+            {editMutation.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />A guardar...
               </>
