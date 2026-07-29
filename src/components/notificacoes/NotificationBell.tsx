@@ -1,27 +1,34 @@
 import { useState } from 'react';
 import { Bell } from 'lucide-react';
 import { useNotificacoesContext } from '@/contexts/NotificacoesContext';
+import { useNotificacoesHistorico } from '@/hooks/useNotificacoesHistorico';
+import { useMarkNotificationRead } from '@/hooks/useNotifications';
 import { NotificationCenter, type NotificationFilter } from '@/components/ui/notification-center';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 /**
  * Sino persistente no header, sempre visível (ao contrário do NotificacoesPopup,
- * que só aparece por alguns segundos por aviso). Usa o mesmo NotificacoesContext
- * (só activas/não-resolvidas) — não existe ainda uma query de histórico
- * paginado, por isso os separadores "Não resolvidas"/"Todas" mostram a mesma
- * lista por agora; `hasMore`/`onLoadMore` ficam sempre a false/no-op até essa
- * query existir.
+ * que só aparece por alguns segundos por aviso). "Não resolvidas" usa o
+ * NotificacoesContext (realtime, instantâneo). "Todas" usa uma query à parte
+ * (useNotificacoesHistorico) que inclui resolvidas — sem ela, uma notificação
+ * resolvida ficava impossível de encontrar em qualquer separador. Só corre
+ * quando o popover está aberto E o separador "Todas" está seleccionado.
  */
 export function NotificationBell() {
   const { notificacoes, resolver, enabled } = useNotificacoesContext();
 
   const [open, setOpen] = useState(false);
   const [filtro, setFiltro] = useState<NotificationFilter>('unread');
+  const mostrarTodas = filtro === 'all';
+
+  const historico = useNotificacoesHistorico(false, open && mostrarTodas);
+  const markAsRead = useMarkNotificationRead();
 
   if (!enabled) return null;
 
   const unreadCount = notificacoes.length;
+  const notificacoesHistorico = historico.data?.pages.flatMap((p) => p.data) ?? [];
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -37,15 +44,15 @@ export function NotificationBell() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96 max-h-[70vh] overflow-y-auto p-3">
         <NotificationCenter
-          notificacoes={notificacoes}
-          isLoading={false}
-          error={null}
+          notificacoes={mostrarTodas ? notificacoesHistorico : notificacoes}
+          isLoading={mostrarTodas && historico.isLoading}
+          error={mostrarTodas ? (historico.error as Error | null) : null}
           filtro={filtro}
           onFiltroChange={setFiltro}
-          onMarkAsRead={resolver}
-          onLoadMore={() => {}}
-          hasMore={false}
-          isLoadingMore={false}
+          onMarkAsRead={mostrarTodas ? (id) => markAsRead.mutate(id) : resolver}
+          onLoadMore={() => historico.fetchNextPage()}
+          hasMore={mostrarTodas && !!historico.hasNextPage}
+          isLoadingMore={historico.isFetchingNextPage}
           unreadCount={unreadCount}
         />
       </PopoverContent>
