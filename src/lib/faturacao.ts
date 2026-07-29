@@ -88,20 +88,39 @@ export async function checkFaturacaoHealth(): Promise<boolean> {
  */
 export async function anularCobrancasFaturacao(cobrancaIds: string[]): Promise<void> {
   for (const id of cobrancaIds) {
-    // Recibos ativos da cobrança → anulados (estorno a débito).
+    // Recibos ativos da cobrança → anulados (estorno a débito). Uma cobrança
+    // pode ter VÁRIOS recibos ativos ao mesmo tempo (acordo de parcelamento:
+    // um por parcela) — este UPDATE já os apanha todos, por `referencia`.
     // Grava um motivo automático — se o recibo pertencer a um motorista, o
     // aviso de anulação sai coerente e tranquilizador (em vez de vazio ou
     // alarmante: "faturação anulada" faria o motorista pensar que perdeu o
     // contrato, quando é apenas um reprocessamento administrativo).
-    const { error: recErr } = await supabase
+    const { data: recibosAnulados, error: recErr } = await supabase
       .from('recibos')
       .update({
         estado: 'anulado',
         observacoes: 'Recibo anulado por reprocessamento da faturação — será emitido novo recibo.',
       })
       .eq('referencia', id)
-      .eq('estado', 'ativo');
+      .eq('estado', 'ativo')
+      .select('id');
     if (recErr) throw recErr;
+
+    // Cada recibo anulado acima pode pertencer a uma parcela de um acordo de
+    // pagamento — sem isto, a parcela ficava presa em 'liquidacao_pendente'/
+    // 'paga' com recibo_id a apontar para um recibo já anulado, e o outbox
+    // continuava a tentar reemitir (mesmo bug já corrigido para a anulação
+    // avulsa em FaturacaoTab.confirmarAnular — aqui faltava). No-op para
+    // recibos que não pertencem a nenhuma parcela.
+    for (const r of recibosAnulados ?? []) {
+      const { error: reverterErr } = await supabase.rpc(
+        'acordo_parcela_reverter_pagamento' as any,
+        { p_recibo_id: (r as { id: string }).id }
+      );
+      if (reverterErr) {
+        console.warn('Falha (não crítica) a reverter parcela do acordo:', reverterErr);
+      }
+    }
 
     // Notas de crédito ativas da cobrança → anuladas (estorno a débito).
     // A tabela pode não existir em BDs antigas — não partir por isso.

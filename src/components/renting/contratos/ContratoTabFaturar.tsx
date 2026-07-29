@@ -29,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -111,6 +112,11 @@ export function ContratoTabFaturar({ contrato }: Props) {
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
   const [anularOpen, setAnularOpen] = useState(false);
   const [anularBusy, setAnularBusy] = useState(false);
+  // Um contrato pode ter várias cobranças ativas (ciclos de faturação
+  // diferentes) — "Anular faturação" anulava todas de vez, sem escolha
+  // nenhuma (achado ao testar manualmente). Pré-selecionadas todas ao abrir,
+  // para o comportamento antigo continuar a ser o valor por omissão.
+  const [cobrancasSelecionadas, setCobrancasSelecionadas] = useState<Set<string>>(new Set());
   const [enviarInvoice, setEnviarInvoice] = useState<InvoiceMetadata | null>(null);
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -284,22 +290,37 @@ export function ContratoTabFaturar({ contrato }: Props) {
       const ativasIds = (cobrancas ?? [])
         .filter((c) => c.estado === 'emitida' || c.estado === 'paga')
         .map((c) => c.id);
-      await anularCobrancasFaturacao(ativasIds);
+      const idsParaAnular = ativasIds.filter((id) => cobrancasSelecionadas.has(id));
+      if (!idsParaAnular.length) {
+        toast.error('Seleciona pelo menos uma fatura para anular.');
+        return;
+      }
+      await anularCobrancasFaturacao(idsParaAnular);
 
-      // Contrato volta a "não faturado" (limpa o snapshot de totais congelado).
-      const { error: upErr } = await supabase
-        .from('contratos_renting')
-        .update({
-          estado_financeiro: 'pendente',
-          facturado_em: null,
-          total_subtotal: null,
-          total_iva: null,
-          total_final: null,
-        })
-        .eq('id', contrato.id);
-      if (upErr) throw upErr;
+      // Só repõe o contrato a "não faturado" (limpa o snapshot de totais
+      // congelado) se NÃO sobrar nenhuma cobrança ativa — anular só ALGUMAS
+      // (ex.: um ciclo de faturação a mais, mantendo os restantes) não pode
+      // apagar o estado financeiro de cobranças que continuam válidas.
+      const sobraAlgumaAtiva = ativasIds.some((id) => !idsParaAnular.includes(id));
+      if (!sobraAlgumaAtiva) {
+        const { error: upErr } = await supabase
+          .from('contratos_renting')
+          .update({
+            estado_financeiro: 'pendente',
+            facturado_em: null,
+            total_subtotal: null,
+            total_iva: null,
+            total_final: null,
+          })
+          .eq('id', contrato.id);
+        if (upErr) throw upErr;
+      }
 
-      toast.success('Faturação anulada — o contrato voltou a "não faturado".');
+      toast.success(
+        idsParaAnular.length === ativasIds.length
+          ? 'Faturação anulada — o contrato voltou a "não faturado".'
+          : `${idsParaAnular.length} fatura(s) anulada(s).`
+      );
       setAnularOpen(false);
       qc.invalidateQueries({ queryKey: ['renting'] });
       qc.invalidateQueries({ queryKey: ['contrato-historico', contrato.id] });
@@ -590,7 +611,16 @@ export function ContratoTabFaturar({ contrato }: Props) {
                   variant="outline"
                   size="sm"
                   className="mt-2 h-7 gap-1.5 text-rose-600 hover:text-rose-700 dark:text-rose-400"
-                  onClick={() => setAnularOpen(true)}
+                  onClick={() => {
+                    setCobrancasSelecionadas(
+                      new Set(
+                        (cobrancas ?? [])
+                          .filter((c) => c.estado === 'emitida' || c.estado === 'paga')
+                          .map((c) => c.id)
+                      )
+                    );
+                    setAnularOpen(true);
+                  }}
                   disabled={anularBusy}
                 >
                   {anularBusy ? (
@@ -906,13 +936,50 @@ export function ContratoTabFaturar({ contrato }: Props) {
           <AlertDialogHeader>
             <AlertDialogTitle>Anular a faturação deste contrato?</AlertDialogTitle>
             <AlertDialogDescription>
-              O contrato volta a <b>"não faturado"</b> e fica re-faturável. Os lançamentos na
-              conta-corrente (cobrança, recibos e notas de crédito) são estornados — o saldo fica a
-              zero. Esta ação <b>não</b> emite Nota de Crédito nem cancela o documento fiscal no
-              software de faturação; se já tiver sido emitido um documento certificado, faça a
-              reversão fiscal (NC) separadamente.
+              Escolhe abaixo quais faturas anular — um contrato pode ter várias cobranças ativas
+              (ciclos de faturação diferentes). Os lançamentos na conta-corrente das selecionadas
+              (cobrança, recibos e notas de crédito) são estornados — o saldo fica a zero. Se
+              anulares todas, o contrato volta a <b>"não faturado"</b> e fica re-faturável. Esta ação{' '}
+              <b>não</b> emite Nota de Crédito nem cancela o documento fiscal no software de
+              faturação; se já tiver sido emitido um documento certificado, faça a reversão fiscal
+              (NC) separadamente.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-1.5 max-h-64 overflow-y-auto rounded-md border p-2">
+            {(cobrancas ?? [])
+              .filter((c) => c.estado === 'emitida' || c.estado === 'paga')
+              .map((c) => {
+                const checked = cobrancasSelecionadas.has(c.id);
+                return (
+                  <label
+                    key={c.id}
+                    className="flex items-center gap-2.5 rounded px-1.5 py-1 text-sm cursor-pointer hover:bg-muted/50"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      disabled={anularBusy}
+                      onCheckedChange={(v) => {
+                        setCobrancasSelecionadas((prev) => {
+                          const next = new Set(prev);
+                          if (v) next.add(c.id);
+                          else next.delete(c.id);
+                          return next;
+                        });
+                      }}
+                    />
+                    <span className="font-mono text-xs">
+                      {c.documento_externo_ref || c.id.slice(0, 8).toUpperCase()}
+                    </span>
+                    <span className="text-muted-foreground truncate flex-1" title={c.destinatario_nome}>
+                      {c.destinatario_nome}
+                    </span>
+                    <span className="font-medium whitespace-nowrap">
+                      {formatCurrency(c.valor_total)}
+                    </span>
+                  </label>
+                );
+              })}
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={anularBusy}>Voltar</AlertDialogCancel>
             <AlertDialogAction
@@ -920,10 +987,12 @@ export function ContratoTabFaturar({ contrato }: Props) {
                 e.preventDefault();
                 anularFaturacao();
               }}
-              disabled={anularBusy}
+              disabled={anularBusy || cobrancasSelecionadas.size === 0}
               className="bg-rose-600 hover:bg-rose-700"
             >
-              {anularBusy ? 'A anular…' : 'Anular faturação'}
+              {anularBusy
+                ? 'A anular…'
+                : `Anular ${cobrancasSelecionadas.size || ''} fatura${cobrancasSelecionadas.size === 1 ? '' : 's'}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
