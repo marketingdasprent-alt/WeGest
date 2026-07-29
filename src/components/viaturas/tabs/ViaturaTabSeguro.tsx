@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useConfirmacao } from '@/hooks/useConfirmacao';
 import { RECURSOS } from '@/utils/permissions';
 
 const seguroSchema = z.object({
@@ -64,6 +65,7 @@ interface ViaturaTabSeguroProps {
 
 export function ViaturaTabSeguro({ viatura, onUpdate }: ViaturaTabSeguroProps) {
   const { canEdit } = usePermissions();
+  const { confirmar, dialogo } = useConfirmacao();
   const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
   const [saving, setSaving] = useState(false);
   const [cartaVerde, setCartaVerde] = useState<ViaturaDocument | null>(null);
@@ -199,7 +201,13 @@ export function ViaturaTabSeguro({ viatura, onUpdate }: ViaturaTabSeguroProps) {
 
   const handleDeleteCartaVerde = async () => {
     if (!cartaVerde || !podeEditar) return;
-    if (!window.confirm('Tem a certeza que quer remover a Carta Verde?')) return;
+    const ok = await confirmar({
+      titulo: 'Remover a carta verde?',
+      descricao: 'O ficheiro é apagado do armazenamento e não pode ser recuperado.',
+      acao: 'Remover',
+      destrutiva: true,
+    });
+    if (!ok) return;
 
     try {
       await supabase.storage.from('viatura-documentos').remove([cartaVerde.ficheiro_url]);
@@ -467,6 +475,7 @@ export function ViaturaTabSeguro({ viatura, onUpdate }: ViaturaTabSeguroProps) {
           )}
         </CardContent>
       </Card>
+      {dialogo}
     </div>
   );
 }
