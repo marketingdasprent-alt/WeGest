@@ -33,7 +33,7 @@ const CONTROLOS = ['Button', 'button', 'ToolbarButton', 'Btn'];
  * A correcção é dar-lhe `aria-label` (ou um `<span className="sr-only">`), não
  * subir o teto.
  */
-const TETO = 163;
+const TETO = 147;
 
 function ficheirosTsx(dir: string): string[] {
   const saida: string[] = [];

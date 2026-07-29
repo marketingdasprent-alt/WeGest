@@ -731,16 +731,22 @@ export function ViaturaTabReparacoes({ viaturaId, onUpdate }: ViaturaTabReparaco
                   currentMediaList[currentMediaIndex]?.nome_ficheiro
                 )
               }
+              aria-label={
+                currentMediaList[currentMediaIndex]?.nome_ficheiro
+                  ? `Descarregar ${currentMediaList[currentMediaIndex].nome_ficheiro}`
+                  : 'Descarregar'
+              }
             >
-              <Download className="h-5 w-5" />
+              <Download className="h-5 w-5" aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
               className="text-white hover:bg-white/20 rounded-full"
               onClick={() => setLightboxOpen(false)}
+              aria-label="Fechar"
             >
-              <X className="h-5 w-5" />
+              <X className="h-5 w-5" aria-hidden="true" />
             </Button>
           </div>
           <div className="relative w-full h-full flex items-center justify-center p-4 sm:p-12">
@@ -751,16 +757,18 @@ export function ViaturaTabReparacoes({ viaturaId, onUpdate }: ViaturaTabReparaco
                   size="icon"
                   className="absolute left-2 sm:left-6 z-40 text-white hover:bg-white/20 rounded-full h-12 w-12"
                   onClick={prevMedia}
+                  aria-label="Ficheiro anterior"
                 >
-                  <ChevronLeft className="h-8 w-8" />
+                  <ChevronLeft className="h-8 w-8" aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="absolute right-2 sm:right-6 z-40 text-white hover:bg-white/20 rounded-full h-12 w-12"
                   onClick={nextMedia}
+                  aria-label="Ficheiro seguinte"
                 >
-                  <ChevronRight className="h-8 w-8" />
+                  <ChevronRight className="h-8 w-8" aria-hidden="true" />
                 </Button>
               </>
             )}
