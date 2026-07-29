@@ -184,9 +184,22 @@ export const SidebarMenu: React.FC = () => {
             >
               <Search className="h-5 w-5" />
             </Button>
-            <NotificationBell />
-            <ThemeToggle />
-            <UserMenu />
+            {/* O <header> inteiro é o SheetTrigger (tocar em qualquer sítio abre
+                a gaveta). O logo e a pesquisa acima já se excluem com
+                stopPropagation, mas estes três são componentes e não o podiam
+                fazer por si: tocar no sino abria o menu de navegação em vez do
+                painel de notificações, e o mesmo acontecia ao tema e ao menu de
+                utilizador. Excluir o grupo todo aqui resolve os três de uma vez
+                e mantém o padrão já usado pelos irmãos. */}
+            <div
+              className="flex items-center gap-1"
+              onClick={(e) => e.stopPropagation()}
+              role="presentation"
+            >
+              <NotificationBell />
+              <ThemeToggle />
+              <UserMenu />
+            </div>
           </div>
         </header>
       </SheetTrigger>

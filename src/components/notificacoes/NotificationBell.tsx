@@ -45,7 +45,13 @@ export function NotificationBell() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 max-h-[70vh] overflow-y-auto p-3">
+      {/* w-96 fixo (384px) era mais largo do que um ecrã de 360px, e o painel
+          saía fora da viewport no telemóvel. Mantém os 384px onde há espaço e
+          encolhe para a largura disponível quando não há. */}
+      <PopoverContent
+        align="end"
+        className="w-[min(24rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto p-3"
+      >
         <NotificationCenter
           notificacoes={mostrarTodas ? notificacoesHistorico : notificacoes}
           isLoading={mostrarTodas && historico.isLoading}
