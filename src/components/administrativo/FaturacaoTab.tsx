@@ -292,6 +292,21 @@ export function FaturacaoContent() {
             .update({ estado: 'emitida' })
             .eq('id', row.referencia)
             .eq('estado', 'paga');
+        // Se este recibo pertence a uma parcela de acordo, reabre-a (estava
+        // liquidacao_pendente/paga) e fecha a linha do outbox associada —
+        // sem isto a parcela ficava presa e o drain (5 em 5 min) tentava
+        // emitir um RC para um pagamento já anulado. No-op se não pertencer
+        // a nenhum acordo.
+        const { error: parcelaErr } = await supabase.rpc(
+          'acordo_parcela_reverter_pagamento' as any,
+          { p_recibo_id: row.reciboId }
+        );
+        if (parcelaErr) {
+          console.error('Falha ao reverter parcela do acordo:', parcelaErr);
+          toast.error(
+            `Recibo anulado, mas a parcela do acordo pode ter ficado desatualizada: ${parcelaErr.message}`
+          );
+        }
         toast.success('Recibo anulado (anulamento lançado na conta-corrente).');
       } else if (row.docTipo === 'nota_credito' && row.notaCreditoId) {
         const { data: ncAtual } = await supabase
