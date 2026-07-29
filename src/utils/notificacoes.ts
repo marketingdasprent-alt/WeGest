@@ -1,35 +1,170 @@
-import type { Tables } from '@/integrations/supabase/types';
-
-type Notificacao = Tables<'notificacoes'>;
+import type { Notificacao } from '@/types/notificacao';
 
 /**
- * Destino do botão "Ver" por tipo de notificação.
- * `link` genérico tem prioridade (ex.: avisos de lista de espera); depois
- * resolve-se por tipo (viatura disponível → detalhe da viatura) e, por fim,
- * cai nas candidaturas.
+ * Destino e rótulo do botão "Ver" de cada tipo de notificação.
+ *
+ * PORQUE ISTO É UM MAPA EXPLÍCITO E NÃO UMA CADEIA DE `if`s
+ * A base de dados aceita 25 tipos (CHECK `notificacoes_tipo_check`). A versão
+ * anterior deste ficheiro rotulava 10 e tinha `return 'Ver candidatura'` como
+ * fallback — ou seja, um alerta de login suspeito, uma fatura por enviar e um
+ * ticket em atraso mostravam todos um botão a dizer **"Ver candidatura"** que
+ * levava a `/motoristas/candidaturas`. O produto dizia ao utilizador uma coisa
+ * que não era verdade, e levava-o ao ecrã errado.
+ *
+ * Com um mapa indexado pelo tipo, um tipo novo na base de dados aparece aqui em
+ * falta (e cai num fallback honesto) em vez de ser silenciosamente etiquetado
+ * como outra coisa. O teste `notificacoes.test.ts` compara este mapa com a
+ * lista de tipos e falha se algum ficar de fora.
  */
-const TIPOS_VIATURA = ['viatura_seguro_expirando', 'viatura_inspecao_expirando'];
-const TIPOS_MOTORISTA = ['motorista_carta_expirando', 'motorista_licenca_tvde_expirando'];
 
+/** Todos os tipos aceites por `notificacoes_tipo_check`, na BD. */
+export const TIPOS_NOTIFICACAO = [
+  'assistencia_ticket_aberto_demasiado_tempo',
+  'cobranca_gerada',
+  'contrato_renting_criado',
+  'contrato_renting_renovacao_proxima',
+  'contrato_renting_sem_checkin',
+  'escalonamento',
+  'invoice_nao_enviada_ao_cliente',
+  'motorista_candidatura_parada',
+  'motorista_carta_expirando',
+  'motorista_ficha_incompleta',
+  'motorista_licenca_tvde_expirando',
+  'motorista_pendente',
+  'motorista_reparacao_cobranca',
+  'pedido_troca_kms',
+  'recibo_anulado',
+  'seguranca_login_suspeito',
+  'sistema_job_falhou',
+  'sistema_limite_email_atingido',
+  'utilizador_criado',
+  'viatura_disponivel',
+  'viatura_extintor_expirando',
+  'viatura_inspecao_expirando',
+  'viatura_iuc_a_pagar',
+  'viatura_manutencao_preventiva_expirando',
+  'viatura_seguro_expirando',
+] as const;
+
+export type TipoNotificacao = (typeof TIPOS_NOTIFICACAO)[number];
+
+interface DestinoNotificacao {
+  /** Texto do botão. Diz o que o utilizador vai encontrar, não o que o sistema fez. */
+  label: string;
+  /** Rota base. Todas verificadas em WebAppRoutes.tsx. */
+  rota: string;
+  /**
+   * Quando presente, a rota fica mais específica se a notificação trouxer o id
+   * dessa entidade (ex.: viatura_id → /viaturas/<id>).
+   */
+  especificaPor?: 'viatura_id' | 'candidatura_id';
+}
+
+const DESTINOS: Record<TipoNotificacao, DestinoNotificacao> = {
+  // ── Viaturas ────────────────────────────────────────────────────────────
+  viatura_disponivel: { label: 'Ver viatura', rota: '/viaturas', especificaPor: 'viatura_id' },
+  viatura_seguro_expirando: {
+    label: 'Ver viatura',
+    rota: '/viaturas',
+    especificaPor: 'viatura_id',
+  },
+  viatura_inspecao_expirando: {
+    label: 'Ver viatura',
+    rota: '/viaturas',
+    especificaPor: 'viatura_id',
+  },
+  viatura_extintor_expirando: {
+    label: 'Ver viatura',
+    rota: '/viaturas',
+    especificaPor: 'viatura_id',
+  },
+  viatura_iuc_a_pagar: { label: 'Ver viatura', rota: '/viaturas', especificaPor: 'viatura_id' },
+  viatura_manutencao_preventiva_expirando: {
+    label: 'Ver viatura',
+    rota: '/viaturas',
+    especificaPor: 'viatura_id',
+  },
+
+  // ── Motoristas ──────────────────────────────────────────────────────────
+  // Estes dois são genuinamente candidaturas — é o único sítio onde
+  // "Ver candidatura" está correcto.
+  motorista_pendente: {
+    label: 'Ver candidatura',
+    rota: '/motoristas/candidaturas',
+    especificaPor: 'candidatura_id',
+  },
+  motorista_candidatura_parada: {
+    label: 'Ver candidatura',
+    rota: '/motoristas/candidaturas',
+    especificaPor: 'candidatura_id',
+  },
+  motorista_carta_expirando: { label: 'Ver motorista', rota: '/motoristas' },
+  motorista_licenca_tvde_expirando: { label: 'Ver motorista', rota: '/motoristas' },
+  // Dirigidas AO MOTORISTA, não ao staff: o destino é o portal dele, onde tem
+  // acesso. Mandá-lo para uma rota de staff dava-lhe um ecrã sem permissão.
+  motorista_ficha_incompleta: { label: 'Completar ficha', rota: '/motorista/painel' },
+  motorista_reparacao_cobranca: { label: 'Ver conta', rota: '/motorista/painel' },
+
+  // ── Contratos e reservas ────────────────────────────────────────────────
+  contrato_renting_criado: { label: 'Ver contrato', rota: '/renting/contratos' },
+  contrato_renting_renovacao_proxima: { label: 'Ver contrato', rota: '/renting/contratos' },
+  contrato_renting_sem_checkin: { label: 'Ver contrato', rota: '/renting/contratos' },
+  pedido_troca_kms: { label: 'Ver pedido', rota: '/renting/pedidos-kms' },
+
+  // ── Financeiro ──────────────────────────────────────────────────────────
+  cobranca_gerada: { label: 'Ver cobrança', rota: '/administrativo/faturacao' },
+  invoice_nao_enviada_ao_cliente: { label: 'Ver fatura', rota: '/administrativo/faturacao' },
+  recibo_anulado: { label: 'Ver recibos', rota: '/administrativo' },
+
+  // ── Assistência e calendário ────────────────────────────────────────────
+  assistencia_ticket_aberto_demasiado_tempo: { label: 'Ver ticket', rota: '/assistencia' },
+  escalonamento: { label: 'Ver evento', rota: '/calendario' },
+
+  // ── Sistema e segurança ─────────────────────────────────────────────────
+  seguranca_login_suspeito: { label: 'Ver utilizadores', rota: '/admin/settings' },
+  utilizador_criado: { label: 'Ver utilizadores', rota: '/admin/settings' },
+  sistema_job_falhou: { label: 'Ver falhas', rota: '/admin/automacao' },
+  sistema_limite_email_atingido: { label: 'Ver automações', rota: '/admin/automacao' },
+};
+
+/**
+ * Fallback para um tipo que ainda não esteja no mapa.
+ *
+ * Leva à própria lista de notificações: é o único destino que existe sempre e
+ * que nunca engana. Antes, um tipo desconhecido dizia "Ver candidatura" e
+ * levava às candidaturas de motorista — uma afirmação falsa sobre o que o
+ * utilizador ia encontrar.
+ */
+const DESTINO_DESCONHECIDO: DestinoNotificacao = {
+  label: 'Ver detalhe',
+  rota: '/notificacoes',
+};
+
+function destinoDe(n: Notificacao): DestinoNotificacao {
+  return DESTINOS[n.tipo as TipoNotificacao] ?? DESTINO_DESCONHECIDO;
+}
+
+/**
+ * Rota de destino do botão "Ver".
+ *
+ * `n.link` tem prioridade: é preenchido pelo motor de automação com a rota
+ * exacta da entidade que originou o aviso, e é sempre mais específico do que
+ * qualquer coisa que se derive do tipo.
+ */
 export const notificacaoLink = (n: Notificacao): string => {
   if (n.link) return n.link;
-  if (n.tipo === 'viatura_disponivel' && n.viatura_id) return `/viaturas/${n.viatura_id}`;
-  if (n.tipo === 'pedido_troca_kms') return '/renting/pedidos-kms';
-  if (TIPOS_VIATURA.includes(n.tipo) && n.viatura_id) return `/viaturas/${n.viatura_id}`;
-  return n.candidatura_id
-    ? `/motoristas/candidaturas?candidatura=${n.candidatura_id}`
-    : '/motoristas/candidaturas';
+
+  const destino = destinoDe(n);
+
+  if (destino.especificaPor === 'viatura_id' && n.viatura_id) {
+    return `${destino.rota}/${n.viatura_id}`;
+  }
+  if (destino.especificaPor === 'candidatura_id' && n.candidatura_id) {
+    return `${destino.rota}?candidatura=${n.candidatura_id}`;
+  }
+
+  return destino.rota;
 };
 
-/** Label do botão "Ver" por tipo de notificação. */
-export const notificacaoLabel = (n: Notificacao): string => {
-  if (n.tipo === 'viatura_disponivel') return 'Ver viatura';
-  if (n.tipo === 'pedido_troca_kms') return 'Ver pedido';
-  if (TIPOS_VIATURA.includes(n.tipo)) return 'Ver viatura';
-  if (TIPOS_MOTORISTA.includes(n.tipo)) return 'Ver motorista';
-  if (n.tipo === 'cobranca_gerada') return 'Ver cobrança';
-  if (n.tipo === 'contrato_renting_renovacao_proxima') return 'Ver contrato';
-  if (n.tipo === 'utilizador_criado') return 'Ver utilizadores';
-  if (n.tipo === 'sistema_limite_email_atingido') return 'Ver automações';
-  return 'Ver candidatura';
-};
+/** Texto do botão "Ver" — descreve o que o utilizador vai encontrar. */
+export const notificacaoLabel = (n: Notificacao): string => destinoDe(n).label;

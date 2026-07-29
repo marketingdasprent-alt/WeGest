@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { notificacaoLink, notificacaoLabel } from './notificacoes';
+import { notificacaoLink, notificacaoLabel, TIPOS_NOTIFICACAO } from './notificacoes';
 
 type Notificacao = Parameters<typeof notificacaoLink>[0];
 
@@ -41,14 +41,19 @@ describe('notificacaoLink', () => {
     expect(notificacaoLink(n)).toBe('/viaturas/v-2');
   });
 
-  it('motorista_carta_expirando sem link nem viatura_id cai no fallback de candidaturas (não tem rota própria de motorista)', () => {
+  it('motorista_carta_expirando vai para os motoristas, não para as candidaturas', () => {
+    // Este teste asseverava o contrário, justificando-se com "não tem rota
+    // própria de motorista". A premissa era falsa: /motoristas existe
+    // (WebAppRoutes.tsx:191), tal como /motoristas/:id. Mandar um alerta de
+    // carta de condução a expirar para o ecrã de CANDIDATURAS nunca foi
+    // justificado — era o fallback enganador a ser tomado por desenho.
     const n = fixture({
       tipo: 'motorista_carta_expirando',
       link: null,
       viatura_id: null,
       candidatura_id: null,
     });
-    expect(notificacaoLink(n)).toBe('/motoristas/candidaturas');
+    expect(notificacaoLink(n)).toBe('/motoristas');
   });
 
   it('viatura_disponivel continua a funcionar como antes', () => {
@@ -109,7 +114,65 @@ describe('notificacaoLabel', () => {
     );
   });
 
-  it('tipo desconhecido continua a cair em "Ver candidatura"', () => {
+  it('motorista_pendente mostra "Ver candidatura" — aqui está correcto', () => {
+    // O nome anterior deste teste dizia "tipo desconhecido", mas
+    // motorista_pendente é um tipo REAL e é um dos dois (com
+    // motorista_candidatura_parada) em que "Ver candidatura" é a verdade.
     expect(notificacaoLabel(fixture({ tipo: 'motorista_pendente' }))).toBe('Ver candidatura');
+  });
+});
+
+// ── Invariantes do mapa ─────────────────────────────────────────────────────
+// A BD aceita 25 tipos. Antes, o frontend rotulava 10 e os outros 15 caíam num
+// `return 'Ver candidatura'` — um alerta de login suspeito, uma fatura por
+// enviar ou um ticket em atraso mostravam todos um botão que mentia e levava ao
+// ecrã de candidaturas de motorista. Estes testes impedem o regresso disso.
+describe('mapa de tipos — completude e honestidade', () => {
+  it('todos os 25 tipos da base de dados têm rótulo e rota próprios', () => {
+    // Se a BD ganhar um tipo novo, acrescentá-lo a TIPOS_NOTIFICACAO faz este
+    // teste falhar até o destino existir — em vez de o tipo ser silenciosamente
+    // etiquetado como outra coisa.
+    const semDestino = TIPOS_NOTIFICACAO.filter((tipo) => {
+      const n = fixture({ tipo, link: null, viatura_id: null, candidatura_id: null });
+      return notificacaoLabel(n) === 'Ver detalhe' && notificacaoLink(n) === '/notificacoes';
+    });
+    expect(semDestino).toEqual([]);
+  });
+
+  it('nenhum tipo diz "Ver candidatura" sem ser uma candidatura', () => {
+    const queDizemCandidatura = TIPOS_NOTIFICACAO.filter(
+      (tipo) => notificacaoLabel(fixture({ tipo })) === 'Ver candidatura'
+    );
+    expect(queDizemCandidatura.sort()).toEqual([
+      'motorista_candidatura_parada',
+      'motorista_pendente',
+    ]);
+  });
+
+  it('um tipo fora do mapa cai num destino honesto, nunca em candidaturas', () => {
+    const n = fixture({
+      tipo: 'tipo_que_ainda_nao_existe' as never,
+      link: null,
+      viatura_id: null,
+      candidatura_id: null,
+    });
+    expect(notificacaoLabel(n)).toBe('Ver detalhe');
+    expect(notificacaoLink(n)).toBe('/notificacoes');
+    expect(notificacaoLabel(n)).not.toBe('Ver candidatura');
+  });
+
+  it('avisos dirigidos ao motorista levam ao portal dele, não a rotas de staff', () => {
+    // Um motorista não tem acesso às rotas de staff: mandá-lo para lá dava-lhe
+    // um ecrã sem permissão em vez da informação que o aviso lhe prometeu.
+    for (const tipo of ['motorista_ficha_incompleta', 'motorista_reparacao_cobranca'] as const) {
+      const n = fixture({ tipo, link: null, viatura_id: null, candidatura_id: null });
+      expect(notificacaoLink(n)).toBe('/motorista/painel');
+    }
+  });
+
+  it('o rótulo nunca vem vazio', () => {
+    for (const tipo of TIPOS_NOTIFICACAO) {
+      expect(notificacaoLabel(fixture({ tipo })).trim().length).toBeGreaterThan(0);
+    }
   });
 });
