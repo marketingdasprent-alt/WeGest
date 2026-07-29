@@ -95,7 +95,12 @@ function singleDocTipo(m: MovimentoRaw): DocTipo {
   return 'ajuste';
 }
 
-/** Nº "NC-{codigo}" extraído do descritivo do movimento de nota de crédito. */
+/**
+ * Nº "NC-{codigo}" extraído do descritivo do movimento de nota de crédito.
+ * Só usado como ÚLTIMO recurso — quando a NC não chegou a ser emitida no
+ * provider (ou a emissão falhou), `notaCredito.documento_externo_ref` fica
+ * null e cai-se aqui. Ver `numeroDoc` em `mapMovimentoToRow`.
+ */
 function ncNumeroFromDesc(m: MovimentoRaw): string {
   if (m.origem !== 'nota_credito') return '';
   const match = (m.descricao ?? '').match(/Nº\s*(\d+)/);
@@ -128,6 +133,11 @@ interface EmbedContrato {
   regime: string | null;
   estacao_entrega_id: string | null;
 }
+interface EmbedNotaCredito {
+  id: string;
+  codigo: number | null;
+  documento_externo_ref: string | null;
+}
 
 /** Linha crua de conta_movimentos com embeds. */
 export interface MovimentoRaw {
@@ -150,6 +160,7 @@ export interface MovimentoRaw {
   cobranca: EmbedCobranca | null;
   recibo: EmbedRecibo | null;
   contrato: EmbedContrato | null;
+  notaCredito: EmbedNotaCredito | null;
 }
 
 /** Linha pronta a apresentar. */
@@ -200,8 +211,14 @@ export function mapMovimentoToRow(
   const isCredito = m.tipo === 'credito';
   const valor = Number(m.valor) || 0;
   const numeroDoc =
-    // a NC tem numeração própria — não pode herdar a ref. da fatura original (mesmo cobranca_id)
-    (m.origem === 'nota_credito' ? ncNumeroFromDesc(m) : '') ||
+    // a NC tem numeração própria — não pode herdar a ref. da fatura original (mesmo
+    // cobranca_id). Prioriza o nº real emitido no provider (documento_externo_ref);
+    // só cai para o código interno "NC-{codigo}" quando a NC nunca chegou a ser
+    // emitida fiscalmente (ou a emissão falhou) — mesma prioridade que já existia
+    // para o Recibo logo abaixo.
+    (m.origem === 'nota_credito'
+      ? m.notaCredito?.documento_externo_ref || ncNumeroFromDesc(m)
+      : '') ||
     m.cobranca?.documento_externo_ref ||
     m.recibo?.documento_externo_ref ||
     m.primavera_ref ||
@@ -363,5 +380,6 @@ export function movimentoSelect(
     entidade:clientes!conta_movimentos_entidade_id_fkey(id, nome, codigo),
     cobranca:contrato_cobrancas!conta_movimentos_cobranca_id_fkey(id, documento_externo_ref, estado, valor_total),
     recibo:recibos!conta_movimentos_recibo_id_fkey${reciboInner ? '!inner' : ''}(id, codigo, metodo, documento_externo_ref, referencia, data_recibo),
-    contrato:contratos_renting!conta_movimentos_contrato_id_fkey${contratoInner ? '!inner' : ''}(id, codigo, regime, estacao_entrega_id)`;
+    contrato:contratos_renting!conta_movimentos_contrato_id_fkey${contratoInner ? '!inner' : ''}(id, codigo, regime, estacao_entrega_id),
+    notaCredito:notas_credito!conta_movimentos_nota_credito_id_fkey(id, codigo, documento_externo_ref)`;
 }
