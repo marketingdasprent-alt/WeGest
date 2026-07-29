@@ -26,6 +26,16 @@ export interface Cliente {
   country_code?: string; // ISO-3166 alpha-2 (default PT)
 }
 
+/** Identificadores do documento ORIGINAL (FT/FR) que um Recibo liquida —
+ *  resolvidos pelo index.ts a partir de `invoices`, nunca pelo chamador.
+ *  insertReceipt (KeyInvoice) não usa "tipo de documento" próprio: referencia
+ *  o documento original por estes 3 campos + o valor a liquidar. */
+export interface DocumentoOriginal {
+  doctype: string;
+  serie: string;
+  docnum: string;
+}
+
 export interface EmitInput {
   tipo: 'FT' | 'FR' | 'NC' | 'RC';
   cliente: Cliente;
@@ -33,6 +43,8 @@ export interface EmitInput {
   observacoes?: string;
   referencia_externa?: string;
   documento_referencia?: string; // obrigatório p/ NC e RC
+  /** Só para RC — ver DocumentoOriginal. */
+  documentoOriginal?: DocumentoOriginal;
 }
 
 export interface PdfInput {

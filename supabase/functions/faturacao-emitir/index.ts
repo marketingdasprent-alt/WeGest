@@ -246,6 +246,46 @@ serve(async (req) => {
     const { provider, cfg, orgId } = await getOrgConfig(req, payload.org_id);
     const adapter = pickAdapter(provider);
 
+    // Worker (service role) grava com service role e org_id explícito — o trigger
+    // set_invoice_org_id não consegue resolver a org sem sessão de utilizador.
+    // Resolvido AQUI (não só mais abaixo) porque o Recibo precisa do mesmo
+    // cliente já para a consulta a `invoices` antes de sequer chamar o adapter.
+    const isServiceRole = isServiceRoleRequest(req);
+    const supabase = isServiceRole
+      ? createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '')
+      : callerClient(req);
+
+    // Recibo (RC): a KeyInvoice não usa "tipo de documento" próprio para
+    // insertReceipt — referencia o documento ORIGINAL (FT/FR) por
+    // DocType+DocSeries+DocNum. O chamador só manda `documento_referencia`
+    // (o nº legal, ex. "4 4/90"); resolvemos aqui os 3 campos a partir do
+    // nosso próprio espelho local (`invoices`), para nenhum chamador (cliente
+    // web, worker) ter de conhecer o formato interno do provider.
+    let documentoOriginal: EmitInput['documentoOriginal'];
+    if (payload.tipo === 'RC') {
+      const { data: original, error: originalErr } = await supabase
+        .from('invoices')
+        .select('provider_doctype, serie, provider_docnum')
+        .eq('numero', payload.documento_referencia)
+        .eq('cobranca_id', payload.cobranca_id ?? '')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (originalErr) throw originalErr;
+      if (!original?.provider_doctype || !original?.provider_docnum) {
+        return json({
+          success: false,
+          error: `Documento original "${payload.documento_referencia}" não encontrado — não é possível emitir o Recibo.`,
+          classe: 'known_failed',
+        });
+      }
+      documentoOriginal = {
+        doctype: original.provider_doctype,
+        serie: original.serie ?? '',
+        docnum: original.provider_docnum,
+      };
+    }
+
     const emitInput: EmitInput = {
       tipo: payload.tipo,
       cliente: payload.cliente ?? ({} as Cliente),
@@ -253,6 +293,7 @@ serve(async (req) => {
       observacoes: payload.observacoes,
       referencia_externa: payload.referencia_externa,
       documento_referencia: payload.documento_referencia,
+      documentoOriginal,
     };
     const doc = await adapter.emit(emitInput, cfg);
     // A partir daqui o documento fiscal JÁ EXISTE no provider — qualquer falha
@@ -266,12 +307,6 @@ serve(async (req) => {
       return s + comDesc * (1 + (Number(it.taxa_iva) || 0) / 100);
     }, 0);
 
-    // Worker (service role) grava com service role e org_id explícito — o trigger
-    // set_invoice_org_id não consegue resolver a org sem sessão de utilizador.
-    const isServiceRole = isServiceRoleRequest(req);
-    const supabase = isServiceRole
-      ? createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '')
-      : callerClient(req);
     const cliente = payload.cliente ?? ({} as Cliente);
 
     const { data: invoice, error: dbErr } = await supabase
