@@ -76,9 +76,22 @@ COMMENT ON FUNCTION public.acordos_manutencao_diaria(date) IS
 -- ── Crons ────────────────────────────────────────────────────────────────
 -- Os 2 cron.schedule() desta secção foram DELIBERADAMENTE retirados daqui
 -- (2026-07-29) — a função acima já está aplicada à BD real de produção, mas
--- os crons em si ficam de fora até o utilizador dar OK final para ligar a
--- automação a sério. Vivem agora em
--- 20260729160000_acordos_crons_ligar.sql, aplicada à parte, só quando for
--- para ir para o ar. Isto evita que um `supabase db push` de rotina (que
--- compara pela versão/timestamp do ficheiro, não pelo conteúdo já aplicado)
--- ligasse os 2 workers automáticos sem ninguém pedir.
+-- os crons em si ficavam de fora até o utilizador dar OK final para ligar a
+-- automação a sério.
+--
+-- ACTUALIZAÇÃO (2026-07-29, mais tarde no mesmo dia): outra pessoa aplicou,
+-- em paralelo e sem coordenação com este branch, a migração
+-- crons_outbox_acordos_helper_e_agendamento — que já agenda os 2 crons
+-- (faturacao-outbox-drain, acordos-parcelas-diario) através de um helper
+-- novo (cron_invocar_edge, com observabilidade via cron_http_log/
+-- cron_edge_health) partilhado com os restantes crons de edge function do
+-- projecto. Confirmado directamente na BD (cron.job): os 2 estão activos.
+-- O utilizador decidiu deixar ficar assim em vez de voltar a pausar.
+--
+-- Por isso o ficheiro 20260729160000_acordos_crons_ligar.sql (que faria o
+-- mesmo agendamento, mas na forma simples, sem o helper/observabilidade) foi
+-- removido deste branch — aplicá-lo por cima regrediria a versão já viva.
+-- Nem esse ficheiro nem este branch são a fonte de verdade do agendamento
+-- actual: a migração que o outro autor aplicou não tem ficheiro local aqui
+-- (aplicada directamente, fora deste branch) — a reconciliar quando os dois
+-- branches convergirem.
