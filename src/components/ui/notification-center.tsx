@@ -6,6 +6,8 @@ import {
   AlertTriangle,
   Bell,
   Check,
+  CheckCheck,
+  ChevronDown,
   ChevronRight,
   Eye,
   Loader2,
@@ -61,6 +63,198 @@ const SEVERIDADE_MAP: Record<string, SeveridadeConfig> = {
 const getSeveridadeConfig = (severidade: string): SeveridadeConfig =>
   SEVERIDADE_MAP[severidade] ?? SEVERIDADE_MAP.normal;
 
+// ── Agrupamento ──────────────────────────────────────────────────────────────
+// Quando um scan em atraso (ex.: renovações de contrato) gera várias
+// notificações de uma vez, o mesmo título repete-se N vezes — agrupa-se
+// para não inundar o popup com linhas quase idênticas.
+
+interface NotificacaoGrupo {
+  titulo: string;
+  items: Notificacao[];
+}
+
+function agruparPorTitulo(notificacoes: Notificacao[]): NotificacaoGrupo[] {
+  const grupos: NotificacaoGrupo[] = [];
+  const indicePorTitulo = new Map<string, number>();
+  for (const n of notificacoes) {
+    const indice = indicePorTitulo.get(n.titulo);
+    if (indice === undefined) {
+      indicePorTitulo.set(n.titulo, grupos.length);
+      grupos.push({ titulo: n.titulo, items: [n] });
+    } else {
+      grupos[indice].items.push(n);
+    }
+  }
+  return grupos;
+}
+
+// ── Linha individual ─────────────────────────────────────────────────────────
+
+function NotificationRow({
+  n,
+  onMarkAsRead,
+  compact = false,
+}: {
+  n: Notificacao;
+  onMarkAsRead: (id: string) => void;
+  compact?: boolean;
+}) {
+  const navigate = useNavigate();
+  const sev = getSeveridadeConfig(n.severidade);
+  const SevIcon = sev.icon;
+  const urgente = n.severidade === 'urgente';
+  const link = notificacaoLink(n);
+
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-3 rounded-lg border border-border transition-colors',
+        compact ? 'p-2 pl-9' : 'p-3',
+        sev.bgClass
+      )}
+    >
+      {!compact && (
+        <div
+          className={cn(
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+            urgente
+              ? 'bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300'
+              : 'bg-primary/10 text-primary'
+          )}
+        >
+          <SevIcon className="h-4 w-4" />
+        </div>
+      )}
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          {!compact && (
+            <p
+              className={cn(
+                'text-sm font-semibold',
+                urgente ? 'text-red-700 dark:text-red-300' : 'text-foreground'
+              )}
+            >
+              {urgente && '🔴 '}
+              {n.titulo}
+            </p>
+          )}
+          <time className={cn('shrink-0 text-xs text-muted-foreground', compact && 'ml-auto')}>
+            {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: pt })}
+          </time>
+        </div>
+
+        {n.mensagem && <p className="mt-0.5 text-sm text-muted-foreground">{n.mensagem}</p>}
+
+        <div className="mt-2 flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={urgente ? 'destructive' : 'default'}
+            className="h-7"
+            onClick={() => navigate(link)}
+          >
+            <Eye className="mr-1 h-3 w-3" />
+            {notificacaoLabel(n)}
+          </Button>
+          {!n.resolvida && (
+            <Button size="sm" variant="ghost" className="h-7" onClick={() => onMarkAsRead(n.id)}>
+              <Check className="mr-1 h-3 w-3" />
+              Resolver
+            </Button>
+          )}
+          {n.resolvida && (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Check className="h-3 w-3" />
+              Resolvida
+            </span>
+          )}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        aria-label="Abrir"
+        onClick={() => navigate(link)}
+        className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+// ── Grupo (título repetido) ──────────────────────────────────────────────────
+
+function NotificationGroupRow({
+  grupo,
+  expanded,
+  onToggle,
+  onMarkAsRead,
+}: {
+  grupo: NotificacaoGrupo;
+  expanded: boolean;
+  onToggle: () => void;
+  onMarkAsRead: (id: string) => void;
+}) {
+  const primeira = grupo.items[0];
+  const sev = getSeveridadeConfig(primeira.severidade);
+  const SevIcon = sev.icon;
+  const urgente = grupo.items.some((n) => n.severidade === 'urgente');
+
+  return (
+    <div className="rounded-lg border border-border">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          'flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors',
+          sev.bgClass
+        )}
+      >
+        <div
+          className={cn(
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+            urgente
+              ? 'bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300'
+              : 'bg-primary/10 text-primary'
+          )}
+        >
+          <SevIcon className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p
+            className={cn(
+              'text-sm font-semibold',
+              urgente ? 'text-red-700 dark:text-red-300' : 'text-foreground'
+            )}
+          >
+            {grupo.titulo}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {formatDistanceToNow(new Date(primeira.created_at), { addSuffix: true, locale: pt })}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-bold tabular-nums text-foreground">
+          {grupo.items.length}
+        </span>
+        {expanded ? (
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="space-y-1.5 border-t border-border p-2">
+          {grupo.items.map((n) => (
+            <NotificationRow key={n.id} n={n} onMarkAsRead={onMarkAsRead} compact />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export const NotificationCenter: React.FC<NotificationCenterProps> = ({
@@ -75,7 +269,22 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   isLoadingMore,
   unreadCount = 0,
 }) => {
-  const navigate = useNavigate();
+  const [gruposAbertos, setGruposAbertos] = React.useState<Set<string>>(new Set());
+
+  const toggleGrupo = (titulo: string) => {
+    setGruposAbertos((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(titulo)) novo.delete(titulo);
+      else novo.add(titulo);
+      return novo;
+    });
+  };
+
+  const handleResolverTodas = () => {
+    for (const n of notificacoes) {
+      if (!n.resolvida) onMarkAsRead(n.id);
+    }
+  };
 
   // ── Loading state ──
   if (isLoading) {
@@ -100,22 +309,38 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     );
   }
 
+  const naoResolvidas = notificacoes.filter((n) => !n.resolvida).length;
+  const grupos = agruparPorTitulo(notificacoes);
+
   return (
     <div className="space-y-4">
-      {/* ── Filter tabs ── */}
-      <Tabs value={filtro} onValueChange={(v) => onFiltroChange(v as NotificationFilter)}>
-        <TabsList>
-          <TabsTrigger value="unread" className="gap-1.5">
-            Não resolvidas
-            {unreadCount > 0 && (
-              <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="all">Todas</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {/* ── Filter tabs + ações em massa ── */}
+      <div className="flex items-center justify-between gap-2">
+        <Tabs value={filtro} onValueChange={(v) => onFiltroChange(v as NotificationFilter)}>
+          <TabsList>
+            <TabsTrigger value="unread" className="gap-1.5">
+              Não resolvidas
+              {unreadCount > 0 && (
+                <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="all">Todas</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {naoResolvidas >= 2 && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 shrink-0 text-xs"
+            onClick={handleResolverTodas}
+          >
+            <CheckCheck className="mr-1.5 h-3.5 w-3.5" />
+            Resolver todas
+          </Button>
+        )}
+      </div>
 
       {/* ── Empty state ── */}
       {notificacoes.length === 0 ? (
@@ -132,99 +357,23 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
         <>
           {/* ── Notification list ── */}
           <div className="space-y-2">
-            {notificacoes.map((n) => {
-              const sev = getSeveridadeConfig(n.severidade);
-              const SevIcon = sev.icon;
-              const urgente = n.severidade === 'urgente';
-              const link = notificacaoLink(n);
-
-              return (
-                <div
-                  key={n.id}
-                  className={cn(
-                    'flex items-start gap-3 rounded-lg border border-border p-3 transition-colors',
-                    sev.bgClass
-                  )}
-                >
-                  {/* Severity icon */}
-                  <div
-                    className={cn(
-                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-                      urgente
-                        ? 'bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300'
-                        : 'bg-primary/10 text-primary'
-                    )}
-                  >
-                    <SevIcon className="h-4 w-4" />
-                  </div>
-
-                  {/* Content */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <p
-                        className={cn(
-                          'text-sm font-semibold',
-                          urgente ? 'text-red-700 dark:text-red-300' : 'text-foreground'
-                        )}
-                      >
-                        {urgente && '🔴 '}
-                        {n.titulo}
-                      </p>
-                      <time className="shrink-0 text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(n.created_at), {
-                          addSuffix: true,
-                          locale: pt,
-                        })}
-                      </time>
-                    </div>
-
-                    {n.mensagem && (
-                      <p className="mt-0.5 text-sm text-muted-foreground">{n.mensagem}</p>
-                    )}
-
-                    {/* Actions */}
-                    <div className="mt-2 flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant={urgente ? 'destructive' : 'default'}
-                        className="h-7"
-                        onClick={() => navigate(link)}
-                      >
-                        <Eye className="mr-1 h-3 w-3" />
-                        {notificacaoLabel(n)}
-                      </Button>
-                      {!n.resolvida && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7"
-                          onClick={() => onMarkAsRead(n.id)}
-                        >
-                          <Check className="mr-1 h-3 w-3" />
-                          Resolver
-                        </Button>
-                      )}
-                      {n.resolvida && (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          <Check className="h-3 w-3" />
-                          Resolvida
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Navigate chevron */}
-                  <button
-                    type="button"
-                    aria-label="Abrir"
-                    onClick={() => navigate(link)}
-                    className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
-              );
-            })}
+            {grupos.map((grupo) =>
+              grupo.items.length === 1 ? (
+                <NotificationRow
+                  key={grupo.items[0].id}
+                  n={grupo.items[0]}
+                  onMarkAsRead={onMarkAsRead}
+                />
+              ) : (
+                <NotificationGroupRow
+                  key={grupo.titulo}
+                  grupo={grupo}
+                  expanded={gruposAbertos.has(grupo.titulo)}
+                  onToggle={() => toggleGrupo(grupo.titulo)}
+                  onMarkAsRead={onMarkAsRead}
+                />
+              )
+            )}
           </div>
 
           {/* ── Load more ── */}

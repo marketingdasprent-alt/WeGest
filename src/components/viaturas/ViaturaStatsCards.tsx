@@ -1,4 +1,4 @@
-import { Car, CheckCircle, AlertTriangle, Wrench, Ban } from 'lucide-react';
+import { Car, CheckCircle, AlertTriangle, KeyRound, Wrench, Ban } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { ViaturaStatsSummary } from '@/lib/viaturas';
@@ -36,6 +36,16 @@ export function ViaturaStatsCards({ stats, activeFilter, onFilter }: ViaturaStat
       filter: 'em_uso',
     },
     {
+      // Subconjunto de "Em Uso" (exclui reservadas) — mesmo recorte do KPI
+      // "Alugadas" da homepage, para o número bater ao clicar a partir de lá.
+      title: 'Alugadas',
+      value: stats.alugadas,
+      icon: KeyRound,
+      color: 'text-indigo-600',
+      bgColor: 'bg-indigo-500/10',
+      filter: 'alugadas',
+    },
+    {
       title: 'Manutenção',
       value: stats.manutencao,
       icon: Wrench,
@@ -54,7 +64,7 @@ export function ViaturaStatsCards({ stats, activeFilter, onFilter }: ViaturaStat
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
       {cards.map((card) => {
         const isActive = activeFilter === card.filter;
         return (

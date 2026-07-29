@@ -173,6 +173,12 @@ export default function Viaturas() {
       emUso: viaturas.filter(
         (v) => !v.is_vendida && (ESTADOS_EM_USO as readonly string[]).includes(estadoDe(v))
       ).length,
+      alugadas: viaturas.filter(
+        (v) =>
+          !v.is_vendida &&
+          estadoDe(v) !== 'em_reserva' &&
+          (ESTADOS_EM_USO as readonly string[]).includes(estadoDe(v))
+      ).length,
       manutencao: viaturas.filter((v) => !v.is_vendida && estadoDe(v) === 'manutencao').length,
       inativas: viaturas.filter((v) => !v.is_vendida && estadoDe(v) === 'inativo').length,
       vendidas: viaturas.filter((v) => v.is_vendida).length,
@@ -210,6 +216,14 @@ export default function Viaturas() {
       result = result.filter((v) => !v.is_vendida);
       if (statusFilter === 'em_uso') {
         result = result.filter((v) => (ESTADOS_EM_USO as readonly string[]).includes(estadoDe(v)));
+      } else if (statusFilter === 'alugadas') {
+        // Ocupadas mas NÃO reservadas — espelha o KPI "Alugadas" da homepage,
+        // que separa alugadas de reservadas (o `em_uso` acima junta as duas).
+        result = result.filter(
+          (v) =>
+            estadoDe(v) !== 'em_reserva' &&
+            (ESTADOS_EM_USO as readonly string[]).includes(estadoDe(v))
+        );
       } else if (statusFilter !== 'all') {
         result = result.filter((v) => estadoDe(v) === statusFilter);
       }

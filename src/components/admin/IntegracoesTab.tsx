@@ -51,6 +51,10 @@ import {
   FaturacaoIntegracaoDialog,
   type FaturacaoConfigRow,
 } from './faturacao/FaturacaoIntegracaoDialog';
+import {
+  EditarIntegracaoEmailDialog,
+  type EmailIntegracaoRow,
+} from './EditarIntegracaoEmailDialog';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import { ImportRobotCsvDialog } from './ImportRobotCsvDialog';
 import { ViaVerdeContaDialog } from './via-verde/ViaVerdeContaDialog';
@@ -116,6 +120,8 @@ export const IntegracoesTab: React.FC = () => {
   // Faturação fiscal (config por-org)
   const [faturacaoDialogOpen, setFaturacaoDialogOpen] = useState(false);
   const [faturacaoRow, setFaturacaoRow] = useState<FaturacaoConfigRow | null>(null);
+  const [editEmailDialogOpen, setEditEmailDialogOpen] = useState(false);
+  const [editEmailRow, setEditEmailRow] = useState<EmailIntegracaoRow | null>(null);
 
   // Webhooks
   const [webhooks, setWebhooks] = useState<IntegracaoWebhook[]>([]);
@@ -392,13 +398,8 @@ export const IntegracoesTab: React.FC = () => {
         setDetailModalOpen(true);
       }
     } else if (card.type === 'email') {
-      // Edição fica para uma fase seguinte (IntegracaoDetailModal é hoje
-      // desenhado à volta de Bolt/Uber — reaproveitá-lo tal-e-qual para email
-      // mostraria campos errados). Eliminar + recriar funciona entretanto.
-      toast({
-        title: 'Edição ainda não disponível',
-        description: 'Para alterar a integração Brevo, elimine-a e crie novamente.',
-      });
+      setEditEmailRow(card.rawData as EmailIntegracaoRow);
+      setEditEmailDialogOpen(true);
     } else {
       const integracao = card.rawData as IntegracaoConfig;
       setSelectedIntegracao(integracao);
@@ -978,6 +979,13 @@ export const IntegracoesTab: React.FC = () => {
         open={faturacaoDialogOpen}
         onOpenChange={setFaturacaoDialogOpen}
         row={faturacaoRow}
+        onSuccess={fetchAll}
+      />
+
+      <EditarIntegracaoEmailDialog
+        open={editEmailDialogOpen}
+        onOpenChange={setEditEmailDialogOpen}
+        row={editEmailRow}
         onSuccess={fetchAll}
       />
 

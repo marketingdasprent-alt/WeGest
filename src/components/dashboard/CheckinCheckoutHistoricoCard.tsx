@@ -37,7 +37,10 @@ function SessionRow({
   onClick: () => void;
 }) {
   const viatura = session.contrato?.viatura;
-  const nomeCondutor = session.contrato?.cliente?.nome ?? session.contrato?.motorista_nome;
+  // `motorista_nome` é o CONDUTOR (motorista TVDE ou condutor principal da
+  // reserva) — `cliente` é a entidade contratante (pode ser uma empresa) e só
+  // entra como fallback quando não há condutor identificado.
+  const nomeCondutor = session.contrato?.motorista_nome ?? session.contrato?.cliente?.nome;
   // Badge vem do evento realizado (fonte de verdade do momento).
   const hasCheckin = !!session.checkinAt;
   const hasCheckout = !!session.checkoutAt;

@@ -28,6 +28,7 @@ import {
   ExternalLink,
   Ticket,
   Settings2,
+  Bot,
 } from 'lucide-react';
 import { REALIZE_ORG_IDS } from '@/config/realize';
 
@@ -194,4 +195,5 @@ export const MENU_ITEMS: MenuItem[] = [
   { label: 'Marketing', url: '/marketing', icon: Mail, recurso: 'marketing_ver' },
   { label: 'CRM', url: '/crm', icon: BarChart3, recurso: 'motoristas_crm' },
   { label: 'Realize', url: '/realize', icon: ExternalLink, orgIds: REALIZE_ORG_IDS },
+  { label: 'Automação', url: '/admin/automacao', icon: Bot, recurso: 'automacoes' },
 ];

@@ -30,6 +30,8 @@ export const RECURSOS = {
   VIATURAS_FINANCEIRO: 'viaturas_financeiro',
   VIATURAS_MARCAS_MODELOS: 'viaturas_marcas_modelos',
   VIATURAS_GRUPOS: 'viaturas_grupos',
+  VIATURAS_ALTERAR_ESTADO: 'viaturas_alterar_estado',
+  VIATURAS_IMOBILIZAR: 'viaturas_imobilizar', // Bloquear/libertar via Cartrack
   // Contratos
   CONTRATOS_VER: 'contratos_ver',
   CONTRATOS_CRIAR: 'contratos_criar',
@@ -55,6 +57,7 @@ export const RECURSOS = {
   ADMIN_CONFIGURACOES: 'admin_configuracoes',
   ADMIN_FISCAL: 'admin_fiscal',
   ADMIN_MINHA_ORGANIZACAO: 'admin_minha_organizacao',
+  AUTOMACOES: 'automacoes',
 
   // Administrativo (antigo "Financeiro")
   FINANCEIRO_RECIBOS: 'financeiro_recibos',

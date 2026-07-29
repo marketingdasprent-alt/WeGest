@@ -33,6 +33,7 @@ const AdminInvites = lazy(() => import('@/pages/AdminInvites'));
 const AdminSettings = lazy(() => import('@/pages/AdminSettings'));
 const AdminDocumentos = lazy(() => import('@/pages/AdminDocumentos'));
 const AuditoriaPage = lazy(() => import('@/pages/admin/AuditoriaPage'));
+const AutomacaoPage = lazy(() => import('@/pages/admin/AutomacaoPage'));
 const MotoristaCandidaturas = lazy(() => import('@/pages/MotoristaCandidaturas'));
 const MyAccount = lazy(() => import('@/pages/MyAccount'));
 const MinhaOrganizacao = lazy(() => import('@/pages/MinhaOrganizacao'));
@@ -292,6 +293,16 @@ const WebAppRoutes = () => {
               <ProtectedRoute requiredResource={RECURSOS.ADMIN_DOCUMENTOS}>
                 <DashboardLayout>
                   <AdminDocumentos />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/automacao"
+            element={
+              <ProtectedRoute requiredResource={RECURSOS.AUTOMACOES}>
+                <DashboardLayout>
+                  <AutomacaoPage />
                 </DashboardLayout>
               </ProtectedRoute>
             }

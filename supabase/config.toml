@@ -61,6 +61,12 @@ verify_jwt = false
 [functions.send-calendar-reminders]
 verify_jwt = false
 
+# Worker do canal email da fila notification_queue. Chamado pelo pg_cron
+# via pg_net (sem sessão de utilizador) — a autorização real é a service
+# role key usada dentro da função, não o JWT do pedido HTTP recebido.
+[functions.send-notification-queue-email]
+verify_jwt = false
+
 [functions.send-calendar-notification]
 verify_jwt = false
 
