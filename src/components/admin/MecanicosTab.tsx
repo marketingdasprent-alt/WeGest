@@ -235,13 +235,23 @@ export const MecanicosTab = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Switch checked={m.ativo} onCheckedChange={() => handleToggleAtivo(m)} />
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(m)}>
+                    <Switch
+                      checked={m.ativo}
+                      onCheckedChange={() => handleToggleAtivo(m)}
+                      aria-label={m.ativo ? `Desativar ${m.nome}` : `Ativar ${m.nome}`}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Editar ${m.nome}`}
+                      onClick={() => handleOpenDialog(m)}
+                    >
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={`Eliminar ${m.nome}`}
                       onClick={() => {
                         setToDelete(m);
                         setDeleteDialogOpen(true);
