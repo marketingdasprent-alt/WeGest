@@ -125,34 +125,9 @@ jobs:
           path: dist/
           retention-days: 7
 
-  rls-test:
-    name: 🛡️ RLS (pgTAP)
-    runs-on: ubuntu-latest
-
-    # Só os dois testes de segurança, de propósito. Há ~35 ficheiros pgTAP em
-    # supabase/tests/ e nenhum corria em CI até agora; ligá-los todos de uma vez
-    # arriscava vermelho por falhas pré-existentes e não verificadas. Estes dois
-    # são o guarda estrutural: falham para QUALQUER tabela nova que nasça sem
-    # isolamento de org ou sem rls_deny_anon.
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Arrancar a base de dados local
-        run: supabase db start
-
-      # `db start` arranca o Postgres; é o `db reset` que aplica as migrações.
-      # Sem este passo os testes correriam contra um schema vazio e falhariam
-      # por ausência de tabelas, não por regressão de segurança.
-      # --no-seed: um seed em falha não deve pintar de vermelho um teste de RLS.
-      - name: Aplicar as migrações
-        run: supabase db reset --no-seed
-
-      - name: Isolamento anónimo e escalada de privilégios
-        run: supabase test db supabase/tests/rls_anon_exposure.test.sql
-
-      - name: Isolamento entre organizações
-        run: supabase test db supabase/tests/rls_org_isolation.test.sql
+  # NOTA: o job de testes de RLS (pgTAP) foi movido para
+  # .github/workflows/rls-test.yml e corre APENAS a pedido (workflow_dispatch).
+  # A razão está escrita nesse ficheiro: a cadeia de migrações não reproduz hoje
+  # a base de dados de produção, por isso um schema construído a partir dela não
+  # é um alvo válido para estas asserções. Não faz parte do gate de CI enquanto
+  # isso não estiver resolvido.
