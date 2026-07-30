@@ -115,3 +115,70 @@ describe('NotificationCenter', () => {
     expect(screen.getByText('Sem notificações')).toBeTruthy();
   });
 });
+
+// ── Regressões de layout e legibilidade ─────────────────────────────────────
+// O painel aparecia com o título quebrado uma palavra por linha, barra de
+// scroll horizontal, botões cortados a meio ("Resol...") e, ao expandir um
+// grupo, uma lista de URLs em cru.
+describe('NotificationCenter — legibilidade do painel', () => {
+  function comItens(total: number) {
+    return notif({
+      id: 'n-grp',
+      tipo: 'assistencia_ticket_aberto_demasiado_tempo',
+      titulo: 'Ticket aberto há demasiado tempo',
+      link: '/assistencia',
+      agrupadas: total,
+      // Prefixos distintos, como em uuids reais: a referência curta usa os
+      // primeiros 8 caracteres, e é isso que distingue as entradas na lista.
+      itens: Array.from({ length: total }, (_, i) => ({
+        link: `/assistencia/${String(i + 1).repeat(8)}-5499-402a-b744-ae7ff8713c22`,
+      })),
+    } as Partial<Notificacao>);
+  }
+
+  it('a lista expandida nunca mostra o URL em cru', () => {
+    renderCenter([comItens(3)]);
+    fireEvent.click(screen.getByRole('button', { name: /Ver 3/ }));
+
+    // Nenhum texto visível pode ser um caminho da aplicação.
+    const comBarra = screen
+      .getAllByRole('button')
+      .filter((b) => (b.textContent ?? '').includes('/assistencia/'));
+    expect(comBarra).toEqual([]);
+
+    // E cada entrada é identificável e distinta das outras.
+    expect(screen.getByText('Ticket #11111111')).toBeTruthy();
+    expect(screen.getByText('Ticket #22222222')).toBeTruthy();
+    expect(screen.getByText('Ticket #33333333')).toBeTruthy();
+  });
+
+  it('a fila de ações dobra em vez de transbordar o painel', () => {
+    // Três botões (Ver ticket / Ver 3 / Resolver) não cabem lado a lado num
+    // popover estreito; sem `flex-wrap` empurravam a largura do painel.
+    renderCenter([comItens(3)]);
+    const acoes = document.querySelector('[class*="flex-wrap"]');
+    expect(acoes).toBeTruthy();
+    expect(acoes?.className).toContain('flex-wrap');
+  });
+
+  it('há um só controlo por ação — sem o chevron duplicado', () => {
+    renderCenter([notif({ id: 'n-1', titulo: 'Contrato a renovar' })]);
+
+    // Existia um botão extra com aria-label "Abrir" que navegava para o mesmo
+    // destino do botão "Ver contrato" ao lado.
+    expect(screen.queryByRole('button', { name: 'Abrir' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /Ver contrato/ })).toHaveLength(1);
+  });
+
+  it('uma notificação sem título não renderiza um cartão em branco', () => {
+    renderCenter([notif({ id: 'n-vazio', titulo: '' as never })]);
+    expect(screen.getByText('Aviso do sistema')).toBeTruthy();
+  });
+
+  it('não usa emoji nem cores fixas de tema no cartão', () => {
+    const { container } = { container: document.body };
+    renderCenter([notif({ id: 'n-urg', severidade: 'urgente', titulo: 'Escalonamento' })]);
+    expect(container.textContent).not.toContain('🔴');
+    expect(container.innerHTML).not.toMatch(/\b(text|bg|border)-red-\d/);
+  });
+});

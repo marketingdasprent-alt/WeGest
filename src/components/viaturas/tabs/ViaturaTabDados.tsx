@@ -38,6 +38,7 @@ import {
   type BatchViaturaEntry,
 } from './viaturaTabDados.types';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useConfirmacao } from '@/hooks/useConfirmacao';
 import { RECURSOS } from '@/utils/permissions';
 import { viaturaToFormValues, VIATURA_FK_FIELDS } from './viaturaFormValues';
 import { detectViaturaTipoFromFilename } from './viaturaBatchDetect';
@@ -57,6 +58,7 @@ interface ViaturaTabDadosProps {
 
 export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDadosProps) {
   const { canEdit, hasAccessToResource } = usePermissions();
+  const { confirmar, dialogo } = useConfirmacao();
   const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
   const podeAlterarEstadoInativo = hasAccessToResource(RECURSOS.VIATURAS_ALTERAR_ESTADO);
   const [documents, setDocuments] = useState<ViaturaDocument[]>([]);
@@ -416,7 +418,13 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
 
   const handleDeleteDocument = async (doc: ViaturaDocument) => {
     if (!podeEditar) return;
-    if (!window.confirm('Tem a certeza que quer remover este documento?')) return;
+    const ok = await confirmar({
+      titulo: 'Remover este documento?',
+      descricao: 'O ficheiro é apagado do armazenamento e não pode ser recuperado.',
+      acao: 'Remover',
+      destrutiva: true,
+    });
+    if (!ok) return;
 
     try {
       await supabase.storage.from('viatura-documentos').remove([doc.ficheiro_url]);
@@ -530,6 +538,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
         batchUploading={batchUploading}
         onUpload={handleBatchUpload}
       />
+      {dialogo}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { semCodigo } from '@/types/codigoPorOrg';
 import type {
   ContratoRenting,
   ContratoEstadoOperacional,
@@ -303,7 +304,7 @@ export function useCreateContratoRenting() {
     mutationFn: async (payload: ContratoRentingInsert): Promise<ContratoRenting> => {
       const { data, error } = await supabase
         .from('contratos_renting')
-        .insert(payload)
+        .insert(semCodigo<'contratos_renting'>(payload))
         .select(SELECT_COLUMNS)
         .single();
       if (error) throw error;

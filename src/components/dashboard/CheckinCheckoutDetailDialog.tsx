@@ -160,16 +160,18 @@ function Lightbox({ state, onClose }: { state: LightboxState; onClose: () => voi
             size="icon"
             className="text-white hover:bg-white/20 rounded-full"
             onClick={download}
+            aria-label="Descarregar foto"
           >
-            <Download className="h-5 w-5" />
+            <Download className="h-5 w-5" aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
             className="text-white hover:bg-white/20 rounded-full"
             onClick={onClose}
+            aria-label="Fechar"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </Button>
         </div>
 
@@ -181,16 +183,18 @@ function Lightbox({ state, onClose }: { state: LightboxState; onClose: () => voi
                 size="icon"
                 className="absolute left-2 sm:left-6 z-40 text-white hover:bg-white/20 rounded-full h-12 w-12"
                 onClick={prev}
+                aria-label="Foto anterior"
               >
-                <ChevronLeft className="h-8 w-8" />
+                <ChevronLeft className="h-8 w-8" aria-hidden="true" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
                 className="absolute right-2 sm:right-6 z-40 text-white hover:bg-white/20 rounded-full h-12 w-12"
                 onClick={next}
+                aria-label="Foto seguinte"
               >
-                <ChevronRight className="h-8 w-8" />
+                <ChevronRight className="h-8 w-8" aria-hidden="true" />
               </Button>
             </>
           )}

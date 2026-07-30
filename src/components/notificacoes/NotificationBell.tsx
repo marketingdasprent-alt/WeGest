@@ -16,7 +16,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
  * quando o popover está aberto E o separador "Todas" está seleccionado.
  */
 export function NotificationBell() {
-  const { notificacoes, resolver, enabled } = useNotificacoesContext();
+  const { notificacoes, resolver, enabled, erro, aCarregar, totalNaoResolvidas } =
+    useNotificacoesContext();
 
   const [open, setOpen] = useState(false);
   const [filtro, setFiltro] = useState<NotificationFilter>('unread');
@@ -27,7 +28,10 @@ export function NotificationBell() {
 
   if (!enabled) return null;
 
-  const unreadCount = notificacoes.length;
+  // O badge conta TIPOS distintos, não linhas — porque é isso que a lista mostra:
+  // o NotificationCenter agrupa por título. Contar linhas dizia "33" e abria 11
+  // grupos; o número tem de descrever o que o utilizador encontra lá dentro.
+  const unreadCount = new Set(notificacoes.map((n) => n.titulo)).size;
   const notificacoesHistorico = historico.data?.pages.flatMap((p) => p.data) ?? [];
 
   return (
@@ -42,11 +46,23 @@ export function NotificationBell() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 max-h-[70vh] overflow-y-auto p-3">
+      {/* w-96 fixo (384px) era mais largo do que um ecrã de 360px, e o painel
+          saía fora da viewport no telemóvel. Mantém os 384px onde há espaço e
+          encolhe para a largura disponível quando não há. */}
+      <PopoverContent
+        align="end"
+        className="w-[min(24rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto p-3"
+      >
+        {/* Os dois separadores têm fontes de dados diferentes, logo cada um traz
+            o SEU estado de erro e de carregamento. Antes, o separador "Não
+            resolvidas" passava sempre error={null} e isLoading={false}: uma
+            falha de leitura era indistinguível de "não tens avisos", e é
+            precisamente essa a distinção que o hook já expunha. */}
         <NotificationCenter
           notificacoes={mostrarTodas ? notificacoesHistorico : notificacoes}
-          isLoading={mostrarTodas && historico.isLoading}
-          error={mostrarTodas ? (historico.error as Error | null) : null}
+          isLoading={mostrarTodas ? historico.isLoading : aCarregar}
+          error={mostrarTodas ? (historico.error as Error | null) : erro}
+          totalNoServidor={mostrarTodas ? undefined : totalNaoResolvidas}
           filtro={filtro}
           onFiltroChange={setFiltro}
           onMarkAsRead={mostrarTodas ? (id) => markAsRead.mutate(id) : resolver}

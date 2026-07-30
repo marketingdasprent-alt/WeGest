@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
 import tseslint from 'typescript-eslint';
 import prettierConfig from 'eslint-config-prettier';
 
@@ -290,9 +291,69 @@ export default tseslint.config(
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
+      'jsx-a11y': jsxA11y,
+    },
+    // Sem este mapeamento, o jsx-a11y só olha para elementos nativos e não vê
+    // um único <Button> do shadcn — que é como praticamente todos os controlos
+    // do projeto são escritos.
+    settings: {
+      'jsx-a11y': {
+        components: {
+          Button: 'button',
+          Input: 'input',
+          Textarea: 'textarea',
+          Label: 'label',
+        },
+      },
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+
+      // ── Acessibilidade (jsx-a11y) ─────────────────────────────────────────
+      // O recommended traz 34 regras, das quais 22 já passam limpas no
+      // projeto: ficam na severidade original (error), para não regredirem.
+      // As 9 abaixo têm violações a funcionar em produção e ficam em warn,
+      // seguindo o mesmo critério já usado em rules-of-hooks mais abaixo.
+      // Contagens medidas ao adicionar o plugin, não estimadas.
+      ...jsxA11y.flatConfigs.recommended.rules,
+      'jsx-a11y/label-has-associated-control': 'warn', // 327
+      'jsx-a11y/click-events-have-key-events': 'warn', // 36
+      'jsx-a11y/no-static-element-interactions': 'warn', // 34
+      'jsx-a11y/role-has-required-aria-props': 'warn', // 21
+      'jsx-a11y/no-autofocus': 'warn', // 15
+      'jsx-a11y/no-noninteractive-element-interactions': 'warn', // 4
+      'jsx-a11y/media-has-caption': 'warn', // 4
+      'jsx-a11y/heading-has-content': 'warn', // 2
+      'jsx-a11y/anchor-has-content': 'warn', // 1
+
+      // Ligada de propósito: vem 'off' no recommended. ATENÇÃO ao seu alcance
+      // real — apanha 23 controlos, mas é CEGA a um <Button> que contenha um
+      // componente de ícone, e desses há 168 sem nome acessível. Não serve como
+      // guarda para esse caso; quem faz esse trabalho é
+      // src/components/ui/botoesComNome.test.ts. Fica ligada porque os 23 que
+      // apanha são reais.
+      // As opções são as do próprio recommended — passar só a severidade
+      // descartava-as e a regra passava a acusar também os <input>, que já são
+      // cobertos por label-has-associated-control.
+      'jsx-a11y/control-has-associated-label': [
+        'warn',
+        {
+          ignoreElements: ['audio', 'canvas', 'embed', 'input', 'textarea', 'tr', 'video'],
+          ignoreRoles: [
+            'grid',
+            'listbox',
+            'menu',
+            'menubar',
+            'radiogroup',
+            'row',
+            'tablist',
+            'toolbar',
+            'tree',
+            'treegrid',
+          ],
+          includeRoles: ['alert', 'dialog'],
+        },
+      ],
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
 
       // Desligado — projecto usa `any` extensivamente com Supabase e dados dinâmicos

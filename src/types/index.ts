@@ -15,3 +15,4 @@ export * from './dateRange';
 export * from './audit';
 export * from './dashboard';
 export * from './financeiro';
+export * from './codigoPorOrg';

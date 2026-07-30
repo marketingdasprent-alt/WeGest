@@ -1,11 +1,16 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>WeGest | Motoristas TVDE Portugal</title>
-    <meta name="description" content="WeGest - Gestão de frotas e motoristas TVDE em Portugal." />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>WeGest | Software de gestão para renting e rent-a-car</title>
+    <meta
+      name="description"
+      content="Sistema de gestão para empresas de renting e rent-a-car: contratos, viaturas, motoristas e faturação num só lugar, com avisos que chegam antes do problema."
+    />
     <meta name="author" content="WeGest" />
     <link rel="canonical" href="https://www.wegest.pt/" />
 
@@ -25,12 +30,15 @@
     <meta name="apple-mobile-web-app-title" content="WeGest" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="format-detection" content="telephone=no" />
-    
+
     <!-- Apple Touch Icon -->
     <link rel="apple-touch-icon" href="/Icon_Favicon.png" />
- 
-    <meta property="og:title" content="WeGest | Motoristas TVDE Portugal" />
-    <meta property="og:description" content="WeGest - Gestão de frotas e motoristas TVDE em Portugal." />
+
+    <meta property="og:title" content="WeGest | Software de gestão para renting e rent-a-car" />
+    <meta
+      property="og:description"
+      content="A sua frota deixa de depender de quem se lembra. Contratos, viaturas, motoristas e faturação num só sistema."
+    />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://www.wegest.pt/" />
     <meta property="og:image" content="https://www.wegest.pt/Logo.png" />
@@ -38,51 +46,56 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@wegest_pt" />
     <meta name="twitter:image" content="https://www.wegest.pt/Logo.png" />
-    
+
     <link rel="icon" href="/Icon_Favicon.png" type="image/png" />
- 
+
     <!-- Organization Structured Data -->
     <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      "name": "WeGest",
-      "url": "https://www.wegest.pt",
-      "logo": "https://www.wegest.pt/Logo.png",
-      "sameAs": [
-        "https://www.facebook.com/rota.liquida",
-        "https://www.instagram.com/rota_liquida/"
-      ]
-    }
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "WeGest",
+        "url": "https://www.wegest.pt",
+        "logo": "https://www.wegest.pt/Logo.png",
+        "sameAs": [
+          "https://www.facebook.com/rota.liquida",
+          "https://www.instagram.com/rota_liquida/"
+        ]
+      }
     </script>
-     
+
     <!-- Google Tag Manager -->
     <script>
-      (function(w,d,s,l,i){
-        w[l]=w[l]||[];
-        w[l].push({'gtm.start': new Date().getTime(),event:'gtm.js'});
-        var f=d.getElementsByTagName(s)[0],
-        j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
-        j.async=true;
-        j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;
-        f.parentNode.insertBefore(j,f);
-      })(window,document,'script','dataLayer','GTM-MTLGMGPK');
+      (function (w, d, s, l, i) {
+        w[l] = w[l] || [];
+        w[l].push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+        var f = d.getElementsByTagName(s)[0],
+          j = d.createElement(s),
+          dl = l != 'dataLayer' ? '&l=' + l : '';
+        j.async = true;
+        j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+        f.parentNode.insertBefore(j, f);
+      })(window, document, 'script', 'dataLayer', 'GTM-MTLGMGPK');
     </script>
     <!-- End Google Tag Manager -->
 
     <!-- Facebook Pixel é carregado lazy via src/lib/pixel.ts apenas em
          páginas públicas (landing, formulário público). Não roda no
          backoffice autenticado para não enviar dados de uso ao Facebook. -->
-
   </head>
 
   <body>
-
     <!-- Google Tag Manager (noscript) -->
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MTLGMGPK"
-    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <noscript
+      ><iframe
+        src="https://www.googletagmanager.com/ns.html?id=GTM-MTLGMGPK"
+        height="0"
+        width="0"
+        style="display: none; visibility: hidden"
+      ></iframe
+    ></noscript>
     <!-- End Google Tag Manager (noscript) -->
-    
+
     <div id="root"></div>
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
     <script type="module" src="/src/main.tsx"></script>

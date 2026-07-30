@@ -31,6 +31,7 @@ import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import type { ItemFatura } from '@/types/faturacao';
 import type { ContratoRenting } from '@/types/contratoRenting';
+import { semCodigo } from '@/types/codigoPorOrg';
 
 export interface FaturaItem {
   descricao: string;
@@ -230,17 +231,19 @@ export function ContratoFaturarDialog({
       //    A 0€ não há recibo (recibos tem CHECK valor > 0 e não há nada a liquidar).
       //    `referencia` liga o recibo à cobrança → a listagem mostra-os como 1 só linha.
       if (tipo === 'fatura_recibo' && fatura.valorRegistado > 0) {
-        const { error: recErr } = await supabase.from('recibos').insert({
-          org_id: contrato.org_id,
-          entidade_id: destinatario.id,
-          contrato_id: contrato.id,
-          valor: fatura.valorRegistado,
-          data_recibo: dataDoc,
-          metodo,
-          estado: 'ativo',
-          referencia: cobInserida?.id ?? null,
-          observacoes: `Liquidação ${descricao}`,
-        });
+        const { error: recErr } = await supabase.from('recibos').insert(
+          semCodigo<'recibos'>({
+            org_id: contrato.org_id,
+            entidade_id: destinatario.id,
+            contrato_id: contrato.id,
+            valor: fatura.valorRegistado,
+            data_recibo: dataDoc,
+            metodo,
+            estado: 'ativo',
+            referencia: cobInserida?.id ?? null,
+            observacoes: `Liquidação ${descricao}`,
+          })
+        );
         if (recErr) throw recErr;
       }
 

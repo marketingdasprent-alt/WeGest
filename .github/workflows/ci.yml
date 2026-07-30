@@ -124,3 +124,10 @@ jobs:
           name: dist-${{ github.sha }}
           path: dist/
           retention-days: 7
+
+  # NOTA: o job de testes de RLS (pgTAP) foi movido para
+  # .github/workflows/rls-test.yml e corre APENAS a pedido (workflow_dispatch).
+  # A razão está escrita nesse ficheiro: a cadeia de migrações não reproduz hoje
+  # a base de dados de produção, por isso um schema construído a partir dela não
+  # é um alvo válido para estas asserções. Não faz parte do gate de CI enquanto
+  # isso não estiver resolvido.

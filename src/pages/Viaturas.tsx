@@ -5,7 +5,6 @@ import {
   Plus,
   Search,
   Eye,
-  Pencil,
   Trash2,
   AlertTriangle,
   Layers,
@@ -14,6 +13,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { AcoesLinha } from '@/components/ui/acoes-linha';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -635,23 +635,28 @@ export default function Viaturas() {
                     <span>{viatura.km_atual?.toLocaleString('pt-PT') || '0'} km</span>
                     <span className="capitalize">{viatura.combustivel || 'N/D'}</span>
                   </div>
-                  <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" onClick={() => handleViewPage(viatura)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => handleViewPage(viatura)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    {podeEliminar && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDeleteClick(viatura)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    )}
-                  </div>
+                  {/* Havia aqui um segundo botão, com um lápis, a chamar
+                      exactamente o mesmo handleViewPage que o olho. Não eram
+                      duas acções que por acaso coincidiam: /viaturas/:id abre o
+                      separador "dados", que É o formulário de edição
+                      (ViaturaTabDados tem onSave). Ver e editar são o mesmo
+                      ecrã, logo era um botão a mais. */}
+                  <AcoesLinha
+                    acoes={[
+                      {
+                        icone: Eye,
+                        rotulo: `Abrir viatura ${viatura.matricula}`,
+                        onClick: () => handleViewPage(viatura),
+                      },
+                      {
+                        icone: Trash2,
+                        rotulo: `Eliminar viatura ${viatura.matricula}`,
+                        onClick: () => handleDeleteClick(viatura),
+                        destrutiva: true,
+                        oculta: !podeEliminar,
+                      },
+                    ]}
+                  />
                 </div>
                 {(isExpired(viatura.inspecao_validade) || isExpired(viatura.seguro_validade)) && (
                   <div className="mt-2 flex items-center gap-1 text-destructive text-xs">
@@ -801,34 +806,30 @@ export default function Viaturas() {
                     </div>
                   </TableCell>
                   <TableCell className="py-2 text-right">
-                    <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={() => handleViewPage(viatura)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={() => handleViewPage(viatura)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      {podeEliminar && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8"
-                          onClick={() => handleDeleteClick(viatura)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      )}
-                    </div>
+                    {/* Mesmo lápis duplicado da vista em cartões, retirado pela
+                        mesma razão. O botão do olho NÃO é redundante com o
+                        clique na linha: <TableRow onClick> não é acessível por
+                        teclado (um <tr> não recebe foco), pelo que este botão é
+                        a única forma de abrir a viatura sem rato. */}
+                    <AcoesLinha
+                      compacto
+                      alinhamento="fim"
+                      pararPropagacao
+                      acoes={[
+                        {
+                          icone: Eye,
+                          rotulo: `Abrir viatura ${viatura.matricula}`,
+                          onClick: () => handleViewPage(viatura),
+                        },
+                        {
+                          icone: Trash2,
+                          rotulo: `Eliminar viatura ${viatura.matricula}`,
+                          onClick: () => handleDeleteClick(viatura),
+                          destrutiva: true,
+                          oculta: !podeEliminar,
+                        },
+                      ]}
+                    />
                   </TableCell>
                 </TableRow>
               ))}

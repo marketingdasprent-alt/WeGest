@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS } from '@/components/administrativo/faturacao';
 import { emitirDocumento, baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
+import { semCodigo } from '@/types/codigoPorOrg';
 
 /** Cobrança/fatura em aberto que um recibo pode liquidar. */
 export interface ReciboCobrancaAlvo {
@@ -126,19 +127,24 @@ export function RecibosDialog({
         obs.trim() ||
         `Liquidação de ${cobranca.documento_externo_ref || cobranca.descricao || 'fatura'}`;
 
+      // Os dois lados do merge são precisos: a main passou a atribuir o
+      // código pela BD (helper semCodigo), e esta branch precisa do id
+      // devolvido para escrever o nº do documento fiscal no recibo (abaixo).
       const { data: reciboInserido, error } = await supabase
         .from('recibos')
-        .insert({
-          org_id: orgId,
-          entidade_id: cobranca.destinatario_id,
-          contrato_id: cobranca.contrato_id,
-          valor: valorNum,
-          data_recibo: data,
-          metodo,
-          observacoes: descricao,
-          referencia: cobranca.id,
-          estado: 'ativo',
-        })
+        .insert(
+          semCodigo<'recibos'>({
+            org_id: orgId,
+            entidade_id: cobranca.destinatario_id,
+            contrato_id: cobranca.contrato_id,
+            valor: valorNum,
+            data_recibo: data,
+            metodo,
+            observacoes: descricao,
+            referencia: cobranca.id,
+            estado: 'ativo',
+          })
+        )
         .select('id')
         .single();
       if (error) throw error;

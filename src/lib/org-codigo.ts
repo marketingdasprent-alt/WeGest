@@ -11,19 +11,22 @@ export interface ResolvedOrg {
 
 /**
  * Resolve o código público de uma organização para { id, nome }.
- * Query anónima (pré-login) — depende da policy pública de SELECT em organizacoes.
+ *
+ * Usa a RPC org_por_codigo e não a tabela: o `anon` já não tem SELECT em
+ * organizacoes. Antes tinha-o por coluna, o que deixava
+ * `GET /organizacoes?select=codigo` listar os códigos de todas as
+ * organizações — e o código é o que autoriza o registo de motorista numa org.
+ * A RPC exige o código, devolve 2 campos e só considera orgs activas.
+ *
  * Devolve null para código vazio, inexistente, inativo ou em erro.
  */
 export async function resolveOrgByCodigo(codigo: string): Promise<ResolvedOrg | null> {
   const normalized = normalizeCodigo(codigo ?? '');
   if (!normalized) return null;
 
-  const { data, error } = await supabase
-    .from('organizacoes')
-    .select('id, nome')
-    .eq('codigo', normalized)
-    .eq('ativa', true)
-    .maybeSingle();
+  const { data, error } = await (supabase as any).rpc('org_por_codigo', {
+    p_codigo: normalized,
+  });
 
   if (error || !data) return null;
   return { id: data.id, nome: data.nome };

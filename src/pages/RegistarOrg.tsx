@@ -56,13 +56,14 @@ const RegistarOrg = () => {
 
     setCheckingCodigo(true);
     try {
-      const { data } = await supabase
-        .from('organizacoes')
-        .select('id')
-        .eq('codigo', sanitized)
-        .maybeSingle();
+      // RPC e não a tabela: o `anon` já não tem SELECT em organizacoes, para
+      // que os códigos deixem de ser enumeráveis. Devolve só um boolean, e
+      // conta também os códigos de organizações inactivas como ocupados.
+      const { data, error } = await (supabase as any).rpc('org_codigo_disponivel', {
+        p_codigo: sanitized,
+      });
 
-      setCodigoDisponivel(!data);
+      setCodigoDisponivel(error ? null : data === true);
     } catch {
       setCodigoDisponivel(null);
     } finally {

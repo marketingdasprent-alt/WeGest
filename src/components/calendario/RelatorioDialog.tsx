@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { FileDown, FileSpreadsheet, Loader2, X } from 'lucide-react';
@@ -177,7 +177,9 @@ export const RelatorioDialog: React.FC<Props> = ({ open, onOpenChange, currentMo
         <div className="flex items-center justify-between gap-4 border-b px-6 py-3 bg-card shrink-0">
           <div className="flex items-center gap-2">
             <FileDown className="h-5 w-5 text-primary" />
-            <h2 className="font-semibold text-base">Relatório de Eventos</h2>
+            {/* DialogTitle e não <h2>: é este elemento que dá nome acessível ao
+                diálogo. Continua a renderizar um h2 com as mesmas classes. */}
+            <DialogTitle className="font-semibold text-base">Relatório de Eventos</DialogTitle>
           </div>
           <div className="flex items-center gap-2">
             <Button

@@ -125,7 +125,7 @@ export function AnyRentDadosSaidaAlert({ contrato }: AnyRentDadosSaidaAlertProps
                 <Label>
                   Combustível <span className="text-destructive">*</span>
                 </Label>
-                <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
                   {COMBUSTIVEL_NIVEL_OPTS.map((nivel) => (
                     <button
                       key={nivel}

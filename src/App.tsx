@@ -29,13 +29,20 @@ const App = () => {
       <AuthProvider>
         <TenantProvider>
           <PermissionsProvider>
-            <NotificacoesProvider>
-              <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-                <TooltipProvider>
-                  <Toaster />
-                  <Sonner />
-                  <UpdateNotification />
-                  <BrowserRouter>
+            <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <UpdateNotification />
+                {/*
+                  NotificacoesProvider vive DENTRO do BrowserRouter porque decide
+                  pela rota atual: notificações internas não podem ser lidas nem
+                  mostradas em rotas públicas (landing, páginas institucionais,
+                  quadro de TV). Fora do router não teria acesso ao pathname, e
+                  era assim que os avisos apareciam sobre a landing.
+                */}
+                <BrowserRouter>
+                  <NotificacoesProvider>
                     {isNativeDriverOnlyMode() ? (
                       <NativeAppRoutes />
                     ) : (
@@ -45,10 +52,10 @@ const App = () => {
                         <OnboardingColaboradorDialog />
                       </>
                     )}
-                  </BrowserRouter>
-                </TooltipProvider>
-              </ThemeProvider>
-            </NotificacoesProvider>
+                  </NotificacoesProvider>
+                </BrowserRouter>
+              </TooltipProvider>
+            </ThemeProvider>
           </PermissionsProvider>
         </TenantProvider>
       </AuthProvider>

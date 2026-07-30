@@ -1,138 +1,102 @@
-import { SimpleNavbar } from '@/components/landing/SimpleNavbar';
-import { Footer } from '@/components/landing/Footer';
-import { motion } from 'framer-motion';
-import { Phone, Mail, MessageCircle, MapPin, Clock } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Mail, Phone, Clock, ArrowRight } from 'lucide-react';
+import { PaginaInstitucional } from '@/components/site/primitives/PaginaInstitucional';
+import { CONTACTOS, CONTACTO } from '@/components/site/content/institucionalContent';
 
-const Contactos = () => {
-  return (
-    <div className="min-h-screen bg-black text-white">
-      <SimpleNavbar />
-
-      {/* Hero Section */}
-      <section className="py-20 bg-gradient-to-b from-gray-900 to-black">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center max-w-3xl mx-auto"
+/**
+ * Contactos.
+ *
+ * Duas correções de substância face à versão anterior:
+ *
+ * 1. **O email estava errado.** O texto mostrava
+ *    `motoristas.tvde@rotaliquida.pt` e o `href` enviava para
+ *    `motoristas.tvde@distanciaarrojada.pt` — domínios diferentes. Agora ambos
+ *    vêm da mesma constante `CONTACTO`, o que torna a divergência impossível.
+ * 2. **O destinatário mudou.** Passa a ser a caixa que já recebe os pedidos do
+ *    formulário da landing, para que nenhum lead caia numa caixa que ninguém lê.
+ *
+ * Saíram os três cartões coloridos (verde WhatsApp, azul email) e o cartão
+ * "Informações Adicionais": cor por canal era decoração, e o brief exclui
+ * grelhas de cartões repetidos. A informação passa a ser uma lista de
+ * definição, que é o que de facto é.
+ */
+const Contactos = () => (
+  <PaginaInstitucional
+    etiqueta={CONTACTOS.etiqueta}
+    titulo={CONTACTOS.titulo}
+    descricao={CONTACTOS.descricao}
+  >
+    <dl className="border-t border-border/50">
+      <div className="flex flex-col gap-1 border-b border-border/50 py-6 md:flex-row md:items-baseline md:gap-8">
+        <dt className="flex min-w-[9rem] items-center gap-2.5 text-sm font-medium text-muted-foreground">
+          <Mail aria-hidden="true" className="h-4 w-4 text-primary" />
+          Email
+        </dt>
+        <dd className="text-[1.0625rem]">
+          <a
+            href={`mailto:${CONTACTO.email}`}
+            className="font-medium text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
-              Fala <span className="text-primary">Connosco</span>
-            </h1>
-            <p className="text-xl text-gray-400">
-              Estamos disponíveis para esclarecer todas as tuas dúvidas e ajudar-te a começar.
-            </p>
-          </motion.div>
-        </div>
-      </section>
+            {CONTACTO.email}
+          </a>
+          <p className="mt-1 text-sm text-muted-foreground">{CONTACTO.resposta}</p>
+        </dd>
+      </div>
 
-      {/* Contact Cards */}
-      <section className="py-16">
-        <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            {/* WhatsApp */}
-            <motion.a
-              href="https://wa.me/351912023234"
-              target="_blank"
-              rel="noopener noreferrer"
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              viewport={{ once: true }}
-              className="bg-gray-800/50 rounded-xl p-8 text-center hover:bg-gray-800 transition-colors group"
-            >
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center group-hover:bg-green-500/30 transition-colors">
-                <MessageCircle className="w-8 h-8 text-green-500" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">WhatsApp</h3>
-              <p className="text-gray-400 mb-4">Resposta rápida</p>
-              <p className="text-primary font-semibold">+351 912 023 234</p>
-            </motion.a>
+      <div className="flex flex-col gap-1 border-b border-border/50 py-6 md:flex-row md:items-baseline md:gap-8">
+        <dt className="flex min-w-[9rem] items-center gap-2.5 text-sm font-medium text-muted-foreground">
+          <Phone aria-hidden="true" className="h-4 w-4 text-primary" />
+          Telefone
+        </dt>
+        <dd className="text-[1.0625rem]">
+          <a
+            href={`tel:${CONTACTO.telefoneHref}`}
+            className="font-medium text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {CONTACTO.telefone}
+          </a>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Fala com a equipa que construiu o sistema.
+          </p>
+        </dd>
+      </div>
 
-            {/* Phone */}
-            <motion.a
-              href="tel:+351309100174"
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              viewport={{ once: true }}
-              className="bg-gray-800/50 rounded-xl p-8 text-center hover:bg-gray-800 transition-colors group"
-            >
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/20 flex items-center justify-center group-hover:bg-primary/30 transition-colors">
-                <Phone className="w-8 h-8 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Telefone</h3>
-              <p className="text-gray-400 mb-4">Linha direta</p>
-              <p className="text-primary font-semibold">309 100 174</p>
-            </motion.a>
+      <div className="flex flex-col gap-1 border-b border-border/50 py-6 md:flex-row md:items-baseline md:gap-8">
+        <dt className="flex min-w-[9rem] items-center gap-2.5 text-sm font-medium text-muted-foreground">
+          <Clock aria-hidden="true" className="h-4 w-4 text-primary" />
+          Horário
+        </dt>
+        <dd className="text-[1.0625rem] text-foreground">{CONTACTO.horario}</dd>
+      </div>
+    </dl>
 
-            {/* Email */}
-            <motion.a
-              href="mailto:motoristas.tvde@distanciaarrojada.pt"
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              viewport={{ once: true }}
-              className="bg-gray-800/50 rounded-xl p-8 text-center hover:bg-gray-800 transition-colors group"
-            >
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-500/20 flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
-                <Mail className="w-8 h-8 text-blue-500" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Email</h3>
-              <p className="text-gray-400 mb-4">Para questões detalhadas</p>
-              <p className="text-primary font-semibold text-sm">motoristas.tvde@rotaliquida.pt</p>
-            </motion.a>
-          </div>
-        </div>
-      </section>
+    <section className="mt-12 rounded-xl border border-border/70 bg-card p-6 md:p-8">
+      <h2 className="font-display text-lg font-semibold tracking-[-0.01em] text-foreground">
+        {CONTACTOS.formularioTitulo}
+      </h2>
+      <p className="mt-3 max-w-xl text-[1.0625rem] leading-relaxed text-muted-foreground">
+        {CONTACTOS.formularioTexto}
+      </p>
+      <Link
+        to="/#contacto"
+        className="group mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-[0.9375rem] font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        {CONTACTOS.formularioCta}
+        <ArrowRight
+          aria-hidden="true"
+          className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+        />
+      </Link>
+    </section>
 
-      {/* Additional Info */}
-      <section className="py-16 bg-gray-900/50">
-        <div className="container mx-auto px-4">
-          <div className="max-w-2xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              viewport={{ once: true }}
-              className="bg-gray-800/50 rounded-xl p-8"
-            >
-              <h2 className="text-2xl font-bold mb-6 text-center">Informações Adicionais</h2>
-
-              <div className="space-y-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                    <Clock className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold mb-1">Horário de Atendimento</h3>
-                    <p className="text-gray-400">Segunda a Sexta: 9h00 - 18h00</p>
-                    <p className="text-gray-400">Sábado: 9h00 - 13h00</p>
-                    <p className="text-gray-500 text-sm mt-1">
-                      WhatsApp disponível 24/7 para emergências
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                    <MapPin className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold mb-1">Áreas de Operação</h3>
-                    <p className="text-gray-400">Portugal Continental e Açores</p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      <Footer />
-    </div>
-  );
-};
+    <p className="mt-8 text-sm text-muted-foreground">
+      Já é cliente e precisa de suporte?{' '}
+      <Link to="/entrar" className="font-medium text-primary underline-offset-4 hover:underline">
+        Entre no sistema
+      </Link>{' '}
+      e abra um pedido no módulo de Assistência — fica registado com prioridade e histórico.
+    </p>
+  </PaginaInstitucional>
+);
 
 export default Contactos;

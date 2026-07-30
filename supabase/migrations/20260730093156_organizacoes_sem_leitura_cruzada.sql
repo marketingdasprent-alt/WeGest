@@ -1,0 +1,59 @@
+-- ============================================================
+-- organizacoes: fechar a leitura cruzada entre organizações
+-- ============================================================
+-- Último degrau da série de 30-07. Os anteiores fecharam o anónimo; este fecha
+-- o autenticado.
+--
+-- DEMONSTRADO em produção antes de corrigir: um utilizador NÃO-ADMIN da Década
+-- Ousada lia as outras 4 organizações — NIF (9 dígitos), morada, telefone e
+-- `codigo`. Ou seja, qualquer funcionário de qualquer um dos 5 clientes via os
+-- dados dos outros 4.
+--
+-- O `codigo` é a parte que mais pesa: é o que autoriza o registo de motorista
+-- numa organização (src/pages/motorista/RegistoMotorista.tsx passa o org_id
+-- resolvido pelo código para o signUp). A migração 20260730091152 tornou-o
+-- não-enumerável pelo anónimo; continuava legível por qualquer conta.
+--
+-- CAUSA — a mesma do incidente de 29-07, outra vez.
+-- As políticas correctas JÁ EXISTIAM:
+--
+--   Users podem ver orgs a que pertencem
+--     SELECT, authenticated, id IN (select org_id from user_organizacoes
+--                                    where user_id = auth.uid())
+--   Decada Ousada admins podem gerir organizacoes
+--     ALL, authenticated, is_decada_ousada_admin()
+--
+-- Por cima delas estava `Permitir verificar codigo de org publicamente`, com
+-- `USING (true)`. Como as políticas PERMISSIVE se somam com OR, essa anulava as
+-- outras duas: não acrescentava uma excepção, tornava-as decorativas.
+--
+-- Existia para o login por código funcionar antes de haver sessão. Deixou de
+-- ser necessária: o caminho anónimo passou para as RPC org_por_codigo e
+-- org_codigo_disponivel em 20260730091152, e o `anon` já não tem grant nenhum
+-- nesta tabela.
+--
+-- ENSAIO ANTES DE APLICAR (transação revertida), com um não-admin da Década
+-- Ousada e um admin da Década Ousada:
+--   não-admin, outras orgs ............ 0   (era 4)
+--   não-admin, a própria org .......... 1
+--   embed do TenantContext ............ 1   (o selector de org continua a listar)
+--   leitura por código, própria org ... 1   (Login.tsx continua a funcionar)
+--   admin Década Ousada, todas ........ 5   (OrganizacoesTab continua a funcionar)
+--
+-- CONSUMIDORES VERIFICADOS
+--   src/contexts/TenantContext.tsx:65      embed organizacoes(...) — orgs do user
+--   src/components/admin/MinhaOrganizacaoTab.tsx:47  a própria org, por id
+--   src/components/admin/OrganizacoesTab.tsx:75      todas — é a vista do
+--                                                    fornecedor, coberta por
+--                                                    is_decada_ousada_admin()
+--   src/pages/Login.tsx:74                 por código, pós-signIn
+--
+-- MUDANÇA DE COMPORTAMENTO A NOTAR
+-- Em Login.tsx, quem escrever um código válido de uma organização a que não
+-- pertence passa a receber "Empresa não encontrada" em vez de "Sem acesso": a
+-- leitura devolve vazio antes de se chegar à verificação de filiação. Ambos os
+-- caminhos terminam em signOut, e a mensagem nova é preferível — deixa de
+-- confirmar a existência da organização a quem não é membro.
+-- ============================================================
+
+drop policy if exists "Permitir verificar codigo de org publicamente" on public.organizacoes;

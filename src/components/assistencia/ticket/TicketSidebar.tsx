@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { Ticket, Anexo, Viatura, Motorista } from './types';
 import { AssistenteResponsavelField } from './AssistenteResponsavelField';
+import { MecanicoResponsavelField } from './MecanicoResponsavelField';
 import { TicketDanosCard } from './TicketDanosCard';
 
 interface Props {
@@ -158,6 +159,13 @@ export const TicketSidebar: React.FC<Props> = ({
           <AssistenteResponsavelField
             ticketId={ticket.id}
             atribuidoA={ticket.atribuido_a}
+            onChanged={onResponsavelChange}
+          />
+        )}
+        {canEditResponsavel && (
+          <MecanicoResponsavelField
+            ticketId={ticket.id}
+            mecanicoId={ticket.mecanico_id}
             onChanged={onResponsavelChange}
           />
         )}

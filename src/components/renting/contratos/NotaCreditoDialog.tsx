@@ -20,6 +20,7 @@ import { openFaturacaoDocumento, type FaturacaoDocEmitente } from '@/utils/fatur
 import { emitirDocumento, baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
+import { semCodigo } from '@/types/codigoPorOrg';
 
 /** Cobrança/fatura-alvo da nota de crédito. */
 export interface NotaCreditoCobranca {
@@ -108,15 +109,17 @@ export function NotaCreditoDialog({
       // cobrança de reserva, sem contrato) — por isso não o enviamos aqui.
       const { data: inserida, error } = await supabase
         .from('notas_credito')
-        .insert({
-          org_id: orgId,
-          cobranca_id: cobranca.id,
-          entidade_id: cobranca.destinatario_id,
-          valor: valorNum,
-          motivo: motivo.trim(),
-          data_nota: hojeISO(),
-          estado: 'ativo',
-        })
+        .insert(
+          semCodigo<'notas_credito'>({
+            org_id: orgId,
+            cobranca_id: cobranca.id,
+            entidade_id: cobranca.destinatario_id,
+            valor: valorNum,
+            motivo: motivo.trim(),
+            data_nota: hojeISO(),
+            estado: 'ativo',
+          })
+        )
         .select('id, codigo')
         .single();
       if (error) throw error;

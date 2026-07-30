@@ -14,6 +14,7 @@ export interface Ticket {
   categoria_id: string | null;
   criado_por: string | null;
   atribuido_a: string | null;
+  mecanico_id: string | null;
   km_inicio: number | null;
   km_fim: number | null;
   combustivel_inicio: string | null;

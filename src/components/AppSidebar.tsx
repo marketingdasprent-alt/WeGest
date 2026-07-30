@@ -203,15 +203,20 @@ export function AppSidebar() {
                       >
                         <SidebarMenuItem>
                           <CollapsibleTrigger asChild>
+                            {/* Com a barra recolhida o <span> do título não é
+                                renderizado e sobra só o ícone. O tooltip do
+                                Radix liga-se por aria-describedby, que é
+                                descrição e não nome — daí o aria-label. */}
                             <SidebarMenuButton
                               tooltip={collapsed ? item.title : undefined}
+                              aria-label={item.title}
                               className={
                                 isSubActive
                                   ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                                   : ''
                               }
                             >
-                              <item.icon className="mr-2 h-4 w-4" />
+                              <item.icon className="mr-2 h-4 w-4" aria-hidden="true" />
                               {!collapsed && <span>{item.title}</span>}
                               {!collapsed && (
                                 <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
@@ -251,8 +256,8 @@ export function AppSidebar() {
                         isActive={location.pathname === item.url}
                         tooltip={collapsed ? item.title : undefined}
                       >
-                        <NavLink to={item.url!} end>
-                          <item.icon className="mr-2 h-4 w-4" />
+                        <NavLink to={item.url!} end aria-label={item.title}>
+                          <item.icon className="mr-2 h-4 w-4" aria-hidden="true" />
                           {!collapsed && <span>{item.title}</span>}
                         </NavLink>
                       </SidebarMenuButton>
@@ -277,8 +282,8 @@ export function AppSidebar() {
                       isActive={location.pathname === item.url}
                       tooltip={collapsed ? item.title : undefined}
                     >
-                      <NavLink to={item.url} end>
-                        <item.icon className="mr-2 h-4 w-4" />
+                      <NavLink to={item.url} end aria-label={item.title}>
+                        <item.icon className="mr-2 h-4 w-4" aria-hidden="true" />
                         {!collapsed && <span>{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>

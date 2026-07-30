@@ -25,7 +25,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -711,6 +711,15 @@ export function ViaturaTabReparacoes({ viaturaId, onUpdate }: ViaturaTabReparaco
       {/* Lightbox Unificado */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
         <DialogContent className="max-w-[95vw] w-full h-[90vh] p-0 bg-black/95 border-none flex flex-col items-center justify-center overflow-hidden">
+          {/* Nome acessível do visualizador. Fica sr-only porque um lightbox é
+              propositadamente só a imagem — mas sem título o leitor de ecrã
+              anunciava apenas "diálogo", sem dizer o que se abriu. Traz o nome
+              do ficheiro, que é a única coisa que distingue um do outro. */}
+          <DialogTitle className="sr-only">
+            {currentMediaList[currentMediaIndex]?.nome_ficheiro
+              ? `Pré-visualização: ${currentMediaList[currentMediaIndex].nome_ficheiro}`
+              : 'Pré-visualização do ficheiro'}
+          </DialogTitle>
           <div className="absolute top-4 right-4 z-50 flex gap-2">
             <Button
               variant="ghost"
@@ -722,16 +731,22 @@ export function ViaturaTabReparacoes({ viaturaId, onUpdate }: ViaturaTabReparaco
                   currentMediaList[currentMediaIndex]?.nome_ficheiro
                 )
               }
+              aria-label={
+                currentMediaList[currentMediaIndex]?.nome_ficheiro
+                  ? `Descarregar ${currentMediaList[currentMediaIndex].nome_ficheiro}`
+                  : 'Descarregar'
+              }
             >
-              <Download className="h-5 w-5" />
+              <Download className="h-5 w-5" aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
               className="text-white hover:bg-white/20 rounded-full"
               onClick={() => setLightboxOpen(false)}
+              aria-label="Fechar"
             >
-              <X className="h-5 w-5" />
+              <X className="h-5 w-5" aria-hidden="true" />
             </Button>
           </div>
           <div className="relative w-full h-full flex items-center justify-center p-4 sm:p-12">
@@ -742,16 +757,18 @@ export function ViaturaTabReparacoes({ viaturaId, onUpdate }: ViaturaTabReparaco
                   size="icon"
                   className="absolute left-2 sm:left-6 z-40 text-white hover:bg-white/20 rounded-full h-12 w-12"
                   onClick={prevMedia}
+                  aria-label="Ficheiro anterior"
                 >
-                  <ChevronLeft className="h-8 w-8" />
+                  <ChevronLeft className="h-8 w-8" aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="absolute right-2 sm:right-6 z-40 text-white hover:bg-white/20 rounded-full h-12 w-12"
                   onClick={nextMedia}
+                  aria-label="Ficheiro seguinte"
                 >
-                  <ChevronRight className="h-8 w-8" />
+                  <ChevronRight className="h-8 w-8" aria-hidden="true" />
                 </Button>
               </>
             )}

@@ -1,4 +1,4 @@
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 
 interface TotalPorGestorEntry {
   id: string;
@@ -26,10 +26,13 @@ export function RelatorioSelectGestorDialog({
       <DialogContent className="max-w-md">
         <div className="space-y-4">
           <div className="space-y-2">
-            <h3 className="font-semibold text-base">Selecione o Gestor</h3>
-            <p className="text-sm text-muted-foreground">
+            {/* O cabeçalho e a frase já existiam como markup simples; passam a
+                Title/Description para darem nome e descrição acessíveis ao
+                diálogo. A aparência é a mesma. */}
+            <DialogTitle className="font-semibold text-base">Selecione o Gestor</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
               Escolha qual gestor deseja incluir no PDF
-            </p>
+            </DialogDescription>
           </div>
           <div className="max-h-96 overflow-y-auto space-y-2">
             {totalPorGestor.map((g) => (

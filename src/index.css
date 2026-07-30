@@ -23,7 +23,11 @@ html[data-native-app='true'] .native-bottom {
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
 
-    --primary: 174 100% 38.4%;
+    /* Teal da marca a 25% e não a 38,4% — ver a nota sobre contraste no bloco
+       .dark. Sobre fundo branco, o teal da logo mede 2,21:1; a 25% mede
+       4,87:1, tanto como texto (text-primary) como atrás de texto branco
+       (bg-primary), porque é o mesmo par de cores nos dois casos. */
+    --primary: 174 100% 25%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 174 20% 96.1%;
@@ -32,24 +36,36 @@ html[data-native-app='true'] .native-bottom {
     --muted: 0 0% 96.1%;
     --muted-foreground: 0 0% 45.1%;
 
-    --accent: 174 100% 38.4%;
+    --accent: 174 100% 25%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
+    /* A 60,2% media 3,76:1 sobre branco — abaixo dos 4,5:1 exigidos a texto,
+       e text-destructive é o token mais usado do projeto (381 ocorrências:
+       mensagens de erro, asteriscos de campo obrigatório, rótulos de eliminar).
+       A 42% mede 6,05:1, tanto como texto como atrás de texto branco. */
+    --destructive: 0 84.2% 42%;
     --destructive-foreground: 0 0% 98%;
 
     /* Estados semânticos (avisos/sucesso) — antes disto cada ficheiro
        escrevia bg-amber-500/text-green-600 à mão, com tom diferente
        consoante o ficheiro. Usar sempre estes tokens em vez de cores
-       Tailwind soltas para avisos/callouts/badges de estado. */
-    --warning: 38 92% 50%;
-    --warning-foreground: 20 91% 14%;
-    --success: 142 76% 36%;
+       Tailwind soltas para avisos/callouts/badges de estado.
+
+       Escurecidos para servirem como TEXTO sobre fundo claro, que é como são
+       usados (text-warning, text-success) a par de fundos com alfa baixo
+       (bg-warning/10). O âmbar a 50% media 2,14:1 e o verde a 36% media
+       3,35:1 — nenhum dos dois passava. */
+    --warning: 38 92% 32%;
+    --warning-foreground: 0 0% 100%;
+    --success: 142 76% 30%;
     --success-foreground: 0 0% 100%;
 
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
-    --ring: 174 100% 38.4%;
+    /* O anel de foco tem de ter 3:1 contra o que está ao lado (WCAG 1.4.11).
+       A 38,4% sobre branco dava 2,21:1 — o indicador de foco do teclado era
+       quase invisível. A 25% dá 4,87:1. */
+    --ring: 174 100% 25%;
 
     /* Cor de marca WeGest — azul-marinho da logo (destaque secundário) */
     --brand-navy: 210 64% 30%;
@@ -59,12 +75,12 @@ html[data-native-app='true'] .native-bottom {
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 0 0% 3.9%;
-    --sidebar-primary: 174 100% 38.4%;
+    --sidebar-primary: 174 100% 25%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 174 20% 96.1%;
     --sidebar-accent-foreground: 174 100% 15%;
     --sidebar-border: 0 0% 89.8%;
-    --sidebar-ring: 174 100% 38.4%;
+    --sidebar-ring: 174 100% 25%;
   }
 
   .dark {
@@ -78,8 +94,19 @@ html[data-native-app='true'] .native-bottom {
     --popover: 222 47% 5%;
     --popover-foreground: 210 40% 98%;
 
+    /* PORQUE O TEAL TEM VALOR DIFERENTE EM CADA TEMA
+       O teal da logo (#00c4b0, L=38,4%) é claro. Sobre o fundo escuro lê-se
+       muito bem como texto (9,06:1), mas por trás de texto BRANCO dava 2,21:1
+       — os botões primários falhavam o mínimo de 4,5:1 nos dois temas, por
+       razões opostas: no claro o teal é demasiado claro para o fundo branco,
+       no escuro é demasiado claro para o texto branco em cima dele.
+
+       Por isso: no tema escuro fica o teal da marca intacto e o texto em cima
+       passa a quase-negro (8,83:1); no tema claro o teal desce a 25%, onde
+       serve para texto e para fundo com texto branco (4,87:1). O logótipo não
+       é afectado — usa a sua própria cor. */
     --primary: 174 100% 38.4%;
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 0 0% 8%;
 
     --secondary: 222 47% 12%;
     --secondary-foreground: 210 40% 98%;
@@ -88,15 +115,28 @@ html[data-native-app='true'] .native-bottom {
     --muted-foreground: 215 20.2% 65.1%;
 
     --accent: 174 100% 38.4%;
-    --accent-foreground: 0 0% 100%;
+    --accent-foreground: 0 0% 8%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    /* Era 30,6%: um vermelho escuro, pensado como FUNDO de botão com texto
+       branco. Só que o uso dominante é como cor de TEXTO (381 ocorrências), e
+       sobre os cartões escuros media 1,92:1 — ou seja, as mensagens de erro
+       estavam praticamente invisíveis no tema escuro.
 
+       Sobe a 60% (lê-se como texto, 5,03:1 sobre os cartões) e o texto por cima
+       inverte para quase-negro (4,81:1), pela mesma razão e pelo mesmo padrão
+       do --primary aqui em cima. Não há conflito entre os dois papéis: uma vez
+       que a cor do texto acompanha o tema, ambos querem o vermelho claro. */
+    --destructive: 0 70% 60%;
+    --destructive-foreground: 0 0% 8%;
+
+    /* O âmbar já cumpria nos dois papéis no tema escuro (9,67:1 como texto,
+       8,70:1 como fundo com o seu próprio foreground) — fica como está. */
     --warning: 38 92% 55%;
     --warning-foreground: 20 91% 10%;
+    /* O verde lê-se bem como texto (8,27:1); o que falhava era o texto BRANCO
+       por cima dele (2,32:1), que inverte para quase-negro (7,90:1). */
     --success: 142 70% 45%;
-    --success-foreground: 0 0% 100%;
+    --success-foreground: 0 0% 8%;
 
     --border: 222 47% 18%;
     --input: 222 47% 18%;
@@ -106,12 +146,16 @@ html[data-native-app='true'] .native-bottom {
     --brand-navy: 210 74% 64%;
     --brand-navy-foreground: 222 47% 8%;
 
-    --radius: 0.75rem;
+    /* O --radius NÃO se redefine aqui de propósito. Havia 0,75rem neste bloco
+       contra 0,5rem no :root, pelo que todos os cantos da aplicação mudavam de
+       forma ao trocar de tema — os dois valores entraram no mesmo commit, logo
+       foi distração e não intenção. O raio é geometria, não cor: não depende
+       do tema. Vale o valor declarado no :root. */
 
     --sidebar-background: 222 47% 5%;
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 174 100% 38.4%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary-foreground: 0 0% 8%;
     --sidebar-accent: 222 47% 12%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 222 47% 18%;

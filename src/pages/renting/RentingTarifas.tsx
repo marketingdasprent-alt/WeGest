@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Tag, Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Button } from '@/components/ui/button';
+import { AcoesLinha } from '@/components/ui/acoes-linha';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -225,24 +226,22 @@ const RentingTarifas = () => {
                     </Badge>
                   </TableCell>
                   <TableCell className="py-2">
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => navigate(`/renting/tarifas/${t.id}`)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget(t)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <AcoesLinha
+                      compacto
+                      acoes={[
+                        {
+                          icone: Pencil,
+                          rotulo: `Editar ${t.nome}`,
+                          onClick: () => navigate(`/renting/tarifas/${t.id}`),
+                        },
+                        {
+                          icone: Trash2,
+                          rotulo: `Eliminar ${t.nome}`,
+                          onClick: () => setDeleteTarget(t),
+                          destrutiva: true,
+                        },
+                      ]}
+                    />
                   </TableCell>
                 </TableRow>
               ))}

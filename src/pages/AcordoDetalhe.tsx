@@ -18,7 +18,7 @@ export default function AcordoDetalhe() {
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-4 mb-4">
-        <Button variant="ghost" size="icon" onClick={goBack}>
+        <Button variant="ghost" size="icon" onClick={goBack} aria-label="Voltar">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-lg font-semibold">Plano de pagamentos</h1>

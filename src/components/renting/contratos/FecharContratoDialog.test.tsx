@@ -231,7 +231,7 @@ describe('FecharContratoDialog', () => {
     // Campos de recolha física visíveis (registarAgora=true por defeito).
     expect(screen.getByPlaceholderText('Ex: 45120')).toBeTruthy();
     expect(screen.getByText('Combustível')).toBeTruthy();
-    expect(screen.getByText('Vazio')).toBeTruthy();
+    expect(screen.getByText('Reserva')).toBeTruthy();
     expect(screen.getByText('Cheio')).toBeTruthy();
 
     // Secção de assinaturas visível (mocked).

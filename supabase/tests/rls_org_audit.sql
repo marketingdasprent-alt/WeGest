@@ -77,6 +77,61 @@ where c.relkind = 'r'
     'user_org_ativa',       -- sessão (user → org ativa)
     'user_organizacoes',    -- junção user ↔ org
     'convites',             -- convites (pré-org)
-    'notificacao_dispensas' -- dispensas por user
+    'notificacao_dispensas',-- dispensas por user
+    'cron_http_log'         -- infraestrutura: request_id de cada invocação de
+                            -- edge function por cron (ver 20260729170000).
+                            -- Não é dado de tenant; RLS admin-only.
   ])
 order by 1;
+
+-- ============================================================
+-- PARTE 3 — exposição ANÓNIMA (o ponto cego das Partes 1 e 2)
+-- ============================================================
+-- As Partes 1 e 2 verificam o isolamento ENTRE ORGANIZAÇÕES, que só se aplica
+-- a quem fez login. Não vêem o caso pior: dados legíveis SEM login nenhum.
+--
+-- Foi assim que a 2026-07-29 se descobriu que 3631 linhas — incluindo
+-- 750 399,64 € de receitas de motoristas em uber_transactions — estavam
+-- legíveis por qualquer pessoa na internet com a chave `anon` (pública por
+-- desenho, vem no bundle do frontend).
+--
+-- Porque escapa às Partes 1 e 2: as 139 políticas RESTRICTIVE
+-- `rls_org_isolation` estão declaradas `TO authenticated`. O papel `anon`
+-- nunca é cruzado com `org_id = get_current_org_id()`. Logo, uma política
+-- PERMISSIVE `USING (true)` criada sem `TO` explícito (o default é PUBLIC, que
+-- inclui anon) não expõe "esta tabela publicamente" — expõe **todas as
+-- organizações a quem não fez login**. A tabela tinha o isolamento "correcto"
+-- e continuava a vazar.
+--
+-- Resultado esperado: 0 linhas. Qualquer linha é uma fuga anónima a fechar.
+-- Se a leitura anónima for funcionalidade real, acrescenta a tabela à
+-- allowlist abaixo com justificação — e prefere restringir por GRANT de
+-- coluna (como em organizacoes) a expor a linha inteira.
+-- ============================================================
+with tabelas_anon as (
+  select c.oid, c.relname
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+  where c.relkind = 'r'
+    and exists (
+      select 1 from pg_attribute a
+      where a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+        and has_column_privilege('anon', c.oid, a.attnum, 'SELECT')
+    )
+)
+select p.tablename as tabela,
+       format('política "%s" (%s) é USING(true) e alcançável por anon', p.policyname, p.cmd) as problema
+from pg_policies p
+join tabelas_anon t on t.relname = p.tablename
+where p.schemaname = 'public'
+  and p.permissive = 'PERMISSIVE'
+  and (p.roles::text like '%public%' or p.roles::text like '%anon%')
+  and p.cmd in ('SELECT', 'ALL')
+  and btrim(coalesce(p.qual, '')) in ('true', '(true)')
+  and p.tablename <> all (array[
+    -- Leitura anónima que é funcionalidade real:
+    'formulario_campanhas', -- /formulario/:id resolve a campanha antes de haver sessão
+    'organizacoes'          -- login por código de org; restrita por grant de COLUNA
+                            -- (id, nome, codigo, ativa) — não expõe NIF/morada/telefone
+  ])
+order by 1, 2;

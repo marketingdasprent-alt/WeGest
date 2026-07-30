@@ -21,8 +21,13 @@ export function contactInquiryTemplate(input: ContactInquiry): { subject: string
       <p><strong>Nome:</strong> ${escapeHtml(input.nome)}</p>
       <p><strong>Email:</strong> ${escapeHtml(input.email)}</p>
       ${input.empresa ? `<p><strong>Empresa:</strong> ${escapeHtml(input.empresa)}</p>` : ''}
-      <p><strong>Mensagem:</strong></p>
-      <p style="white-space: pre-wrap;">${escapeHtml(input.mensagem)}</p>
+      ${input.viaturas ? `<p><strong>Frota:</strong> ${escapeHtml(input.viaturas)}</p>` : ''}
+      ${
+        input.mensagem
+          ? `<p><strong>Mensagem:</strong></p>
+      <p style="white-space: pre-wrap;">${escapeHtml(input.mensagem)}</p>`
+          : '<p><em>Sem mensagem — pedido de contacto direto.</em></p>'
+      }
     `,
     rodape: 'Enviado a partir do formulário "Fale connosco" do site WeGest.',
   });

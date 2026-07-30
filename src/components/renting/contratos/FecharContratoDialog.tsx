@@ -21,7 +21,13 @@ import {
   XCircle,
 } from 'lucide-react';
 
-import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -590,18 +596,22 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
               )}
             </div>
             <div>
-              <h2 className="text-lg font-semibold leading-tight">
+              {/* O cabeçalho e a frase de apoio já diziam exactamente o que este
+                  diálogo faz; passam a Title/Description para o leitor de ecrã
+                  os anunciar em vez de "diálogo" sem nome. Texto e classes
+                  inalterados. */}
+              <DialogTitle className="text-lg font-semibold leading-tight">
                 {fechaImediatamente
                   ? `Fechar contrato #${contratoCodigo}`
                   : `Agendar recolha do contrato #${contratoCodigo}`}
-              </h2>
-              <p className="text-sm text-muted-foreground">
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground">
                 {viaturaEhSlot
                   ? 'Viatura slot — só é preciso confirmar a data (e, se quiseres, o motivo).'
                   : fechaImediatamente
                     ? 'A recolha fica registada agora — o contrato fecha ao confirmar.'
                     : 'O contrato mantém-se em curso até a recolha ser confirmada (agora ou via Calendário).'}
-              </p>
+              </DialogDescription>
               {emModoTroca && (
                 <p className="text-sm text-violet-700 dark:text-violet-400 mt-0.5">
                   Isto faz parte de uma troca — a seguir abre automaticamente o novo contrato com a
@@ -879,7 +889,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                           <Label className="text-xs">
                             Combustível <span className="text-destructive">*</span>
                           </Label>
-                          <div className="grid grid-cols-5 gap-1">
+                          <div className="grid grid-cols-4 gap-1">
                             {COMBUSTIVEL_NIVEL_OPTS.map((nivel) => (
                               <button
                                 key={nivel}
