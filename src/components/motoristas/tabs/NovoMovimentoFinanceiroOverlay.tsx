@@ -28,6 +28,23 @@ export interface MovimentoFinanceiro {
   status: 'pendente' | 'pago' | 'cancelado';
   referencia: string | null;
   created_at: string;
+  /** Acordo de pagamento (parcelamento) que gerou este movimento. */
+  acordo_id?: string | null;
+  /** Fatura cedida a este motorista que gerou este movimento. */
+  cobranca_id?: string | null;
+}
+
+/**
+ * Movimento gerido pela faturação (dívida cedida, parcela de um acordo,
+ * nota de crédito, estornos) — não pode ser marcado como pago, cancelado
+ * nem editado à mão: liquida-se no contrato/fatura de origem.
+ *
+ * Sem isto, marcar "Fatura cedida — …" como paga aqui punha o saldo do
+ * motorista a dizer que a dívida estava liquidada enquanto a fatura
+ * continuava por liquidar, e nada assinalava a divergência.
+ */
+export function isMovimentoDaFaturacao(m: MovimentoFinanceiro): boolean {
+  return !!m.acordo_id || !!m.cobranca_id;
 }
 
 export interface RecorrenciaFinanceira {
