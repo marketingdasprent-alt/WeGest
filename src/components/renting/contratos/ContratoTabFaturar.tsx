@@ -139,6 +139,9 @@ export function ContratoTabFaturar({ contrato }: Props) {
   // cobranças com documento fiscal certificado (emite_fatura_fiscal); uma
   // cobrança interna não tem nada a creditar no software de faturação.
   const [ncAutoAlvo, setNcAutoAlvo] = useState<NotaCreditoCobranca | null>(null);
+  // Pop-up de confirmação (não uma notificação — fácil de perder) mostrado
+  // logo a seguir a anular, quando há fatura(s) certificada(s) na seleção.
+  const [ncPromptAlvos, setNcPromptAlvos] = useState<CobrancaRow[] | null>(null);
   const [enviarInvoice, setEnviarInvoice] = useState<InvoiceMetadata | null>(null);
   const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -346,6 +349,34 @@ export function ContratoTabFaturar({ contrato }: Props) {
    * estornos cancelam-se entre si, deixando o saldo a zero. NÃO emite Nota de Crédito
    * nem cancela o documento fiscal no provider (isso, se necessário, é manual).
    */
+  // Faturas anuladas (internamente) que ainda têm documento fiscal certificado
+  // por creditar — via para chegar à Nota de Crédito mais tarde, se o pop-up
+  // logo a seguir a anular for dispensado. "Faturas do Contrato" não as lista
+  // (deixam de contar como ativas), por isso ficam aqui, à parte.
+  const cobrancasAnuladasPorCreditar = useMemo(
+    () =>
+      (cobrancas ?? []).filter(
+        (c) =>
+          c.estado === 'anulada' &&
+          c.emite_fatura_fiscal &&
+          round2((c.valor_total ?? 0) - (ncPorCobranca[c.id] ?? 0)) > 0.005
+      ),
+    [cobrancas, ncPorCobranca]
+  );
+
+  function cobrancaParaNC(c: CobrancaRow): NotaCreditoCobranca {
+    return {
+      id: c.id,
+      descricao: c.descricao,
+      valor_total: c.valor_total,
+      taxa_iva: c.taxa_iva,
+      destinatario_id: c.destinatario_id,
+      destinatario_nome: c.destinatario_nome,
+      contrato_id: contrato.id,
+      documento_externo_ref: c.documento_externo_ref,
+    };
+  }
+
   async function anularFaturacao() {
     setAnularBusy(true);
     try {
@@ -381,39 +412,18 @@ export function ContratoTabFaturar({ contrato }: Props) {
       // Cobranças anuladas que tinham documento fiscal certificado — a
       // reversão fiscal (NC) tem de ser feita à parte (achado ao testar
       // manualmente: anular aqui nunca cancela o documento no KeyInvoice) e
-      // é fácil esquecer, por isso propõe-se já a seguir, sem obrigar.
+      // é fácil esquecer. Pergunta-se logo a seguir num pop-up (não uma
+      // notificação, fácil de perder/ignorar); se for dispensado, ficam
+      // listadas em "Faturas anuladas por creditar" para tratar mais tarde.
       const fiscaisAnuladas = (cobrancas ?? []).filter(
         (c) => idsParaAnular.includes(c.id) && c.emite_fatura_fiscal
       );
       toast.success(
         idsParaAnular.length === ativasIds.length
           ? 'Faturação anulada — o contrato voltou a "não faturado".'
-          : `${idsParaAnular.length} fatura(s) anulada(s).`,
-        fiscaisAnuladas.length > 0
-          ? {
-              description:
-                fiscaisAnuladas.length > 1
-                  ? `${fiscaisAnuladas.length} tinham documento fiscal certificado. Isto abre a primeira — trata as restantes em Administrativo → Faturação.`
-                  : 'Esta fatura tinha documento fiscal certificado — considera emitir a reversão fiscal (NC) no KeyInvoice.',
-              action: {
-                label: 'Emitir Nota de Crédito',
-                onClick: () => {
-                  const c = fiscaisAnuladas[0];
-                  setNcAutoAlvo({
-                    id: c.id,
-                    descricao: c.descricao,
-                    valor_total: c.valor_total,
-                    taxa_iva: c.taxa_iva,
-                    destinatario_id: c.destinatario_id,
-                    destinatario_nome: c.destinatario_nome,
-                    contrato_id: contrato.id,
-                    documento_externo_ref: c.documento_externo_ref,
-                  });
-                },
-              },
-            }
-          : undefined
+          : `${idsParaAnular.length} fatura(s) anulada(s).`
       );
+      if (fiscaisAnuladas.length > 0) setNcPromptAlvos(fiscaisAnuladas);
       setAnularOpen(false);
       qc.invalidateQueries({ queryKey: ['renting'] });
       qc.invalidateQueries({ queryKey: ['contrato-historico', contrato.id] });
@@ -960,6 +970,38 @@ export function ContratoTabFaturar({ contrato }: Props) {
         </div>
       </div>
 
+      {cobrancasAnuladasPorCreditar.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+            Faturas anuladas por creditar
+          </p>
+          <div className="rounded-md border divide-y">
+            {cobrancasAnuladasPorCreditar.map((c) => (
+              <div key={c.id} className="flex items-center gap-2.5 px-3 py-2 text-sm">
+                <span className="font-mono text-xs">
+                  {c.documento_externo_ref || c.id.slice(0, 8).toUpperCase()}
+                </span>
+                <span className="text-muted-foreground truncate flex-1" title={c.destinatario_nome}>
+                  {c.destinatario_nome}
+                </span>
+                <span className="font-medium whitespace-nowrap">
+                  {formatCurrency(c.valor_total)}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs text-fuchsia-700 dark:text-fuchsia-300"
+                  onClick={() => setNcAutoAlvo(cobrancaParaNC(c))}
+                >
+                  Emitir Nota de Crédito
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <DocumentosEmitidosExtra
         invoices={invoicesExtra.filter(
           (inv) => !inv.numero || !documentosAnuladosRefs.has(inv.numero)
@@ -1048,6 +1090,37 @@ export function ContratoTabFaturar({ contrato }: Props) {
         }
         onEmitida={refetchAll}
       />
+
+      <AlertDialog
+        open={!!ncPromptAlvos}
+        onOpenChange={(o) => {
+          if (!o) setNcPromptAlvos(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Emitir Nota de Crédito?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {ncPromptAlvos?.length === 1
+                ? `A fatura ${ncPromptAlvos[0].documento_externo_ref ?? ''} tinha documento fiscal certificado — anular aqui não o cancela no KeyInvoice. Emitir a Nota de Crédito agora?`
+                : `${ncPromptAlvos?.length ?? 0} das faturas anuladas tinham documento fiscal certificado. Isto abre a Nota de Crédito da primeira (${ncPromptAlvos?.[0]?.documento_externo_ref ?? ''}) — as restantes ficam em "Faturas anuladas por creditar", abaixo.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setNcPromptAlvos(null)}>Agora não</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                const c = ncPromptAlvos?.[0];
+                setNcPromptAlvos(null);
+                if (c) setNcAutoAlvo(cobrancaParaNC(c));
+              }}
+            >
+              Emitir Nota de Crédito
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={anularOpen}
