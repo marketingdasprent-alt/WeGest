@@ -35,7 +35,7 @@ const AdminSettings = () => {
   const canConvites = hasAccessToResource(RECURSOS.ADMIN_CONVITES);
 
   if (loading) {
-    return <AdminLoadingState message="Verificando permissões..." />;
+    return <AdminLoadingState message="A verificar permissões..." />;
   }
 
   if (!isAdmin) {

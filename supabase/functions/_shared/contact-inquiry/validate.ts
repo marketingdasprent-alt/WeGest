@@ -2,12 +2,16 @@ export interface ContactInquiry {
   nome: string;
   email: string;
   empresa: string | null;
-  mensagem: string;
+  /**
+   * Opcional desde o redesenho da landing: exigir prosa para levantar a mão
+   * custava-nos leads. Ver docs/superpowers/specs/2026-07-30-landing-transformacao-design.md
+   */
+  mensagem: string | null;
+  /** Faixa de tamanho da frota — campo de qualificação, escolhido de uma lista. */
+  viaturas: string | null;
 }
 
-export type ValidationResult =
-  | { ok: true; data: ContactInquiry }
-  | { ok: false; error: string };
+export type ValidationResult = { ok: true; data: ContactInquiry } | { ok: false; error: string };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -40,13 +44,26 @@ export function validateContactInquiry(payload: unknown): ValidationResult {
     return { ok: false, error: 'Nome de empresa demasiado longo' };
   }
 
+  // Mensagem opcional: vazia é um pedido de contacto válido. O limite máximo
+  // fica — é a defesa contra payloads abusivos, que a mínima nunca foi.
   const mensagem = typeof body.mensagem === 'string' ? body.mensagem.trim() : '';
-  if (mensagem.length < 10 || mensagem.length > 2000) {
-    return { ok: false, error: 'Mensagem tem de ter entre 10 e 2000 caracteres' };
+  if (mensagem.length > 2000) {
+    return { ok: false, error: 'Mensagem não pode ter mais de 2000 caracteres' };
+  }
+
+  const viaturas = typeof body.viaturas === 'string' ? body.viaturas.trim() : '';
+  if (viaturas.length > 50) {
+    return { ok: false, error: 'Campo de viaturas inválido' };
   }
 
   return {
     ok: true,
-    data: { nome, email, empresa: empresaRaw || null, mensagem },
+    data: {
+      nome,
+      email,
+      empresa: empresaRaw || null,
+      mensagem: mensagem || null,
+      viaturas: viaturas || null,
+    },
   };
 }

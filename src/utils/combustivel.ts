@@ -1,9 +1,12 @@
-// 1/8 e 7/8 acrescentados além dos quartos — a diferença entre "quase vazio"
+// Oitavos acrescentados além dos quartos — a diferença entre "quase vazio"
 // e "quase cheio" gera discussão com o motorista na entrega/recolha.
+// "Reserva" (e não "Vazio") porque é o que o painel mostra: o depósito nunca
+// está literalmente a zero quando a viatura ainda anda.
 export const COMBUSTIVEL_NIVEL_OPTS = [
-  'Vazio',
+  'Reserva',
   '1/8',
   '1/4',
+  '3/8',
   '1/2',
   '3/4',
   '7/8',

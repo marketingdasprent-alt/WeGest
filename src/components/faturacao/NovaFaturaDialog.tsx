@@ -47,6 +47,7 @@ import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import { FATURA_ARTIGO_TIPOS } from '@/lib/faturaArtigoTipos';
 import type { ItemFatura } from '@/types/faturacao';
+import { semCodigo } from '@/types/codigoPorOrg';
 
 const IVA_PADRAO = 23;
 const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
@@ -304,17 +305,19 @@ export function NovaFaturaDialog({
 
       // Factura-Recibo → regista o recibo (liquidação imediata).
       if (tipoDoc === 'fatura_recibo' && calc.totalComIva > 0) {
-        const { error: recErr } = await supabase.from('recibos').insert({
-          org_id: alvo.orgId,
-          entidade_id: destinatario.id,
-          contrato_id: alvo.tipo === 'contrato' ? alvo.id : null,
-          valor: calc.totalComIva,
-          data_recibo: dataDoc,
-          metodo,
-          estado: 'ativo',
-          referencia: cobrancaId,
-          observacoes: `Liquidação ${descricao}`,
-        });
+        const { error: recErr } = await supabase.from('recibos').insert(
+          semCodigo<'recibos'>({
+            org_id: alvo.orgId,
+            entidade_id: destinatario.id,
+            contrato_id: alvo.tipo === 'contrato' ? alvo.id : null,
+            valor: calc.totalComIva,
+            data_recibo: dataDoc,
+            metodo,
+            estado: 'ativo',
+            referencia: cobrancaId,
+            observacoes: `Liquidação ${descricao}`,
+          })
+        );
         if (recErr) throw recErr;
       }
 

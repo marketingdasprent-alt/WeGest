@@ -314,9 +314,13 @@ export function MotoristaViaturaCard({ motoristaId }: MotoristaViaturaCardProps)
                   <Car className="h-5 w-5 md:h-6 md:w-6 text-primary" />
                 </div>
                 <div>
-                  <h2 className="text-2xl md:text-3xl font-black tracking-tight">
+                  {/* DialogTitle já estava importado mas não era usado, pelo que
+                      o diálogo não tinha nome acessível. O cabeçalho visível
+                      passa a ser o título; a matrícula e "Documentação da
+                      Viatura" ficam abaixo como já estavam. */}
+                  <DialogTitle className="text-2xl md:text-3xl font-black tracking-tight">
                     {viatura.marca} {viatura.modelo}
-                  </h2>
+                  </DialogTitle>
                   <div className="flex flex-wrap items-center gap-2 md:gap-3 mt-1">
                     <span className="text-[10px] md:text-xs font-mono font-black uppercase tracking-widest bg-foreground text-background px-2 md:px-3 py-1 rounded-lg">
                       {viatura.matricula}

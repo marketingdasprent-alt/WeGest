@@ -9,10 +9,27 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 
+/**
+ * Ficheiro anexo a um ticket.
+ *
+ * Este tipo veio de components/assistencia/ticket/TicketMediaLightbox.tsx, uma
+ * cópia quase igual deste ficheiro que ninguém importava. A cópia morta estava
+ * MELHOR tipada do que a viva — tinha isto em vez de `any[]` — pelo que a
+ * melhoria tinha sido feita no ficheiro errado e nunca chegou a correr. Trazido
+ * para cá antes de a apagar.
+ */
+interface FicheiroTicket {
+  id: string;
+  ficheiro_url: string;
+  nome_ficheiro: string;
+  tipo_ficheiro: string | null;
+  legenda?: string | null;
+}
+
 interface TicketMediaLightboxProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  mediaList: any[];
+  mediaList: FicheiroTicket[];
   currentIndex: number;
   onNext: (e?: React.MouseEvent) => void;
   onPrev: (e?: React.MouseEvent) => void;
@@ -48,16 +65,20 @@ export function TicketMediaLightbox({
             size="icon"
             className="text-white hover:bg-white/20 rounded-full"
             onClick={() => onDownload(current?.ficheiro_url, current?.nome_ficheiro)}
+            aria-label={
+              current?.nome_ficheiro ? `Descarregar ${current.nome_ficheiro}` : 'Descarregar'
+            }
           >
-            <Download className="h-5 w-5" />
+            <Download className="h-5 w-5" aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
             className="text-white hover:bg-white/20 rounded-full"
             onClick={() => onOpenChange(false)}
+            aria-label="Fechar"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </Button>
         </div>
 
@@ -69,16 +90,18 @@ export function TicketMediaLightbox({
                 size="icon"
                 className="absolute left-2 sm:left-6 z-40 text-white hover:bg-white/20 rounded-full h-12 w-12"
                 onClick={onPrev}
+                aria-label="Ficheiro anterior"
               >
-                <ChevronLeft className="h-8 w-8" />
+                <ChevronLeft className="h-8 w-8" aria-hidden="true" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
                 className="absolute right-2 sm:right-6 z-40 text-white hover:bg-white/20 rounded-full h-12 w-12"
                 onClick={onNext}
+                aria-label="Ficheiro seguinte"
               >
-                <ChevronRight className="h-8 w-8" />
+                <ChevronRight className="h-8 w-8" aria-hidden="true" />
               </Button>
             </>
           )}

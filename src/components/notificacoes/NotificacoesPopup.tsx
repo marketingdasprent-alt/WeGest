@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNotificacoesContext } from '@/contexts/NotificacoesContext';
 import { armNotificationSound } from '@/lib/notificationSound';
-import { notificacaoLink, notificacaoLabel } from '@/utils/notificacoes';
+import { notificacaoLink, notificacaoLabel, notificacaoTitulo } from '@/utils/notificacoes';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, Bell, ChevronRight, Eye, EyeOff, List, X } from 'lucide-react';
@@ -56,7 +56,7 @@ export const NotificacoesPopup = () => {
             className={cn(
               'pointer-events-auto rounded-xl border p-4 shadow-lg duration-300 animate-in slide-in-from-bottom-4 fade-in',
               urgente
-                ? 'border-red-500 bg-red-50 dark:border-red-700 dark:bg-red-950/60 ring-2 ring-red-500/40'
+                ? 'border-destructive bg-destructive/5 ring-2 ring-destructive/30'
                 : 'border-border bg-card'
             )}
           >
@@ -64,9 +64,7 @@ export const NotificacoesPopup = () => {
               <div
                 className={cn(
                   'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-                  urgente
-                    ? 'bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300'
-                    : 'bg-primary/10 text-primary'
+                  urgente ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'
                 )}
               >
                 {urgente ? <AlertTriangle className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
@@ -76,11 +74,14 @@ export const NotificacoesPopup = () => {
                 <p
                   className={cn(
                     'text-sm font-semibold',
-                    urgente ? 'text-red-700 dark:text-red-300' : 'text-foreground'
+                    urgente ? 'text-destructive' : 'text-foreground'
                   )}
                 >
-                  {urgente ? '🔴 ' : ''}
-                  {n.titulo}
+                  {/* Sem o emoji 🔴: a urgência já está no ícone, na cor do
+                      texto, na borda e no anel — cinco sinais para a mesma
+                      coisa, e o emoji era o único que entrava no texto lido
+                      por um leitor de ecrã como "círculo vermelho grande". */}
+                  {notificacaoTitulo(n)}
                 </p>
                 {n.mensagem && <p className="mt-0.5 text-sm text-muted-foreground">{n.mensagem}</p>}
 

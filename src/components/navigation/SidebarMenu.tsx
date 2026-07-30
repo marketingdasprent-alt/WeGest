@@ -11,7 +11,7 @@ import { OrgSelector } from '@/components/OrgSelector';
 import { useTenant } from '@/contexts/TenantContext';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -162,8 +162,8 @@ export const SidebarMenu: React.FC = () => {
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
         <header className="native-header h-16 bg-card/80 backdrop-blur-md border-b border-border sticky top-0 z-[40] lg:hidden flex items-center px-4 w-full">
-          <Button variant="ghost" size="icon" className="mr-4">
-            <Menu className="h-6 w-6" />
+          <Button variant="ghost" size="icon" className="mr-4" aria-label="Abrir menu de navegação">
+            <Menu className="h-6 w-6" aria-hidden="true" />
           </Button>
           <NavLink
             to="/dashboard"
@@ -184,13 +184,29 @@ export const SidebarMenu: React.FC = () => {
             >
               <Search className="h-5 w-5" />
             </Button>
-            <NotificationBell />
-            <ThemeToggle />
-            <UserMenu />
+            {/* O <header> inteiro é o SheetTrigger (tocar em qualquer sítio abre
+                a gaveta). O logo e a pesquisa acima já se excluem com
+                stopPropagation, mas estes três são componentes e não o podiam
+                fazer por si: tocar no sino abria o menu de navegação em vez do
+                painel de notificações, e o mesmo acontecia ao tema e ao menu de
+                utilizador. Excluir o grupo todo aqui resolve os três de uma vez
+                e mantém o padrão já usado pelos irmãos. */}
+            <div
+              className="flex items-center gap-1"
+              onClick={(e) => e.stopPropagation()}
+              role="presentation"
+            >
+              <NotificationBell />
+              <ThemeToggle />
+              <UserMenu />
+            </div>
           </div>
         </header>
       </SheetTrigger>
       <SheetContent side="left" className="w-72 p-0 border-r border-border/50">
+        {/* Nome acessível da gaveta. Não pode ser visível — o topo da gaveta é
+            o logótipo — por isso fica sr-only. */}
+        <SheetTitle className="sr-only">Menu principal</SheetTitle>
         <SidebarContent />
       </SheetContent>
     </Sheet>

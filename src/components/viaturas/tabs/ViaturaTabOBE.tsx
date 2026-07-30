@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { ViaturaObeDispositivoSection } from './obe/ViaturaObeDispositivoSection';
 import { ViaturaObeHistoricoSection } from './obe/ViaturaObeHistoricoSection';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useConfirmacao } from '@/hooks/useConfirmacao';
 import { RECURSOS } from '@/utils/permissions';
 
 interface Viatura {
@@ -29,6 +30,7 @@ interface ViaturaTabOBEProps {
 
 export function ViaturaTabOBE({ viatura, onUpdate }: ViaturaTabOBEProps) {
   const { canEdit } = usePermissions();
+  const { confirmar, dialogo } = useConfirmacao();
   const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
   const [contratoOBE, setContratoOBE] = useState<ViaturaDocument | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -116,7 +118,13 @@ export function ViaturaTabOBE({ viatura, onUpdate }: ViaturaTabOBEProps) {
 
   const handleDeleteContrato = async () => {
     if (!contratoOBE || !podeEditar) return;
-    if (!window.confirm('Tem a certeza que quer remover o Contrato OBE?')) return;
+    const ok = await confirmar({
+      titulo: 'Remover o contrato OBE?',
+      descricao: 'O ficheiro é apagado do armazenamento e não pode ser recuperado.',
+      acao: 'Remover',
+      destrutiva: true,
+    });
+    if (!ok) return;
     try {
       await supabase.storage.from('viatura-documentos').remove([contratoOBE.ficheiro_url]);
       const { error } = await supabase.from('viatura_documentos').delete().eq('id', contratoOBE.id);
@@ -237,6 +245,7 @@ export function ViaturaTabOBE({ viatura, onUpdate }: ViaturaTabOBEProps) {
       <TabsContent value="historico" className="mt-6">
         <ViaturaObeHistoricoSection viaturaId={viatura.id} />
       </TabsContent>
+      {dialogo}
     </Tabs>
   );
 }

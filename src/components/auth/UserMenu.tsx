@@ -26,11 +26,15 @@ export const UserMenu = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
+        {/* O nome só aparece a partir de sm: abaixo disso o botão fica apenas
+            com o ícone e ficava sem nome acessível. O aria-label vale nos dois
+            casos e não depende do breakpoint. */}
         <Button
           variant="ghost"
           className="w-full justify-start gap-2 text-sm text-foreground hover:bg-primary/20 hover:text-foreground px-3"
+          aria-label={`Conta de ${displayName}`}
         >
-          <User className="h-4 w-4 shrink-0" />
+          <User className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="hidden sm:inline">{displayName}</span>
         </Button>
       </DropdownMenuTrigger>

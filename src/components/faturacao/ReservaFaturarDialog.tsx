@@ -41,6 +41,7 @@ import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import type { ItemFatura } from '@/types/faturacao';
 import type { Reserva } from '@/types/reserva';
+import { semCodigo } from '@/types/codigoPorOrg';
 
 interface Props {
   open: boolean;
@@ -194,17 +195,19 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
 
       // Factura-Recibo → regista o recibo (liquidação imediata).
       if (tipo === 'fatura_recibo' && calc.totalComIva > 0) {
-        const { error: recErr } = await supabase.from('recibos').insert({
-          org_id: reserva.org_id,
-          entidade_id: reserva.cliente_id!,
-          contrato_id: null,
-          valor: calc.totalComIva,
-          data_recibo: dataDoc,
-          metodo,
-          estado: 'ativo',
-          referencia: cobrancaId,
-          observacoes: `Liquidação ${descricao}`,
-        });
+        const { error: recErr } = await supabase.from('recibos').insert(
+          semCodigo<'recibos'>({
+            org_id: reserva.org_id,
+            entidade_id: reserva.cliente_id!,
+            contrato_id: null,
+            valor: calc.totalComIva,
+            data_recibo: dataDoc,
+            metodo,
+            estado: 'ativo',
+            referencia: cobrancaId,
+            observacoes: `Liquidação ${descricao}`,
+          })
+        );
         if (recErr) throw recErr;
       }
 

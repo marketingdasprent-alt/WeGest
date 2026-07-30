@@ -1,0 +1,47 @@
+-- ============================================================
+-- Correcção a 20260730084227: o insert anónimo de leads ficou bloqueado
+-- ============================================================
+-- Detectado na verificação pós-migração, antes de qualquer utilizador dar por
+-- isso: depois de revogar os grants largos de `anon`, o insert do formulário
+-- público passou a falhar com
+--
+--   42501: permission denied for table user_organizacoes
+--
+-- CAUSA — políticas encadeadas, não a tabela em si.
+-- As expressões de política são avaliadas com os privilégios de QUEM CHAMA,
+-- não com os do dono da tabela. `Admins can manage leads` (PERMISSIVE, ALL,
+-- TO public) tem qual
+--
+--   exists (select 1 from profiles where profiles.id = auth.uid()
+--             and profiles.is_admin = true)
+--
+-- e num policy FOR ALL sem `with check` o Postgres reutiliza o `qual` como
+-- check. Logo, ao inserir um lead como `anon`, ele lê `profiles` inline; ler
+-- `profiles` aciona a RLS dessa tabela, cuja `mt_profiles_select` referencia
+-- `user_organizacoes` — também inline. O `anon` deixou de ter grant em ambas,
+-- e a cadeia rebenta.
+--
+-- As funções SECURITY DEFINER não têm este problema: verificado que
+-- `is_current_user_admin()` e `get_current_org_id()` correm como `anon` sem
+-- erro, devolvendo false/null.
+--
+-- SOLUÇÃO — remover a política, não reconceder os grants.
+-- Reconceder SELECT em profiles e user_organizacoes ao `anon` desfazia
+-- exactamente o que a migração anterior veio fechar. A política é redundante:
+-- `Admins podem gerenciar todos os leads` (PERMISSIVE, ALL, TO public,
+-- `is_current_user_admin()`) cobre a mesma intenção e é a semântica correcta
+-- num sistema multi-tenant — admin DA ORGANIZAÇÃO ACTUAL, não admin global.
+--
+-- Verificado antes de aplicar: zero utilizadores com profiles.is_admin = true
+-- e user_organizacoes.is_admin = false. Ninguém perde acesso.
+-- ============================================================
+
+drop policy if exists "Admins can manage leads" on public.leads_dasprent;
+
+-- Cobertura que fica em leads_dasprent:
+--   anon_leads_insert                     INSERT anon, org_id = DASPRENT
+--   mt_leads_insert/select/update         authenticated, org + motoristas_crm
+--   Admins podem gerenciar todos os leads ALL, is_current_user_admin()
+--   Apenas admins podem deletar leads     DELETE, is_current_user_admin()
+--   Gestores editam/veem apenas seus      authenticated, por gestor_responsavel
+--   rls_org_isolation                     RESTRICTIVE, authenticated

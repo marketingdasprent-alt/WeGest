@@ -542,6 +542,7 @@ export const CheckinDadosSection: React.FC<CheckinDadosSectionProps> = ({
             key={opt}
             type="button"
             onClick={() => onSelect(opt)}
+            title={opt}
             className={cn(
               'flex-1 text-[10px] font-medium transition-colors border-r border-input last:border-r-0',
               value === opt
@@ -549,7 +550,12 @@ export const CheckinDadosSection: React.FC<CheckinDadosSectionProps> = ({
                 : 'bg-background hover:bg-muted text-foreground'
             )}
           >
-            {opt === 'Vazio' ? <Zap className="h-3 w-3 mx-auto opacity-50" /> : opt}
+            {/* "Vazio"/"Reserva" por extenso não cabem na célula — ícone + title. */}
+            {opt === 'Vazio' || opt === 'Reserva' ? (
+              <Zap className="h-3 w-3 mx-auto opacity-50" />
+            ) : (
+              opt
+            )}
           </button>
         ))}
       </div>

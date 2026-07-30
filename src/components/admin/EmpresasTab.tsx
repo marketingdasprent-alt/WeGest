@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { AcoesLinha } from '@/components/ui/acoes-linha';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
@@ -256,19 +257,22 @@ export const EmpresasTab: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(e)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => setDeleteId(e.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <AcoesLinha
+                    className="shrink-0"
+                    acoes={[
+                      {
+                        icone: Pencil,
+                        rotulo: `Editar ${e.nome_comercial || e.nome}`,
+                        onClick: () => openEdit(e),
+                      },
+                      {
+                        icone: Trash2,
+                        rotulo: `Eliminar ${e.nome_comercial || e.nome}`,
+                        onClick: () => setDeleteId(e.id),
+                        destrutiva: true,
+                      },
+                    ]}
+                  />
                 </div>
               </CardContent>
             </Card>

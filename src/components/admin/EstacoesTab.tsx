@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { AcoesLinha } from '@/components/ui/acoes-linha';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -168,24 +169,23 @@ export const EstacoesTab = () => {
                     <MapPin className="h-4 w-4 text-primary shrink-0" />
                     <span className="font-semibold truncate">{e.nome}</span>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => openEdit(e)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive"
-                      onClick={() => setDeleteId(e.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+                  <AcoesLinha
+                    compacto
+                    className="shrink-0"
+                    acoes={[
+                      {
+                        icone: Pencil,
+                        rotulo: `Editar ${e.nome}`,
+                        onClick: () => openEdit(e),
+                      },
+                      {
+                        icone: Trash2,
+                        rotulo: `Eliminar ${e.nome}`,
+                        onClick: () => setDeleteId(e.id),
+                        destrutiva: true,
+                      },
+                    ]}
+                  />
                 </div>
 
                 {(e.morada || e.cidade) && (

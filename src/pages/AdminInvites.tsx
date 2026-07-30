@@ -12,7 +12,7 @@ const AdminInvites = () => {
   const { isAdmin, loading: adminLoading } = usePermissions();
 
   if (adminLoading) {
-    return <AdminLoadingState message="Verificando permissões..." />;
+    return <AdminLoadingState message="A verificar permissões..." />;
   }
 
   if (!isAdmin) {

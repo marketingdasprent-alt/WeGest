@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -12,32 +12,33 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
-      login_attempts: {
-        Row: {
-          id: string
-          email: string
-          org_codigo: string | null
-          success: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          email: string
-          org_codigo?: string | null
-          success?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          email?: string
-          org_codigo?: string | null
-          success?: boolean
-          created_at?: string
-        }
-        Relationships: []
-      }
       _backup_viaturas_20260710: {
         Row: {
           combustivel: string | null
@@ -160,6 +161,213 @@ export type Database = {
           modelo_id?: string | null
         }
         Relationships: []
+      }
+      acordo_parcelas: {
+        Row: {
+          acordo_id: string
+          aviso_enviado_em: string | null
+          aviso_erro: string | null
+          aviso_tentativas: number
+          created_at: string
+          data_vencimento: string
+          estado: string
+          id: string
+          invoice_rc_id: string | null
+          nota: string | null
+          numero: number
+          org_id: string
+          pago_em: string | null
+          recibo_id: string | null
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          acordo_id: string
+          aviso_enviado_em?: string | null
+          aviso_erro?: string | null
+          aviso_tentativas?: number
+          created_at?: string
+          data_vencimento: string
+          estado?: string
+          id?: string
+          invoice_rc_id?: string | null
+          nota?: string | null
+          numero: number
+          org_id: string
+          pago_em?: string | null
+          recibo_id?: string | null
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          acordo_id?: string
+          aviso_enviado_em?: string | null
+          aviso_erro?: string | null
+          aviso_tentativas?: number
+          created_at?: string
+          data_vencimento?: string
+          estado?: string
+          id?: string
+          invoice_rc_id?: string | null
+          nota?: string | null
+          numero?: number
+          org_id?: string
+          pago_em?: string | null
+          recibo_id?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acordo_parcelas_acordo_id_fkey"
+            columns: ["acordo_id"]
+            isOneToOne: false
+            referencedRelation: "acordos_pagamento"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acordo_parcelas_invoice_rc_id_fkey"
+            columns: ["invoice_rc_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acordo_parcelas_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acordo_parcelas_recibo_id_fkey"
+            columns: ["recibo_id"]
+            isOneToOne: false
+            referencedRelation: "recibos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      acordos_pagamento: {
+        Row: {
+          aviso_antecedencia_dias: number
+          cessao_aplicada: boolean
+          cobranca_id: string
+          codigo: number
+          created_at: string
+          created_by: string | null
+          dia_vencimento: number | null
+          estado: string
+          frequencia: string
+          id: string
+          invoice_id: string | null
+          observacoes: string | null
+          org_id: string
+          precisa_revisao: boolean
+          responsavel_cliente_id: string | null
+          responsavel_motorista_id: string | null
+          responsavel_nome: string
+          responsavel_papel: string
+          titular_id: string
+          titular_nif: string | null
+          titular_nome: string
+          updated_at: string
+          valor_total: number
+        }
+        Insert: {
+          aviso_antecedencia_dias?: number
+          cessao_aplicada?: boolean
+          cobranca_id: string
+          codigo?: number
+          created_at?: string
+          created_by?: string | null
+          dia_vencimento?: number | null
+          estado?: string
+          frequencia: string
+          id?: string
+          invoice_id?: string | null
+          observacoes?: string | null
+          org_id: string
+          precisa_revisao?: boolean
+          responsavel_cliente_id?: string | null
+          responsavel_motorista_id?: string | null
+          responsavel_nome: string
+          responsavel_papel: string
+          titular_id: string
+          titular_nif?: string | null
+          titular_nome: string
+          updated_at?: string
+          valor_total: number
+        }
+        Update: {
+          aviso_antecedencia_dias?: number
+          cessao_aplicada?: boolean
+          cobranca_id?: string
+          codigo?: number
+          created_at?: string
+          created_by?: string | null
+          dia_vencimento?: number | null
+          estado?: string
+          frequencia?: string
+          id?: string
+          invoice_id?: string | null
+          observacoes?: string | null
+          org_id?: string
+          precisa_revisao?: boolean
+          responsavel_cliente_id?: string | null
+          responsavel_motorista_id?: string | null
+          responsavel_nome?: string
+          responsavel_papel?: string
+          titular_id?: string
+          titular_nif?: string | null
+          titular_nome?: string
+          updated_at?: string
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acordos_pagamento_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "contrato_cobrancas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acordos_pagamento_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acordos_pagamento_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acordos_pagamento_responsavel_cliente_id_fkey"
+            columns: ["responsavel_cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acordos_pagamento_responsavel_motorista_id_fkey"
+            columns: ["responsavel_motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acordos_pagamento_titular_id_fkey"
+            columns: ["titular_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       assinaturas_handover: {
         Row: {
@@ -571,83 +779,73 @@ export type Database = {
           },
         ]
       }
-      domain_events: {
+      automacao_execucao_manual_lock: {
         Row: {
-          id: string
-          org_id: string
-          event_type: string
-          entity_table: string
-          entity_id: string
-          payload: Json
-          occurred_at: string
-          emitted_by: string
-          correlation_id: string | null
-          processed_at: string | null
-          created_at: string
+          executado_por: string | null
+          id: boolean
+          ultima_execucao_em: string | null
         }
         Insert: {
-          id?: string
-          org_id: string
-          event_type: string
-          entity_table: string
-          entity_id: string
-          payload?: Json
-          occurred_at?: string
-          emitted_by: string
-          correlation_id?: string | null
-          processed_at?: string | null
-          created_at?: string
+          executado_por?: string | null
+          id?: boolean
+          ultima_execucao_em?: string | null
         }
         Update: {
-          id?: string
-          org_id?: string
-          event_type?: string
-          entity_table?: string
-          entity_id?: string
-          payload?: Json
-          occurred_at?: string
-          emitted_by?: string
-          correlation_id?: string | null
-          processed_at?: string | null
-          created_at?: string
+          executado_por?: string | null
+          id?: boolean
+          ultima_execucao_em?: string | null
         }
         Relationships: []
       }
       automation_logs: {
         Row: {
-          id: string
-          run_id: string | null
-          rule_id: string | null
-          org_id: string
-          evento: string
-          detalhe: Json
-          notification_ids: string[]
-          duracao_ms: number | null
           created_at: string
+          detalhe: Json
+          duracao_ms: number | null
+          evento: string
+          id: string
+          notification_ids: string[]
+          org_id: string
+          rule_id: string | null
+          run_id: string | null
         }
         Insert: {
-          id?: string
-          run_id?: string | null
-          rule_id?: string | null
-          org_id: string
-          evento: string
-          detalhe?: Json
-          notification_ids?: string[]
-          duracao_ms?: number | null
           created_at?: string
+          detalhe?: Json
+          duracao_ms?: number | null
+          evento: string
+          id?: string
+          notification_ids?: string[]
+          org_id: string
+          rule_id?: string | null
+          run_id?: string | null
         }
         Update: {
-          id?: string
-          run_id?: string | null
-          rule_id?: string | null
-          org_id?: string
-          evento?: string
-          detalhe?: Json
-          notification_ids?: string[]
-          duracao_ms?: number | null
           created_at?: string
+          detalhe?: Json
+          duracao_ms?: number | null
+          evento?: string
+          id?: string
+          notification_ids?: string[]
+          org_id?: string
+          rule_id?: string | null
+          run_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "automation_logs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_logs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automacao_estatisticas_por_regra"
+            referencedColumns: ["rule_id"]
+          },
           {
             foreignKeyName: "automation_logs_rule_id_fkey"
             columns: ["rule_id"]
@@ -655,70 +853,83 @@ export type Database = {
             referencedRelation: "automation_rules"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "automation_logs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "automacao_timeline_recente"
+            referencedColumns: ["run_id"]
+          },
+          {
+            foreignKeyName: "automation_logs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "automation_runs"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      notifications: {
+      automation_rules: {
         Row: {
-          id: string
-          org_id: string
-          destinatario_user_id: string
-          template_codigo: string
-          severidade: string
-          titulo: string
-          mensagem: string | null
-          link: string | null
-          entity_table: string | null
-          entity_id: string | null
-          payload: Json
-          lida: boolean
-          lida_em: string | null
-          resolvida: boolean
-          resolvida_por: string | null
-          resolvida_em: string | null
-          rule_run_id: string | null
+          acao_config: Json
+          acao_tipo: string
+          ativo: boolean
+          codigo: string
+          condicoes: Json
+          cooldown_minutos: number
           created_at: string
+          criado_por: string | null
+          descricao: string | null
+          event_type: string
+          id: string
+          nome: string
+          org_id: string
+          prioridade: string
+          updated_at: string
         }
         Insert: {
-          id?: string
-          org_id: string
-          destinatario_user_id: string
-          template_codigo: string
-          severidade?: string
-          titulo: string
-          mensagem?: string | null
-          link?: string | null
-          entity_table?: string | null
-          entity_id?: string | null
-          payload?: Json
-          lida?: boolean
-          lida_em?: string | null
-          resolvida?: boolean
-          resolvida_por?: string | null
-          resolvida_em?: string | null
-          rule_run_id?: string | null
+          acao_config?: Json
+          acao_tipo: string
+          ativo?: boolean
+          codigo: string
+          condicoes?: Json
+          cooldown_minutos?: number
           created_at?: string
+          criado_por?: string | null
+          descricao?: string | null
+          event_type: string
+          id?: string
+          nome: string
+          org_id: string
+          prioridade?: string
+          updated_at?: string
         }
         Update: {
-          id?: string
-          org_id?: string
-          destinatario_user_id?: string
-          template_codigo?: string
-          severidade?: string
-          titulo?: string
-          mensagem?: string | null
-          link?: string | null
-          entity_table?: string | null
-          entity_id?: string | null
-          payload?: Json
-          lida?: boolean
-          lida_em?: string | null
-          resolvida?: boolean
-          resolvida_por?: string | null
-          resolvida_em?: string | null
-          rule_run_id?: string | null
+          acao_config?: Json
+          acao_tipo?: string
+          ativo?: boolean
+          codigo?: string
+          condicoes?: Json
+          cooldown_minutos?: number
           created_at?: string
+          criado_por?: string | null
+          descricao?: string | null
+          event_type?: string
+          id?: string
+          nome?: string
+          org_id?: string
+          prioridade?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "automation_rules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       automation_runs: {
         Row: {
@@ -778,223 +989,43 @@ export type Database = {
           status?: string
           trigger_event_id?: string | null
         }
-        Relationships: []
-      }
-      failed_jobs: {
-        Row: {
-          attempts: number
-          created_at: string
-          failed_at: string
-          id: string
-          job_type: string
-          last_error: string | null
-          org_id: string
-          payload: Json | null
-          resolution_note: string | null
-          resolved: boolean
-          resolved_at: string | null
-          resolved_by: string | null
-          source_id: string
-          source_table: string
-        }
-        Insert: {
-          attempts: number
-          created_at?: string
-          failed_at?: string
-          id?: string
-          job_type: string
-          last_error?: string | null
-          org_id: string
-          payload?: Json | null
-          resolution_note?: string | null
-          resolved?: boolean
-          resolved_at?: string | null
-          resolved_by?: string | null
-          source_id: string
-          source_table?: string
-        }
-        Update: {
-          attempts?: number
-          created_at?: string
-          failed_at?: string
-          id?: string
-          job_type?: string
-          last_error?: string | null
-          org_id?: string
-          payload?: Json | null
-          resolution_note?: string | null
-          resolved?: boolean
-          resolved_at?: string | null
-          resolved_by?: string | null
-          source_id?: string
-          source_table?: string
-        }
-        Relationships: []
-      }
-      notification_queue: {
-        Row: {
-          attempt: number
-          canal: string
-          created_at: string
-          destinatario: string
-          error_message: string | null
-          id: string
-          max_attempts: number
-          next_attempt_at: string
-          notification_id: string
-          org_id: string
-          payload_render: Json
-          priority: number
-          started_at: string | null
-          status: string
-          template_codigo: string
-        }
-        Insert: {
-          attempt?: number
-          canal: string
-          created_at?: string
-          destinatario: string
-          error_message?: string | null
-          id?: string
-          max_attempts?: number
-          next_attempt_at?: string
-          notification_id: string
-          org_id: string
-          payload_render?: Json
-          priority?: number
-          started_at?: string | null
-          status?: string
-          template_codigo: string
-        }
-        Update: {
-          attempt?: number
-          canal?: string
-          created_at?: string
-          destinatario?: string
-          error_message?: string | null
-          id?: string
-          max_attempts?: number
-          next_attempt_at?: string
-          notification_id?: string
-          org_id?: string
-          payload_render?: Json
-          priority?: number
-          started_at?: string | null
-          status?: string
-          template_codigo?: string
-        }
-        Relationships: []
-      }
-      automation_rules: {
-        Row: {
-          acao_config: Json
-          acao_tipo: string
-          ativo: boolean
-          codigo: string
-          condicoes: Json
-          cooldown_minutos: number
-          created_at: string
-          criado_por: string | null
-          descricao: string | null
-          event_type: string
-          id: string
-          nome: string
-          org_id: string
-          prioridade: string
-          updated_at: string
-        }
-        Insert: {
-          acao_config?: Json
-          acao_tipo: string
-          ativo?: boolean
-          codigo: string
-          condicoes?: Json
-          cooldown_minutos?: number
-          created_at?: string
-          criado_por?: string | null
-          descricao?: string | null
-          event_type: string
-          id?: string
-          nome: string
-          org_id: string
-          prioridade?: string
-          updated_at?: string
-        }
-        Update: {
-          acao_config?: Json
-          acao_tipo?: string
-          ativo?: boolean
-          codigo?: string
-          condicoes?: Json
-          cooldown_minutos?: number
-          created_at?: string
-          criado_por?: string | null
-          descricao?: string | null
-          event_type?: string
-          id?: string
-          nome?: string
-          org_id?: string
-          prioridade?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      notification_delivery: {
-        Row: {
-          aberto_em: string | null
-          canal: string
-          clicado_em: string | null
-          created_at: string
-          destinatario: string
-          entregue_em: string | null
-          enviado_em: string | null
-          erro: string | null
-          falhou_em: string | null
-          id: string
-          notification_id: string | null
-          notification_queue_id: string | null
-          org_id: string
-          provider: string | null
-          provider_message_id: string | null
-          status: string
-        }
-        Insert: {
-          aberto_em?: string | null
-          canal: string
-          clicado_em?: string | null
-          created_at?: string
-          destinatario: string
-          entregue_em?: string | null
-          enviado_em?: string | null
-          erro?: string | null
-          falhou_em?: string | null
-          id?: string
-          notification_id?: string | null
-          notification_queue_id?: string | null
-          org_id: string
-          provider?: string | null
-          provider_message_id?: string | null
-          status?: string
-        }
-        Update: {
-          aberto_em?: string | null
-          canal?: string
-          clicado_em?: string | null
-          created_at?: string
-          destinatario?: string
-          entregue_em?: string | null
-          enviado_em?: string | null
-          erro?: string | null
-          falhou_em?: string | null
-          id?: string
-          notification_id?: string | null
-          notification_queue_id?: string | null
-          org_id?: string
-          provider?: string | null
-          provider_message_id?: string | null
-          status?: string
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "automation_runs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_runs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automacao_estatisticas_por_regra"
+            referencedColumns: ["rule_id"]
+          },
+          {
+            foreignKeyName: "automation_runs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_runs_trigger_event_id_fkey"
+            columns: ["trigger_event_id"]
+            isOneToOne: false
+            referencedRelation: "automacao_timeline_recente"
+            referencedColumns: ["event_id"]
+          },
+          {
+            foreignKeyName: "automation_runs_trigger_event_id_fkey"
+            columns: ["trigger_event_id"]
+            isOneToOne: false
+            referencedRelation: "domain_events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bolt_drivers: {
         Row: {
@@ -2174,6 +2205,297 @@ export type Database = {
           },
         ]
       }
+      cartrack_comandos: {
+        Row: {
+          acao: string
+          created_at: string
+          executado_por: string | null
+          id: string
+          integracao_id: string | null
+          mensagem: string | null
+          org_id: string
+          registration: string | null
+          sucesso: boolean
+          viatura_id: string | null
+        }
+        Insert: {
+          acao: string
+          created_at?: string
+          executado_por?: string | null
+          id?: string
+          integracao_id?: string | null
+          mensagem?: string | null
+          org_id?: string
+          registration?: string | null
+          sucesso?: boolean
+          viatura_id?: string | null
+        }
+        Update: {
+          acao?: string
+          created_at?: string
+          executado_por?: string | null
+          id?: string
+          integracao_id?: string | null
+          mensagem?: string | null
+          org_id?: string
+          registration?: string | null
+          sucesso?: boolean
+          viatura_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cartrack_comandos_integracao_id_fkey"
+            columns: ["integracao_id"]
+            isOneToOne: false
+            referencedRelation: "plataformas_configuracao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cartrack_comandos_viatura_id_fkey"
+            columns: ["viatura_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cartrack_events: {
+        Row: {
+          cartrack_vehicle_id: string | null
+          created_at: string
+          description: string | null
+          event_at: string | null
+          event_id: string
+          event_type: string | null
+          id: string
+          integracao_id: string
+          latitude: number | null
+          longitude: number | null
+          org_id: string
+          raw_data: Json | null
+          registration: string | null
+          updated_at: string
+          viatura_id: string | null
+        }
+        Insert: {
+          cartrack_vehicle_id?: string | null
+          created_at?: string
+          description?: string | null
+          event_at?: string | null
+          event_id: string
+          event_type?: string | null
+          id?: string
+          integracao_id: string
+          latitude?: number | null
+          longitude?: number | null
+          org_id?: string
+          raw_data?: Json | null
+          registration?: string | null
+          updated_at?: string
+          viatura_id?: string | null
+        }
+        Update: {
+          cartrack_vehicle_id?: string | null
+          created_at?: string
+          description?: string | null
+          event_at?: string | null
+          event_id?: string
+          event_type?: string | null
+          id?: string
+          integracao_id?: string
+          latitude?: number | null
+          longitude?: number | null
+          org_id?: string
+          raw_data?: Json | null
+          registration?: string | null
+          updated_at?: string
+          viatura_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cartrack_events_integracao_id_fkey"
+            columns: ["integracao_id"]
+            isOneToOne: false
+            referencedRelation: "plataformas_configuracao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cartrack_events_viatura_id_fkey"
+            columns: ["viatura_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cartrack_trips: {
+        Row: {
+          cartrack_vehicle_id: string | null
+          created_at: string
+          distance_km: number | null
+          driver_name: string | null
+          duration_seconds: number | null
+          end_at: string | null
+          end_latitude: number | null
+          end_longitude: number | null
+          id: string
+          integracao_id: string
+          max_speed: number | null
+          odometer_end: number | null
+          odometer_start: number | null
+          org_id: string
+          raw_data: Json | null
+          registration: string | null
+          start_at: string | null
+          start_latitude: number | null
+          start_longitude: number | null
+          trip_id: string
+          updated_at: string
+          viatura_id: string | null
+        }
+        Insert: {
+          cartrack_vehicle_id?: string | null
+          created_at?: string
+          distance_km?: number | null
+          driver_name?: string | null
+          duration_seconds?: number | null
+          end_at?: string | null
+          end_latitude?: number | null
+          end_longitude?: number | null
+          id?: string
+          integracao_id: string
+          max_speed?: number | null
+          odometer_end?: number | null
+          odometer_start?: number | null
+          org_id?: string
+          raw_data?: Json | null
+          registration?: string | null
+          start_at?: string | null
+          start_latitude?: number | null
+          start_longitude?: number | null
+          trip_id: string
+          updated_at?: string
+          viatura_id?: string | null
+        }
+        Update: {
+          cartrack_vehicle_id?: string | null
+          created_at?: string
+          distance_km?: number | null
+          driver_name?: string | null
+          duration_seconds?: number | null
+          end_at?: string | null
+          end_latitude?: number | null
+          end_longitude?: number | null
+          id?: string
+          integracao_id?: string
+          max_speed?: number | null
+          odometer_end?: number | null
+          odometer_start?: number | null
+          org_id?: string
+          raw_data?: Json | null
+          registration?: string | null
+          start_at?: string | null
+          start_latitude?: number | null
+          start_longitude?: number | null
+          trip_id?: string
+          updated_at?: string
+          viatura_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cartrack_trips_integracao_id_fkey"
+            columns: ["integracao_id"]
+            isOneToOne: false
+            referencedRelation: "plataformas_configuracao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cartrack_trips_viatura_id_fkey"
+            columns: ["viatura_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cartrack_vehicles: {
+        Row: {
+          cartrack_vehicle_id: string
+          chassis: string | null
+          created_at: string
+          descricao: string | null
+          id: string
+          ignition: boolean | null
+          integracao_id: string
+          last_latitude: number | null
+          last_longitude: number | null
+          last_position_at: string | null
+          odometer: number | null
+          org_id: string
+          raw_data: Json | null
+          registration: string | null
+          speed: number | null
+          status: string | null
+          updated_at: string
+          viatura_id: string | null
+        }
+        Insert: {
+          cartrack_vehicle_id: string
+          chassis?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          ignition?: boolean | null
+          integracao_id: string
+          last_latitude?: number | null
+          last_longitude?: number | null
+          last_position_at?: string | null
+          odometer?: number | null
+          org_id?: string
+          raw_data?: Json | null
+          registration?: string | null
+          speed?: number | null
+          status?: string | null
+          updated_at?: string
+          viatura_id?: string | null
+        }
+        Update: {
+          cartrack_vehicle_id?: string
+          chassis?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          ignition?: boolean | null
+          integracao_id?: string
+          last_latitude?: number | null
+          last_longitude?: number | null
+          last_position_at?: string | null
+          odometer?: number | null
+          org_id?: string
+          raw_data?: Json | null
+          registration?: string | null
+          speed?: number | null
+          status?: string | null
+          updated_at?: string
+          viatura_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cartrack_vehicles_integracao_id_fkey"
+            columns: ["integracao_id"]
+            isOneToOne: false
+            referencedRelation: "plataformas_configuracao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cartrack_vehicles_viatura_id_fkey"
+            columns: ["viatura_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cliente_anexos: {
         Row: {
           cliente_id: string
@@ -2392,6 +2714,7 @@ export type Database = {
       }
       conta_movimentos: {
         Row: {
+          acordo_id: string | null
           cobranca_id: string | null
           contrato_id: string | null
           created_at: string
@@ -2410,6 +2733,7 @@ export type Database = {
           valor: number
         }
         Insert: {
+          acordo_id?: string | null
           cobranca_id?: string | null
           contrato_id?: string | null
           created_at?: string
@@ -2428,6 +2752,7 @@ export type Database = {
           valor: number
         }
         Update: {
+          acordo_id?: string | null
           cobranca_id?: string | null
           contrato_id?: string | null
           created_at?: string
@@ -2446,6 +2771,13 @@ export type Database = {
           valor?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "conta_movimentos_acordo_id_fkey"
+            columns: ["acordo_id"]
+            isOneToOne: false
+            referencedRelation: "acordos_pagamento"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "conta_movimentos_cobranca_id_fkey"
             columns: ["cobranca_id"]
@@ -2641,6 +2973,7 @@ export type Database = {
           emitida_em: string | null
           estado: Database["public"]["Enums"]["cobranca_estado_enum"]
           id: string
+          lembrete_atraso_enviado_em: string | null
           manual: boolean
           org_id: string
           pago_em: string | null
@@ -2670,6 +3003,7 @@ export type Database = {
           emitida_em?: string | null
           estado?: Database["public"]["Enums"]["cobranca_estado_enum"]
           id?: string
+          lembrete_atraso_enviado_em?: string | null
           manual?: boolean
           org_id: string
           pago_em?: string | null
@@ -2699,6 +3033,7 @@ export type Database = {
           emitida_em?: string | null
           estado?: Database["public"]["Enums"]["cobranca_estado_enum"]
           id?: string
+          lembrete_atraso_enviado_em?: string | null
           manual?: boolean
           org_id?: string
           pago_em?: string | null
@@ -3326,7 +3661,7 @@ export type Database = {
           viatura_id: string | null
         }
         Insert: {
-          codigo?: number
+          codigo: number
           created_at?: string
           created_by?: string | null
           data_fim?: string | null
@@ -3534,7 +3869,7 @@ export type Database = {
           cobertura_id?: string | null
           cobertura_nome?: string | null
           cobertura_preco_dia?: number | null
-          codigo?: number
+          codigo: number
           combustivel_entrada?: string | null
           combustivel_saida?: string | null
           comentarios_entrega?: string | null
@@ -3835,6 +4170,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      cron_http_log: {
+        Row: {
+          id: number
+          invoked_at: string
+          jobname: string
+          request_id: number
+          url: string
+        }
+        Insert: {
+          id?: number
+          invoked_at?: string
+          jobname: string
+          request_id: number
+          url: string
+        }
+        Update: {
+          id?: number
+          invoked_at?: string
+          jobname?: string
+          request_id?: number
+          url?: string
+        }
+        Relationships: []
       }
       danos_tokens: {
         Row: {
@@ -4147,6 +4506,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "documentos_suplementares_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      domain_events: {
+        Row: {
+          correlation_id: string | null
+          created_at: string
+          emitted_by: string
+          entity_id: string
+          entity_table: string
+          event_type: string
+          id: string
+          occurred_at: string
+          org_id: string
+          payload: Json
+          processed_at: string | null
+        }
+        Insert: {
+          correlation_id?: string | null
+          created_at?: string
+          emitted_by: string
+          entity_id: string
+          entity_table: string
+          event_type: string
+          id?: string
+          occurred_at?: string
+          org_id: string
+          payload?: Json
+          processed_at?: string | null
+        }
+        Update: {
+          correlation_id?: string | null
+          created_at?: string
+          emitted_by?: string
+          entity_id?: string
+          entity_table?: string
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          org_id?: string
+          payload?: Json
+          processed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domain_events_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
@@ -4951,6 +5360,141 @@ export type Database = {
           },
         ]
       }
+      failed_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          failed_at: string
+          id: string
+          job_type: string
+          last_error: string | null
+          org_id: string
+          payload: Json | null
+          resolution_note: string | null
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          source_id: string
+          source_table: string
+        }
+        Insert: {
+          attempts: number
+          created_at?: string
+          failed_at?: string
+          id?: string
+          job_type: string
+          last_error?: string | null
+          org_id: string
+          payload?: Json | null
+          resolution_note?: string | null
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_id: string
+          source_table?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          failed_at?: string
+          id?: string
+          job_type?: string
+          last_error?: string | null
+          org_id?: string
+          payload?: Json | null
+          resolution_note?: string | null
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_id?: string
+          source_table?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "failed_jobs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      faturacao_outbox: {
+        Row: {
+          created_at: string
+          estado: string
+          id: string
+          idempotency_key: string
+          invoice_id: string | null
+          needs_reconcile: boolean
+          org_id: string
+          parcela_id: string | null
+          payload: Json
+          proxima_tentativa: string
+          started_at: string | null
+          tentativas: number
+          tipo: string
+          ultimo_erro: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          estado?: string
+          id?: string
+          idempotency_key: string
+          invoice_id?: string | null
+          needs_reconcile?: boolean
+          org_id: string
+          parcela_id?: string | null
+          payload: Json
+          proxima_tentativa?: string
+          started_at?: string | null
+          tentativas?: number
+          tipo: string
+          ultimo_erro?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          estado?: string
+          id?: string
+          idempotency_key?: string
+          invoice_id?: string | null
+          needs_reconcile?: boolean
+          org_id?: string
+          parcela_id?: string | null
+          payload?: Json
+          proxima_tentativa?: string
+          started_at?: string | null
+          tentativas?: number
+          tipo?: string
+          ultimo_erro?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "faturacao_outbox_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "faturacao_outbox_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "faturacao_outbox_parcela_id_fkey"
+            columns: ["parcela_id"]
+            isOneToOne: false
+            referencedRelation: "acordo_parcelas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       formulario_campanhas: {
         Row: {
           campanha_tag: string
@@ -5374,6 +5918,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      login_attempts: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          org_codigo: string | null
+          success: boolean
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          org_codigo?: string | null
+          success?: boolean
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          org_codigo?: string | null
+          success?: boolean
+        }
+        Relationships: []
       }
       marketing_assinaturas: {
         Row: {
@@ -5930,6 +6498,7 @@ export type Database = {
       }
       motorista_financeiro: {
         Row: {
+          acordo_id: string | null
           acordo_pendente: boolean | null
           categoria: string | null
           created_at: string | null
@@ -5951,6 +6520,7 @@ export type Database = {
           valor: number
         }
         Insert: {
+          acordo_id?: string | null
           acordo_pendente?: boolean | null
           categoria?: string | null
           created_at?: string | null
@@ -5972,6 +6542,7 @@ export type Database = {
           valor: number
         }
         Update: {
+          acordo_id?: string | null
           acordo_pendente?: boolean | null
           categoria?: string | null
           created_at?: string | null
@@ -5993,6 +6564,13 @@ export type Database = {
           valor?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "motorista_financeiro_acordo_id_fkey"
+            columns: ["acordo_id"]
+            isOneToOne: false
+            referencedRelation: "acordos_pagamento"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "motorista_financeiro_criado_por_fkey"
             columns: ["criado_por"]
@@ -6846,7 +7424,7 @@ export type Database = {
         }
         Insert: {
           cobranca_id: string
-          codigo?: number
+          codigo: number
           contrato_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -6944,12 +7522,14 @@ export type Database = {
       }
       notificacoes: {
         Row: {
+          agrupadas: number
           candidatura_id: string | null
           created_at: string
           destinatario_id: string | null
           destinatario_user_id: string | null
           evento_id: string | null
           id: string
+          itens: Json | null
           link: string | null
           mensagem: string | null
           org_id: string | null
@@ -6963,12 +7543,14 @@ export type Database = {
           viatura_id: string | null
         }
         Insert: {
+          agrupadas?: number
           candidatura_id?: string | null
           created_at?: string
           destinatario_id?: string | null
           destinatario_user_id?: string | null
           evento_id?: string | null
           id?: string
+          itens?: Json | null
           link?: string | null
           mensagem?: string | null
           org_id?: string | null
@@ -6982,12 +7564,14 @@ export type Database = {
           viatura_id?: string | null
         }
         Update: {
+          agrupadas?: number
           candidatura_id?: string | null
           created_at?: string
           destinatario_id?: string | null
           destinatario_user_id?: string | null
           evento_id?: string | null
           id?: string
+          itens?: Json | null
           link?: string | null
           mensagem?: string | null
           org_id?: string | null
@@ -7027,6 +7611,298 @@ export type Database = {
             columns: ["viatura_id"]
             isOneToOne: false
             referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_delivery: {
+        Row: {
+          aberto_em: string | null
+          canal: string
+          clicado_em: string | null
+          created_at: string
+          destinatario: string
+          entregue_em: string | null
+          enviado_em: string | null
+          erro: string | null
+          falhou_em: string | null
+          id: string
+          notification_id: string | null
+          notification_queue_id: string | null
+          org_id: string
+          provider: string | null
+          provider_message_id: string | null
+          status: string
+        }
+        Insert: {
+          aberto_em?: string | null
+          canal: string
+          clicado_em?: string | null
+          created_at?: string
+          destinatario: string
+          entregue_em?: string | null
+          enviado_em?: string | null
+          erro?: string | null
+          falhou_em?: string | null
+          id?: string
+          notification_id?: string | null
+          notification_queue_id?: string | null
+          org_id: string
+          provider?: string | null
+          provider_message_id?: string | null
+          status?: string
+        }
+        Update: {
+          aberto_em?: string | null
+          canal?: string
+          clicado_em?: string | null
+          created_at?: string
+          destinatario?: string
+          entregue_em?: string | null
+          enviado_em?: string | null
+          erro?: string | null
+          falhou_em?: string | null
+          id?: string
+          notification_id?: string | null
+          notification_queue_id?: string | null
+          org_id?: string
+          provider?: string | null
+          provider_message_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_delivery_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_delivery_notification_queue_id_fkey"
+            columns: ["notification_queue_id"]
+            isOneToOne: false
+            referencedRelation: "notification_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_delivery_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_queue: {
+        Row: {
+          attempt: number
+          canal: string
+          created_at: string
+          destinatario: string
+          error_message: string | null
+          id: string
+          max_attempts: number
+          next_attempt_at: string
+          notification_id: string
+          org_id: string
+          payload_render: Json
+          priority: number
+          started_at: string | null
+          status: string
+          template_codigo: string
+        }
+        Insert: {
+          attempt?: number
+          canal: string
+          created_at?: string
+          destinatario: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          notification_id: string
+          org_id: string
+          payload_render?: Json
+          priority?: number
+          started_at?: string | null
+          status?: string
+          template_codigo: string
+        }
+        Update: {
+          attempt?: number
+          canal?: string
+          created_at?: string
+          destinatario?: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          notification_id?: string
+          org_id?: string
+          payload_render?: Json
+          priority?: number
+          started_at?: string | null
+          status?: string
+          template_codigo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_queue_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_queue_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_templates: {
+        Row: {
+          assunto: string | null
+          ativo: boolean
+          canal: string
+          codigo: string
+          corpo_formato: string
+          corpo_template: string
+          created_at: string
+          id: string
+          idioma: string
+          org_id: string
+          updated_at: string
+          variaveis_esperadas: string[] | null
+          versao: number
+        }
+        Insert: {
+          assunto?: string | null
+          ativo?: boolean
+          canal: string
+          codigo: string
+          corpo_formato?: string
+          corpo_template: string
+          created_at?: string
+          id?: string
+          idioma?: string
+          org_id: string
+          updated_at?: string
+          variaveis_esperadas?: string[] | null
+          versao?: number
+        }
+        Update: {
+          assunto?: string | null
+          ativo?: boolean
+          canal?: string
+          codigo?: string
+          corpo_formato?: string
+          corpo_template?: string
+          created_at?: string
+          id?: string
+          idioma?: string
+          org_id?: string
+          updated_at?: string
+          variaveis_esperadas?: string[] | null
+          versao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_templates_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          destinatario_user_id: string
+          digest_enviado_em: string | null
+          entity_id: string | null
+          entity_table: string | null
+          id: string
+          lida: boolean
+          lida_em: string | null
+          link: string | null
+          mensagem: string | null
+          org_id: string
+          payload: Json
+          resolvida: boolean
+          resolvida_em: string | null
+          resolvida_por: string | null
+          rule_run_id: string | null
+          severidade: string
+          template_codigo: string
+          titulo: string
+        }
+        Insert: {
+          created_at?: string
+          destinatario_user_id: string
+          digest_enviado_em?: string | null
+          entity_id?: string | null
+          entity_table?: string | null
+          id?: string
+          lida?: boolean
+          lida_em?: string | null
+          link?: string | null
+          mensagem?: string | null
+          org_id: string
+          payload?: Json
+          resolvida?: boolean
+          resolvida_em?: string | null
+          resolvida_por?: string | null
+          rule_run_id?: string | null
+          severidade?: string
+          template_codigo: string
+          titulo: string
+        }
+        Update: {
+          created_at?: string
+          destinatario_user_id?: string
+          digest_enviado_em?: string | null
+          entity_id?: string | null
+          entity_table?: string | null
+          id?: string
+          lida?: boolean
+          lida_em?: string | null
+          link?: string | null
+          mensagem?: string | null
+          org_id?: string
+          payload?: Json
+          resolvida?: boolean
+          resolvida_em?: string | null
+          resolvida_por?: string | null
+          rule_run_id?: string | null
+          severidade?: string
+          template_codigo?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_rule_run_id_fkey"
+            columns: ["rule_run_id"]
+            isOneToOne: false
+            referencedRelation: "automacao_timeline_recente"
+            referencedColumns: ["run_id"]
+          },
+          {
+            foreignKeyName: "notifications_rule_run_id_fkey"
+            columns: ["rule_run_id"]
+            isOneToOne: false
+            referencedRelation: "automation_runs"
             referencedColumns: ["id"]
           },
         ]
@@ -7682,7 +8558,7 @@ export type Database = {
           valor: number
         }
         Insert: {
-          codigo?: number
+          codigo: number
           contrato_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -8921,7 +9797,7 @@ export type Database = {
           cobertura_id?: string | null
           cobertura_nome?: string | null
           cobertura_preco_dia?: number | null
-          codigo?: number
+          codigo: number
           condutor_id?: string | null
           condutor_nome?: string | null
           created_at?: string
@@ -11433,6 +12309,8 @@ export type Database = {
           observacoes: string | null
           org_id: string
           proprietario_id: string | null
+          proxima_manutencao_data: string | null
+          proxima_manutencao_km: number | null
           seguradora: string | null
           seguro_numero: string | null
           seguro_validade: string | null
@@ -11497,6 +12375,8 @@ export type Database = {
           observacoes?: string | null
           org_id?: string
           proprietario_id?: string | null
+          proxima_manutencao_data?: string | null
+          proxima_manutencao_km?: number | null
           seguradora?: string | null
           seguro_numero?: string | null
           seguro_validade?: string | null
@@ -11561,6 +12441,8 @@ export type Database = {
           observacoes?: string | null
           org_id?: string
           proprietario_id?: string | null
+          proxima_manutencao_data?: string | null
+          proxima_manutencao_km?: number | null
           seguradora?: string | null
           seguro_numero?: string | null
           seguro_validade?: string | null
@@ -11647,23 +12529,46 @@ export type Database = {
       }
     }
     Views: {
-      contrato_renting_totais: {
+      automacao_estatisticas_por_regra: {
         Row: {
-          cobertura_custo: number | null
-          contrato_id: string | null
-          dias: number | null
-          estado_financeiro:
-            | Database["public"]["Enums"]["contrato_estado_financeiro_enum"]
-            | null
-          extra_custo: number | null
-          facturado_em: string | null
-          is_snapshot: boolean | null
-          iva: number | null
-          subtotal: number | null
-          taxa_custo: number | null
-          total: number | null
+          ativo: boolean | null
+          cooldown_minutos: number | null
+          duracao_media_ms: number | null
+          event_type: string | null
+          execucoes: number | null
+          falhas: number | null
+          nome: string | null
+          org_id: string | null
+          rule_id: string | null
+          ultima_execucao: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "automation_rules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automacao_saude_canais: {
+        Row: {
+          canal: string | null
+          enviados_ultima_hora: number | null
+          falhas_ultima_hora: number | null
+          org_id: string | null
+          tempo_resposta_medio_ms: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_queue_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       automacao_timeline_recente: {
         Row: {
@@ -11684,35 +12589,101 @@ export type Database = {
           started_at: string | null
           ultimo_evento_log: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "automation_runs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automacao_estatisticas_por_regra"
+            referencedColumns: ["rule_id"]
+          },
+          {
+            foreignKeyName: "automation_runs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "domain_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      automacao_estatisticas_por_regra: {
+      contrato_renting_totais: {
         Row: {
-          ativo: boolean | null
-          cooldown_minutos: number | null
-          duracao_media_ms: number | null
-          event_type: string | null
-          execucoes: number | null
-          falhas: number | null
-          nome: string | null
-          org_id: string | null
-          rule_id: string | null
-          ultima_execucao: string | null
+          cobertura_custo: number | null
+          contrato_id: string | null
+          dias: number | null
+          estado_financeiro:
+            | Database["public"]["Enums"]["contrato_estado_financeiro_enum"]
+            | null
+          extra_custo: number | null
+          facturado_em: string | null
+          is_snapshot: boolean | null
+          iva: number | null
+          subtotal: number | null
+          taxa_custo: number | null
+          total: number | null
         }
         Relationships: []
       }
-      automacao_saude_canais: {
+      cron_edge_health: {
         Row: {
-          canal: string | null
-          enviados_ultima_hora: number | null
-          falhas_ultima_hora: number | null
-          org_id: string | null
-          tempo_resposta_medio_ms: number | null
+          error_msg: string | null
+          invoked_at: string | null
+          jobname: string | null
+          resultado: string | null
+          status_code: number | null
+          timed_out: boolean | null
+          url: string | null
         }
         Relationships: []
       }
     }
     Functions: {
+      acordo_cancelar: { Args: { p_acordo_id: string }; Returns: undefined }
+      acordo_criar: {
+        Args: {
+          p_aviso_antecedencia_dias?: number
+          p_cobranca_id: string
+          p_dia_vencimento?: number
+          p_frequencia: string
+          p_observacoes?: string
+          p_parcelas: Json
+          p_responsavel_id: string
+          p_responsavel_papel: string
+        }
+        Returns: string
+      }
+      acordo_parcela_liquidar: {
+        Args: { p_invoice_id?: string; p_parcela_id: string }
+        Returns: undefined
+      }
+      acordo_parcela_registar_pagamento: {
+        Args: {
+          p_cobranca_id: string
+          p_contrato_id: string
+          p_data: string
+          p_descricao: string
+          p_entidade_id: string
+          p_metodo: string
+          p_parcela_id: string
+          p_payload?: Json
+          p_tem_documento_fiscal: boolean
+          p_valor: number
+        }
+        Returns: Json
+      }
+      acordo_parcela_reverter_pagamento: {
+        Args: { p_recibo_id: string }
+        Returns: undefined
+      }
+      acordo_vista_devedor: { Args: { p_acordo_id: string }; Returns: Json }
+      acordos_manutencao_diaria: { Args: { p_hoje: string }; Returns: Json }
       aprovar_candidatura_motorista: {
         Args: { p_candidatura_id: string }
         Returns: string
@@ -11733,6 +12704,90 @@ export type Database = {
         Args: { p_card: string; p_motorista: string; p_plataforma: string }
         Returns: number
       }
+      automation_runs_claim: {
+        Args: { p_max?: number }
+        Returns: {
+          attempt: number
+          completed_at: string | null
+          created_at: string
+          entity_id: string | null
+          entity_table: string | null
+          error_message: string | null
+          id: string
+          job_type: string
+          max_attempts: number
+          next_attempt_at: string
+          org_id: string
+          payload: Json
+          priority: number
+          rule_id: string
+          started_at: string | null
+          status: string
+          trigger_event_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "automation_runs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      automation_runs_complete: {
+        Args: { p_detalhe?: Json; p_run_id: string }
+        Returns: {
+          attempt: number
+          completed_at: string | null
+          created_at: string
+          entity_id: string | null
+          entity_table: string | null
+          error_message: string | null
+          id: string
+          job_type: string
+          max_attempts: number
+          next_attempt_at: string
+          org_id: string
+          payload: Json
+          priority: number
+          rule_id: string
+          started_at: string | null
+          status: string
+          trigger_event_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "automation_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      automation_runs_fail: {
+        Args: { p_error: string; p_run_id: string }
+        Returns: {
+          attempt: number
+          completed_at: string | null
+          created_at: string
+          entity_id: string | null
+          entity_table: string | null
+          error_message: string | null
+          id: string
+          job_type: string
+          max_attempts: number
+          next_attempt_at: string
+          org_id: string
+          payload: Json
+          priority: number
+          rule_id: string
+          started_at: string | null
+          status: string
+          trigger_event_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "automation_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       calcular_valor_aluguer: {
         Args: {
           p_dias: number
@@ -11746,6 +12801,10 @@ export type Database = {
         Returns: boolean
       }
       can_view_financeiro: { Args: never; Returns: boolean }
+      cobranca_saldo_por_liquidar: {
+        Args: { p_cobranca_id: string }
+        Returns: number
+      }
       consumir_token_realizacao: {
         Args: { p_token: string }
         Returns: {
@@ -11805,6 +12864,15 @@ export type Database = {
         Args: { p_contrato_id: string; p_motivo: string }
         Returns: string
       }
+      cron_invocar_edge: {
+        Args: {
+          p_body?: Json
+          p_funcao: string
+          p_jobname: string
+          p_timeout_ms?: number
+        }
+        Returns: number
+      }
       current_user_cargo: { Args: never; Returns: string }
       email_caixa_tem_credenciais: {
         Args: { _caixa_id: string }
@@ -11823,6 +12891,21 @@ export type Database = {
         Returns: undefined
       }
       email_pode_gerir: { Args: never; Returns: boolean }
+      emit_candidaturas_paradas_events: { Args: never; Returns: undefined }
+      emit_contrato_renting_renovacao_events: {
+        Args: never
+        Returns: undefined
+      }
+      emit_expiry_events: { Args: never; Returns: undefined }
+      emit_faturas_nao_enviadas_events: { Args: never; Returns: undefined }
+      emit_lembretes_cobranca_atrasada: { Args: never; Returns: undefined }
+      emit_login_suspeitos_events: { Args: never; Returns: undefined }
+      emit_motoristas_ficha_incompleta_events: {
+        Args: never
+        Returns: undefined
+      }
+      emit_reservas_sem_checkin_events: { Args: never; Returns: undefined }
+      emit_tickets_atrasados_events: { Args: never; Returns: undefined }
       ensure_base_cargos: { Args: { _org_id: string }; Returns: undefined }
       ensure_categoria_sinistro: {
         Args: { _org_id: string }
@@ -11855,8 +12938,36 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      execute_gestor_assignment: { Args: never; Returns: number }
+      enviar_digests_diarios: { Args: never; Returns: undefined }
       executar_jobs_automacao_manualmente: { Args: never; Returns: Json }
+      execute_automation_runs: { Args: { p_max?: number }; Returns: undefined }
+      execute_gestor_assignment: { Args: never; Returns: number }
+      faturacao_outbox_claim: {
+        Args: { p_max: number }
+        Returns: {
+          created_at: string
+          estado: string
+          id: string
+          idempotency_key: string
+          invoice_id: string | null
+          needs_reconcile: boolean
+          org_id: string
+          parcela_id: string | null
+          payload: Json
+          proxima_tentativa: string
+          started_at: string | null
+          tentativas: number
+          tipo: string
+          ultimo_erro: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "faturacao_outbox"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       fn_checkin_abrir_motorista_viatura: {
         Args: {
           p_data_inicio: string
@@ -12124,10 +13235,39 @@ export type Database = {
         Returns: boolean
       }
       iban_valido: { Args: { p_iban: string }; Returns: boolean }
+      ignorar_failed_job: {
+        Args: { p_id: string }
+        Returns: {
+          attempts: number
+          created_at: string
+          failed_at: string
+          id: string
+          job_type: string
+          last_error: string | null
+          org_id: string
+          payload: Json | null
+          resolution_note: string | null
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          source_id: string
+          source_table: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "failed_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_decada_ousada_admin: { Args: never; Returns: boolean }
       is_storage_admin: { Args: never; Returns: boolean }
       limpar_danos_token: { Args: { p_token: string }; Returns: undefined }
+      limpar_notificacoes_antigas: {
+        Args: { p_dias_resolvidas?: number }
+        Returns: Json
+      }
       listar_colaboradores: {
         Args: never
         Returns: {
@@ -12161,7 +13301,86 @@ export type Database = {
       normalize_phone: { Args: { input_phone: string }; Returns: string }
       normalize_plate: { Args: { input_plate: string }; Returns: string }
       notificacao_dispensada: { Args: { p_id: string }; Returns: boolean }
+      notification_queue_claim: {
+        Args: { p_canal: string; p_max?: number }
+        Returns: {
+          attempt: number
+          canal: string
+          created_at: string
+          destinatario: string
+          error_message: string | null
+          id: string
+          max_attempts: number
+          next_attempt_at: string
+          notification_id: string
+          org_id: string
+          payload_render: Json
+          priority: number
+          started_at: string | null
+          status: string
+          template_codigo: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "notification_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      notification_queue_complete: {
+        Args: { p_id: string }
+        Returns: {
+          attempt: number
+          canal: string
+          created_at: string
+          destinatario: string
+          error_message: string | null
+          id: string
+          max_attempts: number
+          next_attempt_at: string
+          notification_id: string
+          org_id: string
+          payload_render: Json
+          priority: number
+          started_at: string | null
+          status: string
+          template_codigo: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "notification_queue"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      notification_queue_fail: {
+        Args: { p_error: string; p_id: string }
+        Returns: {
+          attempt: number
+          canal: string
+          created_at: string
+          destinatario: string
+          error_message: string | null
+          id: string
+          max_attempts: number
+          next_attempt_at: string
+          notification_id: string
+          org_id: string
+          payload_render: Json
+          priority: number
+          started_at: string | null
+          status: string
+          template_codigo: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "notification_queue"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       org_privacidade_por_gestor: { Args: never; Returns: boolean }
+      process_domain_events: { Args: { p_max?: number }; Returns: undefined }
       proxima_data_renovacao: {
         Args: { p_inicio: string; p_intervalo: number; p_opcao: string }
         Returns: string
@@ -12221,31 +13440,13 @@ export type Database = {
         }
         Returns: undefined
       }
-      retry_failed_job: {
-        Args: { p_id: string }
-        Returns: undefined
-      }
-      ignorar_failed_job: {
-        Args: { p_id: string }
-        Returns: {
-          attempts: number
-          created_at: string
-          failed_at: string
-          id: string
-          job_type: string
-          last_error: string | null
-          org_id: string
-          payload: Json | null
-          resolution_note: string | null
-          resolved: boolean
-          resolved_at: string | null
-          resolved_by: string | null
-          source_id: string
-          source_table: string
-        }
-      }
+      retry_failed_job: { Args: { p_id: string }; Returns: undefined }
       salvar_precos_modelo_tarifa: {
         Args: { p_linhas: Json; p_tarifa_id: string }
+        Returns: undefined
+      }
+      seed_automacao_defaults: {
+        Args: { p_org_id: string }
         Returns: undefined
       }
       set_email_api_key: {
@@ -12350,10 +13551,10 @@ export type Database = {
         | "cancelada"
         | "expirada"
       tipo_documento_enum:
-        | "CartÃ£o CidadÃ£o"
+        | "Cartão Cidadão"
         | "Passaporte"
-        | "AutorizaÃ§Ã£o de ResidÃªncia"
-        | "Carta de ConduÃ§Ã£o"
+        | "Autorização de Residência"
+        | "Carta de Condução"
         | "Outro"
     }
     CompositeTypes: {
@@ -12480,6 +13681,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["admin", "gestor_tvde", "gestor_comercial", "colaborador"],
@@ -12513,10 +13717,10 @@ export const Constants = {
         "expirada",
       ],
       tipo_documento_enum: [
-        "CartÃ£o CidadÃ£o",
+        "Cartão Cidadão",
         "Passaporte",
-        "AutorizaÃ§Ã£o de ResidÃªncia",
-        "Carta de ConduÃ§Ã£o",
+        "Autorização de Residência",
+        "Carta de Condução",
         "Outro",
       ],
     },

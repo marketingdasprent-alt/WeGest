@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -194,6 +194,13 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
+            {/* A gaveta é um diálogo Radix e por isso precisa de nome acessível.
+                Aqui o nome não pode ser visível — a barra lateral abre com o
+                logótipo, não com um cabeçalho — logo fica sr-only. Sem ele, o
+                leitor de ecrã anuncia apenas "diálogo" e o Radix avisa na
+                consola. Posto no wrapper, cobre os dois consumidores
+                (AppSidebar e MotoristaSidebar) de uma só vez. */}
+            <SheetTitle className="sr-only">Barra lateral de navegação</SheetTitle>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
         </Sheet>

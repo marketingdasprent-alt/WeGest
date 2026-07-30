@@ -80,7 +80,12 @@ const ToastClose = React.forwardRef<
     toast-close=""
     {...props}
   >
-    <X className="h-4 w-4" />
+    <X className="h-4 w-4" aria-hidden="true" />
+    {/* O botão só tem o ícone, e o Toaster chama <ToastClose /> sem props, pelo
+        que nenhum sítio de chamada podia dar-lhe nome. Sem isto, o leitor de
+        ecrã anunciava "botão" em TODAS as notificações da aplicação. O dialog e
+        o sheet nesta mesma pasta já tinham este sr-only; este ficou esquecido. */}
+    <span className="sr-only">Fechar notificação</span>
   </ToastPrimitives.Close>
 ));
 ToastClose.displayName = ToastPrimitives.Close.displayName;
