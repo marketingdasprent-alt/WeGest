@@ -48,6 +48,7 @@ const Contactos = lazy(() => import('@/pages/Contactos'));
 const FAQ = lazy(() => import('@/pages/FAQ'));
 const Termos = lazy(() => import('@/pages/Termos'));
 const Privacidade = lazy(() => import('@/pages/Privacidade'));
+const Cookies = lazy(() => import('@/pages/Cookies'));
 const RegistoMotorista = lazy(() => import('@/pages/motorista/RegistoMotorista'));
 const LoginMotorista = lazy(() => import('@/pages/motorista/LoginMotorista'));
 const PainelMotorista = lazy(() => import('@/pages/motorista/PainelMotorista'));
@@ -113,6 +114,7 @@ const WebAppRoutes = () => {
           <Route path="/faq" element={<FAQ />} />
           <Route path="/termos" element={<Termos />} />
           <Route path="/privacidade" element={<Privacidade />} />
+          <Route path="/cookies" element={<Cookies />} />
           <Route path="/eliminar-conta" element={<EliminarConta />} />
           <Route path="/formulario/:id" element={<FormularioPublico />} />
           {/* Galeria pública de danos (QR da folha de danos) — sem login */}

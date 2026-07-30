@@ -1,14 +1,33 @@
 import { useState } from 'react';
-import { SimpleNavbar } from '@/components/landing/SimpleNavbar';
-import { Footer } from '@/components/landing/Footer';
-import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Trash2, CheckCircle, AlertTriangle } from 'lucide-react';
+import { PaginaInstitucional } from '@/components/site/primitives/PaginaInstitucional';
+import { CONTACTO } from '@/components/site/content/institucionalContent';
 
+const DADOS_ELIMINADOS = [
+  'A sua conta de utilizador e credenciais de acesso',
+  'Dados do perfil (nome, email, cargo)',
+  'Histórico de atividade e registos associados à sua conta',
+  'Todas as preferências e configurações pessoais',
+];
+
+/**
+ * Eliminação de conta (RGPD, e requisito das lojas de aplicações).
+ *
+ * A lógica do pedido não mudou — continua a chamar a edge function
+ * `solicitar-eliminacao` com email e nome opcional. O que mudou é a casca:
+ * usava o cabeçalho e o rodapé antigos (que anunciavam "a empresa TVDE que
+ * mais cresce em Portugal") e cores fixas `amber-*` / `green-500` em vez dos
+ * tokens `warning` e `primary`.
+ *
+ * Também saíram as animações de entrada: esta página é um formulário
+ * destrutivo, e fazer os avisos aparecerem com atraso é exatamente o que não
+ * se quer quando o utilizador está a ler consequências irreversíveis.
+ */
 export default function EliminarConta() {
   const [email, setEmail] = useState('');
   const [nome, setNome] = useState('');
@@ -35,7 +54,7 @@ export default function EliminarConta() {
       if (fnError) throw fnError;
 
       setSubmitted(true);
-    } catch (err: any) {
+    } catch {
       setError(
         'Ocorreu um erro ao enviar o pedido. Por favor, tente novamente ou contacte o suporte.'
       );
@@ -45,178 +64,143 @@ export default function EliminarConta() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <SimpleNavbar />
-
-      <section className="py-16 border-b border-border">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center max-w-3xl mx-auto"
-          >
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">Eliminação de Conta</h1>
-            <p className="text-muted-foreground text-lg">
-              Pode solicitar a eliminação da sua conta e de todos os dados pessoais associados.
-            </p>
-          </motion.div>
+    <PaginaInstitucional
+      etiqueta="Conta"
+      titulo="Eliminação de conta"
+      descricao="Pode pedir a eliminação da sua conta e dos dados pessoais associados. Processamos o pedido no prazo de 30 dias, conforme o RGPD."
+    >
+      <div className="mx-auto max-w-2xl space-y-6">
+        <div role="note" className="rounded-xl border border-warning/40 bg-warning/10 p-6">
+          <div className="flex items-center gap-3">
+            <AlertTriangle aria-hidden="true" className="h-5 w-5 shrink-0 text-warning" />
+            <h2 className="font-display text-lg font-semibold text-foreground">
+              O que será eliminado
+            </h2>
+          </div>
+          <ul className="mt-4 space-y-2">
+            {DADOS_ELIMINADOS.map((item) => (
+              <li key={item} className="flex gap-3 text-[0.9375rem] text-muted-foreground">
+                <span aria-hidden="true" className="mt-[2px] shrink-0 text-border">
+                  —
+                </span>
+                {item}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-5 text-[0.9375rem] text-foreground">
+            Esta ação é <strong className="font-semibold">irreversível</strong>. Depois da
+            eliminação não é possível recuperar os dados.
+          </p>
         </div>
-      </section>
 
-      <section className="py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-2xl mx-auto space-y-6">
-            {/* What gets deleted */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="rounded-xl p-6 border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-950/20"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-500 flex-shrink-0" />
-                <h2 className="text-lg font-semibold text-amber-800 dark:text-amber-400">
-                  O que será eliminado
+        <div className="rounded-xl border border-border/70 bg-card p-6 md:p-8">
+          {submitted ? (
+            <div role="status" className="py-4 text-center">
+              <CheckCircle aria-hidden="true" className="mx-auto h-12 w-12 text-primary" />
+              <h2 className="mt-4 font-display text-xl font-semibold text-foreground">
+                Pedido enviado
+              </h2>
+              <p className="mt-3 text-[1.0625rem] leading-relaxed text-muted-foreground">
+                Recebemos o seu pedido. Vai receber um email de confirmação, e a conta é eliminada
+                no prazo de <strong className="font-medium text-foreground">30 dias</strong>.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <Trash2 aria-hidden="true" className="h-5 w-5 shrink-0 text-destructive" />
+                <h2 className="font-display text-lg font-semibold text-foreground">
+                  Solicitar eliminação
                 </h2>
               </div>
-              <ul className="text-amber-900 dark:text-amber-300 space-y-1.5 list-disc list-inside text-sm">
-                <li>A sua conta de utilizador e credenciais de acesso</li>
-                <li>Dados do perfil (nome, email, cargo)</li>
-                <li>Histórico de atividade e registos associados à sua conta</li>
-                <li>Todas as preferências e configurações pessoais</li>
-              </ul>
-              <p className="text-amber-700 dark:text-amber-400 text-sm mt-4">
-                Esta ação é <strong>irreversível</strong>. Após a eliminação não será possível
-                recuperar os dados.
-              </p>
-            </motion.div>
 
-            {/* Form or success */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="rounded-xl p-6 border border-border bg-card"
-            >
-              {submitted ? (
-                <div className="text-center py-6">
-                  <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                  <h2 className="text-2xl font-bold mb-2">Pedido enviado</h2>
-                  <p className="text-muted-foreground">
-                    Recebemos o seu pedido de eliminação de conta. Irá receber um email de
-                    confirmação e a sua conta será eliminada no prazo de{' '}
-                    <strong className="text-foreground">30 dias</strong>.
+              <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="nome">
+                    Nome <span className="font-normal text-muted-foreground">(opcional)</span>
+                  </Label>
+                  <Input
+                    id="nome"
+                    type="text"
+                    value={nome}
+                    onChange={(e) => setNome(e.target.value)}
+                    autoComplete="name"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="email">Email da conta</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                    aria-describedby="email-ajuda"
+                  />
+                  <p id="email-ajuda" className="text-xs text-muted-foreground">
+                    O email associado à conta que pretende eliminar.
                   </p>
                 </div>
-              ) : (
-                <>
-                  <div className="flex items-center gap-3 mb-6">
-                    <Trash2 className="h-5 w-5 text-destructive flex-shrink-0" />
-                    <h2 className="text-xl font-semibold">Solicitar eliminação</h2>
-                  </div>
 
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                      <Label htmlFor="nome">Nome (opcional)</Label>
-                      <Input
-                        id="nome"
-                        type="text"
-                        value={nome}
-                        onChange={(e) => setNome(e.target.value)}
-                        placeholder="O seu nome"
-                        className="mt-1"
-                      />
-                    </div>
+                <div className="flex items-start gap-3 rounded-lg border border-destructive/25 bg-destructive/5 p-4">
+                  <Checkbox
+                    id="confirm"
+                    checked={confirmed}
+                    onCheckedChange={(v) => setConfirmed(!!v)}
+                    className="mt-0.5"
+                  />
+                  <Label htmlFor="confirm" className="cursor-pointer text-sm leading-relaxed">
+                    Compreendo que esta ação é{' '}
+                    <strong className="font-semibold">irreversível</strong> e que os meus dados
+                    pessoais serão eliminados permanentemente.
+                  </Label>
+                </div>
 
-                    <div>
-                      <Label htmlFor="email">
-                        Email da conta <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="o-seu-email@exemplo.com"
-                        required
-                        className="mt-1"
-                      />
-                      <p className="text-muted-foreground text-xs mt-1">
-                        Introduza o email associado à conta que pretende eliminar.
-                      </p>
-                    </div>
+                {error && (
+                  <p
+                    role="alert"
+                    className="rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  >
+                    {error}
+                  </p>
+                )}
 
-                    <div className="flex items-start gap-3 bg-destructive/5 border border-destructive/20 rounded-lg p-4">
-                      <Checkbox
-                        id="confirm"
-                        checked={confirmed}
-                        onCheckedChange={(v) => setConfirmed(!!v)}
-                        className="mt-0.5"
-                      />
-                      <Label htmlFor="confirm" className="text-sm leading-relaxed cursor-pointer">
-                        Compreendo que esta ação é <strong>irreversível</strong> e que todos os meus
-                        dados pessoais serão eliminados permanentemente. Não será possível recuperar
-                        a conta após a eliminação.
-                      </Label>
-                    </div>
-
-                    {error && (
-                      <p className="text-destructive text-sm bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
-                        {error}
-                      </p>
-                    )}
-
-                    <Button
-                      type="submit"
-                      variant="destructive"
-                      disabled={loading || !confirmed}
-                      className="w-full"
-                    >
-                      {loading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" /> A enviar pedido...
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 className="h-4 w-4 mr-2" /> Solicitar eliminação da conta
-                        </>
-                      )}
-                    </Button>
-                  </form>
-                </>
-              )}
-            </motion.div>
-
-            {/* GDPR note */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="text-center text-muted-foreground text-sm pb-4"
-            >
-              <p>
-                O pedido será processado no prazo de 30 dias conforme o{' '}
-                <span className="text-foreground/70">
-                  RGPD (Regulamento Geral sobre a Proteção de Dados)
-                </span>
-                .
-              </p>
-              <p className="mt-2">
-                Para questões adicionais, contacte-nos em{' '}
-                <a
-                  href="mailto:motoristas.tvde@distanciaarrojada.pt"
-                  className="text-primary hover:underline"
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={loading || !confirmed}
+                  className="w-full"
                 >
-                  motoristas.tvde@distanciaarrojada.pt
-                </a>
-              </p>
-            </motion.div>
-          </div>
+                  {loading ? (
+                    <>
+                      <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" /> A enviar
+                      pedido…
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 aria-hidden="true" className="mr-2 h-4 w-4" /> Solicitar eliminação da
+                      conta
+                    </>
+                  )}
+                </Button>
+              </form>
+            </>
+          )}
         </div>
-      </section>
 
-      <Footer />
-    </div>
+        <p className="text-center text-sm text-muted-foreground">
+          Para questões adicionais, escreva para{' '}
+          <a
+            href={`mailto:${CONTACTO.email}`}
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            {CONTACTO.email}
+          </a>
+          .
+        </p>
+      </div>
+    </PaginaInstitucional>
   );
 }

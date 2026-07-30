@@ -37,7 +37,6 @@ export interface PedidoConfirmacao {
   descricao?: string;
   /** Texto do botão que confirma. Diz a acção: "Remover", não "OK". */
   acao?: string;
-  cancelar?: string;
   /** Botão vermelho, para quando a acção destrói dados. */
   destrutiva?: boolean;
 }
@@ -82,9 +81,7 @@ export function useConfirmacao() {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => responder(false)}>
-            {estado.cancelar ?? 'Cancelar'}
-          </AlertDialogCancel>
+          <AlertDialogCancel onClick={() => responder(false)}>Cancelar</AlertDialogCancel>
           <AlertDialogAction
             onClick={() => responder(true)}
             className={cn(

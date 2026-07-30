@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { notificacaoLink, notificacaoLabel, TIPOS_NOTIFICACAO } from './notificacoes';
+import {
+  notificacaoLink,
+  notificacaoLabel,
+  notificacaoItemTexto,
+  notificacaoTitulo,
+  TIPOS_NOTIFICACAO,
+} from './notificacoes';
 
 type Notificacao = Parameters<typeof notificacaoLink>[0];
 
@@ -174,5 +180,81 @@ describe('mapa de tipos — completude e honestidade', () => {
     for (const tipo of TIPOS_NOTIFICACAO) {
       expect(notificacaoLabel(fixture({ tipo })).trim().length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('notificacaoItemTexto', () => {
+  it('prefere sempre a mensagem do item quando existe', () => {
+    const n = fixture({ tipo: 'viatura_seguro_expirando' });
+    expect(notificacaoItemTexto(n, { mensagem: 'AA-00-BB — expira em 3 dias' }, 0)).toBe(
+      'AA-00-BB — expira em 3 dias'
+    );
+  });
+
+  it('nunca mostra o URL em cru quando falta a mensagem', () => {
+    // Regressão: a lista expandida fazia `item.mensagem || item.link` e
+    // imprimia dezesseis linhas de /assistencia/<uuid> no painel.
+    const n = fixture({ tipo: 'assistencia_ticket_aberto_demasiado_tempo' });
+    const link = '/assistencia/4309204a-5499-402a-b744-ae7ff8713c22';
+
+    const texto = notificacaoItemTexto(n, { link }, 0);
+
+    expect(texto).not.toContain('/');
+    expect(texto).not.toContain(link);
+    expect(texto).toBe('Ticket #4309204a');
+  });
+
+  it('usa o nome da entidade do próprio tipo', () => {
+    expect(
+      notificacaoItemTexto(
+        fixture({ tipo: 'viatura_iuc_a_pagar' }),
+        {
+          link: '/viaturas/bd35b9ad-4651-463c-8a64-f4df15b7a111',
+        },
+        0
+      )
+    ).toBe('Viatura #bd35b9ad');
+
+    expect(
+      notificacaoItemTexto(
+        fixture({ tipo: 'contrato_renting_renovacao_proxima' }),
+        {
+          link: '/renting/contratos/8d349675-b8d8-4a41-8c97-b232676011ff',
+        },
+        0
+      )
+    ).toBe('Contrato #8d349675');
+  });
+
+  it('sem mensagem e sem id utilizável, numera a posição', () => {
+    const n = fixture({ tipo: 'invoice_nao_enviada_ao_cliente' });
+    expect(notificacaoItemTexto(n, {}, 0)).toBe('Fatura 1');
+    expect(notificacaoItemTexto(n, { link: '/administrativo/faturacao' }, 4)).toBe('Fatura 5');
+  });
+
+  it('um tipo fora do mapa não inventa uma entidade', () => {
+    // Herda o destino honesto do fallback ("Ver detalhe" → "Detalhe"), em vez
+    // de afirmar que é uma viatura ou um contrato.
+    const n = fixture({ tipo: 'tipo_novo_qualquer' as never });
+    expect(notificacaoItemTexto(n, {}, 0)).toBe('Detalhe 1');
+  });
+
+  it('um rótulo que não começa por "Ver" cai em Registo', () => {
+    // 'motorista_ficha_incompleta' → "Completar ficha": não há entidade a
+    // extrair, e inventar uma seria pior do que um termo neutro.
+    const n = fixture({ tipo: 'motorista_ficha_incompleta' });
+    expect(notificacaoItemTexto(n, {}, 2)).toBe('Registo 3');
+  });
+});
+
+describe('notificacaoTitulo', () => {
+  it('devolve o título quando existe', () => {
+    expect(notificacaoTitulo(fixture({ titulo: 'Seguro a expirar' }))).toBe('Seguro a expirar');
+  });
+
+  it('nunca devolve vazio — o cartão mostrava dois botões e nada escrito', () => {
+    expect(notificacaoTitulo(fixture({ titulo: '' }))).toBe('Aviso do sistema');
+    expect(notificacaoTitulo(fixture({ titulo: '   ' }))).toBe('Aviso do sistema');
+    expect(notificacaoTitulo(fixture({ titulo: undefined as never }))).toBe('Aviso do sistema');
   });
 });

@@ -72,24 +72,6 @@ describe('AcoesLinha', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('a acção a carregar fica desativada mas mantém o nome', () => {
-    const onClick = vi.fn();
-    render(<AcoesLinha acoes={[{ icone: Pencil, rotulo: 'Editar', onClick, aCarregar: true }]} />);
-    const botao = screen.getByRole('button', { name: 'Editar' });
-    expect(botao.hasAttribute('disabled')).toBe(true);
-    fireEvent.click(botao);
-    expect(onClick).not.toHaveBeenCalled();
-  });
-
-  it('acção desativada não dispara', () => {
-    const onClick = vi.fn();
-    render(
-      <AcoesLinha acoes={[{ icone: Trash2, rotulo: 'Eliminar', onClick, desativada: true }]} />
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Eliminar' }));
-    expect(onClick).not.toHaveBeenCalled();
-  });
-
   it('pararPropagacao impede que o clique chegue à linha', () => {
     // Sem isto, tocar em "Eliminar" numa linha clicável eliminava E navegava.
     const cliqueNaLinha = vi.fn();

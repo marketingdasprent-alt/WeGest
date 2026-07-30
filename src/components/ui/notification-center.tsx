@@ -14,7 +14,12 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { type Notificacao, itensDaNotificacao, totalAgrupado } from '@/types/notificacao';
-import { notificacaoLabel, notificacaoLink } from '@/utils/notificacoes';
+import {
+  notificacaoLabel,
+  notificacaoLink,
+  notificacaoItemTexto,
+  notificacaoTitulo,
+} from '@/utils/notificacoes';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -56,8 +61,8 @@ interface SeveridadeConfig {
 const SEVERIDADE_MAP: Record<string, SeveridadeConfig> = {
   urgente: {
     icon: AlertTriangle,
-    iconClass: 'text-red-500',
-    bgClass: 'hover:bg-red-500/5',
+    iconClass: 'text-destructive',
+    bgClass: 'hover:bg-destructive/5',
   },
   normal: {
     icon: Bell,
@@ -83,10 +88,13 @@ function agruparPorTitulo(notificacoes: Notificacao[]): NotificacaoGrupo[] {
   const grupos: NotificacaoGrupo[] = [];
   const indicePorTitulo = new Map<string, number>();
   for (const n of notificacoes) {
-    const indice = indicePorTitulo.get(n.titulo);
+    // Agrupa pelo título já resolvido: agrupar pelo valor cru punha as linhas
+    // sem título num grupo com chave '' e cabeçalho vazio.
+    const titulo = notificacaoTitulo(n);
+    const indice = indicePorTitulo.get(titulo);
     if (indice === undefined) {
-      indicePorTitulo.set(n.titulo, grupos.length);
-      grupos.push({ titulo: n.titulo, items: [n] });
+      indicePorTitulo.set(titulo, grupos.length);
+      grupos.push({ titulo, items: [n] });
     } else {
       grupos[indice].items.push(n);
     }
@@ -131,9 +139,7 @@ function NotificationRow({
           <div
             className={cn(
               'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-              urgente
-                ? 'bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300'
-                : 'bg-primary/10 text-primary'
+              urgente ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'
             )}
           >
             <SevIcon className="h-4 w-4" />
@@ -141,33 +147,45 @@ function NotificationRow({
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            {!compact && (
-              <p
-                className={cn(
-                  'flex items-center gap-2 text-sm font-semibold',
-                  urgente ? 'text-red-700 dark:text-red-300' : 'text-foreground'
-                )}
-              >
-                <span>
-                  {urgente && '🔴 '}
-                  {n.titulo}
+          {/*
+            Título e data em coluna, não lado a lado. Em `flex-row` a data era
+            `shrink-0` e o título ficava com o resto: num popover de 384px com
+            um título longo ("Seguro de viatura a expirar"), o resto chegava a
+            ser mais estreito do que uma palavra e o texto saía uma palavra por
+            linha, na vertical.
+          */}
+          {!compact && (
+            <p
+              className={cn(
+                'text-sm font-semibold',
+                urgente ? 'text-destructive' : 'text-foreground'
+              )}
+            >
+              {notificacaoTitulo(n)}
+              {total > 1 && (
+                <span className="ml-2 inline-block whitespace-nowrap rounded-full bg-muted px-2 py-0.5 align-middle text-xs font-bold tabular-nums text-foreground">
+                  {total}
                 </span>
-                {total > 1 && (
-                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-bold tabular-nums text-foreground">
-                    {total}
-                  </span>
-                )}
-              </p>
-            )}
-            <time className={cn('shrink-0 text-xs text-muted-foreground', compact && 'ml-auto')}>
-              {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: pt })}
-            </time>
-          </div>
+              )}
+            </p>
+          )}
+          <time
+            className={cn('block text-xs text-muted-foreground', compact ? 'mb-1' : 'mt-0.5')}
+            dateTime={n.created_at}
+          >
+            {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: pt })}
+          </time>
 
-          {n.mensagem && <p className="mt-0.5 text-sm text-muted-foreground">{n.mensagem}</p>}
+          {n.mensagem && <p className="mt-1 text-sm text-muted-foreground">{n.mensagem}</p>}
 
-          <div className="mt-2 flex items-center gap-2">
+          {/*
+            `flex-wrap`: três botões ("Ver viatura", "Ver 181", "Resolver") não
+            cabem lado a lado num popover estreito, e como o Button não quebra
+            texto forçavam a linha a ser mais larga do que o painel — daí a
+            barra de scroll horizontal e os botões cortados a meio ("Resol...").
+            A dobrar, ocupam duas linhas e ficam inteiros.
+          */}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button
               size="sm"
               variant={urgente ? 'destructive' : 'default'}
@@ -208,14 +226,12 @@ function NotificationRow({
           </div>
         </div>
 
-        <button
-          type="button"
-          aria-label="Abrir"
-          onClick={() => navigate(link)}
-          className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
+        {/*
+          O chevron que existia aqui fazia exactamente o mesmo que o botão
+          "Ver ..." ao lado — dois controlos para uma acção, e com um rótulo
+          ("Abrir") que não dizia para onde. Removido: além de duplicado,
+          consumia largura no painel estreito onde o problema apertava.
+        */}
       </div>
 
       {/* Entidades desta notificação agrupada. Cada uma mantém o seu link —
@@ -229,14 +245,14 @@ function NotificationRow({
                 <button
                   type="button"
                   onClick={() => navigate(item.link as string)}
-                  className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  <span className="truncate">{item.mensagem || item.link}</span>
-                  <ChevronRight className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{notificacaoItemTexto(n, item, i)}</span>
+                  <ChevronRight aria-hidden="true" className="h-3 w-3 shrink-0" />
                 </button>
               ) : (
-                <span className="block px-2 py-1 text-xs text-muted-foreground">
-                  {item.mensagem || 'Sem detalhe'}
+                <span className="block px-2 py-1.5 text-xs text-muted-foreground">
+                  {notificacaoItemTexto(n, item, i)}
                 </span>
               )}
             </li>
@@ -278,9 +294,7 @@ function NotificationGroupRow({
         <div
           className={cn(
             'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-            urgente
-              ? 'bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-300'
-              : 'bg-primary/10 text-primary'
+            urgente ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'
           )}
         >
           <SevIcon className="h-4 w-4" />
@@ -289,7 +303,7 @@ function NotificationGroupRow({
           <p
             className={cn(
               'text-sm font-semibold',
-              urgente ? 'text-red-700 dark:text-red-300' : 'text-foreground'
+              urgente ? 'text-destructive' : 'text-foreground'
             )}
           >
             {grupo.titulo}

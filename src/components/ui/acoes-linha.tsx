@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Loader2, type LucideIcon } from 'lucide-react';
+import { type LucideIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -33,9 +33,6 @@ export interface AcaoLinha {
   onClick: () => void;
   /** Vermelho. A confirmação continua a cargo de quem chama. */
   destrutiva?: boolean;
-  desativada?: boolean;
-  /** Troca o ícone por um spinner sem perder o nome acessível. */
-  aCarregar?: boolean;
   /**
    * Não renderiza a acção. Para permissões: `oculta: !podeEliminar`, que lê
    * melhor do que envolver cada botão num `&&`.
@@ -77,7 +74,7 @@ export function AcoesLinha({
       className={cn('flex items-center gap-1', alinhamento === 'fim' && 'justify-end', className)}
     >
       {visiveis.map((acao) => {
-        const Icone = acao.aCarregar ? Loader2 : acao.icone;
+        const Icone = acao.icone;
         return (
           <Button
             key={acao.rotulo}
@@ -86,7 +83,6 @@ export function AcoesLinha({
             size="icon"
             aria-label={acao.rotulo}
             title={acao.rotulo}
-            disabled={acao.desativada || acao.aCarregar}
             onClick={(e) => {
               if (pararPropagacao) e.stopPropagation();
               acao.onClick();
@@ -96,7 +92,7 @@ export function AcoesLinha({
               acao.destrutiva && 'text-destructive hover:text-destructive'
             )}
           >
-            <Icone className={cn('h-4 w-4', acao.aCarregar && 'animate-spin')} aria-hidden="true" />
+            <Icone className="h-4 w-4" aria-hidden="true" />
           </Button>
         );
       })}

@@ -168,3 +168,67 @@ export const notificacaoLink = (n: Notificacao): string => {
 
 /** Texto do botão "Ver" — descreve o que o utilizador vai encontrar. */
 export const notificacaoLabel = (n: Notificacao): string => destinoDe(n).label;
+
+/**
+ * Título a mostrar.
+ *
+ * `titulo` é NOT NULL na tabela, mas string vazia passa a constraint, e payloads
+ * de realtime e selects parciais chegam sem a coluna. Nesses casos o cartão
+ * renderizava um espaço em branco onde devia estar o assunto do aviso — dava um
+ * cartão com dois botões e nada escrito.
+ */
+export const notificacaoTitulo = (n: Notificacao): string => n.titulo?.trim() || 'Aviso do sistema';
+
+/**
+ * Nome da entidade a que a notificação diz respeito, no singular e capitalizado
+ * ("Viatura", "Ticket", "Contrato").
+ *
+ * Derivado do rótulo do botão em vez de um segundo mapa: um mapa paralelo
+ * indexado pelos mesmos 25 tipos divergiria do primeiro na primeira vez que
+ * alguém alterasse só um deles.
+ */
+function entidadeDe(n: Notificacao): string {
+  const label = destinoDe(n).label;
+  if (!label.startsWith('Ver ')) return 'Registo';
+  const nome = label.slice(4);
+  return nome.charAt(0).toUpperCase() + nome.slice(1);
+}
+
+/** Primeiro segmento de um UUID — curto, mas suficiente para correlacionar. */
+function referenciaCurta(link: string): string | null {
+  const ultimo = link.split(/[/?#]/).filter(Boolean).pop();
+  if (!ultimo) return null;
+  // Só encurta o que parece um id: um segmento legível ("faturacao") deve
+  // continuar a ler-se por inteiro.
+  const pareceId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(ultimo);
+  return pareceId ? ultimo.slice(0, 8) : null;
+}
+
+/**
+ * Texto de uma entidade dentro de uma notificação agrupada.
+ *
+ * ANTES: `item.mensagem || item.link` — quando o item não trazia mensagem (que é
+ * o caso comum, porque o trigger só a preenche em alguns tipos), a lista
+ * mostrava o URL em cru:
+ *
+ *     /assistencia/4309204a-5499-402a-b744-ae7ff8713c...
+ *
+ * Dezesseis linhas de UUID truncado não dizem ao gestor qual é o ticket, e
+ * expõem a estrutura de rotas da aplicação num sítio onde devia estar o nome de
+ * uma coisa. Agora o pior caso é "Ticket #4309204a", que é legível e ainda
+ * permite encontrar o registo na lista respetiva.
+ *
+ * @param indice Posição na lista, usada quando não há mensagem nem id.
+ */
+export const notificacaoItemTexto = (
+  n: Notificacao,
+  item: { mensagem?: string; link?: string },
+  indice: number
+): string => {
+  if (item.mensagem) return item.mensagem;
+
+  const entidade = entidadeDe(n);
+  const referencia = item.link ? referenciaCurta(item.link) : null;
+
+  return referencia ? `${entidade} #${referencia}` : `${entidade} ${indice + 1}`;
+};

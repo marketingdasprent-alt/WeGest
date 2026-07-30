@@ -1,37 +1,91 @@
-import { SimpleNavbar } from '@/components/landing/SimpleNavbar';
-import { Footer } from '@/components/landing/Footer';
-import { FAQSection } from '@/components/landing/FAQSection';
-import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { PaginaInstitucional } from '@/components/site/primitives/PaginaInstitucional';
+import { FAQ_PAGINA, CONTACTO } from '@/components/site/content/institucionalContent';
+import { OBJECOES } from '@/components/site/content/landingContent';
 
+/**
+ * Perguntas frequentes.
+ *
+ * A versão anterior reutilizava o `FAQSection` do funil de recrutamento de
+ * motoristas — "Preciso ter empresa para trabalhar convosco?", "E se não tiver
+ * licença TVDE?", "Qual é a diferença entre Aluguer e Slot?". Quem chega aqui
+ * a partir da landing do software não tem nenhuma dessas dúvidas.
+ *
+ * As perguntas da landing (OBJECOES) são reutilizadas em vez de duplicadas: se
+ * a resposta sobre migração ou preço mudar, muda nos dois sítios ao mesmo
+ * tempo. Esta página acrescenta as que não caberiam na landing sem a alongar.
+ */
 const FAQ = () => {
+  const perguntas = [...OBJECOES.perguntas, ...FAQ_PAGINA.extra];
+
+  const faqSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: perguntas.map((item) => ({
+      '@type': 'Question',
+      name: item.pergunta,
+      acceptedAnswer: { '@type': 'Answer', text: item.resposta },
+    })),
+  };
+
   return (
-    <div className="min-h-screen bg-black text-white">
-      <SimpleNavbar />
+    <PaginaInstitucional
+      etiqueta={FAQ_PAGINA.etiqueta}
+      titulo={FAQ_PAGINA.titulo}
+      descricao={FAQ_PAGINA.descricao}
+    >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
 
-      {/* Hero Section */}
-      <section className="py-20 bg-gradient-to-b from-gray-900 to-black">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center max-w-3xl mx-auto"
+      {/* `multiple` e não `single`: numa página de FAQ é normal querer comparar
+          duas respostas, e fechar uma para abrir outra impede-o. */}
+      <Accordion type="multiple" className="w-full">
+        {perguntas.map((item, index) => (
+          <AccordionItem
+            key={item.pergunta}
+            value={`pergunta-${index}`}
+            className="border-b border-border/60"
           >
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
-              Perguntas <span className="text-[#E53333]">Frequentes</span>
-            </h1>
-            <p className="text-xl text-gray-400">
-              Encontra aqui as respostas às dúvidas mais comuns sobre os nossos serviços.
-            </p>
-          </motion.div>
-        </div>
+            <AccordionTrigger className="py-5 text-left text-[1.0625rem] font-medium text-foreground hover:no-underline">
+              {item.pergunta}
+            </AccordionTrigger>
+            <AccordionContent className="pb-5 pr-8 text-[1.0625rem] leading-relaxed text-muted-foreground">
+              {item.resposta}
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+
+      <section className="mt-12 rounded-xl border border-border/70 bg-card p-6 md:p-8">
+        <h2 className="font-display text-lg font-semibold tracking-[-0.01em] text-foreground">
+          {FAQ_PAGINA.contactoTitulo}
+        </h2>
+        <p className="mt-3 text-[1.0625rem] leading-relaxed text-muted-foreground">
+          Escreva para{' '}
+          <a
+            href={`mailto:${CONTACTO.email}`}
+            className="font-medium text-primary underline-offset-4 hover:underline"
+          >
+            {CONTACTO.email}
+          </a>{' '}
+          ou marque uma demonstração — {CONTACTO.resposta.toLowerCase()}
+        </p>
+        <Link
+          to="/#contacto"
+          className="mt-5 inline-block rounded-lg bg-primary px-5 py-2.5 text-[0.9375rem] font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          Marcar os 20 minutos
+        </Link>
       </section>
-
-      {/* FAQ Section - Reusing existing component */}
-      <FAQSection />
-
-      <Footer />
-    </div>
+    </PaginaInstitucional>
   );
 };
 
