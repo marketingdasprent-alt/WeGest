@@ -191,6 +191,15 @@ export function FaturacaoContent() {
       toast.error('Cobrança não encontrada.');
       return;
     }
+    // O estado real da cobrança é a razão a mostrar primeiro — "já está
+    // liquidada" era mostrado também para uma fatura ANULADA (achado ao
+    // testar manualmente: saldoPagar chega a 0 tanto por ter sido paga como
+    // por ter sido anulada e creditada; o aviso tem de dizer qual das duas
+    // é verdade, não assumir sempre "liquidada").
+    if (r.cob.estado === 'anulada') {
+      toast.info('Esta fatura foi anulada — não é possível registar um recibo.');
+      return;
+    }
     const total = Math.round((Number(r.cob.valor_total) || 0) * 100) / 100;
     const saldoPagar = Math.round((total - r.pago - r.creditado) * 100) / 100;
     if (saldoPagar <= 0.005) {
@@ -255,6 +264,13 @@ export function FaturacaoContent() {
     const r = await resolverCobranca(row.cobrancaId);
     if (!r) {
       toast.error('Cobrança não encontrada.');
+      return;
+    }
+    // Mesmo motivo do fix em abrirReciboParaRow: o estado real da cobrança é
+    // a razão a mostrar primeiro, nunca assumir "já está liquidada" quando na
+    // verdade foi anulada.
+    if (r.cob.estado === 'anulada') {
+      toast.info('Esta fatura foi anulada — não é possível criar um acordo de pagamento.');
       return;
     }
     const total = Math.round((Number(r.cob.valor_total) || 0) * 100) / 100;
