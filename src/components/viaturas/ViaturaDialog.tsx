@@ -206,6 +206,24 @@ export function ViaturaDialog({
       };
 
       if (isEditing && viatura) {
+        // Guard: não permitir marcar inativa enquanto houver contrato em curso —
+        // o contrato tem de ser fechado primeiro (evita viaturas "fantasma"
+        // inativas mas com contrato ativo).
+        if (data.status === 'inativo') {
+          const { count } = await supabase
+            .from('contratos_renting')
+            .select('id', { count: 'exact', head: true })
+            .eq('viatura_id', viatura.id)
+            .eq('estado_operacional', 'em_curso');
+          if ((count ?? 0) > 0) {
+            toast.error(
+              'Esta viatura tem um contrato em curso. Feche o contrato antes de a marcar como inativa.'
+            );
+            setLoading(false);
+            return;
+          }
+        }
+
         const { error } = await supabase.from('viaturas').update(payload).eq('id', viatura.id);
 
         if (error) throw error;
