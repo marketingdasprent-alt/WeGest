@@ -20,34 +20,19 @@ export interface NotificacaoItem {
 }
 
 /**
- * Notificação com as colunas do agrupamento.
+ * Notificação como a BD a devolve.
  *
- * `itens` e `agrupadas` foram acrescentadas à tabela em 20260729200000 e ainda
- * não estão em `src/integrations/supabase/types.ts` — esse ficheiro é gerado e
- * o AGENTS.md §9 proíbe editá-lo à mão. A regeneração corre no workflow
- * `regenerate-types.yml` (em Linux, para garantir UTF-8/LF). Até lá, a
- * composição vive aqui, que é onde o AGENTS.md §9 manda pôr tipos derivados.
- *
- * Quando os tipos forem regenerados, este ficheiro pode passar a
- * `export type Notificacao = Tables<'notificacoes'>` sem mais alterações nos
- * consumidores.
+ * `itens` e `agrupadas` entraram na tabela em 20260729200000 e já estão nos
+ * tipos gerados, por isso esta composição deixou de precisar de as declarar.
+ * `itens` chega como `Json` — a forma concreta é `NotificacaoItem[]`, garantida
+ * pelo trigger que a escreve, e a leitura passa sempre por
+ * `itensDaNotificacao` para que a asserção viva num sítio só.
  */
-export type Notificacao = Tables<'notificacoes'> & {
-  /**
-   * Opcional de propósito: enquanto `types.ts` não for regenerado, quem faz
-   * `select('*')` recebe as colunas em runtime mas o tipo gerado não as declara.
-   * Marcá-las obrigatórias forçaria casts em todos os consumidores sem
-   * acrescentar segurança nenhuma. Null nas linhas anteriores à migração; o
-   * trigger preenche sempre nas novas.
-   */
-  itens?: NotificacaoItem[] | null;
-  /** Quantos avisos esta linha representa. 1 (ou ausente) = notificação única. */
-  agrupadas?: number | null;
-};
+export type Notificacao = Tables<'notificacoes'>;
 
 /** Lista de itens de uma notificação, resiliente a linhas antigas sem `itens`. */
 export function itensDaNotificacao(n: Notificacao): NotificacaoItem[] {
-  return Array.isArray(n.itens) ? n.itens : [];
+  return Array.isArray(n.itens) ? (n.itens as NotificacaoItem[]) : [];
 }
 
 /**
@@ -61,5 +46,8 @@ export function itensDaNotificacao(n: Notificacao): NotificacaoItem[] {
 export function totalAgrupado(n: Notificacao): number {
   const itens = itensDaNotificacao(n);
   if (itens.length > 0) return itens.length;
+  // O `??` fica apesar de o tipo gerado dar `agrupadas` como sempre presente:
+  // payloads de realtime, selects parciais e linhas anteriores à migração
+  // 20260729200000 chegam cá sem a coluna, e sem isto o total sairia NaN.
   return Math.max(1, n.agrupadas ?? 1);
 }

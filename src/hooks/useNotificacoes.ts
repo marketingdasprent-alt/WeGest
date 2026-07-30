@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { playNotificationSound } from '@/lib/notificationSound';
-import type { NotificacaoItem } from '@/types/notificacao';
+import type { Json } from '@/integrations/supabase/types';
 
 export interface Notificacao {
   id: string;
@@ -31,10 +31,14 @@ export interface Notificacao {
   resolvida_por_nome: string | null;
   resolvida_em: string | null;
   created_at: string;
-  /** Entidades desta notificação agrupada — ver src/types/notificacao.ts. */
-  itens?: NotificacaoItem[] | null;
+  /**
+   * Entidades desta notificação agrupada — ver src/types/notificacao.ts.
+   * `Json` (e não `NotificacaoItem[]`) para acompanhar a coluna gerada; a
+   * leitura tipada faz-se com `itensDaNotificacao`.
+   */
+  itens: Json | null;
   /** Quantos avisos esta linha representa (1 = única). */
-  agrupadas?: number | null;
+  agrupadas: number;
 }
 
 /**
