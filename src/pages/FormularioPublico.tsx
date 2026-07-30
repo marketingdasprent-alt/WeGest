@@ -52,28 +52,21 @@ const FormularioPublico = () => {
 
   const fetchFormulario = async () => {
     try {
-      // Using any type to handle the current type issues
-      const { data: formularioData, error } = await (supabase as any)
-        .from('formularios')
-        .select('*')
-        .eq('id', id)
-        .eq('ativo', true)
-        .single();
+      // Uma RPC em vez de duas leituras de tabela: o anon já não tem SELECT em
+      // formularios nem em formulario_campanhas. A função exige o id (sem
+      // enumeração), só devolve formulários com ativo = true, e traz as tags
+      // de campanha na mesma resposta.
+      const { data, error } = await (supabase as any).rpc('formulario_publico_por_id', {
+        p_id: id,
+      });
 
       if (error) throw error;
+      if (!data) throw new Error('Formulário não encontrado ou inativo');
 
-      // Buscar campanhas associadas ao formulário - using any type to handle current type issues
-      const { data: campanhasData, error: campanhasError } = await (supabase as any)
-        .from('formulario_campanhas')
-        .select('campanha_tag')
-        .eq('formulario_id', id);
-
-      if (campanhasError) {
-        console.error('Erro ao buscar campanhas:', campanhasError);
-      }
+      const { campanhas: campanhasData, ...formularioData } = data;
 
       setFormulario(formularioData);
-      setCampanhas(campanhasData?.map((c) => c.campanha_tag) || []);
+      setCampanhas(campanhasData ?? []);
     } catch (error) {
       console.error('Erro ao carregar formulário:', error);
       toast({
@@ -355,20 +348,10 @@ const FormularioPublico = () => {
         }
       }
 
-      // Verificar duplicidade antes de inserir (mesmo email nos últimos 5 minutos)
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      const { data: existingLead } = await supabase
-        .from('leads_dasprent')
-        .select('id')
-        .eq('email', leadData.email)
-        .gte('created_at', fiveMinutesAgo)
-        .maybeSingle();
-
-      if (existingLead) {
-        navigate('/obrigado');
-        return;
-      }
-
+      // A verificação de email duplicado que estava aqui foi removida: o anon
+      // nunca teve política de SELECT em leads_dasprent, por isso a consulta
+      // devolvia sempre vazio e a deduplicação nunca funcionou. Depois de
+      // revogados os grants largos passaria a devolver 42501.
       const { error } = await supabase.from('leads_dasprent').insert(leadData);
 
       if (error) throw error;
