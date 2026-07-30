@@ -81,6 +81,16 @@ export function FaturacaoMovimentoDialog({
   // Ações disponíveis quando a linha é uma fatura ligada a uma cobrança.
   const podeAgir =
     !!row?.cobrancaId && (row?.docTipo === 'fatura' || row?.docTipo === 'fatura_recibo');
+  // A linha "Anulamento de Factura" (crédito, origem='cobranca') é a MESMA
+  // cobrança da fatura original — só que é o ponto onde o utilizador
+  // naturalmente clica depois de já ter anulado (achado ao testar
+  // manualmente). Sem isto, só dava para chegar à Nota de Crédito clicando
+  // na linha "Fatura" original, mais difícil de encontrar depois de anulada.
+  // Só a Nota de Crédito faz sentido aqui — nunca "Fazer recibo"/"Parcelar"
+  // sobre uma fatura já anulada.
+  const isAnulamentoFatura =
+    !!row?.cobrancaId && row?.docTipo === 'estorno' && row?.origem === 'cobranca';
+  const podeNotaCredito = podeAgir || isAnulamentoFatura;
   // Anulação: só faz sentido para um recibo ativo ou uma NC ativa (movimentos a crédito).
   const anularLabel =
     row?.docTipo === 'recibo'
@@ -247,9 +257,9 @@ export function FaturacaoMovimentoDialog({
               fiscal é emitida no {providerLabel}.
             </p>
 
-            {podeAgir && (onFazerRecibo || onNotaCredito || onParcelar) && (
+            {(podeAgir || isAnulamentoFatura) && (onFazerRecibo || onNotaCredito || onParcelar) && (
               <div className="flex flex-wrap gap-2 border-t pt-3">
-                {onFazerRecibo && (
+                {podeAgir && onFazerRecibo && (
                   <Button
                     type="button"
                     variant="outline"
@@ -260,7 +270,7 @@ export function FaturacaoMovimentoDialog({
                     <Receipt className="h-4 w-4" /> Fazer recibo
                   </Button>
                 )}
-                {onNotaCredito && (
+                {podeNotaCredito && onNotaCredito && (
                   <Button
                     type="button"
                     variant="outline"
@@ -271,7 +281,7 @@ export function FaturacaoMovimentoDialog({
                     <FileMinus className="h-4 w-4" /> Nota de crédito
                   </Button>
                 )}
-                {onParcelar && (
+                {podeAgir && onParcelar && (
                   <Button
                     type="button"
                     variant="outline"
