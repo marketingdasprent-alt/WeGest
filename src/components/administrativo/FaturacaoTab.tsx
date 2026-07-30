@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -33,6 +34,12 @@ import type { InvoiceMetadata } from '@/types/faturacao';
 import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
 import type { ReciboCobrancaAlvo } from '@/components/faturacao/RecibosDialog';
 import type { NotaCreditoCobranca } from '@/components/renting/contratos/NotaCreditoDialog';
+import {
+  ParcelamentoDialog,
+  type ParcelamentoFaturaAlvo,
+} from '@/components/faturacao/ParcelamentoDialog';
+import { useAcordoAtivoPorCobranca } from '@/hooks/useAcordosPagamento';
+import { anularReciboNoProvider } from '@/lib/faturacao';
 import { FaturacaoToolbarSection } from './faturacao/sections/FaturacaoToolbarSection';
 import { FaturacaoListaSection } from './faturacao/sections/FaturacaoListaSection';
 import { FaturacaoDialogsSection } from './faturacao/sections/FaturacaoDialogsSection';
@@ -44,12 +51,23 @@ const PAGE_SIZE = 50,
   LIST_CAP = 1000,
   TODAS = 'todas',
   TODOS = 'todos';
+/** Semana escolhida sobrevive a voltar atrás (o componente remonta e perdia a
+ *  seleção, caindo sempre na semana anterior). sessionStorage, não localStorage
+ *  — é preferência da sessão, não deve persistir para sempre nem entre utilizadores. */
+const SELECTED_WEEK_KEY = 'faturacao-tab-selected-week';
+function lerSemanaGuardada(): Date | null {
+  const raw = sessionStorage.getItem(SELECTED_WEEK_KEY);
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 const getWeekShortcutButtons = () => getWeekShortcuts();
 const emptyKpi = (dl = '') => emptyResumo(dl);
 
 type InvoiceDocs = { ft?: InvoiceMetadata; nc?: InvoiceMetadata; rc?: InvoiceMetadata };
 
 export function FaturacaoContent() {
+  const navigate = useNavigate();
   const { data: estacoes = [] } = useEstacoes();
   const estacoesMap = useMemo(() => {
     const m: Record<string, string> = {};
@@ -59,9 +77,15 @@ export function FaturacaoContent() {
 
   const [estacaoId, setEstacaoId] = useState<string>(TODAS);
   const [metodo, setMetodo] = useState<string>(TODOS);
-  const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
+  const [selectedWeek, setSelectedWeek] = useState<Date>(
+    () => lerSemanaGuardada() ?? subWeeks(new Date(), 1)
+  );
   const [page, setPage] = useState(1);
   const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    sessionStorage.setItem(SELECTED_WEEK_KEY, selectedWeek.toISOString());
+  }, [selectedWeek]);
 
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
   const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
@@ -93,6 +117,12 @@ export function FaturacaoContent() {
   const [rawMovimentos, setRawMovimentos] = useState<MovimentoRaw[]>([]);
   const [capped, setCapped] = useState(false);
   const [invoiceByCobranca, setInvoiceByCobranca] = useState<Map<string, InvoiceDocs>>(new Map());
+  // Um acordo de parcelamento gera VÁRIOS recibos para a MESMA cobrança —
+  // invoiceByCobranca só guarda o mais recente por (cobrança, tipo), o que
+  // fazia todas as linhas de recibo de um acordo mostrarem sempre o último
+  // (achado ao testar manualmente). Chave = numeroDoc (documento_externo_ref
+  // do recibo, já escrito de volta) → resolve cada linha ao SEU documento.
+  const [invoiceByNumero, setInvoiceByNumero] = useState<Map<string, InvoiceMetadata>>(new Map());
   const [loading, setLoading] = useState(true);
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
   const profilesRef = useRef<Record<string, string>>({});
@@ -125,6 +155,10 @@ export function FaturacaoContent() {
   const [anularRow, setAnularRow] = useState<FaturacaoRow | null>(null);
   const [anularBusy, setAnularBusy] = useState(false);
   const [anularMotivo, setAnularMotivo] = useState('');
+  const [parcelamentoAlvo, setParcelamentoAlvo] = useState<ParcelamentoFaturaAlvo | null>(null);
+  // Decide se o botão de parcelamento abre o ParcelamentoDialog (sem acordo vivo)
+  // ou navega para o acordo já existente (useAcordoAtivoPorCobranca, Fase 4A).
+  const { data: acordoAtivo } = useAcordoAtivoPorCobranca(selectedRow?.cobrancaId ?? null);
 
   async function resolverCobranca(cobrancaId: string) {
     const { data: cob } = await supabase
@@ -156,6 +190,15 @@ export function FaturacaoContent() {
     const r = await resolverCobranca(row.cobrancaId);
     if (!r) {
       toast.error('Cobrança não encontrada.');
+      return;
+    }
+    // O estado real da cobrança é a razão a mostrar primeiro — "já está
+    // liquidada" era mostrado também para uma fatura ANULADA (achado ao
+    // testar manualmente: saldoPagar chega a 0 tanto por ter sido paga como
+    // por ter sido anulada e creditada; o aviso tem de dizer qual das duas
+    // é verdade, não assumir sempre "liquidada").
+    if (r.cob.estado === 'anulada') {
+      toast.info('Esta fatura foi anulada — não é possível registar um recibo.');
       return;
     }
     const total = Math.round((Number(r.cob.valor_total) || 0) * 100) / 100;
@@ -211,6 +254,48 @@ export function FaturacaoContent() {
     });
   }
 
+  async function abrirParcelarParaRow(row: FaturacaoRow) {
+    if (!row.cobrancaId) return;
+    const invoice = docFiscalDaLinha(row);
+    if (!invoice || invoice.tipo !== 'FT') {
+      toast.error('Só é possível parcelar uma Factura (FT) por liquidar.');
+      return;
+    }
+    setDialogOpen(false);
+    const r = await resolverCobranca(row.cobrancaId);
+    if (!r) {
+      toast.error('Cobrança não encontrada.');
+      return;
+    }
+    // Mesmo motivo do fix em abrirReciboParaRow: o estado real da cobrança é
+    // a razão a mostrar primeiro, nunca assumir "já está liquidada" quando na
+    // verdade foi anulada.
+    if (r.cob.estado === 'anulada') {
+      toast.info('Esta fatura foi anulada — não é possível criar um acordo de pagamento.');
+      return;
+    }
+    const total = Math.round((Number(r.cob.valor_total) || 0) * 100) / 100;
+    // Mesma fórmula que abrirReciboParaRow: total − recibos ativos − NC ativas.
+    const saldoPagar = Math.round((total - r.pago - r.creditado) * 100) / 100;
+    if (saldoPagar <= 0.005) {
+      toast.info('Esta fatura já está liquidada.');
+      return;
+    }
+    setParcelamentoAlvo({
+      cobrancaId: r.cob.id,
+      contratoId: r.cob.contrato_id,
+      numeroDocumento: r.cob.documento_externo_ref || row.numeroDoc || '',
+      // `invoice` (não `invoice?.`): o gate acima já devolveu se `invoice` fosse
+      // null — chegado aqui está sempre definido (é uma const, nunca reatribuído).
+      dataDocumento: invoice.data_emissao || row.dataMovimento || '',
+      valorTotal: total,
+      saldoPagar,
+      titularId: r.cob.destinatario_id,
+      titularNome: r.cob.destinatario_nome,
+      titularNif: invoice.cliente_nif ?? null,
+    });
+  }
+
   async function abrirAnular(row: FaturacaoRow) {
     if (row.docTipo === 'fatura') {
       await abrirNcParaRow(
@@ -246,6 +331,22 @@ export function FaturacaoContent() {
             .update({ estado: 'emitida' })
             .eq('id', row.referencia)
             .eq('estado', 'paga');
+        // Se este recibo pertence a uma parcela de acordo, reabre-a (estava
+        // liquidacao_pendente/paga) e fecha a linha do outbox associada —
+        // sem isto a parcela ficava presa e o drain (5 em 5 min) tentava
+        // emitir um RC para um pagamento já anulado. No-op se não pertencer
+        // a nenhum acordo.
+        const { error: parcelaErr } = await supabase.rpc(
+          'acordo_parcela_reverter_pagamento' as any,
+          { p_recibo_id: row.reciboId }
+        );
+        if (parcelaErr) {
+          console.error('Falha ao reverter parcela do acordo:', parcelaErr);
+          toast.error(
+            `Recibo anulado, mas a parcela do acordo pode ter ficado desatualizada: ${parcelaErr.message}`
+          );
+        }
+        await anularReciboNoProvider(row.reciboId);
         toast.success('Recibo anulado (anulamento lançado na conta-corrente).');
       } else if (row.docTipo === 'nota_credito' && row.notaCreditoId) {
         const { data: ncAtual } = await supabase
@@ -264,6 +365,8 @@ export function FaturacaoContent() {
         toast.success('Nota de crédito anulada (anulamento lançado na conta-corrente).');
       }
       setReloadToken((t) => t + 1);
+      setAnularRow(null);
+      setAnularMotivo('');
     } catch (e: any) {
       console.error('Erro ao anular:', e);
       toast.error(`Erro ao anular: ${e?.message ?? 'tente novamente'}`);
@@ -279,7 +382,15 @@ export function FaturacaoContent() {
     if (row.docTipo === 'nota_credito')
       return (row.cobrancaId && invoiceByCobranca.get(row.cobrancaId)?.nc) || null;
     if (row.docTipo === 'recibo')
-      return (row.referencia && invoiceByCobranca.get(row.referencia)?.rc) || null;
+      // Prioriza o documento DESTA linha (numeroDoc = documento_externo_ref do
+      // recibo, único por recibo) — o fallback por cobrança só serve dados
+      // antigos, de antes do write-back existir, e só está certo se a
+      // cobrança tiver tido um único recibo alguma vez.
+      return (
+        (row.numeroDoc !== '—' && invoiceByNumero.get(row.numeroDoc)) ||
+        (row.referencia && invoiceByCobranca.get(row.referencia)?.rc) ||
+        null
+      );
     return null;
   }
 
@@ -428,7 +539,9 @@ export function FaturacaoContent() {
         .eq('status', 'emitida');
       if (error || cancelled) return;
       const m = new Map<string, InvoiceDocs>();
+      const porNumero = new Map<string, InvoiceMetadata>();
       for (const inv of (data ?? []) as InvoiceMetadata[]) {
+        if (inv.numero) porNumero.set(inv.numero, inv);
         if (!inv.cobranca_id) continue;
         const slot = m.get(inv.cobranca_id) ?? {};
         const key: keyof InvoiceDocs = inv.tipo === 'NC' ? 'nc' : inv.tipo === 'RC' ? 'rc' : 'ft';
@@ -436,7 +549,10 @@ export function FaturacaoContent() {
         if (!prev || (inv.created_at ?? '') > (prev.created_at ?? '')) slot[key] = inv;
         m.set(inv.cobranca_id, slot);
       }
-      if (!cancelled) setInvoiceByCobranca(m);
+      if (!cancelled) {
+        setInvoiceByCobranca(m);
+        setInvoiceByNumero(porNumero);
+      }
     })();
     return () => {
       cancelled = true;
@@ -690,6 +806,14 @@ export function FaturacaoContent() {
         onDialogOpenChange={setDialogOpen}
         onFazerRecibo={selectedRow ? () => abrirReciboParaRow(selectedRow) : undefined}
         onNotaCredito={selectedRow ? () => abrirNcParaRow(selectedRow) : undefined}
+        onParcelar={
+          selectedRow
+            ? acordoAtivo
+              ? () => navigate(`/acordos/${acordoAtivo.id}`)
+              : () => abrirParcelarParaRow(selectedRow)
+            : undefined
+        }
+        parcelarLabel={acordoAtivo ? 'Ver plano de pagamentos' : 'Parcelar'}
         onAnular={selectedRow ? () => abrirAnular(selectedRow) : undefined}
         reciboOpen={reciboOpen}
         onReciboOpenChange={setReciboOpen}
@@ -711,6 +835,15 @@ export function FaturacaoContent() {
             setAnularMotivo('');
           }
         }}
+      />
+
+      <ParcelamentoDialog
+        open={!!parcelamentoAlvo}
+        onOpenChange={(o) => {
+          if (!o) setParcelamentoAlvo(null);
+        }}
+        alvo={parcelamentoAlvo}
+        onCriado={() => setReloadToken((t) => t + 1)}
       />
 
       <FaturacaoAlertasSection

@@ -65,7 +65,7 @@ export function FaturacaoAlertasSection({
           />
           <p className="text-xs text-muted-foreground">
             {anularRow?.docTipo === 'recibo'
-              ? 'Este texto é enviado ao motorista por email — escreve algo que ele perceba.'
+              ? 'Fica registado no histórico do recibo — não é enviado a ninguém por email.'
               : 'Fica registado no histórico da nota de crédito.'}
           </p>
         </div>

@@ -13,7 +13,11 @@ import {
 import { SortableTableHead, type SortDirection } from '@/components/ui/sortable-table-head';
 import { SectionCard } from '@/components/ui/section-card';
 import { cn } from '@/lib/utils';
-import { CATEGORIAS, type MovimentoFinanceiro } from './NovoMovimentoFinanceiroOverlay';
+import {
+  CATEGORIAS,
+  isMovimentoDaFaturacao,
+  type MovimentoFinanceiro,
+} from './NovoMovimentoFinanceiroOverlay';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(value);
@@ -216,8 +220,18 @@ export function MovimentosHistoricoTable({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
-                    {/* Reparação pendente (sem acordo definido) → apenas "Definir Acordo" */}
-                    {isReparacaoAguardaAcordo(movimento) ? (
+                    {/* Movimento gerido pela faturação → sem ações nenhumas.
+                        Paga-se/altera-se no contrato, nunca aqui (senão o
+                        saldo do motorista e a fatura divergiam em silêncio). */}
+                    {isMovimentoDaFaturacao(movimento) ? (
+                      <span
+                        className="text-xs text-muted-foreground whitespace-nowrap"
+                        title="Movimento gerido pela faturação — para pagar ou alterar, vá ao contrato/fatura de origem."
+                      >
+                        Gerido na fatura
+                      </span>
+                    ) : /* Reparação pendente (sem acordo definido) → apenas "Definir Acordo" */
+                    isReparacaoAguardaAcordo(movimento) ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -250,8 +264,9 @@ export function MovimentosHistoricoTable({
                         </Button>
                       </>
                     ) : null}
-                    {/* Botão editar — só visível para admin/Supervisor Gestor TVDE */}
-                    {canEdit && (
+                    {/* Botão editar — só admin/Supervisor Gestor TVDE, e nunca
+                        em movimentos geridos pela faturação (ver acima). */}
+                    {canEdit && !isMovimentoDaFaturacao(movimento) && (
                       <Button
                         variant="ghost"
                         size="icon"

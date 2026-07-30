@@ -33,7 +33,9 @@ import {
 import { baixarDocumentoPdf } from '@/lib/faturacao';
 import type { InvoiceMetadata } from '@/types/faturacao';
 import { useContaCorrenteCliente } from '@/hooks/useContaCorrenteCliente';
+import { useAcordoAtivoResumoPorEntidade } from '@/hooks/useAcordosPagamento';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { AcordoResumoCard } from './AcordoResumoCard';
 
 interface ClienteContaCorrenteTabProps {
   clienteId: string | null;
@@ -100,6 +102,20 @@ function legendaSaldo(saldo: number): string {
   return 'Tudo liquidado';
 }
 
+/**
+ * Um movimento de cessão de dívida (`acordo_criar`/`acordo_cancelar`, migração
+ * 20260724100001). `row.descritivo` já vem com a redação exacta aprovada em
+ * §7.5 da spec ("Dívida cedida a X" no crédito do titular, "Dívida assumida
+ * (cedida por X)" no débito do responsável) — gravada assim na própria coluna
+ * `descricao` pelo backend, não reconstruída aqui. O que falta identificar
+ * visualmente é o TIPO do movimento: sem isto, `singleDocTipo` (faturacao.ts)
+ * cai no fallback 'ajuste' e a badge mostra "Ajuste", indistinguível de um
+ * ajuste manual qualquer.
+ */
+function isCessao(origem: string): boolean {
+  return origem === 'cessao';
+}
+
 export function ClienteContaCorrenteTab({ clienteId }: ClienteContaCorrenteTabProps) {
   const navigate = useNavigate();
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
@@ -107,6 +123,7 @@ export function ClienteContaCorrenteTab({ clienteId }: ClienteContaCorrenteTabPr
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
   const { data, isLoading, isError } = useContaCorrenteCliente(clienteId);
+  const { data: acordoAtivo } = useAcordoAtivoResumoPorEntidade(clienteId);
 
   if (!clienteId) {
     return (
@@ -223,6 +240,14 @@ export function ClienteContaCorrenteTab({ clienteId }: ClienteContaCorrenteTabPr
         )}
       </div>
 
+      {/* Cartão de acordo — só quando há um acordo ativo/em incumprimento deste cliente */}
+      {acordoAtivo && (
+        <AcordoResumoCard
+          acordo={acordoAtivo}
+          onVerAcordo={() => navigate(`/acordos/${acordoAtivo.id}`)}
+        />
+      )}
+
       {/* Tabela de documentos / movimentos — desktop */}
       <div className="hidden sm:block rounded-md border overflow-x-auto">
         <Table>
@@ -334,12 +359,21 @@ export function ClienteContaCorrenteTab({ clienteId }: ClienteContaCorrenteTabPr
                       {row.numeroDoc !== '—' ? row.numeroDoc : row.id.slice(0, 8).toUpperCase()}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={cn('border-0', DOC_TIPO_CLASS[row.docTipo])}
-                      >
-                        {DOC_TIPO_LABEL[row.docTipo]}
-                      </Badge>
+                      {isCessao(row.origem) ? (
+                        <Badge
+                          variant="outline"
+                          className="border-0 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                        >
+                          Cessão
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className={cn('border-0', DOC_TIPO_CLASS[row.docTipo])}
+                        >
+                          {DOC_TIPO_LABEL[row.docTipo]}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="max-w-[220px] truncate text-sm" title={row.descritivo}>
                       {row.descritivo}
@@ -414,9 +448,21 @@ export function ClienteContaCorrenteTab({ clienteId }: ClienteContaCorrenteTabPr
                 onClick={clicavel ? () => abrirOrigem(row) : undefined}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <Badge variant="outline" className={cn('border-0', DOC_TIPO_CLASS[row.docTipo])}>
-                    {DOC_TIPO_LABEL[row.docTipo]}
-                  </Badge>
+                  {isCessao(row.origem) ? (
+                    <Badge
+                      variant="outline"
+                      className="border-0 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                    >
+                      Cessão
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className={cn('border-0', DOC_TIPO_CLASS[row.docTipo])}
+                    >
+                      {DOC_TIPO_LABEL[row.docTipo]}
+                    </Badge>
+                  )}
                   <span className="text-xs text-muted-foreground whitespace-nowrap">
                     {formatDate(row.dataMovimento)}
                   </span>

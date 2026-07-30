@@ -99,6 +99,7 @@ function mk(partial: Partial<MovimentoRaw>): MovimentoRaw {
     cobranca: null,
     recibo: null,
     contrato: null,
+    notaCredito: null,
     ...partial,
   };
 }

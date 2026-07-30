@@ -713,7 +713,7 @@ export const UsersTab = () => {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="create-name" className="text-foreground">
-                Nome
+                Nome *
               </Label>
               <Input
                 id="create-name"
@@ -725,7 +725,7 @@ export const UsersTab = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="create-email" className="text-foreground">
-                Email
+                Email *
               </Label>
               <Input
                 id="create-email"
@@ -738,7 +738,7 @@ export const UsersTab = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="create-password" className="text-foreground">
-                Password
+                Password *
               </Label>
               <Input
                 id="create-password"
@@ -751,7 +751,7 @@ export const UsersTab = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="create-confirm-password" className="text-foreground">
-                Confirmar Password
+                Confirmar Password *
               </Label>
               <Input
                 id="create-confirm-password"

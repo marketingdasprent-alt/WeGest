@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesCodigo, normalizeMatricula } from './reservasUtils';
+import { formatDateTime, matchesCodigo, normalizeMatricula } from './reservasUtils';
 
 describe('normalizeMatricula', () => {
   it('lowercase + remove hífens e espaços', () => {
@@ -24,5 +24,16 @@ describe('matchesCodigo', () => {
 
   it('não faz match quando pesquisa não é numérica', () => {
     expect(matchesCodigo(585, 'abc')).toBe(false);
+  });
+});
+
+describe('formatDateTime', () => {
+  it('formata uma data ISO válida', () => {
+    expect(formatDateTime('2026-07-28T12:09:00')).toBe('2026-07-28 12:09:00');
+  });
+
+  it('null/undefined dá "—" em vez da data zero do Unix (1970-01-01)', () => {
+    expect(formatDateTime(null)).toBe('—');
+    expect(formatDateTime(undefined)).toBe('—');
   });
 });

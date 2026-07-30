@@ -22,8 +22,8 @@ describe('formatCurrency', () => {
     expect(formatCurrency(undefined)).toBe('€0,00');
   });
 
-  it('formata valores negativos', () => {
-    expect(formatCurrency(-50.99)).toBe('€-50,99');
+  it('formata valores negativos com o sinal antes do símbolo', () => {
+    expect(formatCurrency(-50.99)).toBe('-€50,99');
   });
 });
 

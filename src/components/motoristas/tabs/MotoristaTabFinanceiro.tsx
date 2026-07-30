@@ -9,6 +9,7 @@ import type { Motorista } from '@/pages/Motoristas';
 import { useCanEditFinanceiro } from '@/hooks/useCanEditFinanceiro';
 import {
   NovoMovimentoFinanceiroOverlay,
+  isMovimentoDaFaturacao,
   type MovimentoFinanceiro,
   type RecorrenciaFinanceira,
 } from './NovoMovimentoFinanceiroOverlay';
@@ -151,8 +152,17 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   // reverte para o snapshot anterior se o update falhar. Sem isto o clique
   // fica "parado" até o round-trip terminar, o que se sente lento numa acção
   // tão frequente quanto marcar/cancelar um movimento.
+  // Guarda em profundidade: a tabela já não mostra estes botões para
+  // movimentos geridos pela faturação, mas estes handlers são props e podem
+  // vir a ser ligados noutro sítio — liquidar aqui punha o saldo do motorista
+  // a divergir da fatura em silêncio.
+  const bloqueadoPelaFaturacao = (id: string) => {
+    const mov = movimentos.find((m) => m.id === id);
+    return !!mov && isMovimentoDaFaturacao(mov);
+  };
+
   const handleMarcarPago = async (id: string) => {
-    if (!canEdit) return;
+    if (!canEdit || bloqueadoPelaFaturacao(id)) return;
     const anterior = movimentos;
     const dataPagamento = new Date().toISOString();
     setMovimentos((prev) =>
@@ -172,7 +182,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   };
 
   const handleCancelar = async (id: string) => {
-    if (!canEdit) return;
+    if (!canEdit || bloqueadoPelaFaturacao(id)) return;
     const anterior = movimentos;
     setMovimentos((prev) => prev.map((m) => (m.id === id ? { ...m, status: 'cancelado' } : m)));
     try {

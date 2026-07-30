@@ -65,6 +65,8 @@ interface Props {
   fatura: FaturaCalculo;
   clienteEntidade: EntidadeOption;
   condutorEntidade: EntidadeOption | null;
+  /** Motorista TVDE principal do contrato — dívida cedida na emissão, nunca destinatário fiscal. */
+  motoristaEntidade?: EntidadeOption | null;
   emitente?: FaturacaoDocEmitente | null;
   onFaturado: () => void;
 }
@@ -84,6 +86,7 @@ export function ContratoFaturarDialog({
   fatura,
   clienteEntidade,
   condutorEntidade,
+  motoristaEntidade,
   emitente,
   onFaturado,
 }: Props) {
@@ -91,7 +94,7 @@ export function ContratoFaturarDialog({
   const emitirMut = useEmitirEEscreverFatura();
   const { data: orgDef } = useOrgDefinicoes();
   const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
-  const [entidade, setEntidade] = useState<'cliente' | 'condutor'>('cliente');
+  const [entidade, setEntidade] = useState<'cliente' | 'condutor' | 'motorista'>('cliente');
   const [tipo, setTipo] = useState<'fatura' | 'fatura_recibo'>('fatura');
   const [metodo, setMetodo] = useState<string>('transferencia');
   const [dataDoc, setDataDoc] = useState<string>(hoje());
@@ -260,6 +263,31 @@ export function ContratoFaturarDialog({
 
       const cobrancaId = cobInserida?.id ?? null;
 
+      // 1.5) Cedência ao motorista — dívida passa da conta-corrente do
+      // destinatário fiscal para motorista_financeiro (ver
+      // 20260730170000_cobranca_cessao_motorista_na_emissao.sql). A fatura
+      // continua emitida em nome de clienteEntidade; isto é só o lançamento
+      // interno. Best-effort: um erro aqui não deve impedir a fatura já
+      // registada de seguir para a emissão fiscal (Fase 2).
+      //
+      // `tipo === 'fatura'` é obrigatório: uma Factura-Recibo nasce liquidada
+      // (o recibo acima credita logo o titular), por isso não há dívida
+      // nenhuma para ceder — ceder à mesma deixava o titular CREDOR do valor
+      // da fatura e o motorista a dever um valor que ninguém deve (achado ao
+      // rever os dados reais do teste de 30/07/2026, onde isto aconteceu).
+      if (entidade === 'motorista' && motoristaEntidade && cobrancaId && tipo === 'fatura') {
+        const { error: cessaoErr } = await supabase.rpc('cobranca_ceder_a_motorista' as any, {
+          p_cobranca_id: cobrancaId,
+          p_motorista_id: motoristaEntidade.id,
+        });
+        if (cessaoErr) {
+          console.error('Falha a ceder a dívida ao motorista:', cessaoErr);
+          toast.warning(
+            `Fatura registada, mas não foi possível ceder a dívida ao motorista: ${cessaoErr.message}`
+          );
+        }
+      }
+
       // ── Fase 2 — emissão fiscal no provider configurado (NUNCA reverte a Fase 1) ────
       if (faturaZero || !cobrancaId) {
         // Fatura a 0€ não gera documento fiscal — só o documento interno.
@@ -370,15 +398,39 @@ export function ContratoFaturarDialog({
                   disabled={!condutorEntidade}
                   title={
                     !condutorEntidade
-                      ? 'O condutor principal tem de ser um cliente. Motoristas TVDE não podem ser destinatários de fatura.'
+                      ? 'O condutor principal do contrato não é um cliente.'
                       : undefined
                   }
                   onClick={() => setEntidade('condutor')}
                 >
                   Condutor Principal
                 </Button>
+                <Button
+                  type="button"
+                  variant={entidade === 'motorista' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  disabled={!motoristaEntidade || tipo === 'fatura_recibo'}
+                  title={
+                    !motoristaEntidade
+                      ? 'O condutor principal do contrato não é um motorista TVDE.'
+                      : tipo === 'fatura_recibo'
+                        ? 'Uma Factura-Recibo já nasce liquidada — não há dívida para ceder.'
+                        : undefined
+                  }
+                  onClick={() => setEntidade('motorista')}
+                >
+                  Motorista
+                </Button>
               </div>
               <p className="text-[11px] text-muted-foreground truncate">{destinatario.nome}</p>
+              {entidade === 'motorista' && motoristaEntidade && (
+                <p className="text-[11px] text-muted-foreground rounded-md border p-2 mt-1.5">
+                  ⓘ A fatura é emitida em nome de {clienteEntidade.nome}. A dívida passa para a
+                  conta-corrente de {motoristaEntidade.nome} — exigência legal: a fatura fiscal fica
+                  sempre em nome do cliente.
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -398,7 +450,14 @@ export function ContratoFaturarDialog({
                   variant={tipo === 'fatura_recibo' ? 'default' : 'outline'}
                   size="sm"
                   className="flex-1"
-                  onClick={() => setTipo('fatura_recibo')}
+                  onClick={() => {
+                    setTipo('fatura_recibo');
+                    // Sem isto a escolha "Motorista" ficava presa em estado
+                    // (botão já desativado, mas `entidade` continuava
+                    // 'motorista' e o aviso de cessão continuava visível a
+                    // prometer algo que handleCriar já não faz).
+                    setEntidade((e) => (e === 'motorista' ? 'cliente' : e));
+                  }}
                 >
                   Factura-Recibo
                 </Button>

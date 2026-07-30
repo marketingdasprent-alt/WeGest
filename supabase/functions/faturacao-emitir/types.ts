@@ -26,6 +26,16 @@ export interface Cliente {
   country_code?: string; // ISO-3166 alpha-2 (default PT)
 }
 
+/** Identificadores do documento ORIGINAL (FT/FR) que um Recibo liquida —
+ *  resolvidos pelo index.ts a partir de `invoices`, nunca pelo chamador.
+ *  insertReceipt (KeyInvoice) não usa "tipo de documento" próprio: referencia
+ *  o documento original por estes 3 campos + o valor a liquidar. */
+export interface DocumentoOriginal {
+  doctype: string;
+  serie: string;
+  docnum: string;
+}
+
 export interface EmitInput {
   tipo: 'FT' | 'FR' | 'NC' | 'RC';
   cliente: Cliente;
@@ -33,6 +43,8 @@ export interface EmitInput {
   observacoes?: string;
   referencia_externa?: string;
   documento_referencia?: string; // obrigatório p/ NC e RC
+  /** Só para RC — ver DocumentoOriginal. */
+  documentoOriginal?: DocumentoOriginal;
 }
 
 export interface PdfInput {
@@ -40,6 +52,14 @@ export interface PdfInput {
   docnum: string;
   serie?: string;
   signed?: boolean;
+}
+
+/** Identifica um Recibo já emitido, para o anular no provider (setReceiptVoid
+ *  no KeyInvoice) — DocSeries é opcional (o provider usa a série da própria
+ *  chave API quando omissa). */
+export interface VoidReceiptInput {
+  docnum: string;
+  docseries?: string;
 }
 
 /**
@@ -71,4 +91,24 @@ export interface FaturacaoProvider {
   emit(input: EmitInput, cfg: ProviderConfig): Promise<EmitDocResult>;
   /** Devolve o PDF (base64) de um documento já emitido. */
   pdf(input: PdfInput, cfg: ProviderConfig): Promise<string>;
+  /** Anula um Recibo já emitido (reverte a liquidação real no provider). Lança em caso de falha. */
+  voidReceipt(input: VoidReceiptInput, cfg: ProviderConfig): Promise<void>;
+  /** Confirma se o provider tem o doctype do tipo indicado configurado (config da org OU fallback do deployment). Usado no pré-voo, antes de se aceitar criar um acordo de parcelamento. */
+  hasDoctype(tipo: EmitInput['tipo'], cfg: ProviderConfig): boolean;
+}
+
+/**
+ * Erro que um adapter lança quando NÃO é possível confirmar se um documento
+ * chegou a ser criado no provider antes da falha (timeout, ligação perdida,
+ * resposta ilegível). Distinto de um Error normal, que significa que o
+ * provider respondeu e recusou, ou que a falha ocorreu antes de qualquer
+ * tentativa de criação — nesses dois casos sabe-se que nada foi criado.
+ * Um chamador NUNCA deve reemitir automaticamente depois deste erro; precisa
+ * de reconciliar (confirmar manualmente no provider) primeiro.
+ */
+export class EmissaoAmbiguaError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EmissaoAmbiguaError';
+  }
 }

@@ -20,6 +20,7 @@ import {
   FileMinus,
   Eye,
   Ban,
+  CalendarClock,
 } from 'lucide-react';
 import { formatCurrency, formatDateTime, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,15 @@ interface Props {
   /** Ações sobre a fatura desta linha (quando é uma cobrança/fatura). */
   onFazerRecibo?: () => void;
   onNotaCredito?: () => void;
+  /**
+   * Parcelar a fatura desta linha (abre o ParcelamentoDialog) OU navegar para o
+   * acordo já existente — o pai decide qual dos dois consoante já exista um
+   * acordo vivo sobre a cobrança (useAcordoAtivoPorCobranca). Este componente
+   * não sabe distinguir os dois casos, só dispara a ação.
+   */
+  onParcelar?: () => void;
+  /** Texto do botão de parcelamento — "Parcelar" ou "Ver plano de pagamentos". */
+  parcelarLabel?: string;
   /** Anular o recibo / nota de crédito desta linha (estorno na conta-corrente). */
   onAnular?: () => void;
 }
@@ -58,6 +68,8 @@ export function FaturacaoMovimentoDialog({
   onOpenChange,
   onFazerRecibo,
   onNotaCredito,
+  onParcelar,
+  parcelarLabel,
   onAnular,
 }: Props) {
   const { data: orgDef } = useOrgDefinicoes();
@@ -69,6 +81,16 @@ export function FaturacaoMovimentoDialog({
   // Ações disponíveis quando a linha é uma fatura ligada a uma cobrança.
   const podeAgir =
     !!row?.cobrancaId && (row?.docTipo === 'fatura' || row?.docTipo === 'fatura_recibo');
+  // A linha "Anulamento de Factura" (crédito, origem='cobranca') é a MESMA
+  // cobrança da fatura original — só que é o ponto onde o utilizador
+  // naturalmente clica depois de já ter anulado (achado ao testar
+  // manualmente). Sem isto, só dava para chegar à Nota de Crédito clicando
+  // na linha "Fatura" original, mais difícil de encontrar depois de anulada.
+  // Só a Nota de Crédito faz sentido aqui — nunca "Fazer recibo"/"Parcelar"
+  // sobre uma fatura já anulada.
+  const isAnulamentoFatura =
+    !!row?.cobrancaId && row?.docTipo === 'estorno' && row?.origem === 'cobranca';
+  const podeNotaCredito = podeAgir || isAnulamentoFatura;
   // Anulação: só faz sentido para um recibo ativo ou uma NC ativa (movimentos a crédito).
   const anularLabel =
     row?.docTipo === 'recibo'
@@ -235,9 +257,9 @@ export function FaturacaoMovimentoDialog({
               fiscal é emitida no {providerLabel}.
             </p>
 
-            {podeAgir && (onFazerRecibo || onNotaCredito) && (
+            {(podeAgir || isAnulamentoFatura) && (onFazerRecibo || onNotaCredito || onParcelar) && (
               <div className="flex flex-wrap gap-2 border-t pt-3">
-                {onFazerRecibo && (
+                {podeAgir && onFazerRecibo && (
                   <Button
                     type="button"
                     variant="outline"
@@ -248,7 +270,7 @@ export function FaturacaoMovimentoDialog({
                     <Receipt className="h-4 w-4" /> Fazer recibo
                   </Button>
                 )}
-                {onNotaCredito && (
+                {podeNotaCredito && onNotaCredito && (
                   <Button
                     type="button"
                     variant="outline"
@@ -257,6 +279,17 @@ export function FaturacaoMovimentoDialog({
                     onClick={onNotaCredito}
                   >
                     <FileMinus className="h-4 w-4" /> Nota de crédito
+                  </Button>
+                )}
+                {podeAgir && onParcelar && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={onParcelar}
+                  >
+                    <CalendarClock className="h-4 w-4" /> {parcelarLabel ?? 'Parcelar'}
                   </Button>
                 )}
               </div>

@@ -3,7 +3,15 @@ import { pt } from 'date-fns/locale';
 
 export function formatCurrency(value: number | null | undefined): string {
   if (value == null) return '€0,00';
-  return `€${value.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Sinal antes do símbolo (-€33,33), não depois (€-33,33) — toLocaleString
+  // sozinho no valor com sinal produz o segundo, que lê mal em PT-PT. Só
+  // muda o caminho negativo: para value >= 0, abs(value) === value e a
+  // saída é byte-a-byte igual à de antes.
+  const abs = Math.abs(value).toLocaleString('pt-PT', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return value < 0 ? `-€${abs}` : `€${abs}`;
 }
 
 export function formatNumber(value: number | null | undefined, decimals = 0): string {

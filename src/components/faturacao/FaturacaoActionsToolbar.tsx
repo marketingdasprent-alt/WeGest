@@ -95,12 +95,16 @@ export function FaturacaoActionsToolbar({
       ),
     [cobrancas]
   );
+  // 'anulada' incluído desde 30/07/2026: uma fatura certificada anulada
+  // internamente continua a precisar de reversão fiscal (NC) — o backend já
+  // suporta isto (fn_nota_credito_valida); uma cobrança só chega a 'anulada'
+  // vindo de 'emitida'/'paga', logo teve sempre fatura fiscal real.
   const creditaveis = useMemo(
     () =>
       cobrancas.filter(
         (c) =>
           c.emite_fatura_fiscal &&
-          (c.estado === 'emitida' || c.estado === 'paga') &&
+          (c.estado === 'emitida' || c.estado === 'paga' || c.estado === 'anulada') &&
           c.saldoCreditar > 0.005
       ),
     [cobrancas]

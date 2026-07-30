@@ -52,6 +52,7 @@ const Cookies = lazy(() => import('@/pages/Cookies'));
 const RegistoMotorista = lazy(() => import('@/pages/motorista/RegistoMotorista'));
 const LoginMotorista = lazy(() => import('@/pages/motorista/LoginMotorista'));
 const PainelMotorista = lazy(() => import('@/pages/motorista/PainelMotorista'));
+const MotoristaAcordoDetalhe = lazy(() => import('@/pages/motorista/MotoristaAcordoDetalhe'));
 const Assistencia = lazy(() => import('@/pages/Assistencia'));
 const AssistenciaNova = lazy(() => import('@/pages/AssistenciaNova'));
 const TicketDetails = lazy(() => import('@/pages/TicketDetails'));
@@ -73,6 +74,7 @@ const SelecionarOrg = lazy(() => import('@/pages/SelecionarOrg'));
 const RegistarOrg = lazy(() => import('@/pages/RegistarOrg'));
 const RentingContratos = lazy(() => import('@/pages/renting/RentingContratos'));
 const ContratoForm = lazy(() => import('@/pages/renting/ContratoForm'));
+const AcordoDetalhe = lazy(() => import('@/pages/AcordoDetalhe'));
 const PedidosTrocaKms = lazy(() => import('@/pages/renting/PedidosTrocaKms'));
 const RealizarEntregaPage = lazy(() => import('@/pages/renting/RealizarEntregaPage'));
 const RentingReservas = lazy(() => import('@/pages/renting/RentingReservas'));
@@ -136,6 +138,14 @@ const WebAppRoutes = () => {
             element={
               <ProtectedRoute requiredResource={RECURSOS.MOTORISTA_PAINEL}>
                 <PainelMotorista />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/motorista/painel/acordos/:id"
+            element={
+              <ProtectedRoute requiredResource={RECURSOS.MOTORISTA_PAINEL}>
+                <MotoristaAcordoDetalhe />
               </ProtectedRoute>
             }
           />
@@ -505,6 +515,18 @@ const WebAppRoutes = () => {
               <ProtectedRoute requiredResource="renting_contratos">
                 <DashboardLayout>
                   <ContratoForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/acordos/:id"
+            element={
+              <ProtectedRoute
+                requiredResource={[RECURSOS.RENTING_CONTRATOS, RECURSOS.FINANCEIRO_RECIBOS]}
+              >
+                <DashboardLayout>
+                  <AcordoDetalhe />
                 </DashboardLayout>
               </ProtectedRoute>
             }

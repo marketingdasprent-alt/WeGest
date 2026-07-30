@@ -6,7 +6,7 @@
  */
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Download, Loader2, Mail, FileText } from 'lucide-react';
+import { Download, Loader2, Mail, FileText, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,9 +26,18 @@ import type { InvoiceMetadata } from '@/types/faturacao';
 interface Props {
   invoices: InvoiceMetadata[];
   onEnviar: (inv: InvoiceMetadata) => void;
+  /**
+   * Pré-visualização do PDF — opcional porque nem todos os chamadores (ex.:
+   * ReservaTabFaturar) têm ainda o diálogo de preview montado. `win` deve ser
+   * aberta SINCRONAMENTE dentro do próprio onClick (mesmo motivo do padrão
+   * equivalente em ParcelaTimelineItem/ContratoTabFaturar): alguns
+   * navegadores só toleram `window.open()` na pilha de chamada síncrona do
+   * gesto do utilizador.
+   */
+  onVer?: (inv: InvoiceMetadata, win: Window | null) => void;
 }
 
-export function DocumentosEmitidosExtra({ invoices, onEnviar }: Props) {
+export function DocumentosEmitidosExtra({ invoices, onEnviar, onVer }: Props) {
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<string>('data');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -128,6 +137,21 @@ export function DocumentosEmitidosExtra({ invoices, onEnviar }: Props) {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
+                    {onVer && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Ver documento"
+                        onClick={() => {
+                          const win = window.open('', '_blank');
+                          onVer(inv, win);
+                        }}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="ghost"

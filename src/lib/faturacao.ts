@@ -52,7 +52,16 @@ export async function emitirDocumento(payload: CreateFaturaPayload): Promise<Emi
     body: { action: 'emit', ...payload },
   });
   if (error) throw new Error(error.message || 'Falha a contactar o serviço de faturação');
-  if (!data?.success) throw new Error(data?.error || 'Falha ao emitir documento fiscal');
+  if (!data?.success) {
+    const err = new Error(data?.error || 'Falha ao emitir documento fiscal');
+    // `classe` (known_failed | unknown) vem da edge function e distingue se é
+    // seguro reagendar automaticamente. Anexada ao erro — não ao tipo de
+    // retorno, que só existe no caminho de sucesso — para chamadores que
+    // precisem dela (acordoPagamento.ts). Propriedade extra e inerte para
+    // todos os chamadores existentes, que só leem `.message`.
+    (err as Error & { classe?: string }).classe = data?.classe;
+    throw err;
+  }
   return data;
 }
 
@@ -70,29 +79,101 @@ export async function checkFaturacaoHealth(): Promise<boolean> {
 }
 
 /**
+ * Anula, no provider fiscal, um Recibo já emitido — best-effort, nunca lança.
+ * Chamar SEMPRE a seguir a marcar `recibos.estado = 'anulado'` internamente.
+ *
+ * Sem isto (achado ao testar manualmente, 30/07/2026): anular um recibo só
+ * na WeGest nunca revertia a liquidação real no KeyInvoice — a fatura
+ * original ficava com "saldo pendente" errado lá (menor do que a WeGest
+ * pensava), e uma tentativa nova de pagamento sobre a mesma fatura recusava
+ * com "valor a liquidar superior ao valor pendente".
+ */
+export async function anularReciboNoProvider(reciboId: string): Promise<void> {
+  try {
+    const { data: recibo } = await supabase
+      .from('recibos')
+      .select('referencia, documento_externo_ref')
+      .eq('id', reciboId)
+      .maybeSingle();
+    // Sem documento_externo_ref: o recibo nunca chegou a ser emitido no
+    // provider (ou a emissão falhou) — nada para anular lá.
+    if (!recibo?.referencia || !recibo?.documento_externo_ref) return;
+
+    const { data: inv } = await supabase
+      .from('invoices')
+      .select('provider_docnum, serie')
+      .eq('tipo', 'RC')
+      .eq('cobranca_id', recibo.referencia)
+      .eq('numero', recibo.documento_externo_ref)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!inv?.provider_docnum) return;
+
+    const { data, error } = await supabase.functions.invoke<{ success: boolean; error?: string }>(
+      FN,
+      {
+        body: {
+          action: 'void_receipt',
+          provider_docnum: inv.provider_docnum,
+          serie: inv.serie ?? undefined,
+        },
+      }
+    );
+    if (error || !data?.success) {
+      console.warn('Falha (não crítica) ao anular o recibo no KeyInvoice:', error || data?.error);
+    }
+  } catch (e) {
+    console.warn('Falha (não crítica) ao anular o recibo no KeyInvoice:', e);
+  }
+}
+
+/**
  * Anula a faturação de um conjunto de cobranças (estorna tudo → saldo a zero):
- * anula os recibos e notas de crédito ativos ligados e as próprias cobranças.
- * Os triggers de conta-corrente lançam os estornos (recibo/NC → débito; cobrança
- * → crédito), que se cancelam entre si. NÃO emite Nota de Crédito nem cancela o
- * documento fiscal no provider — isso, se necessário, é uma ação separada/manual.
- * Lança em erro.
+ * anula os recibos e notas de crédito ativos ligados e as próprias cobranças, e
+ * fecha (cancela) qualquer acordo de pagamento/parcelamento ativo dessas
+ * cobranças. Os triggers de conta-corrente lançam os estornos (recibo/NC →
+ * débito; cobrança → crédito), que se cancelam entre si. NÃO emite Nota de
+ * Crédito nem cancela o documento fiscal no provider — isso, se necessário, é
+ * uma ação separada/manual. Lança em erro.
  */
 export async function anularCobrancasFaturacao(cobrancaIds: string[]): Promise<void> {
   for (const id of cobrancaIds) {
-    // Recibos ativos da cobrança → anulados (estorno a débito).
+    // Recibos ativos da cobrança → anulados (estorno a débito). Uma cobrança
+    // pode ter VÁRIOS recibos ativos ao mesmo tempo (acordo de parcelamento:
+    // um por parcela) — este UPDATE já os apanha todos, por `referencia`.
     // Grava um motivo automático — se o recibo pertencer a um motorista, o
     // aviso de anulação sai coerente e tranquilizador (em vez de vazio ou
     // alarmante: "faturação anulada" faria o motorista pensar que perdeu o
     // contrato, quando é apenas um reprocessamento administrativo).
-    const { error: recErr } = await supabase
+    const { data: recibosAnulados, error: recErr } = await supabase
       .from('recibos')
       .update({
         estado: 'anulado',
         observacoes: 'Recibo anulado por reprocessamento da faturação — será emitido novo recibo.',
       })
       .eq('referencia', id)
-      .eq('estado', 'ativo');
+      .eq('estado', 'ativo')
+      .select('id');
     if (recErr) throw recErr;
+
+    // Cada recibo anulado acima pode pertencer a uma parcela de um acordo de
+    // pagamento — sem isto, a parcela ficava presa em 'liquidacao_pendente'/
+    // 'paga' com recibo_id a apontar para um recibo já anulado, e o outbox
+    // continuava a tentar reemitir (mesmo bug já corrigido para a anulação
+    // avulsa em FaturacaoTab.confirmarAnular — aqui faltava). No-op para
+    // recibos que não pertencem a nenhuma parcela.
+    for (const r of recibosAnulados ?? []) {
+      const reciboId = (r as { id: string }).id;
+      const { error: reverterErr } = await supabase.rpc(
+        'acordo_parcela_reverter_pagamento' as any,
+        { p_recibo_id: reciboId }
+      );
+      if (reverterErr) {
+        console.warn('Falha (não crítica) a reverter parcela do acordo:', reverterErr);
+      }
+      await anularReciboNoProvider(reciboId);
+    }
 
     // Notas de crédito ativas da cobrança → anuladas (estorno a débito).
     // A tabela pode não existir em BDs antigas — não partir por isso.
@@ -116,6 +197,35 @@ export async function anularCobrancasFaturacao(cobrancaIds: string[]): Promise<v
       .eq('id', id)
       .in('estado', ['emitida', 'paga']);
     if (cobErr) throw cobErr;
+
+    // Se esta cobrança tinha sido cedida a um motorista na emissão (Nova
+    // Fatura / Faturar contrato — 20260730170000), o crédito de anulamento
+    // acima ainda vai para o destinatário fiscal, que já tinha sido
+    // creditado uma vez na cessão — sem isto ficava creditado em dobro, e a
+    // dívida do motorista nunca se revertia. No-op silencioso se a cobrança
+    // nunca foi cedida.
+    const { error: reverterCessaoErr } = await supabase.rpc(
+      'cobranca_reverter_cessao_motorista' as any,
+      { p_cobranca_id: id }
+    );
+    if (reverterCessaoErr) {
+      console.warn('Falha (não crítica) a reverter a cessão ao motorista:', reverterCessaoErr);
+    }
+
+    // Se esta cobrança tinha um acordo de pagamento (parcelamento) ativo,
+    // fecha-o também — sem isto o acordo ficava "ativo" para sempre, a
+    // apontar para uma cobrança já anulada, e continuava a mostrar "falta
+    // pagar" o valor nominal inteiro (achado ao verificar manualmente,
+    // 30/07/2026: 2 acordos órfãos reais na BD). Ao contrário de
+    // acordo_cancelar (só para um acordo "limpo"), esta função fecha
+    // incondicionalmente — a fatura já foi anulada, não há nada a proteger.
+    // No-op silencioso se não houver acordo ativo para esta cobrança.
+    const { error: acordoErr } = await supabase.rpc('acordo_cancelar_por_fatura_anulada' as any, {
+      p_cobranca_id: id,
+    });
+    if (acordoErr) {
+      console.warn('Falha (não crítica) a cancelar o acordo de pagamento:', acordoErr);
+    }
   }
 }
 

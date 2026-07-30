@@ -1,8 +1,21 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Receipt, Lock, FileText, Download, Loader2, Send, RotateCcw, Mail } from 'lucide-react';
+import {
+  Receipt,
+  Lock,
+  FileText,
+  Download,
+  Loader2,
+  Send,
+  RotateCcw,
+  Mail,
+  CalendarClock,
+  Eye,
+  HandCoins,
+} from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -34,6 +48,7 @@ import { useContratoCondutores } from '@/hooks/useContratoCondutores';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useInvoicesByContrato, useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { baixarDocumentoPdf, clienteRowToFatura, anularCobrancasFaturacao } from '@/lib/faturacao';
+import { DocumentoPreviewDialog } from '@/components/faturacao/acordo/DocumentoPreviewDialog';
 import { estadoCobrancaDisplay } from '@/lib/estadoCobranca';
 import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
 import type { ContratoRenting } from '@/types/contratoRenting';
@@ -50,7 +65,16 @@ import {
 import { NovaFaturaDialog } from '@/components/faturacao/NovaFaturaDialog';
 import { EnviarDocumentoEmailDialog } from '@/components/faturacao/EnviarDocumentoEmailDialog';
 import { DocumentosEmitidosExtra } from '@/components/faturacao/DocumentosEmitidosExtra';
+import {
+  ParcelamentoDialog,
+  type ParcelamentoFaturaAlvo,
+} from '@/components/faturacao/ParcelamentoDialog';
+import { NotaCreditoDialog, type NotaCreditoCobranca } from './NotaCreditoDialog';
 import { useContactosDocumento } from '@/hooks/useContactosDocumento';
+import {
+  useAcordoAtivoPorCobranca,
+  useAcordosAtivosPorCobrancas,
+} from '@/hooks/useAcordosPagamento';
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -80,6 +104,20 @@ interface CobrancaRow {
   destinatario_nome: string;
 }
 
+interface NotaCreditoRow {
+  cobranca_id: string;
+  valor: number;
+  estado: string;
+  documento_externo_ref: string | null;
+}
+
+interface ReciboRow {
+  referencia: string | null;
+  valor: number;
+  estado: string;
+  documento_externo_ref: string | null;
+}
+
 interface Props {
   contrato: ContratoRenting;
 }
@@ -92,7 +130,25 @@ export function ContratoTabFaturar({ contrato }: Props) {
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
   const [anularOpen, setAnularOpen] = useState(false);
   const [anularBusy, setAnularBusy] = useState(false);
+  // Um contrato pode ter várias cobranças ativas (ciclos de faturação
+  // diferentes) — "Anular faturação" anulava todas de vez, sem escolha
+  // nenhuma (achado ao testar manualmente). Pré-selecionadas todas ao abrir,
+  // para o comportamento antigo continuar a ser o valor por omissão.
+  const [cobrancasSelecionadas, setCobrancasSelecionadas] = useState<Set<string>>(new Set());
+  // Proposta automática de NC logo a seguir a anular — só faz sentido para
+  // cobranças com documento fiscal certificado (emite_fatura_fiscal); uma
+  // cobrança interna não tem nada a creditar no software de faturação.
+  const [ncAutoAlvo, setNcAutoAlvo] = useState<NotaCreditoCobranca | null>(null);
+  // Pop-up de confirmação (não uma notificação — fácil de perder) mostrado
+  // logo a seguir a anular, quando há fatura(s) certificada(s) na seleção.
+  const [ncPromptAlvos, setNcPromptAlvos] = useState<CobrancaRow[] | null>(null);
   const [enviarInvoice, setEnviarInvoice] = useState<InvoiceMetadata | null>(null);
+  const [previewInvoiceId, setPreviewInvoiceId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  // Fecha a janela anterior se houver duplo-clique antes do preview anterior
+  // resolver — mesmo motivo do fix equivalente em AcordoDetalhePanel.tsx.
+  const [previewWindow, setPreviewWindow] = useState<Window | null>(null);
+  const [parcelamentoAlvo, setParcelamentoAlvo] = useState<ParcelamentoFaturaAlvo | null>(null);
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
@@ -113,20 +169,15 @@ export function ContratoTabFaturar({ contrato }: Props) {
     return null;
   }, [empresas]);
 
+  // Condutor principal — cliente (rent-a-car) OU motorista (TVDE), XOR.
   const principal = useMemo(
-    () => (condutores ?? []).find((c) => c.is_principal && c.cliente_id) ?? null,
-    [condutores]
-  );
-
-  // Condutor principal (cliente OU motorista) — para pré-preencher o envio por email.
-  const principalCond = useMemo(
     () => (condutores ?? []).find((c) => c.is_principal) ?? null,
     [condutores]
   );
   const { data: contactosEnvio = [] } = useContactosDocumento({
     clienteId: contrato.cliente_id,
-    condutor: principalCond
-      ? { cliente_id: principalCond.cliente_id, motorista_id: principalCond.motorista_id }
+    condutor: principal
+      ? { cliente_id: principal.cliente_id, motorista_id: principal.motorista_id }
       : null,
   });
 
@@ -134,6 +185,24 @@ export function ContratoTabFaturar({ contrato }: Props) {
     const ids = [contrato.cliente_id, principal?.cliente_id].filter(Boolean) as string[];
     return Array.from(new Set(ids));
   }, [contrato.cliente_id, principal]);
+
+  // Nome do motorista principal (se o condutor principal for TVDE) — para o
+  // botão "Motorista" em ContratoFaturarDialog/NovaFaturaDialog. Consulta à
+  // parte de clientesNomes porque motoristas_ativos é uma tabela diferente
+  // de clientes (mesmo motivo de useAcordoResponsaveisElegiveis).
+  const { data: motoristaPrincipalNome } = useQuery({
+    queryKey: ['faturar-motorista-nome', principal?.motorista_id ?? null],
+    queryFn: async () => {
+      if (!principal?.motorista_id) return null;
+      const { data } = await supabase
+        .from('motoristas_ativos')
+        .select('nome')
+        .eq('id', principal.motorista_id)
+        .maybeSingle();
+      return data?.nome ?? null;
+    },
+    enabled: !!principal?.motorista_id,
+  });
 
   const { data: clientesNomes } = useQuery({
     queryKey: ['faturar-clientes-nomes', idsClientes.slice().sort().join(',')],
@@ -162,48 +231,75 @@ export function ContratoTabFaturar({ contrato }: Props) {
     },
   });
 
-  // Total já creditado (NC ativas) por cobrança — para o saldo e o botão de NC.
-  const { data: ncPorCobranca, refetch: refetchNC } = useQuery({
+  // Busca-se TUDO (não só 'ativo') porque os anulados também são precisos —
+  // para tirar da lista "Notas de crédito e recibos" os documentos cujo
+  // registo interno já foi anulado (ver documentosAnuladosRefs abaixo). Os
+  // totais ativos continuam derivados só das linhas 'ativo', como antes.
+  const { data: notasCreditoRows, refetch: refetchNC } = useQuery({
     queryKey: ['contrato-notas-credito', contrato.id],
-    queryFn: async (): Promise<Record<string, number>> => {
+    queryFn: async (): Promise<NotaCreditoRow[]> => {
       const { data, error } = await supabase
         .from('notas_credito')
-        .select('cobranca_id, valor')
-        .eq('contrato_id', contrato.id)
-        .eq('estado', 'ativo');
+        .select('cobranca_id, valor, estado, documento_externo_ref')
+        .eq('contrato_id', contrato.id);
       if (error) {
         // a tabela pode ainda não estar na BD — não partir a aba
         console.warn('notas_credito indisponível:', error.message);
-        return {};
+        return [];
       }
-      const m: Record<string, number> = {};
-      (data ?? []).forEach((n: any) => {
-        m[n.cobranca_id] = (m[n.cobranca_id] ?? 0) + Number(n.valor || 0);
-      });
-      return m;
+      return (data ?? []) as unknown as NotaCreditoRow[];
+    },
+  });
+
+  // Total já creditado (NC ativas) por cobrança — para o saldo e o botão de NC.
+  const ncPorCobranca = useMemo(() => {
+    const m: Record<string, number> = {};
+    (notasCreditoRows ?? []).forEach((n) => {
+      if (n.estado === 'ativo') m[n.cobranca_id] = (m[n.cobranca_id] ?? 0) + Number(n.valor || 0);
+    });
+    return m;
+  }, [notasCreditoRows]);
+
+  const { data: recibosRows, refetch: refetchRecibos } = useQuery({
+    queryKey: ['contrato-recibos', contrato.id],
+    queryFn: async (): Promise<ReciboRow[]> => {
+      const { data, error } = await supabase
+        .from('recibos')
+        .select('referencia, valor, estado, documento_externo_ref')
+        .eq('contrato_id', contrato.id);
+      if (error) {
+        console.warn('recibos indisponível:', error.message);
+        return [];
+      }
+      return (data ?? []) as unknown as ReciboRow[];
     },
   });
 
   // Total já liquidado (recibos ativos) por cobrança — para o saldo a pagar.
-  const { data: recibosPorCobranca, refetch: refetchRecibos } = useQuery({
-    queryKey: ['contrato-recibos', contrato.id],
-    queryFn: async (): Promise<Record<string, number>> => {
-      const { data, error } = await supabase
-        .from('recibos')
-        .select('referencia, valor')
-        .eq('contrato_id', contrato.id)
-        .eq('estado', 'ativo');
-      if (error) {
-        console.warn('recibos indisponível:', error.message);
-        return {};
-      }
-      const m: Record<string, number> = {};
-      (data ?? []).forEach((r: any) => {
-        if (r.referencia) m[r.referencia] = (m[r.referencia] ?? 0) + Number(r.valor || 0);
-      });
-      return m;
-    },
-  });
+  const recibosPorCobranca = useMemo(() => {
+    const m: Record<string, number> = {};
+    (recibosRows ?? []).forEach((r) => {
+      if (r.estado === 'ativo' && r.referencia)
+        m[r.referencia] = (m[r.referencia] ?? 0) + Number(r.valor || 0);
+    });
+    return m;
+  }, [recibosRows]);
+
+  // Nºs de documento (RC/NC) cujo registo interno (recibo ou nota de crédito)
+  // já está anulado — usado para tirar esses documentos da lista "Notas de
+  // crédito e recibos" (achado ao testar manualmente: a `invoices` fiscal
+  // fica 'emitida' para sempre, mesmo depois de o recibo/NC ser anulado, por
+  // isso a lista continuava a mostrá-los como se nada tivesse acontecido).
+  const documentosAnuladosRefs = useMemo(() => {
+    const set = new Set<string>();
+    (recibosRows ?? []).forEach((r) => {
+      if (r.estado === 'anulado' && r.documento_externo_ref) set.add(r.documento_externo_ref);
+    });
+    (notasCreditoRows ?? []).forEach((n) => {
+      if (n.estado === 'anulado' && n.documento_externo_ref) set.add(n.documento_externo_ref);
+    });
+    return set;
+  }, [recibosRows, notasCreditoRows]);
 
   const { data: invoices = [], refetch: refetchInvoices } = useInvoicesByContrato(contrato.id);
   const emitirMut = useEmitirEEscreverFatura();
@@ -246,6 +342,19 @@ export function ContratoTabFaturar({ contrato }: Props) {
     contrato.estado_financeiro === 'pago' ||
     temCobrancasAtivas;
 
+  // Para avisar, linha a linha, na checklist de anulação: anular uma cobrança
+  // com um acordo de pagamento ativo também cancela esse acordo (ver
+  // anularCobrancasFaturacao) — o utilizador precisa de saber isto ANTES de
+  // confirmar, não descobrir depois de já ter acontecido.
+  const cobrancasAtivasIds = useMemo(
+    () =>
+      (cobrancas ?? [])
+        .filter((c) => c.estado === 'emitida' || c.estado === 'paga')
+        .map((c) => c.id),
+    [cobrancas]
+  );
+  const { data: acordosAtivosPorCobranca } = useAcordosAtivosPorCobrancas(cobrancasAtivasIds);
+
   /**
    * Anula a faturação do contrato → volta a "não faturado" (Pendente), re-faturável.
    * Desfaz tudo o que a faturação criou na conta-corrente: anula recibos e notas de
@@ -253,28 +362,81 @@ export function ContratoTabFaturar({ contrato }: Props) {
    * estornos cancelam-se entre si, deixando o saldo a zero. NÃO emite Nota de Crédito
    * nem cancela o documento fiscal no provider (isso, se necessário, é manual).
    */
+  // Faturas anuladas (internamente) que ainda têm documento fiscal certificado
+  // por creditar — via para chegar à Nota de Crédito mais tarde, se o pop-up
+  // logo a seguir a anular for dispensado. "Faturas do Contrato" não as lista
+  // (deixam de contar como ativas), por isso ficam aqui, à parte.
+  const cobrancasAnuladasPorCreditar = useMemo(
+    () =>
+      (cobrancas ?? []).filter(
+        (c) =>
+          c.estado === 'anulada' &&
+          c.emite_fatura_fiscal &&
+          round2((c.valor_total ?? 0) - (ncPorCobranca[c.id] ?? 0)) > 0.005
+      ),
+    [cobrancas, ncPorCobranca]
+  );
+
+  function cobrancaParaNC(c: CobrancaRow): NotaCreditoCobranca {
+    return {
+      id: c.id,
+      descricao: c.descricao,
+      valor_total: c.valor_total,
+      taxa_iva: c.taxa_iva,
+      destinatario_id: c.destinatario_id,
+      destinatario_nome: c.destinatario_nome,
+      contrato_id: contrato.id,
+      documento_externo_ref: c.documento_externo_ref,
+    };
+  }
+
   async function anularFaturacao() {
     setAnularBusy(true);
     try {
       const ativasIds = (cobrancas ?? [])
         .filter((c) => c.estado === 'emitida' || c.estado === 'paga')
         .map((c) => c.id);
-      await anularCobrancasFaturacao(ativasIds);
+      const idsParaAnular = ativasIds.filter((id) => cobrancasSelecionadas.has(id));
+      if (!idsParaAnular.length) {
+        toast.error('Seleciona pelo menos uma fatura para anular.');
+        return;
+      }
+      await anularCobrancasFaturacao(idsParaAnular);
 
-      // Contrato volta a "não faturado" (limpa o snapshot de totais congelado).
-      const { error: upErr } = await supabase
-        .from('contratos_renting')
-        .update({
-          estado_financeiro: 'pendente',
-          facturado_em: null,
-          total_subtotal: null,
-          total_iva: null,
-          total_final: null,
-        })
-        .eq('id', contrato.id);
-      if (upErr) throw upErr;
+      // Só repõe o contrato a "não faturado" (limpa o snapshot de totais
+      // congelado) se NÃO sobrar nenhuma cobrança ativa — anular só ALGUMAS
+      // (ex.: um ciclo de faturação a mais, mantendo os restantes) não pode
+      // apagar o estado financeiro de cobranças que continuam válidas.
+      const sobraAlgumaAtiva = ativasIds.some((id) => !idsParaAnular.includes(id));
+      if (!sobraAlgumaAtiva) {
+        const { error: upErr } = await supabase
+          .from('contratos_renting')
+          .update({
+            estado_financeiro: 'pendente',
+            facturado_em: null,
+            total_subtotal: null,
+            total_iva: null,
+            total_final: null,
+          })
+          .eq('id', contrato.id);
+        if (upErr) throw upErr;
+      }
 
-      toast.success('Faturação anulada — o contrato voltou a "não faturado".');
+      // Cobranças anuladas que tinham documento fiscal certificado — a
+      // reversão fiscal (NC) tem de ser feita à parte (achado ao testar
+      // manualmente: anular aqui nunca cancela o documento no KeyInvoice) e
+      // é fácil esquecer. Pergunta-se logo a seguir num pop-up (não uma
+      // notificação, fácil de perder/ignorar); se for dispensado, ficam
+      // listadas em "Faturas anuladas por creditar" para tratar mais tarde.
+      const fiscaisAnuladas = (cobrancas ?? []).filter(
+        (c) => idsParaAnular.includes(c.id) && c.emite_fatura_fiscal
+      );
+      toast.success(
+        idsParaAnular.length === ativasIds.length
+          ? 'Faturação anulada — o contrato voltou a "não faturado".'
+          : `${idsParaAnular.length} fatura(s) anulada(s).`
+      );
+      if (fiscaisAnuladas.length > 0) setNcPromptAlvos(fiscaisAnuladas);
       setAnularOpen(false);
       qc.invalidateQueries({ queryKey: ['renting'] });
       qc.invalidateQueries({ queryKey: ['contrato-historico', contrato.id] });
@@ -467,6 +629,17 @@ export function ContratoTabFaturar({ contrato }: Props) {
       }
     : null;
 
+  // Motorista principal (TVDE) — dívida cedida na emissão (ver
+  // 20260730170000_cobranca_cessao_motorista_na_emissao.sql). NUNCA é o
+  // destinatário fiscal (esse fica sempre em clienteEntidade): é só quem
+  // fica a dever internamente, em cima da mesma fatura emitida ao titular.
+  const motoristaEntidade: EntidadeOption | null = principal?.motorista_id
+    ? {
+        id: principal.motorista_id,
+        nome: motoristaPrincipalNome || 'Motorista principal',
+      }
+    : null;
+
   const jaFacturado = contrato.estado_financeiro !== 'pendente';
 
   // Cobranças com saldos pré-computados — alvo de recibo / nota de crédito na toolbar.
@@ -565,7 +738,16 @@ export function ContratoTabFaturar({ contrato }: Props) {
                   variant="outline"
                   size="sm"
                   className="mt-2 h-7 gap-1.5 text-rose-600 hover:text-rose-700 dark:text-rose-400"
-                  onClick={() => setAnularOpen(true)}
+                  onClick={() => {
+                    setCobrancasSelecionadas(
+                      new Set(
+                        (cobrancas ?? [])
+                          .filter((c) => c.estado === 'emitida' || c.estado === 'paga')
+                          .map((c) => c.id)
+                      )
+                    );
+                    setAnularOpen(true);
+                  }}
                   disabled={anularBusy}
                 >
                   {anularBusy ? (
@@ -660,6 +842,10 @@ export function ContratoTabFaturar({ contrato }: Props) {
                 return visiveis.map((c) => {
                   const creditado = round2(ncPorCobranca?.[c.id] ?? 0);
                   const saldo = round2((c.valor_total ?? 0) - creditado);
+                  // Saldo por liquidar (p/ gate + seed do ParcelamentoDialog) — MESMA fórmula
+                  // que toolbarCobrancas usa para `saldoPagar`: total − recibos ativos − NC ativas.
+                  const pago = round2(recibosPorCobranca?.[c.id] ?? 0);
+                  const saldoPagar = round2((c.valor_total ?? 0) - pago - creditado);
                   const inv = invoiceByCobranca.get(c.id);
                   const porEmitir =
                     !c.documento_externo_ref &&
@@ -674,6 +860,27 @@ export function ContratoTabFaturar({ contrato }: Props) {
                             <span>{c.documento_externo_ref}</span>
                             {inv && (
                               <>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0"
+                                  title="Ver documento"
+                                  onClick={() => {
+                                    // Janela aberta SINCRONAMENTE dentro do clique — ver
+                                    // comentário em DocumentoPreviewDialog.tsx sobre o
+                                    // popup-blocker do Safari.
+                                    const win = window.open('', '_blank');
+                                    setPreviewWindow((prev) => {
+                                      prev?.close();
+                                      return win;
+                                    });
+                                    setPreviewInvoiceId(inv.id);
+                                    setPreviewOpen(true);
+                                  }}
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
                                 <Button
                                   type="button"
                                   variant="ghost"
@@ -699,6 +906,13 @@ export function ContratoTabFaturar({ contrato }: Props) {
                                 >
                                   <Mail className="h-3.5 w-3.5" />
                                 </Button>
+                                <AcaoParcelar
+                                  cobranca={c}
+                                  contratoId={contrato.id}
+                                  invoice={inv}
+                                  saldoPagar={saldoPagar}
+                                  onAbrir={setParcelamentoAlvo}
+                                />
                               </>
                             )}
                           </div>
@@ -780,7 +994,65 @@ export function ContratoTabFaturar({ contrato }: Props) {
         </div>
       </div>
 
-      <DocumentosEmitidosExtra invoices={invoicesExtra} onEnviar={setEnviarInvoice} />
+      {cobrancasAnuladasPorCreditar.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+            Faturas anuladas por creditar
+          </p>
+          <div className="rounded-md border divide-y">
+            {cobrancasAnuladasPorCreditar.map((c) => (
+              <div key={c.id} className="flex items-center gap-2.5 px-3 py-2 text-sm">
+                <span className="font-mono text-xs">
+                  {c.documento_externo_ref || c.id.slice(0, 8).toUpperCase()}
+                </span>
+                <span className="text-muted-foreground truncate flex-1" title={c.destinatario_nome}>
+                  {c.destinatario_nome}
+                </span>
+                <span className="font-medium whitespace-nowrap">
+                  {formatCurrency(c.valor_total)}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs text-fuchsia-700 dark:text-fuchsia-300"
+                  onClick={() => setNcAutoAlvo(cobrancaParaNC(c))}
+                >
+                  Emitir Nota de Crédito
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <DocumentosEmitidosExtra
+        invoices={invoicesExtra.filter(
+          (inv) => !inv.numero || !documentosAnuladosRefs.has(inv.numero)
+        )}
+        onEnviar={setEnviarInvoice}
+        onVer={(inv, win) => {
+          setPreviewWindow((prev) => {
+            prev?.close();
+            return win;
+          });
+          setPreviewInvoiceId(inv.id);
+          setPreviewOpen(true);
+        }}
+      />
+
+      <DocumentoPreviewDialog
+        open={previewOpen}
+        onOpenChange={(o) => {
+          setPreviewOpen(o);
+          if (!o) {
+            setPreviewInvoiceId(null);
+            setPreviewWindow(null);
+          }
+        }}
+        invoiceId={previewInvoiceId}
+        previewWindow={previewWindow}
+      />
 
       <ContratoFaturarDialog
         open={dialogOpen}
@@ -789,6 +1061,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
         fatura={fatura}
         clienteEntidade={clienteEntidade}
         condutorEntidade={condutorEntidade}
+        motoristaEntidade={motoristaEntidade}
         emitente={emitente}
         onFaturado={refetchAll}
       />
@@ -803,6 +1076,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
           codigoLabel: `Contrato #${String(contrato.codigo).padStart(4, '0')}`,
         }}
         destinatario={clienteEntidade}
+        motoristaEntidade={motoristaEntidade}
         emitente={emitente}
         onCriada={refetchAll}
       />
@@ -817,6 +1091,63 @@ export function ContratoTabFaturar({ contrato }: Props) {
         entidades={contactosEnvio}
       />
 
+      <ParcelamentoDialog
+        open={!!parcelamentoAlvo}
+        onOpenChange={(o) => {
+          if (!o) setParcelamentoAlvo(null);
+        }}
+        alvo={parcelamentoAlvo}
+        onCriado={refetchAll}
+      />
+
+      <NotaCreditoDialog
+        open={!!ncAutoAlvo}
+        onOpenChange={(o) => {
+          if (!o) setNcAutoAlvo(null);
+        }}
+        cobranca={ncAutoAlvo}
+        orgId={contrato.org_id}
+        emitente={emitente}
+        jaCreditado={ncAutoAlvo ? (ncPorCobranca[ncAutoAlvo.id] ?? 0) : 0}
+        defaultMotivo={
+          ncAutoAlvo
+            ? `Anulação da fatura ${ncAutoAlvo.documento_externo_ref ?? ''}`.trim()
+            : undefined
+        }
+        onEmitida={refetchAll}
+      />
+
+      <AlertDialog
+        open={!!ncPromptAlvos}
+        onOpenChange={(o) => {
+          if (!o) setNcPromptAlvos(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Emitir Nota de Crédito?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {ncPromptAlvos?.length === 1
+                ? `A fatura ${ncPromptAlvos[0].documento_externo_ref ?? ''} tinha documento fiscal certificado — anular aqui não o cancela no KeyInvoice. Emitir a Nota de Crédito agora?`
+                : `${ncPromptAlvos?.length ?? 0} das faturas anuladas tinham documento fiscal certificado. Isto abre a Nota de Crédito da primeira (${ncPromptAlvos?.[0]?.documento_externo_ref ?? ''}) — as restantes ficam em "Faturas anuladas por creditar", abaixo.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setNcPromptAlvos(null)}>Agora não</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                const c = ncPromptAlvos?.[0];
+                setNcPromptAlvos(null);
+                if (c) setNcAutoAlvo(cobrancaParaNC(c));
+              }}
+            >
+              Emitir Nota de Crédito
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog
         open={anularOpen}
         onOpenChange={(o) => {
@@ -827,13 +1158,59 @@ export function ContratoTabFaturar({ contrato }: Props) {
           <AlertDialogHeader>
             <AlertDialogTitle>Anular a faturação deste contrato?</AlertDialogTitle>
             <AlertDialogDescription>
-              O contrato volta a <b>"não faturado"</b> e fica re-faturável. Os lançamentos na
-              conta-corrente (cobrança, recibos e notas de crédito) são estornados — o saldo fica a
-              zero. Esta ação <b>não</b> emite Nota de Crédito nem cancela o documento fiscal no
-              software de faturação; se já tiver sido emitido um documento certificado, faça a
-              reversão fiscal (NC) separadamente.
+              Escolhe abaixo quais faturas anular — um contrato pode ter várias cobranças ativas
+              (ciclos de faturação diferentes). Os lançamentos na conta-corrente das selecionadas
+              (cobrança, recibos e notas de crédito) são estornados — o saldo fica a zero. Se
+              anulares todas, o contrato volta a <b>"não faturado"</b> e fica re-faturável. Esta
+              ação <b>não</b> emite Nota de Crédito nem cancela o documento fiscal no software de
+              faturação; se já tiver sido emitido um documento certificado, faça a reversão fiscal
+              (NC) separadamente.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-1.5 max-h-64 overflow-y-auto rounded-md border p-2">
+            {(cobrancas ?? [])
+              .filter((c) => c.estado === 'emitida' || c.estado === 'paga')
+              .map((c) => {
+                const checked = cobrancasSelecionadas.has(c.id);
+                const acordoAtivo = acordosAtivosPorCobranca?.get(c.id);
+                return (
+                  <div key={c.id} className="rounded px-1.5 py-1 hover:bg-muted/50">
+                    <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={checked}
+                        disabled={anularBusy}
+                        onCheckedChange={(v) => {
+                          setCobrancasSelecionadas((prev) => {
+                            const next = new Set(prev);
+                            if (v) next.add(c.id);
+                            else next.delete(c.id);
+                            return next;
+                          });
+                        }}
+                      />
+                      <span className="font-mono text-xs">
+                        {c.documento_externo_ref || c.id.slice(0, 8).toUpperCase()}
+                      </span>
+                      <span
+                        className="text-muted-foreground truncate flex-1"
+                        title={c.destinatario_nome}
+                      >
+                        {c.destinatario_nome}
+                      </span>
+                      <span className="font-medium whitespace-nowrap">
+                        {formatCurrency(c.valor_total)}
+                      </span>
+                    </label>
+                    {acordoAtivo && (
+                      <p className="pl-7 text-[11px] text-amber-700 dark:text-amber-400">
+                        ⚠ Tem um acordo de pagamento ativo (ACD-{acordoAtivo.codigo}) — também será
+                        cancelado.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={anularBusy}>Voltar</AlertDialogCancel>
             <AlertDialogAction
@@ -841,14 +1218,88 @@ export function ContratoTabFaturar({ contrato }: Props) {
                 e.preventDefault();
                 anularFaturacao();
               }}
-              disabled={anularBusy}
+              disabled={anularBusy || cobrancasSelecionadas.size === 0}
               className="bg-rose-600 hover:bg-rose-700"
             >
-              {anularBusy ? 'A anular…' : 'Anular faturação'}
+              {anularBusy
+                ? 'A anular…'
+                : `Anular ${cobrancasSelecionadas.size || ''} fatura${cobrancasSelecionadas.size === 1 ? '' : 's'}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+/**
+ * Ícone "Parcelar fatura" — célula própria porque `useAcordoAtivoPorCobranca` é um
+ * hook e não pode ser chamado condicionalmente dentro do `.map()` da tabela.
+ */
+function AcaoParcelar({
+  cobranca,
+  contratoId,
+  invoice,
+  saldoPagar,
+  onAbrir,
+}: {
+  cobranca: CobrancaRow;
+  contratoId: string;
+  invoice: InvoiceMetadata;
+  /**
+   * valor_total − recibos ativos − NC ativas, calculado pelo chamador com a mesma
+   * fórmula de `toolbarCobrancas` — nunca recalcular aqui a partir só de
+   * `cobranca.valor_total`, que ignoraria recibos já emitidos.
+   */
+  saldoPagar: number;
+  onAbrir: (alvo: ParcelamentoFaturaAlvo) => void;
+}) {
+  const { data: acordoAtivo } = useAcordoAtivoPorCobranca(cobranca.id);
+  const navigate = useNavigate();
+  if (invoice.tipo !== 'FT') return null;
+
+  // Já parcelada: em vez de desaparecer sem mais nada (como fazia antes — o
+  // utilizador não tinha como voltar à central das parcelas a partir daqui),
+  // mostra um ícone que navega para o acordo já existente.
+  if (acordoAtivo) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 shrink-0"
+        title={`Ver acordo de pagamento (ACD-${acordoAtivo.codigo})`}
+        onClick={() => navigate(`/acordos/${acordoAtivo.id}`)}
+      >
+        <HandCoins className="h-3.5 w-3.5" />
+      </Button>
+    );
+  }
+
+  if (saldoPagar <= 0.005) return null;
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="h-6 w-6 shrink-0"
+      title="Parcelar fatura"
+      onClick={() =>
+        onAbrir({
+          cobrancaId: cobranca.id,
+          contratoId,
+          numeroDocumento: cobranca.documento_externo_ref || invoice.numero || '',
+          dataDocumento: invoice.data_emissao || '',
+          valorTotal: cobranca.valor_total ?? 0,
+          saldoPagar,
+          titularId: cobranca.destinatario_id,
+          titularNome: cobranca.destinatario_nome,
+          titularNif: invoice.cliente_nif,
+        })
+      }
+    >
+      <CalendarClock className="h-3.5 w-3.5" />
+    </Button>
   );
 }

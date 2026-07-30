@@ -1,0 +1,35 @@
+-- supabase/migrations/20260729170000_cobrancas_geradores_revoke_anon.sql
+-- ============================================================
+-- Hardening: REVOKE explícito de anon/authenticated nos geradores de cobranças
+-- ============================================================
+-- Mesma classe de falha encontrada e corrigida em 20260728150000 para as RPCs
+-- de acordos: `GRANT EXECUTE ... TO service_role` sozinho NÃO retira o EXECUTE
+-- que o Postgres concede a PUBLIC por omissão na criação da função — e nem
+-- gerar_cobrancas_slot_mensais() nem gerar_cobrancas_tvde_semanais(integer)
+-- alguma vez fizeram REVOKE ALL FROM PUBLIC. Confirmado por consulta directa
+-- (has_function_privilege) em 2026-07-29: anon_exec=true e
+-- authenticated_exec=true nas duas, apesar do comentário "EXECUTE só
+-- service_role" no ficheiro de origem (20260626000004).
+--
+-- Impacto: as duas são SECURITY DEFINER, varrem TODAS as organizações sem
+-- nenhuma guarda interna (nem filtro de org, nem verificação de sessão) — um
+-- chamador anónimo com a anon key pública conseguia disparar directamente via
+-- /rest/v1/rpc/... a geração em massa de cobranças de slot ou TVDE de
+-- qualquer organização, sem sessão nenhuma. Nenhuma das duas é chamada pelo
+-- frontend (confirmado por grep a src/ — só aparecem no types.ts gerado);
+-- são estritamente cron → service_role.
+--
+-- CORRECÇÃO (mesma sessão): a 1ª tentativa (REVOKE ... FROM anon,
+-- authenticated) não teve qualquer efeito — confirmado por pg_proc.proacl,
+-- estas 2 funções nunca tiveram grant directo a anon/authenticated; o acesso
+-- vem de um grant a PUBLIC (entrada "=X/postgres" na ACL, sem role antes do
+-- "=") deixado pela migração original (20260626000004 / 20260520000005), que
+-- nunca fez REVOKE FROM PUBLIC. Ao contrário das RPCs de acordos (essas sim
+-- tinham grant directo a anon), aqui é preciso revogar de PUBLIC.
+--
+-- Verificado por consulta directa (has_function_privilege + pg_proc.proacl)
+-- depois de aplicar: ambas ficam anon=false, authenticated=false,
+-- service_role=true, sem entrada PUBLIC na ACL.
+
+REVOKE EXECUTE ON FUNCTION public.gerar_cobrancas_slot_mensais() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.gerar_cobrancas_tvde_semanais(integer) FROM PUBLIC, anon, authenticated;

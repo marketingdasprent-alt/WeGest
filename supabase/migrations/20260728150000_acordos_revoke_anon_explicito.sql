@@ -17,6 +17,11 @@
 -- interna (COALESCE(...has_renting_faturacao_access()...)) que rejeita um
 -- chamador sem sessão — endurecidas aqui na mesma por defesa em profundidade,
 -- não porque estivessem exploráveis na prática.
+--
+-- Verificado por consulta directa (has_function_privilege) depois de aplicar:
+-- acordos_manutencao_diaria e faturacao_outbox_claim ficam anon=false,
+-- authenticated=false, service_role=true; as restantes ficam anon=false,
+-- authenticated=true, service_role=true (sem alteração ao que já usavam).
 
 REVOKE EXECUTE ON FUNCTION public.acordos_manutencao_diaria(date) FROM anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.faturacao_outbox_claim(integer) FROM anon, authenticated;

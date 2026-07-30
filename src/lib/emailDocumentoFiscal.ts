@@ -33,7 +33,19 @@ export async function enviarDocumentoFiscalEmail({
     { body: { to, toNome, subject, mensagem, pdfBase64, filename, org_id: invoice.org_id } }
   );
 
-  if (error) throw new Error(error.message || 'Falha ao contactar o serviço de email');
+  if (error) {
+    // FunctionsHttpError não expõe o corpo JSON em error.message (fica só a
+    // string genérica "Edge Function returned a non-2xx status code") — a
+    // razão real vem em error.context (a Response).
+    let mensagem = error.message || 'Falha ao contactar o serviço de email';
+    try {
+      const body = await error.context?.json?.();
+      mensagem = body?.error || mensagem;
+    } catch {
+      // corpo não é JSON válido — mantém a mensagem genérica
+    }
+    throw new Error(mensagem);
+  }
   if (data && data.success === false) throw new Error(data.error || 'Falha ao enviar o documento');
 
   await supabase

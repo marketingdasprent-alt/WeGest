@@ -407,6 +407,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
         filename={filenameParaEnviar}
         contextoLabel={`Contrato #${contrato.codigo ?? ''}`}
         entidades={contactosEnvio}
+        orgId={contrato.org_id}
       />
     </Dialog>
   );

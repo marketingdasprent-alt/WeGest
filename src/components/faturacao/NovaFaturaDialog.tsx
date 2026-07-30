@@ -42,6 +42,10 @@ import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
 import { openFaturacaoDocumento, type FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
 import { baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
+import {
+  ParcelamentoDialog,
+  type ParcelamentoFaturaAlvo,
+} from '@/components/faturacao/ParcelamentoDialog';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
@@ -100,6 +104,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   alvo: NovaFaturaAlvo;
   destinatario: NovaFaturaDestinatario;
+  /** Motorista TVDE principal do contrato — dívida cedida na emissão, nunca destinatário fiscal. */
+  motoristaEntidade?: NovaFaturaDestinatario | null;
   emitente?: FaturacaoDocEmitente | null;
   onCriada: () => void;
 }
@@ -120,6 +126,7 @@ export function NovaFaturaDialog({
   onOpenChange,
   alvo,
   destinatario,
+  motoristaEntidade,
   emitente,
   onCriada,
 }: Props) {
@@ -128,11 +135,17 @@ export function NovaFaturaDialog({
   const { data: orgDef } = useOrgDefinicoes();
   const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
   const [tipoDoc, setTipoDoc] = useState<'fatura' | 'fatura_recibo'>('fatura');
+  // Cessão da dívida ao motorista — a fatura fica sempre em nome de
+  // `destinatario` (exigência legal); isto só decide quem fica a dever.
+  const [entidade, setEntidade] = useState<'cliente' | 'motorista'>('cliente');
   const [metodo, setMetodo] = useState<string>('transferencia');
   const [dataDoc, setDataDoc] = useState<string>(hoje());
   const [dataVenc, setDataVenc] = useState<string>(maisDias(30));
   const [linhas, setLinhas] = useState<LinhaArtigo[]>([novaLinha()]);
   const [submitting, setSubmitting] = useState(false);
+  // Alvo do "Parcelar" oferecido no toast de sucesso — só para faturas de
+  // contrato (ParcelamentoFaturaAlvo não suporta reservas, fora de âmbito).
+  const [parcelamentoAlvo, setParcelamentoAlvo] = useState<ParcelamentoFaturaAlvo | null>(null);
 
   function patchLinha(key: string, patch: Partial<LinhaArtigo>) {
     setLinhas((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -260,6 +273,7 @@ export function NovaFaturaDialog({
     setMetodo('transferencia');
     setDataDoc(hoje());
     setDataVenc(maisDias(30));
+    setEntidade('cliente');
   }
 
   async function handleCriar() {
@@ -302,6 +316,25 @@ export function NovaFaturaDialog({
         .single();
       if (cobErr) throw cobErr;
       const cobrancaId: string = cobInserida.id;
+
+      // Cedência ao motorista — só faz sentido numa Factura normal (uma
+      // Factura-Recibo já nasce liquidada, sem dívida nenhuma para ceder;
+      // mesmo motivo por que acordo_criar recusa parcelar uma FR). A fatura
+      // continua emitida em nome de `destinatario`; isto é só o lançamento
+      // interno (ver 20260730170000_cobranca_cessao_motorista_na_emissao.sql).
+      // Best-effort: um erro aqui não deve impedir o resto do fluxo.
+      if (entidade === 'motorista' && motoristaEntidade && tipoDoc === 'fatura') {
+        const { error: cessaoErr } = await supabase.rpc('cobranca_ceder_a_motorista' as any, {
+          p_cobranca_id: cobrancaId,
+          p_motorista_id: motoristaEntidade.id,
+        });
+        if (cessaoErr) {
+          console.error('Falha a ceder a dívida ao motorista:', cessaoErr);
+          toast.warning(
+            `Fatura registada, mas não foi possível ceder a dívida ao motorista: ${cessaoErr.message}`
+          );
+        }
+      }
 
       // Factura-Recibo → regista o recibo (liquidação imediata).
       if (tipoDoc === 'fatura_recibo' && calc.totalComIva > 0) {
@@ -348,7 +381,34 @@ export function NovaFaturaDialog({
           }
         }
         toast.success(
-          `Documento fiscal emitido no ${providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
+          `Documento fiscal emitido no ${providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`,
+          // "Parcelar" só faz sentido para faturas de contrato (ParcelamentoFaturaAlvo
+          // não cobre reservas, fora de âmbito) E quando ainda há saldo por liquidar.
+          // Uma Factura-Recibo já foi liquidada de imediato acima (insert em `recibos`,
+          // Fase 1) — saldoPagar seria 0 e gerarPlanoParcelas rejeitaria com "o valor a
+          // parcelar tem de ser positivo" (mesmo invariante que abrirParcelarParaRow em
+          // FaturacaoTab.tsx já impõe: nunca oferecer parcelamento sobre saldo liquidado).
+          alvo.tipo === 'contrato' && tipoDoc === 'fatura'
+            ? {
+                action: {
+                  label: 'Parcelar',
+                  onClick: () =>
+                    setParcelamentoAlvo({
+                      cobrancaId,
+                      contratoId: alvo.id,
+                      numeroDocumento: res.fullDocNumber ?? '',
+                      dataDocumento: dataDoc,
+                      valorTotal: calc.totalComIva,
+                      // Fatura acabada de criar (não Factura-Recibo, excluída acima):
+                      // nada foi liquidado ainda — o saldo por parcelar é o total.
+                      saldoPagar: calc.totalComIva,
+                      titularId: destinatario.id,
+                      titularNome: destinatario.nome,
+                      titularNif: cliente.nif ?? null,
+                    }),
+                },
+              }
+            : undefined
         );
         if (res.warning) toast.warning(res.warning);
       } catch (kiErr: any) {
@@ -371,252 +431,312 @@ export function NovaFaturaDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!submitting) onOpenChange(o);
-      }}
-    >
-      <DialogContent className="max-w-5xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-4 pb-4 border-b bg-card shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5 text-primary" />
-            Nova fatura — {alvo.codigoLabel}
-          </DialogTitle>
-          <DialogDescription>
-            Fatura adicional para {destinatario.nome}. Os valores são indicados{' '}
-            <strong>sem IVA</strong>; o IVA ({IVA_PADRAO}%) é somado no resumo.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(o) => {
+          if (!submitting) onOpenChange(o);
+        }}
+      >
+        <DialogContent className="max-w-5xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-4 pb-4 border-b bg-card shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-primary" />
+              Nova fatura — {alvo.codigoLabel}
+            </DialogTitle>
+            <DialogDescription>
+              Fatura adicional para {destinatario.nome}. Os valores são indicados{' '}
+              <strong>sem IVA</strong>; o IVA ({IVA_PADRAO}%) é somado no resumo.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {/* Tipo + Método + Datas */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tipo de documento</Label>
-              <div className="flex gap-2">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            {/* Tipo + Método + Datas */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Tipo de documento</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={tipoDoc === 'fatura' ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setTipoDoc('fatura')}
+                  >
+                    Factura
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={tipoDoc === 'fatura_recibo' ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setTipoDoc('fatura_recibo')}
+                  >
+                    Factura-Recibo
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Método</Label>
+                  <Select value={metodo} onValueChange={setMetodo}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {METODO_OPTIONS.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Data doc.</Label>
+                  <Input
+                    type="date"
+                    value={dataDoc}
+                    onChange={(e) => setDataDoc(e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Vencimento</Label>
+                  <Input
+                    type="date"
+                    value={dataVenc}
+                    onChange={(e) => setDataVenc(e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {motoristaEntidade && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Quem fica a dever</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={entidade === 'cliente' ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setEntidade('cliente')}
+                  >
+                    {destinatario.nome}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={entidade === 'motorista' ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    disabled={tipoDoc === 'fatura_recibo'}
+                    title={
+                      tipoDoc === 'fatura_recibo'
+                        ? 'Uma Factura-Recibo já nasce liquidada — não há dívida para ceder.'
+                        : undefined
+                    }
+                    onClick={() => setEntidade('motorista')}
+                  >
+                    Motorista — {motoristaEntidade.nome}
+                  </Button>
+                </div>
+                {entidade === 'motorista' && tipoDoc === 'fatura' && (
+                  <p className="text-[11px] text-muted-foreground rounded-md border p-2 mt-1.5">
+                    ⓘ A fatura é emitida em nome de {destinatario.nome}. A dívida passa para a
+                    conta-corrente de {motoristaEntidade.nome} — exigência legal: a fatura fiscal
+                    fica sempre em nome do cliente.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Artigos */}
+            <div className="rounded-md border">
+              <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Artigos · preços sem IVA
+                </span>
                 <Button
                   type="button"
-                  variant={tipoDoc === 'fatura' ? 'default' : 'outline'}
+                  variant="ghost"
                   size="sm"
-                  className="flex-1"
-                  onClick={() => setTipoDoc('fatura')}
+                  className="h-7 gap-1"
+                  onClick={addLinha}
                 >
-                  Factura
-                </Button>
-                <Button
-                  type="button"
-                  variant={tipoDoc === 'fatura_recibo' ? 'default' : 'outline'}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setTipoDoc('fatura_recibo')}
-                >
-                  Factura-Recibo
+                  <Plus className="h-3.5 w-3.5" />
+                  Inserir linha
                 </Button>
               </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Método</Label>
-                <Select value={metodo} onValueChange={setMetodo}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {METODO_OPTIONS.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+              {/* Cabeçalho (desktop) */}
+              <div className="hidden sm:grid grid-cols-[170px_1fr_120px_70px_70px_110px_36px] gap-2 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground border-b">
+                <span>Tipo</span>
+                <span>Descrição</span>
+                <span className="text-right">Valor (s/ IVA)</span>
+                <span className="text-right">Unid.</span>
+                <span className="text-center">Isento</span>
+                <span className="text-right">Total linha</span>
+                <span />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Data doc.</Label>
-                <Input
-                  type="date"
-                  value={dataDoc}
-                  onChange={(e) => setDataDoc(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Vencimento</Label>
-                <Input
-                  type="date"
-                  value={dataVenc}
-                  onChange={(e) => setDataVenc(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* Artigos */}
-          <div className="rounded-md border">
-            <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Artigos · preços sem IVA
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-1"
-                onClick={addLinha}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Inserir linha
-              </Button>
-            </div>
+              <div className="divide-y">
+                {linhas.map((l) => {
+                  const valorUnit = round2(num(l.valor));
+                  const unidades = Math.max(1, Math.floor(Number(l.unidades) || 1));
+                  const linhaSemIva = round2(valorUnit * unidades);
+                  const linhaTotal = l.isentoIva
+                    ? linhaSemIva
+                    : round2(linhaSemIva * (1 + IVA_PADRAO / 100));
+                  const faltaMotivo = linhaSemIva > 0 && l.isentoIva && !l.justificacao.trim();
 
-            {/* Cabeçalho (desktop) */}
-            <div className="hidden sm:grid grid-cols-[170px_1fr_120px_70px_70px_110px_36px] gap-2 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground border-b">
-              <span>Tipo</span>
-              <span>Descrição</span>
-              <span className="text-right">Valor (s/ IVA)</span>
-              <span className="text-right">Unid.</span>
-              <span className="text-center">Isento</span>
-              <span className="text-right">Total linha</span>
-              <span />
-            </div>
-
-            <div className="divide-y">
-              {linhas.map((l) => {
-                const valorUnit = round2(num(l.valor));
-                const unidades = Math.max(1, Math.floor(Number(l.unidades) || 1));
-                const linhaSemIva = round2(valorUnit * unidades);
-                const linhaTotal = l.isentoIva
-                  ? linhaSemIva
-                  : round2(linhaSemIva * (1 + IVA_PADRAO / 100));
-                const faltaMotivo = linhaSemIva > 0 && l.isentoIva && !l.justificacao.trim();
-
-                return (
-                  <div key={l.key} className="px-3 py-2 space-y-2">
-                    <div className="grid grid-cols-2 sm:grid-cols-[170px_1fr_120px_70px_70px_110px_36px] gap-2 items-center">
-                      <Select value={l.tipo} onValueChange={(v) => patchLinha(l.key, { tipo: v })}>
-                        <SelectTrigger className="h-9">
-                          <SelectValue placeholder="Tipo…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {FATURA_ARTIGO_TIPOS.map((t) => (
-                            <SelectItem key={t} value={t}>
-                              {t}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        value={l.descricao}
-                        onChange={(e) => patchLinha(l.key, { descricao: e.target.value })}
-                        placeholder="Descrição"
-                        className="h-9 col-span-2 sm:col-span-1"
-                      />
-                      <Input
-                        inputMode="decimal"
-                        value={l.valor}
-                        onChange={(e) => patchLinha(l.key, { valor: e.target.value })}
-                        placeholder="0,00"
-                        className="h-9 text-right"
-                      />
-                      <Input
-                        inputMode="numeric"
-                        value={l.unidades}
-                        onChange={(e) => patchLinha(l.key, { unidades: e.target.value })}
-                        className="h-9 text-right"
-                      />
-                      <div className="flex justify-center">
-                        <Checkbox
-                          checked={l.isentoIva}
-                          onCheckedChange={(c) =>
-                            patchLinha(l.key, {
-                              isentoIva: c === true,
-                              // Ao desmarcar, limpa o motivo — deixa de fazer sentido.
-                              ...(c === true ? {} : { justificacao: '' }),
-                            })
-                          }
-                        />
-                      </div>
-                      <span className="text-sm text-right tabular-nums text-muted-foreground">
-                        {linhaSemIva > 0 ? formatCurrency(linhaTotal) : '—'}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-rose-600"
-                        onClick={() => removeLinha(l.key)}
-                        disabled={linhas.length <= 1}
-                        title="Eliminar linha"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    {/* Justificação da isenção — obrigatória quando a linha é isenta */}
-                    {l.isentoIva && (
-                      <div className="sm:pl-[178px]">
+                  return (
+                    <div key={l.key} className="px-3 py-2 space-y-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-[170px_1fr_120px_70px_70px_110px_36px] gap-2 items-center">
+                        <Select
+                          value={l.tipo}
+                          onValueChange={(v) => patchLinha(l.key, { tipo: v })}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Tipo…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {FATURA_ARTIGO_TIPOS.map((t) => (
+                              <SelectItem key={t} value={t}>
+                                {t}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <Input
-                          value={l.justificacao}
-                          onChange={(e) => patchLinha(l.key, { justificacao: e.target.value })}
-                          placeholder="Justificação da isenção de IVA (obrigatório) — ex.: Artigo 9.º do CIVA"
-                          className={cn('h-9', faltaMotivo && 'border-destructive')}
+                          value={l.descricao}
+                          onChange={(e) => patchLinha(l.key, { descricao: e.target.value })}
+                          placeholder="Descrição"
+                          className="h-9 col-span-2 sm:col-span-1"
                         />
-                        {faltaMotivo && (
-                          <p className="mt-1 text-[11px] text-destructive">
-                            A lei obriga a indicar o motivo da isenção.
-                          </p>
-                        )}
+                        <Input
+                          inputMode="decimal"
+                          value={l.valor}
+                          onChange={(e) => patchLinha(l.key, { valor: e.target.value })}
+                          placeholder="0,00"
+                          className="h-9 text-right"
+                        />
+                        <Input
+                          inputMode="numeric"
+                          value={l.unidades}
+                          onChange={(e) => patchLinha(l.key, { unidades: e.target.value })}
+                          className="h-9 text-right"
+                        />
+                        <div className="flex justify-center">
+                          <Checkbox
+                            checked={l.isentoIva}
+                            onCheckedChange={(c) =>
+                              patchLinha(l.key, {
+                                isentoIva: c === true,
+                                // Ao desmarcar, limpa o motivo — deixa de fazer sentido.
+                                ...(c === true ? {} : { justificacao: '' }),
+                              })
+                            }
+                          />
+                        </div>
+                        <span className="text-sm text-right tabular-nums text-muted-foreground">
+                          {linhaSemIva > 0 ? formatCurrency(linhaTotal) : '—'}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-rose-600"
+                          onClick={() => removeLinha(l.key)}
+                          disabled={linhas.length <= 1}
+                          title="Eliminar linha"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
 
-        {/* Resumo — sempre visível, soma ao vivo */}
-        <div className="border-t bg-muted/20 px-6 py-3 shrink-0">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-            <div className="space-y-1 text-sm min-w-[240px]">
-              <ResumoRow label="Subtotal (s/ IVA)" value={formatCurrency(calc.subtotal)} />
-              {calc.totalIsento > 0 && (
-                <ResumoRow label="Do qual isento" value={formatCurrency(calc.totalIsento)} muted />
-              )}
-              <ResumoRow label={`IVA (${IVA_PADRAO}%)`} value={formatCurrency(calc.iva)} muted />
-              <div className="border-t border-border/60 my-1" />
-              <ResumoRow label="Total" value={formatCurrency(calc.totalComIva)} strong />
-            </div>
-
-            <div className="rounded-md bg-background border px-4 py-2 text-center min-w-[180px]">
-              <div className="text-xs text-muted-foreground">Total</div>
-              <div className="text-2xl font-semibold text-foreground tabular-nums">
-                {formatCurrency(calc.totalComIva)}
+                      {/* Justificação da isenção — obrigatória quando a linha é isenta */}
+                      {l.isentoIva && (
+                        <div className="sm:pl-[178px]">
+                          <Input
+                            value={l.justificacao}
+                            onChange={(e) => patchLinha(l.key, { justificacao: e.target.value })}
+                            placeholder="Justificação da isenção de IVA (obrigatório) — ex.: Artigo 9.º do CIVA"
+                            className={cn('h-9', faltaMotivo && 'border-destructive')}
+                          />
+                          {faltaMotivo && (
+                            <p className="mt-1 text-[11px] text-destructive">
+                              A lei obriga a indicar o motivo da isenção.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">IVA incluído</div>
             </div>
           </div>
 
-          {linhasSemJustificacao.length > 0 && (
-            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-destructive">
-              <Info className="h-3.5 w-3.5 shrink-0" />
-              Há {linhasSemJustificacao.length} linha(s) isenta(s) sem justificação.
-            </p>
-          )}
-        </div>
+          {/* Resumo — sempre visível, soma ao vivo */}
+          <div className="border-t bg-muted/20 px-6 py-3 shrink-0">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+              <div className="space-y-1 text-sm min-w-[240px]">
+                <ResumoRow label="Subtotal (s/ IVA)" value={formatCurrency(calc.subtotal)} />
+                {calc.totalIsento > 0 && (
+                  <ResumoRow
+                    label="Do qual isento"
+                    value={formatCurrency(calc.totalIsento)}
+                    muted
+                  />
+                )}
+                <ResumoRow label={`IVA (${IVA_PADRAO}%)`} value={formatCurrency(calc.iva)} muted />
+                <div className="border-t border-border/60 my-1" />
+                <ResumoRow label="Total" value={formatCurrency(calc.totalComIva)} strong />
+              </div>
 
-        <div className="px-6 py-4 border-t bg-card flex items-center justify-end gap-3 shrink-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancelar
-          </Button>
-          <Button onClick={handleCriar} disabled={submitting || !podeCriar} className="gap-2">
-            {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-            Criar
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+              <div className="rounded-md bg-background border px-4 py-2 text-center min-w-[180px]">
+                <div className="text-xs text-muted-foreground">Total</div>
+                <div className="text-2xl font-semibold text-foreground tabular-nums">
+                  {formatCurrency(calc.totalComIva)}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">IVA incluído</div>
+              </div>
+            </div>
+
+            {linhasSemJustificacao.length > 0 && (
+              <p className="mt-2 flex items-center gap-1.5 text-[11px] text-destructive">
+                <Info className="h-3.5 w-3.5 shrink-0" />
+                Há {linhasSemJustificacao.length} linha(s) isenta(s) sem justificação.
+              </p>
+            )}
+          </div>
+
+          <div className="px-6 py-4 border-t bg-card flex items-center justify-end gap-3 shrink-0">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCriar} disabled={submitting || !podeCriar} className="gap-2">
+              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              Criar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <ParcelamentoDialog
+        open={!!parcelamentoAlvo}
+        onOpenChange={(o) => {
+          if (!o) setParcelamentoAlvo(null);
+        }}
+        alvo={parcelamentoAlvo}
+        onCriado={() => {
+          setParcelamentoAlvo(null);
+          onCriada();
+        }}
+      />
+    </>
   );
 }
 

@@ -78,6 +78,15 @@ export function useInvoicesByContrato(contratoId: string) {
 }
 
 /**
+ * Um documento fiscal por id (para pré-visualização — DocumentoPreviewDialog).
+ */
+export async function fetchInvoiceById(invoiceId: string): Promise<InvoiceMetadata> {
+  const { data, error } = await supabase.from('invoices').select('*').eq('id', invoiceId).single();
+  if (error) throw error;
+  return data as unknown as InvoiceMetadata;
+}
+
+/**
  * Health-check do serviço de faturação (a edge function autentica no provider).
  */
 export function useFaturacaoHealth() {

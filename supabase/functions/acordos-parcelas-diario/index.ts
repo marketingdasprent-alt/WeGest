@@ -16,7 +16,7 @@
 // type em 'password_recovery' | 'magic_link' | 'motorista_onboarding' — é
 // exclusiva para emails de autenticação: gera sempre o corpo a partir de um
 // actionLink do Supabase Auth e IGNORA qualquer subject/html enviado.
-// Chamar la com {to, subject, html} não enviava o aviso nenhum — enviava (na
+// Chamá-la com {to, subject, html} não enviava o aviso nenhum — enviava (na
 // melhor hipótese) um email de "magic link" com link vazio. Em vez disso,
 // este worker fala directamente com EmailProviderFactory
 // (supabase/functions/_shared/email/factories/EmailProviderFactory.ts), o
@@ -92,7 +92,7 @@ serve(async (req) => {
       r.erros.push(msg);
     };
 
-    // ── ① VENCIDAS ───────────────────────────────────────────────────────────────────────
+    // ── ① VENCIDAS ────────────────────────────────────────────────────────
     const { data: vencidas, error: vencidasError } = await service
       .from('acordo_parcelas')
       .update({ estado: 'vencida' })
@@ -102,7 +102,7 @@ serve(async (req) => {
     registarErro('Passo ①', vencidasError);
     r.vencidas = vencidas?.length ?? 0;
 
-    // ── ② AVISOS ─────────────────────────────────────────────────────────────────────────
+    // ── ② AVISOS ──────────────────────────────────────────────────────────
     const { data: aAvisar, error: aAvisarError } = await service
       .from('acordo_parcelas')
       .select(
@@ -289,7 +289,7 @@ serve(async (req) => {
       }
     }
 
-    // ── ③ INCUMPRIMENTO, ④ LIQUIDADOS, ⑤ DIVERGÊNCIA ──────────────────────────
+    // ── ③ INCUMPRIMENTO, ④ LIQUIDADOS, ⑤ DIVERGÊNCIA ──────────────────────
     const { data: manutencao, error: manutencaoError } = await service.rpc(
       'acordos_manutencao_diaria',
       { p_hoje: hoje }

@@ -8,7 +8,10 @@
 // o adapter correspondente. KeyInvoice é apenas um dos providers possíveis.
 //
 // Resolução da config (por org):
-//   1) descobre a org do chamador via RPC get_current_org_id() (JWT do chamador);
+//   1) descobre a org do chamador via RPC get_current_org_id() (JWT do chamador) —
+//      EXCETO quando o chamador é service-role E indica org_id explícito no body,
+//      caso em que se usa esse org_id diretamente (workers internos, sem sessão de
+//      utilizador para o RPC resolver — ver getOrgConfig);
 //   2) lê a linha `plataformas_configuracao` (plataforma='faturacao', ativo) com
 //      SERVICE ROLE (a RLS é admin-only; o utilizador que fatura pode não ser admin);
 //   3) despacha para o adapter com a config da org (chave + settings).
@@ -23,12 +26,15 @@
 //   'emit'  (default) — cria o documento e grava em `invoices`.
 //   'health' — confirma que a chave autentica. Aceita credenciais de teste no
 //              body ({ provider, apiKey, settings }) para testar ANTES de gravar.
+//   'preflight' — confirma que a org tem o Recibo (RC) configurado e a chave
+//                 autentica, ANTES de se criar um acordo de parcelamento.
 //   'pdf'    — devolve o PDF (base64). Body: { provider_doctype, provider_docnum, serie?, signed? }
 // ============================================================
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { keyInvoiceProvider } from './providers/keyinvoice.ts';
 import type { Cliente, EmitInput, FaturacaoProvider, Item, ProviderConfig } from './types.ts';
+import { EmissaoAmbiguaError } from './types.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,6 +44,14 @@ const corsHeaders = {
 
 const env = (k: string) => Deno.env.get(k);
 
+/** Confirma se o pedido vem autenticado com a service role key (workers internos).
+ *  `Boolean(serviceRoleKey)` evita que, com a env var por definir, o literal
+ *  "Bearer undefined" passe a autenticar como service role. */
+function isServiceRoleRequest(req: Request): boolean {
+  const serviceRoleKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  return Boolean(serviceRoleKey) && (req.headers.get('Authorization') ?? '') === `Bearer ${serviceRoleKey}`;
+}
+
 // Registo de providers — adicionar aqui novos adapters (ex.: moloni, invoicexpress).
 const PROVIDERS: Record<string, FaturacaoProvider> = {
   keyinvoice: keyInvoiceProvider,
@@ -45,7 +59,7 @@ const PROVIDERS: Record<string, FaturacaoProvider> = {
 const DEFAULT_PROVIDER = 'keyinvoice';
 
 interface Body {
-  action?: 'emit' | 'health' | 'pdf';
+  action?: 'emit' | 'health' | 'pdf' | 'preflight' | 'void_receipt';
   // emit
   tipo?: 'FT' | 'FR' | 'NC' | 'RC';
   cliente?: Cliente;
@@ -55,6 +69,12 @@ interface Body {
   observacoes?: string;
   referencia_externa?: string;
   documento_referencia?: string;
+  /**
+   * Organização em nome da qual emitir. SÓ é aceite de um chamador service-role
+   * (workers internos). De um utilizador seria escalada de tenant — emitiria
+   * pela conta de faturação de outra organização.
+   */
+  org_id?: string;
   // pdf
   provider_doctype?: string;
   provider_docnum?: string;
@@ -82,16 +102,29 @@ function callerClient(req: Request) {
   });
 }
 
-/** Resolve { provider, cfg } da org do chamador. Sem org → só fallback de secrets. */
-async function getOrgConfig(req: Request): Promise<{ provider: string; cfg: ProviderConfig }> {
+/** Resolve { provider, cfg } da org. Sem org → sem chave (falha cedo e claro). */
+async function getOrgConfig(
+  req: Request,
+  orgIdExplicito?: string
+): Promise<{ provider: string; cfg: ProviderConfig; orgId: string | null }> {
+  const isServiceRole = isServiceRoleRequest(req);
+
   let orgId: string | null = null;
-  try {
-    const { data } = await callerClient(req).rpc('get_current_org_id');
-    orgId = (data as string) ?? null;
-  } catch {
-    /* segue sem org */
+
+  if (isServiceRole && orgIdExplicito) {
+    // Worker interno a emitir em nome de uma org concreta.
+    orgId = orgIdExplicito;
+  } else if (!isServiceRole) {
+    // Utilizador normal: a org vem SEMPRE do JWT, nunca do body.
+    try {
+      const { data } = await callerClient(req).rpc('get_current_org_id');
+      orgId = (data as string) ?? null;
+    } catch {
+      /* segue sem org */
+    }
   }
-  if (!orgId) return { provider: DEFAULT_PROVIDER, cfg: { apiKey: null, settings: null } };
+
+  if (!orgId) return { provider: DEFAULT_PROVIDER, cfg: { apiKey: null, settings: null }, orgId: null };
 
   const service = createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
   const { data: row } = await service
@@ -104,7 +137,7 @@ async function getOrgConfig(req: Request): Promise<{ provider: string; cfg: Prov
 
   const settings = ((row as any)?.config ?? null) as Record<string, unknown> | null;
   const provider = String((settings?.provider as string) || DEFAULT_PROVIDER).toLowerCase();
-  return { provider, cfg: { apiKey: (row as any)?.client_secret ?? null, settings } };
+  return { provider, cfg: { apiKey: (row as any)?.client_secret ?? null, settings }, orgId };
 }
 
 function pickAdapter(provider: string): FaturacaoProvider {
@@ -134,12 +167,61 @@ serve(async (req) => {
         provider = String(payload.provider || DEFAULT_PROVIDER).toLowerCase();
         cfg = { apiKey: payload.apiKey ?? null, settings: { provider, ...(payload.settings ?? {}) } };
       } else {
-        ({ provider, cfg } = await getOrgConfig(req));
+        ({ provider, cfg } = await getOrgConfig(req, payload.org_id));
       }
       await pickAdapter(provider).health(cfg);
       return json({ ok: true, provider });
     } catch (e) {
       return json({ ok: false, error: (e as Error).message });
+    }
+  }
+
+  // ── preflight ──
+  // Responde "esta org consegue emitir Recibos?" ANTES de se criar um acordo.
+  // Falhar aqui custa um diálogo de erro; falhar depois de receber dinheiro
+  // custa um problema contabilístico.
+  if (payload.action === 'preflight') {
+    try {
+      const { provider, cfg } = await getOrgConfig(req, payload.org_id);
+      const adapter = pickAdapter(provider);
+      const rcConfigurado = adapter.hasDoctype('RC', cfg);
+
+      if (!rcConfigurado) {
+        return json({
+          ok: false,
+          provider,
+          rc_configurado: false,
+          error:
+            'O documento "Recibo" não está configurado. Sem ele, os pagamentos das ' +
+            'parcelas não podem ser registados legalmente.',
+        });
+      }
+
+      await adapter.health(cfg);
+      return json({ ok: true, provider, rc_configurado: true });
+    } catch (e) {
+      return json({ ok: false, rc_configurado: false, error: (e as Error).message });
+    }
+  }
+
+  // ── void_receipt (anula um Recibo já emitido no provider) ──
+  // Chamado a partir da anulação interna de um recibo (recibos.estado →
+  // 'anulado') — sem isto, a liquidação real no KeyInvoice nunca é revertida
+  // e a fatura original fica com "saldo pendente" errado lá (achado ao
+  // testar manualmente, 30/07/2026).
+  if (payload.action === 'void_receipt') {
+    try {
+      if (!payload.provider_docnum) {
+        return json({ success: false, error: 'void_receipt: provider_docnum obrigatório' });
+      }
+      const { provider, cfg } = await getOrgConfig(req, payload.org_id);
+      await pickAdapter(provider).voidReceipt(
+        { docnum: payload.provider_docnum, docseries: payload.serie },
+        cfg
+      );
+      return json({ success: true });
+    } catch (e) {
+      return json({ success: false, error: (e as Error).message });
     }
   }
 
@@ -149,7 +231,7 @@ serve(async (req) => {
       if (!payload.provider_doctype || !payload.provider_docnum) {
         return json({ success: false, error: 'pdf: provider_doctype e provider_docnum obrigatórios' });
       }
-      const { provider, cfg } = await getOrgConfig(req);
+      const { provider, cfg } = await getOrgConfig(req, payload.org_id);
       const base64 = await pickAdapter(provider).pdf(
         {
           doctype: payload.provider_doctype,
@@ -167,19 +249,63 @@ serve(async (req) => {
 
   // ── emit ──
   if (!payload?.tipo || !['FT', 'FR', 'NC', 'RC'].includes(payload.tipo)) {
-    return json({ success: false, error: 'tipo inválido (FT|FR|NC|RC)' });
+    return json({ success: false, error: 'tipo inválido (FT|FR|NC|RC)', classe: 'known_failed' });
   }
-  if (!payload.itens?.length) return json({ success: false, error: 'Sem itens para faturar' });
+  if (!payload.itens?.length) {
+    return json({ success: false, error: 'Sem itens para faturar', classe: 'known_failed' });
+  }
   if ((payload.tipo === 'NC' || payload.tipo === 'RC') && !payload.documento_referencia) {
     return json({
       success: false,
       error: `${payload.tipo === 'RC' ? 'Recibo' : 'Nota de Crédito'} exige documento_referencia`,
+      classe: 'known_failed',
     });
   }
 
+  let docEmitido = false;
   try {
-    const { provider, cfg } = await getOrgConfig(req);
+    const { provider, cfg, orgId } = await getOrgConfig(req, payload.org_id);
     const adapter = pickAdapter(provider);
+
+    // Worker (service role) grava com service role e org_id explícito — o trigger
+    // set_invoice_org_id não consegue resolver a org sem sessão de utilizador.
+    // Resolvido AQUI (não só mais abaixo) porque o Recibo precisa do mesmo
+    // cliente já para a consulta a `invoices` antes de sequer chamar o adapter.
+    const isServiceRole = isServiceRoleRequest(req);
+    const supabase = isServiceRole
+      ? createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '')
+      : callerClient(req);
+
+    // Recibo (RC): a KeyInvoice não usa "tipo de documento" próprio para
+    // insertReceipt — referencia o documento ORIGINAL (FT/FR) por
+    // DocType+DocSeries+DocNum. O chamador só manda `documento_referencia`
+    // (o nº legal, ex. "4 4/90"); resolvemos aqui os 3 campos a partir do
+    // nosso próprio espelho local (`invoices`), para nenhum chamador (cliente
+    // web, worker) ter de conhecer o formato interno do provider.
+    let documentoOriginal: EmitInput['documentoOriginal'];
+    if (payload.tipo === 'RC') {
+      const { data: original, error: originalErr } = await supabase
+        .from('invoices')
+        .select('provider_doctype, serie, provider_docnum')
+        .eq('numero', payload.documento_referencia)
+        .eq('cobranca_id', payload.cobranca_id ?? '')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (originalErr) throw originalErr;
+      if (!original?.provider_doctype || !original?.provider_docnum) {
+        return json({
+          success: false,
+          error: `Documento original "${payload.documento_referencia}" não encontrado — não é possível emitir o Recibo.`,
+          classe: 'known_failed',
+        });
+      }
+      documentoOriginal = {
+        doctype: original.provider_doctype,
+        serie: original.serie ?? '',
+        docnum: original.provider_docnum,
+      };
+    }
 
     const emitInput: EmitInput = {
       tipo: payload.tipo,
@@ -188,8 +314,12 @@ serve(async (req) => {
       observacoes: payload.observacoes,
       referencia_externa: payload.referencia_externa,
       documento_referencia: payload.documento_referencia,
+      documentoOriginal,
     };
     const doc = await adapter.emit(emitInput, cfg);
+    // A partir daqui o documento fiscal JÁ EXISTE no provider — qualquer falha
+    // seguinte (gravar o espelho local, etc.) nunca pode ser 'known_failed'.
+    docEmitido = true;
 
     // Total calculado a partir dos itens enviados (provider-agnostic)
     const total = payload.itens.reduce((s, it) => {
@@ -198,13 +328,12 @@ serve(async (req) => {
       return s + comDesc * (1 + (Number(it.taxa_iva) || 0) / 100);
     }, 0);
 
-    // Gravar espelho local — JWT do chamador p/ RLS + trigger org_id
-    const supabase = callerClient(req);
     const cliente = payload.cliente ?? ({} as Cliente);
 
     const { data: invoice, error: dbErr } = await supabase
       .from('invoices')
       .insert({
+        ...(isServiceRole && orgId ? { org_id: orgId } : {}),
         contrato_id: payload.contrato_id ?? null,
         cobranca_id: payload.cobranca_id ?? null,
         tipo: payload.tipo,
@@ -242,6 +371,18 @@ serve(async (req) => {
 
     return json({ success: true, invoice, provider: providerMeta });
   } catch (e) {
-    return json({ success: false, error: (e as Error).message });
+    // known_failed = provado que nada foi criado (o provider respondeu e
+    //   recusou, ou a falha ocorreu antes de sequer tentar criar) — seguro
+    //   reagendar.
+    // unknown = não se sabe se foi criado (falha de transporte durante a
+    //   criação, OU falha DEPOIS de o adapter confirmar sucesso) — nunca
+    //   reemitir sem reconciliar primeiro; o risco é um SEGUNDO documento
+    //   fiscal legal sobre o mesmo pagamento.
+    const ambiguo = docEmitido || e instanceof EmissaoAmbiguaError;
+    return json({
+      success: false,
+      error: (e as Error).message,
+      classe: ambiguo ? 'unknown' : 'known_failed',
+    });
   }
 });
