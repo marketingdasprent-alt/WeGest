@@ -169,20 +169,15 @@ export function ContratoTabFaturar({ contrato }: Props) {
     return null;
   }, [empresas]);
 
+  // Condutor principal — cliente (rent-a-car) OU motorista (TVDE), XOR.
   const principal = useMemo(
-    () => (condutores ?? []).find((c) => c.is_principal && c.cliente_id) ?? null,
-    [condutores]
-  );
-
-  // Condutor principal (cliente OU motorista) — para pré-preencher o envio por email.
-  const principalCond = useMemo(
     () => (condutores ?? []).find((c) => c.is_principal) ?? null,
     [condutores]
   );
   const { data: contactosEnvio = [] } = useContactosDocumento({
     clienteId: contrato.cliente_id,
-    condutor: principalCond
-      ? { cliente_id: principalCond.cliente_id, motorista_id: principalCond.motorista_id }
+    condutor: principal
+      ? { cliente_id: principal.cliente_id, motorista_id: principal.motorista_id }
       : null,
   });
 
@@ -190,6 +185,24 @@ export function ContratoTabFaturar({ contrato }: Props) {
     const ids = [contrato.cliente_id, principal?.cliente_id].filter(Boolean) as string[];
     return Array.from(new Set(ids));
   }, [contrato.cliente_id, principal]);
+
+  // Nome do motorista principal (se o condutor principal for TVDE) — para o
+  // botão "Motorista" em ContratoFaturarDialog/NovaFaturaDialog. Consulta à
+  // parte de clientesNomes porque motoristas_ativos é uma tabela diferente
+  // de clientes (mesmo motivo de useAcordoResponsaveisElegiveis).
+  const { data: motoristaPrincipalNome } = useQuery({
+    queryKey: ['faturar-motorista-nome', principal?.motorista_id ?? null],
+    queryFn: async () => {
+      if (!principal?.motorista_id) return null;
+      const { data } = await supabase
+        .from('motoristas_ativos')
+        .select('nome')
+        .eq('id', principal.motorista_id)
+        .maybeSingle();
+      return data?.nome ?? null;
+    },
+    enabled: !!principal?.motorista_id,
+  });
 
   const { data: clientesNomes } = useQuery({
     queryKey: ['faturar-clientes-nomes', idsClientes.slice().sort().join(',')],
@@ -616,6 +629,17 @@ export function ContratoTabFaturar({ contrato }: Props) {
       }
     : null;
 
+  // Motorista principal (TVDE) — dívida cedida na emissão (ver
+  // 20260730170000_cobranca_cessao_motorista_na_emissao.sql). NUNCA é o
+  // destinatário fiscal (esse fica sempre em clienteEntidade): é só quem
+  // fica a dever internamente, em cima da mesma fatura emitida ao titular.
+  const motoristaEntidade: EntidadeOption | null = principal?.motorista_id
+    ? {
+        id: principal.motorista_id,
+        nome: motoristaPrincipalNome || 'Motorista principal',
+      }
+    : null;
+
   const jaFacturado = contrato.estado_financeiro !== 'pendente';
 
   // Cobranças com saldos pré-computados — alvo de recibo / nota de crédito na toolbar.
@@ -1037,6 +1061,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
         fatura={fatura}
         clienteEntidade={clienteEntidade}
         condutorEntidade={condutorEntidade}
+        motoristaEntidade={motoristaEntidade}
         emitente={emitente}
         onFaturado={refetchAll}
       />
@@ -1051,6 +1076,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
           codigoLabel: `Contrato #${String(contrato.codigo).padStart(4, '0')}`,
         }}
         destinatario={clienteEntidade}
+        motoristaEntidade={motoristaEntidade}
         emitente={emitente}
         onCriada={refetchAll}
       />

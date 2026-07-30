@@ -103,6 +103,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   alvo: NovaFaturaAlvo;
   destinatario: NovaFaturaDestinatario;
+  /** Motorista TVDE principal do contrato — dívida cedida na emissão, nunca destinatário fiscal. */
+  motoristaEntidade?: NovaFaturaDestinatario | null;
   emitente?: FaturacaoDocEmitente | null;
   onCriada: () => void;
 }
@@ -123,6 +125,7 @@ export function NovaFaturaDialog({
   onOpenChange,
   alvo,
   destinatario,
+  motoristaEntidade,
   emitente,
   onCriada,
 }: Props) {
@@ -131,6 +134,9 @@ export function NovaFaturaDialog({
   const { data: orgDef } = useOrgDefinicoes();
   const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
   const [tipoDoc, setTipoDoc] = useState<'fatura' | 'fatura_recibo'>('fatura');
+  // Cessão da dívida ao motorista — a fatura fica sempre em nome de
+  // `destinatario` (exigência legal); isto só decide quem fica a dever.
+  const [entidade, setEntidade] = useState<'cliente' | 'motorista'>('cliente');
   const [metodo, setMetodo] = useState<string>('transferencia');
   const [dataDoc, setDataDoc] = useState<string>(hoje());
   const [dataVenc, setDataVenc] = useState<string>(maisDias(30));
@@ -266,6 +272,7 @@ export function NovaFaturaDialog({
     setMetodo('transferencia');
     setDataDoc(hoje());
     setDataVenc(maisDias(30));
+    setEntidade('cliente');
   }
 
   async function handleCriar() {
@@ -308,6 +315,25 @@ export function NovaFaturaDialog({
         .single();
       if (cobErr) throw cobErr;
       const cobrancaId: string = cobInserida.id;
+
+      // Cedência ao motorista — só faz sentido numa Factura normal (uma
+      // Factura-Recibo já nasce liquidada, sem dívida nenhuma para ceder;
+      // mesmo motivo por que acordo_criar recusa parcelar uma FR). A fatura
+      // continua emitida em nome de `destinatario`; isto é só o lançamento
+      // interno (ver 20260730170000_cobranca_cessao_motorista_na_emissao.sql).
+      // Best-effort: um erro aqui não deve impedir o resto do fluxo.
+      if (entidade === 'motorista' && motoristaEntidade && tipoDoc === 'fatura') {
+        const { error: cessaoErr } = await supabase.rpc('cobranca_ceder_a_motorista' as any, {
+          p_cobranca_id: cobrancaId,
+          p_motorista_id: motoristaEntidade.id,
+        });
+        if (cessaoErr) {
+          console.error('Falha a ceder a dívida ao motorista:', cessaoErr);
+          toast.warning(
+            `Fatura registada, mas não foi possível ceder a dívida ao motorista: ${cessaoErr.message}`
+          );
+        }
+      }
 
       // Factura-Recibo → regista o recibo (liquidação imediata).
       if (tipoDoc === 'fatura_recibo' && calc.totalComIva > 0) {
@@ -483,6 +509,45 @@ export function NovaFaturaDialog({
                 </div>
               </div>
             </div>
+
+            {motoristaEntidade && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Quem fica a dever</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={entidade === 'cliente' ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setEntidade('cliente')}
+                  >
+                    {destinatario.nome}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={entidade === 'motorista' ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    disabled={tipoDoc === 'fatura_recibo'}
+                    title={
+                      tipoDoc === 'fatura_recibo'
+                        ? 'Uma Factura-Recibo já nasce liquidada — não há dívida para ceder.'
+                        : undefined
+                    }
+                    onClick={() => setEntidade('motorista')}
+                  >
+                    Motorista — {motoristaEntidade.nome}
+                  </Button>
+                </div>
+                {entidade === 'motorista' && tipoDoc === 'fatura' && (
+                  <p className="text-[11px] text-muted-foreground rounded-md border p-2 mt-1.5">
+                    ⓘ A fatura é emitida em nome de {destinatario.nome}. A dívida passa para a
+                    conta-corrente de {motoristaEntidade.nome} — exigência legal: a fatura fiscal
+                    fica sempre em nome do cliente.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Artigos */}
             <div className="rounded-md border">

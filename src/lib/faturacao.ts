@@ -198,6 +198,20 @@ export async function anularCobrancasFaturacao(cobrancaIds: string[]): Promise<v
       .in('estado', ['emitida', 'paga']);
     if (cobErr) throw cobErr;
 
+    // Se esta cobrança tinha sido cedida a um motorista na emissão (Nova
+    // Fatura / Faturar contrato — 20260730170000), o crédito de anulamento
+    // acima ainda vai para o destinatário fiscal, que já tinha sido
+    // creditado uma vez na cessão — sem isto ficava creditado em dobro, e a
+    // dívida do motorista nunca se revertia. No-op silencioso se a cobrança
+    // nunca foi cedida.
+    const { error: reverterCessaoErr } = await supabase.rpc(
+      'cobranca_reverter_cessao_motorista' as any,
+      { p_cobranca_id: id }
+    );
+    if (reverterCessaoErr) {
+      console.warn('Falha (não crítica) a reverter a cessão ao motorista:', reverterCessaoErr);
+    }
+
     // Se esta cobrança tinha um acordo de pagamento (parcelamento) ativo,
     // fecha-o também — sem isto o acordo ficava "ativo" para sempre, a
     // apontar para uma cobrança já anulada, e continuava a mostrar "falta
