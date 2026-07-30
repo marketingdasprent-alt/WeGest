@@ -46,6 +46,10 @@ import { ReservaFaturarDialog } from '@/components/faturacao/ReservaFaturarDialo
 import { NovaFaturaDialog } from '@/components/faturacao/NovaFaturaDialog';
 import { EnviarDocumentoEmailDialog } from '@/components/faturacao/EnviarDocumentoEmailDialog';
 import { DocumentosEmitidosExtra } from '@/components/faturacao/DocumentosEmitidosExtra';
+import {
+  NotaCreditoDialog,
+  type NotaCreditoCobranca,
+} from '@/components/renting/contratos/NotaCreditoDialog';
 import { useContactosDocumento } from '@/hooks/useContactosDocumento';
 import { useReservaCondutores } from '@/hooks/useReservaCondutores';
 import type { Reserva } from '@/types/reserva';
@@ -80,6 +84,10 @@ export function ReservaTabFaturar({ reserva }: Props) {
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
   const [anularOpen, setAnularOpen] = useState(false);
   const [anularBusy, setAnularBusy] = useState(false);
+  // Proposta automática de NC logo a seguir a anular (mesmo motivo do
+  // ContratoTabFaturar): só faz sentido para cobranças com documento fiscal
+  // certificado, e é fácil esquecer de fazer isto à parte.
+  const [ncAutoAlvo, setNcAutoAlvo] = useState<NotaCreditoCobranca | null>(null);
   const [enviarInvoice, setEnviarInvoice] = useState<InvoiceMetadata | null>(null);
   const [sortField, setSortField] = useState<string>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -250,11 +258,38 @@ export function ReservaTabFaturar({ reserva }: Props) {
   async function anularFaturacao() {
     setAnularBusy(true);
     try {
-      const ativasIds = cobrancas
-        .filter((c) => c.estado === 'emitida' || c.estado === 'paga')
-        .map((c) => c.id);
+      const ativas = cobrancas.filter((c) => c.estado === 'emitida' || c.estado === 'paga');
+      const ativasIds = ativas.map((c) => c.id);
       await anularCobrancasFaturacao(ativasIds);
-      toast.success('Faturação anulada — a reserva voltou a "não faturada".');
+
+      const fiscaisAnuladas = ativas.filter((c) => c.emite_fatura_fiscal);
+      toast.success(
+        'Faturação anulada — a reserva voltou a "não faturada".',
+        fiscaisAnuladas.length > 0
+          ? {
+              description:
+                fiscaisAnuladas.length > 1
+                  ? `${fiscaisAnuladas.length} tinham documento fiscal certificado. Isto abre a primeira — trata as restantes em Administrativo → Faturação.`
+                  : 'Esta fatura tinha documento fiscal certificado — considera emitir a reversão fiscal (NC) no KeyInvoice.',
+              action: {
+                label: 'Emitir Nota de Crédito',
+                onClick: () => {
+                  const c = fiscaisAnuladas[0];
+                  setNcAutoAlvo({
+                    id: c.id,
+                    descricao: c.descricao,
+                    valor_total: c.valor_total,
+                    taxa_iva: c.taxa_iva,
+                    destinatario_id: c.destinatario_id,
+                    destinatario_nome: c.destinatario_nome,
+                    contrato_id: null,
+                    documento_externo_ref: c.documento_externo_ref,
+                  });
+                },
+              },
+            }
+          : undefined
+      );
       setAnularOpen(false);
       qc.invalidateQueries({ queryKey: ['renting', 'reservas'] });
       refetchAll();
@@ -665,6 +700,23 @@ export function ReservaTabFaturar({ reserva }: Props) {
           onCriada={refetchAll}
         />
       )}
+
+      <NotaCreditoDialog
+        open={!!ncAutoAlvo}
+        onOpenChange={(o) => {
+          if (!o) setNcAutoAlvo(null);
+        }}
+        cobranca={ncAutoAlvo}
+        orgId={reserva.org_id}
+        emitente={emitente}
+        jaCreditado={ncAutoAlvo ? (ncPorCobranca[ncAutoAlvo.id] ?? 0) : 0}
+        defaultMotivo={
+          ncAutoAlvo
+            ? `Anulação da fatura ${ncAutoAlvo.documento_externo_ref ?? ''}`.trim()
+            : undefined
+        }
+        onEmitida={refetchAll}
+      />
 
       <AlertDialog
         open={anularOpen}
