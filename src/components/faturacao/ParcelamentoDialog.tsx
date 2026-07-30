@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { DocumentoToken } from './DocumentoToken';
 import {
   useAcordoResponsaveisElegiveis,
+  useCobrancaCedida,
   useCriarAcordo,
   useFaturacaoPreflight,
 } from '@/hooks/useAcordosPagamento';
@@ -75,6 +76,7 @@ const MAX_PARCELAS = 24;
 export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props) {
   const qc = useQueryClient();
   const { data: elegiveis } = useAcordoResponsaveisElegiveis(alvo?.contratoId);
+  const { data: cedida } = useCobrancaCedida(alvo?.cobrancaId);
   const criarAcordo = useCriarAcordo();
   const preflight = useFaturacaoPreflight();
 
@@ -108,6 +110,15 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
     setParcelasEditadas(null);
     setErroGeracao(null);
   }, [open, alvo]);
+
+  // Fatura já cedida a um motorista na emissão: o responsável está decidido —
+  // acordo_criar recusa qualquer outro. Força a escolha (o reset acima põe
+  // sempre o titular, e `cedida` chega depois, em async) e trava o campo, em
+  // vez de deixar submeter um valor que a BD ia rejeitar com um erro cru.
+  useEffect(() => {
+    if (!open || !cedida) return;
+    setResponsavel({ papel: 'motorista', id: cedida.motoristaId });
+  }, [open, cedida]);
 
   const planoGerado = useMemo((): ParcelaPlano[] | null => {
     if (!alvo) return null;
@@ -295,6 +306,7 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
               </Label>
               <Select
                 value={responsavel ? `${responsavel.papel}:${responsavel.id}` : ''}
+                disabled={!!cedida}
                 onValueChange={(v) => {
                   const [papel, id] = v.split(':');
                   setResponsavel({ papel: papel as ResponsavelSelecao['papel'], id });
@@ -304,17 +316,32 @@ export function ParcelamentoDialog({ open, onOpenChange, alvo, onCriado }: Props
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={`cliente:${alvo.titularId}`}>
-                    Cliente — {alvo.titularNome} (titular)
-                  </SelectItem>
-                  {elegiveisSemTitular.map((e) => (
-                    <SelectItem key={`${e.papel}:${e.id}`} value={`${e.papel}:${e.id}`}>
-                      {e.papel === 'motorista' ? 'Motorista' : 'Condutor'} — {e.nome ?? e.id}
+                  {cedida ? (
+                    <SelectItem value={`motorista:${cedida.motoristaId}`}>
+                      Motorista — {cedida.nome ?? cedida.motoristaId}
                     </SelectItem>
-                  ))}
+                  ) : (
+                    <>
+                      <SelectItem value={`cliente:${alvo.titularId}`}>
+                        Cliente — {alvo.titularNome} (titular)
+                      </SelectItem>
+                      {elegiveisSemTitular.map((e) => (
+                        <SelectItem key={`${e.papel}:${e.id}`} value={`${e.papel}:${e.id}`}>
+                          {e.papel === 'motorista' ? 'Motorista' : 'Condutor'} — {e.nome ?? e.id}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
-              {cessaoParaTerceiro && (
+              {cedida && (
+                <p className="text-[11px] text-muted-foreground rounded-md border p-2 mt-1.5">
+                  ⓘ Esta fatura já foi cedida a {cedida.nome ?? 'um motorista'} na emissão — a
+                  dívida já está na conta-corrente dele, por isso o plano de pagamentos só pode
+                  ficar a cargo do mesmo motorista.
+                </p>
+              )}
+              {cessaoParaTerceiro && !cedida && (
                 <p className="text-[11px] text-muted-foreground rounded-md border p-2 mt-1.5">
                   ⓘ A dívida passa para a conta-corrente de{' '}
                   {elegiveisSemTitular.find((e) => e.id === responsavel?.id)?.nome ??

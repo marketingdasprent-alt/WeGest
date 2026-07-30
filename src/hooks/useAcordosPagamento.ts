@@ -66,6 +66,49 @@ export function useAcordosAtivosPorCobrancas(cobrancaIds: string[]) {
   });
 }
 
+export interface CobrancaCedida {
+  motoristaId: string;
+  nome: string | null;
+}
+
+/**
+ * Se esta cobrança já foi cedida a um motorista no momento da EMISSÃO
+ * (Faturar contrato / Nova Fatura — ver
+ * 20260730170000_cobranca_cessao_motorista_na_emissao.sql), devolve esse
+ * motorista; senão devolve null.
+ *
+ * O parcelamento precisa de saber isto: `acordo_criar` recusa criar um acordo
+ * para um responsável DIFERENTE do motorista a quem a fatura já foi cedida
+ * (senão a dívida era cedida duas vezes). Sem esta informação o diálogo abria
+ * sempre no titular por defeito e submeter dava um erro cru da BD — o caminho
+ * mais natural (não mexer no campo) era exactamente o que falhava sempre.
+ */
+export function useCobrancaCedida(cobrancaId: string | null | undefined) {
+  return useQuery({
+    queryKey: [...QUERY_KEY_BASE, 'cedida', cobrancaId ?? null],
+    queryFn: async (): Promise<CobrancaCedida | null> => {
+      if (!cobrancaId) return null;
+      const { data, error } = await supabase
+        .from('contrato_cobrancas')
+        .select('responsavel_motorista_id, motoristas_ativos(nome)')
+        .eq('id', cobrancaId)
+        .maybeSingle();
+      if (error) throw error;
+      const row = data as unknown as {
+        responsavel_motorista_id: string | null;
+        motoristas_ativos: { nome: string | null } | null;
+      } | null;
+      if (!row?.responsavel_motorista_id) return null;
+      return {
+        motoristaId: row.responsavel_motorista_id,
+        nome: row.motoristas_ativos?.nome ?? null,
+      };
+    },
+    enabled: !!cobrancaId,
+    staleTime: 15_000,
+  });
+}
+
 export interface ResponsavelElegivel {
   papel: 'condutor' | 'motorista';
   /** cliente_id quando papel='condutor'; motorista_id quando papel='motorista'. */

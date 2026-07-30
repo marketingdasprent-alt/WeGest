@@ -266,7 +266,13 @@ export function ContratoFaturarDialog({
       // continua emitida em nome de clienteEntidade; isto é só o lançamento
       // interno. Best-effort: um erro aqui não deve impedir a fatura já
       // registada de seguir para a emissão fiscal (Fase 2).
-      if (entidade === 'motorista' && motoristaEntidade && cobrancaId) {
+      //
+      // `tipo === 'fatura'` é obrigatório: uma Factura-Recibo nasce liquidada
+      // (o recibo acima credita logo o titular), por isso não há dívida
+      // nenhuma para ceder — ceder à mesma deixava o titular CREDOR do valor
+      // da fatura e o motorista a dever um valor que ninguém deve (achado ao
+      // rever os dados reais do teste de 30/07/2026, onde isto aconteceu).
+      if (entidade === 'motorista' && motoristaEntidade && cobrancaId && tipo === 'fatura') {
         const { error: cessaoErr } = await supabase.rpc('cobranca_ceder_a_motorista' as any, {
           p_cobranca_id: cobrancaId,
           p_motorista_id: motoristaEntidade.id,
@@ -401,11 +407,13 @@ export function ContratoFaturarDialog({
                   variant={entidade === 'motorista' ? 'default' : 'outline'}
                   size="sm"
                   className="flex-1"
-                  disabled={!motoristaEntidade}
+                  disabled={!motoristaEntidade || tipo === 'fatura_recibo'}
                   title={
                     !motoristaEntidade
                       ? 'O condutor principal do contrato não é um motorista TVDE.'
-                      : undefined
+                      : tipo === 'fatura_recibo'
+                        ? 'Uma Factura-Recibo já nasce liquidada — não há dívida para ceder.'
+                        : undefined
                   }
                   onClick={() => setEntidade('motorista')}
                 >
@@ -439,7 +447,14 @@ export function ContratoFaturarDialog({
                   variant={tipo === 'fatura_recibo' ? 'default' : 'outline'}
                   size="sm"
                   className="flex-1"
-                  onClick={() => setTipo('fatura_recibo')}
+                  onClick={() => {
+                    setTipo('fatura_recibo');
+                    // Sem isto a escolha "Motorista" ficava presa em estado
+                    // (botão já desativado, mas `entidade` continuava
+                    // 'motorista' e o aviso de cessão continuava visível a
+                    // prometer algo que handleCriar já não faz).
+                    setEntidade((e) => (e === 'motorista' ? 'cliente' : e));
+                  }}
                 >
                   Factura-Recibo
                 </Button>
