@@ -103,6 +103,20 @@ interface CobrancaRow {
   destinatario_nome: string;
 }
 
+interface NotaCreditoRow {
+  cobranca_id: string;
+  valor: number;
+  estado: string;
+  documento_externo_ref: string | null;
+}
+
+interface ReciboRow {
+  referencia: string | null;
+  valor: number;
+  estado: string;
+  documento_externo_ref: string | null;
+}
+
 interface Props {
   contrato: ContratoRenting;
 }
@@ -196,48 +210,75 @@ export function ContratoTabFaturar({ contrato }: Props) {
     },
   });
 
-  // Total já creditado (NC ativas) por cobrança — para o saldo e o botão de NC.
-  const { data: ncPorCobranca, refetch: refetchNC } = useQuery({
+  // Busca-se TUDO (não só 'ativo') porque os anulados também são precisos —
+  // para tirar da lista "Notas de crédito e recibos" os documentos cujo
+  // registo interno já foi anulado (ver documentosAnuladosRefs abaixo). Os
+  // totais ativos continuam derivados só das linhas 'ativo', como antes.
+  const { data: notasCreditoRows, refetch: refetchNC } = useQuery({
     queryKey: ['contrato-notas-credito', contrato.id],
-    queryFn: async (): Promise<Record<string, number>> => {
+    queryFn: async (): Promise<NotaCreditoRow[]> => {
       const { data, error } = await supabase
         .from('notas_credito')
-        .select('cobranca_id, valor')
-        .eq('contrato_id', contrato.id)
-        .eq('estado', 'ativo');
+        .select('cobranca_id, valor, estado, documento_externo_ref')
+        .eq('contrato_id', contrato.id);
       if (error) {
         // a tabela pode ainda não estar na BD — não partir a aba
         console.warn('notas_credito indisponível:', error.message);
-        return {};
+        return [];
       }
-      const m: Record<string, number> = {};
-      (data ?? []).forEach((n: any) => {
-        m[n.cobranca_id] = (m[n.cobranca_id] ?? 0) + Number(n.valor || 0);
-      });
-      return m;
+      return (data ?? []) as unknown as NotaCreditoRow[];
+    },
+  });
+
+  // Total já creditado (NC ativas) por cobrança — para o saldo e o botão de NC.
+  const ncPorCobranca = useMemo(() => {
+    const m: Record<string, number> = {};
+    (notasCreditoRows ?? []).forEach((n) => {
+      if (n.estado === 'ativo') m[n.cobranca_id] = (m[n.cobranca_id] ?? 0) + Number(n.valor || 0);
+    });
+    return m;
+  }, [notasCreditoRows]);
+
+  const { data: recibosRows, refetch: refetchRecibos } = useQuery({
+    queryKey: ['contrato-recibos', contrato.id],
+    queryFn: async (): Promise<ReciboRow[]> => {
+      const { data, error } = await supabase
+        .from('recibos')
+        .select('referencia, valor, estado, documento_externo_ref')
+        .eq('contrato_id', contrato.id);
+      if (error) {
+        console.warn('recibos indisponível:', error.message);
+        return [];
+      }
+      return (data ?? []) as unknown as ReciboRow[];
     },
   });
 
   // Total já liquidado (recibos ativos) por cobrança — para o saldo a pagar.
-  const { data: recibosPorCobranca, refetch: refetchRecibos } = useQuery({
-    queryKey: ['contrato-recibos', contrato.id],
-    queryFn: async (): Promise<Record<string, number>> => {
-      const { data, error } = await supabase
-        .from('recibos')
-        .select('referencia, valor')
-        .eq('contrato_id', contrato.id)
-        .eq('estado', 'ativo');
-      if (error) {
-        console.warn('recibos indisponível:', error.message);
-        return {};
-      }
-      const m: Record<string, number> = {};
-      (data ?? []).forEach((r: any) => {
-        if (r.referencia) m[r.referencia] = (m[r.referencia] ?? 0) + Number(r.valor || 0);
-      });
-      return m;
-    },
-  });
+  const recibosPorCobranca = useMemo(() => {
+    const m: Record<string, number> = {};
+    (recibosRows ?? []).forEach((r) => {
+      if (r.estado === 'ativo' && r.referencia)
+        m[r.referencia] = (m[r.referencia] ?? 0) + Number(r.valor || 0);
+    });
+    return m;
+  }, [recibosRows]);
+
+  // Nºs de documento (RC/NC) cujo registo interno (recibo ou nota de crédito)
+  // já está anulado — usado para tirar esses documentos da lista "Notas de
+  // crédito e recibos" (achado ao testar manualmente: a `invoices` fiscal
+  // fica 'emitida' para sempre, mesmo depois de o recibo/NC ser anulado, por
+  // isso a lista continuava a mostrá-los como se nada tivesse acontecido).
+  const documentosAnuladosRefs = useMemo(() => {
+    const set = new Set<string>();
+    (recibosRows ?? []).forEach((r) => {
+      if (r.estado === 'anulado' && r.documento_externo_ref) set.add(r.documento_externo_ref);
+    });
+    (notasCreditoRows ?? []).forEach((n) => {
+      if (n.estado === 'anulado' && n.documento_externo_ref) set.add(n.documento_externo_ref);
+    });
+    return set;
+  }, [recibosRows, notasCreditoRows]);
 
   const { data: invoices = [], refetch: refetchInvoices } = useInvoicesByContrato(contrato.id);
   const emitirMut = useEmitirEEscreverFatura();
@@ -883,7 +924,20 @@ export function ContratoTabFaturar({ contrato }: Props) {
         </div>
       </div>
 
-      <DocumentosEmitidosExtra invoices={invoicesExtra} onEnviar={setEnviarInvoice} />
+      <DocumentosEmitidosExtra
+        invoices={invoicesExtra.filter(
+          (inv) => !inv.numero || !documentosAnuladosRefs.has(inv.numero)
+        )}
+        onEnviar={setEnviarInvoice}
+        onVer={(inv, win) => {
+          setPreviewWindow((prev) => {
+            prev?.close();
+            return win;
+          });
+          setPreviewInvoiceId(inv.id);
+          setPreviewOpen(true);
+        }}
+      />
 
       <DocumentoPreviewDialog
         open={previewOpen}

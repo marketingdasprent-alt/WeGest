@@ -128,47 +128,84 @@ export function ReservaTabFaturar({ reserva }: Props) {
 
   const cobrancaIds = useMemo(() => cobrancas.map((c) => c.id), [cobrancas]);
 
-  const { data: ncPorCobranca = {}, refetch: refetchNC } = useQuery({
+  // Busca-se TUDO (não só 'ativo') — os anulados também são precisos, para
+  // tirar da lista "Notas de crédito e recibos" os documentos cujo registo
+  // interno já foi anulado (mesmo achado do ContratoTabFaturar: a `invoices`
+  // fiscal fica 'emitida' para sempre, mesmo depois de o recibo/NC ser
+  // anulado). Os totais ativos continuam derivados só das linhas 'ativo'.
+  const { data: notasCreditoRows = [], refetch: refetchNC } = useQuery({
     queryKey: ['reserva-notas-credito', reserva.id],
-    queryFn: async (): Promise<Record<string, number>> => {
+    queryFn: async (): Promise<
+      Array<{
+        cobranca_id: string;
+        valor: number;
+        estado: string;
+        documento_externo_ref: string | null;
+      }>
+    > => {
       const { data, error } = await supabase
         .from('notas_credito')
-        .select('cobranca_id, valor')
-        .eq('estado', 'ativo')
+        .select('cobranca_id, valor, estado, documento_externo_ref')
         .in(
           'cobranca_id',
           cobrancaIds.length ? cobrancaIds : ['00000000-0000-0000-0000-000000000000']
         );
-      if (error) return {};
-      const m: Record<string, number> = {};
-      (data ?? []).forEach((n: any) => {
-        m[n.cobranca_id] = (m[n.cobranca_id] ?? 0) + Number(n.valor || 0);
-      });
-      return m;
+      if (error) return [];
+      return data ?? [];
     },
     enabled: cobrancaIds.length > 0,
   });
 
-  const { data: recibosPorCobranca = {}, refetch: refetchRecibos } = useQuery({
+  const ncPorCobranca = useMemo(() => {
+    const m: Record<string, number> = {};
+    notasCreditoRows.forEach((n) => {
+      if (n.estado === 'ativo') m[n.cobranca_id] = (m[n.cobranca_id] ?? 0) + Number(n.valor || 0);
+    });
+    return m;
+  }, [notasCreditoRows]);
+
+  const { data: recibosRows = [], refetch: refetchRecibos } = useQuery({
     queryKey: ['reserva-recibos', reserva.id],
-    queryFn: async (): Promise<Record<string, number>> => {
+    queryFn: async (): Promise<
+      Array<{
+        referencia: string | null;
+        valor: number;
+        estado: string;
+        documento_externo_ref: string | null;
+      }>
+    > => {
       const { data, error } = await supabase
         .from('recibos')
-        .select('referencia, valor')
-        .eq('estado', 'ativo')
+        .select('referencia, valor, estado, documento_externo_ref')
         .in(
           'referencia',
           cobrancaIds.length ? cobrancaIds : ['00000000-0000-0000-0000-000000000000']
         );
-      if (error) return {};
-      const m: Record<string, number> = {};
-      (data ?? []).forEach((r: any) => {
-        if (r.referencia) m[r.referencia] = (m[r.referencia] ?? 0) + Number(r.valor || 0);
-      });
-      return m;
+      if (error) return [];
+      return data ?? [];
     },
     enabled: cobrancaIds.length > 0,
   });
+
+  const recibosPorCobranca = useMemo(() => {
+    const m: Record<string, number> = {};
+    recibosRows.forEach((r) => {
+      if (r.estado === 'ativo' && r.referencia)
+        m[r.referencia] = (m[r.referencia] ?? 0) + Number(r.valor || 0);
+    });
+    return m;
+  }, [recibosRows]);
+
+  const documentosAnuladosRefs = useMemo(() => {
+    const set = new Set<string>();
+    recibosRows.forEach((r) => {
+      if (r.estado === 'anulado' && r.documento_externo_ref) set.add(r.documento_externo_ref);
+    });
+    notasCreditoRows.forEach((n) => {
+      if (n.estado === 'anulado' && n.documento_externo_ref) set.add(n.documento_externo_ref);
+    });
+    return set;
+  }, [recibosRows, notasCreditoRows]);
 
   const { data: invoices = [], refetch: refetchInvoices } = useQuery({
     queryKey: ['reserva-invoices', reserva.id],
@@ -590,7 +627,10 @@ export function ReservaTabFaturar({ reserva }: Props) {
         </div>
       </div>
 
-      <DocumentosEmitidosExtra invoices={invoices} onEnviar={setEnviarInvoice} />
+      <DocumentosEmitidosExtra
+        invoices={invoices.filter((inv) => !inv.numero || !documentosAnuladosRefs.has(inv.numero))}
+        onEnviar={setEnviarInvoice}
+      />
 
       <ReservaFaturarDialog
         open={dialogOpen}
