@@ -85,22 +85,30 @@ export function useAcordoResponsaveisElegiveis(contratoId: string | null | undef
       if (!contratoId) return [];
       const { data, error } = await supabase
         .from('contrato_condutores')
-        .select('cliente_id, motorista_id, clientes(nome)')
+        .select('cliente_id, motorista_id, clientes(nome), motoristas_ativos(nome)')
         .eq('contrato_id', contratoId)
         .is('data_fim', null);
       if (error) throw error;
-      // TVDE fatura-se fora do WeGest — acordo_criar recusa sempre
-      // responsavel_papel='motorista' (ver migration 20260724100001). Nunca
-      // oferecer motorista como candidato elegível: seria um caminho
-      // garantido a falhar, com um erro cru da BD mostrado ao utilizador.
+      // Num contrato TVDE, a dívida é sempre do motorista responsável, nunca
+      // do titular/empresa — por isso o motorista tem de aparecer aqui como
+      // candidato (pedido explícito, 30/07/2026). Antes disto era filtrado
+      // fora porque acordo_criar recusava sempre responsavel_papel='motorista';
+      // esse bloqueio foi levantado (ver acordo_cessao_motorista_desbloqueada).
       return (data ?? [])
-        .filter((c) => !c.motorista_id && !!c.cliente_id)
+        .filter((c) => !!c.motorista_id || !!c.cliente_id)
         .map(
-          (c): ResponsavelElegivel => ({
-            papel: 'condutor',
-            id: c.cliente_id as string,
-            nome: c.clientes?.nome ?? null,
-          })
+          (c): ResponsavelElegivel =>
+            c.motorista_id
+              ? {
+                  papel: 'motorista',
+                  id: c.motorista_id as string,
+                  nome: c.motoristas_ativos?.nome ?? null,
+                }
+              : {
+                  papel: 'condutor',
+                  id: c.cliente_id as string,
+                  nome: c.clientes?.nome ?? null,
+                }
         );
     },
     enabled: !!contratoId,
