@@ -80,11 +80,12 @@ export async function checkFaturacaoHealth(): Promise<boolean> {
 
 /**
  * Anula a faturação de um conjunto de cobranças (estorna tudo → saldo a zero):
- * anula os recibos e notas de crédito ativos ligados e as próprias cobranças.
- * Os triggers de conta-corrente lançam os estornos (recibo/NC → débito; cobrança
- * → crédito), que se cancelam entre si. NÃO emite Nota de Crédito nem cancela o
- * documento fiscal no provider — isso, se necessário, é uma ação separada/manual.
- * Lança em erro.
+ * anula os recibos e notas de crédito ativos ligados e as próprias cobranças, e
+ * fecha (cancela) qualquer acordo de pagamento/parcelamento ativo dessas
+ * cobranças. Os triggers de conta-corrente lançam os estornos (recibo/NC →
+ * débito; cobrança → crédito), que se cancelam entre si. NÃO emite Nota de
+ * Crédito nem cancela o documento fiscal no provider — isso, se necessário, é
+ * uma ação separada/manual. Lança em erro.
  */
 export async function anularCobrancasFaturacao(cobrancaIds: string[]): Promise<void> {
   for (const id of cobrancaIds) {
@@ -144,6 +145,21 @@ export async function anularCobrancasFaturacao(cobrancaIds: string[]): Promise<v
       .eq('id', id)
       .in('estado', ['emitida', 'paga']);
     if (cobErr) throw cobErr;
+
+    // Se esta cobrança tinha um acordo de pagamento (parcelamento) ativo,
+    // fecha-o também — sem isto o acordo ficava "ativo" para sempre, a
+    // apontar para uma cobrança já anulada, e continuava a mostrar "falta
+    // pagar" o valor nominal inteiro (achado ao verificar manualmente,
+    // 30/07/2026: 2 acordos órfãos reais na BD). Ao contrário de
+    // acordo_cancelar (só para um acordo "limpo"), esta função fecha
+    // incondicionalmente — a fatura já foi anulada, não há nada a proteger.
+    // No-op silencioso se não houver acordo ativo para esta cobrança.
+    const { error: acordoErr } = await supabase.rpc('acordo_cancelar_por_fatura_anulada' as any, {
+      p_cobranca_id: id,
+    });
+    if (acordoErr) {
+      console.warn('Falha (não crítica) a cancelar o acordo de pagamento:', acordoErr);
+    }
   }
 }
 

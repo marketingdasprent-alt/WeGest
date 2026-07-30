@@ -41,6 +41,31 @@ export function useAcordoAtivoPorCobranca(cobrancaId: string | null | undefined)
   });
 }
 
+/**
+ * Mesma verificação que `useAcordoAtivoPorCobranca`, mas em lote — usado pela
+ * checklist de "Anular faturação" (várias cobranças na mesma lista) para
+ * avisar, por linha, que anular também vai cancelar o acordo associado.
+ */
+export function useAcordosAtivosPorCobrancas(cobrancaIds: string[]) {
+  const key = [...cobrancaIds].sort().join(',');
+  return useQuery({
+    queryKey: [...QUERY_KEY_BASE, 'ativos-lote', key],
+    queryFn: async (): Promise<Map<string, AcordoAtivoInfo>> => {
+      if (cobrancaIds.length === 0) return new Map();
+      const { data, error } = await supabase
+        .from('acordos_pagamento' as any)
+        .select('id, codigo, estado, cobranca_id')
+        .in('cobranca_id', cobrancaIds)
+        .in('estado', ['ativo', 'incumprimento']);
+      if (error) throw error;
+      const rows = data as unknown as Array<AcordoAtivoInfo & { cobranca_id: string }>;
+      return new Map(rows.map((r) => [r.cobranca_id, r]));
+    },
+    enabled: cobrancaIds.length > 0,
+    staleTime: 15_000,
+  });
+}
+
 export interface ResponsavelElegivel {
   papel: 'condutor' | 'motorista';
   /** cliente_id quando papel='condutor'; motorista_id quando papel='motorista'. */

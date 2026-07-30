@@ -70,7 +70,10 @@ import {
   type ParcelamentoFaturaAlvo,
 } from '@/components/faturacao/ParcelamentoDialog';
 import { useContactosDocumento } from '@/hooks/useContactosDocumento';
-import { useAcordoAtivoPorCobranca } from '@/hooks/useAcordosPagamento';
+import {
+  useAcordoAtivoPorCobranca,
+  useAcordosAtivosPorCobrancas,
+} from '@/hooks/useAcordosPagamento';
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -276,6 +279,19 @@ export function ContratoTabFaturar({ contrato }: Props) {
     contrato.estado_financeiro === 'facturado' ||
     contrato.estado_financeiro === 'pago' ||
     temCobrancasAtivas;
+
+  // Para avisar, linha a linha, na checklist de anulação: anular uma cobrança
+  // com um acordo de pagamento ativo também cancela esse acordo (ver
+  // anularCobrancasFaturacao) — o utilizador precisa de saber isto ANTES de
+  // confirmar, não descobrir depois de já ter acontecido.
+  const cobrancasAtivasIds = useMemo(
+    () =>
+      (cobrancas ?? [])
+        .filter((c) => c.estado === 'emitida' || c.estado === 'paga')
+        .map((c) => c.id),
+    [cobrancas]
+  );
+  const { data: acordosAtivosPorCobranca } = useAcordosAtivosPorCobrancas(cobrancasAtivasIds);
 
   /**
    * Anula a faturação do contrato → volta a "não faturado" (Pendente), re-faturável.
@@ -950,36 +966,42 @@ export function ContratoTabFaturar({ contrato }: Props) {
               .filter((c) => c.estado === 'emitida' || c.estado === 'paga')
               .map((c) => {
                 const checked = cobrancasSelecionadas.has(c.id);
+                const acordoAtivo = acordosAtivosPorCobranca?.get(c.id);
                 return (
-                  <label
-                    key={c.id}
-                    className="flex items-center gap-2.5 rounded px-1.5 py-1 text-sm cursor-pointer hover:bg-muted/50"
-                  >
-                    <Checkbox
-                      checked={checked}
-                      disabled={anularBusy}
-                      onCheckedChange={(v) => {
-                        setCobrancasSelecionadas((prev) => {
-                          const next = new Set(prev);
-                          if (v) next.add(c.id);
-                          else next.delete(c.id);
-                          return next;
-                        });
-                      }}
-                    />
-                    <span className="font-mono text-xs">
-                      {c.documento_externo_ref || c.id.slice(0, 8).toUpperCase()}
-                    </span>
-                    <span
-                      className="text-muted-foreground truncate flex-1"
-                      title={c.destinatario_nome}
-                    >
-                      {c.destinatario_nome}
-                    </span>
-                    <span className="font-medium whitespace-nowrap">
-                      {formatCurrency(c.valor_total)}
-                    </span>
-                  </label>
+                  <div key={c.id} className="rounded px-1.5 py-1 hover:bg-muted/50">
+                    <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={checked}
+                        disabled={anularBusy}
+                        onCheckedChange={(v) => {
+                          setCobrancasSelecionadas((prev) => {
+                            const next = new Set(prev);
+                            if (v) next.add(c.id);
+                            else next.delete(c.id);
+                            return next;
+                          });
+                        }}
+                      />
+                      <span className="font-mono text-xs">
+                        {c.documento_externo_ref || c.id.slice(0, 8).toUpperCase()}
+                      </span>
+                      <span
+                        className="text-muted-foreground truncate flex-1"
+                        title={c.destinatario_nome}
+                      >
+                        {c.destinatario_nome}
+                      </span>
+                      <span className="font-medium whitespace-nowrap">
+                        {formatCurrency(c.valor_total)}
+                      </span>
+                    </label>
+                    {acordoAtivo && (
+                      <p className="pl-7 text-[11px] text-amber-700 dark:text-amber-400">
+                        ⚠ Tem um acordo de pagamento ativo (ACD-{acordoAtivo.codigo}) — também será
+                        cancelado.
+                      </p>
+                    )}
+                  </div>
                 );
               })}
           </div>
