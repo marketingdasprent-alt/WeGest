@@ -733,7 +733,7 @@ export default function AssistenciaNova() {
 
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
-                    <UserCog className="h-4 w-4" /> Mecânico responsável (opcional)
+                    <UserCog className="h-4 w-4" /> Assistente responsável (opcional)
                   </Label>
                   <AssistenteResponsavelSelect value={atribuidoA} onChange={setAtribuidoA} />
                 </div>

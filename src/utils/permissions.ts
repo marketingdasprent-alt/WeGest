@@ -42,6 +42,7 @@ export const RECURSOS = {
   ASSISTENCIA_VER: 'assistencia_ver',
   ASSISTENCIA_CRIAR: 'assistencia_criar',
   ASSISTENCIA_CATEGORIAS: 'assistencia_categorias',
+  ASSISTENCIA_MECANICOS: 'assistencia_mecanicos', // Gerir catálogo de mecânicos
   ASSISTENCIA_TICKETS: 'assistencia_tickets', // Legacy - gestão completa
   ASSISTENCIA_DISPONIVEL: 'assistencia_disponivel',
 

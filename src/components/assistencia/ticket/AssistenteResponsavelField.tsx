@@ -53,7 +53,7 @@ export const AssistenteResponsavelSelect: React.FC<SelectProps> = ({
       disabled={disabled || isLoading}
     >
       <SelectTrigger>
-        <SelectValue placeholder="Escolher mecânico" />
+        <SelectValue placeholder="Escolher responsável" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={NONE}>Ninguém</SelectItem>
@@ -101,7 +101,7 @@ export const AssistenteResponsavelField: React.FC<FieldProps> = ({
         .update({ atribuido_a: novo })
         .eq('id', ticketId);
       if (error) throw error;
-      toast({ title: 'Mecânico responsável atualizado.' });
+      toast({ title: 'Assistente responsável atualizado.' });
       onChanged();
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' });
@@ -113,7 +113,7 @@ export const AssistenteResponsavelField: React.FC<FieldProps> = ({
   return (
     <div>
       <Label className="text-[10px] uppercase text-muted-foreground font-bold flex items-center gap-1 mb-1">
-        <UserCog className="h-3 w-3" /> Mecânico responsável
+        <UserCog className="h-3 w-3" /> Assistente responsável
       </Label>
       <AssistenteResponsavelSelect value={atribuidoA} onChange={handleChange} disabled={saving} />
     </div>

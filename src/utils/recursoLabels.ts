@@ -51,6 +51,7 @@ export const getRecursoLabel = (nome: string): string => {
     assistencia_ver: 'Ver tickets de assistência',
     assistencia_criar: 'Criar tickets de assistência',
     assistencia_categorias: 'Gerir categorias de assistência',
+    assistencia_mecanicos: 'Gerir catálogo de mecânicos',
     assistencia_tickets: 'Gestão completa de tickets',
 
     // Calendário
