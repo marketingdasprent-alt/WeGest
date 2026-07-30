@@ -59,7 +59,7 @@ const PROVIDERS: Record<string, FaturacaoProvider> = {
 const DEFAULT_PROVIDER = 'keyinvoice';
 
 interface Body {
-  action?: 'emit' | 'health' | 'pdf' | 'preflight';
+  action?: 'emit' | 'health' | 'pdf' | 'preflight' | 'void_receipt';
   // emit
   tipo?: 'FT' | 'FR' | 'NC' | 'RC';
   cliente?: Cliente;
@@ -201,6 +201,27 @@ serve(async (req) => {
       return json({ ok: true, provider, rc_configurado: true });
     } catch (e) {
       return json({ ok: false, rc_configurado: false, error: (e as Error).message });
+    }
+  }
+
+  // ── void_receipt (anula um Recibo já emitido no provider) ──
+  // Chamado a partir da anulação interna de um recibo (recibos.estado →
+  // 'anulado') — sem isto, a liquidação real no KeyInvoice nunca é revertida
+  // e a fatura original fica com "saldo pendente" errado lá (achado ao
+  // testar manualmente, 30/07/2026).
+  if (payload.action === 'void_receipt') {
+    try {
+      if (!payload.provider_docnum) {
+        return json({ success: false, error: 'void_receipt: provider_docnum obrigatório' });
+      }
+      const { provider, cfg } = await getOrgConfig(req, payload.org_id);
+      await pickAdapter(provider).voidReceipt(
+        { docnum: payload.provider_docnum, docseries: payload.serie },
+        cfg
+      );
+      return json({ success: true });
+    } catch (e) {
+      return json({ success: false, error: (e as Error).message });
     }
   }
 

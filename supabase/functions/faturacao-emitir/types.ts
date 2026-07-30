@@ -54,6 +54,14 @@ export interface PdfInput {
   signed?: boolean;
 }
 
+/** Identifica um Recibo já emitido, para o anular no provider (setReceiptVoid
+ *  no KeyInvoice) — DocSeries é opcional (o provider usa a série da própria
+ *  chave API quando omissa). */
+export interface VoidReceiptInput {
+  docnum: string;
+  docseries?: string;
+}
+
 /**
  * Config do provider já resolvida (vinda da org em `plataformas_configuracao`
  * ou de um teste de ligação). O adapter aplica os seus próprios defaults e
@@ -83,6 +91,8 @@ export interface FaturacaoProvider {
   emit(input: EmitInput, cfg: ProviderConfig): Promise<EmitDocResult>;
   /** Devolve o PDF (base64) de um documento já emitido. */
   pdf(input: PdfInput, cfg: ProviderConfig): Promise<string>;
+  /** Anula um Recibo já emitido (reverte a liquidação real no provider). Lança em caso de falha. */
+  voidReceipt(input: VoidReceiptInput, cfg: ProviderConfig): Promise<void>;
   /** Confirma se o provider tem o doctype do tipo indicado configurado (config da org OU fallback do deployment). Usado no pré-voo, antes de se aceitar criar um acordo de parcelamento. */
   hasDoctype(tipo: EmitInput['tipo'], cfg: ProviderConfig): boolean;
 }

@@ -39,6 +39,7 @@ import {
   type ParcelamentoFaturaAlvo,
 } from '@/components/faturacao/ParcelamentoDialog';
 import { useAcordoAtivoPorCobranca } from '@/hooks/useAcordosPagamento';
+import { anularReciboNoProvider } from '@/lib/faturacao';
 import { FaturacaoToolbarSection } from './faturacao/sections/FaturacaoToolbarSection';
 import { FaturacaoListaSection } from './faturacao/sections/FaturacaoListaSection';
 import { FaturacaoDialogsSection } from './faturacao/sections/FaturacaoDialogsSection';
@@ -345,6 +346,7 @@ export function FaturacaoContent() {
             `Recibo anulado, mas a parcela do acordo pode ter ficado desatualizada: ${parcelaErr.message}`
           );
         }
+        await anularReciboNoProvider(row.reciboId);
         toast.success('Recibo anulado (anulamento lançado na conta-corrente).');
       } else if (row.docTipo === 'nota_credito' && row.notaCreditoId) {
         const { data: ncAtual } = await supabase

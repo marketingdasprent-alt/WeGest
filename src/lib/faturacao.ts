@@ -79,6 +79,56 @@ export async function checkFaturacaoHealth(): Promise<boolean> {
 }
 
 /**
+ * Anula, no provider fiscal, um Recibo já emitido — best-effort, nunca lança.
+ * Chamar SEMPRE a seguir a marcar `recibos.estado = 'anulado'` internamente.
+ *
+ * Sem isto (achado ao testar manualmente, 30/07/2026): anular um recibo só
+ * na WeGest nunca revertia a liquidação real no KeyInvoice — a fatura
+ * original ficava com "saldo pendente" errado lá (menor do que a WeGest
+ * pensava), e uma tentativa nova de pagamento sobre a mesma fatura recusava
+ * com "valor a liquidar superior ao valor pendente".
+ */
+export async function anularReciboNoProvider(reciboId: string): Promise<void> {
+  try {
+    const { data: recibo } = await supabase
+      .from('recibos')
+      .select('referencia, documento_externo_ref')
+      .eq('id', reciboId)
+      .maybeSingle();
+    // Sem documento_externo_ref: o recibo nunca chegou a ser emitido no
+    // provider (ou a emissão falhou) — nada para anular lá.
+    if (!recibo?.referencia || !recibo?.documento_externo_ref) return;
+
+    const { data: inv } = await supabase
+      .from('invoices')
+      .select('provider_docnum, serie')
+      .eq('tipo', 'RC')
+      .eq('cobranca_id', recibo.referencia)
+      .eq('numero', recibo.documento_externo_ref)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!inv?.provider_docnum) return;
+
+    const { data, error } = await supabase.functions.invoke<{ success: boolean; error?: string }>(
+      FN,
+      {
+        body: {
+          action: 'void_receipt',
+          provider_docnum: inv.provider_docnum,
+          serie: inv.serie ?? undefined,
+        },
+      }
+    );
+    if (error || !data?.success) {
+      console.warn('Falha (não crítica) ao anular o recibo no KeyInvoice:', error || data?.error);
+    }
+  } catch (e) {
+    console.warn('Falha (não crítica) ao anular o recibo no KeyInvoice:', e);
+  }
+}
+
+/**
  * Anula a faturação de um conjunto de cobranças (estorna tudo → saldo a zero):
  * anula os recibos e notas de crédito ativos ligados e as próprias cobranças, e
  * fecha (cancela) qualquer acordo de pagamento/parcelamento ativo dessas
@@ -114,13 +164,15 @@ export async function anularCobrancasFaturacao(cobrancaIds: string[]): Promise<v
     // avulsa em FaturacaoTab.confirmarAnular — aqui faltava). No-op para
     // recibos que não pertencem a nenhuma parcela.
     for (const r of recibosAnulados ?? []) {
+      const reciboId = (r as { id: string }).id;
       const { error: reverterErr } = await supabase.rpc(
         'acordo_parcela_reverter_pagamento' as any,
-        { p_recibo_id: (r as { id: string }).id }
+        { p_recibo_id: reciboId }
       );
       if (reverterErr) {
         console.warn('Falha (não crítica) a reverter parcela do acordo:', reverterErr);
       }
+      await anularReciboNoProvider(reciboId);
     }
 
     // Notas de crédito ativas da cobrança → anuladas (estorno a débito).

@@ -39,6 +39,7 @@ import type {
   FaturacaoProvider,
   PdfInput,
   ProviderConfig,
+  VoidReceiptInput,
 } from '../types.ts';
 import { EmissaoAmbiguaError } from '../types.ts';
 
@@ -296,6 +297,30 @@ export const keyInvoiceProvider: FaturacaoProvider = {
       numero: FullDocNumber ?? (DocNum != null ? String(DocNum) : ''),
       raw: res.Data,
     };
+  },
+
+  async voidReceipt(input: VoidReceiptInput, cfg): Promise<void> {
+    // setReceiptVoid (API5) — "Anula um recibo". Descoberto ao testar
+    // manualmente (30/07/2026): anular um recibo só na WeGest nunca revertia
+    // a liquidação real no KeyInvoice — a fatura original ficava com "saldo
+    // pendente" errado lá, bloqueando qualquer tentativa nova de pagamento
+    // (insertReceipt recusava com "valor a liquidar superior ao valor
+    // pendente"). DocSeries é opcional — omitido, o provider usa a série da
+    // própria chave API.
+    const r = resolve(cfg);
+    const sid = await authenticate(r.apiKey, r.endpoint);
+    const d = await call(
+      r.endpoint,
+      'setReceiptVoid',
+      {
+        DocNum: String(input.docnum),
+        ...(input.docseries ? { DocSeries: String(input.docseries) } : {}),
+      },
+      { sid }
+    );
+    if (!ok(d)) {
+      throw new Error(`setReceiptVoid falhou: ${d?.ErrorMessage || 'recusado'}`);
+    }
   },
 
   async pdf(input: PdfInput, cfg): Promise<string> {
