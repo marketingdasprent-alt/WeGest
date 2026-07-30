@@ -37,6 +37,7 @@ import { MotoristaDocumentosCard } from './MotoristaDocumentosCard';
 import { MotoristaMovimentosCard } from './MotoristaMovimentosCard';
 import { MotoristaRecibosCard } from './MotoristaRecibosCard';
 import { MotoristaDanosCard } from './MotoristaDanosCard';
+import { MotoristaAcordoCard } from './MotoristaAcordoCard';
 import { MotoristaRelatoriosCard } from './MotoristaRelatoriosCard';
 import { MotoristaCombustivelCard } from './MotoristaCombustivelCard';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
@@ -785,7 +786,9 @@ export function MotoristaDashboard() {
         </Dialog>
       </div>
 
-      {/* 
+      <MotoristaAcordoCard />
+
+      {/*
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <MotoristaCombustivelCard motoristaId={motorista.id} />
         <MotoristaMovimentosCard motoristaId={motorista.id} />

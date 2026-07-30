@@ -9,7 +9,7 @@ vi.mock('@/integrations/supabase/client', () => ({
   supabase: { rpc: rpcMock },
 }));
 
-import { useAcordoVistaDevedor } from './useAcordoVistaDevedor';
+import { useAcordoVistaDevedor, useMeusAcordosAtivos } from './useAcordoVistaDevedor';
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -61,5 +61,25 @@ describe('useAcordoVistaDevedor', () => {
     });
     const { result } = renderHook(() => useAcordoVistaDevedor('a-1'), { wrapper });
     await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+describe('useMeusAcordosAtivos', () => {
+  it('chama a RPC motorista_meus_acordos_ativos e normaliza os campos', async () => {
+    rpcMock.mockResolvedValue({
+      data: [{ id: 'a-1', codigo: 7, falta_pagar: 143.5 }],
+      error: null,
+    });
+    const { result } = renderHook(() => useMeusAcordosAtivos(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(rpcMock).toHaveBeenCalledWith('motorista_meus_acordos_ativos', {});
+    expect(result.current.data).toEqual([{ id: 'a-1', codigo: 7, faltaPagar: 143.5 }]);
+  });
+
+  it('devolve [] para quem não tem nenhum acordo ativo (ou não é motorista)', async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+    const { result } = renderHook(() => useMeusAcordosAtivos(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([]);
   });
 });
