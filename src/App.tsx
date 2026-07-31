@@ -14,6 +14,7 @@ import WebAppRoutes from '@/routes/WebAppRoutes';
 import { UpdateNotification } from '@/components/UpdateNotification';
 import { NotificacoesPopup } from '@/components/notificacoes/NotificacoesPopup';
 import { OnboardingColaboradorDialog } from '@/components/onboarding/OnboardingColaboradorDialog';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,39 +27,47 @@ const queryClient = new QueryClient({
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TenantProvider>
-          <PermissionsProvider>
-            <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-              <TooltipProvider>
-                <Toaster />
-                <Sonner />
-                <UpdateNotification />
-                {/*
+      {/*
+        Fronteira de raiz — última rede, para o que rebenta fora das rotas
+        (providers, popup de notificações, diálogo de onboarding).
+        Fica DENTRO do QueryClientProvider de propósito: assim o "Tentar de
+        novo" remonta a árvore sem deitar fora a cache das queries.
+      */}
+      <ErrorBoundary origem="raiz">
+        <AuthProvider>
+          <TenantProvider>
+            <PermissionsProvider>
+              <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+                <TooltipProvider>
+                  <Toaster />
+                  <Sonner />
+                  <UpdateNotification />
+                  {/*
                   NotificacoesProvider vive DENTRO do BrowserRouter porque decide
                   pela rota atual: notificações internas não podem ser lidas nem
                   mostradas em rotas públicas (landing, páginas institucionais,
                   quadro de TV). Fora do router não teria acesso ao pathname, e
                   era assim que os avisos apareciam sobre a landing.
                 */}
-                <BrowserRouter>
-                  <NotificacoesProvider>
-                    {isNativeDriverOnlyMode() ? (
-                      <NativeAppRoutes />
-                    ) : (
-                      <>
-                        <WebAppRoutes />
-                        <NotificacoesPopup />
-                        <OnboardingColaboradorDialog />
-                      </>
-                    )}
-                  </NotificacoesProvider>
-                </BrowserRouter>
-              </TooltipProvider>
-            </ThemeProvider>
-          </PermissionsProvider>
-        </TenantProvider>
-      </AuthProvider>
+                  <BrowserRouter>
+                    <NotificacoesProvider>
+                      {isNativeDriverOnlyMode() ? (
+                        <NativeAppRoutes />
+                      ) : (
+                        <>
+                          <WebAppRoutes />
+                          <NotificacoesPopup />
+                          <OnboardingColaboradorDialog />
+                        </>
+                      )}
+                    </NotificacoesProvider>
+                  </BrowserRouter>
+                </TooltipProvider>
+              </ThemeProvider>
+            </PermissionsProvider>
+          </TenantProvider>
+        </AuthProvider>
+      </ErrorBoundary>
     </QueryClientProvider>
   );
 };
