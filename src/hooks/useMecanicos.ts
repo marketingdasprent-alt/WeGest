@@ -47,6 +47,11 @@ export async function atribuirMecanicoAoTicket(
   ticketId: string,
   mecanicoId: string | null
 ): Promise<void> {
+  // ATENÇÃO: `assistencia_tickets.mecanico_id` não existe em produção — a
+  // migração `20260728140000_mecanicos.sql` está no repositório mas não foi
+  // aplicada (verificado a 31/07/2026). Enquanto assim for, este update falha
+  // em produção. O cast é o que permite compilar; não é dívida de estilo, é um
+  // marcador de que falta aplicar a migração.
   const { error } = await (supabase as any)
     .from('assistencia_tickets')
     .update({ mecanico_id: mecanicoId })

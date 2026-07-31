@@ -48,7 +48,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
 
   const loadRecorrencias = async () => {
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('motorista_financeiro_recorrencias')
         .select('*')
         .eq('motorista_id', motoristaId)
@@ -205,7 +205,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
     const anterior = recorrencias;
     setRecorrencias((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('motorista_financeiro_recorrencias')
         .update({ status, updated_at: new Date().toISOString() })
         .eq('id', id);

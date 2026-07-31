@@ -32,7 +32,7 @@ export function useCartrackVehicles(enabled = true) {
     enabled,
     staleTime: 60_000,
     queryFn: async (): Promise<CartrackVehicle[]> => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('cartrack_vehicles')
         .select(
           'id, integracao_id, cartrack_vehicle_id, registration, descricao, odometer, last_latitude, last_longitude, last_position_at, speed, ignition, status, viatura_id'
@@ -59,14 +59,17 @@ export function useCartrackVehicleByViatura(viaturaId?: string | null) {
     enabled: !!viaturaId,
     staleTime: 60_000,
     queryFn: async (): Promise<CartrackVehicleDetail | null> => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('cartrack_vehicles')
         .select('*')
         .eq('viatura_id', viaturaId)
         .maybeSingle();
       if (error) throw error;
       if (!data) return null;
-      const fuel = (data.raw_data?.status?.fuel ?? {}) as Record<string, unknown>;
+      // `raw_data` é jsonb → `Json` nos tipos gerados; a forma do payload da
+      // Cartrack tem de ser afirmada para se lhe chegar ao combustível.
+      const raw = data.raw_data as { status?: { fuel?: Record<string, unknown> } } | null;
+      const fuel = raw?.status?.fuel ?? {};
       const toNum = (v: unknown) => (typeof v === 'number' ? v : null);
       return {
         ...(data as CartrackVehicle),

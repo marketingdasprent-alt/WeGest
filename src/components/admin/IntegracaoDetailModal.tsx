@@ -323,7 +323,7 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
       // invocado de seguida para processar já, sem esperar pelo próximo
       // tick de 5 min.
       if (isViaVerde) {
-        const { error: insertError } = await (supabase as any).from('via_verde_sync_queue').insert({
+        const { error: insertError } = await supabase.from('via_verde_sync_queue').insert({
           integracao_id: integracao.id,
           org_id: orgId,
           status: 'pending',

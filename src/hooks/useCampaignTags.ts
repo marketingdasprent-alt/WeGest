@@ -8,7 +8,7 @@ export const useCampaignTags = () => {
   const fetchAvailableTags = async () => {
     try {
       setLoading(true);
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('leads_dasprent')
         .select('campaign_tags')
         .not('campaign_tags', 'is', null);

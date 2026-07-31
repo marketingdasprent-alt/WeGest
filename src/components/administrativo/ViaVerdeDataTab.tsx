@@ -112,7 +112,7 @@ export const ViaVerdeDataTab: React.FC = () => {
   const fetchTransacoes = async () => {
     setLoading(true);
     try {
-      let query = (supabase as any)
+      let query = supabase
         .from('via_verde_transacoes')
         .select(`*, motorista:motoristas_ativos (nome)`)
         .order('transaction_date', { ascending: false });

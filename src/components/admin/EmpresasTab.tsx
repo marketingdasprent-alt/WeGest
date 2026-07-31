@@ -141,7 +141,7 @@ export const EmpresasTab: React.FC = () => {
         toast.success('Empresa atualizada');
       } else {
         // org_id é NOT NULL em clientes e exigido pelo RLS — obter via RPC.
-        const { data: orgId, error: orgErr } = await (supabase as any).rpc('get_current_org_id');
+        const { data: orgId, error: orgErr } = await supabase.rpc('get_current_org_id');
         if (orgErr || !orgId) {
           throw new Error('Não foi possível determinar a organização atual');
         }

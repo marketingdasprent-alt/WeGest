@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       _backup_viaturas_20260710: {
@@ -2980,6 +2955,7 @@ export type Database = {
           periodo_ate: string
           periodo_de: string
           reserva_id: string | null
+          responsavel_motorista_id: string | null
           tarifa_id: string | null
           tarifa_nome: string | null
           taxa_iva: number
@@ -3010,6 +2986,7 @@ export type Database = {
           periodo_ate: string
           periodo_de: string
           reserva_id?: string | null
+          responsavel_motorista_id?: string | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
           taxa_iva?: number
@@ -3040,6 +3017,7 @@ export type Database = {
           periodo_ate?: string
           periodo_de?: string
           reserva_id?: string | null
+          responsavel_motorista_id?: string | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
           taxa_iva?: number
@@ -3090,6 +3068,13 @@ export type Database = {
             columns: ["reserva_id"]
             isOneToOne: false
             referencedRelation: "reservas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contrato_cobrancas_responsavel_motorista_id_fkey"
+            columns: ["responsavel_motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
             referencedColumns: ["id"]
           },
           {
@@ -6501,6 +6486,7 @@ export type Database = {
           acordo_id: string | null
           acordo_pendente: boolean | null
           categoria: string | null
+          cobranca_id: string | null
           created_at: string | null
           criado_por: string | null
           dano_id: string | null
@@ -6523,6 +6509,7 @@ export type Database = {
           acordo_id?: string | null
           acordo_pendente?: boolean | null
           categoria?: string | null
+          cobranca_id?: string | null
           created_at?: string | null
           criado_por?: string | null
           dano_id?: string | null
@@ -6545,6 +6532,7 @@ export type Database = {
           acordo_id?: string | null
           acordo_pendente?: boolean | null
           categoria?: string | null
+          cobranca_id?: string | null
           created_at?: string | null
           criado_por?: string | null
           dano_id?: string | null
@@ -6569,6 +6557,13 @@ export type Database = {
             columns: ["acordo_id"]
             isOneToOne: false
             referencedRelation: "acordos_pagamento"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_financeiro_cobranca_id_fkey"
+            columns: ["cobranca_id"]
+            isOneToOne: false
+            referencedRelation: "contrato_cobrancas"
             referencedColumns: ["id"]
           },
           {
@@ -7981,6 +7976,47 @@ export type Database = {
             foreignKeyName: "org_definicoes_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: true
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizacao_modulos: {
+        Row: {
+          ativado_em: string
+          ativo: boolean
+          created_at: string
+          desativado_em: string | null
+          id: string
+          modulo: string
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativado_em?: string
+          ativo?: boolean
+          created_at?: string
+          desativado_em?: string | null
+          id?: string
+          modulo: string
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          ativado_em?: string
+          ativo?: boolean
+          created_at?: string
+          desativado_em?: string | null
+          id?: string
+          modulo?: string
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organizacao_modulos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
             referencedRelation: "organizacoes"
             referencedColumns: ["id"]
           },
@@ -12646,6 +12682,10 @@ export type Database = {
     }
     Functions: {
       acordo_cancelar: { Args: { p_acordo_id: string }; Returns: undefined }
+      acordo_cancelar_por_fatura_anulada: {
+        Args: { p_cobranca_id: string }
+        Returns: undefined
+      }
       acordo_criar: {
         Args: {
           p_aviso_antecedencia_dias?: number
@@ -12801,6 +12841,14 @@ export type Database = {
         Returns: boolean
       }
       can_view_financeiro: { Args: never; Returns: boolean }
+      cobranca_ceder_a_motorista: {
+        Args: { p_cobranca_id: string; p_motorista_id: string }
+        Returns: undefined
+      }
+      cobranca_reverter_cessao_motorista: {
+        Args: { p_cobranca_id: string }
+        Returns: undefined
+      }
       cobranca_saldo_por_liquidar: {
         Args: { p_cobranca_id: string }
         Returns: number
@@ -13013,6 +13061,7 @@ export type Database = {
         }
         Returns: number
       }
+      formulario_publico_por_id: { Args: { p_id: string }; Returns: Json }
       generate_primavera_api_key: { Args: never; Returns: string }
       gerar_cobranca_dano: { Args: { p_dano_id: string }; Returns: string }
       gerar_cobranca_renta_car: {
@@ -13287,6 +13336,7 @@ export type Database = {
         Returns: Json
       }
       marcar_convite_usado: { Args: { p_token: string }; Returns: boolean }
+      marcar_todas_notificacoes_lidas: { Args: never; Returns: Json }
       marketing_lista_contagem: {
         Args: { p_lista_id: string }
         Returns: number
@@ -13295,6 +13345,7 @@ export type Database = {
         Args: { p_principal: string; p_secundaria: string }
         Returns: undefined
       }
+      motorista_meus_acordos_ativos: { Args: never; Returns: Json }
       nif_pt_valido: { Args: { p_nif: string }; Returns: boolean }
       norm_nome_match: { Args: { t: string }; Returns: string }
       normalize_owner_name: { Args: { input_name: string }; Returns: string }
@@ -13379,6 +13430,8 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      org_codigo_disponivel: { Args: { p_codigo: string }; Returns: boolean }
+      org_por_codigo: { Args: { p_codigo: string }; Returns: Json }
       org_privacidade_por_gestor: { Args: never; Returns: boolean }
       process_domain_events: { Args: { p_max?: number }; Returns: undefined }
       proxima_data_renovacao: {
@@ -13476,6 +13529,7 @@ export type Database = {
         }[]
       }
       verificar_lista_espera_disponibilidade: { Args: never; Returns: number }
+      verificar_modulo: { Args: { p_modulo: string }; Returns: boolean }
       via_verde_sync_queue_claim: {
         Args: { p_max: number }
         Returns: {
@@ -13681,9 +13735,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: ["admin", "gestor_tvde", "gestor_comercial", "colaborador"],

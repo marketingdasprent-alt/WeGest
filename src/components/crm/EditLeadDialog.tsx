@@ -83,7 +83,7 @@ export const EditLeadDialog: React.FC<EditLeadDialogProps> = ({
   const fetchFormularios = async () => {
     try {
       // Using any type to handle the current type issues
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('formularios')
         .select('id, nome, ativo')
         .eq('ativo', true)

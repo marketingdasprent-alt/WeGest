@@ -225,7 +225,7 @@ export function NovoMovimentoFinanceiroOverlay({
         // Cria a regra de recorrência + gera já a 1ª ocorrência (não esperar
         // pelo cron de 2ª feira). O cron gerar_movimentos_recorrentes trata
         // das semanas seguintes — ver 20260709100000_movimentos_financeiros_recorrentes.sql.
-        const { data: regra, error: regraError } = await (supabase as any)
+        const { data: regra, error: regraError } = await supabase
           .from('motorista_financeiro_recorrencias')
           .insert({
             motorista_id: motoristaId,
@@ -243,7 +243,7 @@ export function NovoMovimentoFinanceiroOverlay({
           .single();
         if (regraError) throw regraError;
 
-        const { error: primeiraError } = await (supabase as any)
+        const { error: primeiraError } = await supabase
           .from('motorista_financeiro')
           .insert({
             motorista_id: motoristaId,

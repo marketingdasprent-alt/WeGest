@@ -222,7 +222,7 @@ export function ReservaTabFaturar({ reserva }: Props) {
   const { data: invoices = [], refetch: refetchInvoices } = useQuery({
     queryKey: ['reserva-invoices', reserva.id],
     queryFn: async (): Promise<InvoiceMetadata[]> => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('invoices')
         .select('*')
         .in(

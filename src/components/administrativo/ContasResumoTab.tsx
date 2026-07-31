@@ -366,7 +366,7 @@ export function ContasResumoTab() {
       const weekEndUtc = `${format(weekEnd, 'yyyy-MM-dd')}T23:59:59Z`;
 
       // 4d. Buscar transações de combustível no período
-      const combustivelQuery = (supabase as any)
+      const combustivelQuery = supabase
         .from('bp_transacoes')
         .select('motorista_id, amount')
         .gte('transaction_date', weekStartUtc)
@@ -388,7 +388,7 @@ export function ContasResumoTab() {
         .not('motorista_id', 'is', null);
 
       // 4d-ter. Buscar portagens Via Verde no período
-      const viaVerdeQuery = (supabase as any)
+      const viaVerdeQuery = supabase
         .from('via_verde_transacoes')
         .select('motorista_id, amount')
         .gte('transaction_date', weekStartUtc)

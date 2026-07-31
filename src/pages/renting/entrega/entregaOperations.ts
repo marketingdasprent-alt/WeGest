@@ -179,7 +179,7 @@ export async function uploadDanos(params: UploadDanosParams): Promise<string[]> 
   // tem de correr ANTES de confirmar (o token ainda não está usado aqui).
   // Best-effort: um token novo normalmente não tem nada para limpar.
   try {
-    const { error: limparErr } = await (supabase as any).rpc('limpar_danos_token', {
+    const { error: limparErr } = await supabase.rpc('limpar_danos_token', {
       p_token: token,
     });
     if (limparErr) throw limparErr;
@@ -225,7 +225,7 @@ export async function uploadDanos(params: UploadDanosParams): Promise<string[]> 
     }
 
     for (const grupo of grupos) {
-      const { data: dano, error: dErr } = await (supabase as any)
+      const { data: dano, error: dErr } = await supabase
         .from('viatura_danos')
         .insert({
           viatura_id: vId,

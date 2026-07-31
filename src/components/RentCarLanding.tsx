@@ -33,7 +33,7 @@ export const RentCarLanding = () => {
       setLoading(true);
 
       // Using any type to handle the current type issues
-      const { data: formulario, error } = await (supabase as any)
+      const { data: formulario, error } = await supabase
         .from('formularios')
         .select('*')
         .eq('nome', 'Formulário TVDE Distância Arrojada')
@@ -45,7 +45,9 @@ export const RentCarLanding = () => {
       }
       if (formulario) {
         setFormulario(formulario);
-        const campos = formulario.campos || [];
+        // `campos` é uma coluna jsonb → `Json` nos tipos gerados; a forma do
+        // array de campos tem de ser afirmada aqui.
+        const campos = (formulario.campos ?? []) as unknown as FormField[];
         setFormFields(campos);
       }
     } catch (error) {
@@ -149,7 +151,7 @@ export const RentCarLanding = () => {
       // Buscar campanhas associadas ao formulário
       let campanhas: string[] = [];
       if (formulario?.id) {
-        const { data: campanhasData } = await (supabase as any)
+        const { data: campanhasData } = await supabase
           .from('formulario_campanhas')
           .select('campanha_tag')
           .eq('formulario_id', formulario.id);
@@ -265,7 +267,7 @@ export const RentCarLanding = () => {
 
       // Verificar duplicidade antes de inserir (mesmo email nos últimos 5 minutos)
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      const { data: existingLead } = await (supabase as any)
+      const { data: existingLead } = await supabase
         .from('leads_dasprent')
         .select('id')
         .eq('email', leadData.email)
@@ -277,7 +279,7 @@ export const RentCarLanding = () => {
         return;
       }
 
-      const { error } = await (supabase as any).from('leads_dasprent').insert(leadData);
+      const { error } = await supabase.from('leads_dasprent').insert(leadData);
       if (error) throw error;
 
       // Track form submission success

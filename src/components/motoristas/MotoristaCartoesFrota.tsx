@@ -14,6 +14,14 @@ import { Loader2, Fuel, Zap, Plus, UserX, Check, AlertTriangle } from 'lucide-re
 
 type TipoCartao = 'bp' | 'repsol' | 'edp';
 
+/**
+ * As três colunas de `motoristas_ativos` que guardam o número do cartão por
+ * fornecedor. São escritas por chave calculada (`cartao_${tipo}`), que o
+ * compilador não consegue ligar ao nome da coluna — este é o cast estreito
+ * usado nesses pontos, para não abrir o payload a qualquer chave.
+ */
+type ColunaCartaoFicha = Partial<Record<`cartao_${TipoCartao}`, string | null>>;
+
 interface CartaoAssoc {
   id: string;
   numero: string;
@@ -82,7 +90,7 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
   const carregarAssociados = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('cartoes_frota')
         .select('id, numero, tipo, status, limite')
         .eq('motorista_id', motorista.id)
@@ -101,7 +109,7 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
     setLoadingDisp(true);
     setSelectedId('');
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('cartoes_frota')
         .select('id, numero, detentor, limite')
         .eq('tipo', tipo)
@@ -134,15 +142,15 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
     if (!cartao) return;
     setBusy(true);
     try {
-      const { error: e1 } = await (supabase as any)
+      const { error: e1 } = await supabase
         .from('cartoes_frota')
         .update({ motorista_id: motorista.id, status: 'em_uso', data_entrega: todayISO() })
         .eq('id', cartao.id);
       if (e1) throw e1;
       // Atualizar a ficha do motorista (usado no match das transações importadas)
-      const { error: e2 } = await (supabase as any)
+      const { error: e2 } = await supabase
         .from('motoristas_ativos')
-        .update({ [`cartao_${tipo}`]: cartao.numero })
+        .update({ [`cartao_${tipo}`]: cartao.numero } as ColunaCartaoFicha)
         .eq('id', motorista.id);
       if (e2) throw e2;
       toast({ title: `Cartão ${TIPO_INFO[tipo].label} ${cartao.numero} associado` });
@@ -157,7 +165,7 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
   const devolver = async (c: CartaoAssoc) => {
     setBusy(true);
     try {
-      const { error: e1 } = await (supabase as any)
+      const { error: e1 } = await supabase
         .from('cartoes_frota')
         .update({
           motorista_id: null,
@@ -169,9 +177,9 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
       if (e1) throw e1;
       // Limpar a ficha se apontava para este cartão
       if (fichaDe(c.tipo).trim() === c.numero.trim()) {
-        await (supabase as any)
+        await supabase
           .from('motoristas_ativos')
-          .update({ [`cartao_${c.tipo}`]: null })
+          .update({ [`cartao_${c.tipo}`]: null } as ColunaCartaoFicha)
           .eq('id', motorista.id);
       }
       toast({ title: `Cartão ${c.numero} devolvido` });
@@ -186,9 +194,9 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
   const sincronizarFicha = async (c: CartaoAssoc) => {
     setBusy(true);
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('motoristas_ativos')
-        .update({ [`cartao_${c.tipo}`]: c.numero })
+        .update({ [`cartao_${c.tipo}`]: c.numero } as ColunaCartaoFicha)
         .eq('id', motorista.id);
       if (error) throw error;
       toast({ title: 'Ficha sincronizada' });

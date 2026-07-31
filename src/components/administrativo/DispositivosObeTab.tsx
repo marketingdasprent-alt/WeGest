@@ -263,12 +263,12 @@ export function DispositivosObeTab() {
         { data: vits, error: e2 },
         { data: motoristas, error: e3 },
       ] = await Promise.all([
-        (supabase as any)
+        supabase
           .from('dispositivos_obe')
           .select('*, viatura:viatura_id(matricula, marca, modelo)')
           .order('nr_equipamento'),
         supabase.from('viaturas').select('id, matricula, marca, modelo').order('matricula'),
-        (supabase as any).rpc('get_viaturas_motorista_atual'),
+        supabase.rpc('get_viaturas_motorista_atual'),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
@@ -386,8 +386,8 @@ export function DispositivosObeTab() {
         notas: form.notas || null,
       };
       const { error } = editing
-        ? await (supabase as any).from('dispositivos_obe').update(payload).eq('id', editing.id)
-        : await (supabase as any).from('dispositivos_obe').insert(payload);
+        ? await supabase.from('dispositivos_obe').update(payload).eq('id', editing.id)
+        : await supabase.from('dispositivos_obe').insert(payload);
       if (error) throw error;
       toast({ title: editing ? 'Dispositivo atualizado' : 'Dispositivo criado' });
       setDialogOpen(false);
@@ -401,7 +401,7 @@ export function DispositivosObeTab() {
 
   const handleDelete = async () => {
     if (!deleteTarget || !podeGerir) return;
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from('dispositivos_obe')
       .delete()
       .eq('id', deleteTarget.id);
@@ -422,7 +422,7 @@ export function DispositivosObeTab() {
     setHistSearch('');
     setLoadingHistory(true);
     try {
-      const { data, error } = await (supabase as any).rpc('get_obe_historico_portagens', {
+      const { data, error } = await supabase.rpc('get_obe_historico_portagens', {
         p_nr_equipamento: d.nr_equipamento,
       });
       if (error) throw error;
@@ -622,7 +622,7 @@ export function DispositivosObeTab() {
     const matriculaMap = new Map(viaturas.map((v) => [v.matricula.toUpperCase(), v.id]));
     setImporting(true);
     try {
-      const { data: orgId } = await (supabase as any).rpc('get_current_org_id');
+      const { data: orgId } = await supabase.rpc('get_current_org_id');
       const payload = valid.map((r) => ({
         org_id: orgId,
         nr_equipamento: r.nr_equipamento,
@@ -630,7 +630,7 @@ export function DispositivosObeTab() {
         viatura_id: r.matricula ? (matriculaMap.get(r.matricula.toUpperCase()) ?? null) : null,
         notas: r.notas || null,
       }));
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('dispositivos_obe')
         .upsert(payload, { onConflict: 'org_id,nr_equipamento', ignoreDuplicates: false });
       if (error) throw error;

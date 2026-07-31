@@ -63,7 +63,7 @@ export function ViaturaObeHistoricoSection({ viaturaId }: ViaturaObeHistoricoSec
   const carregar = async () => {
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any).rpc('get_viatura_historico_portagens', {
+      const { data, error } = await supabase.rpc('get_viatura_historico_portagens', {
         p_viatura_id: viaturaId,
         p_data_inicio: dataInicio || null,
         p_data_fim: dataFim || null,

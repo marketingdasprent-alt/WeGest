@@ -74,7 +74,7 @@ export function CartoesFlotaTab() {
   const carregar = async () => {
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('cartoes_frota')
         .select(
           '*, motorista:motorista_id(nome), ultimo_motorista:ultimo_motorista_id(nome), cliente:cliente_id(nome)'
@@ -82,7 +82,11 @@ export function CartoesFlotaTab() {
         .order('tipo')
         .order('numero');
       if (error) throw error;
-      setCartoes(data || []);
+      // `CartaoFrota` é escrito à mão e diverge da forma que a BD devolve com as
+      // relações embebidas (sobretudo em nulabilidade). Afirmar aqui mantém o
+      // resto do ficheiro verificado; reconciliar o tipo com o gerado é trabalho
+      // à parte e mexe no comportamento do ecrã.
+      setCartoes((data || []) as unknown as CartaoFrota[]);
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
     } finally {
@@ -92,7 +96,7 @@ export function CartoesFlotaTab() {
 
   const carregarMotoristas = async () => {
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('motoristas_ativos')
         .select('id, nome')
         .order('nome');
@@ -108,7 +112,7 @@ export function CartoesFlotaTab() {
       const now = new Date();
       const desde = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const ate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
-      const { data, error } = await (supabase as any).rpc('get_cartoes_consumo', {
+      const { data, error } = await supabase.rpc('get_cartoes_consumo', {
         p_desde: desde,
         p_ate: ate,
       });
@@ -297,8 +301,8 @@ export function CartoesFlotaTab() {
         ativo: status === 'disponivel' || status === 'em_uso',
       };
       const { error } = editing
-        ? await (supabase as any).from('cartoes_frota').update(payload).eq('id', editing.id)
-        : await (supabase as any).from('cartoes_frota').insert(payload);
+        ? await supabase.from('cartoes_frota').update(payload).eq('id', editing.id)
+        : await supabase.from('cartoes_frota').insert(payload);
       if (error) throw error;
       toast({ title: editing ? 'Cartão atualizado' : 'Cartão criado' });
       setDialogOpen(false);
@@ -312,7 +316,7 @@ export function CartoesFlotaTab() {
 
   const handleDelete = async () => {
     if (!deleteTarget || !podeGerir) return;
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from('cartoes_frota')
       .delete()
       .eq('id', deleteTarget.id);
@@ -330,7 +334,7 @@ export function CartoesFlotaTab() {
     setHistorico([]);
     setLoadingHistory(true);
     try {
-      const { data, error } = await (supabase as any).rpc('get_cartao_historico_consumo', {
+      const { data, error } = await supabase.rpc('get_cartao_historico_consumo', {
         p_tipo: c.tipo,
         p_numero: c.numero,
       });
@@ -385,7 +389,7 @@ export function CartoesFlotaTab() {
     if (valid.length === 0) return;
     setImporting(true);
     try {
-      const { data: orgId } = await (supabase as any).rpc('get_current_org_id');
+      const { data: orgId } = await supabase.rpc('get_current_org_id');
       const payload = valid.map((r) => ({
         org_id: orgId,
         numero: r.numero,
@@ -398,7 +402,7 @@ export function CartoesFlotaTab() {
         notas: r.notas || null,
         devolucao: r.devolucao || null,
       }));
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('cartoes_frota')
         .upsert(payload, { onConflict: 'org_id,tipo,numero', ignoreDuplicates: false });
       if (error) throw error;

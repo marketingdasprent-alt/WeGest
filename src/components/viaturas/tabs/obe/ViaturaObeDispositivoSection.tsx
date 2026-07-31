@@ -38,12 +38,12 @@ export function ViaturaObeDispositivoSection({
     setLoading(true);
     try {
       const [{ data: assoc, error: e1 }, { data: livres, error: e2 }] = await Promise.all([
-        (supabase as any)
+        supabase
           .from('dispositivos_obe')
           .select('id, nr_equipamento, contrato, ativo, notas')
           .eq('viatura_id', viaturaId)
           .maybeSingle(),
-        (supabase as any)
+        supabase
           .from('dispositivos_obe')
           .select('id, nr_equipamento, contrato, ativo, notas')
           .is('viatura_id', null)
@@ -84,7 +84,7 @@ export function ViaturaObeDispositivoSection({
     if (!selecionado) return;
     setSaving(true);
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('dispositivos_obe')
         .update({ viatura_id: viaturaId })
         .eq('id', selecionado);
@@ -110,7 +110,7 @@ export function ViaturaObeDispositivoSection({
       return;
     setSaving(true);
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('dispositivos_obe')
         .update({ viatura_id: null })
         .eq('id', atual.id);
