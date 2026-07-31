@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { CardListSkeleton } from '@/components/ui/table-skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -422,11 +424,8 @@ const LeadDetails: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
-          <p className="text-muted-foreground mt-4">Carregando dados do lead...</p>
-        </div>
+      <div className="min-h-screen bg-background p-6">
+        <CardListSkeleton cartoes={3} />
       </div>
     );
   }
@@ -702,14 +701,13 @@ const LeadDetails: React.FC = () => {
                   <div>
                     <h3 className="text-lg font-semibold mb-4">Anotações Anteriores</h3>
                     {loadingNotes ? (
-                      <div className="flex items-center justify-center py-8">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                        <span className="ml-2 text-muted-foreground">Carregando anotações...</span>
-                      </div>
+                      <CardListSkeleton cartoes={2} />
                     ) : notes.length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-muted-foreground">Nenhuma anotação encontrada.</p>
-                      </div>
+                      <EmptyState
+                        icon={FileText}
+                        title="Ainda sem notas"
+                        description="As notas que escrever sobre este contacto ficam aqui, com data e autor, para toda a equipa ver."
+                      />
                     ) : (
                       <div className="space-y-4 max-h-96 overflow-y-auto">
                         {notes.map((note) => (
@@ -770,10 +768,11 @@ const LeadDetails: React.FC = () => {
                     <Upload className="h-4 w-4 mr-2" />
                     Anexar Documento
                   </Button>
-                  <div className="text-center py-8">
-                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">Nenhum arquivo anexado</p>
-                  </div>
+                  <EmptyState
+                    icon={FileText}
+                    title="Nenhum ficheiro anexado"
+                    description="Anexe documentos do contacto — contrato, comprovativos, identificação — para ficarem acessíveis a quem trabalhar este lead."
+                  />
                 </div>
               </TabsContent>
             </Tabs>
