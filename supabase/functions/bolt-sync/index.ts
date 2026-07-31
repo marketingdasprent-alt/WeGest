@@ -39,11 +39,23 @@ async function getBoltToken(supabase: any, integracaoId?: string): Promise<{ tok
     query = query.eq("id", integracaoId);
   }
 
-  const { data: config, error } = await query.single();
+  // Uma integração Bolt por empresa (várias company_id) — ver nota em bolt-api.
+  // O .single() antigo rebentava assim que existisse mais do que uma.
+  const { data: configs, error } = await query;
 
-  if (error || !config) {
+  if (error) {
+    throw new Error(`Erro ao ler configuração Bolt: ${error.message}`);
+  }
+  if (!configs || configs.length === 0) {
     throw new Error("Configuração Bolt não encontrada");
   }
+  if (configs.length > 1) {
+    throw new Error(
+      `Há ${configs.length} integrações Bolt activas — indique integracao_id no pedido.`,
+    );
+  }
+
+  const config = configs[0];
 
   const response = await fetch("https://oidc.bolt.eu/token", {
     method: "POST",

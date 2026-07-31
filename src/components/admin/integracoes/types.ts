@@ -11,9 +11,15 @@ export type PlataformaIntegracao =
 // (exceto 'viaverde', que é manual: armazenada como plataforma='viaverde', sem robot/credenciais;
 // e 'brevo', armazenada como plataforma='email' + email_provider='brevo' — integração de email
 // da própria empresa, sem robot/Apify, API key cifrada via RPC set_email_api_key)
+// 'bolt_api' só existe no wizard, para distinguir as duas formas de ligar à
+// Bolt: 'bolt' = robô Apify (raspa o portal, CSV semanal → bolt_resumos_semanais)
+// e 'bolt_api' = API oficial Bolt Fleet (OAuth → bolt_viagens). Na BD a API
+// grava-se como plataforma='bolt'; o robô como plataforma='robot' +
+// robot_target_platform='bolt'. As duas coexistem (o CSV é a rede de segurança).
 export type PlataformaOperacional =
   | 'uber'
   | 'bolt'
+  | 'bolt_api'
   | 'bp'
   | 'repsol'
   | 'edp'
