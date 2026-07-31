@@ -17,9 +17,27 @@ import { cn } from '@/lib/utils';
  * if (aCarregar) return <TableSkeleton colunas={5} />;
  */
 
+/**
+ * Coluna que só aparece a partir de um ponto de quebra — para o skeleton
+ * acompanhar tabelas que escondem colunas em ecrã pequeno. Sem isto, o
+ * skeleton mostra cinco colunas e a tabela real mostra três, e a transição
+ * salta à vista no telemóvel.
+ */
+export interface ColunaSkeleton {
+  /** Ponto de quebra a partir do qual a coluna existe. */
+  desde?: 'md' | 'lg';
+  /** Largura fixa em vez de repartir o espaço (ex.: 'w-16' para um estado). */
+  largura?: string;
+}
+
+const CLASSE_DESDE = { md: 'hidden md:block', lg: 'hidden lg:block' } as const;
+
 export interface TableSkeletonProps {
-  /** Colunas a desenhar. Usar o mesmo número da tabela real. */
-  colunas: number;
+  /**
+   * Número de colunas, ou a sua descrição quando há colunas responsivas.
+   * Usar o mesmo número/forma da tabela real.
+   */
+  colunas: number | ColunaSkeleton[];
   /** Linhas de espera. 5 chega para dar forma sem encher o ecrã. */
   linhas?: number;
   /** Desenhar a linha de cabeçalho. Desligar quando o cabeçalho é real. */
@@ -40,6 +58,9 @@ export function TableSkeleton({
   cabecalho = true,
   className,
 }: TableSkeletonProps) {
+  const specs: ColunaSkeleton[] =
+    typeof colunas === 'number' ? Array.from({ length: colunas }, () => ({})) : colunas;
+
   return (
     <div
       className={cn('w-full space-y-3', className)}
@@ -51,17 +72,29 @@ export function TableSkeleton({
     >
       {cabecalho && (
         <div className="flex gap-4 border-b border-border pb-3" aria-hidden="true">
-          {Array.from({ length: colunas }, (_, c) => (
-            <Skeleton key={c} className="h-4 flex-1" />
+          {specs.map((spec, c) => (
+            <Skeleton
+              key={c}
+              className={cn(
+                'h-4',
+                spec.largura ?? 'flex-1',
+                spec.desde && CLASSE_DESDE[spec.desde]
+              )}
+            />
           ))}
         </div>
       )}
 
       {Array.from({ length: linhas }, (_, l) => (
         <div key={l} className="flex items-center gap-4 py-1" aria-hidden="true">
-          {Array.from({ length: colunas }, (_, c) => (
-            <div key={c} className="flex-1">
-              <Skeleton className={cn('h-4', LARGURAS[(l + c) % LARGURAS.length])} />
+          {specs.map((spec, c) => (
+            <div
+              key={c}
+              className={cn(spec.largura ?? 'flex-1', spec.desde && CLASSE_DESDE[spec.desde])}
+            >
+              <Skeleton
+                className={cn('h-4', spec.largura ? 'w-full' : LARGURAS[(l + c) % LARGURAS.length])}
+              />
             </div>
           ))}
         </div>
