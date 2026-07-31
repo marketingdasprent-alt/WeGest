@@ -243,10 +243,19 @@ export const IntegracoesTab: React.FC = () => {
               : i.plataforma === 'robot'
                 ? 'api'
                 : 'api',
+          // As duas ligações à Bolt mostram o mesmo nome e o mesmo logótipo:
+          // plataforma='bolt' é a API oficial (OAuth → bolt_viagens) e
+          // plataforma='robot'+target 'bolt' é o robô Apify (CSV semanal →
+          // bolt_resumos_semanais). Sem esta etiqueta ficavam indistinguíveis
+          // na lista, e são coisas diferentes — convém saber qual falhou.
           subLabel:
             i.plataforma === 'robot' && !isSimplifiedRobot
               ? (i as any).apify_actor_id || undefined
-              : i.company_name || undefined,
+              : isBoltRobot
+                ? 'Robô · CSV semanal'
+                : i.plataforma === 'bolt'
+                  ? `API oficial${i.company_name ? ` · ${i.company_name}` : ''}`
+                  : i.company_name || undefined,
           rawData: i,
           logoUrl:
             i.logo_url ||
