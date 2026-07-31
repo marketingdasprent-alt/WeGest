@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -132,6 +134,14 @@ const MotoristaCandidaturas: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  // Distinguir 'não há nada' de 'os filtros não deixam ver nada': cada caso
+  // pede uma acção diferente de quem está a olhar.
+  const temFiltrosAtivos = searchTerm !== '' || statusFilter !== 'all';
+  const limparFiltros = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+  };
   const [sortField, setSortField] = useState<string>('data');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
@@ -508,13 +518,30 @@ const MotoristaCandidaturas: React.FC = () => {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="p-4">
+              <TableSkeleton colunas={5} />
             </div>
           ) : filteredCandidaturas.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              Nenhuma candidatura encontrada
-            </div>
+            <EmptyState
+              icon={Users}
+              title={
+                temFiltrosAtivos
+                  ? 'Nenhuma candidatura com estes filtros'
+                  : 'Ainda não há candidaturas'
+              }
+              description={
+                temFiltrosAtivos
+                  ? 'Nenhuma das candidaturas recebidas corresponde à pesquisa.'
+                  : 'Quando alguém se candidatar pelo formulário público, aparece aqui para ser analisada.'
+              }
+              action={
+                temFiltrosAtivos ? (
+                  <Button variant="outline" onClick={limparFiltros}>
+                    Limpar filtros
+                  </Button>
+                ) : undefined
+              }
+            />
           ) : (
             <Table>
               <TableHeader>
