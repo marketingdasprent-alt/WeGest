@@ -79,12 +79,38 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
 
   const [empresaId, setEmpresaId] = useState(empresaPorDefeito);
   const empresaSelecionada = empresas.find((e) => e.id === empresaId) ?? null;
+
+  // Dados do contrato que vão no corpo do email — é isto que faz o email ser
+  // um template com informação, em vez de um texto escrito à mão.
+  const fmtData = (d?: string | null) =>
+    d
+      ? new Date(d).toLocaleDateString('pt-PT', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+      : '';
+  const fmtEur = (v?: number | null) =>
+    v == null ? '' : v.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
+
+  const detalhesEmail = [
+    { label: 'Contrato', valor: contrato.codigo ? `#${contrato.codigo}` : '' },
+    { label: 'Viatura', valor: contrato.matricula ?? '' },
+    {
+      label: 'Período',
+      valor: [fmtData(contrato.data_inicio), fmtData(contrato.data_fim)]
+        .filter(Boolean)
+        .join(' a '),
+    },
+    { label: 'Valor', valor: fmtEur(contrato.total_final) },
+  ].filter((d) => d.valor);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gerando, setGerando] = useState(false);
   const [cidadeAssinatura, setCidadeAssinatura] = useState('');
   const [enviarEmailOpen, setEnviarEmailOpen] = useState(false);
-  const [pdfParaEnviar, setPdfParaEnviar] = useState<jsPDF | null>(null);
-  const [filenameParaEnviar, setFilenameParaEnviar] = useState('');
+  const [anexosParaEnviar, setAnexosParaEnviar] = useState<Array<{ pdf: jsPDF; filename: string }>>(
+    []
+  );
 
   // Chave estável de um condutor (cliente_id em rent-a-car, motorista_id em
   // TVDE/slot) — usada para seleccionar para quem gerar os documentos.
@@ -248,10 +274,15 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
         action: 'email',
         templateIds,
         cidadeAssinatura,
+        // Por email vai um ficheiro por documento (Contrato, Declaração,
+        // Termo...), não um PDF único com tudo colado: quem recebe assina e
+        // arquiva cada um por si.
+        separados: true,
       });
-      if (!resultado) throw new Error('Não foi possível gerar o documento.');
-      setPdfParaEnviar(resultado.pdf);
-      setFilenameParaEnviar(resultado.fileName);
+      if (!resultado || !('anexos' in resultado) || resultado.anexos.length === 0) {
+        throw new Error('Não foi possível gerar os documentos.');
+      }
+      setAnexosParaEnviar(resultado.anexos.map((a) => ({ pdf: a.pdf, filename: a.fileName })));
       setEnviarEmailOpen(true);
     } catch (err) {
       toast({
@@ -404,8 +435,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
       <EnviarContratoEmailDialog
         open={enviarEmailOpen}
         onOpenChange={setEnviarEmailOpen}
-        pdf={pdfParaEnviar}
-        filename={filenameParaEnviar}
+        anexos={anexosParaEnviar}
         contextoLabel={`Contrato #${contrato.codigo ?? ''}`}
         entidades={contactosEnvio}
         orgId={contrato.org_id}
@@ -413,6 +443,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
         // encabeça e assina o email, não uma marca fixa.
         emissorNome={empresaSelecionada?.nomeCompleto || empresaSelecionada?.nome}
         emissorLogoUrl={empresaSelecionada?.logoUrl ?? null}
+        detalhes={detalhesEmail}
       />
     </Dialog>
   );

@@ -55,6 +55,25 @@ const CORPO_POR_IDIOMA: Record<IdiomaEmail, string[]> = {
 };
 
 /**
+ * Frase de contexto do email, logo abaixo da saudação.
+ *
+ * O corpo do email é o template (esta introdução + o painel com os dados do
+ * contrato), não um texto que alguém tenha de escrever. A caixa de mensagem no
+ * ecrã é apenas para uma nota adicional, e fica vazia por omissão.
+ */
+export function introDocumento(idioma: IdiomaEmail): string {
+  switch (idioma) {
+    case 'en':
+      return 'Please find your rental agreement attached. The details are below.';
+    case 'es':
+      return 'Adjuntamos su contrato de alquiler. A continuación, los datos.';
+    case 'pt':
+    default:
+      return 'Segue em anexo o seu contrato de aluguer. Abaixo, os dados do contrato.';
+  }
+}
+
+/**
  * Mensagem por defeito do corpo do email, por idioma.
  *
  * `assinatura` é a empresa que emite o documento. Estava aqui "DASPRENT"
