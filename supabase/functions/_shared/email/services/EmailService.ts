@@ -1,13 +1,19 @@
 import { EmailProviderFactory } from '../factories/EmailProviderFactory.ts';
 import { EmailConfigError, EmailProviderError, EmailValidationError } from '../errors/index.ts';
-import { calendarNotificationTemplate, type CalendarNotificationInput } from '../templates/calendarNotification.ts';
+import {
+  calendarNotificationTemplate,
+  type CalendarNotificationInput,
+} from '../templates/calendarNotification.ts';
 import { folhaDanosTemplate } from '../templates/folhaDanos.ts';
 import { documentoFiscalTemplate } from '../templates/documentoFiscal.ts';
 import {
   assistanceNotificationTemplate,
   type AssistanceNotificationInput,
 } from '../templates/assistanceNotification.ts';
-import { alertasExpiracoesTemplate, type AlertasExpiracoesInput } from '../templates/alertasExpiracoes.ts';
+import {
+  alertasExpiracoesTemplate,
+  type AlertasExpiracoesInput,
+} from '../templates/alertasExpiracoes.ts';
 import {
   reciboAnuladoMotoristaTemplate,
   reciboAnuladoGestorTemplate,
@@ -19,11 +25,28 @@ import {
   eliminacaoContaConfirmacaoTemplate,
   type EliminacaoContaInput,
 } from '../templates/eliminacaoConta.ts';
-import { passwordRecoveryTemplate, magicLinkTemplate, motoristaOnboardingTemplate } from '../templates/authEmail.ts';
-import { jobFalhaTemplate, viaVerdeSyncFalhaTemplate, type JobFalhaInput } from '../templates/jobFalha.ts';
-import { documentoViaturaTemplate, type DocumentoViaturaInput } from '../templates/documentoViatura.ts';
-import { candidaturaPendenteTemplate, type CandidaturaPendenteInput } from '../templates/candidatura.ts';
-import { reservaSemCheckinTemplate, type ReservaSemCheckinInput } from '../templates/reservaSemCheckin.ts';
+import {
+  passwordRecoveryTemplate,
+  magicLinkTemplate,
+  motoristaOnboardingTemplate,
+} from '../templates/authEmail.ts';
+import {
+  jobFalhaTemplate,
+  viaVerdeSyncFalhaTemplate,
+  type JobFalhaInput,
+} from '../templates/jobFalha.ts';
+import {
+  documentoViaturaTemplate,
+  type DocumentoViaturaInput,
+} from '../templates/documentoViatura.ts';
+import {
+  candidaturaPendenteTemplate,
+  type CandidaturaPendenteInput,
+} from '../templates/candidatura.ts';
+import {
+  reservaSemCheckinTemplate,
+  type ReservaSemCheckinInput,
+} from '../templates/reservaSemCheckin.ts';
 import { contratoTemplate, type ContratoInput } from '../templates/contrato.ts';
 import {
   reparacaoConcluidaTemplate,
@@ -31,7 +54,10 @@ import {
   type ReparacaoConcluidaInput,
   type ReparacaoAbertaDemoradaInput,
 } from '../templates/reparacao.ts';
-import { fichaIncompletaTemplate, type FichaIncompletaInput } from '../templates/fichaIncompleta.ts';
+import {
+  fichaIncompletaTemplate,
+  type FichaIncompletaInput,
+} from '../templates/fichaIncompleta.ts';
 import {
   faturaClienteTemplate,
   cobrancaAtrasoTemplate,
@@ -94,7 +120,9 @@ export class EmailService {
     }
 
     if (!resolvedOrgId) {
-      throw new EmailValidationError('Não foi possível determinar a organização (org_id ou viaturaId em falta)');
+      throw new EmailValidationError(
+        'Não foi possível determinar a organização (org_id ou viaturaId em falta)'
+      );
     }
 
     const { html } = folhaDanosTemplate();
@@ -119,13 +147,27 @@ export class EmailService {
       mensagem: string;
       pdfBase64: string;
       filename: string;
+      /** Empresa emissora — dá a marca ao email (logo/nome no cabeçalho).
+       *  Sem ela o email sai com a marca WeGest, como antes. */
+      emissorNome?: string;
+      emissorLogoUrl?: string | null;
+      titulo?: string;
+      categoria?: string;
     }
   ): Promise<EmailSendResult> {
     if (!args.to || !args.to.includes('@')) {
       throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
     }
 
-    const { html } = documentoFiscalTemplate(args.mensagem);
+    const { html } = documentoFiscalTemplate({
+      mensagem: args.mensagem,
+      titulo: args.titulo,
+      categoria: args.categoria,
+      destinatarioNome: args.toNome,
+      emissorNome: args.emissorNome,
+      emissorLogoUrl: args.emissorLogoUrl,
+      anexoNome: args.filename,
+    });
     const attachments: EmailAttachment[] = [{ content: args.pdfBase64, name: args.filename }];
 
     const message: EmailMessage = {
@@ -204,7 +246,11 @@ export class EmailService {
 
   async sendEliminacaoConta(
     orgId: string,
-    args: EliminacaoContaInput & { to: string; toNome?: string; destinatario: 'admin' | 'confirmacao' }
+    args: EliminacaoContaInput & {
+      to: string;
+      toNome?: string;
+      destinatario: 'admin' | 'confirmacao';
+    }
   ): Promise<EmailSendResult> {
     if (!args.to || !args.to.includes('@')) {
       throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
@@ -221,7 +267,11 @@ export class EmailService {
 
   async sendAuthEmail(
     orgId: string,
-    args: { to: string; type: 'password_recovery' | 'magic_link' | 'motorista_onboarding'; actionLink: string }
+    args: {
+      to: string;
+      type: 'password_recovery' | 'magic_link' | 'motorista_onboarding';
+      actionLink: string;
+    }
   ): Promise<EmailSendResult> {
     if (!args.to || !args.to.includes('@')) {
       throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
@@ -379,8 +429,15 @@ export class EmailService {
 
     const { subject, html } = faturaClienteTemplate(args);
     const attachments: EmailAttachment[] | undefined =
-      args.pdfBase64 && args.filename ? [{ content: args.pdfBase64, name: args.filename }] : undefined;
-    const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html, attachments };
+      args.pdfBase64 && args.filename
+        ? [{ content: args.pdfBase64, name: args.filename }]
+        : undefined;
+    const message: EmailMessage = {
+      to: [{ email: args.to, name: args.toNome }],
+      subject,
+      html,
+      attachments,
+    };
 
     return this.send(orgId, 'fatura_cliente', message);
   }
@@ -424,14 +481,20 @@ export class EmailService {
 
     try {
       const { provider, sender } = await EmailProviderFactory.getProvider(orgId, this.supabase);
-      result = await provider.send({ ...message, senderOverride: message.senderOverride ?? sender });
+      result = await provider.send({
+        ...message,
+        senderOverride: message.senderOverride ?? sender,
+      });
     } catch (err) {
       if (err instanceof EmailConfigError) {
         result = { success: false, error: `config: ${err.message}` };
       } else {
         result = {
           success: false,
-          error: err instanceof EmailProviderError || err instanceof Error ? err.message : 'Erro desconhecido ao enviar email',
+          error:
+            err instanceof EmailProviderError || err instanceof Error
+              ? err.message
+              : 'Erro desconhecido ao enviar email',
         };
       }
     }
@@ -460,7 +523,10 @@ export class EmailService {
       ...extra,
     });
     if (error) {
-      console.error(`EmailService: falha ao gravar log de "${origem}" para ${email}:`, error.message);
+      console.error(
+        `EmailService: falha ao gravar log de "${origem}" para ${email}:`,
+        error.message
+      );
     }
   }
 

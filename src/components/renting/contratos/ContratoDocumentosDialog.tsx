@@ -78,6 +78,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
     '';
 
   const [empresaId, setEmpresaId] = useState(empresaPorDefeito);
+  const empresaSelecionada = empresas.find((e) => e.id === empresaId) ?? null;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gerando, setGerando] = useState(false);
   const [cidadeAssinatura, setCidadeAssinatura] = useState('');
@@ -408,6 +409,10 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
         contextoLabel={`Contrato #${contrato.codigo ?? ''}`}
         entidades={contactosEnvio}
         orgId={contrato.org_id}
+        // A empresa escolhida acima é quem emite o contrato — é ela que
+        // encabeça e assina o email, não uma marca fixa.
+        emissorNome={empresaSelecionada?.nomeCompleto || empresaSelecionada?.nome}
+        emissorLogoUrl={empresaSelecionada?.logoUrl ?? null}
       />
     </Dialog>
   );

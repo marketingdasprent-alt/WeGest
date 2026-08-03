@@ -15,6 +15,12 @@ export interface EnviarContratoDocumentoArgs {
   pdf: jsPDF;
   filename: string;
   orgId: string;
+  /** Empresa emissora do contrato — o email sai com a marca dela (logótipo e
+   *  nome no cabeçalho), em vez da marca WeGest. */
+  emissorNome?: string;
+  emissorLogoUrl?: string | null;
+  titulo?: string;
+  categoria?: string;
 }
 
 export async function enviarContratoDocumentoEmail({
@@ -25,6 +31,10 @@ export async function enviarContratoDocumentoEmail({
   pdf,
   filename,
   orgId,
+  emissorNome,
+  emissorLogoUrl,
+  titulo,
+  categoria,
 }: EnviarContratoDocumentoArgs): Promise<void> {
   const datauri = pdf.output('datauristring');
   const marcador = 'base64,';
@@ -34,7 +44,21 @@ export async function enviarContratoDocumentoEmail({
 
   const { data, error } = await supabase.functions.invoke<{ success?: boolean; error?: string }>(
     'send-documento-fiscal-email',
-    { body: { to, toNome, subject, mensagem, pdfBase64, filename, org_id: orgId } }
+    {
+      body: {
+        to,
+        toNome,
+        subject,
+        mensagem,
+        pdfBase64,
+        filename,
+        org_id: orgId,
+        emissorNome,
+        emissorLogoUrl,
+        titulo,
+        categoria,
+      },
+    }
   );
 
   if (error) {

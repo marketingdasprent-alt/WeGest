@@ -21,12 +21,26 @@ describe('documentoEmail', () => {
     expect(tipoDocumentoLabel('FT', 'es')).toBe('Factura');
   });
 
-  it('a mensagem default PT tem o texto pedido e a assinatura DASPRENT', () => {
+  it('a mensagem default PT tem o texto pedido', () => {
     const m = mensagemDefaultDocumento('pt');
     expect(m).toContain('Saudações');
     expect(m).toContain('documento referente ao seu contrato de aluguer');
     expect(m).toContain('Estamos à disposição para qualquer dúvida que surja.');
-    expect(m).toContain('DASPRENT');
+  });
+
+  // A assinatura é a empresa que emite o documento. Estava "DASPRENT" fixo no
+  // código, o que assinava com a empresa errada os contratos de todas as outras
+  // emissoras (Distância Arrojada, Urbango, Dasprent Sul...).
+  it('assina com a empresa emissora indicada', () => {
+    expect(mensagemDefaultDocumento('pt', 'Distância Arrojada')).toContain('Distância Arrojada');
+    expect(mensagemDefaultDocumento('en', 'Urbango, Lda')).toContain('Urbango, Lda');
+  });
+
+  it('sem empresa indicada não inventa assinatura', () => {
+    const m = mensagemDefaultDocumento('pt');
+    expect(m).toContain('A sua equipa,');
+    expect(m).not.toContain('DASPRENT');
+    expect(m.trimEnd().endsWith('A sua equipa,')).toBe(true);
   });
 
   it('deteta mensagens default em qualquer idioma e distingue texto editado', () => {
@@ -34,6 +48,16 @@ describe('documentoEmail', () => {
     expect(isMensagemDefault(mensagemDefaultDocumento('en'))).toBe(true);
     expect(isMensagemDefault(mensagemDefaultDocumento('es'))).toBe(true);
     expect(isMensagemDefault('mensagem escrita à mão pelo gestor')).toBe(false);
+  });
+
+  // Trocar de idioma só deve reescrever o corpo se o utilizador ainda não lhe
+  // tiver mexido — e isso tem de continuar a funcionar com assinatura.
+  it('reconhece a default assinada pela empresa como não editada', () => {
+    const assinada = mensagemDefaultDocumento('pt', 'Distância Arrojada');
+    expect(isMensagemDefault(assinada, 'Distância Arrojada')).toBe(true);
+    expect(isMensagemDefault(`${assinada}\n\nPS: passa cá amanhã`, 'Distância Arrojada')).toBe(
+      false
+    );
   });
 
   it('constrói o assunto com tipo, número e contexto', () => {
