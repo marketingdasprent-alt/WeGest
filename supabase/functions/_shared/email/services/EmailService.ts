@@ -144,9 +144,12 @@ export class EmailService {
       to: string;
       toNome?: string;
       subject: string;
-      mensagem: string;
-      pdfBase64: string;
-      filename: string;
+      /** Nota livre opcional — o corpo do email é o template (intro+detalhes). */
+      mensagem?: string;
+      intro?: string;
+      detalhes?: Array<{ label: string; valor: string }>;
+      /** Ficheiros a anexar — um por documento, todos no mesmo email. */
+      ficheiros: Array<{ content: string; name: string }>;
       /** Empresa emissora — dá a marca ao email (logo/nome no cabeçalho).
        *  Sem ela o email sai com a marca WeGest, como antes. */
       emissorNome?: string;
@@ -161,14 +164,19 @@ export class EmailService {
 
     const { html } = documentoFiscalTemplate({
       mensagem: args.mensagem,
+      intro: args.intro,
+      detalhes: args.detalhes,
       titulo: args.titulo,
       categoria: args.categoria,
       destinatarioNome: args.toNome,
       emissorNome: args.emissorNome,
       emissorLogoUrl: args.emissorLogoUrl,
-      anexoNome: args.filename,
+      anexoNomes: args.ficheiros.map((f) => f.name),
     });
-    const attachments: EmailAttachment[] = [{ content: args.pdfBase64, name: args.filename }];
+    const attachments: EmailAttachment[] = args.ficheiros.map((f) => ({
+      content: f.content,
+      name: f.name,
+    }));
 
     const message: EmailMessage = {
       to: [{ email: args.to, name: args.toNome }],

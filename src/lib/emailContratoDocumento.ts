@@ -11,9 +11,12 @@ export interface EnviarContratoDocumentoArgs {
   to: string;
   toNome?: string;
   subject: string;
-  mensagem: string;
-  pdf: jsPDF;
-  filename: string;
+  /** Nota livre opcional — o corpo é o template (`intro` + `detalhes`). */
+  mensagem?: string;
+  intro?: string;
+  detalhes?: Array<{ label: string; valor: string }>;
+  /** Documentos a anexar — um ficheiro por documento, todos no mesmo email. */
+  anexos: Array<{ pdf: jsPDF; filename: string }>;
   orgId: string;
   /** Empresa emissora do contrato — o email sai com a marca dela (logótipo e
    *  nome no cabeçalho), em vez da marca WeGest. */
@@ -28,19 +31,24 @@ export async function enviarContratoDocumentoEmail({
   toNome,
   subject,
   mensagem,
-  pdf,
-  filename,
+  intro,
+  detalhes,
+  anexos,
   orgId,
   emissorNome,
   emissorLogoUrl,
   titulo,
   categoria,
 }: EnviarContratoDocumentoArgs): Promise<void> {
-  const datauri = pdf.output('datauristring');
   const marcador = 'base64,';
-  const idx = datauri.indexOf(marcador);
-  const pdfBase64 = idx >= 0 ? datauri.slice(idx + marcador.length) : '';
-  if (!pdfBase64) throw new Error('Não foi possível preparar o PDF para envio.');
+  const anexosBase64 = anexos.map(({ pdf, filename }) => {
+    const datauri = pdf.output('datauristring');
+    const idx = datauri.indexOf(marcador);
+    const content = idx >= 0 ? datauri.slice(idx + marcador.length) : '';
+    if (!content) throw new Error(`Não foi possível preparar "${filename}" para envio.`);
+    return { content, name: filename };
+  });
+  if (anexosBase64.length === 0) throw new Error('Nenhum documento para enviar.');
 
   const { data, error } = await supabase.functions.invoke<{ success?: boolean; error?: string }>(
     'send-documento-fiscal-email',
@@ -50,8 +58,9 @@ export async function enviarContratoDocumentoEmail({
         toNome,
         subject,
         mensagem,
-        pdfBase64,
-        filename,
+        intro,
+        detalhes,
+        anexos: anexosBase64,
         org_id: orgId,
         emissorNome,
         emissorLogoUrl,

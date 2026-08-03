@@ -38,6 +38,31 @@ export interface GenerateContratoPdfParams {
   /** Cidade de assinatura escolhida no dialog (normalmente a cidade de uma
    *  estação). Manda sobre o fallback (sede da empresa / cidade do motorista). */
   cidadeAssinatura?: string;
+  /**
+   * Um PDF por documento em vez de um só combinado.
+   *
+   * Para imprimir/descarregar um único PDF é o que faz sentido (folheia-se de
+   * uma ponta à outra). Por email não: quem recebe quer o Contrato, a
+   * Declaração e o Termo como ficheiros distintos, para assinar e arquivar
+   * cada um por si — não uma pilha de 12 páginas onde tem de os separar.
+   */
+  separados?: boolean;
+}
+
+/** Um PDF combinado, ou vários (um por documento) quando `separados`. */
+export type ContratoPdfResultado =
+  | { pdf: jsPDF; fileName: string }
+  | { anexos: Array<{ pdf: jsPDF; fileName: string }> };
+
+/** Nome de ficheiro seguro a partir do nome do template. */
+function nomeFicheiro(nomeTemplate: string, codigo: number | null | undefined): string {
+  const base = `${nomeTemplate}_${codigo ?? ''}`
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9-_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return base || 'Documento';
 }
 
 /**
@@ -56,7 +81,8 @@ export const generateContratoPdf = async ({
   action = 'print',
   templateIds,
   cidadeAssinatura,
-}: GenerateContratoPdfParams): Promise<{ pdf: jsPDF; fileName: string } | null> => {
+  separados = false,
+}: GenerateContratoPdfParams): Promise<ContratoPdfResultado | null> => {
   if (!empresa) {
     throw new Error('Empresa não definida — impossível gerar contrato.');
   }
@@ -461,6 +487,18 @@ export const generateContratoPdf = async ({
     // mostrar todos os danos existentes da viatura (não só os deste contrato).
     ...(t.tipo === 'anexo_danos' ? { viaturaId: viatura?.id } : {}),
   }));
+
+  // Um PDF por documento — cada um gerado à parte, para irem como anexos
+  // distintos no mesmo email.
+  if (separados) {
+    const anexos: Array<{ pdf: jsPDF; fileName: string }> = [];
+    for (let i = 0; i < docs.length; i++) {
+      const nome = nomeFicheiro(templatesEscolhidos[i].nome, contrato.codigo);
+      const pdfDoc = await generateDocumentosCombinados([docs[i]], { action, fileName: nome });
+      if (pdfDoc) anexos.push({ pdf: pdfDoc, fileName: `${nome}.pdf` });
+    }
+    return anexos.length ? { anexos } : null;
+  }
 
   const fileName =
     `Contrato_${contrato.codigo ?? ''}_${(motoristaData.nome as string) ?? ''}`.trim();
