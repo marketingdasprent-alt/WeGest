@@ -17,6 +17,13 @@ interface SendDocumentoFiscalEmailRequest {
   pdfBase64: string;
   filename: string;
   org_id: string;
+  /** Empresa emissora do documento — encabeça o email com a marca dela.
+   *  Opcional: sem isto o email sai com a marca WeGest (comportamento antigo). */
+  emissorNome?: string;
+  emissorLogoUrl?: string | null;
+  /** Título e etiqueta do email, ex.: "Contrato de Aluguer" / "Contrato". */
+  titulo?: string;
+  categoria?: string;
 }
 
 serve(async (req) => {
@@ -33,6 +40,10 @@ serve(async (req) => {
       pdfBase64,
       filename,
       org_id,
+      emissorNome,
+      emissorLogoUrl,
+      titulo,
+      categoria,
     }: SendDocumentoFiscalEmailRequest = await req.json();
 
     if (!to || !subject || !pdfBase64 || !filename || !org_id) {
@@ -54,6 +65,10 @@ serve(async (req) => {
       mensagem: mensagem || '',
       pdfBase64,
       filename,
+      emissorNome,
+      emissorLogoUrl,
+      titulo,
+      categoria,
     });
 
     if (!result.success) throw new Error(result.error || 'Falha ao enviar email');

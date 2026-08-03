@@ -50,6 +50,11 @@ interface Props {
   entidades: ContactoEntidade[];
   /** Organização do contrato — a edge function usa-a para resolver a integração de email. */
   orgId: string;
+  /** Empresa emissora do contrato. Dá a marca ao email (logótipo/nome no
+   *  cabeçalho) e assina a mensagem — sem isto o email saía assinado por uma
+   *  empresa fixa, independentemente de quem emitiu o contrato. */
+  emissorNome?: string;
+  emissorLogoUrl?: string | null;
 }
 
 /** Envio por email do PDF do contrato — mesmo padrão/UX de
@@ -63,11 +68,13 @@ export function EnviarContratoEmailDialog({
   contextoLabel,
   entidades,
   orgId,
+  emissorNome,
+  emissorLogoUrl,
 }: Props) {
   const [entidadeTipo, setEntidadeTipo] = useState<string>('cliente');
   const [email, setEmail] = useState('');
   const [idioma, setIdioma] = useState<IdiomaEmail>('pt');
-  const [mensagem, setMensagem] = useState(() => mensagemDefaultDocumento('pt'));
+  const [mensagem, setMensagem] = useState(() => mensagemDefaultDocumento('pt', emissorNome));
   const [enviando, setEnviando] = useState(false);
 
   const entidadeSelecionada = useMemo(
@@ -82,9 +89,9 @@ export function EnviarContratoEmailDialog({
     setEntidadeTipo(inicial?.tipo ?? 'cliente');
     setEmail(inicial?.email ?? '');
     setIdioma('pt');
-    setMensagem(mensagemDefaultDocumento('pt'));
+    setMensagem(mensagemDefaultDocumento('pt', emissorNome));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, emissorNome]);
 
   function onEntidadeChange(tipo: string) {
     setEntidadeTipo(tipo);
@@ -94,7 +101,9 @@ export function EnviarContratoEmailDialog({
 
   function onIdiomaChange(novo: IdiomaEmail) {
     // Só substitui o corpo se o utilizador ainda não o tiver editado.
-    setMensagem((atual) => (isMensagemDefault(atual) ? mensagemDefaultDocumento(novo) : atual));
+    setMensagem((atual) =>
+      isMensagemDefault(atual, emissorNome) ? mensagemDefaultDocumento(novo, emissorNome) : atual
+    );
     setIdioma(novo);
   }
 
@@ -115,6 +124,10 @@ export function EnviarContratoEmailDialog({
         pdf,
         filename,
         orgId,
+        emissorNome,
+        emissorLogoUrl,
+        titulo: ASSUNTO_POR_IDIOMA[idioma],
+        categoria: 'Contrato',
       });
       toast.success(`Documento enviado para ${dest}.`);
       onOpenChange(false);

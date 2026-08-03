@@ -24,52 +24,58 @@ export function tipoDocumentoLabel(tipo: TipoFatura, idioma: IdiomaEmail = 'pt')
   return TIPO_DOC_LABEL[idioma]?.[tipo] ?? TIPO_DOC_LABEL.pt[tipo] ?? tipo;
 }
 
-/** Mensagem por defeito do corpo do email, por idioma. */
-export function mensagemDefaultDocumento(idioma: IdiomaEmail): string {
-  switch (idioma) {
-    case 'en':
-      return [
-        'Greetings,',
-        '',
-        'Please find attached the document regarding your rental agreement.',
-        '',
-        'We remain at your disposal for any questions you may have.',
-        '',
-        'Your team,',
-        '',
-        'DASPRENT',
-      ].join('\n');
-    case 'es':
-      return [
-        'Saludos,',
-        '',
-        'Adjuntamos el documento correspondiente a su contrato de alquiler.',
-        '',
-        'Quedamos a su disposición para cualquier duda que pueda surgir.',
-        '',
-        'Su equipo,',
-        '',
-        'DASPRENT',
-      ].join('\n');
-    case 'pt':
-    default:
-      return [
-        'Saudações',
-        '',
-        'Junto enviamos documento referente ao seu contrato de aluguer.',
-        '',
-        'Estamos à disposição para qualquer dúvida que surja.',
-        '',
-        'A sua equipa,',
-        '',
-        'DASPRENT',
-      ].join('\n');
-  }
+const CORPO_POR_IDIOMA: Record<IdiomaEmail, string[]> = {
+  en: [
+    'Greetings,',
+    '',
+    'Please find attached the document regarding your rental agreement.',
+    '',
+    'We remain at your disposal for any questions you may have.',
+    '',
+    'Your team,',
+  ],
+  es: [
+    'Saludos,',
+    '',
+    'Adjuntamos el documento correspondiente a su contrato de alquiler.',
+    '',
+    'Quedamos a su disposición para cualquier duda que pueda surgir.',
+    '',
+    'Su equipo,',
+  ],
+  pt: [
+    'Saudações',
+    '',
+    'Junto enviamos documento referente ao seu contrato de aluguer.',
+    '',
+    'Estamos à disposição para qualquer dúvida que surja.',
+    '',
+    'A sua equipa,',
+  ],
+};
+
+/**
+ * Mensagem por defeito do corpo do email, por idioma.
+ *
+ * `assinatura` é a empresa que emite o documento. Estava aqui "DASPRENT"
+ * escrito à mão, o que fazia um contrato da Distância Arrojada (ou Urbango,
+ * ou Dasprent Sul...) chegar ao cliente assinado pela empresa errada. Sem
+ * assinatura indicada, a linha do nome simplesmente não aparece — melhor
+ * nenhum nome do que o nome errado.
+ */
+export function mensagemDefaultDocumento(idioma: IdiomaEmail, assinatura?: string): string {
+  const base = CORPO_POR_IDIOMA[idioma] ?? CORPO_POR_IDIOMA.pt;
+  const nome = (assinatura ?? '').trim();
+  return [...base, ...(nome ? ['', nome] : [])].join('\n');
 }
 
-/** `true` se o texto ainda corresponde a uma das mensagens por defeito (não foi editado). */
-export function isMensagemDefault(texto: string): boolean {
-  return (['pt', 'en', 'es'] as IdiomaEmail[]).some((i) => mensagemDefaultDocumento(i) === texto);
+/** `true` se o texto ainda corresponde a uma das mensagens por defeito (não foi
+ *  editado) — usado para não esmagar um texto que o utilizador já alterou. */
+export function isMensagemDefault(texto: string, assinatura?: string): boolean {
+  return (['pt', 'en', 'es'] as IdiomaEmail[]).some(
+    (i) =>
+      mensagemDefaultDocumento(i, assinatura) === texto || mensagemDefaultDocumento(i) === texto
+  );
 }
 
 /** Número apresentável do documento (nº legal, ou docnum do provider). */
