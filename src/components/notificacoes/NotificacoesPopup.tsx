@@ -27,6 +27,18 @@ export const NotificacoesPopup = () => {
   const [ocultados, setOcultados] = useState<Set<string>>(new Set());
   const ocultar = (id: string) => setOcultados((atual) => new Set(atual).add(id));
 
+  // Ocultar de uma vez tudo o que está à vista. Um backlog (dezenas de
+  // vistorias/licenças a expirar de uma assentada) obrigava a fechar aviso a
+  // aviso para se poder trabalhar. Só afeta os que já subiram: os que
+  // chegarem a seguir voltam a aparecer, porque continuam por resolver e
+  // fechar não é uma decisão permanente.
+  const ocultarTodas = (ids: string[]) =>
+    setOcultados((atual) => {
+      const novo = new Set(atual);
+      ids.forEach((id) => novo.add(id));
+      return novo;
+    });
+
   // Desbloqueia o áudio no primeiro gesto do utilizador (autoplay policy),
   // para que o aviso urgente ao supervisor toque mesmo sem clique imediato.
   useEffect(() => {
@@ -135,15 +147,32 @@ export const NotificacoesPopup = () => {
         </button>
       )}
 
-      <Button
-        variant="ghost"
-        size="sm"
-        className="pointer-events-auto h-8 self-end text-xs text-muted-foreground hover:text-foreground"
-        onClick={() => navigate('/notificacoes')}
-      >
-        <List className="mr-1.5 h-3.5 w-3.5" />
-        Ver todas
-      </Button>
+      <div className="pointer-events-auto flex items-center gap-1 self-end">
+        {/* Só com mais do que um aviso à vista: para um único cartão o X e o
+            "Ocultar" já chegam, e um terceiro botão para o mesmo efeito só
+            confundia. */}
+        {visiveis.length > 1 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs text-muted-foreground hover:text-foreground"
+            title="Fecha os avisos que estão à vista — continuam todos por resolver"
+            onClick={() => ocultarTodas(ordenadas.map((n) => n.id))}
+          >
+            <EyeOff className="mr-1.5 h-3.5 w-3.5" />
+            Ocultar todas ({visiveis.length})
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 text-xs text-muted-foreground hover:text-foreground"
+          onClick={() => navigate('/notificacoes')}
+        >
+          <List className="mr-1.5 h-3.5 w-3.5" />
+          Ver todas
+        </Button>
+      </div>
     </div>
   );
 };
