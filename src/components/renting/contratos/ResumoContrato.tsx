@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { calcExtraTotal } from '@/hooks/useContratoExtras';
 import { calcTaxaValor } from '@/hooks/useContratoTaxas';
 import type { ExtraFormItem, TaxaFormItem } from '@/types/contratoRenting';
@@ -27,6 +28,13 @@ interface ResumoContratoProps {
   totalSnapshot?: number | null;
   subtotalSnapshot?: number | null;
   ivaSnapshot?: number | null;
+  /**
+   * Chamado quando o utilizador escreve o preço unitário no cartão.
+   * `null` significa "volta ao cálculo pela tarifa".
+   */
+  onValorTotalManualChange?: (valor: number | null) => void;
+  /** Torna o preço editável no cartão. Por omissão o cartão é só-leitura. */
+  editavel?: boolean;
 }
 
 /**
@@ -54,6 +62,8 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
   totalSnapshot,
   subtotalSnapshot,
   ivaSnapshot,
+  onValorTotalManualChange,
+  editavel = false,
 }) => {
   const calculo = useMemo(() => {
     if (isFacturado && totalSnapshot != null) {
@@ -148,6 +158,65 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
     ivaSnapshot,
   ]);
 
+  // ── Preço unitário editável ───────────────────────────────────
+  // O preço unitário é a fonte de verdade enquanto o formulário está aberto e o
+  // total é derivado dele — ao contrário do cartão da reserva, onde manda o
+  // total. É deliberado: esticar um contrato de 15 para 20 dias tem de cobrar
+  // mais, e não redistribuir o mesmo total por mais dias.
+  const isRentACarPreco = regime === 'rent_a_car';
+  // Calculado à parte de `calculo.dias`, que devolve 0 quando o contrato está
+  // facturado — aí queremos continuar a mostrar o preço que ficou congelado.
+  const diasPreco = dataInicio && dataFim ? calcDias(dataInicio, dataFim) : 0;
+  const divisor = isRentACarPreco ? diasPreco : 1;
+
+  const precoLabel = isRentACarPreco
+    ? 'Preço/dia (sem IVA)'
+    : regime === 'slot'
+      ? 'Valor mensal (IVA inc.)'
+      : 'Preço/semana (IVA inc.)';
+
+  const [precoUnit, setPrecoUnit] = useState('');
+  // `semeado` distingue "ainda não sabemos o preço" de "o preço é o que está no
+  // input". Sem ele, mudar as datas voltaria a semear a partir do total e o
+  // preço/dia mudava sozinho — exactamente o contrário do que queremos.
+  const semeado = useRef(false);
+  const divisorAnterior = useRef(divisor);
+
+  useEffect(() => {
+    if (semeado.current) return;
+    if (valorTotalManual == null || divisor <= 0) return;
+    semeado.current = true;
+    setPrecoUnit((valorTotalManual / divisor).toFixed(2));
+  }, [valorTotalManual, divisor]);
+
+  useEffect(() => {
+    if (divisorAnterior.current === divisor) return;
+    divisorAnterior.current = divisor;
+    if (!semeado.current || divisor <= 0) return;
+    const n = Number(precoUnit);
+    if (!Number.isFinite(n) || n <= 0) return;
+    onValorTotalManualChange?.(Number((n * divisor).toFixed(2)));
+  }, [divisor, precoUnit, onValorTotalManualChange]);
+
+  const handlePrecoChange = (raw: string) => {
+    const normalizado = raw.replace(',', '.').replace(/[^0-9.]/g, '');
+    setPrecoUnit(normalizado);
+    semeado.current = true;
+    if (divisor <= 0) return;
+    if (normalizado === '' || normalizado === '.') {
+      onValorTotalManualChange?.(null);
+      return;
+    }
+    const n = Number(normalizado);
+    if (!Number.isFinite(n) || n < 0) return;
+    onValorTotalManualChange?.(Number((n * divisor).toFixed(2)));
+  };
+
+  const handlePrecoBlur = () => {
+    const n = Number(precoUnit);
+    setPrecoUnit(precoUnit && Number.isFinite(n) && n > 0 ? n.toFixed(2) : '');
+  };
+
   const showsManual = valorTotalManual != null && valorTotalManual > 0 && !isFacturado;
 
   return (
@@ -178,7 +247,44 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
             <Row label={`Dias`} value={String(calculo.dias)} muted />
           )}
 
-          {showsManual ? (
+          {editavel ? (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground text-xs shrink-0">{precoLabel}</span>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  aria-label={precoLabel}
+                  value={precoUnit}
+                  onChange={(e) => handlePrecoChange(e.target.value)}
+                  onBlur={handlePrecoBlur}
+                  disabled={isFacturado || divisor <= 0}
+                  placeholder={isRentACarPreco && tarifaDiaria ? tarifaDiaria.toFixed(2) : '0,00'}
+                  className="h-8 w-24 text-right tabular-nums text-sm"
+                  title={
+                    isFacturado
+                      ? 'Contrato facturado — os valores estão congelados'
+                      : divisor <= 0
+                        ? 'Define primeiro as datas'
+                        : 'Deixa vazio para usar o preço da tarifa'
+                  }
+                />
+              </div>
+              {isRentACarPreco ? (
+                diasPreco > 0 ? (
+                  <p className="text-muted-foreground text-xs text-right">
+                    × {diasPreco} dia{diasPreco === 1 ? '' : 's'}
+                  </p>
+                ) : (
+                  <p className="text-amber-600 dark:text-amber-400 text-xs text-right">
+                    Define as datas primeiro
+                  </p>
+                )
+              ) : regime === 'tvde' ? (
+                <p className="text-muted-foreground text-xs text-right">× 1 semana</p>
+              ) : null}
+            </>
+          ) : showsManual ? (
             <Row
               label={regime === 'tvde' || regime === 'slot' ? 'Valor semanal' : 'Valor manual'}
               value={formatCurrency(valorTotalManual ?? 0)}
