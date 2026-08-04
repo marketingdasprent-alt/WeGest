@@ -40,8 +40,12 @@ verify_jwt = false
 [functions.bolt-sync]
 verify_jwt = false
 
+# Teste de ligação à API da Bolt. Recebe client_id/client_secret no corpo e é
+# invocado só pelos ecrãs de administração (já autenticados) → exige JWT.
+# Sem isto, a função era um proxy anónimo para o OIDC da Bolt: qualquer um
+# podia usá-la para testar pares de credenciais em massa a partir do nosso IP.
 [functions.bolt-test-connection]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bolt-api]
 verify_jwt = false
@@ -135,6 +139,16 @@ verify_jwt = false
 
 [functions.bolt-import-csv]
 verify_jwt = false
+
+# Sincronização de UMA semana pela API oficial da Bolt (getFleetOrders).
+# Escreve no financeiro (bolt_resumos_semanais), por isso exige JWT válido:
+# a chave service_role do agendador já é um JWT assinado pelo projecto e passa
+# na verificação, tal como a sessão do administrador que carrega no botão.
+# Deixá-la a false abria um gatilho anónimo para uma função que consome quota
+# da API da Bolt e reescreve valores financeiros. A autorização a sério é feita
+# dentro da função (service-role OU admin da org dona da integração).
+[functions.bolt-sync-semana]
+verify_jwt = true
 
 [functions.primavera-api]
 verify_jwt = false
