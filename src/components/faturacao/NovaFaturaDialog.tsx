@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { resolverDestinatario } from '@/components/renting/contratos/destinatarioFatura';
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
 import { openFaturacaoDocumento, type FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
@@ -84,6 +85,9 @@ export type NovaFaturaAlvo =
 export interface NovaFaturaDestinatario {
   id: string;
   nome: string;
+  /** 'motorista' → o `id` vem de `motoristas_ativos`, não de `clientes`, e é
+   *  trocado pela ficha de cliente dele antes de gravar. */
+  tipo?: 'cliente' | 'motorista';
 }
 
 interface LinhaArtigo {
@@ -135,8 +139,8 @@ export function NovaFaturaDialog({
   const { data: orgDef } = useOrgDefinicoes();
   const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
   const [tipoDoc, setTipoDoc] = useState<'fatura' | 'fatura_recibo'>('fatura');
-  // Cessão da dívida ao motorista — a fatura fica sempre em nome de
-  // `destinatario` (exigência legal); isto só decide quem fica a dever.
+  // Destinatário fiscal do documento: o titular ou o motorista. Escolher
+  // "Motorista" emite a fatura em nome dele, com o NIF dele.
   const [entidade, setEntidade] = useState<'cliente' | 'motorista'>('cliente');
   const [metodo, setMetodo] = useState<string>('transferencia');
   const [dataDoc, setDataDoc] = useState<string>(hoje());
@@ -216,14 +220,35 @@ export function NovaFaturaDialog({
 
   const podeCriar = calc.totalComIva > 0 && !!destinatario.id && linhasSemJustificacao.length === 0;
 
-  async function abrirDocumentoLocal(numeroDoc: string) {
+  // Quem fica no documento: o titular ou o motorista escolhido.
+  const { destinatario: alvoFatura, precisaFichaCliente } = resolverDestinatario(entidade, {
+    cliente: destinatario,
+    motorista: motoristaEntidade,
+  });
+
+  /** Id de `clientes` do destinatário — num motorista garante a ficha dele
+   *  (`destinatario_id` tem FK para `clientes`). */
+  async function resolverIdFiscal(): Promise<string> {
+    if (!precisaFichaCliente) return alvoFatura.id;
+    const { data, error } = await supabase.rpc('garantir_cliente_do_motorista' as any, {
+      p_motorista_id: alvoFatura.id,
+    });
+    if (error || !data) {
+      throw new Error(
+        `Não foi possível preparar a ficha de faturação de ${alvoFatura.nome}: ${error?.message ?? 'sem resposta'}`
+      );
+    }
+    return data as string;
+  }
+
+  async function abrirDocumentoLocal(numeroDoc: string, clienteId: string) {
     let clienteNif: string | null = null;
     let clienteMorada: string | null = null;
     try {
       const { data: cli } = await supabase
         .from('clientes')
         .select('nif, morada, codigo_postal, cidade')
-        .eq('id', destinatario.id)
+        .eq('id', clienteId)
         .single();
       if (cli) {
         clienteNif = (cli as any).nif ?? null;
@@ -240,7 +265,7 @@ export function NovaFaturaDialog({
       numero: numeroDoc,
       data: dataDoc,
       emitente: emitente ?? null,
-      cliente: { nome: destinatario.nome, nif: clienteNif, morada: clienteMorada },
+      cliente: { nome: alvoFatura.nome, nif: clienteNif, morada: clienteMorada },
       linhas: calc.itens.map((it) => ({
         descricao: it.descricao,
         valor: round2(it.preco_unitario * it.quantidade),
@@ -254,16 +279,16 @@ export function NovaFaturaDialog({
     if (!aberto) toast.warning('Pop-up bloqueado — não foi possível abrir o documento local.');
   }
 
-  async function fetchClienteFatura() {
+  async function fetchClienteFatura(clienteId: string) {
     try {
       const { data } = await supabase
         .from('clientes')
         .select('nome, nif, email, morada, codigo_postal, localidade')
-        .eq('id', destinatario.id)
+        .eq('id', clienteId)
         .single();
-      return clienteRowToFatura(data, destinatario.nome);
+      return clienteRowToFatura(data, alvoFatura.nome);
     } catch {
-      return clienteRowToFatura(null, destinatario.nome);
+      return clienteRowToFatura(null, alvoFatura.nome);
     }
   }
 
@@ -292,6 +317,10 @@ export function NovaFaturaDialog({
       const emitidaEm = new Date(`${dataDoc}T12:00:00`).toISOString();
       const periodo = dataDoc; // fatura manual: período pontual (data do documento)
 
+      // Id fiscal ANTES de gravar: num motorista troca-se o id dele pelo da
+      // ficha de cliente, senão a FK de destinatario_id rebenta.
+      const destinatarioIdFiscal = await resolverIdFiscal();
+
       // ── Fase 1 — cobrança manual (fonte de verdade na conta-corrente) ──────
       const { data: cobInserida, error: cobErr } = await supabase
         .from('contrato_cobrancas')
@@ -302,9 +331,9 @@ export function NovaFaturaDialog({
           periodo_de: periodo,
           periodo_ate: periodo,
           descricao,
-          destinatario_id: destinatario.id,
-          destinatario_papel: 'cliente',
-          destinatario_nome: destinatario.nome,
+          destinatario_id: destinatarioIdFiscal,
+          destinatario_papel: precisaFichaCliente ? 'condutor' : 'cliente',
+          destinatario_nome: alvoFatura.nome,
           valor_sem_iva: calc.subtotal,
           taxa_iva: calc.taxaEfetiva,
           emite_fatura_fiscal: true,
@@ -317,31 +346,16 @@ export function NovaFaturaDialog({
       if (cobErr) throw cobErr;
       const cobrancaId: string = cobInserida.id;
 
-      // Cedência ao motorista — só faz sentido numa Factura normal (uma
-      // Factura-Recibo já nasce liquidada, sem dívida nenhuma para ceder;
-      // mesmo motivo por que acordo_criar recusa parcelar uma FR). A fatura
-      // continua emitida em nome de `destinatario`; isto é só o lançamento
-      // interno (ver 20260730170000_cobranca_cessao_motorista_na_emissao.sql).
-      // Best-effort: um erro aqui não deve impedir o resto do fluxo.
-      if (entidade === 'motorista' && motoristaEntidade && tipoDoc === 'fatura') {
-        const { error: cessaoErr } = await supabase.rpc('cobranca_ceder_a_motorista' as any, {
-          p_cobranca_id: cobrancaId,
-          p_motorista_id: motoristaEntidade.id,
-        });
-        if (cessaoErr) {
-          console.error('Falha a ceder a dívida ao motorista:', cessaoErr);
-          toast.warning(
-            `Fatura registada, mas não foi possível ceder a dívida ao motorista: ${cessaoErr.message}`
-          );
-        }
-      }
+      // Sem cedência de dívida: ao escolher "Motorista" a fatura é emitida em
+      // nome dele, por isso a dívida já nasce na conta-corrente do próprio.
+      // Ceder por cima (20260730170000) duplicava o valor.
 
       // Factura-Recibo → regista o recibo (liquidação imediata).
       if (tipoDoc === 'fatura_recibo' && calc.totalComIva > 0) {
         const { error: recErr } = await supabase.from('recibos').insert(
           semCodigo<'recibos'>({
             org_id: alvo.orgId,
-            entidade_id: destinatario.id,
+            entidade_id: destinatarioIdFiscal,
             contrato_id: alvo.tipo === 'contrato' ? alvo.id : null,
             valor: calc.totalComIva,
             data_recibo: dataDoc,
@@ -360,7 +374,7 @@ export function NovaFaturaDialog({
 
       // ── Fase 2 — emissão fiscal no provider (não reverte a Fase 1) ─────────
       try {
-        const cliente = await fetchClienteFatura();
+        const cliente = await fetchClienteFatura(destinatarioIdFiscal);
         const res = await emitirMut.mutateAsync({
           payload: {
             tipo: tipoDoc === 'fatura_recibo' ? 'FR' : 'FT',
@@ -402,8 +416,8 @@ export function NovaFaturaDialog({
                       // Fatura acabada de criar (não Factura-Recibo, excluída acima):
                       // nada foi liquidado ainda — o saldo por parcelar é o total.
                       saldoPagar: calc.totalComIva,
-                      titularId: destinatario.id,
-                      titularNome: destinatario.nome,
+                      titularId: destinatarioIdFiscal,
+                      titularNome: alvoFatura.nome,
                       titularNif: cliente.nif ?? null,
                     }),
                 },
@@ -416,7 +430,7 @@ export function NovaFaturaDialog({
         toast.warning(
           'Fatura registada, mas o documento fiscal ficou por emitir. Pode reemiti-lo na lista de faturas.'
         );
-        await abrirDocumentoLocal(descricao);
+        await abrirDocumentoLocal(descricao, destinatarioIdFiscal);
       }
 
       onCriada();
@@ -515,7 +529,7 @@ export function NovaFaturaDialog({
 
             {motoristaEntidade && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Quem fica a dever</Label>
+                <Label className="text-xs">Entidade de Faturação</Label>
                 <div className="flex gap-2">
                   <Button
                     type="button"
@@ -531,22 +545,15 @@ export function NovaFaturaDialog({
                     variant={entidade === 'motorista' ? 'default' : 'outline'}
                     size="sm"
                     className="flex-1"
-                    disabled={tipoDoc === 'fatura_recibo'}
-                    title={
-                      tipoDoc === 'fatura_recibo'
-                        ? 'Uma Factura-Recibo já nasce liquidada — não há dívida para ceder.'
-                        : undefined
-                    }
                     onClick={() => setEntidade('motorista')}
                   >
                     Motorista — {motoristaEntidade.nome}
                   </Button>
                 </div>
-                {entidade === 'motorista' && tipoDoc === 'fatura' && (
+                {entidade === 'motorista' && (
                   <p className="text-[11px] text-muted-foreground rounded-md border p-2 mt-1.5">
-                    ⓘ A fatura é emitida em nome de {destinatario.nome}. A dívida passa para a
-                    conta-corrente de {motoristaEntidade.nome} — exigência legal: a fatura fiscal
-                    fica sempre em nome do cliente.
+                    ⓘ A fatura sai em nome de {motoristaEntidade.nome}, com o NIF e a morada dele. A
+                    dívida fica na conta-corrente do próprio — {destinatario.nome} não é debitado.
                   </p>
                 )}
               </div>
