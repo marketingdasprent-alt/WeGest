@@ -87,7 +87,7 @@ const PLATFORM_META: Record<IntegracaoCardType, { label: string; logo: string; c
   },
   faturacao: {
     label: 'Faturação',
-    logo: '/images/logo-keyinvoice.svg',
+    logo: '/images/logo-keyinvoice.png',
     color: 'hsl(var(--chart-1))',
   },
   email: {
