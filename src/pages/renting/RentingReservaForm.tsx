@@ -287,51 +287,76 @@ const RentingReservaForm = () => {
     });
   };
 
-  // Hidrata o formulário quando a reserva carrega (modo edição). Só corre UMA
-  // vez — senão um refetch (ex.: invalidação disparada pelo próprio guardar,
-  // ou por outra aba/acção que invalide a query da reserva) volta a fazer
-  // reset e apaga edições em curso (ver hidratou em useContratoForm.ts, mesmo
-  // padrão). As relações (condutores/coberturas/extras/taxas) são hidratadas
-  // à parte, logo a seguir, para poderem re-sincronizar em segurança sempre
-  // que a sua própria query refetch — sem arrastar o resto do formulário.
+  // Hidrata o formulário quando a reserva carrega (modo edição) E SEMPRE que os
+  // dados do servidor mudam. Antes só corria UMA vez, e isso agarrava o
+  // formulário a um instantâneo velho: `useReserva` tem staleTime de 30 s, por
+  // isso ao reabrir a reserva o react-query devolve primeiro a cópia em cache
+  // (anterior ao último "Guardar") e só depois refaz o pedido — o valor/tarifa/
+  // emissora frescos chegavam quando a hidratação já não voltava a correr.
+  //
+  // `keepDirtyValues: true` é o que substitui a guarda antiga: os campos que o
+  // utilizador já tocou ficam como estão, os restantes acompanham o servidor.
+  // Era exactamente isso que a guarda protegia (um refetch a apagar edições em
+  // curso). Depois de guardar, o `form.reset(form.getValues())` do onSuccess do
+  // update limpa o estado sujo — daí a re-hidratação seguinte aceitar, e bem,
+  // tudo o que vem do servidor.
+  //
+  // O primeiro reset é integral (sem keepDirtyValues) para não mudar nada no
+  // arranque: os efeitos automáticos da aba Geral correm ANTES deste (efeitos
+  // de filho antes dos do pai) e já sujam campos ao abrir — respeitá-los logo
+  // na primeira hidratação faria o formulário nascer com valores derivados em
+  // vez dos gravados.
+  //
+  // As relações (condutores/coberturas/extras/taxas) não entram no reset a
+  // partir da reserva: são hidratadas nos efeitos próprios, logo a seguir, que
+  // só voltam a correr quando a SUA query muda. Aqui repetem-se os valores que
+  // já estão no formulário para uma re-hidratação não as apagar (na primeira
+  // corrida ainda são as listas vazias de DEFAULT_VALUES).
   const hidratouRef = useRef(false);
   useEffect(() => {
-    if (!isEdit || !reserva || hidratouRef.current) return;
+    if (!isEdit || !reserva) return;
+    const primeiraHidratacao = !hidratouRef.current;
     hidratouRef.current = true;
-    form.reset({
-      viatura_id: reserva.viatura_id,
-      matricula: reserva.matricula ?? '',
-      grupo: reserva.grupo ?? '',
-      estacao_entrega_id: reserva.estacao_entrega_id,
-      estacao_recolha_id: reserva.estacao_recolha_id,
-      data_inicio: isoToLocalInput(reserva.data_inicio),
-      data_fim: isoToLocalInput(reserva.data_fim),
-      cliente_id: reserva.cliente_id,
-      cliente_nome: reserva.cliente_nome ?? '',
-      condutor_id: reserva.condutor_id,
-      condutor_nome: reserva.condutor_nome ?? '',
-      emissor_id: reserva.emissor_id,
-      gestor_id: reserva.gestor_id ?? null,
-      estado: reserva.estado,
-      regime: reserva.regime,
-      tarifa_id: reserva.tarifa_id ?? null,
-      slot_valor_semanal: reserva.slot_valor_semanal,
-      slot_valor_mensal: reserva.slot_valor_mensal,
-      valor_total: reserva.valor_total,
-      franquia_valor: reserva.franquia_valor,
-      caucao_valor: reserva.caucao_valor,
-      kms_incluidos: reserva.kms_incluidos,
-      km_adicional_valor: reserva.km_adicional_valor,
-      is_longa_duracao: reserva.is_longa_duracao,
-      renovacao_opcao: reserva.renovacao_opcao,
-      renovacao_intervalo_dias: reserva.renovacao_intervalo_dias,
-      observacoes: reserva.observacoes ?? '',
-      observacoes_internas: reserva.observacoes_internas ?? '',
-      coberturas: [],
-      extras: [],
-      taxas: [],
-      condutores: [],
-    });
+    form.reset(
+      {
+        viatura_id: reserva.viatura_id,
+        matricula: reserva.matricula ?? '',
+        grupo: reserva.grupo ?? '',
+        estacao_entrega_id: reserva.estacao_entrega_id,
+        estacao_recolha_id: reserva.estacao_recolha_id,
+        data_inicio: isoToLocalInput(reserva.data_inicio),
+        data_fim: isoToLocalInput(reserva.data_fim),
+        cliente_id: reserva.cliente_id,
+        cliente_nome: reserva.cliente_nome ?? '',
+        condutor_id: reserva.condutor_id,
+        condutor_nome: reserva.condutor_nome ?? '',
+        emissor_id: reserva.emissor_id,
+        gestor_id: reserva.gestor_id ?? null,
+        estado: reserva.estado,
+        regime: reserva.regime,
+        tarifa_id: reserva.tarifa_id ?? null,
+        slot_valor_semanal: reserva.slot_valor_semanal,
+        slot_valor_mensal: reserva.slot_valor_mensal,
+        valor_total: reserva.valor_total,
+        franquia_valor: reserva.franquia_valor,
+        caucao_valor: reserva.caucao_valor,
+        kms_incluidos: reserva.kms_incluidos,
+        km_adicional_valor: reserva.km_adicional_valor,
+        is_longa_duracao: reserva.is_longa_duracao,
+        renovacao_opcao: reserva.renovacao_opcao,
+        renovacao_intervalo_dias: reserva.renovacao_intervalo_dias,
+        observacoes: reserva.observacoes ?? '',
+        observacoes_internas: reserva.observacoes_internas ?? '',
+        coberturas: form.getValues('coberturas'),
+        extras: form.getValues('extras'),
+        taxas: form.getValues('taxas'),
+        condutores: form.getValues('condutores'),
+      },
+      primeiraHidratacao ? undefined : { keepDirtyValues: true }
+    );
+    // `reserva` é o objecto do react-query: com structural sharing a
+    // identidade só muda quando os dados mudam mesmo, por isso o reset não se
+    // realimenta (um reset não altera nenhuma destas dependências).
   }, [isEdit, reserva, form]);
 
   // Hidratação das relações m:n — em efeitos próprios (não no reset principal)
