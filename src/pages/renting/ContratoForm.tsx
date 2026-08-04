@@ -462,6 +462,9 @@ const ContratoForm = () => {
         </Card>
 
         <aside>
+          {/* A edição sobrevive aos resets das hidratacoes (coberturasEffect, extrasEffect, taxasEffect)
+              porque esses efeitos fazem reset com {...form.getValues(), campo: fresh}, e o spread
+              ja transporta valor_total_manual ao vivo. shouldDirty fica so por consistencia. */}
           <ResumoContrato
             dataInicio={dataInicio}
             dataFim={dataFim}
