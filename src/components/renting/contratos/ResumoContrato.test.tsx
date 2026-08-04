@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ResumoContrato } from './ResumoContrato';
+import { formatCurrency } from './contratosUtils';
 
 // 2026-08-01 → 2026-08-16 = 15 dias; → 2026-08-21 = 20 dias.
 const INICIO = '2026-08-01T10:00';
@@ -146,5 +147,22 @@ describe('ResumoContrato — preco unitario editavel', () => {
     render(<ResumoContrato {...props({ editavel: false })} />);
     expect(screen.queryByLabelText('Preço/dia (sem IVA)')).not.toBeInTheDocument();
     expect(screen.getByText('Valor manual')).toBeInTheDocument();
+  });
+});
+
+describe('ResumoContrato — desconto gravado continua a contar', () => {
+  it('aplica o desconto ao total mesmo sem campo no formulario', () => {
+    render(<ResumoContrato {...props({ descontoPercentagem: 10 })} />);
+    // 1275 − 10% = 1147,50 · IVA 23% = 263,93 · total 1411,43
+    expect(screen.getByText('Desconto (10%)')).toBeInTheDocument();
+    // O total aparece 2x (resumo no topo + linha "Total" do detalhe), daí
+    // getAllByText. E comparamos já normalizado: o Intl.NumberFormat pt-PT
+    // mete um espaço insecável (NBSP) antes do "€", o normalizador do
+    // testing-library só limpa isso no texto do DOM, nunca no matcher que
+    // lhe passamos — uma string literal com formatCurrency() nunca bateria
+    // certo, mesmo com o número correto.
+    const totalEsperado = formatCurrency(1411.43).replace(/\s+/g, ' ');
+    const totais = screen.getAllByText((content) => content === totalEsperado);
+    expect(totais.length).toBeGreaterThan(0);
   });
 });

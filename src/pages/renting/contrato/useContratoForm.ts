@@ -66,6 +66,18 @@ import {
 
 // Mapeia o 1º campo do schema com erro para o separador onde ele vive —
 // os restantes campos ficam todos no separador "Geral" (ContratoFormSecoes).
+//
+// `valor_total_manual`, `desconto_percentagem` e `voucher_codigo` caem neste
+// grupo. Desde que o SectionGeral foi apagado (tinha os únicos <FormMessage />
+// destes três campos), um erro de validação neles deixa de ter superfície
+// visível — o cartão lateral (ResumoContrato) não lê form.formState.errors.
+// Decisão deliberada, não um esquecimento: os três só entram no formulário
+// por hidratação de um contrato/reserva já gravado, e só se grava um
+// contrato passando por este mesmo schema (ou pela função SQL
+// renovar_contrato_renting, que copia uma linha já validada) — não há forma
+// de os tornar inválidos pela aplicação. `valor_total_manual` tem ainda o
+// CHECK chk_contratos_valor_total_manual_valido (>= 0) na BD como garantia
+// extra.
 const FIELD_TAB_MAP: Partial<Record<keyof ContratoFormValues, string>> = {
   coberturas: 'coberturas',
   extras: 'extras',
@@ -541,7 +553,9 @@ export function useContratoForm(): UseContratoFormReturn {
     });
   }, [condutoresWatch, motoristas]);
 
-  // IVA derivado do regime
+  // IVA derivado do regime. Nunca é editável no formulário — sai sempre do
+  // regime + taxas da organização —, mas `taxa_iva` continua a ser calculado
+  // aqui e gravado normalmente no submit.
   useEffect(() => {
     const modalidade = regime === 'tvde' ? 'tvde' : 'rent_a_car';
     form.setValue('taxa_iva', ivaParaModalidade(orgDefinicoes, modalidade), {

@@ -34,7 +34,6 @@ import { SectionCliente } from './SectionCliente';
 import { SectionEmpresaEmissora } from './SectionEmpresaEmissora';
 import { SectionEntregaRecolha } from './SectionEntregaRecolha';
 import { SectionInfoAdicional } from './SectionInfoAdicional';
-import { SectionGeral } from './SectionGeral';
 import { SectionRegime } from './SectionRegime';
 import { SectionViatura } from './SectionViatura';
 
@@ -364,7 +363,6 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         )}
       </div>
 
-      <SectionGeral form={form} />
       <FranquiaKmsFields
         franquiaReadOnly
         kmsReadOnly
