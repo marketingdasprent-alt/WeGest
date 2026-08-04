@@ -113,6 +113,9 @@ export const IntegracoesTab: React.FC = () => {
   const [selectedViaVerdeConta, setSelectedViaVerdeConta] = useState<ViaVerdeConta | null>(null);
   const [importRobotDialogOpen, setImportRobotDialogOpen] = useState(false);
   const [selectedRobotIntegracaoId, setSelectedRobotIntegracaoId] = useState<string>('');
+  const [importRobotTab, setImportRobotTab] = useState<'uber' | 'bolt' | 'bp' | 'repsol' | 'edp'>(
+    'uber'
+  );
   const [importUberDialogOpen, setImportUberDialogOpen] = useState(false);
   const [selectedUberIntegracaoId, setSelectedUberIntegracaoId] = useState<string>('');
   const [executingRobots, setExecutingRobots] = useState<Set<string>>(new Set());
@@ -243,19 +246,18 @@ export const IntegracoesTab: React.FC = () => {
               : i.plataforma === 'robot'
                 ? 'api'
                 : 'api',
-          // As duas ligações à Bolt mostram o mesmo nome e o mesmo logótipo:
-          // plataforma='bolt' é a API oficial (OAuth → bolt_viagens) e
-          // plataforma='robot'+target 'bolt' é o robô Apify (CSV semanal →
-          // bolt_resumos_semanais). Sem esta etiqueta ficavam indistinguíveis
-          // na lista, e são coisas diferentes — convém saber qual falhou.
+          // A Bolt é uma plataforma só; o que muda é COMO se lê a conta. O
+          // auth_mode diz qual dos dois é ('oauth' = API oficial, 'password' =
+          // robô Apify ainda por converter) e convém vê-lo na lista: são
+          // caminhos diferentes e é bom saber qual deles falhou.
           subLabel:
             i.plataforma === 'robot' && !isSimplifiedRobot
               ? (i as any).apify_actor_id || undefined
-              : isBoltRobot
-                ? 'Robô · CSV semanal'
-                : i.plataforma === 'bolt'
+              : isBoltRobot || i.plataforma === 'bolt'
+                ? i.auth_mode === 'oauth'
                   ? `API oficial${i.company_name ? ` · ${i.company_name}` : ''}`
-                  : i.company_name || undefined,
+                  : 'Robô · CSV semanal'
+                : i.company_name || undefined,
           rawData: i,
           logoUrl:
             i.logo_url ||
@@ -438,6 +440,13 @@ export const IntegracoesTab: React.FC = () => {
       setImportUberDialogOpen(true);
     } else {
       setSelectedRobotIntegracaoId(integracao.id);
+      // Abrir já no separador da plataforma do cartão — o dialog é partilhado
+      // pelas cinco e importar o CSV certo no separador errado é um erro caro.
+      const alvo = (integracao.robot_target_platform ??
+        (integracao.plataforma === 'bolt' ? 'bolt' : null)) as string | null;
+      setImportRobotTab(
+        alvo === 'bolt' || alvo === 'bp' || alvo === 'repsol' || alvo === 'edp' ? alvo : 'uber'
+      );
       setImportRobotDialogOpen(true);
     }
   };
@@ -793,11 +802,21 @@ export const IntegracoesTab: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {cards.map((card) => {
-            const rawPlataforma = (card.rawData as IntegracaoConfig)?.plataforma;
-            const isRobotBacked = rawPlataforma === 'robot' || rawPlataforma === 'via_verde';
+            const raw = card.rawData as IntegracaoConfig | undefined;
+            const rawPlataforma = raw?.plataforma;
+            // Bolt convertida para a API: o botão Play dispara robot-execute
+            // (Apify) e o login do portal desta conta já foi substituído pelas
+            // credenciais da API — deixaria de entrar. Sincroniza-se pelo botão
+            // "Sincronizar semana" dentro do detalhe da integração.
+            const isBoltApi = card.type === 'bolt' && raw?.auth_mode === 'oauth';
+            const isRobotBacked =
+              (rawPlataforma === 'robot' && !isBoltApi) || rawPlataforma === 'via_verde';
             const isUberBacked = rawPlataforma === 'uber';
             const isCartrackBacked = rawPlataforma === 'cartrack';
-            const hasImport = rawPlataforma === 'robot' || isUberBacked;
+            // Importação manual do CSV: em TODAS as integrações Bolt,
+            // independentemente do auth_mode — a API e o CSV convivem (o CSV é
+            // o único que traz campanhas e reembolsos de despesas).
+            const hasImport = rawPlataforma === 'robot' || isUberBacked || card.type === 'bolt';
             return (
               <IntegracaoCard
                 key={card.id}
@@ -1144,6 +1163,7 @@ export const IntegracoesTab: React.FC = () => {
         open={importRobotDialogOpen}
         onOpenChange={setImportRobotDialogOpen}
         integracaoId={selectedRobotIntegracaoId}
+        tabInicial={importRobotTab}
         onImportComplete={fetchAll}
       />
 
