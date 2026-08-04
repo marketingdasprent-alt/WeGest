@@ -477,6 +477,13 @@ const ContratoForm = () => {
             totalSnapshot={contrato?.total_final}
             subtotalSnapshot={contrato?.total_subtotal}
             ivaSnapshot={contrato?.total_iva}
+            editavel
+            onValorTotalManualChange={(valor) =>
+              form.setValue('valor_total_manual', valor, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
           />
           {isEdit && contrato && <HistoricoEdicoesContrato contratoId={contrato.id} />}
         </aside>
