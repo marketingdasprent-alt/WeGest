@@ -193,9 +193,16 @@ export const ReservaTabGeral: React.FC<ReservaTabGeralProps> = ({
   );
 
   // Slot não tem faturação de aluguer (carro é do motorista) — só valor semanal.
+  // Só preenche valor_total se ainda estiver VAZIO — um valor já gravado
+  // (reserva hidratada) ou escrito à mão pelo utilizador manda sempre sobre a
+  // tarifa; para voltar ao preço da tarifa, o utilizador apaga o campo. Sem
+  // esta guarda, este efeito volta a disparar quando `tarifas`/`precosModelo`
+  // (queries assíncronas) chegam DEPOIS da hidratação inicial do formulário —
+  // ou quando as datas mudam, já que `dias` é dependência de `faturacao` — e
+  // apaga o valor manual/gravado com o preço recém-calculado da tarifa.
   useEffect(() => {
     if (faturacao && !isSlot) {
-      form.setValue('valor_total', faturacao.valor, { shouldDirty: true });
+      fillEmptyFormFields(form, { valor_total: faturacao.valor });
     }
   }, [faturacao, isSlot, form]);
 
