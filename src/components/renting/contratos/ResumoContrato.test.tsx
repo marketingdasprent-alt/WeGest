@@ -74,6 +74,28 @@ describe('ResumoContrato — preco unitario editavel', () => {
     expect(screen.getByLabelText('Preço/dia (sem IVA)')).toHaveValue('85.00');
   });
 
+  it('escrever antes da hidratacao chegar — o valor gravado tardio nao sobrepoe o que foi escrito', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <ResumoContrato {...props({ valorTotalManual: null, onValorTotalManualChange: onChange })} />
+    );
+    const input = screen.getByLabelText('Preço/dia (sem IVA)');
+    fireEvent.change(input, { target: { value: '40' } });
+    expect(input).toHaveValue('40');
+    expect(onChange).toHaveBeenCalledWith(600);
+
+    // Hidratacao assincrona: o valor gravado chega tarde (depois de o
+    // utilizador ja ter escrito) e discorda de propósito do que foi escrito —
+    // 1275 / 15 dias = 85.00, bem diferente de 40. Se a guarda `semeado`
+    // (ResumoContrato.tsx) falhar e o campo for re-semeado a partir do total,
+    // o input passa a mostrar "85.00" e este teste falha sem ambiguidade.
+    rerender(
+      <ResumoContrato {...props({ valorTotalManual: 1275, onValorTotalManualChange: onChange })} />
+    );
+
+    expect(screen.getByLabelText('Preço/dia (sem IVA)')).toHaveValue('40');
+  });
+
   it('mostra a tarifa como placeholder quando nao ha valor manual', () => {
     render(<ResumoContrato {...props({ valorTotalManual: null })} />);
     const input = screen.getByLabelText('Preço/dia (sem IVA)');
