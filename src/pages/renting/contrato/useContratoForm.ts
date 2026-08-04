@@ -70,7 +70,9 @@ import {
 // `valor_total_manual`, `desconto_percentagem` e `voucher_codigo` caem neste
 // grupo. Desde que o SectionGeral foi apagado (tinha os únicos <FormMessage />
 // destes três campos), um erro de validação neles deixa de ter superfície
-// visível — o cartão lateral (ResumoContrato) não lê form.formState.errors.
+// ACIONÁVEL: o `onInvalid` (mais abaixo) continua a abrir o separador "Geral" e
+// a mostrar o toast, mas lá não há nenhum destes campos para corrigir — e o
+// cartão lateral (ResumoContrato) não lê form.formState.errors.
 // Decisão deliberada, não um esquecimento: os três só entram no formulário
 // por hidratação de um contrato/reserva já gravado, e só se grava um
 // contrato passando por este mesmo schema (ou pela função SQL

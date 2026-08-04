@@ -462,10 +462,6 @@ const ContratoForm = () => {
         </Card>
 
         <aside>
-          {/* Nota sobre shouldDirty: a edição sobrevive aos resets dos efeitos de hidratação
-              (useContratoForm.ts:452–517) porque fazem reset com {...form.getValues(), campo: fresh};
-              o spread já transporta valor_total_manual. shouldDirty fica apenas por consistência
-              com o padrão em 627. */}
           <ResumoContrato
             dataInicio={dataInicio}
             dataFim={dataFim}
@@ -483,6 +479,13 @@ const ContratoForm = () => {
             ivaSnapshot={contrato?.total_iva}
             editavel
             onValorTotalManualChange={(valor) =>
+              // Nota sobre shouldDirty: o que se escreve aqui sobrevive aos
+              // `form.reset` dos efeitos de hidratação das relações (condutores,
+              // coberturas, extras e taxas, em useContratoForm) porque esses
+              // fazem reset com { ...form.getValues(), <relação>: fresca } e o
+              // spread já transporta valor_total_manual. shouldDirty fica só por
+              // consistência com `aplicarDadosViatura`, o outro sítio que
+              // escreve neste campo.
               form.setValue('valor_total_manual', valor, {
                 shouldDirty: true,
                 shouldValidate: true,

@@ -159,10 +159,12 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
   ]);
 
   // ── Preço unitário editável ───────────────────────────────────
-  // O preço unitário é a fonte de verdade enquanto o formulário está aberto e o
-  // total é derivado dele — ao contrário do cartão da reserva, onde manda o
-  // total. É deliberado: esticar um contrato de 15 para 20 dias tem de cobrar
-  // mais, e não redistribuir o mesmo total por mais dias.
+  // Quando mudam as DATAS, é o preço unitário que manda e o total que se
+  // refaz — ao contrário do cartão da reserva, onde manda o total. É
+  // deliberado: esticar um contrato de 15 para 20 dias tem de cobrar mais, e
+  // não redistribuir o mesmo total por mais dias. Já uma escrita vinda de fora
+  // (hidratação, troca de viatura) manda sobre o input, desde que o utilizador
+  // não o tenha em foco.
   const isRentACarPreco = regime === 'rent_a_car';
   // Calculado à parte de `calculo.dias`, que devolve 0 quando o contrato está
   // facturado — aí queremos continuar a mostrar o preço que ficou congelado.
@@ -176,32 +178,44 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
       : 'Preço/semana (IVA inc.)';
 
   const [precoUnit, setPrecoUnit] = useState('');
-  // `semeado` distingue "ainda não sabemos o preço" de "o preço é o que está no
-  // input". Sem ele, mudar as datas voltaria a semear a partir do total e o
-  // preço/dia mudava sozinho — exactamente o contrário do que queremos.
-  const semeado = useRef(false);
+  // Guarda de foco (igual à do cartão da reserva): enquanto o utilizador está a
+  // escrever, o input manda e nada de fora lhe toca. Fora do foco, o input
+  // segue o valor do formulário — é o que permite ver a tarifa nova quando se
+  // troca de viatura (aplicarDadosViatura reescreve `valor_total_manual`).
+  const inputFocused = useRef(false);
+  // Último divisor visto, para distinguir "mudaram as datas" de "mudou o valor".
   const divisorAnterior = useRef(divisor);
 
+  // As duas direcções vivem no MESMO efeito de propósito, porque a ordem entre
+  // elas importa: no render em que o divisor muda, o valor que vem de fora
+  // ainda é o do divisor antigo. Sincronizar o input aí daria 1275/20 = 63,75 —
+  // o preço/dia mudava sozinho ao esticar as datas, exactamente o oposto do que
+  // este cartão promete. Por isso a mudança de divisor trata-se primeiro e sai.
   useEffect(() => {
-    if (semeado.current) return;
-    if (valorTotalManual == null || divisor <= 0) return;
-    semeado.current = true;
-    setPrecoUnit((valorTotalManual / divisor).toFixed(2));
-  }, [valorTotalManual, divisor]);
-
-  useEffect(() => {
-    if (divisorAnterior.current === divisor) return;
+    const divisorMudou = divisorAnterior.current !== divisor;
     divisorAnterior.current = divisor;
-    if (!semeado.current || divisor <= 0) return;
-    const n = Number(precoUnit);
-    if (!Number.isFinite(n) || n <= 0) return;
-    onValorTotalManualChange?.(Number((n * divisor).toFixed(2)));
-  }, [divisor, precoUnit, onValorTotalManualChange]);
+    const preco = Number(precoUnit);
+    const temPreco = precoUnit !== '' && Number.isFinite(preco) && preco > 0;
+
+    // (1) Mudaram as datas e já há preço/dia: o preço fica quieto e é o total
+    // que recalcula. Sem preço escrito não escreve nada — abrir o formulário e
+    // mexer nas datas não pode inventar um valor manual do nada.
+    if (divisorMudou && divisor > 0 && temPreco) {
+      onValorTotalManualChange?.(Number((preco * divisor).toFixed(2)));
+      return;
+    }
+
+    // (2) O valor mudou por fora (hidratação inicial, troca de viatura): o
+    // input segue-o. Inclui o eco da nossa própria escrita do ramo (1), que
+    // devolve exactamente o mesmo preço e portanto não mexe em nada.
+    if (inputFocused.current) return;
+    if (divisor <= 0 || valorTotalManual == null || valorTotalManual <= 0) return;
+    setPrecoUnit((valorTotalManual / divisor).toFixed(2));
+  }, [divisor, precoUnit, valorTotalManual, onValorTotalManualChange]);
 
   const handlePrecoChange = (raw: string) => {
     const normalizado = raw.replace(',', '.').replace(/[^0-9.]/g, '');
     setPrecoUnit(normalizado);
-    semeado.current = true;
     if (divisor <= 0) return;
     if (normalizado === '' || normalizado === '.') {
       onValorTotalManualChange?.(null);
@@ -213,6 +227,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
   };
 
   const handlePrecoBlur = () => {
+    inputFocused.current = false;
     const n = Number(precoUnit);
     setPrecoUnit(precoUnit && Number.isFinite(n) && n > 0 ? n.toFixed(2) : '');
   };
@@ -251,22 +266,29 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
             <>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground text-xs shrink-0">{precoLabel}</span>
+                {/* O placeholder não promete a tarifa: `tarifa_diaria` nunca é
+                    preenchido por contratos criados na aplicação (não há campo
+                    que o escreva), por isso deixar o campo vazio dá Total
+                    0,00 € e não o preço tarifário. */}
                 <Input
                   type="text"
                   inputMode="decimal"
                   aria-label={precoLabel}
                   value={precoUnit}
                   onChange={(e) => handlePrecoChange(e.target.value)}
+                  onFocus={() => {
+                    inputFocused.current = true;
+                  }}
                   onBlur={handlePrecoBlur}
                   disabled={isFacturado || divisor <= 0}
-                  placeholder={isRentACarPreco && tarifaDiaria ? tarifaDiaria.toFixed(2) : '0,00'}
+                  placeholder="0,00"
                   className="h-8 w-24 text-right tabular-nums text-sm"
                   title={
                     isFacturado
                       ? 'Contrato facturado — os valores estão congelados'
                       : divisor <= 0
                         ? 'Define primeiro as datas'
-                        : 'Deixa vazio para usar o preço da tarifa'
+                        : undefined
                   }
                 />
               </div>
