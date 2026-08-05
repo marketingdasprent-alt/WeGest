@@ -10,6 +10,14 @@ verify_jwt = false
 [functions.send-folha-danos-email]
 verify_jwt = false
 
+# Arquiva a Folha de Danos assinada nos anexos do contrato. Chamada tanto pela
+# UI autenticada como pela página de check-in/out por token — quem confirma no
+# terreno não tem permissão de renting_contratos, por isso a RLS não serve de
+# porta aqui. A autorização é feita DENTRO da função (token de realização que
+# bate certo com o contrato, ou o contrato ser visível à sessão do chamador).
+[functions.guardar-folha-danos]
+verify_jwt = false
+
 # Envio de documento fiscal (fatura/FR/NC/recibo) por email ao cliente/condutor.
 # Iniciada sempre pela UI autenticada → exige JWT válido (evita relay anónimo de anexos).
 [functions.send-documento-fiscal-email]

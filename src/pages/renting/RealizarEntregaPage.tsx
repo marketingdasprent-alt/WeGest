@@ -300,6 +300,7 @@ const RealizarEntregaPage = () => {
         contexto,
         responsavelNome,
         info,
+        token,
       };
       await gerarFolhaBloco({
         ...params,
@@ -412,6 +413,7 @@ const RealizarEntregaPage = () => {
               contexto,
               responsavelNome,
               info,
+              token,
             };
             gerarFolhaBloco({
               ...params,
@@ -545,6 +547,7 @@ const RealizarEntregaPage = () => {
             contexto,
             responsavelNome,
             info,
+            token,
           };
           gerarFolhaBloco({
             ...params,

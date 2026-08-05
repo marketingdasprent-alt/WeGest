@@ -52,6 +52,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useOrgId } from '@/contexts/TenantContext';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
+import { guardarFolhaDanos } from '@/lib/guardarFolhaDanos';
 import {
   AssinaturasHandoverSection,
   type AssinaturasHandoverHandle,
@@ -459,6 +460,14 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
           momento: 'RECOLHA',
           orgId,
           viaturaId: contexto?.viaturaId ?? viaturaId ?? undefined,
+        });
+        // Guarda a mesma cópia assinada nos anexos do contrato, para poder ser
+        // descarregada de novo a partir do separador "Anexos".
+        void guardarFolhaDanos({
+          pdf,
+          contratoId,
+          matricula: matricula ?? '',
+          momento: 'RECOLHA',
         });
       }
     } catch {
