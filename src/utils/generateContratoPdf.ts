@@ -66,14 +66,36 @@ export const generateContratoPdf = async ({
   //      - tvde       → Contrato de Prestação + Contrato de Aluguer (1 PDF,
   //        folha branca a separar). O motorista presta serviço sob a licença
   //        da empresa (prestação) E aluga a viatura (aluguer).
-  const { data: templates, error: templatesErr } = await supabase
-    .from('document_templates')
-    .select('id, nome, tipo, cliente_empresa_id')
-    .eq('ativo', true)
-    .eq('cliente_empresa_id', empresa.id)
-    .order('nome', { ascending: true });
+  const [{ data: templatesEmpresa, error: templatesErr }, { data: folhasOrg, error: folhasErr }] =
+    await Promise.all([
+      supabase
+        .from('document_templates')
+        .select('id, nome, tipo, cliente_empresa_id')
+        .eq('ativo', true)
+        .eq('cliente_empresa_id', empresa.id)
+        .order('nome', { ascending: true }),
+      // A Folha de Danos é um anexo da VIATURA e vive ao nível da org, não da
+      // empresa emissora — tem de entrar aqui pela mesma regra do diálogo
+      // "Gerar Documentos". Sem isto, escolhê-la dava "Nenhum documento
+      // seleccionado para gerar": o id vinha do diálogo mas não existia nesta
+      // lista, e ficava pelo caminho no `.map()` mais abaixo.
+      supabase
+        .from('document_templates')
+        .select('id, nome, tipo, cliente_empresa_id')
+        .eq('ativo', true)
+        .eq('tipo', 'anexo_danos')
+        .eq('org_id', contrato.org_id)
+        .order('nome', { ascending: true }),
+    ]);
 
   if (templatesErr) throw templatesErr;
+  if (folhasErr) throw folhasErr;
+
+  const daEmpresa = templatesEmpresa ?? [];
+  const templates = [
+    ...daEmpresa,
+    ...(folhasOrg ?? []).filter((f) => !daEmpresa.some((t) => t.id === f.id)),
+  ];
 
   const porPrefixo = (prefixo: string) =>
     (templates ?? []).find((t) => t.nome.toLowerCase().startsWith(prefixo.toLowerCase()));
@@ -445,7 +467,15 @@ export const generateContratoPdf = async ({
   }
 
   if (templatesEscolhidos.length === 0) {
-    throw new Error('Nenhum documento seleccionado para gerar.');
+    // Distinguir os dois casos: nada escolhido vs. escolhido mas não
+    // encontrado. O 2.º é sempre um template que a query acima não trouxe
+    // (tipicamente por estar noutra empresa) — dizer "nenhum seleccionado"
+    // nesse caso manda quem depura para o lado errado.
+    throw new Error(
+      templateIds?.length
+        ? 'Os documentos seleccionados não estão disponíveis para esta empresa.'
+        : 'Nenhum documento seleccionado para gerar.'
+    );
   }
 
   const idxFotos = anexoFotos ? anexarFotosA(templatesEscolhidos) : -1;
@@ -456,10 +486,26 @@ export const generateContratoPdf = async ({
     headerLogoUrl: empresa.logoUrl || '/Logo.png',
     footerText,
     anexoFotos: i === idxFotos ? anexoFotos : undefined,
-    // Folha de danos: passar a viatura para o renderer puxar TODOS os danos
-    // activos + fotos + QR no placeholder {{secao_danos}}. Sem contratoId para
-    // mostrar todos os danos existentes da viatura (não só os deste contrato).
-    ...(t.tipo === 'anexo_danos' ? { viaturaId: viatura?.id } : {}),
+    // Folha de danos: a viatura faz o renderer puxar TODOS os danos activos
+    // + fotos + QR para o placeholder {{secao_danos}}.
+    //
+    // Sem contratoId de propósito: aqui não estamos num handover, e passá-lo
+    // rotularia os danos deste contrato como "Nesta recolha/entrega" — em vez
+    // de "Contrato #N", que é o que faz sentido a ler isto mais tarde.
+    //
+    // Os km/combustível vêm do contrato: sem eles a folha saía com esses
+    // campos em branco. O momento segue o estado — um contrato já devolvido
+    // tem km de entrada, os restantes só os de saída.
+    ...(t.tipo === 'anexo_danos'
+      ? {
+          viaturaId: viatura?.id,
+          momentoFolha: contrato.estado_operacional === 'devolvido' ? 'RECOLHA' : 'ENTREGA',
+          km_saida: contrato.km_saida != null ? String(contrato.km_saida) : '',
+          km_entrada: contrato.km_entrada != null ? String(contrato.km_entrada) : '',
+          combustivel_saida: contrato.combustivel_saida ?? '',
+          eletricidade_saida: contrato.eletricidade_saida ?? '',
+        }
+      : {}),
   }));
 
   const fileName =
