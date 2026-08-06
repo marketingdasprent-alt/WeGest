@@ -68,12 +68,14 @@ export const ReservaTabCaixa: React.FC<ReservaTabCaixaProps> = ({
   reservaCodigo,
 }) => {
   const valorTotal = form.watch('valor_total');
+  const valorTotalManual = form.watch('valor_total_manual');
   const dataInicio = form.watch('data_inicio');
   const dataFim = form.watch('data_fim');
   const regime = form.watch('regime');
 
   const dias = useMemo(() => diferencaDias(dataInicio, dataFim), [dataInicio, dataFim]);
-  const rawTotal = valorTotal ?? 0;
+  // Preço escrito à mão manda sobre o automático da tarifa (ver schema).
+  const rawTotal = valorTotalManual ?? valorTotal ?? 0;
   const taxaIVA = ivaRate(regime);
   const { subtotal, iva, total } = calcularSubtotalIvaTotal(regime, rawTotal);
   const precoUnitarioDerivado = dias && dias > 0 ? rawTotal / dias : 0;
@@ -96,13 +98,13 @@ export const ReservaTabCaixa: React.FC<ReservaTabCaixaProps> = ({
     setPrecoUnitInput(normalized);
     if (!dias || dias <= 0) return;
     if (normalized === '' || normalized === '.') {
-      form.setValue('valor_total', null, { shouldValidate: true });
+      form.setValue('valor_total_manual', null, { shouldValidate: true, shouldDirty: true });
       return;
     }
     const n = Number(normalized);
     if (!Number.isFinite(n) || n < 0) return;
     const novoTotal = Number((n * dias).toFixed(2));
-    form.setValue('valor_total', novoTotal, { shouldValidate: true });
+    form.setValue('valor_total_manual', novoTotal, { shouldValidate: true, shouldDirty: true });
   };
 
   const descricao = `Aluguer${reservaCodigo ? ` #${reservaCodigo}` : ''} · ${formatDateShort(dataInicio)} → ${formatDateShort(dataFim)}`;

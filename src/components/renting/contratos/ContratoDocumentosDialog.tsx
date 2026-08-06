@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useDocumentTemplates } from '@/hooks/useDocumentTemplates';
+import { useDocumentTemplates, useFolhasDanosDaOrg } from '@/hooks/useDocumentTemplates';
 import { useContactosDocumento } from '@/hooks/useContactosDocumento';
 
 import { generateContratoPdf, type CondutorPrincipal } from '@/utils/generateContratoPdf';
@@ -33,6 +33,7 @@ import type { Motorista } from '@/types/motorista';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
 import { EnviarContratoEmailDialog } from './EnviarContratoEmailDialog';
+import { templatesComFolhaDanos } from './templatesComFolhaDanos';
 
 interface Props {
   open: boolean;
@@ -144,17 +145,32 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
       : null,
   });
 
-  const { data: todosTemplates = [], isLoading: loading } = useDocumentTemplates(
+  const { data: todosTemplates = [], isLoading: loadingEmpresa } = useDocumentTemplates(
     open ? empresaId : null
   );
-  // A Folha de Danos (anexo_danos) gera-se só no fluxo de check-in/out
-  // (entrega/recolha), nunca por este diálogo do contrato.
-  // useMemo estabiliza a referência: sem ele, `.filter()` devolvia array novo
-  // a cada render e a pré-selecção (effect abaixo) corria sempre, esmagando
-  // a escolha do utilizador a cada clique.
+
+  // Folhas de Danos da org — ver o hook: não são filtráveis por empresa.
+  const { data: folhasOrg = [], isLoading: loadingFolhas } = useFolhasDanosDaOrg(
+    contrato.org_id,
+    open
+  );
+
+  const loading = loadingEmpresa || loadingFolhas;
+
+  // A Folha de Danos aparece aqui como qualquer outro documento. Entra UMA:
+  // a da empresa seleccionada se existir, senão a da org — nunca uma lista de
+  // folhas quase iguais.
+  //
+  // Note-se que sai GERADA NA HORA: leva os danos activos da viatura neste
+  // momento e não as assinaturas do handover — essas só existem na folha
+  // impressa durante a entrega/recolha.
+  //
+  // useMemo estabiliza a referência: sem ele, o array novo a cada render fazia
+  // a pré-selecção (effect abaixo) correr sempre, esmagando a escolha do
+  // utilizador a cada clique.
   const templates = useMemo(
-    () => todosTemplates.filter((t) => t.tipo !== 'anexo_danos'),
-    [todosTemplates]
+    () => templatesComFolhaDanos(todosTemplates, folhasOrg, empresaId),
+    [todosTemplates, folhasOrg, empresaId]
   );
 
   // Guarda a chave (open+empresa) já pré-seleccionada, para o effect correr

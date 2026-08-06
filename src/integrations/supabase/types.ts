@@ -13081,6 +13081,12 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_gestores_tvde: {
+        Args: never
+        Returns: {
+          nome: string
+        }[]
+      }
       get_cartao_historico_consumo: {
         Args: { p_numero: string; p_tipo: string }
         Returns: {

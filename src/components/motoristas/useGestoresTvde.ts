@@ -1,44 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface GestorTvde {
   nome: string;
 }
 
-/** Gestores TVDE da org activa, via user_organizacoes (per-org) — filtra
- *  pelo nome do cargo (cargos são por-org, ids distintos entre orgs). */
+/**
+ * Gestores TVDE da org activa.
+ *
+ * Vem do RPC `get_gestores_tvde` e não de `user_organizacoes` directamente:
+ * essa tabela só deixa cada utilizador ver a SUA linha (ou tudo, se for
+ * admin), pelo que a lista saía VAZIA para toda a gente que não fosse
+ * administrador — incluindo cargos com `motoristas_editar`, que têm
+ * precisamente de preencher este campo. `profiles` impunha a mesma barreira
+ * logo a seguir. O RPC é SECURITY DEFINER, devolve só nomes e faz o gate no
+ * servidor, sem alargar nenhuma política.
+ *
+ * `orgId` já não filtra (a função resolve a org da sessão) — fica como chave
+ * de cache e para não disparar antes de a org estar escolhida.
+ */
 export function useGestoresTvde(orgId: string | null): GestorTvde[] {
-  const [gestores, setGestores] = useState<GestorTvde[]>([]);
+  const { data = [] } = useQuery({
+    queryKey: ['gestores-tvde', orgId],
+    enabled: !!orgId,
+    queryFn: async (): Promise<GestorTvde[]> => {
+      const { data, error } = await supabase.rpc('get_gestores_tvde');
+      if (error) throw error;
+      return ((data as { nome: string }[] | null) ?? []).map((g) => ({ nome: g.nome }));
+    },
+  });
 
-  useEffect(() => {
-    if (!orgId) return;
-    const fetchGestores = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('user_organizacoes')
-          .select('cargos(nome), profiles(nome)')
-          .eq('org_id', orgId);
-
-        if (error) throw error;
-
-        const uniqueGestores = ((data as any[]) || []).reduce((acc: GestorTvde[], current) => {
-          const cargoNome = (current.cargos?.nome || '').toLowerCase();
-          const nome = current.profiles?.nome as string | undefined;
-          const isGestorTvde = cargoNome.includes('gestor') && cargoNome.includes('tvde');
-          if (isGestorTvde && nome && !acc.find((item) => item.nome === nome)) {
-            acc.push({ nome });
-          }
-          return acc;
-        }, []);
-        uniqueGestores.sort((a, b) => a.nome.localeCompare(b.nome));
-
-        setGestores(uniqueGestores);
-      } catch (error) {
-        console.error('Erro ao buscar gestores:', error);
-      }
-    };
-    fetchGestores();
-  }, [orgId]);
-
-  return gestores;
+  return data;
 }

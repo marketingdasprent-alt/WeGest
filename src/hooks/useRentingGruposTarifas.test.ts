@@ -75,7 +75,7 @@ describe('calcularBaseAluguerRenting', () => {
     expect(semModelo).toBe(500);
   });
 
-  it('valorTotalManual > 0 tem prioridade sobre qualquer tarifa/regime', () => {
+  it('valorTotalManual tem prioridade sobre qualquer tarifa/regime', () => {
     const base = calcularBaseAluguerRenting({
       regime: 'tvde',
       isLongaDuracao: false,
@@ -88,13 +88,29 @@ describe('calcularBaseAluguerRenting', () => {
     expect(base).toBe(999);
   });
 
-  it('valorTotalManual = 0 NÃO conta como override — cai no cálculo normal', () => {
+  // Um aluguer a zero (oferecido/incluído) é uma decisão legítima e tem de
+  // sobreviver ao gravar — antes o 0 caía no cálculo automático e o preço da
+  // tarifa reaparecia sozinho.
+  it('valorTotalManual = 0 é um override válido — não cai no cálculo da tarifa', () => {
     const base = calcularBaseAluguerRenting({
       regime: 'tvde',
       isLongaDuracao: false,
       dias: 7,
       tarifa: null,
       valorTotalManual: 0,
+      precoModeloSemana: 120,
+    });
+
+    expect(base).toBe(0);
+  });
+
+  it('sem override (null) segue a tarifa', () => {
+    const base = calcularBaseAluguerRenting({
+      regime: 'tvde',
+      isLongaDuracao: false,
+      dias: 7,
+      tarifa: null,
+      valorTotalManual: null,
       precoModeloSemana: 120,
     });
 

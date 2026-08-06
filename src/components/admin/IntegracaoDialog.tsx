@@ -66,7 +66,7 @@ const PLATFORMS: { id: PlataformaOperacional | 'keyinvoice'; name: string; logo:
   { id: 'viaverde', name: 'Via Verde', logo: '/images/logo-via-verde.png' },
   { id: 'brevo', name: 'Brevo (Email)', logo: '/images/logo-brevo.png' },
   { id: 'cartrack', name: 'Cartrack', logo: '/images/logo-cartrack.png' },
-  { id: 'keyinvoice', name: 'KeyInvoice', logo: '/images/logo-keyinvoice.svg' },
+  { id: 'keyinvoice', name: 'KeyInvoice', logo: '/images/logo-keyinvoice.png' },
 ];
 
 const STEP_LABELS = ['Seleção de plataforma', 'Credenciais', 'Confirmação'];
