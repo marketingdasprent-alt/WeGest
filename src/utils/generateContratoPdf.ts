@@ -515,9 +515,11 @@ export const generateContratoPdf = async ({
     // Folha de danos: a viatura faz o renderer puxar TODOS os danos activos
     // + fotos + QR para o placeholder {{secao_danos}}.
     //
-    // Sem contratoId de propósito: aqui não estamos num handover, e passá-lo
-    // rotularia os danos deste contrato como "Nesta recolha/entrega" — em vez
-    // de "Contrato #N", que é o que faz sentido a ler isto mais tarde.
+    // O contratoId VAI (é ele que dá o número no canto, a identificação do
+    // cliente/condutor e o QR com o âmbito deste contrato), mas com
+    // folhaDanosMomentoActual=false: aqui não estamos num handover, e sem essa
+    // ressalva os danos deste contrato saíam rotulados "Nesta recolha/entrega"
+    // em vez de "Contrato #N", que é o que faz sentido a ler isto mais tarde.
     //
     // Os km/combustível vêm do contrato: sem eles a folha saía com esses
     // campos em branco. O momento segue o estado — um contrato já devolvido
@@ -525,6 +527,8 @@ export const generateContratoPdf = async ({
     ...(t.tipo === 'anexo_danos'
       ? {
           viaturaId: viatura?.id,
+          contratoId: contrato.id,
+          folhaDanosMomentoActual: false,
           momentoFolha: contrato.estado_operacional === 'devolvido' ? 'RECOLHA' : 'ENTREGA',
           km_saida: contrato.km_saida != null ? String(contrato.km_saida) : '',
           km_entrada: contrato.km_entrada != null ? String(contrato.km_entrada) : '',

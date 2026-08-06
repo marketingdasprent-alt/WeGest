@@ -24,6 +24,9 @@ export interface AnexoFotoItem {
   /** Ficheiro de vídeo. A grelha do PDF não consegue mostrar um frame, por isso
    *  marca-se a moldura como vídeo e remete-se para o QR. */
   video?: boolean;
+  /** Anexo em PDF (peritagem, orçamento de oficina). Também não se desenha na
+   *  grelha — moldura rotulada e o conteúdo vê-se pelo QR. */
+  pdf?: boolean;
 }
 
 /** Uma parte identificada no contrato — o titular e/ou quem conduz. */
@@ -38,6 +41,9 @@ export interface AnexoParteItem {
 /** Anexo de danos da viatura: lista + fotos (máx 6) + QR code. */
 export interface AnexoDanos {
   titulo: string;
+  /** Código do contrato de renting. Vai para o canto superior direito da
+   *  página e para o placeholder {{numero_contrato}}. */
+  numeroContrato?: number;
   /** Quem alugou: titular do contrato e/ou condutor, conforme o que estiver
    *  preenchido. Vazio quando o contrato não tem nenhum dos dois. */
   partes?: AnexoParteItem[];
@@ -82,6 +88,19 @@ export interface GenerateDocumentParams {
   anexoDanos?: AnexoDanos;
   viaturaId?: string;
   contratoId?: string;
+  /**
+   * Estamos no momento de entrega/recolha deste contrato?
+   *
+   * `contratoId` faz duas coisas na folha de danos e nem sempre se querem as
+   * duas: identifica o documento (número no canto, partes, QR do contrato) e
+   * rotula os danos deste contrato como "Nesta recolha/entrega".
+   *
+   * No fecho/handover as duas fazem sentido → true (omissão).
+   * A imprimir do botão "Documentos" do contrato não há handover nenhum, e
+   * "Nesta recolha/entrega" seria mentira: os danos saem rotulados
+   * "Contrato #N" e mantém-se todo o resto → false.
+   */
+  folhaDanosMomentoActual?: boolean;
   km_saida?: string;
   km_entrada?: string;
   combustivel_saida?: string;
@@ -161,4 +180,5 @@ export type DocumentoCombinado = Pick<
   | 'anexoDanos'
   | 'viaturaId'
   | 'contratoId'
+  | 'folhaDanosMomentoActual'
 >;

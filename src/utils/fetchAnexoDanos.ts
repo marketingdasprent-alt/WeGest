@@ -105,10 +105,15 @@ async function fetchPartesContrato(
 export async function fetchAnexoDanos(
   viaturaId: string,
   matricula = '',
-  /** ID do contrato de renting actual — usado só para rotular a origem de
-   *  cada linha ("Nesta recolha/entrega" vs. já existente). Não filtra: a
-   *  lista mostra sempre todos os danos activos da viatura. */
-  contratoId?: string
+  /** Contrato a que esta folha diz respeito. Dá o número (canto superior
+   *  direito), as partes (cliente/condutor), o âmbito do QR e — quando
+   *  `momentoActual` — o rótulo "Nesta recolha/entrega" nos danos dele.
+   *  Nunca filtra: a lista mostra sempre todos os danos activos da viatura. */
+  contratoId?: string,
+  /** false quando se imprime fora de um handover (botão "Documentos" do
+   *  contrato): os danos deste contrato saem como "Contrato #N", que é o que
+   *  faz sentido a ler isto mais tarde, e o resto do cabeçalho mantém-se. */
+  momentoActual = true
 ): Promise<AnexoDanos | undefined> {
   try {
     const { data: danosRows } = await supabase
@@ -167,7 +172,7 @@ export async function fetchAnexoDanos(
     for (const d of danos) {
       const rentingId = d.contrato_renting_id as string | null;
       const ticketId = d.ticket_id as string | null;
-      if (rentingId && rentingId === contratoId) {
+      if (rentingId && rentingId === contratoId && momentoActual) {
         origemPorDanoId.set(d.id, 'Nesta recolha/entrega');
       } else if (rentingId) {
         const codigo = codigoPorContratoId.get(rentingId);
@@ -230,11 +235,15 @@ export async function fetchAnexoDanos(
       .filter((f) => !!f.ficheiro_url)
       .slice(0, 6);
 
-    // Vídeo detectado pela extensão: o jsPDF não consegue extrair um frame,
-    // por isso a moldura sai marcada como vídeo e remete-se para o QR.
+    // Vídeo e PDF detectados pela extensão: nenhum dos dois se desenha numa
+    // grelha de imagens (o jsPDF não extrai frames nem rasteriza PDFs), por
+    // isso a moldura sai rotulada e remete-se para o QR.
     const EXT_VIDEO = /\.(mp4|mov|webm|avi|mkv|m4v|3gp)$/i;
-    const ehVideo = (f: FotoRow) =>
-      EXT_VIDEO.test(f.nome_ficheiro ?? '') || EXT_VIDEO.test(f.ficheiro_url.split('?')[0]);
+    const EXT_PDF = /\.pdf$/i;
+    const temExt = (f: FotoRow, re: RegExp) =>
+      re.test(f.nome_ficheiro ?? '') || re.test(f.ficheiro_url.split('?')[0]);
+    const ehVideo = (f: FotoRow) => temExt(f, EXT_VIDEO);
+    const ehPdf = (f: FotoRow) => temExt(f, EXT_PDF);
 
     const byBucket: Record<string, { raw: string; path: string; danoId: string }[]> = {
       'viatura-documentos': [],
@@ -267,6 +276,7 @@ export async function fetchAnexoDanos(
         danoId: f.dano_id,
         descricao: f.descricao?.trim() || undefined,
         video: ehVideo(f),
+        pdf: ehPdf(f),
       }))
       .filter((f): f is NonNullable<typeof f> & { url: string } => !!f.url)
       .map((f) => ({
@@ -274,6 +284,7 @@ export async function fetchAnexoDanos(
         origem: origemPorDanoId.get(f.danoId) ?? 'Registo manual',
         descricao: f.descricao,
         video: f.video,
+        pdf: f.pdf,
       }));
 
     // QR público: gera (ou reutiliza) um token e aponta para a galeria pública
@@ -303,13 +314,11 @@ export async function fetchAnexoDanos(
       v != null && !Number.isNaN(Number(v)) ? `${Number(v).toFixed(2)} €` : undefined;
 
     return {
-      titulo: [
-        'ANEXO — DANOS DA VIATURA',
-        matricula || null,
-        codigoContratoActual != null ? `· CONTRATO #${codigoContratoActual}` : null,
-      ]
-        .filter(Boolean)
-        .join(' '),
+      // O número do contrato saiu do título: passou para o canto superior
+      // direito da página, como no contrato de aluguer. Repeti-lo aqui era
+      // dizer duas vezes a mesma coisa em meia folha de distância.
+      titulo: `ANEXO — DANOS DA VIATURA${matricula ? ` ${matricula}` : ''}`,
+      numeroContrato: codigoContratoActual,
       partes,
       danos: danosTabela.map((d) => ({
         localizacao: (d.localizacao as string | null) ?? '—',
