@@ -28,10 +28,13 @@ interface ResumoContratoProps {
   totalSnapshot?: number | null;
   subtotalSnapshot?: number | null;
   ivaSnapshot?: number | null;
-  /** Torna o preço editável aqui mesmo, em vez de num campo à parte no
-   *  formulário. Recebe o valor TOTAL do aluguer (já multiplicado pelos dias)
-   *  ou `null` para devolver o controlo à tarifa. Omitir = resumo só-leitura. */
+  /**
+   * Chamado quando o utilizador escreve o preço unitário no cartão.
+   * `null` significa "volta ao cálculo pela tarifa".
+   */
   onValorTotalManualChange?: (valor: number | null) => void;
+  /** Torna o preço editável no cartão. Por omissão o cartão é só-leitura. */
+  editavel?: boolean;
 }
 
 /**
@@ -60,6 +63,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
   subtotalSnapshot,
   ivaSnapshot,
   onValorTotalManualChange,
+  editavel = false,
 }) => {
   const calculo = useMemo(() => {
     if (isFacturado && totalSnapshot != null) {
@@ -95,9 +99,10 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
     }
 
     const dias = dataFim ? calcDias(dataInicio, dataFim) : 0;
-    // 0 é um override válido (aluguer oferecido) — só `null` devolve o
-    // controlo à tarifa.
-    const baseAluguer = valorTotalManual != null ? valorTotalManual : (tarifaDiaria ?? 0) * dias;
+    const baseAluguer =
+      valorTotalManual != null && valorTotalManual > 0
+        ? valorTotalManual
+        : (tarifaDiaria ?? 0) * dias;
     const custoCoberturas = coberturasPrecoDia * dias;
     const custoExtras = extras.reduce((soma, e) => soma + calcExtraTotal(e, dias), 0);
     const subtotalBruto = baseAluguer + custoCoberturas + custoExtras;
@@ -153,52 +158,81 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
     ivaSnapshot,
   ]);
 
-  const showsManual = valorTotalManual != null && !isFacturado;
+  // ── Preço unitário editável ───────────────────────────────────
+  // Quando mudam as DATAS, é o preço unitário que manda e o total que se
+  // refaz — ao contrário do cartão da reserva, onde manda o total. É
+  // deliberado: esticar um contrato de 15 para 20 dias tem de cobrar mais, e
+  // não redistribuir o mesmo total por mais dias. Já uma escrita vinda de fora
+  // (hidratação, troca de viatura) manda sobre o input, desde que o utilizador
+  // não o tenha em foco.
+  const isRentACarPreco = regime === 'rent_a_car';
+  // Calculado à parte de `calculo.dias`, que devolve 0 quando o contrato está
+  // facturado — aí queremos continuar a mostrar o preço que ficou congelado.
+  const diasPreco = dataInicio && dataFim ? calcDias(dataInicio, dataFim) : 0;
+  const divisor = isRentACarPreco ? diasPreco : 1;
 
-  // ── Preço editável ────────────────────────────────────────────────────────
-  // Um contrato facturado tem os totais congelados — aí nunca é editável.
-  const editavel = onValorTotalManualChange != null && !isFacturado;
-  // Rent-a-Car digita-se por dia (× dias = total), como na reserva. TVDE/slot
-  // não têm duração fechada: o valor é semanal e escreve-se directamente.
-  const porDia = regime !== 'tvde' && regime !== 'slot' && calculo.dias > 0;
+  const precoLabel = isRentACarPreco
+    ? 'Preço/dia (sem IVA)'
+    : regime === 'slot'
+      ? 'Valor mensal (IVA inc.)'
+      : 'Preço/semana (IVA inc.)';
 
+  const [precoUnit, setPrecoUnit] = useState('');
+  // Guarda de foco (igual à do cartão da reserva): enquanto o utilizador está a
+  // escrever, o input manda e nada de fora lhe toca. Fora do foco, o input
+  // segue o valor do formulário — é o que permite ver a tarifa nova quando se
+  // troca de viatura (aplicarDadosViatura reescreve `valor_total_manual`).
   const inputFocused = useRef(false);
-  const [precoInput, setPrecoInput] = useState('');
+  // Último divisor visto, para distinguir "mudaram as datas" de "mudou o valor".
+  const divisorAnterior = useRef(divisor);
 
-  // Só sincroniza fora de foco, senão o valor saltava enquanto se digita.
+  // As duas direcções vivem no MESMO efeito de propósito, porque a ordem entre
+  // elas importa: no render em que o divisor muda, o valor que vem de fora
+  // ainda é o do divisor antigo. Sincronizar o input aí daria 1275/20 = 63,75 —
+  // o preço/dia mudava sozinho ao esticar as datas, exactamente o oposto do que
+  // este cartão promete. Por isso a mudança de divisor trata-se primeiro e sai.
   useEffect(() => {
-    if (inputFocused.current) return;
-    // Só `null` esvazia o campo — um 0 escrito à mão tem de continuar visível
-    // como "0.00", senão parecia que a edição se tinha perdido.
-    if (valorTotalManual == null) {
-      setPrecoInput('');
+    const divisorMudou = divisorAnterior.current !== divisor;
+    divisorAnterior.current = divisor;
+    const preco = Number(precoUnit);
+    const temPreco = precoUnit !== '' && Number.isFinite(preco) && preco > 0;
+
+    // (1) Mudaram as datas e já há preço/dia: o preço fica quieto e é o total
+    // que recalcula. Sem preço escrito não escreve nada — abrir o formulário e
+    // mexer nas datas não pode inventar um valor manual do nada.
+    if (divisorMudou && divisor > 0 && temPreco) {
+      onValorTotalManualChange?.(Number((preco * divisor).toFixed(2)));
       return;
     }
-    setPrecoInput((porDia ? valorTotalManual / calculo.dias : valorTotalManual).toFixed(2));
-  }, [valorTotalManual, porDia, calculo.dias]);
+
+    // (2) O valor mudou por fora (hidratação inicial, troca de viatura): o
+    // input segue-o. Inclui o eco da nossa própria escrita do ramo (1), que
+    // devolve exactamente o mesmo preço e portanto não mexe em nada.
+    if (inputFocused.current) return;
+    if (divisor <= 0 || valorTotalManual == null || valorTotalManual <= 0) return;
+    setPrecoUnit((valorTotalManual / divisor).toFixed(2));
+  }, [divisor, precoUnit, valorTotalManual, onValorTotalManualChange]);
 
   const handlePrecoChange = (raw: string) => {
-    const normalized = raw.replace(',', '.').replace(/[^0-9.]/g, '');
-    setPrecoInput(normalized);
-    if (normalized === '' || normalized === '.') {
+    const normalizado = raw.replace(',', '.').replace(/[^0-9.]/g, '');
+    setPrecoUnit(normalizado);
+    if (divisor <= 0) return;
+    if (normalizado === '' || normalizado === '.') {
       onValorTotalManualChange?.(null);
       return;
     }
-    const n = Number(normalized);
+    const n = Number(normalizado);
     if (!Number.isFinite(n) || n < 0) return;
-    onValorTotalManualChange?.(Number((porDia ? n * calculo.dias : n).toFixed(2)));
+    onValorTotalManualChange?.(Number((n * divisor).toFixed(2)));
   };
 
   const handlePrecoBlur = () => {
     inputFocused.current = false;
-    const n = Number(precoInput);
-    if (precoInput !== '' && Number.isFinite(n) && n >= 0) setPrecoInput(n.toFixed(2));
-    else setPrecoInput('');
+    const n = Number(precoUnit);
+    setPrecoUnit(precoUnit && Number.isFinite(n) && n > 0 ? n.toFixed(2) : '');
   };
 
-  // Placeholder = o que a tarifa daria, para se ver do que se está a sair.
-  const placeholderTarifa =
-    porDia && (tarifaDiaria ?? 0) > 0 ? (tarifaDiaria as number).toFixed(2) : '0,00';
+  const showsManual = valorTotalManual != null && valorTotalManual > 0 && !isFacturado;
 
   return (
     <Card className="bg-card border-border sticky top-4">
@@ -228,42 +262,51 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
             <Row label={`Dias`} value={String(calculo.dias)} muted />
           )}
 
-          {/* O preço edita-se aqui, ao lado do total que ele produz — e já não
-              num campo solto no meio do formulário. Vazio = segue a tarifa. */}
-          {editavel && (
-            <div className="space-y-1 pb-1">
+          {editavel ? (
+            <>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground text-xs">
-                  {porDia
-                    ? 'Preço/dia (sem IVA)'
-                    : regime === 'tvde' || regime === 'slot'
-                      ? 'Valor semanal'
-                      : 'Valor total'}
-                </span>
+                <span className="text-muted-foreground text-xs shrink-0">{precoLabel}</span>
+                {/* O placeholder não promete a tarifa: `tarifa_diaria` nunca é
+                    preenchido por contratos criados na aplicação (não há campo
+                    que o escreva), por isso deixar o campo vazio dá Total
+                    0,00 € e não o preço tarifário. */}
                 <Input
                   type="text"
                   inputMode="decimal"
-                  value={precoInput}
+                  aria-label={precoLabel}
+                  value={precoUnit}
                   onChange={(e) => handlePrecoChange(e.target.value)}
                   onFocus={() => {
                     inputFocused.current = true;
                   }}
                   onBlur={handlePrecoBlur}
-                  placeholder={placeholderTarifa}
+                  disabled={isFacturado || divisor <= 0}
+                  placeholder="0,00"
                   className="h-8 w-24 text-right tabular-nums text-sm"
-                  title="Deixa vazio para usar o preço da tarifa"
+                  title={
+                    isFacturado
+                      ? 'Contrato facturado — os valores estão congelados'
+                      : divisor <= 0
+                        ? 'Define primeiro as datas'
+                        : undefined
+                  }
                 />
               </div>
-              {porDia && (
-                <p className="text-[11px] text-muted-foreground text-right">
-                  × {calculo.dias} dia{calculo.dias === 1 ? '' : 's'}
-                  {!showsManual && ' · a seguir à tarifa'}
-                </p>
-              )}
-            </div>
-          )}
-
-          {showsManual && !editavel ? (
+              {isRentACarPreco ? (
+                diasPreco > 0 ? (
+                  <p className="text-muted-foreground text-xs text-right">
+                    × {diasPreco} dia{diasPreco === 1 ? '' : 's'}
+                  </p>
+                ) : (
+                  <p className="text-amber-600 dark:text-amber-400 text-xs text-right">
+                    Define as datas primeiro
+                  </p>
+                )
+              ) : regime === 'tvde' ? (
+                <p className="text-muted-foreground text-xs text-right">× 1 semana</p>
+              ) : null}
+            </>
+          ) : showsManual ? (
             <Row
               label={regime === 'tvde' || regime === 'slot' ? 'Valor semanal' : 'Valor manual'}
               value={formatCurrency(valorTotalManual ?? 0)}

@@ -219,9 +219,10 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         onViaturaChange={onViaturaChange}
       />
 
-      {/* Tarifa & Faturação — mesmo layout da reserva (cartão de preços por
-          modelo + caixa "Faturar ao Cliente"), seguido dos campos próprios do
-          contrato (estado operacional/financeiro, tarifa diária, voucher...). */}
+      {/* Tarifa & Faturação — mesmo layout da reserva: escolha da tarifa,
+          cartão de preços do modelo e caixa "Faturar ao Cliente". O preço em si
+          não se edita aqui: escreve-se no cartão lateral (ResumoContrato), que
+          escreve `valor_total_manual`. */}
       <div>
         <SectionHeader icon={Coins} title="Tarifa & Faturação" accent="emerald" />
 
@@ -363,8 +364,6 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         )}
       </div>
 
-      {/* O bloco de valor manual / desconto / voucher foi removido do
-          formulário: o preço edita-se agora no card "Resumo do contrato". */}
       <FranquiaKmsFields
         franquiaReadOnly
         kmsReadOnly
