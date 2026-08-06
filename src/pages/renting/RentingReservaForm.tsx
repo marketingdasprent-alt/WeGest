@@ -87,6 +87,7 @@ const DEFAULT_VALUES: ReservaFormValues = {
   regime: 'rent_a_car',
   tarifa_id: null,
   valor_total: null,
+  valor_total_manual: null,
   franquia_valor: null,
   caucao_valor: null,
   kms_incluidos: null,
@@ -318,6 +319,7 @@ const RentingReservaForm = () => {
       slot_valor_semanal: reserva.slot_valor_semanal,
       slot_valor_mensal: reserva.slot_valor_mensal,
       valor_total: reserva.valor_total,
+      valor_total_manual: reserva.valor_total_manual,
       franquia_valor: reserva.franquia_valor,
       caucao_valor: reserva.caucao_valor,
       kms_incluidos: reserva.kms_incluidos,
@@ -630,7 +632,9 @@ const RentingReservaForm = () => {
               )
             : null,
         tarifa: null,
-        valorTotalManual: values.valor_total,
+        // Só o override escrito à mão ganha à tarifa — `valor_total` é o
+        // valor automático e não deve impedir o recálculo.
+        valorTotalManual: values.valor_total_manual,
         precoModeloSemana:
           isTvdeSubmit && values.tarifa_id && viaturaSelecionada?.modelo_id
             ? (precoModeloLinha?.preco_semana ?? null)
@@ -667,7 +671,11 @@ const RentingReservaForm = () => {
         // Valor semanal só no regime slot (cobrado por carro).
         slot_valor_semanal: values.regime === 'slot' ? (values.slot_valor_semanal ?? null) : null,
         slot_valor_mensal: values.regime === 'slot' ? (values.slot_valor_mensal ?? null) : null,
+        // `valor_total` fica sempre com o valor EFECTIVO (manual quando existe,
+        // senão o da tarifa) — é o que toda a faturação a jusante lê. O
+        // override guarda-se à parte para sobreviver às re-hidratações.
         valor_total: baseAluguer ?? values.valor_total,
+        valor_total_manual: values.valor_total_manual,
         franquia_valor: values.franquia_valor,
         caucao_valor: values.caucao_valor,
         kms_incluidos: values.kms_incluidos,

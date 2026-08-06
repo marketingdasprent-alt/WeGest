@@ -409,7 +409,10 @@ export function useContratoForm(): UseContratoFormReturn {
         origem: 'sistema',
         regime: reservaFromQuery.regime,
         tarifa_id: (reservaFromQuery as any).tarifa_id ?? null,
-        valor_total_manual: reservaFromQuery.valor_total,
+        // O preço escrito à mão na reserva manda; só na sua ausência é que o
+        // contrato herda o total efectivo. `??` (e não `||`) para um preço
+        // negociado a 0 não ser trocado pelo da tarifa.
+        valor_total_manual: reservaFromQuery.valor_total_manual ?? reservaFromQuery.valor_total,
         is_longa_duracao: reservaFromQuery.is_longa_duracao ?? false,
         renovacao_opcao: reservaFromQuery.renovacao_opcao ?? null,
         renovacao_intervalo_dias: reservaFromQuery.renovacao_intervalo_dias,

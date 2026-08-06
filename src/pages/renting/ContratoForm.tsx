@@ -467,6 +467,10 @@ const ContratoForm = () => {
             dataFim={dataFim}
             tarifaDiaria={tarifaDiaria}
             valorTotalManual={valorTotalManual}
+            // O preço edita-se no próprio resumo, junto do total que produz.
+            onValorTotalManualChange={(valor) =>
+              form.setValue('valor_total_manual', valor, { shouldDirty: true })
+            }
             descontoPercentagem={descontoPercentagem}
             taxaIva={taxaIva}
             regime={regime}
