@@ -13,6 +13,33 @@ import { AlertTriangle, Bell, ChevronRight, Eye, EyeOff, List, X } from 'lucide-
 // resumidos num único cartão em vez de empilhados.
 const MAX_CARTOES = 3;
 
+// "Ocultar" vivia só em useState — qualquer F5 (muito comum: gente refresca
+// a página várias vezes por dia) esvaziava o Set e os avisos já fechados
+// reapareciam todos de repente, dando a sensação de que "ocultar não pega".
+// sessionStorage resolve exactamente isto: sobrevive a um refresh da mesma
+// aba, e continua a esvaziar-se ao fechar o browser — o "por sessão" que o
+// comentário original já prometia, mas que o useState sozinho não cumpria.
+const OCULTADAS_STORAGE_KEY = 'wegest:notificacoes-ocultadas';
+
+function lerOcultadasGuardadas(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(OCULTADAS_STORAGE_KEY);
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+  } catch {
+    // Modo privado restritivo ou sessionStorage indisponível — degrada para
+    // o comportamento anterior (só em memória) em vez de rebentar o popup.
+    return new Set();
+  }
+}
+
+function gravarOcultadas(ids: Set<string>): void {
+  try {
+    sessionStorage.setItem(OCULTADAS_STORAGE_KEY, JSON.stringify([...ids]));
+  } catch {
+    /* idem — falhar a gravar não pode impedir o ocultar de funcionar nesta aba */
+  }
+}
+
 export const NotificacoesPopup = () => {
   const navigate = useNavigate();
 
@@ -24,8 +51,13 @@ export const NotificacoesPopup = () => {
   // olhos apagava o aviso também da lista "Não resolvidas" e do histórico,
   // sem qualquer confirmação de que o problema real (carta a expirar, IUC
   // por pagar...) tinha sido tratado.
-  const [ocultados, setOcultados] = useState<Set<string>>(new Set());
-  const ocultar = (id: string) => setOcultados((atual) => new Set(atual).add(id));
+  const [ocultados, setOcultados] = useState<Set<string>>(() => lerOcultadasGuardadas());
+  const ocultar = (id: string) =>
+    setOcultados((atual) => {
+      const novo = new Set(atual).add(id);
+      gravarOcultadas(novo);
+      return novo;
+    });
 
   // Ocultar de uma vez tudo o que está à vista. Um backlog (dezenas de
   // vistorias/licenças a expirar de uma assentada) obrigava a fechar aviso a
@@ -36,6 +68,7 @@ export const NotificacoesPopup = () => {
     setOcultados((atual) => {
       const novo = new Set(atual);
       ids.forEach((id) => novo.add(id));
+      gravarOcultadas(novo);
       return novo;
     });
 

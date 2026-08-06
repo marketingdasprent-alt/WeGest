@@ -51,6 +51,7 @@ const SELECT_COLUMNS = `
   entrega_via_any_rent,
   dua_original_com_motorista, dua_devolvida_em, dua_observacoes,
   voucher_codigo,
+  cidade_assinatura,
   numero_processo, voo_referencia,
   local_entrega, local_recolha,
   comentarios_entrega, comentarios_recolha,
@@ -295,6 +296,26 @@ export function contratoErrorMessage(error: unknown): { title: string; descripti
 // ────────────────────────────────────────────────────────────
 // Mutations
 // ────────────────────────────────────────────────────────────
+
+/**
+ * Grava a cidade de assinatura vigente do contrato — em silêncio, sem toast
+ * nem invalidação de queries. Chamada depois de gerar documentos com sucesso
+ * (ContratoDocumentosDialog); a acção que importa ao utilizador (o PDF) já
+ * teve sucesso, isto é só housekeeping para a próxima geração não voltar a
+ * perguntar. Falhar aqui não pode incomodar quem só queria o documento.
+ */
+export async function gravarCidadeAssinaturaVigente(
+  contratoId: string,
+  cidade: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('contratos_renting')
+    .update({ cidade_assinatura: cidade })
+    .eq('id', contratoId);
+  if (error) {
+    console.warn('Não foi possível gravar a cidade de assinatura vigente:', error.message);
+  }
+}
 
 export function useCreateContratoRenting() {
   const qc = useQueryClient();
