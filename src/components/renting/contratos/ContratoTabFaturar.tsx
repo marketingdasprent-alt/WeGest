@@ -539,7 +539,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
 
   const fatura: FaturaCalculo = useMemo(() => {
     const dias = calcDias(contrato.data_inicio, contrato.data_fim);
-    const manual = contrato.valor_total_manual != null;
+    const manual = contrato.valor_total_manual != null && contrato.valor_total_manual > 0;
     const baseAluguer = manual
       ? contrato.valor_total_manual!
       : (contrato.tarifa_diaria ?? 0) * dias;
