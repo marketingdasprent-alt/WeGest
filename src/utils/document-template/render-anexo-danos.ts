@@ -33,6 +33,22 @@ const estadoLabels: Record<string, string> = {
 };
 
 /**
+ * Legenda por baixo de cada imagem.
+ *
+ * A descrição escrita por quem registou manda sobre a origem: diz o que se
+ * está a ver ("risco no para-choques traseiro"), enquanto a origem só diz de
+ * onde a foto veio ("Nesta recolha/entrega"). Sem descrição, mantém-se a
+ * origem, que é o que sempre lá esteve.
+ *
+ * Vídeos levam prefixo — no papel não se distingue um vídeo de uma foto, e
+ * sem aviso o leitor ficava à espera de ver uma imagem que não existe.
+ */
+export function legendaFoto(foto: AnexoFotoItem): string {
+  const texto = foto.descricao?.trim() || foto.origem?.trim() || '—';
+  return foto.video ? `[Vídeo] ${texto}` : texto;
+}
+
+/**
  * Renderiza o anexo de danos da viatura (fotos + tabela + QR code) no PDF.
  * Se `inline` for true, continua na página actual; caso contrário, abre nova página.
  * Devolve o novo yPos após a renderização.
@@ -69,6 +85,55 @@ export async function renderAnexoDanos(
   pdf.setTextColor(0, 0, 0);
 
   let ty = danosStartY + 12;
+
+  // — Quem alugou: titular e/ou condutor —
+  // Vai a seguir ao título e antes das fotos porque é o que identifica a
+  // folha: sem isto, uma folha assinada não dizia de quem era o carro.
+  const partes = ad.partes ?? [];
+  if (partes.length > 0) {
+    const colGap = 6;
+    const colW = partes.length > 1 ? (maxWidth - colGap) / 2 : maxWidth;
+    // Altura da coluna mais alta: rótulo + nome + as linhas de detalhe.
+    const linhasMax = Math.max(...partes.map((p) => p.detalhes.length));
+    const blocoH = 4 + 4.5 + linhasMax * 3.6 + 3;
+
+    if (ty + blocoH > pageHeight - bottomMargin) {
+      adPage();
+      ty = topMargin + 8;
+    }
+
+    pdf.setDrawColor(...borderColor);
+    pdf.setFillColor(248, 249, 252);
+    pdf.rect(leftMargin, ty, maxWidth, blocoH, 'FD');
+
+    partes.slice(0, 2).forEach((parte, i) => {
+      const cx = leftMargin + i * (colW + colGap) + 3;
+      const larguraTexto = colW - 6;
+      let py = ty + 4.5;
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(...gray);
+      pdf.text(parte.papel, cx, py);
+      py += 4.5;
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      pdf.setTextColor(...blue);
+      pdf.text(pdf.splitTextToSize(parte.nome, larguraTexto)[0] ?? parte.nome, cx, py);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7);
+      pdf.setTextColor(60, 60, 70);
+      for (const detalhe of parte.detalhes) {
+        py += 3.6;
+        pdf.text(pdf.splitTextToSize(detalhe, larguraTexto)[0] ?? detalhe, cx, py);
+      }
+    });
+
+    pdf.setTextColor(0, 0, 0);
+    ty += blocoH + 6;
+  }
 
   // — Fotos (grelha 2×3, máx 6) —
   if (ad.fotos.length > 0) {
@@ -112,6 +177,15 @@ export async function renderAnexoDanos(
 
         // Carregar e desenhar a imagem
         try {
+          // Vídeo: ver a nota no bloco equivalente abaixo.
+          if (ad.fotos[fi].video) {
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(7);
+            pdf.setTextColor(...gray);
+            pdf.text('VÍDEO', nfx + photoW / 2, nfy + imgAreaH / 2, { align: 'center' });
+            pdf.setTextColor(0, 0, 0);
+            throw new Error('video');
+          }
           const imgUrl = ad.fotos[fi].url;
           const img = imagens?.get(imgUrl) ?? (await loadImage(imgUrl));
           if (img) {
@@ -128,11 +202,11 @@ export async function renderAnexoDanos(
           /* skip */
         }
 
-        const origemTexto = ad.fotos[fi].origem ?? '—';
+        const legenda = legendaFoto(ad.fotos[fi]);
         pdf.setFont('helvetica', 'italic');
         pdf.setFontSize(7);
         pdf.setTextColor(...gray);
-        const captionFit = pdf.splitTextToSize(origemTexto, photoW - 3)[0] ?? origemTexto;
+        const captionFit = pdf.splitTextToSize(legenda, photoW - 3)[0] ?? legenda;
         pdf.text(captionFit, nfx + photoW / 2, nfy + imgAreaH + captionH / 2 + 1.5, {
           align: 'center',
         });
@@ -144,6 +218,16 @@ export async function renderAnexoDanos(
       pdf.rect(fx, fy, photoW, imgAreaH, 'S');
 
       try {
+        // Vídeo: nada a desenhar (o jsPDF não extrai frames). A moldura fica
+        // com o rótulo e a legenda diz "[Vídeo]" — vê-se pelo QR.
+        if (ad.fotos[fi].video) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(7);
+          pdf.setTextColor(...gray);
+          pdf.text('VÍDEO', fx + photoW / 2, fy + imgAreaH / 2, { align: 'center' });
+          pdf.setTextColor(0, 0, 0);
+          throw new Error('video');
+        }
         const imgUrl = ad.fotos[fi].url;
         const img = imagens?.get(imgUrl) ?? (await loadImage(imgUrl));
         if (img) {
@@ -163,8 +247,8 @@ export async function renderAnexoDanos(
       pdf.setFont('helvetica', 'italic');
       pdf.setFontSize(7);
       pdf.setTextColor(...gray);
-      const origemTexto = ad.fotos[fi].origem ?? '—';
-      const captionFit = pdf.splitTextToSize(origemTexto, photoW - 3)[0] ?? origemTexto;
+      const legenda = legendaFoto(ad.fotos[fi]);
+      const captionFit = pdf.splitTextToSize(legenda, photoW - 3)[0] ?? legenda;
       pdf.text(captionFit, fx + photoW / 2, fy + imgAreaH + captionH / 2 + 1.5, {
         align: 'center',
       });

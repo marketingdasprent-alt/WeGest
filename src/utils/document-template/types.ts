@@ -17,11 +17,30 @@ export interface AnexoFotoItem {
   url: string;
   /** Legenda por baixo da foto — mesma origem usada na tabela de danos. */
   origem?: string;
+  /** Descrição escrita por quem tirou a foto/vídeo (viatura_dano_fotos.descricao).
+   *  Quando existe, é ela que aparece na legenda: diz o que se está a ver
+   *  ("risco no para-choques traseiro"), enquanto a origem só diz de onde veio. */
+  descricao?: string;
+  /** Ficheiro de vídeo. A grelha do PDF não consegue mostrar um frame, por isso
+   *  marca-se a moldura como vídeo e remete-se para o QR. */
+  video?: boolean;
+}
+
+/** Uma parte identificada no contrato — o titular e/ou quem conduz. */
+export interface AnexoParteItem {
+  /** 'CLIENTE', 'CONDUTOR', 'CLIENTE / CONDUTOR' quando são a mesma entidade. */
+  papel: string;
+  nome: string;
+  /** Linhas soltas já formatadas (NIF, contacto, morada) — só as que existem. */
+  detalhes: string[];
 }
 
 /** Anexo de danos da viatura: lista + fotos (máx 6) + QR code. */
 export interface AnexoDanos {
   titulo: string;
+  /** Quem alugou: titular do contrato e/ou condutor, conforme o que estiver
+   *  preenchido. Vazio quando o contrato não tem nenhum dos dois. */
+  partes?: AnexoParteItem[];
   danos: AnexoDanoItem[];
   /** URLs já assinadas (máx 6) para a grelha de fotos, com legenda de origem. */
   fotos: AnexoFotoItem[];

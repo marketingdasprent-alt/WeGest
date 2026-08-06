@@ -10,6 +10,7 @@ import {
   normalizarEmpresasBolt,
   payloadConversaoBolt,
   payloadCriacaoBolt,
+  semanaDe,
   periodoTexto,
   semanaAnterior,
 } from './boltIntegracao';
@@ -314,5 +315,32 @@ describe('semanaAnterior', () => {
 describe('periodoTexto', () => {
   it('usa o formato gravado em bolt_resumos_semanais.periodo', () => {
     expect(periodoTexto('2026-07-27', '2026-08-02')).toBe('2026-07-27 a 2026-08-02');
+  });
+});
+
+describe('semanaDe', () => {
+  // A calibração precisa exactamente desta semana — é a única com alvo
+  // conhecido (48.797,42 EUR na Bolt Distancia).
+  it('encaixa qualquer dia na semana Segunda–Domingo que o contém', () => {
+    const esperada = { inicio: '2026-07-06', fim: '2026-07-12' };
+    expect(semanaDe('2026-07-06')).toEqual(esperada); // a própria segunda
+    expect(semanaDe('2026-07-09')).toEqual(esperada); // a meio
+    expect(semanaDe('2026-07-12')).toEqual(esperada); // o domingo
+  });
+
+  it('não deixa o domingo cair na semana seguinte', () => {
+    // (getDay() + 6) % 7 posto ao contrário mandava o domingo 7 dias à frente.
+    expect(semanaDe('2026-08-02')).toEqual({ inicio: '2026-07-27', fim: '2026-08-02' });
+  });
+
+  it('atravessa a fronteira do mês e do ano', () => {
+    expect(semanaDe('2026-01-01')).toEqual({ inicio: '2025-12-29', fim: '2026-01-04' });
+  });
+
+  it('recusa datas inválidas em vez de sincronizar um período inventado', () => {
+    expect(semanaDe('2026-02-31')).toBeNull(); // não existe
+    expect(semanaDe('06/07/2026')).toBeNull(); // formato errado
+    expect(semanaDe('')).toBeNull();
+    expect(semanaDe('2026-7-6')).toBeNull(); // sem zeros à esquerda
   });
 });

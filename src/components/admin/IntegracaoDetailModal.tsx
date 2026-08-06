@@ -63,6 +63,7 @@ import {
   payloadConversaoBolt,
   periodoTexto,
   semanaAnterior,
+  semanaDe,
 } from './integracoes/boltIntegracao';
 
 // Sync automático do Via Verde: janela fixa Segunda 00:00–05:00 (Lisboa).
@@ -305,6 +306,12 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
   // o mesmo que o CSV semanal cobre, portanto o único que se pode comparar.
   const semana = semanaAnterior(new Date());
 
+  // Semana a puxar no botão "Atualizar". Arranca na anterior (o que a
+  // automação faria) mas é escolhível: a calibração precisa de uma semana de
+  // referência concreta e as semanas que o robô deixou vazias são antigas.
+  const [semanaEscolhida, setSemanaEscolhida] = useState(semana.inicio);
+  const semanaSelecionada = semanaDe(semanaEscolhida);
+
   /**
    * Sincroniza uma semana pela API oficial.
    *
@@ -315,11 +322,12 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
   const handleSincronizarSemana = async () => {
     try {
       setSincronizandoSemana(true);
+      const alvo = semanaSelecionada ?? semana;
       const { data, error } = await supabase.functions.invoke('bolt-sync-semana', {
         body: {
           integracao_id: integracao.id,
-          periodo_inicio: semana.inicio,
-          periodo_fim: semana.fim,
+          periodo_inicio: alvo.inicio,
+          periodo_fim: alvo.fim,
         },
       });
       if (error) {
@@ -351,11 +359,11 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
       const viagens = typeof data?.viagens_gravadas === 'number' ? data.viagens_gravadas : null;
       toast({
         title: data?.aviso
-          ? `Semana ${periodoTexto(semana.inicio, semana.fim)} — com avisos`
+          ? `Semana ${periodoTexto(alvo.inicio, alvo.fim)} — com avisos`
           : 'Semana sincronizada',
         description:
           data?.message ??
-          `${periodoTexto(semana.inicio, semana.fim)}${
+          `${periodoTexto(alvo.inicio, alvo.fim)}${
             resumos !== null ? ` — ${resumos} resumo(s)` : ''
           }${viagens !== null ? `, ${viagens} viagem(ns)` : ''}.`,
         variant: data?.aviso ? 'destructive' : undefined,
@@ -501,16 +509,12 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
             })
           );
           converteuParaApi = boltModo === 'password';
-        } else if (boltModo === 'password') {
-          // Ainda no robô e sem credenciais novas: as do portal continuam a ser
-          // editáveis, como em qualquer outra integração de robô.
-          updatePayload.client_id = formData.client_id || null;
-          updatePayload.client_secret = formData.client_secret || null;
-          updatePayload.cookies_json = null;
-          updatePayload.auth_mode = 'password';
         }
-        // Já em oauth e sem nada colado: não se toca nas credenciais gravadas
-        // (o Client Secret nem sequer está em memória para as reescrever).
+        // Sem credenciais novas coladas não se toca no que está gravado — nem
+        // em modo robô nem em oauth. O ecrã já não mostra o login do portal,
+        // por isso reescrevê-lo a partir do formulário seria gravar um valor
+        // que o utilizador não viu nem pôde controlar. Em oauth o Client
+        // Secret nem sequer está em memória para o poder reescrever.
       } else if (
         isUberSimplified ||
         isBpSimplified ||
@@ -847,21 +851,19 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
               </div>
             )}
 
-            {/* Login + Password — integrações de robô (Uber/BP/Repsol/EDP/Via
-                Verde) e Bolt enquanto ainda não foi convertida para a API. */}
+            {/* Login + Password — só as integrações de robô (Uber/BP/Repsol/
+                EDP/Via Verde). A Bolt NÃO entra aqui: pede a chave de API no
+                bloco acima e mais nada. Mostrar os dois ao mesmo tempo dava a
+                entender que a conta ainda se liga por login, que é exactamente
+                o que esta mudança acaba. As credenciais do portal que lá estão
+                continuam gravadas e a servir o robô até à conversão — só
+                deixam de ser editáveis por aqui. */}
             {(isUberSimplified ||
-              (isBoltSimplified && boltModo === 'password') ||
               isBpSimplified ||
               isRepsolSimplified ||
               isEdpSimplified ||
               isViaVerde) && (
               <>
-                {isBoltSimplified && (
-                  <p className="text-xs text-muted-foreground">
-                    Credenciais do <strong>portal Bolt</strong>, usadas pelo robô. Ficam em uso
-                    enquanto esta conta não for convertida para a API — a conversão substitui-as.
-                  </p>
-                )}
                 <div className="space-y-2">
                   <Label>Login (Email)</Label>
                   <Input
@@ -1332,7 +1334,13 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
               <div>
                 <Label>Integração Activa</Label>
                 <p className="text-sm text-muted-foreground">
-                  Activa a sincronização de dados desta plataforma.
+                  {isBolt && boltModo === 'oauth'
+                    ? // Em modo API o interruptor não liga "a sincronização": decide
+                      // se esta conta existe para o resto do sistema. Desligada, o
+                      // bolt-sync-agendado não a enfileira e a importação de CSV
+                      // fica sem destino.
+                      'Desligada, esta conta deixa de ser sincronizada e de aceitar importações de CSV.'
+                    : 'Activa a sincronização de dados desta plataforma.'}
                 </p>
               </div>
               <Switch
@@ -1341,34 +1349,68 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
               />
             </div>
 
-            {/* Bolt em modo API: sincronização a pedido, uma semana de cada vez.
-                Sem toggle automático — a decisão de negócio é validar cada
-                semana contra o CSV antes de deixar isto correr sozinho. */}
+            {/* Bolt em modo API: puxar os dados a pedido.
+                O automático corre à segunda e à quinta (crons bolt-weekly-*),
+                sempre sobre a semana anterior. Este botão serve o que a
+                automação nunca cobre: calibrar contra uma semana de referência
+                e recuperar semanas antigas que ficaram por importar. */}
             {isBolt && boltModo === 'oauth' && (
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/40 p-4">
+              <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <Label>Sincronizar semana</Label>
+                    <Label>Atualizar dados da Bolt</Label>
                     <p className="text-sm text-muted-foreground">
-                      Semana anterior: {periodoTexto(semana.inicio, semana.fim)}. Lê as viagens pela
-                      API e actualiza os resumos — as campanhas e reembolsos importados por CSV não
-                      são tocados.
+                      Lê as viagens pela API e actualiza os resumos. As campanhas e reembolsos
+                      importados por CSV não são tocados — cada fonte é dona dos seus campos.
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={handleSincronizarSemana}
-                  disabled={sincronizandoSemana}
-                >
-                  {sincronizandoSemana ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Semana</Label>
+                    <Input
+                      type="date"
+                      className="w-[170px]"
+                      value={semanaEscolhida}
+                      max={semana.fim}
+                      onChange={(e) => {
+                        // Qualquer dia serve: encaixa-se na semana Segunda–Domingo
+                        // que o contém, para não obrigar a acertar na segunda.
+                        const encaixada = semanaDe(e.target.value);
+                        setSemanaEscolhida(encaixada ? encaixada.inicio : e.target.value);
+                      }}
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleSincronizarSemana}
+                    disabled={sincronizandoSemana || !semanaSelecionada}
+                  >
+                    {sincronizandoSemana ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Atualizar
+                  </Button>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  {semanaSelecionada ? (
+                    <>
+                      Vai buscar{' '}
+                      <strong>
+                        {periodoTexto(semanaSelecionada.inicio, semanaSelecionada.fim)}
+                      </strong>
+                      {semanaSelecionada.inicio === semana.inicio && ' (semana anterior)'}. Repetir
+                      a mesma semana é seguro: reescreve só o que vem da API.
+                    </>
                   ) : (
-                    <RefreshCw className="mr-2 h-4 w-4" />
+                    'Escolha uma data — a semana Segunda a Domingo que a contém é a que será lida.'
                   )}
-                  Sincronizar
-                </Button>
+                </p>
               </div>
             )}
 

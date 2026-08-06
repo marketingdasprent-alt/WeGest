@@ -339,6 +339,39 @@ export function semanaAnterior(hoje: Date): { inicio: string; fim: string } {
 }
 
 /**
+ * Semana Segunda–Domingo que CONTÉM a data indicada.
+ *
+ * É o que permite escolher uma semana qualquer no seletor sem obrigar o
+ * utilizador a acertar na segunda-feira certa: escolhe um dia, fica com a
+ * semana toda. Necessário para calibrar contra 2026-07-06 e para recuperar
+ * as semanas que o robô deixou vazias — nenhuma delas é "a semana anterior".
+ *
+ * Data inválida devolve null: melhor não sincronizar nada do que sincronizar
+ * um período que ninguém pediu.
+ */
+export function semanaDe(dataIso: string): { inicio: string; fim: string } | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataIso)) return null;
+  const [ano, mes, dia] = dataIso.split('-').map(Number);
+  const referencia = new Date(ano, mes - 1, dia);
+  // Construir e reler apanha datas impossíveis (2026-02-31 → 3 de Março).
+  if (
+    referencia.getFullYear() !== ano ||
+    referencia.getMonth() !== mes - 1 ||
+    referencia.getDate() !== dia
+  ) {
+    return null;
+  }
+
+  const diaSemana = (referencia.getDay() + 6) % 7; // 0 = Segunda … 6 = Domingo
+  const inicio = new Date(referencia);
+  inicio.setDate(referencia.getDate() - diaSemana);
+  const fim = new Date(inicio);
+  fim.setDate(inicio.getDate() + 6);
+
+  return { inicio: isoLocal(inicio), fim: isoLocal(fim) };
+}
+
+/**
  * Formato de `bolt_resumos_semanais.periodo`, confirmado contra as 4312 linhas
  * já existentes. Não inventar outro — é chave de leitura em vários ecrãs.
  */
