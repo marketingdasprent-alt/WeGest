@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { buildSupabaseFunctionUrl } from '@/utils/supabaseFunctionUrl';
 import { toast } from 'sonner';
@@ -20,6 +20,12 @@ interface ImportRobotCsvDialogProps {
   onOpenChange: (open: boolean) => void;
   integracaoId: string;
   onImportComplete: () => void;
+  /**
+   * Separador a abrir. Quem clica em "Importar" no cartão da Bolt quer a Bolt,
+   * não o Uber — abrir sempre no primeiro separador convidava a importar o
+   * ficheiro certo na plataforma errada.
+   */
+  tabInicial?: 'uber' | 'bolt' | 'bp' | 'repsol' | 'edp';
 }
 
 export const ImportRobotCsvDialog: React.FC<ImportRobotCsvDialogProps> = ({
@@ -27,10 +33,15 @@ export const ImportRobotCsvDialog: React.FC<ImportRobotCsvDialogProps> = ({
   onOpenChange,
   integracaoId,
   onImportComplete,
+  tabInicial = 'uber',
 }) => {
   const orgId = useOrgId();
   const [importing, setImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState('uber');
+  const [activeTab, setActiveTab] = useState(tabInicial);
+
+  useEffect(() => {
+    if (open) setActiveTab(tabInicial);
+  }, [open, tabInicial]);
 
   // Uber files
   const [pagamentosFile, setPagamentosFile] = useState<File | null>(null);
@@ -231,7 +242,7 @@ export const ImportRobotCsvDialog: React.FC<ImportRobotCsvDialogProps> = ({
         <Tabs
           value={activeTab}
           onValueChange={(v) => {
-            setActiveTab(v);
+            setActiveTab(v as typeof activeTab);
             setResult(null);
           }}
         >

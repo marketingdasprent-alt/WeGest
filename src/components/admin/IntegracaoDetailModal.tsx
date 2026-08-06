@@ -54,6 +54,16 @@ import {
   Zap,
 } from 'lucide-react';
 import type { IntegracaoConfig } from './integracoes/types';
+import { BoltApiCredenciais } from './integracoes/BoltApiCredenciais';
+import {
+  boltAuthMode,
+  CREDENCIAIS_BOLT_VAZIAS,
+  type EstadoCredenciaisBolt,
+  isIntegracaoBolt,
+  payloadConversaoBolt,
+  periodoTexto,
+  semanaAnterior,
+} from './integracoes/boltIntegracao';
 
 // Sync automático do Via Verde: janela fixa Segunda 00:00–05:00 (Lisboa).
 // Fora desta janela os dados podem não estar prontos até às 7h de Segunda
@@ -89,6 +99,14 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
   const [executingRobot, setExecutingRobot] = useState(false);
   const [loadingCron, setLoadingCron] = useState(false);
 
+  // Credenciais da API Bolt coladas neste ecrã. Vazio = o utilizador não lhes
+  // tocou, e nesse caso as que estão gravadas ficam como estão.
+  const [boltCred, setBoltCred] = useState<EstadoCredenciaisBolt>(CREDENCIAIS_BOLT_VAZIAS);
+  // Remonta o bloco (e apaga o Client Secret que ele tem em memória) sempre que
+  // o modal reabre ou muda de integração.
+  const [boltFormKey, setBoltFormKey] = useState(0);
+  const [sincronizandoSemana, setSincronizandoSemana] = useState(false);
+
   const initialCronRef = useRef<{ schedule: string; custom: string }>({
     schedule: 'disabled',
     custom: '',
@@ -105,6 +123,13 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
     integracao.plataforma === 'robot' && integracao.robot_target_platform === 'repsol';
   const isEdpSimplified =
     integracao.plataforma === 'robot' && integracao.robot_target_platform === 'edp';
+  // Bolt: uma plataforma só. A linha é sempre robot+robot_target_platform='bolt'
+  // (ou a forma legada plataforma='bolt'); o que distingue as duas formas de
+  // ligar é o auth_mode — 'oauth' = API oficial, 'password' = robô Apify ainda
+  // por converter. Converter é um UPDATE nesta MESMA linha: o id não muda,
+  // senão os resumos semanais já importados ficavam órfãos.
+  const isBolt = isIntegracaoBolt(integracao);
+  const boltModo = boltAuthMode(integracao);
   const isViaVerde = integracao.plataforma === 'via_verde';
   // Cartrack: API REST directa (GPS/frota). Layout simplificado (username/password),
   // sincroniza pelo botão abaixo → cartrack-sync.
@@ -242,6 +267,8 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
     setPeriodoTipo('semana_anterior');
     setPeriodoInicio('');
     setPeriodoFim('');
+    setBoltCred(CREDENCIAIS_BOLT_VAZIAS);
+    setBoltFormKey((k) => k + 1);
     loadCronState();
   }, [open, integracao]);
 
@@ -274,37 +301,70 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
 
   const handleRemoveLogo = () => setLogoUrl(null);
 
-  const handleTestConnection = async () => {
-    if (integracao.plataforma !== 'bolt') return;
+  // Semana anterior completa (Segunda-Domingo) — é o período que a Bolt fecha e
+  // o mesmo que o CSV semanal cobre, portanto o único que se pode comparar.
+  const semana = semanaAnterior(new Date());
+
+  /**
+   * Sincroniza uma semana pela API oficial.
+   *
+   * O merge é por campo (ver a migração 20260804140000_bolt_merge_por_fonte):
+   * a API é dona das viagens/ganhos e o CSV das campanhas e reembolsos, por
+   * isso correr isto não destrói nada do que foi importado por CSV.
+   */
+  const handleSincronizarSemana = async () => {
     try {
-      const [testing, setTestingLocal] = [true, () => {}];
-      const { data, error } = await supabase.functions.invoke('bolt-test-connection', {
+      setSincronizandoSemana(true);
+      const { data, error } = await supabase.functions.invoke('bolt-sync-semana', {
         body: {
-          client_id: formData.client_id,
-          client_secret: formData.client_secret,
-          company_id: formData.company_id,
           integracao_id: integracao.id,
+          periodo_inicio: semana.inicio,
+          periodo_fim: semana.fim,
         },
       });
-      if (error) throw error;
-      if (data.success) {
-        toast({
-          title: 'Bolt validada',
-          description: data.message || data.company?.company_name || 'Configuração válida',
-        });
-      } else {
-        toast({
-          title: 'Falha na validação',
-          description: data.error || 'Verifique a configuração',
-          variant: 'destructive',
-        });
+      if (error) {
+        // bolt-sync-semana devolve o diagnóstico no corpo com estado 4xx/5xx
+        // (ex.: 409 "está em auth_mode=password"); o supabase-js deita-o fora e
+        // fica só "non-2xx status code", que não diz nada a ninguém.
+        const contexto = (error as any)?.context;
+        if (contexto?.status === 404) {
+          throw new Error(
+            'A função bolt-sync-semana ainda não está publicada neste projecto. Publique-a antes de sincronizar.'
+          );
+        }
+        let msg = error.message;
+        try {
+          const corpo = await contexto?.json?.();
+          msg = corpo?.error || corpo?.message || msg;
+        } catch {
+          /* corpo não-JSON: fica a mensagem do supabase-js */
+        }
+        throw new Error(msg);
       }
-    } catch (error: any) {
+      if (data && data.success === false) {
+        throw new Error(data.error || data.message || 'Não foi possível sincronizar a semana.');
+      }
+
+      // 'vazio'/'warning' vêm com success=true e aviso=true: a semana correu,
+      // mas não trouxe (ou não gravou) tudo. Não é um sucesso a festejar.
+      const resumos = typeof data?.resumos_gravados === 'number' ? data.resumos_gravados : null;
+      const viagens = typeof data?.viagens_gravadas === 'number' ? data.viagens_gravadas : null;
       toast({
-        title: 'Erro',
-        description: error.message || 'Não foi possível validar',
-        variant: 'destructive',
+        title: data?.aviso
+          ? `Semana ${periodoTexto(semana.inicio, semana.fim)} — com avisos`
+          : 'Semana sincronizada',
+        description:
+          data?.message ??
+          `${periodoTexto(semana.inicio, semana.fim)}${
+            resumos !== null ? ` — ${resumos} resumo(s)` : ''
+          }${viagens !== null ? `, ${viagens} viagem(ns)` : ''}.`,
+        variant: data?.aviso ? 'destructive' : undefined,
       });
+      onUpdate();
+    } catch (error: any) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    } finally {
+      setSincronizandoSemana(false);
     }
   };
 
@@ -416,9 +476,43 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
         logo_url: logoUrl,
       };
 
-      if (
+      // Converteu do robô para a API neste "Guardar"? Só então é preciso
+      // desligar o agendamento do robô.
+      let converteuParaApi = false;
+
+      if (isBolt) {
+        // Credenciais coladas mas incompletas: parar aqui. Gravar em silêncio
+        // sem elas seria deitar fora o que o utilizador acabou de escrever, e
+        // ele ficaria convencido de que a integração passou para a API.
+        if (boltCred.preenchido && !boltCred.completo) {
+          throw new Error(boltCred.motivo ?? 'Complete e teste as credenciais da API Bolt.');
+        }
+
+        if (boltCred.completo) {
+          // Conversão/actualização NO LUGAR: .eq('id') mais abaixo, e o payload
+          // nunca traz `id` nem `plataforma`.
+          Object.assign(
+            updatePayload,
+            payloadConversaoBolt({
+              clientId: boltCred.clientId,
+              clientSecret: boltCred.clientSecret,
+              companyId: boltCred.companyId,
+              companyName: boltCred.companyName,
+            })
+          );
+          converteuParaApi = boltModo === 'password';
+        } else if (boltModo === 'password') {
+          // Ainda no robô e sem credenciais novas: as do portal continuam a ser
+          // editáveis, como em qualquer outra integração de robô.
+          updatePayload.client_id = formData.client_id || null;
+          updatePayload.client_secret = formData.client_secret || null;
+          updatePayload.cookies_json = null;
+          updatePayload.auth_mode = 'password';
+        }
+        // Já em oauth e sem nada colado: não se toca nas credenciais gravadas
+        // (o Client Secret nem sequer está em memória para as reescrever).
+      } else if (
         isUberSimplified ||
-        isBoltSimplified ||
         isBpSimplified ||
         isRepsolSimplified ||
         isEdpSimplified ||
@@ -449,12 +543,6 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
         updatePayload.uber_scopes = formData.uber_scopes
           ? formData.uber_scopes.trim().split(/\s+/).filter(Boolean)
           : [];
-      } else if (integracao.plataforma === 'bolt') {
-        updatePayload.client_id = formData.client_id || null;
-        updatePayload.client_secret = formData.client_secret || null;
-        updatePayload.company_id = formData.company_id ? parseInt(formData.company_id, 10) : null;
-        updatePayload.sync_automatico = formData.sync_automatico;
-        updatePayload.intervalo_sync_horas = formData.intervalo_sync_horas;
       } else if (integracao.plataforma === 'robot') {
         // Advanced robot
         updatePayload.client_id =
@@ -529,8 +617,36 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
         }
       }
 
+      // Bolt em modo API: o agendamento do robô tem de desaparecer. As
+      // credenciais do portal foram substituídas pelas da API (são as mesmas
+      // colunas), portanto um robot-execute agendado só ia falhar o login
+      // semana após semana, em silêncio.
+      const boltEmModoApi = isBolt && (converteuParaApi || boltModo === 'oauth');
+      // Só se houver mesmo o que apagar: ou acabou de converter, ou o
+      // loadCronState encontrou um agendamento ainda de pé.
+      const temAgendamentoDoRobo =
+        integracao.plataforma === 'robot' &&
+        (converteuParaApi || initialCronRef.current.schedule !== 'disabled');
+      if (boltEmModoApi && temAgendamentoDoRobo) {
+        try {
+          await supabase.functions.invoke('robot-schedule', {
+            body: { integracao_id: integracao.id, action: 'delete' },
+          });
+          initialCronRef.current = { schedule: 'disabled', custom: '' };
+          setFormData((prev) => ({ ...prev, cron_schedule: 'disabled', cron_custom: '' }));
+        } catch (scheduleErr: any) {
+          console.warn('Erro ao remover agendamento do robô:', scheduleErr);
+          toast({
+            title: 'Aviso',
+            description:
+              'Credenciais guardadas, mas o agendamento do robô pode não ter sido removido. Confirme-o antes de Segunda-feira.',
+            variant: 'destructive',
+          });
+        }
+      }
+
       // Handle cron scheduling for robot integrations
-      if (integracao.plataforma === 'robot') {
+      if (integracao.plataforma === 'robot' && !boltEmModoApi) {
         const cronChanged =
           formData.cron_schedule !== initialCronRef.current.schedule ||
           (formData.cron_schedule === 'custom' &&
@@ -567,10 +683,19 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
         }
       }
 
-      // Bolt sync scheduling is handled by the central sync-orchestrator
-      // No individual cron jobs needed — just save sync_automatico flag
-
-      toast({ title: 'Sucesso', description: 'Configuração guardada' });
+      if (converteuParaApi) {
+        toast({
+          title: 'Integração convertida para a API',
+          description:
+            'A mesma integração passou a ler a Bolt pela API oficial — o histórico continua ligado a ela. O robô foi desligado; a importação manual do CSV mantém-se.',
+        });
+      } else {
+        toast({ title: 'Sucesso', description: 'Configuração guardada' });
+      }
+      // Depois de gravar, o bloco de credenciais volta a nascer vazio: o Client
+      // Secret não fica em memória e não reaparece no campo.
+      setBoltCred(CREDENCIAIS_BOLT_VAZIAS);
+      setBoltFormKey((k) => k + 1);
       onUpdate(data as IntegracaoConfig);
     } catch (error: any) {
       toast({ title: 'Erro', description: error.message, variant: 'destructive' });
@@ -678,14 +803,65 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
               </div>
             )}
 
-            {/* Login + Password — shown for all simplified integrations (Uber/Bolt/BP/Repsol/EDP/Via Verde) */}
+            {/* === BOLT — ligação à API oficial ===
+                Uma plataforma só: aqui converte-se do robô para a API sem
+                mudar de linha (o id fica, e com ele os resumos semanais já
+                importados). A importação manual do CSV mantém-se nos dois
+                modos — API e CSV são donos de campos diferentes do resumo. */}
+            {isBolt && (
+              <div className="space-y-4 rounded-lg border border-border p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="flex items-center gap-2">
+                    <Zap className="h-4 w-4" />
+                    Ligação à Bolt
+                  </Label>
+                  <Badge variant={boltModo === 'oauth' ? 'default' : 'secondary'}>
+                    {boltModo === 'oauth' ? 'API oficial' : 'Robô (login do portal)'}
+                  </Badge>
+                </div>
+
+                <BoltApiCredenciais
+                  key={boltFormKey}
+                  contexto="editar"
+                  modoGravado={boltModo}
+                  // Só em oauth é que o client_secret gravado é um segredo de
+                  // API; em modo robô é a password do portal, e dizer
+                  // "gravado" neste campo seria mentira.
+                  segredoGravado={boltModo === 'oauth' && !!integracao.client_secret}
+                  companyIdGravado={integracao.company_id}
+                  companyNameGravado={integracao.company_name}
+                  onEstado={setBoltCred}
+                />
+
+                {boltCred.preenchido && !boltCred.completo && (
+                  <p className="text-xs text-destructive" data-testid="bolt-motivo-bloqueio">
+                    {boltCred.motivo}
+                  </p>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  A importação manual do CSV semanal continua disponível no cartão desta integração,
+                  em qualquer dos modos — é ela que traz as campanhas e os reembolsos de despesas,
+                  que a API não devolve.
+                </p>
+              </div>
+            )}
+
+            {/* Login + Password — integrações de robô (Uber/BP/Repsol/EDP/Via
+                Verde) e Bolt enquanto ainda não foi convertida para a API. */}
             {(isUberSimplified ||
-              isBoltSimplified ||
+              (isBoltSimplified && boltModo === 'password') ||
               isBpSimplified ||
               isRepsolSimplified ||
               isEdpSimplified ||
               isViaVerde) && (
               <>
+                {isBoltSimplified && (
+                  <p className="text-xs text-muted-foreground">
+                    Credenciais do <strong>portal Bolt</strong>, usadas pelo robô. Ficam em uso
+                    enquanto esta conta não for convertida para a API — a conversão substitui-as.
+                  </p>
+                )}
                 <div className="space-y-2">
                   <Label>Login (Email)</Label>
                   <Input
@@ -953,53 +1129,11 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
               </>
             )}
 
-            {/* === BOLT FIELDS === */}
-            {integracao.plataforma === 'bolt' && (
-              <>
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Client ID</Label>
-                    <Input
-                      value={formData.client_id}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, client_id: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Company ID</Label>
-                    <Input
-                      type="number"
-                      value={formData.company_id}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, company_id: e.target.value }))
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Client Secret</Label>
-                  <div className="relative">
-                    <Input
-                      type={showSecret ? 'text' : 'password'}
-                      value={formData.client_secret}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, client_secret: e.target.value }))
-                      }
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
-                      onClick={() => setShowSecret(!showSecret)}
-                    >
-                      {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
+            {/* Os campos soltos de Client ID / Company ID / Client Secret que
+                aqui estavam (plataforma='bolt' legado) foram substituídos pelo
+                bloco "Ligação à Bolt" acima: reapresentavam o Client Secret
+                gravado e deixavam escrever à mão um company_id que a conta
+                podia nem ter. */}
 
             {/* === ADVANCED ROBOT FIELDS (non-simplified) === */}
             {integracao.plataforma === 'robot' && !isSimplified && (
@@ -1166,8 +1300,10 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
               </>
             )}
 
-            {/* Sync semanal toggle for all robot types */}
-            {integracao.plataforma === 'robot' && (
+            {/* Sync semanal toggle — robôs. Uma Bolt já convertida não o tem:
+                o agendamento dispara robot-execute (Apify) e o login do portal
+                dessa conta já foi substituído pelas credenciais da API. */}
+            {integracao.plataforma === 'robot' && !(isBolt && boltModo === 'oauth') && (
               <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 p-4">
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
@@ -1205,24 +1341,34 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
               />
             </div>
 
-            {/* Bolt sync toggle */}
-            {integracao.plataforma === 'bolt' && (
-              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-4">
+            {/* Bolt em modo API: sincronização a pedido, uma semana de cada vez.
+                Sem toggle automático — a decisão de negócio é validar cada
+                semana contra o CSV antes de deixar isto correr sozinho. */}
+            {isBolt && boltModo === 'oauth' && (
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/40 p-4">
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <Label>Sincronização Semanal</Label>
+                    <Label>Sincronizar semana</Label>
                     <p className="text-sm text-muted-foreground">
-                      Segundas-feiras às 00:00 (hora de Lisboa)
+                      Semana anterior: {periodoTexto(semana.inicio, semana.fim)}. Lê as viagens pela
+                      API e actualiza os resumos — as campanhas e reembolsos importados por CSV não
+                      são tocados.
                     </p>
                   </div>
                 </div>
-                <Switch
-                  checked={formData.sync_automatico}
-                  onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, sync_automatico: checked }))
-                  }
-                />
+                <Button
+                  variant="outline"
+                  onClick={handleSincronizarSemana}
+                  disabled={sincronizandoSemana}
+                >
+                  {sincronizandoSemana ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Sincronizar
+                </Button>
               </div>
             )}
 
@@ -1273,15 +1419,15 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-2">
-              {integracao.plataforma === 'bolt' && (
-                <Button variant="outline" onClick={handleTestConnection}>
-                  <Zap className="mr-2 h-4 w-4" /> Testar Conexão
-                </Button>
-              )}
+              {/* "Testar Conexão" desapareceu daqui: o teste vive dentro do
+                  bloco "Ligação à Bolt", junto das credenciais que testa — e é
+                  ele que preenche a lista de empresas. */}
               {(SINCRONIZACAO_ATIVA ||
                 integracao.plataforma === 'via_verde' ||
                 integracao.robot_target_platform === 'bolt') &&
-                (integracao.plataforma === 'robot' || integracao.plataforma === 'via_verde') && (
+                (integracao.plataforma === 'robot' || integracao.plataforma === 'via_verde') &&
+                // Convertida para a API: o robô já não consegue entrar no portal.
+                !(isBolt && boltModo === 'oauth') && (
                   <Button variant="outline" onClick={handleExecuteRobot} disabled={executingRobot}>
                     {executingRobot ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

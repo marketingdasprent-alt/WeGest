@@ -31,6 +31,12 @@ import {
   VIAVERDE_DEFAULTS,
   type PlataformaOperacional,
 } from './integracoes/types';
+import { BoltApiCredenciais } from './integracoes/BoltApiCredenciais';
+import {
+  CREDENCIAIS_BOLT_VAZIAS,
+  type EstadoCredenciaisBolt,
+  payloadCriacaoBolt,
+} from './integracoes/boltIntegracao';
 import { presetToCronExpression } from '@/lib/cronPresets';
 import { cn } from '@/lib/utils';
 
@@ -50,8 +56,10 @@ interface IntegracaoDialogProps {
 
 const PLATFORMS: { id: PlataformaOperacional | 'keyinvoice'; name: string; logo: string }[] = [
   { id: 'uber', name: 'Uber', logo: '/images/logo-uber.png' },
+  // Um só tile Bolt: a integração nasce sempre pela API oficial (OAuth). O tile
+  // separado "Bolt (API)" desapareceu — criava uma linha nova em vez de usar a
+  // conta que já existe, e o histórico ficava dividido por dois integracao_id.
   { id: 'bolt', name: 'Bolt', logo: '/images/logo-bolt.png' },
-  { id: 'bolt_api', name: 'Bolt (API)', logo: '/images/logo-bolt.png' },
   { id: 'bp', name: 'BP', logo: '/images/logo-bp.png' },
   { id: 'repsol', name: 'Repsol', logo: '/images/logo-repsol.png' },
   { id: 'edp', name: 'EDP', logo: '/images/logo-edp.png' },
@@ -124,7 +132,6 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
     cron_schedule: 'disabled' as 'disabled' | 'daily' | 'weekly' | 'custom',
     cron_custom: '',
     apiKey: '',
-    companyId: '',
     senderName: '',
     senderEmail: '',
     replyTo: '',
@@ -137,10 +144,12 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
     'idle' | 'testing' | 'success' | 'error'
   >('idle');
   const [cartrackTestError, setCartrackTestError] = useState('');
-  const [boltApiTestState, setBoltApiTestState] = useState<
-    'idle' | 'testing' | 'success' | 'error'
-  >('idle');
-  const [boltApiTestError, setBoltApiTestError] = useState('');
+  // Credenciais da API Bolt — o bloco BoltApiCredenciais é dono do teste de
+  // ligação e da escolha da empresa; aqui só se guarda o resultado.
+  const [boltCred, setBoltCred] = useState<EstadoCredenciaisBolt>(CREDENCIAIS_BOLT_VAZIAS);
+  // Remonta o bloco Bolt (e limpa o Client Secret que ele tem em memória)
+  // sempre que o wizard fecha ou se muda de plataforma.
+  const [boltFormKey, setBoltFormKey] = useState(0);
 
   const resetForm = () => {
     setFormData({
@@ -151,7 +160,6 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
       cron_schedule: 'disabled',
       cron_custom: '',
       apiKey: '',
-      companyId: '',
       senderName: '',
       senderEmail: '',
       replyTo: '',
@@ -162,8 +170,8 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
     setBrevoTestError('');
     setCartrackTestState('idle');
     setCartrackTestError('');
-    setBoltApiTestState('idle');
-    setBoltApiTestError('');
+    setBoltCred(CREDENCIAIS_BOLT_VAZIAS);
+    setBoltFormKey((k) => k + 1);
   };
 
   const handleClose = (nextOpen: boolean) => {
@@ -191,11 +199,6 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
   const isBrevo = formData.plataforma === 'brevo';
   // Cartrack: API REST directa (HTTP Basic Auth), não robô Apify.
   const isCartrack = formData.plataforma === 'cartrack';
-  // Bolt (API): API oficial Bolt Fleet (OAuth client_credentials), não robô
-  // Apify. Grava-se como plataforma='bolt' — o robô Bolt continua a existir em
-  // paralelo (plataforma='robot' + robot_target_platform='bolt').
-  const isBoltApi = formData.plataforma === 'bolt_api';
-  const needsLoginPassword = isUber || isBolt || isBp || isRepsol || isEdp || isViaVerde;
   const selectedPlatform = PLATFORMS.find((p) => p.id === formData.plataforma);
 
   const canProceedStep1 = !!formData.plataforma;
@@ -204,15 +207,14 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
   // e silencioso é pior do que um robot mal configurado (ver brevo-test-connection).
   // Cartrack exige igualmente teste de ligação aprovado (Basic Auth: credencial
   // errada é um 401 silencioso no sync).
-  // Bolt (API) idem: sem teste aprovado não se sabe se o Fleet Integration API
-  // está sequer activo na conta — a Bolt não o liga por omissão.
+  // Bolt idem: sem teste aprovado não se sabe se o Fleet Integration API está
+  // sequer activo na conta — a Bolt não o liga por omissão.
   const canProceedStep2 = isBrevo
     ? !!(formData.senderName && formData.senderEmail) && brevoTestState === 'success'
     : isCartrack
       ? !!(formData.login && formData.password) && cartrackTestState === 'success'
-      : isBoltApi
-        ? !!(formData.login && formData.password && formData.companyId) &&
-          boltApiTestState === 'success'
+      : isBolt
+        ? boltCred.completo
         : !!(formData.login && formData.password);
 
   const handleTestBrevoConnection = async () => {
@@ -266,48 +268,18 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
     }
   };
 
-  const handleTestBoltApiConnection = async () => {
-    if (!formData.login || !formData.password || !formData.companyId) {
-      toast({ title: 'Preencha Client ID, Secret e Company ID', variant: 'destructive' });
-      return;
-    }
-    setBoltApiTestState('testing');
-    setBoltApiTestError('');
-    try {
-      // bolt-test-connection recebe as credenciais no corpo do pedido (não lê a
-      // BD), portanto valida-se ANTES de gravar seja o que for.
-      const { data, error } = await supabase.functions.invoke('bolt-test-connection', {
-        body: {
-          client_id: formData.login,
-          client_secret: formData.password,
-          company_id: formData.companyId,
-        },
-      });
-      if (error || !data?.success) {
-        setBoltApiTestState('error');
-        setBoltApiTestError(data?.error || error?.message || 'Não foi possível ligar à Bolt');
-        return;
-      }
-      setBoltApiTestState('success');
-      toast({
-        title: 'Ligação confirmada',
-        description: data.company?.company_name
-          ? `Ligado a: ${data.company.company_name}`
-          : 'Credenciais da Bolt válidas.',
-      });
-    } catch (err: any) {
-      setBoltApiTestState('error');
-      setBoltApiTestError(err.message || 'Não foi possível ligar à Bolt');
-    }
-  };
-
   const handleNext = () => {
     if (step === 1 && !canProceedStep1) {
       toast({ title: 'Selecione uma plataforma', variant: 'destructive' });
       return;
     }
     if (step === 2 && !canProceedStep2) {
-      toast({ title: 'Preencha as credenciais', variant: 'destructive' });
+      // Na Bolt o passo tem três condições (chave, teste, empresa) — dizer
+      // qual delas falta poupa uma adivinha.
+      toast({
+        title: (isBolt && boltCred.motivo) || 'Preencha as credenciais',
+        variant: 'destructive',
+      });
       return;
     }
     setStep((s) => Math.min(s + 1, 3));
@@ -390,48 +362,62 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
         return;
       }
 
-      // Bolt (API): API oficial Bolt Fleet (OAuth client_credentials). Sem robô
-      // Apify — grava-se como plataforma='bolt' com client_id/client_secret/
-      // company_id, que é o que bolt-api/bolt-sync procuram.
+      // Bolt: API oficial Bolt Fleet (OAuth client_credentials). Grava-se como
+      // plataforma='robot' + robot_target_platform='bolt' + auth_mode='oauth' —
+      // a mesma forma das contas que já existem, para converter uma delas ser
+      // só um UPDATE do auth_mode e nunca uma linha nova (ver boltIntegracao.ts).
       //
-      // sync_automatico fica a false de propósito: o sync automático está
-      // desligado à escala do sistema (ver src/config/sync.ts) e, antes de
-      // ligar, é preciso validar uma semana da API contra o acerto oficial da
-      // Bolt (o CSV semanal). Até lá a integração serve para leituras a pedido
-      // (motoristas/viaturas/viagens) sem mexer nos pagamentos.
-      if (isBoltApi) {
-        const companyIdNum = Number.parseInt(formData.companyId, 10);
-        if (!Number.isFinite(companyIdNum)) {
-          throw new Error('Company ID tem de ser um número.');
+      // O token Apify é best-effort aqui: a linha nasce em oauth, o robô não
+      // corre, e não faz sentido impedir a ligação à API por faltar um token de
+      // um robô que não vai ser usado. Guarda-se se existir.
+      if (isBolt) {
+        if (!boltCred.completo) {
+          throw new Error(boltCred.motivo ?? 'Teste a ligação antes de criar a integração.');
         }
-        const { error: boltError } = await supabase.from('plataformas_configuracao').insert({
-          nome: formData.nome,
-          plataforma: 'bolt',
-          client_id: formData.login,
-          client_secret: formData.password,
-          company_id: companyIdNum,
-          ativo: true,
-          sync_automatico: false,
-        });
+
+        const { data: comToken } = await supabase
+          .from('plataformas_configuracao')
+          .select('apify_api_token')
+          .in('plataforma', ['robot', 'via_verde'])
+          .eq('robot_target_platform', 'bolt')
+          .not('apify_api_token', 'is', null)
+          .limit(1);
+
+        const { error: boltError } = await supabase.from('plataformas_configuracao').insert(
+          payloadCriacaoBolt({
+            nome: formData.nome,
+            clientId: boltCred.clientId,
+            clientSecret: boltCred.clientSecret,
+            companyId: boltCred.companyId,
+            companyName: boltCred.companyName,
+            apifyApiToken: (comToken?.[0] as any)?.apify_api_token ?? null,
+          }) as any
+        );
         if (boltError) throw boltError;
 
         toast({
           title: 'Integração criada',
-          description: `Bolt (API) "${formData.nome}" criada. O robô/CSV continua a funcionar em paralelo.`,
+          description: `Bolt "${formData.nome}" ligada à API oficial. A importação manual do CSV continua disponível.`,
         });
         setSaving(false);
-        onOpenChange(false);
+        // handleClose limpa o formulário — o Client Secret não pode ficar em
+        // memória (nem reaparecer no campo se o wizard for reaberto).
+        handleClose(false);
         onSuccess();
         return;
       }
 
       // Via Verde segue o fluxo de robot Apify abaixo (mesmo caminho de
       // Uber/Bolt/BP/Repsol/EDP), incluindo a criação da via_verde_contas.
-      let apifyApiToken: string | null = null;
-      const { data: existingIntegrations } = await supabase
+      // O token Apify vem SEMPRE da configuração já existente em
+      // plataformas_configuracao (tabela protegida por RLS) — nunca de uma
+      // constante no código, que acabaria no bundle público de wegest.pt.
+      // Via Verde procura em plataforma='via_verde' e as restantes em
+      // plataforma='robot'; ambas gravam o robot_target_platform.
+      const { data: existingIntegrations, error: tokenLookupError } = await supabase
         .from('plataformas_configuracao')
         .select('apify_api_token')
-        .eq('plataforma', 'robot')
+        .in('plataforma', ['robot', 'via_verde'])
         // Sem este filtro, uma integração Via Verde nova podia herdar o
         // token PARTILHADO do Uber/Bolt/BP/Repsol/EDP em vez do seu próprio
         // token dedicado — plataforma='robot' sozinho não distingue entre
@@ -440,12 +426,19 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
         .not('apify_api_token', 'is', null)
         .limit(1);
 
-      if (existingIntegrations && existingIntegrations.length > 0) {
-        apifyApiToken = (existingIntegrations[0] as any).apify_api_token;
-      }
+      if (tokenLookupError) throw tokenLookupError;
 
+      const apifyApiToken: string | null =
+        (existingIntegrations?.[0] as any)?.apify_api_token || null;
+
+      // Antes havia aqui um fallback silencioso para um token em hardcode. Sem
+      // token a integração era criada na mesma e só falhava mais tarde, no
+      // primeiro robot-execute, com um 401 do Apify difícil de diagnosticar.
       if (!apifyApiToken) {
-        apifyApiToken = (defaults as any).apify_api_token || null;
+        throw new Error(
+          `Não há nenhum token Apify configurado para ${selectedPlatform?.name ?? defaults.robot_target_platform}. ` +
+            'Abra uma integração existente desta plataforma e preencha o token Apify, ou peça-o ao administrador, antes de criar esta.'
+        );
       }
 
       const insertData: Record<string, any> = {
@@ -834,100 +827,13 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                     )}
                   </div>
                 </>
-              ) : isBoltApi ? (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    Credenciais da <strong>API oficial Bolt Fleet</strong>, geradas em{' '}
-                    <em>fleets.bolt.eu › Definições › API</em> (botão "Generate credentials"). Se
-                    essa secção não existir, peça à Bolt para activar o Fleet Integration API.
-                  </p>
-                  <div className="space-y-2">
-                    <Label htmlFor="bolt-client-id">
-                      Client ID <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="bolt-client-id"
-                      placeholder="Client ID gerado no portal Bolt"
-                      value={formData.login}
-                      onChange={(e) => {
-                        setFormData((prev) => ({ ...prev, login: e.target.value }));
-                        setBoltApiTestState('idle');
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bolt-client-secret">
-                      Client Secret <span className="text-destructive">*</span>
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="bolt-client-secret"
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
-                        value={formData.password}
-                        onChange={(e) => {
-                          setFormData((prev) => ({ ...prev, password: e.target.value }));
-                          setBoltApiTestState('idle');
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bolt-company-id">
-                      Company ID <span className="text-destructive">*</span>
-                    </Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="bolt-company-id"
-                        inputMode="numeric"
-                        placeholder="Ex: 123456"
-                        value={formData.companyId}
-                        onChange={(e) => {
-                          setFormData((prev) => ({ ...prev, companyId: e.target.value }));
-                          setBoltApiTestState('idle');
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleTestBoltApiConnection}
-                        disabled={
-                          boltApiTestState === 'testing' ||
-                          !formData.login ||
-                          !formData.password ||
-                          !formData.companyId
-                        }
-                      >
-                        {boltApiTestState === 'testing' ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          'Testar ligação'
-                        )}
-                      </Button>
-                    </div>
-                    {boltApiTestState === 'success' && (
-                      <p className="text-xs text-emerald-600 flex items-center gap-1">
-                        <Check className="h-3 w-3" /> Ligação confirmada
-                      </p>
-                    )}
-                    {boltApiTestState === 'error' && (
-                      <p className="text-xs text-destructive">{boltApiTestError}</p>
-                    )}
-                  </div>
-                </>
+              ) : isBolt ? (
+                <BoltApiCredenciais
+                  key={boltFormKey}
+                  contexto="criar"
+                  modoGravado="password"
+                  onEstado={setBoltCred}
+                />
               ) : (
                 <>
                   <p className="text-sm text-muted-foreground">
@@ -998,14 +904,17 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                 {isBrevo && formData.senderEmail && (
                   <p className="text-sm text-muted-foreground">{formData.senderEmail}</p>
                 )}
-                {/* Bolt (API) e Cartrack não usam email — mascarar um Client ID
-                    como se fosse endereço só confundia. */}
-                {isBoltApi && (
+                {/* Bolt e Cartrack não usam email — mascarar um Client ID como
+                    se fosse endereço só confundia. O Client Secret nunca é
+                    reapresentado, aqui nem em lado nenhum. */}
+                {isBolt && (
                   <p className="text-sm text-muted-foreground">
-                    Company ID {formData.companyId} · API oficial
+                    {boltCred.companyName
+                      ? `${boltCred.companyName} (${boltCred.companyId}) · API oficial`
+                      : `Company ID ${boltCred.companyId} · API oficial`}
                   </p>
                 )}
-                {!isBrevo && !isBoltApi && formData.login && (
+                {!isBrevo && !isBolt && formData.login && (
                   <p className="text-sm text-muted-foreground">{maskEmail(formData.login)}</p>
                 )}
               </div>
@@ -1030,9 +939,10 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
             {/* Schedule — não aplicável ao Brevo (só envio sob-demanda) nem ao
                 Cartrack (robot-schedule dispara robot-execute, não cartrack-sync;
                 o Cartrack sincroniza pelo botão no detalhe da integração).
-                Bolt (API) pelo mesmo motivo do Cartrack: o robot-schedule agenda
-                robot-execute (robô Apify), não o bolt-sync. */}
-            {!isBrevo && !isCartrack && !isBoltApi && (
+                Bolt pelo mesmo motivo do Cartrack: o robot-schedule agenda
+                robot-execute (robô Apify), e uma integração Bolt nova nasce em
+                auth_mode='oauth' — quem sincroniza é a API, não o robô. */}
+            {!isBrevo && !isCartrack && !isBolt && (
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Clock className="h-4 w-4" />
@@ -1057,7 +967,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
               </div>
             )}
 
-            {!isBrevo && !isCartrack && !isBoltApi && formData.cron_schedule === 'custom' && (
+            {!isBrevo && !isCartrack && !isBolt && formData.cron_schedule === 'custom' && (
               <div className="space-y-2">
                 <Label htmlFor="cron_custom">Expressão Cron</Label>
                 <Input

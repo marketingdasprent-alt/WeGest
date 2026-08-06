@@ -45,6 +45,7 @@ import { Separator } from '@/components/ui/separator';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { MotoristaResumoDialog } from '@/components/administrativo/MotoristaResumoDialog';
+import { BOLT_FONTE_FINANCEIRA, receitaBoltDeduplicada } from '@/config/bolt';
 
 interface Recibo {
   id: string;
@@ -272,18 +273,24 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         0
       );
 
-      // 3. Bolt Data: SUM BOTH Viagens AND Weekly Summaries (Just like Admin)
-      const { data: boltViagens } = await supabase
-        .from('bolt_viagens')
-        .select('driver_earnings')
-        .eq('motorista_id', motoristaId)
-        .gte('payment_confirmed_timestamp', weekStartISO)
-        .lte('payment_confirmed_timestamp', weekEndISO);
+      // 3. Bolt: as duas origens (API bolt_viagens e CSV bolt_resumos_semanais)
+      // descrevem o MESMO dinheiro — nunca se somam, senão o recibo mostra a
+      // receita a dobrar. Quem manda é BOLT_FONTE_FINANCEIRA (src/config/bolt.ts);
+      // enquanto for 'csv' a API nem sequer é consultada (modo sombra).
+      let boltViagensTotal = 0;
+      if (BOLT_FONTE_FINANCEIRA === 'api') {
+        const { data: boltViagens } = await supabase
+          .from('bolt_viagens')
+          .select('driver_earnings')
+          .eq('motorista_id', motoristaId)
+          .gte('payment_confirmed_timestamp', weekStartISO)
+          .lte('payment_confirmed_timestamp', weekEndISO);
 
-      const boltViagensTotal = (boltViagens || []).reduce(
-        (acc, curr) => acc + (Number(curr.driver_earnings) || 0),
-        0
-      );
+        boltViagensTotal = (boltViagens || []).reduce(
+          (acc, curr) => acc + (Number(curr.driver_earnings) || 0),
+          0
+        );
+      }
 
       const { data: boltResumos } = await supabase
         .from('bolt_resumos_semanais')
@@ -383,7 +390,9 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       // 6. FINAL AGGREGATION (MIRROR OF ContasResumoTab.tsx:resumosCalculados)
       const passesReciboVerde = motorista.recibo_verde ?? true;
 
-      const boltTotal = boltViagensTotal + boltResumosTotal;
+      // Precedência entre origens (nunca soma) — igual ao Administrativo → Contas,
+      // que também dedupa em vez de somar.
+      const boltTotal = receitaBoltDeduplicada(boltViagensTotal, boltResumosTotal);
       const faturadoPlataformas = uberTotal + boltTotal;
       const totalFaturadoReal = faturadoPlataformas + extraCredits;
 
