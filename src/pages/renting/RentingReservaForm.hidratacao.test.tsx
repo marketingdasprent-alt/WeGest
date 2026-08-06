@@ -121,6 +121,7 @@ function reserva(over: Partial<Reserva> = {}): Reserva {
     slot_valor_semanal: null,
     slot_valor_mensal: null,
     valor_total: 1350,
+    valor_total_manual: null,
     tarifa_id: 'tarifa-antiga',
     observacoes: null,
     observacoes_internas: null,

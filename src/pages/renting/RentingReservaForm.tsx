@@ -693,6 +693,9 @@ const RentingReservaForm = () => {
         slot_valor_semanal: values.regime === 'slot' ? (values.slot_valor_semanal ?? null) : null,
         slot_valor_mensal: values.regime === 'slot' ? (values.slot_valor_mensal ?? null) : null,
         valor_total: baseAluguer ?? values.valor_total,
+        // Override escrito à mão no card de Preço — tem de viajar no payload,
+        // senão o valor manual perde-se ao gravar e a tarifa reassume.
+        valor_total_manual: values.valor_total_manual ?? null,
         franquia_valor: values.franquia_valor,
         caucao_valor: values.caucao_valor,
         kms_incluidos: values.kms_incluidos,
