@@ -932,11 +932,14 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className="text-xs">Fotos / Vídeos (opcional)</Label>
+                        <Label className="text-xs">Fotos / Vídeos / PDF (opcional)</Label>
                         <input
                           ref={fileInputRef}
                           type="file"
-                          accept="image/*,video/*"
+                          // PDF entra para peritagens e orçamentos de oficina. Não
+                          // se desenha na grelha da folha (o jsPDF não rasteriza
+                          // PDFs) — sai como moldura "PDF" e vê-se pelo QR.
+                          accept="image/*,video/*,application/pdf"
                           multiple
                           hidden
                           onChange={(e) => addFiles(e.target.files)}
@@ -992,7 +995,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                             </button>
                           </div>
                           <p className="text-center text-[10px] text-muted-foreground">
-                            ou arrasta fotos/vídeos para aqui
+                            ou arrasta fotos, vídeos ou PDF para aqui
                           </p>
                           {/* Lista, não grelha de quadrados: cada ficheiro leva
                               a sua descrição ao lado, e é ela que fica como
@@ -1011,7 +1014,11 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                                       />
                                     ) : (
                                       <div className="flex h-full w-full items-center justify-center">
-                                        <Film className="h-4 w-4 text-muted-foreground" />
+                                        {f.file.type === 'application/pdf' ? (
+                                          <FileText className="h-4 w-4 text-muted-foreground" />
+                                        ) : (
+                                          <Film className="h-4 w-4 text-muted-foreground" />
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -1021,7 +1028,9 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                                     placeholder={
                                       f.preview
                                         ? 'Descrição da foto (ex: risco no para-choques)'
-                                        : 'Descrição do vídeo'
+                                        : f.file.type === 'application/pdf'
+                                          ? 'Descrição do documento (ex: peritagem)'
+                                          : 'Descrição do vídeo'
                                     }
                                     className="h-8 text-xs"
                                     aria-label={`Descrição de ${f.file.name}`}

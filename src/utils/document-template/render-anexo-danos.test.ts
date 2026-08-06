@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { legendaFoto } from './render-anexo-danos';
+import { legendaFoto, rotuloNaoImagem } from './render-anexo-danos';
 
 describe('legendaFoto', () => {
   // O que motivou a mudança: a legenda dizia de ONDE a foto veio, nunca o que
@@ -37,5 +37,32 @@ describe('legendaFoto', () => {
     expect(legendaFoto({ url: 'x', origem: 'Nesta recolha/entrega', video: true })).toBe(
       '[Vídeo] Nesta recolha/entrega'
     );
+  });
+});
+
+describe('legendaFoto — anexos que não são imagem', () => {
+  it('PDF leva prefixo próprio', () => {
+    expect(legendaFoto({ url: 'x', descricao: 'Peritagem da seguradora', pdf: true })).toBe(
+      '[PDF] Peritagem da seguradora'
+    );
+  });
+
+  it('PDF ganha ao vídeo quando ambos vêm marcados', () => {
+    // Não deve acontecer, mas um ficheiro mal classificado não pode sair
+    // rotulado como as duas coisas.
+    expect(legendaFoto({ url: 'x', origem: 'Registo manual', pdf: true, video: true })).toBe(
+      '[PDF] Registo manual'
+    );
+  });
+});
+
+describe('rotuloNaoImagem', () => {
+  it('imagem normal não leva rótulo — desenha-se', () => {
+    expect(rotuloNaoImagem({ url: 'x', descricao: 'Risco' })).toBeNull();
+  });
+
+  it('vídeo e PDF levam o seu rótulo', () => {
+    expect(rotuloNaoImagem({ url: 'x', video: true })).toBe('VÍDEO');
+    expect(rotuloNaoImagem({ url: 'x', pdf: true })).toBe('PDF');
   });
 });
