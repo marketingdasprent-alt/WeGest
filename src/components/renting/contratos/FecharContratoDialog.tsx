@@ -233,7 +233,9 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     queryFn: async () => {
       const { data } = await supabase
         .from('contratos_renting')
-        .select('viatura_id, emissor_id, cliente_id, km_saida, combustivel_saida')
+        .select(
+          'viatura_id, emissor_id, cliente_id, km_saida, combustivel_saida, cidade_assinatura'
+        )
         .eq('id', contratoId)
         .maybeSingle();
       const empty = {
@@ -244,6 +246,11 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         clienteNome: '',
         kmSaida: null as number | null,
         combustivelSaida: null as string | null,
+        // Cidade vigente do contrato — gravada por ContratoDocumentosDialog na
+        // primeira vez que se gerou algo para ele. O fecho não tem picker
+        // nenhum: usa o que já está, e fica vazia (como sempre foi) só quando
+        // o contrato nunca gerou documento algum.
+        cidadeAssinatura: null as string | null,
       };
       if (!data) return empty;
 
@@ -335,6 +342,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         clienteNome,
         kmSaida: (data.km_saida as number | null) ?? null,
         combustivelSaida: (data.combustivel_saida as string | null) ?? null,
+        cidadeAssinatura: (data.cidade_assinatura as string | null) ?? null,
       };
     },
   });
@@ -437,6 +445,11 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         documentData: {
           viatura_matricula: matricula ?? '',
           data_assinatura: hoje,
+          // Cidade vigente do contrato — sem picker aqui de propósito: quem
+          // está a fechar um contrato já usado não devia ter de escolher outra
+          // vez algo que já ficou definido. Fica vazia só se este contrato
+          // nunca gerou nenhum documento (mesmo comportamento de sempre).
+          cidade_assinatura: contexto?.cidadeAssinatura ?? '',
           clienteData: { nome: contexto?.clienteNome ?? '' },
           assinatura_motorista: sigs.motorista ?? '',
           assinatura_responsavel: sigs.responsavel ?? '',

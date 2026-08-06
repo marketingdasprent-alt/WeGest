@@ -176,6 +176,11 @@ export type ContratoRenting = {
 
   voucher_codigo: string | null;
 
+  /** Cidade de assinatura vigente — gravada por ContratoDocumentosDialog após
+   *  a primeira geração de documentos e reaproveitada depois (não pede outra
+   *  vez). Opcional: contratos que nunca geraram documentos não têm nenhuma. */
+  cidade_assinatura?: string | null;
+
   observacoes: string | null;
   observacoes_internas: string | null;
 

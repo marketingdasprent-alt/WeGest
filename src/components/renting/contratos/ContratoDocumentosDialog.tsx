@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { gravarCidadeAssinaturaVigente } from '@/hooks/useContratosRenting';
 import { useDocumentTemplates, useFolhasDanosDaOrg } from '@/hooks/useDocumentTemplates';
 import { useContactosDocumento } from '@/hooks/useContactosDocumento';
 
@@ -107,7 +108,25 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
   ].filter((d) => d.valor);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gerando, setGerando] = useState(false);
-  const [cidadeAssinatura, setCidadeAssinatura] = useState('');
+  // Pré-preenchida com a cidade vigente do contrato (gravada da última vez que
+  // se gerou algo para ele) — um contrato que já teve documentos gerados não
+  // volta a perguntar. Só nasce vazia mesmo na primeira geração de sempre.
+  const [cidadeAssinatura, setCidadeAssinatura] = useState(contrato.cidade_assinatura ?? '');
+
+  // Reabrir o diálogo (ou trocar de contrato sem desmontar) tem de reflectir
+  // o valor mais recente gravado — sem isto, gerar uma vez com uma cidade
+  // nova e reabrir logo a seguir mostrava outra vez a antiga.
+  useEffect(() => {
+    if (open) setCidadeAssinatura(contrato.cidade_assinatura ?? '');
+  }, [open, contrato.cidade_assinatura]);
+
+  // Fica "vigente": a próxima geração para este mesmo contrato (aqui ou no
+  // fecho) já não pergunta.
+  const persistirCidadeVigente = (cidade: string) => {
+    const valor = cidade.trim();
+    if (!valor || valor === (contrato.cidade_assinatura ?? '')) return;
+    void gravarCidadeAssinaturaVigente(contrato.id, valor);
+  };
   const [enviarEmailOpen, setEnviarEmailOpen] = useState(false);
   const [anexosParaEnviar, setAnexosParaEnviar] = useState<Array<{ pdf: jsPDF; filename: string }>>(
     []
@@ -255,6 +274,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
         templateIds,
         cidadeAssinatura,
       });
+      persistirCidadeVigente(cidadeAssinatura);
       onOpenChange(false);
     } catch (err) {
       toast({
@@ -298,6 +318,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
       if (!resultado || !('anexos' in resultado) || resultado.anexos.length === 0) {
         throw new Error('Não foi possível gerar os documentos.');
       }
+      persistirCidadeVigente(cidadeAssinatura);
       setAnexosParaEnviar(resultado.anexos.map((a) => ({ pdf: a.pdf, filename: a.fileName })));
       setEnviarEmailOpen(true);
     } catch (err) {
