@@ -147,26 +147,34 @@ export const NotificacoesPopup = () => {
         </button>
       )}
 
-      <div className="pointer-events-auto flex items-center gap-1 self-end">
+      {/* Barra própria, com fundo: estes botões ficam FORA dos cartões, por
+          cima do conteúdo da página. Em ghost sem fundo liam-se por cima de
+          seja o que for que estivesse por trás — texto sobre texto. Levam a
+          mesma casca dos cartões (bg-card + borda + sombra) para pertencerem
+          visualmente à pilha de avisos em vez de flutuarem soltos. */}
+      <div className="pointer-events-auto flex items-center gap-0.5 self-end rounded-full border border-border bg-card p-1 shadow-lg duration-300 animate-in slide-in-from-bottom-4 fade-in">
         {/* Só com mais do que um aviso à vista: para um único cartão o X e o
             "Ocultar" já chegam, e um terceiro botão para o mesmo efeito só
             confundia. */}
         {visiveis.length > 1 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs text-muted-foreground hover:text-foreground"
-            title="Fecha os avisos que estão à vista — continuam todos por resolver"
-            onClick={() => ocultarTodas(ordenadas.map((n) => n.id))}
-          >
-            <EyeOff className="mr-1.5 h-3.5 w-3.5" />
-            Ocultar todas ({visiveis.length})
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 rounded-full px-3 text-xs text-foreground"
+              title="Fecha os avisos que estão à vista — continuam todos por resolver"
+              onClick={() => ocultarTodas(ordenadas.map((n) => n.id))}
+            >
+              <EyeOff className="mr-1.5 h-3.5 w-3.5" />
+              Ocultar todas ({visiveis.length})
+            </Button>
+            <span aria-hidden="true" className="h-4 w-px shrink-0 bg-border" />
+          </>
         )}
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 text-xs text-muted-foreground hover:text-foreground"
+          className="h-8 rounded-full px-3 text-xs text-foreground"
           onClick={() => navigate('/notificacoes')}
         >
           <List className="mr-1.5 h-3.5 w-3.5" />

@@ -362,7 +362,9 @@ export function useUpdateContratoRenting() {
 export interface FecharContratoRecolhaInfo {
   km: string;
   combustivel: string;
-  fotos: File[];
+  /** Cada ficheiro leva a descrição escrita no fecho — é ela que vira legenda
+   *  da imagem na Folha de Danos (viatura_dano_fotos.descricao). */
+  fotos: { file: File; descricao?: string }[];
 }
 
 export interface FecharContratoArgs {
@@ -526,7 +528,7 @@ export function useFecharContrato() {
             .single();
           if (dErr) throw dErr;
 
-          for (const file of recolha.fotos) {
+          for (const { file, descricao } of recolha.fotos) {
             const ext = file.name.split('.').pop() || 'bin';
             const path = `${dano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
             const { error: upErr } = await supabase.storage
@@ -537,6 +539,7 @@ export function useFecharContrato() {
               dano_id: dano.id,
               ficheiro_url: path,
               nome_ficheiro: file.name,
+              descricao: descricao?.trim() || null,
               uploaded_by: userId,
             });
             if (fErr) throw fErr;

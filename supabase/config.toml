@@ -158,6 +158,16 @@ verify_jwt = false
 [functions.bolt-sync-semana]
 verify_jwt = true
 
+# Enfileira o sync semanal. Chamada pelo cron (service-role) e pelo botão
+# "Atualizar" (sessão do utilizador) — daí verify_jwt = false: a própria
+# função distingue os dois e exige admin da org ao chamador autenticado.
+[functions.bolt-sync-agendado]
+verify_jwt = false
+
+# Só o cron lhe toca; não há caminho pela UI.
+[functions.bolt-sync-drain]
+verify_jwt = false
+
 [functions.primavera-api]
 verify_jwt = false
 

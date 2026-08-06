@@ -80,6 +80,10 @@ interface SelectedFile {
   id: string;
   file: File;
   preview: string | null;
+  /** Descrição do que se está a ver. Vai para viatura_dano_fotos.descricao e
+   *  passa a ser a legenda da imagem na Folha de Danos — sem ela a legenda
+   *  só dizia de onde a foto veio, não o que mostra. */
+  descricao: string;
 }
 
 export interface AlteracaoMaterial {
@@ -350,9 +354,13 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       file: f,
       preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null,
+      descricao: '',
     }));
     setFiles((prev) => [...prev, ...novos]);
   };
+
+  const setDescricaoFicheiro = (id: string, descricao: string) =>
+    setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, descricao } : f)));
 
   const handleDropFiles = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -538,7 +546,11 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       valorDivida: values.valorDivida,
       recolha:
         !viaturaEhSlot && registarAgora
-          ? { km, combustivel, fotos: files.map((f) => f.file) }
+          ? {
+              km,
+              combustivel,
+              fotos: files.map((f) => ({ file: f.file, descricao: f.descricao })),
+            }
           : undefined,
       // Se o motorista tinha levado a DUA original e o gestor confirma a
       // devolução, regista dua_devolvida_em no contrato (fecha o ciclo do aviso).
@@ -982,30 +994,45 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                           <p className="text-center text-[10px] text-muted-foreground">
                             ou arrasta fotos/vídeos para aqui
                           </p>
+                          {/* Lista, não grelha de quadrados: cada ficheiro leva
+                              a sua descrição ao lado, e é ela que fica como
+                              legenda na Folha de Danos. Em quadrados de 6
+                              colunas não cabia campo nenhum. */}
                           {files.length > 0 && (
-                            <div className="grid grid-cols-6 gap-1.5 mt-1.5">
+                            <div className="mt-1.5 space-y-1.5">
                               {files.map((f) => (
-                                <div
-                                  key={f.id}
-                                  className="relative rounded overflow-hidden border border-border aspect-square bg-muted"
-                                >
-                                  {f.preview ? (
-                                    <img
-                                      src={f.preview}
-                                      alt={f.file.name}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="flex items-center justify-center w-full h-full">
-                                      <Film className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                  )}
+                                <div key={f.id} className="flex items-center gap-2">
+                                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded border border-border bg-muted">
+                                    {f.preview ? (
+                                      <img
+                                        src={f.preview}
+                                        alt={f.file.name}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center">
+                                        <Film className="h-4 w-4 text-muted-foreground" />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <Input
+                                    value={f.descricao}
+                                    onChange={(e) => setDescricaoFicheiro(f.id, e.target.value)}
+                                    placeholder={
+                                      f.preview
+                                        ? 'Descrição da foto (ex: risco no para-choques)'
+                                        : 'Descrição do vídeo'
+                                    }
+                                    className="h-8 text-xs"
+                                    aria-label={`Descrição de ${f.file.name}`}
+                                  />
                                   <button
                                     type="button"
                                     onClick={() => removeFile(f.id)}
-                                    className="absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5 text-white"
+                                    aria-label={`Remover ${f.file.name}`}
+                                    className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-destructive"
                                   >
-                                    <X className="h-2.5 w-2.5" />
+                                    <X className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
                               ))}
