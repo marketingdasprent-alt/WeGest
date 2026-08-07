@@ -8606,6 +8606,53 @@ export type Database = {
           },
         ]
       }
+      primavera_jobs: {
+        Row: {
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          org_id: string
+          payload: Json
+          resultado: Json | null
+          status: string
+          tipo: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          org_id: string
+          payload: Json
+          resultado?: Json | null
+          status?: string
+          tipo: string
+        }
+        Update: {
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          org_id?: string
+          payload?: Json
+          resultado?: Json | null
+          status?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "primavera_jobs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           assinatura_url: string | null
@@ -13334,6 +13381,7 @@ export type Database = {
         Returns: string
       }
       generate_primavera_api_key: { Args: never; Returns: string }
+      gerar_chave_agente_primavera: { Args: never; Returns: string }
       gerar_cobranca_dano: { Args: { p_dano_id: string }; Returns: string }
       gerar_cobranca_renta_car: {
         Args: { p_contrato_id: string }
@@ -13711,6 +13759,27 @@ export type Database = {
       org_codigo_disponivel: { Args: { p_codigo: string }; Returns: boolean }
       org_por_codigo: { Args: { p_codigo: string }; Returns: Json }
       org_privacidade_por_gestor: { Args: never; Returns: boolean }
+      primavera_jobs_claim: {
+        Args: { p_max: number; p_org_id: string }
+        Returns: {
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          org_id: string
+          payload: Json
+          resultado: Json | null
+          status: string
+          tipo: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "primavera_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       process_domain_events: { Args: { p_max?: number }; Returns: undefined }
       proxima_data_renovacao: {
         Args: { p_inicio: string; p_intervalo: number; p_opcao: string }

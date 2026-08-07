@@ -1,0 +1,20 @@
+{
+  "wegest_url": "https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1",
+  "chave_agente": "cole aqui a chave gerada em Admin -> Faturação -> Integração -> Primavera",
+
+  "primavera": {
+    "endpoint": "http://localhost:7071",
+    "username": "DasprentWS",
+    "password": "DasprentWS",
+    "enterprise": "CLONEDASPRENT"
+  },
+
+  "iva_codes": {
+    "0": "",
+    "6": "",
+    "13": "",
+    "23": ""
+  },
+
+  "poll_interval_segundos": 5
+}
