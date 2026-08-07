@@ -39,22 +39,25 @@ import {
 } from './integracoes/boltIntegracao';
 import { presetToCronExpression } from '@/lib/cronPresets';
 import { cn } from '@/lib/utils';
+import { FATURACAO_PROVIDER_OPTIONS } from '@/lib/faturacaoProviders';
 
 interface IntegracaoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
   /**
-   * KeyInvoice (faturação) tem o seu próprio dialog dedicado
-   * (FaturacaoIntegracaoDialog — testar ligação, definições avançadas,
-   * doctypes), mais completo do que o wizard genérico login+password. Em vez
-   * de duplicar essa lógica aqui, selecionar "KeyInvoice" no passo 1 fecha
-   * este wizard e pede ao pai (IntegracoesTab) para abrir esse dialog.
+   * Cada software de faturação (KeyInvoice, Primavera, ...) tem o seu próprio
+   * dialog dedicado (FaturacaoIntegracaoDialog — testar ligação, definições
+   * avançadas, doctypes), mais completo do que o wizard genérico
+   * login+password. Em vez de duplicar essa lógica aqui, selecionar um tile
+   * de faturação no passo 1 fecha este wizard e pede ao pai (IntegracoesTab)
+   * para abrir esse dialog já preso a esse provider (não é escolhido lá
+   * dentro — são integrações separadas, cada uma com a sua própria linha).
    */
-  onOpenFaturacao?: () => void;
+  onOpenFaturacao?: (provider: string) => void;
 }
 
-const PLATFORMS: { id: PlataformaOperacional | 'keyinvoice'; name: string; logo: string }[] = [
+const PLATFORMS: { id: PlataformaOperacional | string; name: string; logo: string }[] = [
   { id: 'uber', name: 'Uber', logo: '/images/logo-uber.png' },
   // Um só tile Bolt: a integração nasce sempre pela API oficial (OAuth). O tile
   // separado "Bolt (API)" desapareceu — criava uma linha nova em vez de usar a
@@ -66,8 +69,17 @@ const PLATFORMS: { id: PlataformaOperacional | 'keyinvoice'; name: string; logo:
   { id: 'viaverde', name: 'Via Verde', logo: '/images/logo-via-verde.png' },
   { id: 'brevo', name: 'Brevo (Email)', logo: '/images/logo-brevo.png' },
   { id: 'cartrack', name: 'Cartrack', logo: '/images/logo-cartrack.png' },
-  { id: 'keyinvoice', name: 'KeyInvoice', logo: '/images/logo-keyinvoice.png' },
+  // Um tile por provider de faturação registado (KeyInvoice, Primavera, ...) —
+  // gerado a partir do registo único em faturacaoProviders.ts, nunca
+  // hardcoded aqui, para um novo provider aparecer sozinho.
+  ...FATURACAO_PROVIDER_OPTIONS.map((p) => ({
+    id: p.slug,
+    name: p.label,
+    logo: `/images/logo-${p.slug}.png`,
+  })),
 ];
+
+const FATURACAO_SLUGS = new Set(FATURACAO_PROVIDER_OPTIONS.map((p) => p.slug));
 
 const STEP_LABELS = ['Seleção de plataforma', 'Credenciais', 'Confirmação'];
 
@@ -551,12 +563,15 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                     type="button"
                     onClick={() => {
                       const plataformaId = platform.id;
-                      if (plataformaId === 'keyinvoice') {
+                      if (FATURACAO_SLUGS.has(plataformaId)) {
                         handleClose(false);
-                        onOpenFaturacao?.();
+                        onOpenFaturacao?.(plataformaId);
                         return;
                       }
-                      setFormData((prev) => ({ ...prev, plataforma: plataformaId }));
+                      setFormData((prev) => ({
+                        ...prev,
+                        plataforma: plataformaId as PlataformaOperacional,
+                      }));
                     }}
                     className={cn(
                       'flex flex-col items-center justify-center gap-3 rounded-xl border-2 p-6 transition-all hover:shadow-md cursor-pointer bg-card',

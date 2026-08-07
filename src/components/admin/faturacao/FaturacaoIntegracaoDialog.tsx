@@ -16,13 +16,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   Loader2,
   Eye,
   EyeOff,
@@ -34,11 +27,7 @@ import {
   Sparkles,
   Copy,
 } from 'lucide-react';
-import {
-  FATURACAO_PROVIDERS,
-  FATURACAO_PROVIDER_OPTIONS,
-  faturacaoProviderLabel,
-} from '@/lib/faturacaoProviders';
+import { FATURACAO_PROVIDERS, faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import type { Json } from '@/integrations/supabase/types';
 
 /** Settings específicos do provider (guardados em plataformas_configuracao.config). */
@@ -61,21 +50,28 @@ export interface FaturacaoConfigRow {
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Config existente (ou null se ainda não foi configurada). */
+  /** Provider fixo desta integração (ex.: 'keyinvoice', 'primavera') — vem do
+   *  tile escolhido em "Adicionar plataforma" ou do cartão editado. Cada
+   *  provider é uma integração PRÓPRIA (linha própria em
+   *  plataformas_configuracao); este diálogo nunca troca de provider a meio
+   *  — trocar de software é configurar o outro separadamente e ativá-lo. */
+  provider: string;
+  /** Config existente desse provider (ou null se ainda não foi configurada). */
   row: FaturacaoConfigRow | null;
   onSuccess: () => void;
 }
 
 /**
- * Configura o software de faturação fiscal da organização. Trocar de software é
- * só escolher outro provider e colar a chave — o resto (endpoint, doctypes,
- * defaults) vem dos defaults do adapter, com override opcional em "avançado".
+ * Configura UMA integração de faturação fiscal (um provider fixo, ex.:
+ * KeyInvoice OU Primavera) da organização. Cada provider tem a sua própria
+ * linha/chave/estado — nunca partilhada. Só uma pode estar ativa (a emitir
+ * de facto) por org; "Guardar" promove esta a ativa e desativa as outras
+ * (índice único na BD garante que nunca há duas em simultâneo).
  */
-export function FaturacaoIntegracaoDialog({ open, onOpenChange, row, onSuccess }: Props) {
+export function FaturacaoIntegracaoDialog({ open, onOpenChange, provider, row, onSuccess }: Props) {
   const qc = useQueryClient();
   const { orgId } = useTenant();
 
-  const [provider, setProvider] = useState('keyinvoice');
   const [apiKey, setApiKey] = useState('');
   const [endpoint, setEndpoint] = useState('');
   const [defaultProduct, setDefaultProduct] = useState('');
@@ -98,7 +94,6 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, row, onSuccess }
   useEffect(() => {
     if (!open) return;
     const c = row?.config ?? {};
-    setProvider(c.provider || 'keyinvoice');
     setApiKey(row?.client_secret || '');
     setEndpoint(c.endpoint || '');
     setDefaultProduct(c.default_product || '');
@@ -165,11 +160,13 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, row, onSuccess }
       // Primavera (chave gerada pelo WeGest): o teste confirma que o AGENTE
       // já configurado está a responder — depende de a linha já estar
       // gravada (senão não há fila nenhuma onde pôr o pedido de teste, é o
-      // próprio adapter que explica isto na mensagem de erro). Por isso vai
-      // pela sessão do utilizador (getOrgConfig), não por credenciais soltas
-      // do formulário como o KeyInvoice faz.
+      // próprio adapter que explica isto na mensagem de erro). Manda-se o
+      // `provider` explícito (não confiar em "o que estiver ativo agora") —
+      // esta integração pode estar a ser testada sem ainda ser a que emite
+      // de facto (ex.: Primavera em teste enquanto o KeyInvoice continua em
+      // produção).
       const body = providerMeta?.chaveGeradaPeloWeGest
-        ? { action: 'health' }
+        ? { action: 'health', provider }
         : { action: 'health', provider, apiKey: apiKey.trim(), settings: buildSettings() };
       const { data, error } = await supabase.functions.invoke('faturacao-emitir', { body });
       if (error) throw new Error(error.message);
@@ -186,10 +183,6 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, row, onSuccess }
   }
 
   async function handleSave() {
-    if (!provider) {
-      toast.error('Escolha o software de faturação.');
-      return;
-    }
     if (!apiKey.trim()) {
       toast.error(
         `Introduza ${providerMeta?.apiKeyLabel ? 'a ' + providerMeta.apiKeyLabel.toLowerCase() : 'a chave da API'}.`
@@ -199,6 +192,19 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, row, onSuccess }
     setSaving(true);
     try {
       const settings = buildSettings();
+      const nome = providerMeta?.label || provider;
+
+      // Guardar promove ESTA integração a ativa (é a que passa a emitir de
+      // facto) — só pode haver uma por org (índice único na BD). Desativar
+      // as outras primeiro, senão o insert/update seguinte falha a violar
+      // esse índice.
+      const { error: deactivateErr } = await supabase
+        .from('plataformas_configuracao')
+        .update({ ativo: false })
+        .eq('plataforma', 'faturacao')
+        .neq('id', row?.id ?? '00000000-0000-0000-0000-000000000000');
+      if (deactivateErr) throw deactivateErr;
+
       if (row?.id) {
         const { error } = await supabase
           .from('plataformas_configuracao')
@@ -206,14 +212,14 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, row, onSuccess }
             client_secret: apiKey.trim(),
             config: settings as unknown as Json,
             ativo: true,
-            nome: 'Faturação',
+            nome,
           })
           .eq('id', row.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from('plataformas_configuracao').insert({
           plataforma: 'faturacao',
-          nome: 'Faturação',
+          nome,
           ativo: true,
           client_secret: apiKey.trim(),
           config: settings as unknown as Json,
@@ -228,7 +234,7 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, row, onSuccess }
       if (defErr) throw defErr;
 
       qc.invalidateQueries({ queryKey: ['org-definicoes'] });
-      toast.success('Software de faturação configurado.');
+      toast.success(`${nome} configurado e ativado — passa a ser o software a emitir documentos.`);
       onSuccess();
       onOpenChange(false);
     } catch (e) {
@@ -242,30 +248,15 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, row, onSuccess }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Software de faturação</DialogTitle>
+          <DialogTitle>{providerMeta?.label || provider}</DialogTitle>
           <DialogDescription>
-            Escolha o software fiscal. A emissão (faturas, recibos, notas de crédito) passa a ser
-            feita neste software.
+            Integração própria e independente das restantes — guardar promove{' '}
+            {providerMeta?.label || provider} a software ativo (é o que passa a emitir faturas,
+            recibos e notas de crédito); as outras ficam configuradas mas inativas.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="fat-provider">Software de faturação</Label>
-            <Select value={provider} onValueChange={setProvider}>
-              <SelectTrigger id="fat-provider">
-                <SelectValue placeholder="Escolher software" />
-              </SelectTrigger>
-              <SelectContent>
-                {FATURACAO_PROVIDER_OPTIONS.map((p) => (
-                  <SelectItem key={p.slug} value={p.slug}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {FATURACAO_PROVIDERS[provider]?.brandingHelp && (
             <div className="space-y-1.5 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
               <p className="flex items-center gap-1.5 font-medium text-foreground">
