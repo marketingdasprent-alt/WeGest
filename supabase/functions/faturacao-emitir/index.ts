@@ -33,6 +33,7 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { keyInvoiceProvider } from './providers/keyinvoice.ts';
+import { primaveraProvider } from './providers/primavera.ts';
 import type { Cliente, EmitInput, FaturacaoProvider, Item, ProviderConfig } from './types.ts';
 import { EmissaoAmbiguaError } from './types.ts';
 
@@ -49,12 +50,16 @@ const env = (k: string) => Deno.env.get(k);
  *  "Bearer undefined" passe a autenticar como service role. */
 function isServiceRoleRequest(req: Request): boolean {
   const serviceRoleKey = env('SUPABASE_SERVICE_ROLE_KEY');
-  return Boolean(serviceRoleKey) && (req.headers.get('Authorization') ?? '') === `Bearer ${serviceRoleKey}`;
+  return (
+    Boolean(serviceRoleKey) &&
+    (req.headers.get('Authorization') ?? '') === `Bearer ${serviceRoleKey}`
+  );
 }
 
 // Registo de providers — adicionar aqui novos adapters (ex.: moloni, invoicexpress).
 const PROVIDERS: Record<string, FaturacaoProvider> = {
   keyinvoice: keyInvoiceProvider,
+  primavera: primaveraProvider,
 };
 const DEFAULT_PROVIDER = 'keyinvoice';
 
@@ -124,7 +129,8 @@ async function getOrgConfig(
     }
   }
 
-  if (!orgId) return { provider: DEFAULT_PROVIDER, cfg: { apiKey: null, settings: null }, orgId: null };
+  if (!orgId)
+    return { provider: DEFAULT_PROVIDER, cfg: { apiKey: null, settings: null }, orgId: null };
 
   const service = createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
   const { data: row } = await service
@@ -137,7 +143,11 @@ async function getOrgConfig(
 
   const settings = ((row as any)?.config ?? null) as Record<string, unknown> | null;
   const provider = String((settings?.provider as string) || DEFAULT_PROVIDER).toLowerCase();
-  return { provider, cfg: { apiKey: (row as any)?.client_secret ?? null, settings }, orgId };
+  return {
+    provider,
+    cfg: { apiKey: (row as any)?.client_secret ?? null, settings, orgId },
+    orgId,
+  };
 }
 
 function pickAdapter(provider: string): FaturacaoProvider {
@@ -165,7 +175,10 @@ serve(async (req) => {
       if (payload.apiKey || payload.provider) {
         // teste direto com credenciais fornecidas (antes de gravar na app)
         provider = String(payload.provider || DEFAULT_PROVIDER).toLowerCase();
-        cfg = { apiKey: payload.apiKey ?? null, settings: { provider, ...(payload.settings ?? {}) } };
+        cfg = {
+          apiKey: payload.apiKey ?? null,
+          settings: { provider, ...(payload.settings ?? {}) },
+        };
       } else {
         ({ provider, cfg } = await getOrgConfig(req, payload.org_id));
       }
@@ -229,7 +242,10 @@ serve(async (req) => {
   if (payload.action === 'pdf') {
     try {
       if (!payload.provider_doctype || !payload.provider_docnum) {
-        return json({ success: false, error: 'pdf: provider_doctype e provider_docnum obrigatórios' });
+        return json({
+          success: false,
+          error: 'pdf: provider_doctype e provider_docnum obrigatórios',
+        });
       }
       const { provider, cfg } = await getOrgConfig(req, payload.org_id);
       const base64 = await pickAdapter(provider).pdf(
@@ -341,7 +357,7 @@ serve(async (req) => {
         provider_doctype: doc.doctype,
         provider_docnum: doc.docnum || null,
         serie: doc.serie || null,
-        numero: doc.numero || (doc.docnum || null),
+        numero: doc.numero || doc.docnum || null,
         data_emissao: new Date().toISOString().slice(0, 10),
         total: round2(total),
         cliente_nif: (cliente.nif || '').trim() || null,

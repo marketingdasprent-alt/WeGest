@@ -171,6 +171,16 @@ verify_jwt = false
 [functions.primavera-api]
 verify_jwt = false
 
+# Chamadas pelo agente local Primavera (agent/primavera-agent/), fora de
+# qualquer sessão Supabase — autenticam com a chave do agente (pva_...) no
+# header Authorization, validada dentro da própria função contra
+# plataformas_configuracao.client_secret.
+[functions.primavera-agent-poll]
+verify_jwt = false
+
+[functions.primavera-agent-result]
+verify_jwt = false
+
 # Faturação fiscal (provider-agnostic). Iniciada sempre por utilizador
 # autenticado → exige JWT válido (usa get_current_org_id + RLS no invoices).
 [functions.faturacao-emitir]
