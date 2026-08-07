@@ -20,9 +20,15 @@ import type { Control } from 'react-hook-form';
 interface DadosPessoaisSectionProps {
   control: Control;
   gestores: { nome: string }[];
+  /** A lista falhou a carregar — distingue-se de "a org não tem gestores". */
+  erroGestores?: boolean;
 }
 
-export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSectionProps) {
+export function DadosPessoaisSection({
+  control,
+  gestores,
+  erroGestores = false,
+}: DadosPessoaisSectionProps) {
   const [gestorPopoverOpen, setGestorPopoverOpen] = useState(false);
 
   return (
@@ -63,7 +69,11 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
                   <Command>
                     <CommandInput placeholder="Procurar gestor..." />
                     <CommandList>
-                      <CommandEmpty>Nenhum gestor encontrado.</CommandEmpty>
+                      <CommandEmpty>
+                        {erroGestores
+                          ? 'Não foi possível carregar os gestores.'
+                          : 'Nenhum gestor encontrado.'}
+                      </CommandEmpty>
                       <CommandGroup>
                         {gestores.map((gestor) => (
                           <CommandItem

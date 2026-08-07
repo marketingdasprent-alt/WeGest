@@ -13454,6 +13454,7 @@ export type Database = {
       get_gestores_tvde: {
         Args: never
         Returns: {
+          id: string
           nome: string
         }[]
       }
