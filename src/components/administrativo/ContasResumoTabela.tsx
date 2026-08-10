@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/table';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import { cn } from '@/lib/utils';
+import { legendaSaldoMotorista } from '@/lib/saldoMotorista';
 import type { MotoristaResumo } from './contasResumoExports';
 
 export type SortField =
@@ -36,6 +37,35 @@ interface ContasResumoTabelaProps {
   formatCurrency: (value: number) => string;
   /** Coluna Gorjeta — dados sensíveis, só para admins da org dona dos dados. */
   showGorjeta?: boolean;
+}
+
+/** Valor + cor consoante o sinal, texto completo em title (tooltip nativo) —
+ *  reutilizado nas duas vistas (tabela desktop, cartões mobile). undefined =
+ *  a busca em lote do saldo ainda não respondeu (não confundir com 0€). */
+function SaldoPendenteCell({
+  saldo,
+  formatCurrency,
+}: {
+  saldo: number | undefined;
+  formatCurrency: (value: number) => string;
+}) {
+  if (saldo === undefined) {
+    return <span className="text-muted-foreground">…</span>;
+  }
+  const legenda = legendaSaldoMotorista(saldo);
+  return (
+    <span
+      title={legenda.texto}
+      className={cn(
+        'font-medium',
+        legenda.tone === 'positivo' && 'text-green-600',
+        legenda.tone === 'negativo' && 'text-red-500',
+        legenda.tone === 'neutro' && 'text-muted-foreground'
+      )}
+    >
+      {formatCurrency(saldo)}
+    </span>
+  );
 }
 
 export function ContasResumoTabela({
@@ -149,13 +179,17 @@ export function ContasResumoTabela({
               >
                 Reparações
               </SortableTableHead>
+              {/* Não sortável — saldo pendente ACTUAL do motorista (não
+                  limitado a esta semana), não uma coluna calculada da
+                  própria semana como as restantes. */}
+              <TableHead className="text-right">Saldo Pendente</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredResumos.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={showGorjeta ? 10 : 9}
+                  colSpan={showGorjeta ? 11 : 10}
                   className="text-center py-8 text-muted-foreground"
                 >
                   Nenhum dado encontrado para o período selecionado
@@ -259,6 +293,12 @@ export function ContasResumoTabela({
                       ) : (
                         <span className="text-muted-foreground">€0,00</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-right" onClick={() => onRowClick(resumo)}>
+                      <SaldoPendenteCell
+                        saldo={resumo.saldoPendente}
+                        formatCurrency={formatCurrency}
+                      />
                     </TableCell>
                   </TableRow>
                 );
@@ -387,6 +427,17 @@ export function ContasResumoTabela({
                         <span className="text-red-600">-{formatCurrency(resumo.reparacoes)}</span>
                       </div>
                     )}
+                  </div>
+
+                  <div
+                    className="flex justify-between border-t pt-3 text-sm"
+                    onClick={() => onRowClick(resumo)}
+                  >
+                    <span className="text-muted-foreground">Saldo Pendente</span>
+                    <SaldoPendenteCell
+                      saldo={resumo.saldoPendente}
+                      formatCurrency={formatCurrency}
+                    />
                   </div>
                 </CardContent>
               </Card>

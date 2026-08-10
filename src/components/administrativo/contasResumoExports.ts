@@ -25,6 +25,11 @@ export interface MotoristaResumo {
   reparacoes: number;
   outros_custos: number;
   aluguer: number;
+  /** Saldo pendente ACTUAL (não limitado a esta semana) — motorista_saldo_pendente,
+   *  mesmo valor mostrado no separador Financeiro do motorista e no portal
+   *  dele. Positivo = a favor do motorista; negativo = motorista deve.
+   *  undefined enquanto a busca em lote não responde. */
+  saldoPendente?: number;
 }
 
 const fmtEur = (v: number) =>

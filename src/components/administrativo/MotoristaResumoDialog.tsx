@@ -113,6 +113,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     outrasReceitas,
     slotPeriodos,
     aluguerSemTarifa,
+    valoresSemanaAnterior,
   } = useMotoristaResumoData(open, motorista, dateRange);
   const [isSending, setIsSending] = useState(false);
   const [settings, setSettings] = useState<PrintSettings>(loadSettings);
@@ -161,7 +162,6 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
   // Só avisar quando o valor mostrado é mesmo 0 — se houver renda manual
   // (renda_viatura) o aluguer já vem preenchido e não há falha a assinalar.
   const mostrarAvisoAluguer = !isImportado && aluguerSemTarifa && despesas.aluguer === 0;
-  const valoresSemanaAnterior = 0;
 
   // Cálculo puro (testado em resumoFinanceiro.test.ts). A gorjeta entra uma
   // única vez, na receita ajustada — não voltar a somar no total a receber.

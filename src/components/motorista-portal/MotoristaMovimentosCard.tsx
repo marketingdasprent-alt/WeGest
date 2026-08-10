@@ -23,22 +23,30 @@ interface MotoristaMovimentosCardProps {
   motoristaId: string;
 }
 
+const LIMITE_INICIAL = 5;
+const LIMITE_EXPANDIDO = 50;
+
 export function MotoristaMovimentosCard({ motoristaId }: MotoristaMovimentosCardProps) {
   const [movimentos, setMovimentos] = useState<Movimento[]>([]);
   const [loading, setLoading] = useState(true);
+  // "Ver Todos" alarga o limite da própria query em vez de abrir uma página
+  // nova só para isto — mantém o componente simples, o extrato já é a lista.
+  const [limite, setLimite] = useState(LIMITE_INICIAL);
 
   useEffect(() => {
     loadMovimentos();
-  }, [motoristaId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [motoristaId, limite]);
 
   async function loadMovimentos() {
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('motorista_financeiro')
         .select('*')
         .eq('motorista_id', motoristaId)
         .order('data_movimento', { ascending: false })
-        .limit(5);
+        .limit(limite);
 
       if (error) throw error;
       setMovimentos(data || []);
@@ -109,8 +117,11 @@ export function MotoristaMovimentosCard({ motoristaId }: MotoristaMovimentosCard
             variant="ghost"
             size="sm"
             className="bg-muted text-muted-foreground hover:text-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider h-8 border border-border"
+            onClick={() =>
+              setLimite((l) => (l === LIMITE_INICIAL ? LIMITE_EXPANDIDO : LIMITE_INICIAL))
+            }
           >
-            Ver Todos
+            {limite === LIMITE_INICIAL ? 'Ver Todos' : 'Ver Menos'}
           </Button>
         </div>
       </CardHeader>

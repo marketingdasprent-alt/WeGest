@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
+import { AlertTriangle, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { toggleSort, type SortDirection } from '@/components/ui/sortable-table-head';
 import { FinanceiroSection } from '@/components/ui/financeiro-section';
@@ -15,6 +15,8 @@ import {
 } from './NovoMovimentoFinanceiroOverlay';
 import { RecorrenciasAtivasList } from './RecorrenciasAtivasList';
 import { MovimentosHistoricoTable } from './MovimentosHistoricoTable';
+import { legendaSaldoMotorista } from '@/lib/saldoMotorista';
+import { cn } from '@/lib/utils';
 
 interface MotoristaTabFinanceiroProps {
   motorista: Motorista;
@@ -36,6 +38,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   // mapa: movimento.id → URL da fatura do ticket associado
   const [movimentoFaturaMap, setMovimentoFaturaMap] = useState<Map<string, string>>(new Map());
   const [recorrencias, setRecorrencias] = useState<RecorrenciaFinanceira[]>([]);
+  const [saldoPendente, setSaldoPendente] = useState<number | null>(null);
   const { canEdit } = useCanEditFinanceiro();
   const [sortField, setSortField] = useState<string>('data_movimento');
   const [sortDir, setSortDir] = useState<SortDirection>('desc');
@@ -44,7 +47,23 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   useEffect(() => {
     loadMovimentos();
     loadRecorrencias();
+    loadSaldo();
   }, [motoristaId]);
+
+  // RPC única, reutilizada em toda a app (portal do motorista, resumo
+  // semanal, Contas/Resumo) — nunca recalculado à mão a partir de
+  // `movimentos` (esses vêm sem filtro de status, o saldo só conta pendentes).
+  const loadSaldo = async () => {
+    try {
+      const { data, error } = await supabase.rpc('motorista_saldo_pendente', {
+        p_motorista_id: motoristaId,
+      });
+      if (error) throw error;
+      setSaldoPendente(Number(data) || 0);
+    } catch (error) {
+      console.error('Erro ao carregar saldo pendente:', error);
+    }
+  };
 
   const loadRecorrencias = async () => {
     try {
@@ -140,6 +159,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   };
 
   const resumo = calcularResumo();
+  const legendaSaldo = legendaSaldoMotorista(saldoPendente ?? 0);
 
   const pendingRepairs = movimentos.filter(
     (m) =>
@@ -175,6 +195,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
         .eq('id', id);
       if (error) throw error;
       toast.success('Movimento marcado como pago!');
+      loadSaldo();
     } catch (error) {
       setMovimentos(anterior);
       toast.error('Erro ao atualizar movimento');
@@ -192,6 +213,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
         .eq('id', id);
       if (error) throw error;
       toast.success('Movimento cancelado!');
+      loadSaldo();
     } catch (error) {
       setMovimentos(anterior);
       toast.error('Erro ao cancelar movimento');
@@ -294,6 +316,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
             handleCloseOverlay();
             loadMovimentos();
             loadRecorrencias();
+            loadSaldo();
           }}
         />
       )}
@@ -316,7 +339,61 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
         )}
 
         {/* Resumo */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card
+            className={cn(
+              'overflow-hidden border-t-4',
+              legendaSaldo.tone === 'negativo'
+                ? 'border-t-red-500'
+                : legendaSaldo.tone === 'positivo'
+                  ? 'border-t-green-500'
+                  : 'border-t-muted-foreground/30'
+            )}
+          >
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Saldo Pendente</p>
+                  <p
+                    className={cn(
+                      'text-2xl font-bold',
+                      legendaSaldo.tone === 'negativo'
+                        ? 'text-red-600'
+                        : legendaSaldo.tone === 'positivo'
+                          ? 'text-green-600'
+                          : 'text-foreground'
+                    )}
+                  >
+                    {saldoPendente === null ? '—' : formatCurrency(saldoPendente)}
+                  </p>
+                  {saldoPendente !== null && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{legendaSaldo.texto}</p>
+                  )}
+                </div>
+                <div
+                  className={cn(
+                    'p-2 rounded-lg',
+                    legendaSaldo.tone === 'negativo'
+                      ? 'bg-red-500/10'
+                      : legendaSaldo.tone === 'positivo'
+                        ? 'bg-green-500/10'
+                        : 'bg-muted'
+                  )}
+                >
+                  <Wallet
+                    className={cn(
+                      'h-6 w-6',
+                      legendaSaldo.tone === 'negativo'
+                        ? 'text-red-500'
+                        : legendaSaldo.tone === 'positivo'
+                          ? 'text-green-500'
+                          : 'text-muted-foreground'
+                    )}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           <Card className="overflow-hidden border-t-4 border-t-green-500">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
