@@ -13672,6 +13672,17 @@ export type Database = {
         Returns: undefined
       }
       motorista_meus_acordos_ativos: { Args: never; Returns: Json }
+      motorista_saldo_pendente: {
+        Args: { p_ate_data?: string; p_motorista_id: string }
+        Returns: number
+      }
+      motoristas_saldo_pendente_lote: {
+        Args: { p_motorista_ids: string[] }
+        Returns: {
+          motorista_id: string
+          saldo: number
+        }[]
+      }
       nif_pt_valido: { Args: { p_nif: string }; Returns: boolean }
       norm_nome_match: { Args: { t: string }; Returns: string }
       normalize_owner_name: { Args: { input_name: string }; Returns: string }

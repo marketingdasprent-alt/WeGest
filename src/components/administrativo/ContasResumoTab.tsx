@@ -997,6 +997,33 @@ export function ContasResumoTab() {
         _uid: r.motorista_id || r.driver_uuid || `${r.driver_name || 'sem-nome'}__${idx}`,
       }));
       setResumos(comUid);
+
+      // Saldo pendente em lote (uma RPC para todos os motoristas da página,
+      // não N chamadas) — mesmo valor mostrado no separador Financeiro do
+      // motorista e no portal dele. Não bloqueia a tabela principal: chega
+      // depois, por cima.
+      const motoristaIdsComSaldo = comUid
+        .map((r) => r.motorista_id)
+        .filter((id): id is string => !!id);
+      if (motoristaIdsComSaldo.length > 0) {
+        const { data: saldos, error: erroSaldos } = await supabase.rpc(
+          'motoristas_saldo_pendente_lote',
+          { p_motorista_ids: motoristaIdsComSaldo }
+        );
+        if (erroSaldos) {
+          console.error('Erro ao carregar saldos pendentes:', erroSaldos);
+        } else {
+          const saldoPorMotorista = new Map(
+            (saldos ?? []).map((s) => [s.motorista_id, Number(s.saldo) || 0])
+          );
+          setResumos((prev) =>
+            prev.map((r) => ({
+              ...r,
+              saldoPendente: r.motorista_id ? (saldoPorMotorista.get(r.motorista_id) ?? 0) : 0,
+            }))
+          );
+        }
+      }
     } catch (error) {
       console.error('Erro ao carregar resumos:', error);
       toast.error('Erro ao carregar dados de contas');

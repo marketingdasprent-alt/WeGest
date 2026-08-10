@@ -43,6 +43,7 @@ import { MotoristaCombustivelCard } from './MotoristaCombustivelCard';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { legendaSaldoMotorista } from '@/lib/saldoMotorista';
 
 interface MotoristaAtivo {
   id: string;
@@ -165,19 +166,12 @@ export function MotoristaDashboard() {
 
   async function loadStats(motoristaId: string, motoristaData: MotoristaAtivo) {
     try {
-      const { data: movimentos } = await supabase
-        .from('motorista_financeiro')
-        .select('tipo, valor, status')
-        .eq('motorista_id', motoristaId)
-        .eq('status', 'pendente');
-
-      let saldoPendente = 0;
-      if (movimentos) {
-        movimentos.forEach((m) => {
-          if (m.tipo === 'credito') saldoPendente += Number(m.valor);
-          else saldoPendente -= Number(m.valor);
-        });
-      }
+      // RPC única, reutilizada em toda a app (admin, resumo semanal, este
+      // dashboard) — nunca mais recalculado à mão em JS aqui.
+      const { data: saldoData } = await supabase.rpc('motorista_saldo_pendente', {
+        p_motorista_id: motoristaId,
+      });
+      const saldoPendente = Number(saldoData) || 0;
 
       const { data: recibosPendentes } = await supabase
         .from('motorista_recibos')
@@ -351,6 +345,7 @@ export function MotoristaDashboard() {
   // que lhes diz respeito (cartões "Recibos Pendentes"/"Em Falta" + secção de
   // recibos). null/true = usa (comportamento normal).
   const usaRecibos = motorista.recibo_verde !== false;
+  const legendaSaldo = legendaSaldoMotorista(stats.saldoPendente);
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-700 pb-12">
@@ -377,12 +372,22 @@ export function MotoristaDashboard() {
                 <Wallet className="w-4 h-4 text-primary" />
               </div>
             </div>
-            <p className="text-2xl md:text-3xl font-black mb-1 md:mb-2">
+            <p
+              className={cn(
+                'text-2xl md:text-3xl font-black mb-1 md:mb-2',
+                legendaSaldo.tone === 'negativo' && 'text-destructive'
+              )}
+            >
               {formatCurrency(stats.saldoPendente)}
             </p>
-            <div className="flex items-center text-primary text-[10px] font-bold">
+            <div
+              className={cn(
+                'flex items-center text-[10px] font-bold',
+                legendaSaldo.tone === 'negativo' ? 'text-destructive' : 'text-primary'
+              )}
+            >
               <TrendingUp className="w-3 h-3 mr-1" />
-              Disponível para levantamento
+              {legendaSaldo.texto}
             </div>
           </CardContent>
         </Card>
@@ -788,12 +793,10 @@ export function MotoristaDashboard() {
 
       <MotoristaAcordoCard />
 
-      {/*
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <MotoristaCombustivelCard motoristaId={motorista.id} />
         <MotoristaMovimentosCard motoristaId={motorista.id} />
       </div>
-      */}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <MotoristaRelatoriosCard motoristaId={motorista.id} />
