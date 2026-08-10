@@ -107,10 +107,22 @@ function callerClient(req: Request) {
   });
 }
 
-/** Resolve { provider, cfg } da org. Sem org → sem chave (falha cedo e claro). */
+/**
+ * Resolve { provider, cfg } da org. Sem org → sem chave (falha cedo e claro).
+ *
+ * Sem `providerFiltro`: lê a integração de faturação ATIVA (a que emite de
+ * facto) — só pode haver uma por org (ver migração
+ * 20260807150000_faturacao_unica_ativa_por_org.sql).
+ *
+ * Com `providerFiltro`: lê a linha desse provider especificamente, ativa ou
+ * não — usado pelo teste de ligação ("Testar ligação" no diálogo), para
+ * testar a integração que se está a CONFIGURAR (ex.: Primavera ainda não
+ * promovida a ativa) sem depender de qual delas está em produção agora.
+ */
 async function getOrgConfig(
   req: Request,
-  orgIdExplicito?: string
+  orgIdExplicito?: string,
+  providerFiltro?: string
 ): Promise<{ provider: string; cfg: ProviderConfig; orgId: string | null }> {
   const isServiceRole = isServiceRoleRequest(req);
 
@@ -133,16 +145,19 @@ async function getOrgConfig(
     return { provider: DEFAULT_PROVIDER, cfg: { apiKey: null, settings: null }, orgId: null };
 
   const service = createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-  const { data: row } = await service
+  let query = service
     .from('plataformas_configuracao')
     .select('client_secret, config')
     .eq('plataforma', 'faturacao')
-    .eq('ativo', true)
-    .eq('org_id', orgId)
-    .maybeSingle();
+    .eq('org_id', orgId);
+  query = providerFiltro
+    ? query.eq('config->>provider', providerFiltro)
+    : query.eq('ativo', true);
+  const { data: row } = await query.maybeSingle();
 
   const settings = ((row as any)?.config ?? null) as Record<string, unknown> | null;
-  const provider = String((settings?.provider as string) || DEFAULT_PROVIDER).toLowerCase();
+  const provider =
+    providerFiltro || String((settings?.provider as string) || DEFAULT_PROVIDER).toLowerCase();
   return {
     provider,
     cfg: { apiKey: (row as any)?.client_secret ?? null, settings, orgId },
@@ -172,13 +187,18 @@ serve(async (req) => {
     try {
       let provider: string;
       let cfg: ProviderConfig;
-      if (payload.apiKey || payload.provider) {
+      if (payload.apiKey) {
         // teste direto com credenciais fornecidas (antes de gravar na app)
         provider = String(payload.provider || DEFAULT_PROVIDER).toLowerCase();
         cfg = {
           apiKey: payload.apiKey ?? null,
           settings: { provider, ...(payload.settings ?? {}) },
         };
+      } else if (payload.provider) {
+        // testa a linha JÁ GRAVADA desse provider especificamente — pode não
+        // ser a integração ativa (ex.: a testar o Primavera enquanto o
+        // KeyInvoice continua em produção).
+        ({ provider, cfg } = await getOrgConfig(req, payload.org_id, payload.provider));
       } else {
         ({ provider, cfg } = await getOrgConfig(req, payload.org_id));
       }

@@ -120,9 +120,12 @@ export const IntegracoesTab: React.FC = () => {
   const [selectedUberIntegracaoId, setSelectedUberIntegracaoId] = useState<string>('');
   const [executingRobots, setExecutingRobots] = useState<Set<string>>(new Set());
 
-  // Faturação fiscal (config por-org)
+  // Faturação fiscal (config por-org) — KeyInvoice e Primavera são
+  // integrações SEPARADAS (uma linha cada em plataformas_configuracao,
+  // distinguidas por config.provider), nunca uma partilhada por dropdown.
   const [faturacaoDialogOpen, setFaturacaoDialogOpen] = useState(false);
   const [faturacaoRow, setFaturacaoRow] = useState<FaturacaoConfigRow | null>(null);
+  const [faturacaoProvider, setFaturacaoProvider] = useState<string>('keyinvoice');
   const [editEmailDialogOpen, setEditEmailDialogOpen] = useState(false);
   const [editEmailRow, setEditEmailRow] = useState<EmailIntegracaoRow | null>(null);
 
@@ -367,24 +370,29 @@ export const IntegracoesTab: React.FC = () => {
         });
       });
 
-    // Faturação fiscal (KeyInvoice, etc.) — igual às restantes plataformas:
-    // só aparece na grelha depois de configurada, via "Adicionar Plataforma".
-    const fatRow = (integracoes as any[]).find((i) => i.plataforma === 'faturacao') || null;
-    if (fatRow) {
-      result.push({
-        id: fatRow.id,
-        type: 'faturacao',
-        nome: 'Faturação',
-        ativo: !!fatRow.ativo,
-        ultimoSync: null,
-        username: null,
-        password: null,
-        connectionMode: 'api',
-        subLabel: faturacaoProviderLabel(fatRow.config?.provider),
-        rawData: fatRow,
-        logoUrl: null,
+    // Faturação fiscal — KeyInvoice e Primavera (e futuros providers) são
+    // integrações independentes: uma linha e um cartão por provider, nunca
+    // uma linha só partilhada. Só a que estiver `ativo=true` é a que emite
+    // de facto (garantido por índice único na BD — ver migração
+    // 20260807150000_faturacao_unica_ativa_por_org.sql); as outras ficam
+    // configuradas/testáveis mas inativas.
+    (integracoes as any[])
+      .filter((i) => i.plataforma === 'faturacao')
+      .forEach((fatRow) => {
+        result.push({
+          id: fatRow.id,
+          type: 'faturacao',
+          nome: faturacaoProviderLabel(fatRow.config?.provider),
+          ativo: !!fatRow.ativo,
+          ultimoSync: null,
+          username: null,
+          password: null,
+          connectionMode: 'api',
+          subLabel: fatRow.ativo ? 'A emitir documentos' : 'Configurado, inativo',
+          rawData: fatRow,
+          logoUrl: null,
+        });
       });
-    }
 
     setCards(result);
   };
@@ -392,7 +400,9 @@ export const IntegracoesTab: React.FC = () => {
   // Card handlers
   const handleCardEdit = (card: IntegracaoCardData) => {
     if (card.type === 'faturacao') {
-      setFaturacaoRow((card.rawData as FaturacaoConfigRow | null) ?? null);
+      const row = (card.rawData as FaturacaoConfigRow | null) ?? null;
+      setFaturacaoRow(row);
+      setFaturacaoProvider((row?.config as any)?.provider || 'keyinvoice');
       setFaturacaoDialogOpen(true);
     } else if (card.type === 'via_verde') {
       // Distinguir: rawData é ViaVerdeConta (legado FTP) OU IntegracaoConfig (novo wizard via_verde).
@@ -978,8 +988,16 @@ export const IntegracoesTab: React.FC = () => {
         open={newIntegracaoDialogOpen}
         onOpenChange={setNewIntegracaoDialogOpen}
         onSuccess={fetchAll}
-        onOpenFaturacao={() => {
-          setFaturacaoRow(null);
+        onOpenFaturacao={(provider) => {
+          // A linha desse provider pode já existir (voltar a abrir "Primavera"
+          // quando já foi configurada antes) — reencontra-se por config.provider,
+          // nunca a primeira linha de faturação que aparecer.
+          const existing =
+            (rawIntegracoes as any[]).find(
+              (i) => i.plataforma === 'faturacao' && i.config?.provider === provider
+            ) ?? null;
+          setFaturacaoRow(existing as FaturacaoConfigRow | null);
+          setFaturacaoProvider(provider);
           setFaturacaoDialogOpen(true);
         }}
       />
@@ -1006,6 +1024,7 @@ export const IntegracoesTab: React.FC = () => {
       <FaturacaoIntegracaoDialog
         open={faturacaoDialogOpen}
         onOpenChange={setFaturacaoDialogOpen}
+        provider={faturacaoProvider}
         row={faturacaoRow}
         onSuccess={fetchAll}
       />
