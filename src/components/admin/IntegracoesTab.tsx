@@ -1026,6 +1026,13 @@ export const IntegracoesTab: React.FC = () => {
         onOpenChange={setFaturacaoDialogOpen}
         provider={faturacaoProvider}
         row={faturacaoRow}
+        // Existe outra integração de faturação já activa (a emitir a sério)
+        // além desta? Determina o valor por omissão do interruptor "activar" —
+        // nunca activar sozinho por omissão quando isso ia desligar outra que
+        // já está em produção.
+        existeOutraIntegracaoAtiva={(rawIntegracoes as any[]).some(
+          (i) => i.plataforma === 'faturacao' && i.ativo && i.id !== faturacaoRow?.id
+        )}
         onSuccess={fetchAll}
       />
 

@@ -43,11 +43,11 @@ Deno.serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // SEM filtro por `ativo` — ver o mesmo comentário em primavera-agent-poll.
     const { data: configs, error: erroConfig } = await supabase
       .from('plataformas_configuracao')
       .select('org_id')
       .eq('plataforma', 'faturacao')
-      .eq('ativo', true)
       .eq('client_secret', chave)
       .filter('config->>provider', 'eq', 'primavera');
 
