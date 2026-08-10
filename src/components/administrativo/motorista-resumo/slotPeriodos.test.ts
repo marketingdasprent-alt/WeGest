@@ -48,13 +48,21 @@ describe('buildSlotPeriodos', () => {
     ];
 
     // Semana 27/07–02/08: só o dia 02/08 está nas duas linhas → 7 dias, não 8.
-    const resumoSemana1 = buildSlotPeriodos(linhas, ...semana('2026-07-27', '2026-08-02'), new Map());
+    const resumoSemana1 = buildSlotPeriodos(
+      linhas,
+      ...semana('2026-07-27', '2026-08-02'),
+      new Map()
+    );
     expect(resumoSemana1).toHaveLength(1);
     expect(resumoSemana1[0].dias).toBe(7);
     expect(resumoSemana1[0].custo).toBeCloseTo(230, 2);
 
     // Semana 03/08–09/08: a semana INTEIRA está coberta pelas duas → 7 dias, não 14.
-    const resumoSemana2 = buildSlotPeriodos(linhas, ...semana('2026-08-03', '2026-08-09'), new Map());
+    const resumoSemana2 = buildSlotPeriodos(
+      linhas,
+      ...semana('2026-08-03', '2026-08-09'),
+      new Map()
+    );
     expect(resumoSemana2).toHaveLength(1);
     expect(resumoSemana2[0].dias).toBe(7);
     expect(resumoSemana2[0].custo).toBeCloseTo(230, 2);
@@ -74,7 +82,11 @@ describe('buildSlotPeriodos', () => {
 
   it('ignora atribuições sem tarifa configurada (0€)', () => {
     const semTarifa = tarifado('v1', 'AA-00-AA', '2026-07-27', null, 0);
-    const periodos = buildSlotPeriodos([semTarifa], ...semana('2026-07-27', '2026-08-02'), new Map());
+    const periodos = buildSlotPeriodos(
+      [semTarifa],
+      ...semana('2026-07-27', '2026-08-02'),
+      new Map()
+    );
     expect(periodos).toHaveLength(0);
   });
 
@@ -96,7 +108,11 @@ describe('buildSlotPeriodos', () => {
       viaturas: { matricula: 'AA-00-AA', modelo_id: 'modelo-1', renting_grupos: null },
     };
     const tvdeModeloPrecoMap = new Map([['modelo-1', 350]]);
-    const periodos = buildSlotPeriodos([linha], ...semana('2026-07-27', '2026-08-02'), tvdeModeloPrecoMap);
+    const periodos = buildSlotPeriodos(
+      [linha],
+      ...semana('2026-07-27', '2026-08-02'),
+      tvdeModeloPrecoMap
+    );
     expect(periodos).toHaveLength(1);
     expect(periodos[0].custo).toBeCloseTo(350, 2);
   });

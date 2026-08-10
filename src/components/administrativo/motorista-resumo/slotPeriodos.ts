@@ -33,7 +33,10 @@ export function buildSlotPeriodos(
   tvdeModeloPrecoMap: Map<string, number>
 ): SlotPeriodo[] {
   const totalWeekDays = differenceInDays(weekEnd, weekStart) + 1;
-  const porViatura = new Map<string, { matricula: string; taxaDiaria: number; dias: Set<string> }>();
+  const porViatura = new Map<
+    string,
+    { matricula: string; taxaDiaria: number; dias: Set<string> }
+  >();
 
   viaturasPeriodoData.forEach((mv) => {
     const tarifas = mv.viaturas?.renting_grupos?.renting_tarifas || [];

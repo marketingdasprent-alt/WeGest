@@ -295,7 +295,10 @@ export function ContasResumoTabela({
                       )}
                     </TableCell>
                     <TableCell className="text-right" onClick={() => onRowClick(resumo)}>
-                      <SaldoPendenteCell saldo={resumo.saldoPendente} formatCurrency={formatCurrency} />
+                      <SaldoPendenteCell
+                        saldo={resumo.saldoPendente}
+                        formatCurrency={formatCurrency}
+                      />
                     </TableCell>
                   </TableRow>
                 );
@@ -431,7 +434,10 @@ export function ContasResumoTabela({
                     onClick={() => onRowClick(resumo)}
                   >
                     <span className="text-muted-foreground">Saldo Pendente</span>
-                    <SaldoPendenteCell saldo={resumo.saldoPendente} formatCurrency={formatCurrency} />
+                    <SaldoPendenteCell
+                      saldo={resumo.saldoPendente}
+                      formatCurrency={formatCurrency}
+                    />
                   </div>
                 </CardContent>
               </Card>

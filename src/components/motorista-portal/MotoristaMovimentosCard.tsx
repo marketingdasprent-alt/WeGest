@@ -117,7 +117,9 @@ export function MotoristaMovimentosCard({ motoristaId }: MotoristaMovimentosCard
             variant="ghost"
             size="sm"
             className="bg-muted text-muted-foreground hover:text-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider h-8 border border-border"
-            onClick={() => setLimite((l) => (l === LIMITE_INICIAL ? LIMITE_EXPANDIDO : LIMITE_INICIAL))}
+            onClick={() =>
+              setLimite((l) => (l === LIMITE_INICIAL ? LIMITE_EXPANDIDO : LIMITE_INICIAL))
+            }
           >
             {limite === LIMITE_INICIAL ? 'Ver Todos' : 'Ver Menos'}
           </Button>
