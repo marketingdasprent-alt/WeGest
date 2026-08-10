@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import {
   Loader2,
   Eye,
@@ -58,6 +59,10 @@ interface Props {
   provider: string;
   /** Config existente desse provider (ou null se ainda não foi configurada). */
   row: FaturacaoConfigRow | null;
+  /** Já existe outra integração de faturação ativa (a emitir a sério) nesta
+   *  org, diferente desta? Dita o valor por omissão do interruptor "Ativar" —
+   *  nunca activar sozinho por omissão se isso ia desligar outra em produção. */
+  existeOutraIntegracaoAtiva: boolean;
   onSuccess: () => void;
 }
 
@@ -65,14 +70,23 @@ interface Props {
  * Configura UMA integração de faturação fiscal (um provider fixo, ex.:
  * KeyInvoice OU Primavera) da organização. Cada provider tem a sua própria
  * linha/chave/estado — nunca partilhada. Só uma pode estar ativa (a emitir
- * de facto) por org; "Guardar" promove esta a ativa e desativa as outras
- * (índice único na BD garante que nunca há duas em simultâneo).
+ * de facto) por org — "Guardar" grava sempre; só ativa (e desactiva as
+ * outras) se o interruptor "Ativar" estiver ligado, para dar para testar uma
+ * integração nova sem cortar a que já está em produção.
  */
-export function FaturacaoIntegracaoDialog({ open, onOpenChange, provider, row, onSuccess }: Props) {
+export function FaturacaoIntegracaoDialog({
+  open,
+  onOpenChange,
+  provider,
+  row,
+  existeOutraIntegracaoAtiva,
+  onSuccess,
+}: Props) {
   const qc = useQueryClient();
   const { orgId } = useTenant();
 
   const [apiKey, setApiKey] = useState('');
+  const [ativo, setAtivo] = useState(true);
   const [endpoint, setEndpoint] = useState('');
   const [defaultProduct, setDefaultProduct] = useState('');
   const [defaultIdTax, setDefaultIdTax] = useState('');
@@ -95,6 +109,11 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, provider, row, o
     if (!open) return;
     const c = row?.config ?? {};
     setApiKey(row?.client_secret || '');
+    // A integrar de novo (row null): activa por omissão só se não houver
+    // nenhuma outra já em produção — não desligar uma que já funciona só
+    // por se ter aberto este diálogo. A editar uma já existente: mantém o
+    // que já lá estava (editar credenciais não deve mudar isto sozinho).
+    setAtivo(row ? !!row.ativo : !existeOutraIntegracaoAtiva);
     setEndpoint(c.endpoint || '');
     setDefaultProduct(c.default_product || '');
     setDefaultIdTax(c.default_idtax || '');
@@ -107,7 +126,7 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, provider, row, o
     setShowKey(false);
     setShowAdvanced(false);
     setChaveAcabouDeSerGerada(false);
-  }, [open, row]);
+  }, [open, row, existeOutraIntegracaoAtiva]);
 
   function buildSettings(): FaturacaoConfig {
     const doctypes: FaturacaoConfig['doctypes'] = {};
@@ -194,16 +213,19 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, provider, row, o
       const settings = buildSettings();
       const nome = providerMeta?.label || provider;
 
-      // Guardar promove ESTA integração a ativa (é a que passa a emitir de
-      // facto) — só pode haver uma por org (índice único na BD). Desativar
-      // as outras primeiro, senão o insert/update seguinte falha a violar
-      // esse índice.
-      const { error: deactivateErr } = await supabase
-        .from('plataformas_configuracao')
-        .update({ ativo: false })
-        .eq('plataforma', 'faturacao')
-        .neq('id', row?.id ?? '00000000-0000-0000-0000-000000000000');
-      if (deactivateErr) throw deactivateErr;
+      // "Ativar" (ligado) promove ESTA integração a activa (é a que passa a
+      // emitir de facto) — só pode haver uma por org (índice único na BD).
+      // Desativar as outras primeiro, senão o insert/update seguinte falha a
+      // violar esse índice. Com "Ativar" desligado, isto só GRAVA as
+      // credenciais (para testar) sem mexer em qual está em produção.
+      if (ativo) {
+        const { error: deactivateErr } = await supabase
+          .from('plataformas_configuracao')
+          .update({ ativo: false })
+          .eq('plataforma', 'faturacao')
+          .neq('id', row?.id ?? '00000000-0000-0000-0000-000000000000');
+        if (deactivateErr) throw deactivateErr;
+      }
 
       if (row?.id) {
         const { error } = await supabase
@@ -211,7 +233,7 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, provider, row, o
           .update({
             client_secret: apiKey.trim(),
             config: settings as unknown as Json,
-            ativo: true,
+            ativo,
             nome,
           })
           .eq('id', row.id);
@@ -220,7 +242,7 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, provider, row, o
         const { error } = await supabase.from('plataformas_configuracao').insert({
           plataforma: 'faturacao',
           nome,
-          ativo: true,
+          ativo,
           client_secret: apiKey.trim(),
           config: settings as unknown as Json,
         });
@@ -228,13 +250,22 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, provider, row, o
       }
 
       // Slug público (legível por toda a org) — dita o nome mostrado na app.
-      let defQuery = supabase.from('org_definicoes').update({ faturacao_provider: provider });
-      defQuery = orgId ? defQuery.eq('org_id', orgId) : defQuery.not('org_id', 'is', null);
-      const { error: defErr } = await defQuery;
-      if (defErr) throw defErr;
+      // Só faz sentido apontar para este provider se ele for mesmo o activo;
+      // gravar uma integração inactiva (só para testar) nunca deve mudar o
+      // que a app mostra como "o software em uso".
+      if (ativo) {
+        let defQuery = supabase.from('org_definicoes').update({ faturacao_provider: provider });
+        defQuery = orgId ? defQuery.eq('org_id', orgId) : defQuery.not('org_id', 'is', null);
+        const { error: defErr } = await defQuery;
+        if (defErr) throw defErr;
+      }
 
       qc.invalidateQueries({ queryKey: ['org-definicoes'] });
-      toast.success(`${nome} configurado e ativado — passa a ser o software a emitir documentos.`);
+      toast.success(
+        ativo
+          ? `${nome} configurado e ativado — passa a ser o software a emitir documentos.`
+          : `${nome} guardado (inativo) — pode testar-se sem afetar o que está em produção.`
+      );
       onSuccess();
       onOpenChange(false);
     } catch (e) {
@@ -250,9 +281,9 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, provider, row, o
         <DialogHeader>
           <DialogTitle>{providerMeta?.label || provider}</DialogTitle>
           <DialogDescription>
-            Integração própria e independente das restantes — guardar promove{' '}
-            {providerMeta?.label || provider} a software ativo (é o que passa a emitir faturas,
-            recibos e notas de crédito); as outras ficam configuradas mas inativas.
+            Integração própria e independente das restantes. Guardar grava sempre a chave — só
+            promove {providerMeta?.label || provider} a software activo (o que emite de facto) se
+            "Usar para emitir documentos", em baixo, estiver ligado.
           </DialogDescription>
         </DialogHeader>
 
@@ -480,6 +511,22 @@ export function FaturacaoIntegracaoDialog({ open, onOpenChange, provider, row, o
               )}
             </>
           )}
+
+          <Separator />
+
+          <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="fat-ativo">Usar para emitir documentos</Label>
+              <p className="text-xs text-muted-foreground">
+                {ativo && existeOutraIntegracaoAtiva
+                  ? 'Desliga a outra integração de faturação em produção — só uma pode estar activa.'
+                  : ativo
+                    ? 'Ao guardar, passa a ser esta a emitir faturas, recibos e notas de crédito.'
+                    : 'Fica guardada e testável, mas continua a ser a outra integração a emitir de facto.'}
+              </p>
+            </div>
+            <Switch id="fat-ativo" checked={ativo} onCheckedChange={setAtivo} />
+          </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">

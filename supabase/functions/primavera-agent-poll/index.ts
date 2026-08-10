@@ -44,11 +44,17 @@ Deno.serve(async (req) => {
     // aleatória, 32 bytes), mas tratar isso como "não encontrada" em vez de
     // deixar rebentar é mais seguro do que assumir unicidade sem a garantir
     // por constraint — o mesmo bug já mordeu a integração Bolt.
+    //
+    // SEM filtro por `ativo`: o agente tem de conseguir autenticar-se e
+    // reclamar jobs de TESTE mesmo antes de esta integração ser promovida a
+    // activa (ver FaturacaoIntegracaoDialog — "Guardar" grava sem activar por
+    // omissão quando já há outra em produção). A chave (32 bytes aleatórios)
+    // já é a autenticação real; `ativo` é só regra de negócio de qual emite a
+    // sério, não uma camada de segurança adicional.
     const { data: configs, error: erroConfig } = await supabase
       .from('plataformas_configuracao')
       .select('org_id')
       .eq('plataforma', 'faturacao')
-      .eq('ativo', true)
       .eq('client_secret', chave)
       .filter('config->>provider', 'eq', 'primavera');
 
