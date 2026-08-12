@@ -84,8 +84,17 @@ type EstadoSync = 'success' | 'warning' | 'vazio' | 'error';
 
 const TIPO_LOG = 'api_sync';
 
-/** Página do getFleetOrders. O tecto da Bolt é 1000; 500 é o meio-termo seguro. */
-const LIMITE_PAGINA = 500;
+/** Página do getFleetOrders — o tecto que a Bolt documenta.
+ *
+ * Era 500 ("meio-termo seguro"), mas o custo dominante é o número de idas à
+ * API, não o tamanho de cada uma: a Distancia Lisboa faz 29 mil viagens por
+ * semana, o que a 500 dá 59 chamadas sequenciais e estoura os 150 s da edge
+ * function (8 semanas falharam assim a 2026-08-12). A 1000 são 30.
+ *
+ * Isto ALIVIA, não resolve: uma frota com o dobro volta a não caber. A solução
+ * durável é a função retomar de onde ficou entre invocações — ver o cursor em
+ * bolt_sync_queue. */
+const LIMITE_PAGINA = 1000;
 
 /** Linhas por upsert em bolt_viagens. */
 const LOTE_VIAGENS = 500;
