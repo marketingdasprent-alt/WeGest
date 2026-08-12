@@ -510,53 +510,59 @@ Deno.serve(async (req) => {
 
     const matcher = criarMatcherMotoristas((motoristas || []) as MotoristaConhecido[]);
 
+    // Mapa uuid → motorista. É a FONTE DE VERDADE da ligação.
+    //
+    // A Bolt emite um uuid novo quando o motorista sai da frota e volta, e
+    // outro por cada conta da frota — um motorista tem legitimamente vários.
+    // `motoristas_ativos.bolt_id` só guarda um, e era por isso que o sync
+    // caía no match por nome para o resto. Nomes curtos como "Paulo Silva"
+    // casaram com a pessoa errada e mandaram ~14.400 € para contas alheias
+    // (auditoria 2026-08-12).
+    const { data: mapeamentos, error: erroMapa } = await supabase
+      .from('bolt_mapeamento_motoristas')
+      .select('driver_uuid, motorista_id')
+      .eq('org_id', orgId);
+    if (erroMapa) {
+      console.warn(`[bolt-sync-semana] falha a ler o mapeamento: ${erroMapa.message}`);
+    }
+    const porUuid = new Map<string, string>(
+      ((mapeamentos || []) as Array<{ driver_uuid: string; motorista_id: string | null }>)
+        .filter((m) => m.driver_uuid && m.motorista_id)
+        .map((m) => [m.driver_uuid, m.motorista_id as string]),
+    );
+
     const motoristaPorChave = new Map<string, string | null>();
-    const carimbados = new Set<string>();
     let ligadosPorBoltId = 0;
+    // Quantos teriam sido apanhados pelo match por nome. Já NÃO se aplica —
+    // fica só como medida de quanto trabalho manual o mapa ainda poupa.
     let ligadosPorNome = 0;
-    let boltIdsGravados = 0;
-    // Ligados por nome cujo carimbo NÃO pegou (a ficha já tinha outro bolt_id).
-    // Estes repetem-se todas as semanas até alguém corrigir a ficha à mão, por
-    // isso vão para o aviso em vez de desaparecerem em silêncio.
-    const carimbosNaoAplicados: string[] = [];
+
+    // Sugestões por nome — NÃO são aplicadas, só reportadas. Ver abaixo.
+    const porLigar: string[] = [];
 
     for (const linha of agregado.linhas) {
-      // bolt_id === driver_uuid é a ligação sem ambiguidade; a cascata por
-      // nome/telefone só entra quando ainda ninguém a estabeleceu.
-      let motoristaId = matcher.porBoltId(linha.driver_uuid);
+      // 1. O mapa uuid → motorista. Única forma de ligar automaticamente.
+      let motoristaId = linha.driver_uuid ? (porUuid.get(linha.driver_uuid) ?? null) : null;
+      // 2. Compatibilidade: o uuid ainda pode estar só na ficha (mapa por semear).
+      if (!motoristaId) motoristaId = matcher.porBoltId(linha.driver_uuid);
+
       if (motoristaId) {
         ligadosPorBoltId++;
       } else {
-        motoristaId = matcher.encontrar(linha.driver_name, linha.driver_phone, null);
-        if (motoristaId) {
-          ligadosPorNome++;
-          // Descoberto por nome: fica gravado para a próxima ser directa.
-          // `.is('bolt_id', null)` impede que um segundo motorista da Bolt com
-          // nome parecido roube o bolt_id de quem já o tem.
-          if (linha.driver_uuid && !carimbados.has(motoristaId)) {
-            carimbados.add(motoristaId);
-            // `select('id')` é o que permite distinguir "gravou" de "não deu
-            // match". Sem ele o update devolve 0 linhas SEM erro quando a ficha
-            // já tem outro bolt_id, e o contador dava o carimbo como feito —
-            // era por isso que o mesmo motorista aparecia como "ligado por
-            // nome" semana após semana e o log dizia que tinha aprendido
-            // (auditoria 2026-08-12).
-            const { data: carimbo, error } = await supabase
-              .from('motoristas_ativos')
-              .update({ bolt_id: linha.driver_uuid })
-              .eq('id', motoristaId)
-              .eq('org_id', orgId)
-              .is('bolt_id', null)
-              .select('id');
-            if (error) {
-              console.warn(`[bolt-sync-semana] falha a gravar bolt_id: ${error.message}`);
-            } else if ((carimbo?.length ?? 0) > 0) {
-              boltIdsGravados++;
-            } else {
-              carimbosNaoAplicados.push(linha.driver_name || linha.driver_uuid);
-            }
-          }
-        }
+        // 3. Sem uuid conhecido, o motorista fica POR LIGAR — de propósito.
+        //
+        // Aqui, antes, entrava o match por nome e carimbava a ficha. Era a
+        // origem do problema: "Paulo Silva" casa com dois motoristas, e quem
+        // ganhava era o primeiro da lista. Melhor uma linha por atribuir, que
+        // se vê e se corrige, do que dinheiro na conta-corrente errada.
+        //
+        // O palpite por nome continua a ser calculado, mas só para dizer a
+        // quem é que ISTO SE PARECE no aviso. Não escreve nada.
+        const palpite = matcher.encontrar(linha.driver_name, linha.driver_phone, null);
+        if (palpite) ligadosPorNome++;
+        porLigar.push(
+          `${linha.driver_name || '(sem nome)'}${palpite ? ' (parece um motorista já existente)' : ''}`,
+        );
       }
       motoristaPorChave.set(linha.chave, motoristaId);
     }
@@ -856,7 +862,7 @@ Deno.serve(async (req) => {
           'as parcelas ficaram só em dados_raw',
       );
     }
-    if (agregado.linhas.length > 0 && ligadosPorBoltId + ligadosPorNome === 0) {
+    if (agregado.linhas.length > 0 && ligadosPorBoltId === 0) {
       avisos.push('nenhum motorista da Bolt foi ligado a um motorista da WeGest');
     }
     if (motoristasRepetidos > 0) {
@@ -866,11 +872,12 @@ Deno.serve(async (req) => {
           'da mesma semana. Confirma o Bolt ID na ficha destes motoristas',
       );
     }
-    if (carimbosNaoAplicados.length > 0) {
+    if (porLigar.length > 0) {
       avisos.push(
-        `${carimbosNaoAplicados.length} motorista(s) ligados por nome mas sem gravar o Bolt ID ` +
-          `(${carimbosNaoAplicados.join(', ')}) — a ficha já tem OUTRO Bolt ID. ` +
-          'Enquanto não for corrigida à mão, repete-se todas as semanas',
+        `${porLigar.length} identidade(s) Bolt por ligar a um motorista ` +
+          `(${porLigar.slice(0, 8).join(', ')}${porLigar.length > 8 ? ', …' : ''}) — ` +
+          'os ganhos ficaram gravados mas sem dono. Liga-os em Motoristas → ' +
+          'Não Associados; a ligação vale para sempre, mesmo que a Bolt mude o ID',
       );
     }
     if (avisos.length > 0) {
@@ -889,13 +896,14 @@ Deno.serve(async (req) => {
       viagens_sem_referencia: viagensSemReferencia,
       viagens_ignoradas: agregado.ordens_ignoradas,
       viagens_sem_preco: agregado.ordens_sem_preco,
-      ligados_por_bolt_id: ligadosPorBoltId,
-      ligados_por_nome: ligadosPorNome,
-      bolt_ids_gravados: boltIdsGravados,
+      ligados_por_uuid: ligadosPorBoltId,
+      // Quantos o antigo match por nome teria apanhado. Já não liga nada —
+      // serve para medir quanto falta mapear.
+      palpites_por_nome: ligadosPorNome,
       motoristas_repetidos: motoristasRepetidos,
       motoristas_repetidos_nomes: nomesRepetidos,
-      carimbos_nao_aplicados: carimbosNaoAplicados,
-      sem_motorista_wegest: agregado.linhas.length - ligadosPorBoltId - ligadosPorNome,
+      por_ligar: porLigar,
+      sem_motorista_wegest: agregado.linhas.length - ligadosPorBoltId,
       erros: resumosComErro,
       divisor_distancia: DIVISOR_DISTANCIA_POR_DEFEITO,
       totais: agregado.totais,

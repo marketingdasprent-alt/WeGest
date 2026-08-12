@@ -216,3 +216,31 @@ Deno.test('matcher: bolt_id continua a ser a ligacao directa', () => {
   assertEquals(matcher.porBoltId('uuid-1'), 'x');
   assertEquals(matcher.porBoltId('uuid-2'), null);
 });
+
+// Telefone partilhado por varias fichas nao identifica ninguem.
+// Na Decada Ousada ha 16 telefones repetidos e um em SETE fichas.
+Deno.test('matcher: telefone repetido em duas fichas nao liga a nenhuma', () => {
+  const matcher = criarMatcherMotoristas([
+    { id: 'a', nome: 'Agnelo Tavares', telefone: '910225915' },
+    { id: 'b', nome: 'Cesar Martins', telefone: '910225915' },
+  ]);
+  assertEquals(matcher.encontrar('Qualquer Um', '910225915', null), null);
+});
+
+Deno.test('matcher: email repetido em duas fichas nao liga a nenhuma', () => {
+  const matcher = criarMatcherMotoristas([
+    { id: 'a', nome: 'Um', email: 'partilhado@x.pt' },
+    { id: 'b', nome: 'Outro', email: 'partilhado@x.pt' },
+  ]);
+  assertEquals(matcher.encontrar(null, null, 'partilhado@x.pt'), null);
+});
+
+Deno.test('matcher: nome exacto repetido em duas fichas nao liga a nenhuma', () => {
+  const matcher = criarMatcherMotoristas([
+    { id: 'a', nome: 'João Silva', telefone: '911111111' },
+    { id: 'b', nome: 'João Silva', telefone: '922222222' },
+  ]);
+  assertEquals(matcher.encontrar('João Silva', null, null), null);
+  // Mas com o telefone certo continua a resolver.
+  assertEquals(matcher.encontrar('João Silva', '922222222', null), 'b');
+});

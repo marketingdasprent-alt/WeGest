@@ -218,22 +218,52 @@ export function criarMatcherMotoristas(
   motoristas: readonly MotoristaConhecido[],
 ): MatcherMotoristas {
   const todos = motoristas ?? [];
-  const porNome: Record<string, string> = {};
-  const porTelefone: Record<string, string> = {};
-  const porBolt: Record<string, string> = {};
+
+  // Índices com detecção de colisão. Uma chave que aponta para mais do que um
+  // motorista NÃO identifica ninguém e é descartada.
+  //
+  // Isto não é hipotético: na Década Ousada há 16 telefones repetidos em duas
+  // fichas e um (`910225915`) em SETE — provavelmente um número de escritório
+  // copiado para várias fichas. Com `mapa[chave] = id`, ganhava o último a ser
+  // escrito, em ordem arbitrária, e mandava o dinheiro para uma ficha à sorte.
+  // Descartar é o comportamento certo: o motorista fica por ligar e aparece no
+  // aviso do sync, em vez de ser ligado a alguém ao calhas.
+  const indexar = (pares: Array<[string, string]>): Record<string, string> => {
+    const mapa: Record<string, string> = {};
+    const ambiguas = new Set<string>();
+    for (const [chave, id] of pares) {
+      if (ambiguas.has(chave)) continue;
+      const jaLa = mapa[chave];
+      if (jaLa && jaLa !== id) {
+        delete mapa[chave];
+        ambiguas.add(chave);
+        continue;
+      }
+      mapa[chave] = id;
+    }
+    return mapa;
+  };
+
+  const paresNome: Array<[string, string]> = [];
+  const paresTelefone: Array<[string, string]> = [];
+  const paresBolt: Array<[string, string]> = [];
 
   for (const m of todos) {
     if (!m?.id) continue;
 
     const nome = normalizeStr(m.nome ?? '');
-    if (nome) porNome[nome] = m.id;
+    if (nome) paresNome.push([nome, m.id]);
 
     const digitos = digitosTelefone(m.telefone);
-    if (digitos) porTelefone[digitos] = m.id;
+    if (digitos) paresTelefone.push([digitos, m.id]);
 
     const bolt = (m.bolt_id ?? '').trim();
-    if (bolt) porBolt[bolt] = m.id;
+    if (bolt) paresBolt.push([bolt, m.id]);
   }
+
+  const porNome = indexar(paresNome);
+  const porTelefone = indexar(paresTelefone);
+  const porBolt = indexar(paresBolt);
 
   return {
     porBoltId(boltId?: string | null): string | null {
@@ -260,11 +290,12 @@ export function criarMatcherMotoristas(
       const digitos = digitosTelefone(telefone);
       if (digitos && porTelefone[digitos]) return porTelefone[digitos];
 
-      // 2. Email.
+      // 2. Email — também só quando é de um só motorista.
       if (email) {
         const alvo = email.toLowerCase().trim();
-        const achado = todos.find((m) => (m.email ?? '').toLowerCase().trim() === alvo);
-        if (achado) return achado.id;
+        const achados = todos.filter((m) => (m.email ?? '').toLowerCase().trim() === alvo);
+        if (achados.length === 1) return achados[0].id;
+        if (achados.length > 1) return null;
       }
 
       const normNome = nome ? normalizeStr(nome) : '';
