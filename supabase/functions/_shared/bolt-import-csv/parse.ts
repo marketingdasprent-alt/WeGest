@@ -241,45 +241,58 @@ export function criarMatcherMotoristas(
       return chave ? porBolt[chave] ?? null : null;
     },
 
+    // ORDEM: telefone → email → nome exacto → nome parcial (sem ambiguidade).
+    //
+    // O telefone vem PRIMEIRO de propósito. A Bolt verifica documentos, por
+    // isso o número identifica a pessoa; o nome que a API devolve é curto
+    // ("Paulo Silva", "Fernando Pereira") e casa com mais do que um motorista.
+    //
+    // Antes o nome vinha primeiro e o match parcial escolhia `todos.find` — o
+    // PRIMEIRO da lista, por ordem arbitrária. Isso juntou pessoas diferentes
+    // na mesma ficha (auditoria 2026-08-12): os ganhos do Paulo Sérgio da
+    // Silva #480 foram parar ao Paulo Alexandre Mena Antunes #25, e os do
+    // Fernando da Silva Pereira #418 ao Fernando Pereira #313 — em ambos os
+    // casos o telefone da Bolt apontava, correctamente, para o outro.
     encontrar(nome?: string | null, telefone?: string | null, email?: string | null): string | null {
       if (!nome && !telefone && !email) return null;
 
-      const normNome = nome ? normalizeStr(nome) : '';
-
-      // 1. Nome exacto (normalizado).
-      if (normNome && porNome[normNome]) return porNome[normNome];
-
-      // 2. Telefone.
+      // 1. Telefone — identificador forte.
       const digitos = digitosTelefone(telefone);
       if (digitos && porTelefone[digitos]) return porTelefone[digitos];
 
-      // 3. Email.
+      // 2. Email.
       if (email) {
         const alvo = email.toLowerCase().trim();
         const achado = todos.find((m) => (m.email ?? '').toLowerCase().trim() === alvo);
         if (achado) return achado.id;
       }
 
-      // 4. Nome parcial. Primeiro: todas as palavras do nome da Bolt existem no
-      //    nome da WeGest ("Joao Silva" → "João Manuel Silva").
+      const normNome = nome ? normalizeStr(nome) : '';
+
+      // 3. Nome exacto (normalizado).
+      if (normNome && porNome[normNome]) return porNome[normNome];
+
+      // 4/5. Nome parcial, nos dois sentidos. `filter` em vez de `find`: com
+      // mais do que um candidato o nome NAO chega para decidir, e adivinhar
+      // manda dinheiro para a ficha errada. Devolve null e o motorista fica
+      // por ligar — visível no aviso do sync, que é o comportamento correcto.
       if (normNome) {
         const partes = normNome.split(' ').filter((p) => p.length > 2);
         if (partes.length >= 2) {
-          const achado = todos.find((m) => {
+          const achados = todos.filter((m) => {
             const alvo = normalizeStr(m.nome ?? '');
             return alvo ? partes.every((p) => alvo.includes(p)) : false;
           });
-          if (achado) return achado.id;
+          if (achados.length === 1) return achados[0].id;
+          if (achados.length > 1) return null;
         }
 
-        // 5. E ao contrário: todas as palavras do nome da WeGest existem no da
-        //    Bolt (o portal costuma trazer o nome completo).
-        const inverso = todos.find((m) => {
+        const inversos = todos.filter((m) => {
           const partesAlvo = normalizeStr(m.nome ?? '').split(' ').filter((p) => p.length > 2);
           if (partesAlvo.length < 2) return false;
           return partesAlvo.every((p) => normNome.includes(p));
         });
-        if (inverso) return inverso.id;
+        if (inversos.length === 1) return inversos[0].id;
       }
 
       return null;
