@@ -542,11 +542,15 @@ Deno.serve(async (req) => {
 
     const motoristaPorChave = new Map<string, string | null>();
     let ligadosPorBoltId = 0;
-    // Quantos teriam sido apanhados pelo match por nome. Já NÃO se aplica —
-    // fica só como medida de quanto trabalho manual o mapa ainda poupa.
+    // Palpites que NÃO foram aplicados (só um dos sinais, ou sinais em
+    // desacordo). Medem quanto trabalho manual ainda falta.
     let ligadosPorNome = 0;
+    // Ligados automaticamente por nome E telefone concordarem.
+    let ligadosPorCorroboracao = 0;
+    // Novas ligações a gravar no mapa, para a próxima semana ser directa.
+    const mapearNovos: Array<{ uuid: string; motoristaId: string; nome: string | null }> = [];
 
-    // Sugestões por nome — NÃO são aplicadas, só reportadas. Ver abaixo.
+    // Identidades que ficaram sem dono, para o aviso.
     const porLigar: string[] = [];
 
     for (const linha of agregado.linhas) {
@@ -558,22 +562,72 @@ Deno.serve(async (req) => {
       if (motoristaId) {
         ligadosPorBoltId++;
       } else {
-        // 3. Sem uuid conhecido, o motorista fica POR LIGAR — de propósito.
+        // 3. Sem uuid conhecido. Só se liga automaticamente com DOIS sinais
+        //    independentes a apontar para a MESMA pessoa: o nome e o telefone.
         //
-        // Aqui, antes, entrava o match por nome e carimbava a ficha. Era a
-        // origem do problema: "Paulo Silva" casa com dois motoristas, e quem
-        // ganhava era o primeiro da lista. Melhor uma linha por atribuir, que
-        // se vê e se corrige, do que dinheiro na conta-corrente errada.
+        // O match por nome sozinho foi o que estragou tudo — "Paulo Silva"
+        // casa com dois motoristas e ganhava o primeiro da lista. Mas exigir
+        // ligação manual para tudo torna impossível arrancar uma integração
+        // nova: uma frota com 100 motoristas nasceria com 100 linhas sem dono.
         //
-        // O palpite por nome continua a ser calculado, mas só para dizer a
-        // quem é que ISTO SE PARECE no aviso. Não escreve nada.
-        const palpite = matcher.encontrar(linha.driver_name, linha.driver_phone, null);
-        if (palpite) ligadosPorNome++;
-        porLigar.push(
-          `${linha.driver_name || '(sem nome)'}${palpite ? ' (parece um motorista já existente)' : ''}`,
-        );
+        // A corroboração resolve os dois lados. Nos casos que estragaram
+        // contas (auditoria 2026-08-12) os dois sinais DISCORDAVAM — no Paulo,
+        // o nome dava #25 e o telefone #480 —, por isso nenhum deles teria
+        // sido ligado automaticamente. E um motorista novo cujo nome e
+        // telefone batem certo entra sozinho, como deve ser.
+        //
+        // `encontrar` já devolve null quando a chave é ambígua (telefone ou
+        // nome repetido em várias fichas), por isso aqui basta compará-los.
+        const porNome = matcher.encontrar(linha.driver_name, null, null);
+        const porTelefone = linha.driver_phone
+          ? matcher.encontrar(null, linha.driver_phone, null)
+          : null;
+
+        if (porNome && porTelefone && porNome === porTelefone) {
+          motoristaId = porNome;
+          ligadosPorCorroboracao++;
+          if (linha.driver_uuid) {
+            mapearNovos.push({
+              uuid: linha.driver_uuid,
+              motoristaId,
+              nome: linha.driver_name ?? null,
+            });
+          }
+        } else {
+          const palpite = porNome ?? porTelefone;
+          if (palpite) ligadosPorNome++;
+          porLigar.push(
+            `${linha.driver_name || '(sem nome)'}${
+              porNome && porTelefone
+                ? ' (nome e telefone apontam para motoristas DIFERENTES)'
+                : palpite
+                  ? ' (parece um motorista já existente)'
+                  : ''
+            }`,
+          );
+        }
       }
       motoristaPorChave.set(linha.chave, motoristaId);
+    }
+
+    // Grava as ligações corroboradas para a semana seguinte já entrar pelo
+    // uuid, sem repetir a heurística. `auto_mapped: true` marca-as como
+    // derivadas — ficam distinguíveis das que uma pessoa confirmou à mão.
+    if (mapearNovos.length > 0) {
+      const { error } = await supabase.from('bolt_mapeamento_motoristas').upsert(
+        mapearNovos.map((m) => ({
+          driver_uuid: m.uuid,
+          driver_name: m.nome,
+          motorista_id: m.motoristaId,
+          integracao_id,
+          org_id: orgId,
+          auto_mapped: true,
+        })),
+        { onConflict: 'driver_uuid' },
+      );
+      if (error) {
+        console.warn(`[bolt-sync-semana] falha a gravar o mapeamento: ${error.message}`);
+      }
     }
 
     // Duas identidades da Bolt a apontar para o mesmo motorista da WeGest
@@ -871,7 +925,7 @@ Deno.serve(async (req) => {
           'as parcelas ficaram só em dados_raw',
       );
     }
-    if (agregado.linhas.length > 0 && ligadosPorBoltId === 0) {
+    if (agregado.linhas.length > 0 && ligadosPorBoltId + ligadosPorCorroboracao === 0) {
       avisos.push('nenhum motorista da Bolt foi ligado a um motorista da WeGest');
     }
     if (motoristasRepetidos > 0) {
@@ -906,13 +960,15 @@ Deno.serve(async (req) => {
       viagens_ignoradas: agregado.ordens_ignoradas,
       viagens_sem_preco: agregado.ordens_sem_preco,
       ligados_por_uuid: ligadosPorBoltId,
-      // Quantos o antigo match por nome teria apanhado. Já não liga nada —
-      // serve para medir quanto falta mapear.
+      // Nome E telefone a apontar para o mesmo motorista.
+      ligados_por_corroboracao: ligadosPorCorroboracao,
+      mapeamentos_gravados: mapearNovos.length,
+      // Só um dos sinais, ou os dois em desacordo — não ligam nada.
       palpites_por_nome: ligadosPorNome,
       motoristas_repetidos: motoristasRepetidos,
       motoristas_repetidos_nomes: nomesRepetidos,
       por_ligar: porLigar,
-      sem_motorista_wegest: agregado.linhas.length - ligadosPorBoltId,
+      sem_motorista_wegest: agregado.linhas.length - ligadosPorBoltId - ligadosPorCorroboracao,
       erros: resumosComErro,
       divisor_distancia: DIVISOR_DISTANCIA_POR_DEFEITO,
       totais: agregado.totais,
