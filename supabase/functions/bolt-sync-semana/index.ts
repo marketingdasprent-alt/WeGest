@@ -515,6 +515,10 @@ Deno.serve(async (req) => {
     let ligadosPorBoltId = 0;
     let ligadosPorNome = 0;
     let boltIdsGravados = 0;
+    // Ligados por nome cujo carimbo NÃO pegou (a ficha já tinha outro bolt_id).
+    // Estes repetem-se todas as semanas até alguém corrigir a ficha à mão, por
+    // isso vão para o aviso em vez de desaparecerem em silêncio.
+    const carimbosNaoAplicados: string[] = [];
 
     for (const linha of agregado.linhas) {
       // bolt_id === driver_uuid é a ligação sem ambiguidade; a cascata por
@@ -531,16 +535,25 @@ Deno.serve(async (req) => {
           // nome parecido roube o bolt_id de quem já o tem.
           if (linha.driver_uuid && !carimbados.has(motoristaId)) {
             carimbados.add(motoristaId);
-            const { error } = await supabase
+            // `select('id')` é o que permite distinguir "gravou" de "não deu
+            // match". Sem ele o update devolve 0 linhas SEM erro quando a ficha
+            // já tem outro bolt_id, e o contador dava o carimbo como feito —
+            // era por isso que o mesmo motorista aparecia como "ligado por
+            // nome" semana após semana e o log dizia que tinha aprendido
+            // (auditoria 2026-08-12).
+            const { data: carimbo, error } = await supabase
               .from('motoristas_ativos')
               .update({ bolt_id: linha.driver_uuid })
               .eq('id', motoristaId)
               .eq('org_id', orgId)
-              .is('bolt_id', null);
+              .is('bolt_id', null)
+              .select('id');
             if (error) {
               console.warn(`[bolt-sync-semana] falha a gravar bolt_id: ${error.message}`);
-            } else {
+            } else if ((carimbo?.length ?? 0) > 0) {
               boltIdsGravados++;
+            } else {
+              carimbosNaoAplicados.push(linha.driver_name || linha.driver_uuid);
             }
           }
         }
@@ -552,11 +565,25 @@ Deno.serve(async (req) => {
     // (tipicamente uma com driver_uuid e outra só com nome) repartem os ganhos
     // dele por duas linhas. Não se corrige automaticamente — fundir as linhas
     // erradas é pior do que o problema —, mas tem de aparecer no log.
+    //
+    // Contar POR EXECUÇÃO é o âmbito certo: o mesmo motorista a aparecer em
+    // duas frotas Bolt diferentes na mesma semana é normal (a casa tem várias
+    // contas) e some correctamente a jusante. O que interessa apanhar é a
+    // repetição DENTRO da mesma frota, que denuncia ficha mal ligada.
+    //
+    // O aviso NOMEIA os motoristas: sem isso obrigava a uma auditoria à mão
+    // para descobrir quem era, e ninguém a fazia (auditoria 2026-08-12).
     const vezesPorMotorista = new Map<string, number>();
     for (const id of motoristaPorChave.values()) {
       if (id) vezesPorMotorista.set(id, (vezesPorMotorista.get(id) ?? 0) + 1);
     }
-    const motoristasRepetidos = [...vezesPorMotorista.values()].filter((n) => n > 1).length;
+    const nomePorMotoristaId = new Map(
+      ((motoristas || []) as MotoristaConhecido[]).map((m) => [m.id, m.nome]),
+    );
+    const nomesRepetidos = [...vezesPorMotorista.entries()]
+      .filter(([, n]) => n > 1)
+      .map(([id]) => nomePorMotoristaId.get(id) ?? id);
+    const motoristasRepetidos = nomesRepetidos.length;
 
     // ── 9. Resumos semanais, SEMPRE pela RPC do merge por fonte ──
     const gravarResumo = async (linha: LinhaAgregada) => {
@@ -834,8 +861,16 @@ Deno.serve(async (req) => {
     }
     if (motoristasRepetidos > 0) {
       avisos.push(
-        `${motoristasRepetidos} motoristas da WeGest ligados a mais do que uma identidade Bolt — ` +
-          'os ganhos ficam repartidos por várias linhas da mesma semana',
+        `${motoristasRepetidos} motorista(s) desta frota ligados a mais do que uma identidade ` +
+          `Bolt (${nomesRepetidos.join(', ')}) — os ganhos ficam repartidos por várias linhas ` +
+          'da mesma semana. Confirma o Bolt ID na ficha destes motoristas',
+      );
+    }
+    if (carimbosNaoAplicados.length > 0) {
+      avisos.push(
+        `${carimbosNaoAplicados.length} motorista(s) ligados por nome mas sem gravar o Bolt ID ` +
+          `(${carimbosNaoAplicados.join(', ')}) — a ficha já tem OUTRO Bolt ID. ` +
+          'Enquanto não for corrigida à mão, repete-se todas as semanas',
       );
     }
     if (avisos.length > 0) {
@@ -858,6 +893,8 @@ Deno.serve(async (req) => {
       ligados_por_nome: ligadosPorNome,
       bolt_ids_gravados: boltIdsGravados,
       motoristas_repetidos: motoristasRepetidos,
+      motoristas_repetidos_nomes: nomesRepetidos,
+      carimbos_nao_aplicados: carimbosNaoAplicados,
       sem_motorista_wegest: agregado.linhas.length - ligadosPorBoltId - ligadosPorNome,
       erros: resumosComErro,
       divisor_distancia: DIVISOR_DISTANCIA_POR_DEFEITO,
