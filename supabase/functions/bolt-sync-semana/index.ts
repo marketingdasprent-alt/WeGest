@@ -482,14 +482,15 @@ Deno.serve(async (req) => {
       }
       const fimExclusivo = formatarData(somarDias(civilBase, 7));
       const lidas: FleetOrder[] = [];
-      // Paginação por CURSOR, não por range(). Com 40 mil linhas o
-      // `.range(offset, …)` obriga o Postgres a percorrer e ordenar tudo a
-      // cada página e estoura o statement timeout. O order_reference tem
-      // índice único, por isso "maior do que o último que li" é uma varredura
-      // barata e estável.
+      // Ordenar por (order_created_timestamp, order_reference) — a MESMA ordem
+      // do índice bolt_viagens_integracao_periodo. Assim o intervalo de datas
+      // é uma varredura de intervalo e a ordenação vem de graça.
+      //
+      // Ordenar por order_reference (a primeira tentativa) fazia o planeador
+      // percorrer o índice errado e descartar 128.647 linhas pelo filtro de
+      // data para devolver 1000: 38 SEGUNDOS por página, contra 143 ms agora.
       const LOTE_LEITURA = 1000;
-      let ultimaRef = '';
-      for (;;) {
+      for (let salto = 0; ; salto += LOTE_LEITURA) {
         const { data, error } = await supabase
           .from('bolt_viagens')
           .select(
@@ -501,9 +502,9 @@ Deno.serve(async (req) => {
           .eq('integracao_id', integracao_id)
           .gte('order_created_timestamp', `${semanaBase}T00:00:00Z`)
           .lt('order_created_timestamp', `${fimExclusivo}T00:00:00Z`)
-          .gt('order_reference', ultimaRef)
+          .order('order_created_timestamp')
           .order('order_reference')
-          .limit(LOTE_LEITURA);
+          .range(salto, salto + LOTE_LEITURA - 1);
         if (error) {
           return jsonError(`Falha a ler bolt_viagens para agregar: ${error.message}`, 500);
         }
@@ -534,9 +535,6 @@ Deno.serve(async (req) => {
               commission: n(v.commission),
             },
           });
-        }
-        if (pagina.length > 0) {
-          ultimaRef = String(pagina[pagina.length - 1].order_reference ?? '');
         }
         if (pagina.length < LOTE_LEITURA) break;
       }
