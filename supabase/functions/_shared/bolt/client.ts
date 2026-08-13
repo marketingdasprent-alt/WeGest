@@ -385,6 +385,19 @@ export function getRetryAfterMs(resposta: Response, tentativa: number): number {
   return backoffMs(tentativa);
 }
 
+/**
+ * Códigos de erro da Bolt (HTTP 200!) que valem uma nova tentativa.
+ *
+ * O 1005 (TOO_MANY_REQUESTS) é um limite de débito: repetir mais tarde é
+ * exactamente a resposta certa. Vinha a ser tratado como determinista — como
+ * o 498810 ou o 702 — e abortava a semana à primeira. Apareceu a 2026-08-13,
+ * depois de as páginas passarem a ir 4 a 4 com 2 jobs em simultâneo: até 8
+ * pedidos ao mesmo tempo era mais do que a Bolt aceita.
+ */
+function codigoBoltRepetivel(codigo: number): boolean {
+  return codigo === 1005;
+}
+
 /** Só 429 e 5xx se repetem. Os restantes 4xx são deterministas. */
 function estadoRepetivel(estado: number): boolean {
   return estado === 429 || estado >= 500;
@@ -495,8 +508,28 @@ export async function callBolt<T>(
     }
 
     // ANTES do response.ok: os erros da Bolt vêm com HTTP 200.
-    // BoltApiError é determinista (498805/498806/498809/498810, 702…) e nunca repete.
-    assertBoltOk(corpo);
+    // Quase todos são deterministas (498805/498806/498809/498810, 702…) e não
+    // vale a pena repetir. A excepção é o limite de débito — ver
+    // codigoBoltRepetivel.
+    try {
+      assertBoltOk(corpo);
+    } catch (erro) {
+      if (
+        erro instanceof BoltApiError &&
+        codigoBoltRepetivel(erro.codigo) &&
+        tentativa < MAX_TENTATIVAS - 1
+      ) {
+        const espera = getRetryAfterMs(resposta, tentativa);
+        ultimoErro = erro;
+        console.warn(
+          `[bolt] ${operacao}: ${erro.codigoNome ?? erro.codigo} — nova tentativa ` +
+            `${tentativa + 2}/${MAX_TENTATIVAS} daqui a ${espera}ms`,
+        );
+        await dormir(espera);
+        continue;
+      }
+      throw erro;
+    }
 
     if (!resposta.ok) {
       throw new Error(`[bolt] ${operacao}: HTTP ${resposta.status}`);

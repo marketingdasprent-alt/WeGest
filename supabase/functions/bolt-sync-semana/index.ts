@@ -103,9 +103,15 @@ const LIMITE_PAGINA = 1000;
  * entre 150 s e 154 s). A Bolt declara o total na 1ª página, por isso os
  * offsets seguintes são todos conhecidos à partida e podem ir juntos.
  *
- * 4 é deliberadamente modesto: a Bolt não documenta o limite de débito. Se
- * algum dia devolver 429, o callBolt já repete com backoff e Retry-After. */
-const PAGINAS_EM_PARALELO = 4;
+ * Estava em 4 e foi a mais: a 2026-08-13 a Bolt começou a devolver
+ * 1005 TOO_MANY_REQUESTS. Com o drain a correr 2 jobs ao mesmo tempo, 4
+ * páginas cada davam 8 pedidos em simultâneo. A 2 são 4 — ainda metade das
+ * idas de uma fila indiana, sem irritar a Bolt.
+ *
+ * O 1005 passou também a ser repetido com backoff (ver codigoBoltRepetivel no
+ * cliente), por isso um pico de débito agora abranda em vez de perder a
+ * semana. */
+const PAGINAS_EM_PARALELO = 2;
 
 /** Linhas por upsert em bolt_viagens. */
 const LOTE_VIAGENS = 500;
