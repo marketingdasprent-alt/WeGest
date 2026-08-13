@@ -482,8 +482,14 @@ Deno.serve(async (req) => {
       }
       const fimExclusivo = formatarData(somarDias(civilBase, 7));
       const lidas: FleetOrder[] = [];
-      const LOTE_LEITURA = 5000;
-      for (let salto = 0; ; salto += LOTE_LEITURA) {
+      // Paginação por CURSOR, não por range(). Com 40 mil linhas o
+      // `.range(offset, …)` obriga o Postgres a percorrer e ordenar tudo a
+      // cada página e estoura o statement timeout. O order_reference tem
+      // índice único, por isso "maior do que o último que li" é uma varredura
+      // barata e estável.
+      const LOTE_LEITURA = 1000;
+      let ultimaRef = '';
+      for (;;) {
         const { data, error } = await supabase
           .from('bolt_viagens')
           .select(
@@ -495,8 +501,9 @@ Deno.serve(async (req) => {
           .eq('integracao_id', integracao_id)
           .gte('order_created_timestamp', `${semanaBase}T00:00:00Z`)
           .lt('order_created_timestamp', `${fimExclusivo}T00:00:00Z`)
+          .gt('order_reference', ultimaRef)
           .order('order_reference')
-          .range(salto, salto + LOTE_LEITURA - 1);
+          .limit(LOTE_LEITURA);
         if (error) {
           return jsonError(`Falha a ler bolt_viagens para agregar: ${error.message}`, 500);
         }
@@ -527,6 +534,9 @@ Deno.serve(async (req) => {
               commission: n(v.commission),
             },
           });
+        }
+        if (pagina.length > 0) {
+          ultimaRef = String(pagina[pagina.length - 1].order_reference ?? '');
         }
         if (pagina.length < LOTE_LEITURA) break;
       }
@@ -964,7 +974,7 @@ Deno.serve(async (req) => {
       if (!colunasViagensEmFalta) {
         const { error } = await supabase
           .from('bolt_viagens')
-          .upsert(lote, { onConflict: 'order_reference' });
+          .upsert(lote, { onConflict: 'integracao_id,order_reference' });
         if (!error) return null;
         if (!faltaColunaViagens(error)) return error;
         console.warn(
@@ -982,7 +992,7 @@ Deno.serve(async (req) => {
       });
       const { error } = await supabase
         .from('bolt_viagens')
-        .upsert(legado, { onConflict: 'order_reference' });
+        .upsert(legado, { onConflict: 'integracao_id,order_reference' });
       return error;
     };
 
