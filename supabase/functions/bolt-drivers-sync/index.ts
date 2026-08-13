@@ -56,6 +56,30 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const filtroIntegracao = (body as { integracao_id?: string }).integracao_id ?? null;
 
+    // O getDrivers exige janela temporal (sem ela a Bolt devolve 702
+    // INVALID_REQUEST) e recusa janelas largas (498806 INVALID_DATE_RANGE com
+    // 5 meses). Só traz quem esteve na frota no intervalo pedido.
+    //
+    // Para apanhar também quem já SAIU — que são precisamente os
+    // `deactivated` que respondem a "saiu e voltou?" — percorre-se o
+    // histórico em janelas de 30 dias e acumula-se. O upsert é por
+    // driver_uuid, portanto repetições entre janelas não duplicam.
+    const desde = (body as { desde?: string }).desde ?? '2026-03-01';
+    const DIAS_JANELA = 30;
+    const janelas: Array<{ inicio: number; fim: number }> = [];
+    {
+      const fimGlobal = Date.now();
+      let cursor = new Date(`${desde}T00:00:00Z`).getTime();
+      while (cursor < fimGlobal) {
+        const fim = Math.min(cursor + DIAS_JANELA * 86400_000, fimGlobal);
+        janelas.push({
+          inicio: Math.floor(cursor / 1000),
+          fim: Math.floor(fim / 1000),
+        });
+        cursor = fim;
+      }
+    }
+
     // As mesmas condições do agendador: activa, oauth e mesmo Bolt.
     let query = supabase
       .from('plataformas_configuracao')
@@ -86,12 +110,21 @@ Deno.serve(async (req) => {
       const cred: BoltCredenciais = { clientId, clientSecret };
 
       try {
-        const motoristas = await paginar<FleetDriver>(
-          cred,
-          'getDrivers',
-          { company_id: companyId },
-          { limite: 500 },
-        );
+        // Acumula por uuid: a última janela em que o motorista aparece é a que
+        // fica, por isso o `state` reflecte o mais recente que a Bolt reportou.
+        const porUuid = new Map<string, FleetDriver>();
+        for (const janela of janelas) {
+          const lote = await paginar<FleetDriver>(
+            cred,
+            'getDrivers',
+            { company_id: companyId, start_ts: janela.inicio, end_ts: janela.fim },
+            { limite: 500 },
+          );
+          for (const d of lote) {
+            if (d?.driver_uuid) porUuid.set(d.driver_uuid, d);
+          }
+        }
+        const motoristas = [...porUuid.values()];
 
         const linhas = motoristas
           .filter((d) => d?.driver_uuid)
