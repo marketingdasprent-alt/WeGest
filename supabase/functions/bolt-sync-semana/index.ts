@@ -1130,6 +1130,23 @@ Deno.serve(async (req) => {
       if (error) console.warn(`[bolt-sync-semana] falha a actualizar ultimo_sync: ${error.message}`);
     }
 
+    // A caixa `bolt_id` da ficha passa a apontar para o uuid da semana mais
+    // recente com ganhos. A Bolt emite um uuid novo quando o motorista sai da
+    // frota e volta, e a caixa ficava presa ao primeiro que lá tivesse sido
+    // carimbado — a ficha apontava para uma identidade já morta.
+    //
+    // As ligações antigas ficam todas no mapa, que é quem reconhece as viagens
+    // históricas. Isto é só a fotografia do presente, e NÃO decide identidade:
+    // escolhe o mais recente de entre os já atribuídos.
+    if (gravaResumos && resumosGravados > 0) {
+      const { error } = await supabase.rpc('bolt_actualizar_bolt_id_recente', {
+        p_integracao_id: integracao_id,
+      });
+      if (error) {
+        console.warn(`[bolt-sync-semana] falha a actualizar o bolt_id recente: ${error.message}`);
+      }
+    }
+
     console.log(
       `[bolt-sync-semana] fim · ${status} · resumos ${resumosGravados}/${agregado.linhas.length} · ` +
         `viagens ${viagensGravadas}/${paraGravar.length} · ${Date.now() - inicioMs}ms`,
