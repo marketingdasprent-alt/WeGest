@@ -96,6 +96,17 @@ const TIPO_LOG = 'api_sync';
  * bolt_sync_queue. */
 const LIMITE_PAGINA = 1000;
 
+/** Páginas do getFleetOrders pedidas ao mesmo tempo.
+ *
+ * O gargalo eram as idas à API em fila indiana: 29 mil viagens são 30 páginas
+ * e passavam dos 150 s (6 semanas da Distancia Lisboa falharam a 2026-08-12,
+ * entre 150 s e 154 s). A Bolt declara o total na 1ª página, por isso os
+ * offsets seguintes são todos conhecidos à partida e podem ir juntos.
+ *
+ * 4 é deliberadamente modesto: a Bolt não documenta o limite de débito. Se
+ * algum dia devolver 429, o callBolt já repete com backoff e Retry-After. */
+const PAGINAS_EM_PARALELO = 4;
+
 /** Linhas por upsert em bolt_viagens. */
 const LOTE_VIAGENS = 500;
 
@@ -440,7 +451,7 @@ Deno.serve(async (req) => {
           end_ts: semana.end_ts,
           time_range_filter_type: filtroTemporal,
         },
-        { limite: LIMITE_PAGINA },
+        { limite: LIMITE_PAGINA, concorrencia: PAGINAS_EM_PARALELO },
       );
     } catch (erro) {
       const mensagem = `Semana ${semana.periodo}: falha a ler as viagens da Bolt. ${explicarErroBolt(erro)}`;

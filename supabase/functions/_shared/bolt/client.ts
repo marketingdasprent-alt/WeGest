@@ -534,6 +534,11 @@ export interface OpcoesPaginacao<T> {
   limite?: number;
   /** Travão de segurança contra ciclos infinitos. */
   maxPaginas?: number;
+  /**
+   * Páginas a pedir ao mesmo tempo depois de a Bolt declarar o total.
+   * 1 = comportamento sequencial de sempre. Ver `paginar`.
+   */
+  concorrencia?: number;
 }
 
 const CHAVES_COLECAO = ["orders", "drivers", "vehicles", "logs", "state_logs"] as const;
@@ -579,11 +584,88 @@ export async function paginar<T>(
   const extrair = opcoes.extrair ?? extrairPorDefeito<T>;
   const lerTotal = opcoes.total ?? totalPorDefeito;
 
+  const concorrencia = Math.max(1, Math.floor(opcoes.concorrencia ?? 1));
+
   const acumulado: T[] = [];
   let totalDeclarado: number | undefined;
   let offset = offsetInicial;
 
-  for (let pagina = 0; pagina < maxPaginas; pagina++) {
+  // ── Primeira página: além dos registos, diz-nos o total ──
+  const primeiroCorpo = await callBolt<unknown>(cred, operacao, {
+    ...params,
+    limit: limite,
+    offset,
+  });
+  const primeiros = extrair(primeiroCorpo);
+  totalDeclarado = lerTotal(primeiroCorpo);
+  for (const item of primeiros) acumulado.push(item);
+
+  console.log(
+    `[bolt] ${operacao}: página 1 (offset ${offset}) — ${primeiros.length} registos` +
+      (typeof totalDeclarado === "number" ? `, total declarado ${totalDeclarado}` : ""),
+  );
+
+  if (primeiros.length < limite) {
+    verificarTotal(operacao, acumulado.length, totalDeclarado, offsetInicial);
+    return acumulado;
+  }
+
+  // ── Resto em PARALELO, quando sabemos quantas páginas faltam ──
+  //
+  // O custo de uma semana grande é dominado pelas idas à API, não pelo
+  // tamanho de cada uma: 29 mil viagens são 30 páginas, e em fila indiana
+  // isso passava dos 150 s da edge function (6 semanas da Distancia Lisboa
+  // falharam assim a 2026-08-12). Sabendo o total à primeira página, os
+  // offsets seguintes são todos conhecidos e não dependem uns dos outros.
+  //
+  // Seguro quanto a limites de débito: callBolt já repete o 429 e o 5xx com
+  // backoff, honrando o Retry-After. E `verificarTotal`, no fim, continua a
+  // ser a rede — trazer menos do que o declarado rebenta em vez de gravar
+  // uma semana incompleta.
+  if (concorrencia > 1 && typeof totalDeclarado === "number" && offsetInicial === 0) {
+    const offsets: number[] = [];
+    for (let o = offsetInicial + primeiros.length; o < totalDeclarado; o += limite) {
+      offsets.push(o);
+    }
+    if (offsets.length + 1 > maxPaginas) {
+      throw new Error(
+        `[bolt] ${operacao}: ${offsets.length + 1} páginas passam do tecto de ${maxPaginas} — abortado.`,
+      );
+    }
+
+    const paginas: T[][] = new Array(offsets.length);
+    let proxima = 0;
+    const trabalhador = async () => {
+      for (;;) {
+        const indice = proxima++;
+        if (indice >= offsets.length) return;
+        const corpo = await callBolt<unknown>(cred, operacao, {
+          ...params,
+          limit: limite,
+          offset: offsets[indice],
+        });
+        paginas[indice] = extrair(corpo);
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(concorrencia, offsets.length) }, () => trabalhador()),
+    );
+
+    // Reconstituídos por ordem de offset — a ordem importa para a agregação
+    // ser reproduzível entre corridas.
+    for (const pagina of paginas) {
+      for (const item of pagina ?? []) acumulado.push(item);
+    }
+    console.log(
+      `[bolt] ${operacao}: +${offsets.length} páginas em paralelo (${concorrencia} a fio) — ${acumulado.length} registos`,
+    );
+    verificarTotal(operacao, acumulado.length, totalDeclarado, offsetInicial);
+    return acumulado;
+  }
+
+  // ── Sem total declarado: fila indiana, como sempre ──
+  offset += primeiros.length;
+  for (let pagina = 1; pagina < maxPaginas; pagina++) {
     const corpo = await callBolt<unknown>(cred, operacao, { ...params, limit: limite, offset });
     const itens = extrair(corpo);
 
