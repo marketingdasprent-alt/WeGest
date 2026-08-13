@@ -258,11 +258,23 @@ Deno.serve(async (req) => {
       filtro_temporal,
       formula_id,
       company_id: companyIdPedido,
+      fase: fasePedida,
+      semana_inicio: semanaInicioPedida,
     } = body as Record<string, unknown>;
 
     if (!integracao_id || typeof integracao_id !== 'string') {
       return jsonError('integracao_id é obrigatório.', 400);
     }
+
+    // Fase do trabalho. Ver a migração 20260813100000 para o porquê.
+    //   'completo' — busca e agrega numa passagem (frotas pequenas).
+    //   'viagens'  — só busca à API e grava bolt_viagens (um job por dia).
+    //   'agregar'  — só lê a BD e grava os resumos da semana, sem rede.
+    const fase = fasePedida === 'viagens' || fasePedida === 'agregar'
+      ? (fasePedida as 'viagens' | 'agregar')
+      : 'completo';
+    const gravaViagens = fase === 'completo' || fase === 'viagens';
+    const gravaResumos = fase === 'completo' || fase === 'agregar';
 
     // ── 1. Configuração da integração ──
     const { data: config, error: erroConfig } = await supabase
@@ -455,30 +467,100 @@ Deno.serve(async (req) => {
 
     // ── 5. Viagens ──
     let ordens: FleetOrder[];
-    try {
-      ordens = await paginar<FleetOrder>(
-        cred,
-        'getFleetOrders',
-        {
-          company_id: companyId,
-          start_ts: semana.start_ts,
-          end_ts: semana.end_ts,
-          time_range_filter_type: filtroTemporal,
-        },
-        { limite: LIMITE_PAGINA, concorrencia: PAGINAS_EM_PARALELO },
+
+    if (fase === 'agregar') {
+      // Sem rede: as viagens já foram gravadas pelos jobs diários. A
+      // bolt_viagens guarda todos os campos que o agregador consome, por isso
+      // reconstruir a ordem daqui é sem perdas — e a fórmula continua a ser a
+      // mesma, em TypeScript, num sítio só.
+      const semanaBase = typeof semanaInicioPedida === 'string' && semanaInicioPedida
+        ? semanaInicioPedida
+        : semana.inicio;
+      const civilBase = analisarData(semanaBase);
+      if (!civilBase) {
+        return jsonError(`semana_inicio inválida para agregar: ${semanaBase}`, 400);
+      }
+      const fimExclusivo = formatarData(somarDias(civilBase, 7));
+      const lidas: FleetOrder[] = [];
+      const LOTE_LEITURA = 5000;
+      for (let salto = 0; ; salto += LOTE_LEITURA) {
+        const { data, error } = await supabase
+          .from('bolt_viagens')
+          .select(
+            'order_reference, order_status, order_created_timestamp, payment_confirmed_timestamp, ' +
+              'payment_method, driver_uuid, driver_name, driver_phone, ride_distance, ' +
+              'ride_price, booking_fee, toll_fee, cancellation_fee, tip, net_earnings, ' +
+              'cash_discount, in_app_discount, commission',
+          )
+          .eq('integracao_id', integracao_id)
+          .gte('order_created_timestamp', `${semanaBase}T00:00:00Z`)
+          .lt('order_created_timestamp', `T00:00:00Z`)
+          .order('order_reference')
+          .range(salto, salto + LOTE_LEITURA - 1);
+        if (error) {
+          return jsonError(`Falha a ler bolt_viagens para agregar: ${error.message}`, 500);
+        }
+        const pagina = (data ?? []) as unknown as Array<Record<string, unknown>>;
+        for (const v of pagina) {
+          const seg = (iso: unknown): number | undefined =>
+            typeof iso === 'string' ? Math.floor(new Date(iso).getTime() / 1000) : undefined;
+          const n = (x: unknown): number => Number(x ?? 0) || 0;
+          lidas.push({
+            order_reference: String(v.order_reference ?? ''),
+            order_status: (v.order_status as string) ?? undefined,
+            order_created_timestamp: seg(v.order_created_timestamp),
+            payment_confirmed_timestamp: seg(v.payment_confirmed_timestamp),
+            payment_method: (v.payment_method as string) ?? undefined,
+            driver_uuid: (v.driver_uuid as string) ?? undefined,
+            driver_name: (v.driver_name as string) ?? undefined,
+            driver_phone: (v.driver_phone as string) ?? undefined,
+            ride_distance: v.ride_distance == null ? undefined : n(v.ride_distance),
+            order_price: {
+              ride_price: n(v.ride_price),
+              booking_fee: n(v.booking_fee),
+              toll_fee: n(v.toll_fee),
+              cancellation_fee: n(v.cancellation_fee),
+              tip: n(v.tip),
+              net_earnings: n(v.net_earnings),
+              cash_discount: n(v.cash_discount),
+              in_app_discount: n(v.in_app_discount),
+              commission: n(v.commission),
+            },
+          });
+        }
+        if (pagina.length < LOTE_LEITURA) break;
+      }
+      ordens = lidas;
+      console.log(
+        `[bolt-sync-semana] fase agregar · ${ordens.length} viagens lidas da BD (sem rede)`,
       );
-    } catch (erro) {
-      const mensagem = `Semana ${semana.periodo}: falha a ler as viagens da Bolt. ${explicarErroBolt(erro)}`;
-      console.error(`[bolt-sync-semana] getFleetOrders falhou`);
-      await registarLog('error', mensagem, {
-        erros: 1,
-        periodo: semana.periodo,
-        periodo_inicio: semana.inicio,
-        periodo_fim: semana.fim,
-        company_id: companyId,
-        filtro_temporal: filtroTemporal,
-      });
-      return jsonError(mensagem, 502, { periodo: semana.periodo });
+    } else {
+      try {
+        ordens = await paginar<FleetOrder>(
+          cred,
+          'getFleetOrders',
+          {
+            company_id: companyId,
+            start_ts: semana.start_ts,
+            end_ts: semana.end_ts,
+            time_range_filter_type: filtroTemporal,
+          },
+          { limite: LIMITE_PAGINA, concorrencia: PAGINAS_EM_PARALELO },
+        );
+      } catch (erro) {
+        const mensagem =
+          `Semana ${semana.periodo}: falha a ler as viagens da Bolt. ${explicarErroBolt(erro)}`;
+        console.error(`[bolt-sync-semana] getFleetOrders falhou`);
+        await registarLog('error', mensagem, {
+          erros: 1,
+          periodo: semana.periodo,
+          periodo_inicio: semana.inicio,
+          periodo_fim: semana.fim,
+          company_id: companyId,
+          filtro_temporal: filtroTemporal,
+        });
+        return jsonError(mensagem, 502, { periodo: semana.periodo });
+      }
     }
 
     const baseResposta = {
@@ -732,7 +814,10 @@ Deno.serve(async (req) => {
     let abortadoPorEstrutura: string | null = null;
     let motivoAborto: 'migracao' | 'chave_legada' = 'migracao';
 
-    for (const linha of agregado.linhas) {
+    // Na fase 'viagens' os resumos são da alçada do job 'agregar' da semana —
+    // escrevê-los aqui, com só um dia de dados, apagava a semana inteira (a
+    // RPC substitui os campos da API, não os soma).
+    for (const linha of gravaResumos ? agregado.linhas : []) {
       const { error } = await gravarResumo(linha);
       if (!error) {
         resumosGravados++;
@@ -906,7 +991,9 @@ Deno.serve(async (req) => {
     // viagens são 78 lotes de 500, um a seguir ao outro. Cada lote é
     // independente — a chave do conflito é o order_reference e a ordem de
     // gravação não altera o resultado.
-    const paraGravar = [...porReferencia.values()];
+    // Na fase 'agregar' as viagens vieram da própria bolt_viagens — reescrevê-las
+    // seria trabalho puro sem ganho nenhum.
+    const paraGravar = gravaViagens ? [...porReferencia.values()] : [];
     const lotes: Record<string, unknown>[][] = [];
     for (let i = 0; i < paraGravar.length; i += LOTE_VIAGENS) {
       lotes.push(paraGravar.slice(i, i + LOTE_VIAGENS));
@@ -936,10 +1023,19 @@ Deno.serve(async (req) => {
     let status: EstadoSync;
     let mensagem: string;
 
-    if (resumosGravados === 0) {
+    if (!gravaResumos) {
+      // Fase 'viagens': o sucesso mede-se pelas viagens gravadas. Os resumos
+      // desta semana são escritos pelo job 'agregar', depois de todos os dias.
+      status = viagensComErro > 0 && viagensGravadas === 0 ? 'error' : 'success';
+      mensagem =
+        `Dia ${semana.inicio}: ${viagensGravadas} viagens gravadas de ${ordens.length} ` +
+        `trazidas da API (empresa ${companyId}). Os resumos da semana ficam para a fase de agregação.`;
+    } else if (resumosGravados === 0) {
       status = 'error';
       mensagem =
-        `Semana ${semana.periodo}: nenhum resumo gravado. A Bolt devolveu ${ordens.length} viagens ` +
+        `Semana ${semana.periodo}: nenhum resumo gravado. ${
+          fase === 'agregar' ? 'A base de dados tinha' : 'A Bolt devolveu'
+        } ${ordens.length} viagens ` +
         `de ${agregado.linhas.length} motoristas e falharam todas (${resumosComErro} erros).`;
     } else {
       status = 'success';
@@ -1039,14 +1135,19 @@ Deno.serve(async (req) => {
         `viagens ${viagensGravadas}/${paraGravar.length} · ${Date.now() - inicioMs}ms`,
     );
 
+    // O que conta como sucesso depende da fase: um job 'viagens' grava zero
+    // resumos DE PROPÓSITO (são da alçada do 'agregar' da semana). Medi-lo
+    // pelos resumos marcava-o como falhado com a mensagem de sucesso dentro.
+    const houveSucesso = gravaResumos ? resumosGravados > 0 : viagensGravadas > 0;
+
     return json({
-      success: resumosGravados > 0,
+      success: houveSucesso,
       status,
       aviso: status === 'warning',
       message: mensagem,
       ...detalhes,
       duracao_ms: Date.now() - inicioMs,
-    }, resumosGravados > 0 ? 200 : 500);
+    }, houveSucesso ? 200 : 500);
   } catch (erro) {
     const detalhe = erro instanceof Error ? erro.message : String(erro);
     console.error(`[bolt-sync-semana] erro inesperado: ${detalhe}`);
