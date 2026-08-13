@@ -110,6 +110,14 @@ const PAGINAS_EM_PARALELO = 4;
 /** Linhas por upsert em bolt_viagens. */
 const LOTE_VIAGENS = 500;
 
+/** Lotes de viagens gravados ao mesmo tempo.
+ *
+ * Com as páginas da API já em paralelo, o que sobrava eram estes upserts em
+ * fila indiana: 39 mil viagens são 78 lotes, um a seguir ao outro (medido a
+ * 2026-08-12: 107 s numa semana que antes nem acabava). Os lotes não dependem
+ * uns dos outros — a chave do conflito é o order_reference. */
+const LOTES_EM_PARALELO = 4;
+
 /** Um pedido só pode cobrir isto — trava enganos do tipo "sincroniza 2026 todo". */
 const MAX_DIAS_PERIODO = 62;
 
@@ -887,18 +895,36 @@ Deno.serve(async (req) => {
       return error;
     };
 
+    // Lotes em paralelo. Depois de a leitura da API deixar de ser o gargalo
+    // (páginas concorrentes), o que sobrava eram estes upserts em fila: 39 mil
+    // viagens são 78 lotes de 500, um a seguir ao outro. Cada lote é
+    // independente — a chave do conflito é o order_reference e a ordem de
+    // gravação não altera o resultado.
     const paraGravar = [...porReferencia.values()];
+    const lotes: Record<string, unknown>[][] = [];
     for (let i = 0; i < paraGravar.length; i += LOTE_VIAGENS) {
-      const lote = paraGravar.slice(i, i + LOTE_VIAGENS);
-      const error = await upsertViagens(lote);
-      if (error) {
-        viagensComErro += lote.length;
-        if (errosViagens.length < 3) errosViagens.push(error.message);
-        console.error(`[bolt-sync-semana] upsert de viagens falhou: ${error.message}`);
-      } else {
-        viagensGravadas += lote.length;
-      }
+      lotes.push(paraGravar.slice(i, i + LOTE_VIAGENS));
     }
+
+    let proximoLote = 0;
+    const gravador = async () => {
+      for (;;) {
+        const indice = proximoLote++;
+        if (indice >= lotes.length) return;
+        const lote = lotes[indice];
+        const error = await upsertViagens(lote);
+        if (error) {
+          viagensComErro += lote.length;
+          if (errosViagens.length < 3) errosViagens.push(error.message);
+          console.error(`[bolt-sync-semana] upsert de viagens falhou: ${error.message}`);
+        } else {
+          viagensGravadas += lote.length;
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(LOTES_EM_PARALELO, lotes.length) }, () => gravador()),
+    );
 
     // ── 11. Estado final ──
     let status: EstadoSync;
