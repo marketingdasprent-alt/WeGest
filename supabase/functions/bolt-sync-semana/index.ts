@@ -494,7 +494,7 @@ Deno.serve(async (req) => {
           )
           .eq('integracao_id', integracao_id)
           .gte('order_created_timestamp', `${semanaBase}T00:00:00Z`)
-          .lt('order_created_timestamp', `T00:00:00Z`)
+          .lt('order_created_timestamp', `${fimExclusivo}T00:00:00Z`)
           .order('order_reference')
           .range(salto, salto + LOTE_LEITURA - 1);
         if (error) {
