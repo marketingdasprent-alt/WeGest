@@ -173,6 +173,17 @@ describe('useContratoForm — contrato a partir de reserva com cache obsoleta', 
     expect(result.current.valorTotalManual).toBe(1275);
   });
 
+  it('prefere o preço manual da reserva ao valor efectivo desactualizado', () => {
+    // Reserva gravada enquanto o formulário passava o campo errado ao cálculo
+    // da base: `valor_total_manual` ficou certo, `valor_total` ficou velho.
+    // Estas reservas existem em produção e têm de converter-se pelo preço que
+    // o utilizador escreveu, não pelo que ficou para trás.
+    reservaDoServidor = reserva({ valor_total: 1350, valor_total_manual: 900 });
+    const { result } = renderHook(() => useContratoForm(), { wrapper });
+
+    expect(result.current.form.getValues('valor_total_manual')).toBe(900);
+  });
+
   it('acompanha também a tarifa e a empresa emissora', () => {
     reservaDoServidor = reserva({ tarifa_id: 'tarifa-antiga', emissor_id: 'emissor-antigo' });
     const { result, rerender } = renderHook(() => useContratoForm(), { wrapper });

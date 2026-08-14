@@ -655,7 +655,14 @@ const RentingReservaForm = () => {
               )
             : null,
         tarifa: null,
-        valorTotalManual: values.valor_total,
+        // O override é `valor_total_manual` — é nele que o card de Preço
+        // escreve. Aqui passava-se `values.valor_total`, que nenhum campo do
+        // formulário alguma vez altera: ficava sempre com o valor que veio da
+        // BD. O preço escrito à mão não entrava neste cálculo, `valor_total`
+        // (o valor EFECTIVO que o resto da app lê) ficava com o valor antigo ou
+        // com o da tarifa, e converter a reserva em contrato trazia o preço
+        // errado — mesmo com `valor_total_manual` bem gravado.
+        valorTotalManual: values.valor_total_manual ?? null,
         precoModeloSemana:
           isTvdeSubmit && values.tarifa_id && viaturaSelecionada?.modelo_id
             ? (precoModeloLinha?.preco_semana ?? null)
