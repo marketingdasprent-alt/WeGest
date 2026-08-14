@@ -460,7 +460,14 @@ export function useContratoForm(): UseContratoFormReturn {
           origem: 'sistema',
           regime: reservaFromQuery.regime,
           tarifa_id: (reservaFromQuery as any).tarifa_id ?? null,
-          valor_total_manual: reservaFromQuery.valor_total,
+          // O override manual manda sobre o valor efectivo. Em teoria são o
+          // mesmo número (`valor_total` é definido como "o manual quando
+          // existe"), mas as reservas gravadas enquanto o formulário passava o
+          // campo errado ao cálculo da base ficaram com um `valor_total`
+          // desactualizado e um `valor_total_manual` correcto. Ler primeiro o
+          // manual faz essas converterem-se com o preço certo, sem ninguém ter
+          // de lhes tocar.
+          valor_total_manual: reservaFromQuery.valor_total_manual ?? reservaFromQuery.valor_total,
           is_longa_duracao: reservaFromQuery.is_longa_duracao ?? false,
           renovacao_opcao: reservaFromQuery.renovacao_opcao ?? null,
           renovacao_intervalo_dias: reservaFromQuery.renovacao_intervalo_dias,
