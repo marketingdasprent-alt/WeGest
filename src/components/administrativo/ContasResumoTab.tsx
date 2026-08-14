@@ -390,12 +390,19 @@ export function ContasResumoTab() {
         error: null,
       });
 
-      // 4. Buscar transações Uber no mesmo período
+      // 4. Uber: o resumo semanal, não as transacções em bruto.
+      //
+      // uber_resumos_semanais é para a Uber o que bolt_resumos_semanais é para
+      // a Bolt: uma linha por motorista e semana, mantida por gatilho, com a
+      // API a mandar quando tem dados do período. Somar uber_transactions
+      // directamente duplicava a receita no dia em que a API oficial ligasse —
+      // ela escreve uma linha por VIAGEM e o CSV uma linha SEMANAL, e as duas
+      // conviviam na mesma soma. Ver a migração 20260814170000.
       const uberQuery = supabase
-        .from('uber_transactions')
-        .select('uber_driver_id, gross_amount, raw_transaction')
-        .gte('occurred_at', weekStart.toISOString())
-        .lte('occurred_at', weekEnd.toISOString());
+        .from('uber_resumos_semanais')
+        .select('uber_driver_id, motorista_nome, motorista_id, ganhos_brutos, gorjetas, viagens')
+        .lte('periodo_inicio', format(weekEnd, 'yyyy-MM-dd'))
+        .gte('periodo_fim', format(weekStart, 'yyyy-MM-dd'));
 
       // 4b. Buscar atividade Uber (viagens_concluidas reais) para o período
       // Gerar período normalizado: Segunda → Domingo (YYYYMMDD-YYYYMMDD)
@@ -787,28 +794,26 @@ export function ContasResumoTab() {
         string,
         { firstName: string; lastName: string; total: number; count: number; gorjeta: number }
       > = {};
+      // Uma linha por motorista e semana — o nome e a gorjeta já vêm no
+      // resumo, extraídos pelo gatilho. Não é preciso abrir o raw_transaction.
       (uberResult.data || []).forEach((t) => {
         const driverId = t.uber_driver_id || 'unknown';
-        const csvRow = (t.raw_transaction as any)?.csv_row || {};
+        const nome = (t.motorista_nome || '').trim();
+        const espaco = nome.indexOf(' ');
         if (!uberByDriver[driverId]) {
           uberByDriver[driverId] = {
-            firstName: csvRow['Nome próprio do motorista'] || '',
-            lastName: csvRow['Apelido do motorista'] || '',
+            firstName: espaco > 0 ? nome.slice(0, espaco) : nome,
+            lastName: espaco > 0 ? nome.slice(espaco + 1) : '',
             total: 0,
             count: 0,
             gorjeta: 0,
           };
         }
-        uberByDriver[driverId].total += Number(t.gross_amount) || 0;
+        uberByDriver[driverId].total += Number(t.ganhos_brutos) || 0;
+        uberByDriver[driverId].gorjeta += Number(t.gorjetas) || 0;
+        // As viagens vêm da atividade (viagens_concluidas), que é o número que
+        // a Uber reporta; o resumo só conta linhas de transacção.
         uberByDriver[driverId].count = uberViagensByDriver[driverId] || 0;
-        // Gorjeta Uber: coluna "Pago a si:Os seus rendimentos:Gratificação" no raw_transaction.
-        const gratKey = Object.keys(csvRow).find(
-          (k) => k.includes('Gratificação') || k.includes('Gratificacao')
-        );
-        if (gratKey) {
-          uberByDriver[driverId].gorjeta +=
-            parseFloat(String(csvRow[gratKey]).replace(',', '.')) || 0;
-        }
       });
 
       // Also inject drivers that only have atividade but no payment transactions

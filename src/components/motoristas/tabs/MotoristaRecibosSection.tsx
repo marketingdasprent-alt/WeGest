@@ -261,14 +261,16 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
 
       // 2. Uber Data (Official Transactions for ALL associated IDs)
       const { data: uberTrans } = await supabase
-        .from('uber_transactions')
-        .select('gross_amount')
+        // O resumo semanal, não as transacções em bruto — a mesma fonte que o
+        // ecrã de Contas e o painel do motorista usam. Ver 20260814170000.
+        .from('uber_resumos_semanais')
+        .select('ganhos_brutos')
         .in('uber_driver_id', associatedUberIds)
-        .gte('occurred_at', weekStartISO)
-        .lte('occurred_at', weekEndISO);
+        .lte('periodo_inicio', weekEndStr)
+        .gte('periodo_fim', weekStartStr);
 
       const uberTotal = (uberTrans || []).reduce(
-        (acc, curr) => acc + (Number(curr.gross_amount) || 0),
+        (acc, curr) => acc + (Number(curr.ganhos_brutos) || 0),
         0
       );
 

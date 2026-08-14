@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       _backup_viaturas_20260710: {
@@ -1449,6 +1474,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           error_message: string | null
+          fase: string
           formula_id: string | null
           id: string
           integracao_id: string
@@ -1457,6 +1483,7 @@ export type Database = {
           periodo_fim: string
           periodo_inicio: string
           resultado: Json | null
+          semana_inicio: string | null
           started_at: string | null
           status: string
         }
@@ -1464,6 +1491,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
+          fase?: string
           formula_id?: string | null
           id?: string
           integracao_id: string
@@ -1472,6 +1500,7 @@ export type Database = {
           periodo_fim: string
           periodo_inicio: string
           resultado?: Json | null
+          semana_inicio?: string | null
           started_at?: string | null
           status?: string
         }
@@ -1479,6 +1508,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
+          fase?: string
           formula_id?: string | null
           id?: string
           integracao_id?: string
@@ -1487,6 +1517,7 @@ export type Database = {
           periodo_fim?: string
           periodo_inicio?: string
           resultado?: Json | null
+          semana_inicio?: string | null
           started_at?: string | null
           status?: string
         }
@@ -10809,6 +10840,97 @@ export type Database = {
           },
         ]
       }
+      uber_resumos_semanais: {
+        Row: {
+          api_sincronizado_em: string | null
+          chave_motorista: string
+          comissoes: number | null
+          created_at: string
+          csv_importado_em: string | null
+          fonte: string
+          ganhos_brutos: number
+          ganhos_liquidos: number | null
+          gorjetas: number
+          id: string
+          integracao_id: string
+          motorista_id: string | null
+          motorista_nome: string | null
+          org_id: string
+          periodo: string
+          periodo_fim: string
+          periodo_inicio: string
+          uber_driver_id: string | null
+          updated_at: string
+          viagens: number
+        }
+        Insert: {
+          api_sincronizado_em?: string | null
+          chave_motorista: string
+          comissoes?: number | null
+          created_at?: string
+          csv_importado_em?: string | null
+          fonte: string
+          ganhos_brutos?: number
+          ganhos_liquidos?: number | null
+          gorjetas?: number
+          id?: string
+          integracao_id: string
+          motorista_id?: string | null
+          motorista_nome?: string | null
+          org_id: string
+          periodo: string
+          periodo_fim: string
+          periodo_inicio: string
+          uber_driver_id?: string | null
+          updated_at?: string
+          viagens?: number
+        }
+        Update: {
+          api_sincronizado_em?: string | null
+          chave_motorista?: string
+          comissoes?: number | null
+          created_at?: string
+          csv_importado_em?: string | null
+          fonte?: string
+          ganhos_brutos?: number
+          ganhos_liquidos?: number | null
+          gorjetas?: number
+          id?: string
+          integracao_id?: string
+          motorista_id?: string | null
+          motorista_nome?: string | null
+          org_id?: string
+          periodo?: string
+          periodo_fim?: string
+          periodo_inicio?: string
+          uber_driver_id?: string | null
+          updated_at?: string
+          viagens?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uber_resumos_semanais_integracao_id_fkey"
+            columns: ["integracao_id"]
+            isOneToOne: false
+            referencedRelation: "plataformas_configuracao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "uber_resumos_semanais_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "uber_resumos_semanais_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uber_sync_cursors: {
         Row: {
           created_at: string
@@ -10928,6 +11050,7 @@ export type Database = {
           commission_amount: number | null
           created_at: string
           currency: string | null
+          fonte: string
           gross_amount: number | null
           id: string
           integracao_id: string
@@ -10950,6 +11073,7 @@ export type Database = {
           commission_amount?: number | null
           created_at?: string
           currency?: string | null
+          fonte?: string
           gross_amount?: number | null
           id?: string
           integracao_id: string
@@ -10972,6 +11096,7 @@ export type Database = {
           commission_amount?: number | null
           created_at?: string
           currency?: string | null
+          fonte?: string
           gross_amount?: number | null
           id?: string
           integracao_id?: string
@@ -13064,6 +13189,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      bolt_actualizar_bolt_id_recente: {
+        Args: { p_integracao_id?: string }
+        Returns: number
+      }
       bolt_normalizar_nome: { Args: { p_nome: string }; Returns: string }
       bolt_resumo_merge_api: {
         Args: {
@@ -13124,6 +13253,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           error_message: string | null
+          fase: string
           formula_id: string | null
           id: string
           integracao_id: string
@@ -13132,6 +13262,7 @@ export type Database = {
           periodo_fim: string
           periodo_inicio: string
           resultado: Json | null
+          semana_inicio: string | null
           started_at: string | null
           status: string
         }[]
@@ -13875,6 +14006,23 @@ export type Database = {
         }
         Returns: string
       }
+      uber_resumo_merge: {
+        Args: {
+          p_comissoes?: number
+          p_fonte: string
+          p_ganhos_brutos?: number
+          p_ganhos_liquidos?: number
+          p_integracao_id: string
+          p_motorista_id?: string
+          p_motorista_nome?: string
+          p_org_id: string
+          p_periodo_fim: string
+          p_periodo_inicio: string
+          p_uber_driver_id?: string
+          p_viagens?: number
+        }
+        Returns: string
+      }
       unaccent: { Args: { "": string }; Returns: string }
       validar_convite_token: {
         Args: { p_token: string }
@@ -14093,6 +14241,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["admin", "gestor_tvde", "gestor_comercial", "colaborador"],

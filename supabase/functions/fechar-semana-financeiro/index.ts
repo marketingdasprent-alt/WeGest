@@ -298,18 +298,19 @@ Deno.serve(async (req) => {
                   .lte('periodo_inicio', semanaFim)
                   .gte('periodo_fim', semanaInicio)
               : Promise.resolve({ data: [] as { ganhos_liquidos: number | null }[] }),
-            // Uber: sem tabela pré-agregada — soma transações individuais da
-            // semana. occurred_at é timestamptz, por isso usa limite
-            // superior EXCLUSIVO (dia seguinte) em vez de <= semanaFim, que
-            // ficaria à meia-noite de domingo e perdia o domingo inteiro.
+            // Uber: o resumo semanal, igual à Bolt. Somava-se aqui
+            // uber_transactions em bruto, o que duplicava a receita no dia em
+            // que a API oficial ligasse (uma linha por VIAGEM da API mais a
+            // linha SEMANAL do CSV, na mesma soma). O resumo é mantido por
+            // gatilho e já resolve a precedência. Ver 20260814170000.
             motoristaId
               ? supabase
-                  .from('uber_transactions')
-                  .select('gross_amount, occurred_at')
+                  .from('uber_resumos_semanais')
+                  .select('ganhos_brutos, periodo_inicio, periodo_fim')
                   .eq('motorista_id', motoristaId)
-                  .gte('occurred_at', semanaInicio)
-                  .lt('occurred_at', semanaFimExclusivoStr)
-              : Promise.resolve({ data: [] as { gross_amount: number | null }[] }),
+                  .lte('periodo_inicio', semanaFim)
+                  .gte('periodo_fim', semanaInicio)
+              : Promise.resolve({ data: [] as { ganhos_brutos: number | null }[] }),
           ]);
 
           const totalMultas = (multasRes.data ?? []).reduce(
@@ -327,7 +328,7 @@ Deno.serve(async (req) => {
             0
           );
           const uberTotal = (uberRes.data ?? []).reduce(
-            (acc, r: { gross_amount: number | null }) => acc + (Number(r.gross_amount) || 0),
+            (acc, r: { ganhos_brutos: number | null }) => acc + (Number(r.ganhos_brutos) || 0),
             0
           );
 
