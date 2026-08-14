@@ -2,7 +2,9 @@ import { assertAlmostEquals, assertEquals } from "https://deno.land/std@0.224.0/
 import {
   agregarPorMotorista,
   aplicarFormula,
+  chaveDaCorrida,
   eFormulaId,
+  eOrdemPaga,
   ePagamentoEmDinheiro,
   type FormulaId,
   FORMULAS_ID,
@@ -387,4 +389,254 @@ Deno.test("totais = soma das linhas", () => {
   assertEquals(resultado.totais.gorjetas, 6);
   assertEquals(resultado.totais.orders_total, 4);
   assertEquals(resultado.totais.orders_finished, 4);
+});
+
+// ---------------------------------------------------------------------------
+// Uma corrida, várias tentativas
+// ---------------------------------------------------------------------------
+
+/** Referência real da Bolt: base64 de `<frota>-<corrida>-<tentativa>`. */
+const ref = (frota: number, corrida: number, tentativa: number) =>
+  btoa(`${frota}-${corrida}-${tentativa}`).replace(/=+$/, "");
+
+Deno.test("chaveDaCorrida ignora a tentativa e fica pela corrida", () => {
+  assertEquals(chaveDaCorrida(ref(1230, 1639363673, 3593827406)), "1230-1639363673");
+  assertEquals(chaveDaCorrida(ref(1230, 1639363673, 3593835122)), "1230-1639363673");
+  // Corridas diferentes não se fundem.
+  assertEquals(chaveDaCorrida(ref(1230, 999, 1)) === chaveDaCorrida(ref(1230, 998, 1)), false);
+});
+
+Deno.test("chaveDaCorrida devolve a referência intacta quando não a reconhece", () => {
+  // Sem isto, uma referência que descodifique para lixo podia colidir com
+  // outra e fundir duas corridas diferentes.
+  assertEquals(chaveDaCorrida("ref-7"), "ref-7");
+  assertEquals(chaveDaCorrida(btoa("isto-nao-e-numerico")), btoa("isto-nao-e-numerico"));
+  assertEquals(chaveDaCorrida(""), null);
+  assertEquals(chaveDaCorrida(null), null);
+});
+
+Deno.test("caso Anabela (03-09/08/2026): a corrida cancelada e reposta conta UMA vez", () => {
+  // A Bolt despachou a corrida 1639363673, a motorista cancelou depois de
+  // aceitar, voltou a recebê-la 3 minutos depois e concluiu-a. A API devolve
+  // as DUAS tentativas com os mesmos 6,20 EUR. Somá-las dava 140,45 EUR no
+  // WeGest contra 134,19 EUR no relatório da Bolt.
+  const mesmaCorrida = preco({ ride_price: 8.27, commission: 2.07, in_app_discount: 3.31, net_earnings: 6.2 });
+  const resultado = agregarPorMotorista([
+    ordem({
+      order_reference: ref(1230, 1639363673, 3593827406),
+      order_status: "driver_cancelled_after_accept",
+      driver_uuid: "uuid-anabela",
+      driver_name: "Anabela Gonçalves",
+      order_price: mesmaCorrida,
+    }),
+    ordem({
+      order_reference: ref(1230, 1639363673, 3593835122),
+      order_status: "finished",
+      driver_uuid: "uuid-anabela",
+      driver_name: "Anabela Gonçalves",
+      order_price: mesmaCorrida,
+    }),
+  ]);
+
+  assertEquals(resultado.linhas.length, 1);
+  assertEquals(resultado.linhas[0].parcelas.net_earnings, 6.2); // 12,40 = duplicado
+  assertEquals(resultado.linhas[0].ganhos_brutos_app, 8.27);
+  assertEquals(resultado.linhas[0].comissoes, 2.07);
+  assertEquals(resultado.linhas[0].viagens_terminadas, 1);
+  assertEquals(resultado.ordens_repetidas, 1);
+});
+
+Deno.test("a tentativa concluída manda, mesmo chegando primeiro a não concluída", () => {
+  const p = preco({ ride_price: 10, net_earnings: 7.5 });
+  for (const ordemDeChegada of [["driver_rejected", "finished"], ["finished", "driver_rejected"]]) {
+    const resultado = agregarPorMotorista(
+      ordemDeChegada.map((estado, i) =>
+        ordem({
+          order_reference: ref(98, 555, 100 + i),
+          order_status: estado,
+          driver_uuid: "u",
+          driver_name: "N",
+          order_price: p,
+        })
+      ),
+    );
+    assertEquals(resultado.linhas[0].parcelas.net_earnings, 7.5);
+    assertEquals(resultado.linhas[0].viagens_terminadas, 1);
+  }
+});
+
+Deno.test("corrida que trocou de motorista: o dinheiro fica com quem a concluiu", () => {
+  // 7.283 corridas em produção mudaram de motorista e concluíram. Sem isto,
+  // quem rejeitou ficava com uma cópia do dinheiro de quem a fez.
+  const p = preco({ ride_price: 20, net_earnings: 15 });
+  const resultado = agregarPorMotorista([
+    ordem({
+      order_reference: ref(98, 777, 1),
+      order_status: "driver_rejected",
+      driver_uuid: "quem-rejeitou",
+      driver_name: "Rejeitou",
+      order_price: p,
+    }),
+    ordem({
+      order_reference: ref(98, 777, 2),
+      order_status: "finished",
+      driver_uuid: "quem-concluiu",
+      driver_name: "Concluiu",
+      order_price: p,
+    }),
+  ]);
+
+  assertEquals(resultado.linhas.length, 1);
+  assertEquals(resultado.linhas[0].driver_uuid, "quem-concluiu");
+  assertEquals(resultado.linhas[0].parcelas.net_earnings, 15);
+});
+
+Deno.test("corrida nunca concluída também não se soma duas vezes", () => {
+  const p = preco({ ride_price: 4, net_earnings: 3 });
+  const resultado = agregarPorMotorista([
+    ordem({ order_reference: ref(98, 888, 1), order_status: "client_cancelled", driver_uuid: "u", driver_name: "N", order_price: p }),
+    ordem({ order_reference: ref(98, 888, 2), order_status: "driver_did_not_respond", driver_uuid: "u", driver_name: "N", order_price: p }),
+  ]);
+
+  assertEquals(resultado.linhas[0].parcelas.net_earnings, 3);
+  assertEquals(resultado.linhas[0].viagens_terminadas, 0);
+  assertEquals(resultado.ordens_repetidas, 1);
+});
+
+// ---------------------------------------------------------------------------
+// Falha do motorista: a corrida conta, o dinheiro não
+// ---------------------------------------------------------------------------
+
+Deno.test("eOrdemPaga: paga o que o motorista fez e o que o cliente lhe estragou", () => {
+  assertEquals(eOrdemPaga("finished"), true);
+  // Culpa do cliente: a Bolt cobra-lhe a taxa e entrega-a ao motorista.
+  assertEquals(eOrdemPaga("client_cancelled"), true);
+  assertEquals(eOrdemPaga("client_did_not_show"), true);
+  // Culpa do motorista: não recebe.
+  assertEquals(eOrdemPaga("driver_cancelled_after_accept"), false);
+  assertEquals(eOrdemPaga("driver_rejected"), false);
+  assertEquals(eOrdemPaga("driver_did_not_respond"), false);
+  // Um estado driver_* que a Bolt ainda não inventou é apanhado na mesma.
+  assertEquals(eOrdemPaga("driver_cancelled_before_accept"), false);
+  // Maiúsculas e espaços não enganam a regra.
+  assertEquals(eOrdemPaga("  DRIVER_REJECTED  "), false);
+});
+
+Deno.test("driver_cancelled_after_accept: nem euros, nem km, nem viagem terminada", () => {
+  const resultado = agregarPorMotorista([
+    ordem({
+      order_reference: ref(98, 4001, 1),
+      order_status: "driver_cancelled_after_accept",
+      driver_uuid: "u",
+      driver_name: "N",
+      ride_distance: 3000,
+      order_price: preco({ cancellation_fee: 2.5, commission: 0.5, net_earnings: 2 }),
+    }),
+  ]);
+
+  const linha = resultado.linhas[0];
+  assertEquals(linha.parcelas.net_earnings, 0);
+  assertEquals(linha.taxas_cancelamento, 0);
+  assertEquals(linha.comissoes, 0);
+  assertEquals(linha.bruto_viagens, 0);
+  assertEquals(linha.distancia_total_km, 0);
+  assertEquals(linha.viagens_terminadas, 0);
+  // A corrida não desaparece do histórico — só não traz dinheiro.
+  assertEquals(linha.orders_total, 1);
+  assertEquals(resultado.ordens_sem_pagamento, 1);
+});
+
+Deno.test("client_cancelled continua a pagar a taxa ao motorista", () => {
+  // 7.728,42 EUR em produção. Cortar os não-concluídos todos tirava-lhos.
+  const resultado = agregarPorMotorista([
+    ordem({
+      order_reference: ref(98, 4002, 1),
+      order_status: "client_cancelled",
+      driver_uuid: "u",
+      driver_name: "N",
+      order_price: preco({ cancellation_fee: 4, commission: 1, net_earnings: 3 }),
+    }),
+  ]);
+
+  const linha = resultado.linhas[0];
+  assertEquals(linha.taxas_cancelamento, 4);
+  assertEquals(linha.comissoes, 1);
+  assertEquals(linha.parcelas.net_earnings, 3);
+  assertEquals(resultado.ordens_sem_pagamento, 0);
+});
+
+Deno.test("uma semana inteira: só entra o que o motorista tem a receber", () => {
+  const resultado = agregarPorMotorista([
+    ordem({
+      order_reference: ref(98, 5001, 1),
+      order_status: "finished",
+      driver_uuid: "u",
+      driver_name: "N",
+      order_price: preco({ ride_price: 10, commission: 2.5, net_earnings: 7.5 }),
+    }),
+    ordem({
+      order_reference: ref(98, 5002, 1),
+      order_status: "client_did_not_show",
+      driver_uuid: "u",
+      driver_name: "N",
+      order_price: preco({ cancellation_fee: 2, commission: 0.5, net_earnings: 1.5 }),
+    }),
+    ordem({
+      order_reference: ref(98, 5003, 1),
+      order_status: "driver_rejected",
+      driver_uuid: "u",
+      driver_name: "N",
+      order_price: preco({ cancellation_fee: 3, commission: 0.75, net_earnings: 2.25 }),
+    }),
+  ]);
+
+  const linha = resultado.linhas[0];
+  assertEquals(linha.parcelas.net_earnings, 9); // 7,50 + 1,50 (os 2,25 ficam de fora)
+  assertEquals(linha.taxas_cancelamento, 2); // só a do cliente
+  assertEquals(linha.comissoes, 3); // 2,50 + 0,50
+  assertEquals(linha.viagens_terminadas, 1);
+  assertEquals(linha.orders_total, 3);
+  assertEquals(resultado.ordens_sem_pagamento, 1);
+});
+
+Deno.test("nenhuma concluida: fica a do cliente, nao a do motorista que chegou primeiro", () => {
+  // 98 corridas em producao: o motorista nao atendeu, o cliente cancelou a
+  // seguir, e a taxa de cancelamento ficou agarrada a segunda tentativa.
+  // Ficar com a primeira deitava fora 314,83 EUR que sao dos motoristas.
+  const resultado = agregarPorMotorista([
+    ordem({
+      order_reference: ref(98, 6001, 1),
+      order_status: "driver_did_not_respond",
+      driver_uuid: "u",
+      driver_name: "N",
+      order_price: preco({}),
+    }),
+    ordem({
+      order_reference: ref(98, 6001, 2),
+      order_status: "client_cancelled",
+      driver_uuid: "u",
+      driver_name: "N",
+      order_price: preco({ cancellation_fee: 3.2, commission: 0.8, net_earnings: 2.4 }),
+    }),
+  ]);
+
+  assertEquals(resultado.linhas.length, 1);
+  assertEquals(resultado.linhas[0].taxas_cancelamento, 3.2);
+  assertEquals(resultado.linhas[0].parcelas.net_earnings, 2.4);
+  assertEquals(resultado.ordens_sem_pagamento, 0);
+});
+
+Deno.test("a concluida ganha a do cliente, esteja onde estiver na lista", () => {
+  const daClientela = preco({ cancellation_fee: 3, commission: 0.75, net_earnings: 2.25 });
+  const daConcluida = preco({ ride_price: 12, commission: 3, net_earnings: 9 });
+  for (const invertida of [false, true]) {
+    const linhas = [
+      ordem({ order_reference: ref(98, 6002, 1), order_status: "client_cancelled", driver_uuid: "u", driver_name: "N", order_price: daClientela }),
+      ordem({ order_reference: ref(98, 6002, 2), order_status: "finished", driver_uuid: "u", driver_name: "N", order_price: daConcluida }),
+    ];
+    const resultado = agregarPorMotorista(invertida ? [...linhas].reverse() : linhas);
+    assertEquals(resultado.linhas[0].parcelas.net_earnings, 9);
+    assertEquals(resultado.linhas[0].taxas_cancelamento, 0);
+    assertEquals(resultado.linhas[0].viagens_terminadas, 1);
+  }
 });
