@@ -168,7 +168,7 @@ describe('useCreateMotorista', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     // Verifica chamada ao supabase
-    expect(supabase.from).toHaveBeenCalledWith('motoristas');
+    expect(supabase.from).toHaveBeenCalledWith('motoristas_ativos');
     expect(chain.insert).toHaveBeenCalledWith({
       nome: 'Ana Lopes',
       nif: '123456789',
@@ -260,7 +260,7 @@ describe('useUpdateMotorista', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     // Verifica chamadas ao supabase
-    expect(supabase.from).toHaveBeenCalledWith('motoristas');
+    expect(supabase.from).toHaveBeenCalledWith('motoristas_ativos');
     expect(chain.update).toHaveBeenCalledWith(dadosUpdate);
     expect(chain.eq).toHaveBeenCalledWith('id', '1');
 
@@ -302,7 +302,7 @@ describe('useDeleteMotorista', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     // Verifica chamadas ao supabase
-    expect(supabase.from).toHaveBeenCalledWith('motoristas');
+    expect(supabase.from).toHaveBeenCalledWith('motoristas_ativos');
     expect(chain.delete).toHaveBeenCalled();
     expect(chain.eq).toHaveBeenCalledWith('id', '1');
 

@@ -96,6 +96,13 @@ const renderizar = () =>
 describe('ContasResumoTab — portão do Fechar Período', () => {
   beforeEach(() => {
     mockFrom().mockReset();
+    // O saldo pendente vem por RPC. Sem stub devolve undefined e o
+    // destructuring rebenta dentro do try/catch — o teste passava na mesma mas
+    // deixava uma rejeição por tratar a sujar a saída da suite.
+    (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+      error: null,
+    });
   });
 
   it('sem período fechado não mostra a tabela — mostra o cadeado', async () => {
