@@ -553,10 +553,18 @@ export const GenerateDocumentsDialog = ({
         }
       }
 
-      // Quando múltiplos documentos: apagar página 1 em branco e dar saída ao PDF combinado.
-      // Tem de respeitar a ação escolhida — imprimir abre a caixa de impressão, download grava.
+      // Saída do PDF combinado. Tem de respeitar a ação escolhida — imprimir
+      // abre a caixa de impressão, download grava.
+      //
+      // Aqui NÃO se apaga a página 1. Houve um `deletePage(1)` neste sítio, de
+      // quando o separador era adicionado antes de cada documento e a primeira
+      // folha do PDF ficava mesmo em branco. Esse comportamento acabou quando o
+      // `addSeparatorPage` passou a exigir `successCount > 0`: a partir daí a
+      // página 1 deixou de estar em branco e passou a ser a primeira página do
+      // primeiro documento — que o deletePage apagava, calado. O gerador escreve
+      // sempre na página corrente do PDF que recebe (nunca cria uma para si), por
+      // isso o PDF combinado não tem nem pode ter folha em branco à cabeça.
       if (isMultiple && combinedPdf && successCount > 0) {
-        combinedPdf.deletePage(1);
         const today_str = new Date().toISOString().split('T')[0].replace(/-/g, '');
         const fileName = `Documentos_${activeMotorista.nome}_${today_str}.pdf`;
         if (action === 'print') {
