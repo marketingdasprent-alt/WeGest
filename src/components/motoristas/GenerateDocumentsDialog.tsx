@@ -23,7 +23,6 @@ import { Loader2, FileText, CheckCircle2, Search, User, Download } from 'lucide-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { gerarContratoAtomico } from '@/hooks/useContratos';
-import jsPDF from 'jspdf';
 import {
   generateDocumentFromTemplate,
   uploadDocumentToStorage,
@@ -39,6 +38,7 @@ import { resolveCartaoFrota } from '@/utils/document-template/resolveCartaoFrota
 import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
 import { matchesSearch, cn } from '@/lib/utils';
 import { printPdf } from '@/lib/printPdf';
+import { criarCompositorPdf } from '@/utils/document-template/compositorPdf';
 
 interface Motorista {
   id: string;
@@ -399,20 +399,9 @@ export const GenerateDocumentsDialog = ({
       // com uma página em branco para nunca saírem colados.
       const isMultiple = templatesToGenerate.length > 1;
 
-      // Quando múltiplos downloads, criar um PDF combinado onde todos os documentos são adicionados
-      const combinedPdf = isMultiple
-        ? new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-        : null;
-
-      // Insere uma página em branco a separar os documentos dentro do PDF combinado.
-      // Só corre depois de já existir um documento gerado (successCount > 0), por isso
-      // nunca há folha em branco à cabeça nem depois do último — exatamente uma entre cada par.
-      const addSeparatorPage = () => {
-        if (!combinedPdf) return;
-        if (successCount > 0) {
-          combinedPdf.addPage(); // página em branco a separar os documentos
-        }
-      };
+      // A regra de composição (quem cria o PDF, onde entra a separadora) vive
+      // toda no compositor — ver compositorPdf.ts.
+      const compositor = criarCompositorPdf(isMultiple);
 
       // Cartão de combustível (placeholders {{cartao_frota_*}}) — upgrade da
       // fonte anterior (motoristaData.cartao_bp/repsol/edp acima) para também
@@ -504,15 +493,16 @@ export const GenerateDocumentsDialog = ({
       for (const template of contratoTemplates) {
         setCurrentGenerating(template.id);
         try {
-          addSeparatorPage();
-          await generateDocumentFromTemplate({
-            templateId: template.id,
-            motoristaData,
-            documentData: docParams,
-            action,
-            skipOutput: isMultiple,
-            existingPdf: combinedPdf || undefined,
-          });
+          await compositor.anexar((existente) =>
+            generateDocumentFromTemplate({
+              templateId: template.id,
+              motoristaData,
+              documentData: docParams,
+              action,
+              skipOutput: isMultiple,
+              existingPdf: existente,
+            })
+          );
 
           setGeneratedTemplates((prev) => new Set(prev).add(template.id));
           successCount++;
@@ -532,18 +522,19 @@ export const GenerateDocumentsDialog = ({
             continue;
           }
 
-          addSeparatorPage();
-          await generateDocumentFromTemplate({
-            templateId: template.id,
-            motoristaData,
-            documentData: docParams,
-            action,
-            skipOutput: isMultiple,
-            existingPdf: combinedPdf || undefined,
-            ...(template.tipo === 'anexo_danos' && viaturaIdEfetivo
-              ? { viaturaId: viaturaIdEfetivo }
-              : {}),
-          });
+          await compositor.anexar((existente) =>
+            generateDocumentFromTemplate({
+              templateId: template.id,
+              motoristaData,
+              documentData: docParams,
+              action,
+              skipOutput: isMultiple,
+              existingPdf: existente,
+              ...(template.tipo === 'anexo_danos' && viaturaIdEfetivo
+                ? { viaturaId: viaturaIdEfetivo }
+                : {}),
+            })
+          );
 
           setGeneratedTemplates((prev) => new Set(prev).add(template.id));
           successCount++;
@@ -558,12 +549,10 @@ export const GenerateDocumentsDialog = ({
       //
       // Aqui NÃO se apaga a página 1. Houve um `deletePage(1)` neste sítio, de
       // quando o separador era adicionado antes de cada documento e a primeira
-      // folha do PDF ficava mesmo em branco. Esse comportamento acabou quando o
-      // `addSeparatorPage` passou a exigir `successCount > 0`: a partir daí a
-      // página 1 deixou de estar em branco e passou a ser a primeira página do
-      // primeiro documento — que o deletePage apagava, calado. O gerador escreve
-      // sempre na página corrente do PDF que recebe (nunca cria uma para si), por
-      // isso o PDF combinado não tem nem pode ter folha em branco à cabeça.
+      // folha do PDF ficava mesmo em branco. Esse pressuposto caiu, a página 1
+      // passou a ser a primeira página do primeiro documento, e o deletePage
+      // ficou a apagá-la, calado.
+      const combinedPdf = compositor.pdf;
       if (isMultiple && combinedPdf && successCount > 0) {
         const today_str = new Date().toISOString().split('T')[0].replace(/-/g, '');
         const fileName = `Documentos_${activeMotorista.nome}_${today_str}.pdf`;

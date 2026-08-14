@@ -35,14 +35,6 @@ class FakePdf {
 
 const { pdfsCriados } = vi.hoisted(() => ({ pdfsCriados: [] as unknown[] }));
 
-vi.mock('jspdf', () => ({
-  default: vi.fn(() => {
-    const p = new FakePdf();
-    pdfsCriados.push(p);
-    return p;
-  }),
-}));
-
 const TEMPLATES = [
   {
     id: 'tpl-1',
@@ -133,15 +125,18 @@ vi.mock('@/utils/document-template/resolveCartaoFrota', () => ({
     .mockResolvedValue({ marca: '', numero: '', validade: '', limite: '' }),
 }));
 
-// O gerador real escreve na página CORRENTE do PDF recebido — nunca cria uma
-// página para si próprio (ver generate-document.ts: `startPage =
-// pdf.getNumberOfPages()` e o comentário sobre documentos de continuação). O
-// mock reproduz exactamente esse contrato: sem isso o teste não conseguiria
-// distinguir "a página 1 é do primeiro documento" de "a página 1 está vazia".
+// O mock reproduz o contrato do gerador real: sem PDF recebido CRIA um; com PDF
+// recebido escreve na página CORRENTE e nunca cria página nenhuma (ver
+// generate-document.ts, `startPage = pdf.getNumberOfPages()` e o comentário
+// sobre documentos de continuação). Sem isto o teste não distinguiria "a página
+// 1 é do primeiro documento" de "a página 1 está vazia".
 vi.mock('@/utils/generateDocumentFromTemplate', () => ({
   generateDocumentFromTemplate: vi.fn(
     async ({ templateId, existingPdf }: { templateId: string; existingPdf?: FakePdf }) => {
-      existingPdf?.escrever(templateId);
+      const pdf = existingPdf ?? new FakePdf();
+      if (!existingPdf) pdfsCriados.push(pdf);
+      pdf.escrever(templateId);
+      return pdf;
     }
   ),
   uploadDocumentToStorage: vi.fn().mockResolvedValue(null),
