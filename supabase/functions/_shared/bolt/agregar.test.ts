@@ -640,3 +640,66 @@ Deno.test("a concluida ganha a do cliente, esteja onde estiver na lista", () => 
     assertEquals(resultado.linhas[0].viagens_terminadas, 1);
   }
 });
+
+// ---------------------------------------------------------------------------
+// O meio centimo que a Bolt arredonda duas vezes
+// ---------------------------------------------------------------------------
+
+Deno.test("arredondamento duplo: 4,50 a 25% da 3,38 + 1,13 = 4,51 (um centimo do nada)", () => {
+  // 4,50 x 0,25 = 1,125 -> comissao 1,13 (subiu meio centimo)
+  // 4,50 x 0,75 = 3,375 -> liquido  3,38 (subiu meio centimo)
+  // Somados dao 4,51 para uma corrida de 4,50. Uma corrida so, um centimo.
+  const resultado = agregarPorMotorista([
+    ordem({
+      order_reference: ref(98, 7001, 1),
+      driver_uuid: "u", driver_name: "N",
+      order_price: preco({ ride_price: 4.5, commission: 1.13, net_earnings: 3.38 }),
+    }),
+  ]);
+  // O exacto e 3,375 / 1,125; a linha semanal trunca ao centimo, como a Bolt.
+  assertEquals(resultado.linhas[0].parcelas.net_earnings, 3.37);
+  assertEquals(resultado.linhas[0].comissoes, 1.12);
+});
+
+Deno.test("sem arredondamento duplo nao se mexe em nada", () => {
+  // 4,69 x 0,25 = 1,1725 -> 1,17; 4,69 - 1,17 = 3,52 = liquido. Fecha certo.
+  const resultado = agregarPorMotorista([
+    ordem({
+      order_reference: ref(98, 7002, 1),
+      driver_uuid: "u", driver_name: "N",
+      order_price: preco({ ride_price: 4.69, commission: 1.17, net_earnings: 3.52 }),
+    }),
+  ]);
+  assertEquals(resultado.linhas[0].parcelas.net_earnings, 3.52);
+  assertEquals(resultado.linhas[0].comissoes, 1.17);
+});
+
+Deno.test("caso Anabela: as 26 corridas de 03-09/08 dao 134,19 como no relatorio", () => {
+  // Valores REAIS da semana. 11 das 26 tem o arredondamento duplo; somar os
+  // liquidos ja arredondados dava 134,25 e o relatorio da Bolt diz 134,19.
+  const semana: Array<[number, number, number]> = [
+    // [ride_price, commission, net_earnings]
+    [4.50, 1.13, 3.38], [4.50, 1.13, 3.38], [4.50, 1.13, 3.38], [4.50, 1.13, 3.38],
+    [4.50, 1.13, 3.38], [4.62, 1.16, 3.47], [4.62, 1.16, 3.47], [4.66, 1.17, 3.50],
+    [4.69, 1.17, 3.52], [4.73, 1.18, 3.55], [4.95, 1.24, 3.71], [4.95, 1.24, 3.71],
+    [5.20, 1.30, 3.90], [5.30, 1.33, 3.98], [6.01, 1.50, 4.51], [6.19, 1.55, 4.64],
+    [7.03, 1.76, 5.27], [7.22, 1.81, 5.42], [8.27, 2.07, 6.20], [8.42, 1.48, 6.95],
+    [10.00, 2.50, 7.50], [10.09, 2.52, 7.57], [11.16, 2.79, 8.37], [11.29, 2.82, 8.47],
+    [11.77, 2.06, 9.71], [13.24, 3.31, 9.93],
+  ];
+
+  const resultado = agregarPorMotorista(
+    semana.map(([ride, com, net], i) =>
+      ordem({
+        order_reference: ref(1230, 8000 + i, 1),
+        driver_uuid: "uuid-anabela",
+        driver_name: "Anabela Gonçalves",
+        order_price: preco({ ride_price: ride, commission: com, net_earnings: net }),
+      })
+    ),
+  );
+
+  assertEquals(resultado.linhas[0].viagens_terminadas, 26);
+  // 134,25 era o que mostravamos; 134,19 e o relatorio da Bolt.
+  assertEquals(resultado.linhas[0].parcelas.net_earnings, 134.19);
+});

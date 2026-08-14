@@ -107,6 +107,56 @@ function paraEuros(centimos: Centimos): ParcelasBolt {
   return euros;
 }
 
+// ---------------------------------------------------------------------------
+// O meio cêntimo que a Bolt arredonda duas vezes
+// ---------------------------------------------------------------------------
+
+/**
+ * A corrida sofreu arredondamento duplo?
+ *
+ * A Bolt calcula o líquido e a comissão a partir do mesmo preço e arredonda os
+ * DOIS ao cêntimo, cada um por si. Quando a conta cai num meio cêntimo — e cai
+ * sempre que o preço é múltiplo de 0,02, porque 4,50 x 0,25 = 1,1(25) — os dois
+ * sobem, e a identidade
+ *
+ *     liquido = preco + reserva + portagem + gorjeta - comissao
+ *
+ * passa a fechar com +0,01 de folga. Somar 26 corridas dessas dá 6 centimos a
+ * mais do que o relatorio semanal da Bolt, que faz a conta com os valores por
+ * arredondar e arredonda uma vez no fim. Foi esta a diferenca entre os 134,25
+ * que mostravamos a Anabela Goncalves e os 134,19 do relatorio dela.
+ *
+ * A CORRECCAO E EXACTA, nao e ajustada a olho: se cada um dos dois subiu menos
+ * de meio centimo e a soma dos dois desvios da exactamente 0,01, entao cada um
+ * subiu EXACTAMENTE meio centimo. O valor verdadeiro e `liquido - 0,005`, sem
+ * margem de erro.
+ *
+ * So se aplica quando o desvio e exactamente +0,01. Em 3% das corridas a
+ * identidade nem fecha (a API faz deducoes que nao detalha) — essas ficam
+ * intactas, porque ai nao ha nada que se possa afirmar.
+ *
+ * Medido em producao sobre 165.412 corridas concluidas:
+ *   119.014 (73%) fecham certo · 39.280 (24%) com o meio centimo · 3% cauda
+ */
+function temArredondamentoDuplo(preco: OrderPriceData | undefined): boolean {
+  if (!preco) return false;
+  const c = (v: unknown) => paraCentimos(v);
+  const esperado = c(preco.ride_price) + c(preco.booking_fee) + c(preco.toll_fee) +
+    c(preco.tip) - c(preco.commission);
+  return c(preco.net_earnings) - esperado === 1;
+}
+
+/**
+ * Devolve euros a partir de cêntimos, tirando os meios cêntimos a mais.
+ *
+ * Trunca em vez de arredondar: 134,195 dá 134,19, que é o que o relatório da
+ * Bolt mostra. Isto está calibrado num único relatório — se aparecer um em que
+ * a Bolt arredonde para cima, é aqui que se muda.
+ */
+function eurosSemMeios(centimos: number, meios: number): number {
+  return Math.trunc((centimos * 10 - meios * 5) / 10) / 100;
+}
+
 /** Fórmula aplicada em cêntimos — sem resíduo de vírgula flutuante. */
 function formulaCentimos(c: Centimos, formulaId: FormulaId): number {
   switch (formulaId) {
@@ -393,6 +443,8 @@ interface Bucket {
   todas: Centimos;
   app: Centimos;
   dinheiro: Centimos;
+  /** Corridas com arredondamento duplo — meio cêntimo a mais no líquido E na comissão. */
+  meios: number;
   distancia: number;
   /** Ordem de aparecimento, para a saída ser estável. */
   posicao: number;
@@ -432,6 +484,7 @@ export function agregarPorMotorista(
   let ordensIgnoradas = 0;
   let ordensSemPreco = 0;
   let ordensSemPagamento = 0;
+  let meiosGlobal = 0;
   let distanciaGlobal = 0;
   let terminadasGlobal = 0;
   let dinheiroGlobal = 0;
@@ -466,6 +519,7 @@ export function agregarPorMotorista(
         todas: novoAcumulador(),
         app: novoAcumulador(),
         dinheiro: novoAcumulador(),
+        meios: 0,
         distancia: 0,
         posicao: buckets.size,
       };
@@ -500,6 +554,10 @@ export function agregarPorMotorista(
     if (paga) {
       acumular(bucket.todas, preco);
       acumular(emDinheiro ? bucket.dinheiro : bucket.app, preco);
+      if (temArredondamentoDuplo(preco)) {
+        bucket.meios++;
+        meiosGlobal++;
+      }
 
       const distancia = numero(ordem?.ride_distance);
       bucket.distancia += distancia;
@@ -522,6 +580,13 @@ export function agregarPorMotorista(
     const kmTotal = arredondar2(bucket.distancia / divisor);
     const denominador = bucket.orders_finished > 0 ? bucket.orders_finished : bucket.orders_total;
 
+    // O líquido e a comissão levam de volta os meios cêntimos que a Bolt
+    // arredondou duas vezes. Corrigem-se os DOIS, senão a identidade
+    // bruto - comissão = líquido deixava de fechar no ecrã.
+    const parcelas = paraEuros(bucket.todas);
+    parcelas.net_earnings = eurosSemMeios(bucket.todas.net_earnings, bucket.meios);
+    parcelas.commission = eurosSemMeios(bucket.todas.commission, bucket.meios);
+
     linhas.push({
       chave: bucket.chave,
       driver_uuid: bucket.driver_uuid,
@@ -530,7 +595,7 @@ export function agregarPorMotorista(
       orders_total: bucket.orders_total,
       orders_finished: bucket.orders_finished,
       orders_cash: bucket.orders_cash,
-      parcelas: paraEuros(bucket.todas),
+      parcelas,
       parcelas_app: paraEuros(bucket.app),
       parcelas_dinheiro: paraEuros(bucket.dinheiro),
       ride_distance: arredondar2(bucket.distancia),
@@ -540,7 +605,7 @@ export function agregarPorMotorista(
       ganhos_brutos_dinheiro: dinheiroCentimos / 100,
       gorjetas: bucket.todas.tip / 100,
       taxas_cancelamento: bucket.todas.cancellation_fee / 100,
-      comissoes: bucket.todas.commission / 100,
+      comissoes: parcelas.commission,
       portagens: bucket.todas.toll_fee / 100,
       taxas_reserva: bucket.todas.booking_fee / 100,
       viagens_terminadas: bucket.orders_finished,
@@ -561,6 +626,11 @@ export function agregarPorMotorista(
 
   const kmGlobal = arredondar2(distanciaGlobal / divisor);
 
+  // Os totais levam a mesma correccao dos meios centimos que as linhas.
+  const parcelasGlobais = paraEuros(globalTodas);
+  parcelasGlobais.net_earnings = eurosSemMeios(globalTodas.net_earnings, meiosGlobal);
+  parcelasGlobais.commission = eurosSemMeios(globalTodas.commission, meiosGlobal);
+
   return {
     formula_id: formulaId,
     formula: FORMULAS[formulaId],
@@ -579,13 +649,13 @@ export function agregarPorMotorista(
       ganhos_brutos_dinheiro: variantes[formulaId].ganhos_brutos_dinheiro,
       gorjetas: globalTodas.tip / 100,
       taxas_cancelamento: globalTodas.cancellation_fee / 100,
-      comissoes: globalTodas.commission / 100,
+      comissoes: parcelasGlobais.commission,
       portagens: globalTodas.toll_fee / 100,
       taxas_reserva: globalTodas.booking_fee / 100,
       bruto_viagens: variantes[formulaId].bruto_viagens,
       ride_distance: arredondar2(distanciaGlobal),
       distancia_total_km: kmGlobal,
-      parcelas: paraEuros(globalTodas),
+      parcelas: parcelasGlobais,
     },
     variantes,
   };
