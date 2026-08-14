@@ -284,15 +284,20 @@ Deno.serve(async (req) => {
               : Promise.resolve({
                   data: [] as { tipo: string; categoria: string | null; valor: number }[],
                 }),
-            // Bolt: tabela pré-agregada por semana (import semanal do CSV).
+            // Bolt: o MESMO campo que o ecrã de resumos e a ficha do motorista
+            // mostram — ganhos_liquidos, escrito tanto pela API oficial como
+            // pelo CSV. Lia-se aqui ganhos_brutos_total, o BRUTO: o painel do
+            // motorista mostrava um número e os outros dois ecrãs mostravam
+            // outro. Em 178 semanas fechadas, 178 não batiam — 65.087,40 EUR no
+            // painel contra 47.730,63 EUR nos restantes.
             motoristaId
               ? supabase
                   .from('bolt_resumos_semanais')
-                  .select('ganhos_brutos_total, periodo_inicio, periodo_fim')
+                  .select('ganhos_liquidos, periodo_inicio, periodo_fim')
                   .eq('motorista_id', motoristaId)
                   .lte('periodo_inicio', semanaFim)
                   .gte('periodo_fim', semanaInicio)
-              : Promise.resolve({ data: [] as { ganhos_brutos_total: number | null }[] }),
+              : Promise.resolve({ data: [] as { ganhos_liquidos: number | null }[] }),
             // Uber: sem tabela pré-agregada — soma transações individuais da
             // semana. occurred_at é timestamptz, por isso usa limite
             // superior EXCLUSIVO (dia seguinte) em vez de <= semanaFim, que
@@ -318,7 +323,7 @@ Deno.serve(async (req) => {
             })
             .reduce((acc, r: { custo: number | null }) => acc + (Number(r.custo) || 0), 0);
           const boltTotal = (boltRes.data ?? []).reduce(
-            (acc, r: { ganhos_brutos_total: number | null }) => acc + (Number(r.ganhos_brutos_total) || 0),
+            (acc, r: { ganhos_liquidos: number | null }) => acc + (Number(r.ganhos_liquidos) || 0),
             0
           );
           const uberTotal = (uberRes.data ?? []).reduce(

@@ -45,7 +45,6 @@ import { Separator } from '@/components/ui/separator';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { MotoristaResumoDialog } from '@/components/administrativo/MotoristaResumoDialog';
-import { BOLT_FONTE_FINANCEIRA, receitaBoltDeduplicada } from '@/config/bolt';
 
 interface Recibo {
   id: string;
@@ -273,25 +272,10 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         0
       );
 
-      // 3. Bolt: as duas origens (API bolt_viagens e CSV bolt_resumos_semanais)
-      // descrevem o MESMO dinheiro — nunca se somam, senão o recibo mostra a
-      // receita a dobrar. Quem manda é BOLT_FONTE_FINANCEIRA (src/config/bolt.ts);
-      // enquanto for 'csv' a API nem sequer é consultada (modo sombra).
-      let boltViagensTotal = 0;
-      if (BOLT_FONTE_FINANCEIRA === 'api') {
-        const { data: boltViagens } = await supabase
-          .from('bolt_viagens')
-          .select('driver_earnings')
-          .eq('motorista_id', motoristaId)
-          .gte('payment_confirmed_timestamp', weekStartISO)
-          .lte('payment_confirmed_timestamp', weekEndISO);
-
-        boltViagensTotal = (boltViagens || []).reduce(
-          (acc, curr) => acc + (Number(curr.driver_earnings) || 0),
-          0
-        );
-      }
-
+      // 3. Bolt: um sítio só — bolt_resumos_semanais.ganhos_liquidos, escrito
+      // tanto pela API oficial como pelo CSV (ver src/config/bolt.ts). Já não
+      // se consulta bolt_viagens: tem uma linha por TENTATIVA de despacho e
+      // somá-la conta a mesma corrida várias vezes.
       const { data: boltResumos } = await supabase
         .from('bolt_resumos_semanais')
         .select('ganhos_liquidos')
@@ -390,9 +374,9 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       // 6. FINAL AGGREGATION (MIRROR OF ContasResumoTab.tsx:resumosCalculados)
       const passesReciboVerde = motorista.recibo_verde ?? true;
 
-      // Precedência entre origens (nunca soma) — igual ao Administrativo → Contas,
-      // que também dedupa em vez de somar.
-      const boltTotal = receitaBoltDeduplicada(boltViagensTotal, boltResumosTotal);
+      // Fonte única: bolt_resumos_semanais.ganhos_liquidos — o mesmo campo que
+      // o ecrã de resumos e o painel do motorista mostram.
+      const boltTotal = boltResumosTotal;
       const faturadoPlataformas = uberTotal + boltTotal;
       const totalFaturadoReal = faturadoPlataformas + extraCredits;
 

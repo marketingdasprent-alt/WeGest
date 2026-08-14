@@ -1,46 +1,55 @@
 // src/config/bolt.test.ts
+//
+// Este ficheiro testava um interruptor `BOLT_FONTE_FINANCEIRA` que escolhia
+// entre DUAS TABELAS para o mesmo dinheiro Bolt — bolt_resumos_semanais quando
+// estava em 'csv', bolt_viagens quando estava em 'api'. O interruptor
+// desapareceu: há um sítio só, e tanto a API oficial como o CSV escrevem lá.
+//
+// O que se guarda aqui agora é a regra que substituiu o interruptor, para que
+// ninguém a desfaça sem dar por isso.
 import { describe, it, expect } from 'vitest';
-import { BOLT_FONTE_FINANCEIRA, receitaBoltDeduplicada, csvBoltEntraNoResumo } from './bolt';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { BOLT_GANHOS } from './bolt';
 
-describe('BOLT_FONTE_FINANCEIRA', () => {
-  it("está em 'csv' — a API Bolt ainda é modo sombra", () => {
-    // Se este teste falhar é porque alguém ligou a API como fonte do dinheiro.
-    // Só se muda depois de conferir os totais das duas origens no mesmo período.
-    expect(BOLT_FONTE_FINANCEIRA).toBe('csv');
-  });
-});
+const raiz = join(__dirname, '..', '..');
+const ler = (caminho: string) => readFileSync(join(raiz, caminho), 'utf8');
 
-describe('receitaBoltDeduplicada', () => {
-  it("com fonte 'csv' devolve só o CSV — nunca a soma das duas origens", () => {
-    // O bug: 300 (CSV) + 500 (API) = 800 no recibo do motorista.
-    expect(receitaBoltDeduplicada(500, 300, 'csv')).toBe(300);
+describe('ganhos Bolt: uma tabela só', () => {
+  it('a fonte é bolt_resumos_semanais.ganhos_liquidos', () => {
+    expect(BOLT_GANHOS.tabela).toBe('bolt_resumos_semanais');
+    expect(BOLT_GANHOS.campo).toBe('ganhos_liquidos');
   });
 
-  it("com fonte 'csv' ignora a API mesmo quando ela é a única com dados", () => {
-    expect(receitaBoltDeduplicada(500, 0, 'csv')).toBe(0);
+  it('não voltou a existir um interruptor de fonte', () => {
+    // Um `BOLT_FONTE_FINANCEIRA` obrigava cada ecrã a repetir a decisão, e
+    // bastava um decidir diferente para o mesmo motorista aparecer com dois
+    // valores.
+    expect(ler('src/config/bolt.ts')).not.toMatch(/export const BOLT_FONTE_FINANCEIRA/);
   });
 
-  it("com fonte 'api' manda a API e o CSV não se soma", () => {
-    expect(receitaBoltDeduplicada(500, 300, 'api')).toBe(500);
+  it('nenhum ecrã financeiro lê bolt_viagens para dinheiro', () => {
+    // bolt_viagens tem uma linha por TENTATIVA de despacho: a mesma corrida
+    // aparece lá tantas vezes quantas a Bolt a despachou, sempre com os mesmos
+    // valores. Somá-la dava 19.489,74 EUR a mais.
+    const ecras = [
+      'src/components/administrativo/ContasResumoTab.tsx',
+      'src/components/motoristas/tabs/MotoristaRecibosSection.tsx',
+    ];
+    for (const ecra of ecras) {
+      expect(ler(ecra), `${ecra} não pode consultar bolt_viagens`).not.toMatch(
+        /\.from\(\s*['"]bolt_viagens['"]\s*\)/
+      );
+    }
   });
 
-  it("com fonte 'api' cai no CSV quando a API não tem viagens no período", () => {
-    expect(receitaBoltDeduplicada(0, 300, 'api')).toBe(300);
-  });
-
-  it('usa a fonte configurada por omissão', () => {
-    expect(receitaBoltDeduplicada(500, 300)).toBe(BOLT_FONTE_FINANCEIRA === 'api' ? 500 : 300);
-  });
-});
-
-describe('csvBoltEntraNoResumo', () => {
-  it("com fonte 'csv' o CSV entra sempre, mesmo havendo dados da API", () => {
-    expect(csvBoltEntraNoResumo(true, 'csv')).toBe(true);
-    expect(csvBoltEntraNoResumo(false, 'csv')).toBe(true);
-  });
-
-  it("com fonte 'api' o CSV é descartado só quando a API já trouxe viagens", () => {
-    expect(csvBoltEntraNoResumo(true, 'api')).toBe(false);
-    expect(csvBoltEntraNoResumo(false, 'api')).toBe(true);
+  it('o fecho da semana grava o líquido, não o bruto', () => {
+    // O painel do motorista lê motorista_resumo_semanal.receita_bolt, escrito
+    // aqui. Enquanto isto lia ganhos_brutos_total, o painel mostrava um número
+    // e os outros dois ecrãs mostravam outro: em 178 semanas fechadas, 178 não
+    // batiam (65.087,40 EUR contra 47.730,63 EUR).
+    const fecho = ler('supabase/functions/fechar-semana-financeiro/index.ts');
+    expect(fecho).toMatch(/\.select\('ganhos_liquidos, periodo_inicio, periodo_fim'\)/);
+    expect(fecho).not.toMatch(/Number\(r\.ganhos_brutos_total\)/);
   });
 });

@@ -34,7 +34,6 @@ import { ContasResumoFiltros } from './ContasResumoFiltros';
 import { ContasResumoStats } from './ContasResumoStats';
 import { ContasResumoTabela } from './ContasResumoTabela';
 import { ContasResumoBulkBar } from './ContasResumoBulkBar';
-import { BOLT_FONTE_FINANCEIRA, csvBoltEntraNoResumo } from '@/config/bolt';
 
 // Semana: Segunda (1) a Domingo (0)
 const WEEK_STARTS_ON = 1;
@@ -382,19 +381,14 @@ export function ContasResumoTab() {
         if (!motoristaById.has(v.id)) motoristaById.set(v.id, v);
       }
 
-      // 3. Buscar viagens Bolt (API) — só quando a API é a fonte financeira.
-      // Enquanto BOLT_FONTE_FINANCEIRA for 'csv' a API fica em modo sombra:
-      // não é consultada, para não substituir silenciosamente os ganhos do CSV
-      // (ver src/config/bolt.ts).
-      const usarApiBolt = BOLT_FONTE_FINANCEIRA === 'api';
-      const boltQuery: PromiseLike<{ data: any[] | null; error: any }> = usarApiBolt
-        ? (supabase
-            .from('bolt_viagens')
-            .select('driver_name, driver_uuid, driver_earnings, order_status, integracao_id')
-            .gt('driver_earnings', 0)
-            .gte('payment_confirmed_timestamp', weekStart.toISOString())
-            .lte('payment_confirmed_timestamp', weekEnd.toISOString()) as any)
-        : Promise.resolve({ data: [], error: null });
+      // 3. Bolt: NÃO se consulta bolt_viagens. O dinheiro Bolt está todo em
+      // bolt_resumos_semanais.ganhos_liquidos (ver src/config/bolt.ts), escrito
+      // tanto pela API como pelo CSV. bolt_viagens tem uma linha por TENTATIVA
+      // de despacho e somá-la conta a mesma corrida várias vezes.
+      const boltQuery: PromiseLike<{ data: any[] | null; error: any }> = Promise.resolve({
+        data: [],
+        error: null,
+      });
 
       // 4. Buscar transações Uber no mesmo período
       const uberQuery = supabase
@@ -767,9 +761,8 @@ export function ContasResumoTab() {
             (gorjetaBoltById[motoristaId] || 0) + (Number(r.gorjetas) || 0);
         }
 
-        // A API só ganha ao CSV quando é ela a fonte financeira. Com fonte
-        // 'csv' o CSV entra sempre — nada de precedência silenciosa da API.
-        if (!csvBoltEntraNoResumo(boltResumosTracked.has(key))) return;
+        // Não há precedência entre origens: bolt_resumos_semanais é a fonte
+        // única e ganhos_liquidos já traz o valor certo, venha da API ou do CSV.
 
         if (!agrupado[key]) {
           agrupado[key] = {
