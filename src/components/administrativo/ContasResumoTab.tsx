@@ -1275,9 +1275,9 @@ export function ContasResumoTab() {
           <p className="text-base font-medium">Período por fechar</p>
           <p className="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">
             O resumo de {format(weekStart, 'dd/MM', { locale: pt })} a{' '}
-            {format(weekEnd, 'dd/MM/yyyy', { locale: pt })} ainda não foi calculado. Fecha o
-            período para gerar os valores — assim o que aparece aqui é um retrato fixo, e não uma
-            conta que muda sozinha à medida que as importações vão chegando.
+            {format(weekEnd, 'dd/MM/yyyy', { locale: pt })} ainda não foi calculado. Fecha o período
+            para gerar os valores — assim o que aparece aqui é um retrato fixo, e não uma conta que
+            muda sozinha à medida que as importações vão chegando.
           </p>
         </div>
       ) : (

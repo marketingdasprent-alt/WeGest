@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Check, ChevronsUpDown, Link2, Loader2, Zap } from 'lucide-react';
 
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -15,6 +13,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import {
+  useIdentidadesBoltPorLigar,
   useIdentidadesPlataforma,
   useMapearMotoristaBolt,
 } from '@/hooks/useMotoristasPlataformaSync';
@@ -35,50 +34,6 @@ import { cn } from '@/lib/utils';
  */
 interface Props {
   motoristaId: string | null;
-}
-
-/** UUIDs Bolt vistos nos resumos que ainda não pertencem a ninguém. */
-function useIdentidadesBoltPorLigar() {
-  return useQuery({
-    queryKey: ['bolt-identidades-por-ligar'],
-    queryFn: async () => {
-      const { data: mapeados } = await (supabase as any)
-        .from('bolt_mapeamento_motoristas')
-        .select('driver_uuid');
-      const jaLigados = new Set<string>(
-        ((mapeados ?? []) as Array<{ driver_uuid: string }>).map((m) => m.driver_uuid)
-      );
-
-      const { data, error } = await supabase
-        .from('bolt_resumos_semanais')
-        .select('identificador_motorista, motorista_nome, telefone, periodo_inicio')
-        .not('identificador_motorista', 'is', null)
-        .order('periodo_inicio', { ascending: false })
-        .limit(2000);
-      if (error) throw error;
-
-      const porUuid = new Map<
-        string,
-        { uuid: string; nome: string | null; telefone: string | null; ultima: string }
-      >();
-      for (const r of (data ?? []) as Array<{
-        identificador_motorista: string;
-        motorista_nome: string | null;
-        telefone: string | null;
-        periodo_inicio: string;
-      }>) {
-        const uuid = r.identificador_motorista;
-        if (jaLigados.has(uuid) || porUuid.has(uuid)) continue;
-        porUuid.set(uuid, {
-          uuid,
-          nome: r.motorista_nome,
-          telefone: r.telefone,
-          ultima: r.periodo_inicio,
-        });
-      }
-      return [...porUuid.values()];
-    },
-  });
 }
 
 export function IdentidadesBoltSection({ motoristaId }: Props) {
@@ -118,7 +73,10 @@ export function IdentidadesBoltSection({ motoristaId }: Props) {
           </PopoverTrigger>
           <PopoverContent className="w-[420px] p-0" align="end">
             <Command>
-              <CommandInput placeholder="Procurar por nome ou telefone na Bolt..." className="h-9" />
+              <CommandInput
+                placeholder="Procurar por nome ou telefone na Bolt..."
+                className="h-9"
+              />
               <CommandList>
                 <CommandEmpty>
                   {aCarregarPorLigar ? 'A carregar…' : 'Não há identidades Bolt por ligar.'}
