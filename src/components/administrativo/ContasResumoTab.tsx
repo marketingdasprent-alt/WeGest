@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -200,6 +200,9 @@ export function ContasResumoTab() {
       toast.success(
         `Período fechado: ${resultado.viaturasAtualizadas} viaturas, ${resultado.motoristasAtualizados} motoristas atualizados.`
       );
+      // Destranca o resumo: é o fecho que o faz existir. O efeito que observa
+      // `periodoFechado` encarrega-se de carregar os valores a seguir.
+      setPeriodoFechado(true);
       loadResumos();
     } catch (error) {
       console.error('Erro ao fechar período:', error);
@@ -250,9 +253,58 @@ export function ContasResumoTab() {
     return label;
   };
 
+  // O resumo só existe depois de o período ser FECHADO.
+  //
+  // Antes, abrir o separador calculava tudo ao vivo a partir das tabelas de
+  // origem — e isso dava a impressão de um número final quando ainda faltavam
+  // importações e o valor mudava sozinho de um dia para o outro. Agora a
+  // conta faz-se uma vez, no fecho, e é esse retrato que se mostra.
+  //
+  // `motorista_resumo_semanal` é o que o fechar-semana-financeiro grava; a
+  // existência de linhas que cubram esta semana é o sinal de que foi fechada.
+  //
+  // SOBREPOSIÇÃO, não igualdade. O botão deixa escolher um intervalo qualquer
+  // no calendário e a função grava-o tal e qual — em produção há fechos de
+  // 8 dias a começar a um domingo (02/08→09/08), de 3 dias e até de 1 dia.
+  // Comparar `semana_inicio` com a segunda-feira da semana vista deixaria
+  // trancadas semanas que já tinham sido fechadas por um período que as cobre.
+  const [periodoFechado, setPeriodoFechado] = useState<boolean | null>(null);
+
+  // As datas em TEXTO, não os Date. weekStart/weekEnd são objectos novos a cada
+  // render; postos nas dependências de um efeito que muda estado, davam um
+  // ciclo infinito (efeito → setState → render → Date novos → efeito).
+  const semanaInicioStr = format(weekStart, 'yyyy-MM-dd');
+  const semanaFimStr = format(weekEnd, 'yyyy-MM-dd');
+
   useEffect(() => {
+    let cancelado = false;
+    const verificar = async () => {
+      setPeriodoFechado(null);
+      const { count, error } = await supabase
+        .from('motorista_resumo_semanal')
+        .select('id', { count: 'exact', head: true })
+        .lte('semana_inicio', semanaFimStr)
+        .gte('semana_fim', semanaInicioStr);
+      if (cancelado) return;
+      // Em caso de erro assume-se fechado: melhor mostrar o que há do que
+      // esconder o resumo todo por causa de uma falha de rede.
+      setPeriodoFechado(error ? true : (count ?? 0) > 0);
+    };
+    verificar();
+    return () => {
+      cancelado = true;
+    };
+  }, [semanaInicioStr, semanaFimStr]);
+
+  useEffect(() => {
+    if (periodoFechado === false) {
+      setResumos([]);
+      setLoading(false);
+      return;
+    }
+    if (periodoFechado === null) return;
     loadResumos();
-  }, [selectedWeek]);
+  }, [selectedWeek, periodoFechado]);
 
   // Navegar de semana reseta o período custom — evita fechar sem querer um
   // período de outra semana que ficou escolhido no popover.
@@ -1219,38 +1271,53 @@ export function ContasResumoTab() {
         </Popover>
       </div>
 
-      <ContasResumoStats
-        totalMotoristas={filteredResumos.length}
-        totais={totais}
-        formatCurrency={formatCurrency}
-      />
+      {periodoFechado === false ? (
+        <div className="rounded-lg border border-dashed bg-muted/20 p-10 text-center">
+          <Lock className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+          <p className="text-base font-medium">Período por fechar</p>
+          <p className="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">
+            O resumo de {format(weekStart, 'dd/MM', { locale: pt })} a{' '}
+            {format(weekEnd, 'dd/MM/yyyy', { locale: pt })} ainda não foi calculado. Fecha o
+            período para gerar os valores — assim o que aparece aqui é um retrato fixo, e não uma
+            conta que muda sozinha à medida que as importações vão chegando.
+          </p>
+        </div>
+      ) : (
+        <>
+          <ContasResumoStats
+            totalMotoristas={filteredResumos.length}
+            totais={totais}
+            formatCurrency={formatCurrency}
+          />
 
-      <ContasResumoTabela
-        filteredResumos={filteredResumos}
-        pageItems={pageItems}
-        sortField={sortField}
-        sortDir={sortDir}
-        onSort={handleSort}
-        selectedIds={selectedIds}
-        onToggleSelectAll={toggleSelectAll}
-        onToggleSelectOne={toggleSelectOne}
-        onRowClick={handleRowClick}
-        formatCurrency={formatCurrency}
-        showGorjeta={showGorjeta}
-      />
+          <ContasResumoTabela
+            filteredResumos={filteredResumos}
+            pageItems={pageItems}
+            sortField={sortField}
+            sortDir={sortDir}
+            onSort={handleSort}
+            selectedIds={selectedIds}
+            onToggleSelectAll={toggleSelectAll}
+            onToggleSelectOne={toggleSelectOne}
+            onRowClick={handleRowClick}
+            formatCurrency={formatCurrency}
+            showGorjeta={showGorjeta}
+          />
 
-      {total > 0 && (
-        <TablePagination
-          page={page}
-          totalPages={totalPages}
-          total={total}
-          start={start}
-          end={end}
-          onPageChange={setPage}
-          noun={['motorista', 'motoristas']}
-          pageSizeStr={pageSizeStr}
-          onPageSizeChange={setPageSizeStr}
-        />
+          {total > 0 && (
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              start={start}
+              end={end}
+              onPageChange={setPage}
+              noun={['motorista', 'motoristas']}
+              pageSizeStr={pageSizeStr}
+              onPageSizeChange={setPageSizeStr}
+            />
+          )}
+        </>
       )}
 
       <ContasResumoBulkBar

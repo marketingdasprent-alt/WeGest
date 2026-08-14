@@ -44,8 +44,10 @@ function criarBuilder(linhas: any[]) {
     {
       get(_alvo, prop) {
         if (prop === 'then') {
-          return (resolve: (v: { data: any[]; error: null }) => void) =>
-            resolve({ data: linhas, error: null });
+          // `count` para as consultas com { count: 'exact', head: true } — é
+          // assim que o componente verifica se o período já foi fechado.
+          return (resolve: (v: { data: any[]; error: null; count: number }) => void) =>
+            resolve({ data: linhas, error: null, count: linhas.length });
         }
         if (prop === 'single' || prop === 'maybeSingle') {
           return () => Promise.resolve({ data: linhas[0] ?? null, error: null });
@@ -58,8 +60,12 @@ function criarBuilder(linhas: any[]) {
 }
 
 function mockarTabelas(tabelas: Record<string, any[]>) {
+  // O ecrã só calcula depois de o período estar fechado, e o sinal de fechado é
+  // haver linhas em motorista_resumo_semanal. Estes testes são sobre a conta da
+  // receita Bolt, não sobre o portão — por isso o período nasce fechado.
+  const comPeriodoFechado = { motorista_resumo_semanal: [{ id: 'r1' }], ...tabelas };
   (supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((t: string) =>
-    criarBuilder(tabelas[t] ?? [])
+    criarBuilder(comPeriodoFechado[t as keyof typeof comPeriodoFechado] ?? [])
   );
 }
 
