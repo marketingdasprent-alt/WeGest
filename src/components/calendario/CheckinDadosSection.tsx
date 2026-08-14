@@ -174,8 +174,13 @@ interface FolhaDanosParams {
 }
 
 export function gerarFolhaDanos(p: FolhaDanosParams) {
+  // Quem chama é que manda na paginação, tal como no
+  // generateDocumentFromTemplate: recebendo um PDF existente, escreve-se na
+  // página CORRENTE e não se cria nenhuma. Havia aqui um `doc.addPage()` que
+  // fazia o contrário — dois geradores com contratos opostos obrigavam cada
+  // chamador a adivinhar qual estava a usar, e era isso que produzia ora
+  // folhas em branco a mais ora documentos sobrepostos.
   const doc = p.existingPdf || new jsPDF({ unit: 'mm', format: 'a4' });
-  if (p.existingPdf) doc.addPage();
   const W = 210;
   let y = 20;
 

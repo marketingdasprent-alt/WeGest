@@ -112,6 +112,23 @@ export const CartrackMapCard: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [live, setLive] = useState(false);
 
+  // Progresso do sync. O overlay era um spinner mudo: quando a sincronização
+  // demorava ~40 s, quem carregava no botão não tinha como distinguir "está a
+  // trabalhar" de "está pendurado", desistia a meio e dava o botão como
+  // avariado. O passo e os segundos decorridos custam duas linhas e tiram a
+  // ambiguidade toda.
+  const [syncPasso, setSyncPasso] = useState<string | null>(null);
+  const [syncSegundos, setSyncSegundos] = useState(0);
+
+  useEffect(() => {
+    if (!syncing) {
+      setSyncSegundos(0);
+      return;
+    }
+    const t = window.setInterval(() => setSyncSegundos((s) => s + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [syncing]);
+
   // Integração para o modo ao vivo (derivada das viaturas carregadas).
   const liveIntegracaoId = useMemo(
     () => (vehicles ?? []).map((v) => v.integracao_id).find(Boolean) ?? null,
@@ -170,6 +187,7 @@ export const CartrackMapCard: React.FC = () => {
 
   const handleSync = async () => {
     setSyncing(true);
+    setSyncPasso('a apurar integrações');
     try {
       // Integrações a sincronizar — derivadas das próprias viaturas já carregadas
       // (evita ler plataformas_configuracao no browser). Usa o cartrack-sync,
@@ -184,22 +202,39 @@ export const CartrackMapCard: React.FC = () => {
         });
         return;
       }
+
       // Sync rápido só de posições/odómetro (positions_only) — trips/events ficam
       // para o sync automático/Integrações. Mantém o botão do mapa ágil.
-      for (const id of ids) {
+      let sincronizadas = 0;
+      for (const [i, id] of ids.entries()) {
+        setSyncPasso(
+          ids.length > 1 ? `a sincronizar (${i + 1}/${ids.length})` : 'a sincronizar com a Cartrack'
+        );
         const { data, error: fnErr } = await supabase.functions.invoke('cartrack-sync', {
           body: { integracao_id: id, positions_only: true },
         });
         if (fnErr || !data?.success) {
           throw new Error(data?.error || fnErr?.message || 'Falha ao sincronizar');
         }
+        sincronizadas += data.vehicles?.upserted ?? 0;
+        // A API da Cartrack pode recusar o pedido e ainda assim o sync
+        // "correr": sem isto, uma frota inteira por atualizar aparecia como
+        // sucesso silencioso.
+        if (data.vehicles?.erro_api) {
+          throw new Error(`A Cartrack recusou o pedido — ${data.vehicles.erro_api}`);
+        }
       }
+      setSyncPasso('a recarregar posições');
       await refetch();
-      toast({ title: 'Cartrack atualizado', description: 'Posições sincronizadas.' });
+      toast({
+        title: 'Cartrack atualizado',
+        description: `${sincronizadas} ${sincronizadas === 1 ? 'viatura sincronizada' : 'viaturas sincronizadas'}.`,
+      });
     } catch (e: any) {
       toast({ title: 'Erro ao sincronizar', description: e.message, variant: 'destructive' });
     } finally {
       setSyncing(false);
+      setSyncPasso(null);
     }
   };
 
@@ -351,6 +386,9 @@ export const CartrackMapCard: React.FC = () => {
             <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center gap-2 bg-background/70 backdrop-blur-sm">
               <Loader2 className="h-7 w-7 animate-spin text-primary" />
               <p className="text-xs font-medium text-muted-foreground">A sincronizar viaturas…</p>
+              <p className="text-[11px] text-muted-foreground/80">
+                {syncPasso ?? '…'} · {syncSegundos}s
+              </p>
             </div>
           )}
         </div>

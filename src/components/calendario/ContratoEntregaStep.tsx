@@ -29,6 +29,7 @@ import jsPDF from 'jspdf';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { empresaDocData } from '@/config/empresas';
 import { resolveCartaoFrota } from '@/utils/document-template/resolveCartaoFrota';
+import { criarCompositorPdf } from '@/utils/document-template/compositorPdf';
 import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
 import { useOrgId } from '@/contexts/TenantContext';
 import {
@@ -424,9 +425,13 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
 
         const templateIds = Array.from(selectedTemplates);
         const isMultiple = templateIds.length > 1;
-        const combinedPdf = isMultiple
-          ? new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-          : null;
+
+        // Antes não havia separador nenhum entre documentos: como os geradores
+        // escrevem na página corrente, o 2.º documento era desenhado POR CIMA
+        // da última página do 1.º, e o `deletePage(1)` do fim ainda levava a
+        // primeira página do primeiro documento. A regra vive agora no
+        // compositor, uma vez só.
+        const compositor = criarCompositorPdf(isMultiple);
 
         // Guarda TODOS os documentos seleccionados no bucket 'documentos'
         // ('{contratoId}/…pdf'), não só o 1.º — o motorista vê-os depois na
@@ -444,14 +449,16 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
               })) || null;
             if (!firstDocUrl) firstDocUrl = docUrl;
 
-            await generateDocumentFromTemplate({
-              templateId,
-              motoristaData: motoristaFull,
-              documentData: docData,
-              action: 'print',
-              skipOutput: isMultiple,
-              existingPdf: combinedPdf || undefined,
-            });
+            await compositor.anexar((existente) =>
+              generateDocumentFromTemplate({
+                templateId,
+                motoristaData: motoristaFull,
+                documentData: docData,
+                action: 'print',
+                skipOutput: isMultiple,
+                existingPdf: existente,
+              })
+            );
             successCount++;
           } catch {
             /* PDF non-critical */
@@ -477,24 +484,25 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
               .limit(1);
             const tmpl = tmplRows?.[0];
             if (tmpl) {
-              const targetPdf = isMultiple && combinedPdf ? combinedPdf : undefined;
-              const danosPdf = await generateDocumentFromTemplate({
-                templateId: tmpl.id,
-                motoristaData: motoristaFull ?? { nome: motoristaNome },
-                documentData: {
-                  ...docData,
-                  viatura_matricula: viatura.matricula,
-                  assinatura_motorista: sigs.motorista ?? '',
-                },
-                viaturaId: viatura.id,
-                km_saida: checkinDados.km,
-                combustivel_saida: checkinDados.combustivel,
-                momentoFolha: 'ENTREGA',
-                action: isMultiple ? 'print' : 'print',
-                skipOutput: isMultiple,
-                existingPdf: targetPdf,
-              });
-              if (targetPdf) successCount++;
+              const danosPdf = await compositor.anexar((existente) =>
+                generateDocumentFromTemplate({
+                  templateId: tmpl.id,
+                  motoristaData: motoristaFull ?? { nome: motoristaNome },
+                  documentData: {
+                    ...docData,
+                    viatura_matricula: viatura.matricula,
+                    assinatura_motorista: sigs.motorista ?? '',
+                  },
+                  viaturaId: viatura.id,
+                  km_saida: checkinDados.km,
+                  combustivel_saida: checkinDados.combustivel,
+                  momentoFolha: 'ENTREGA',
+                  action: 'print',
+                  skipOutput: isMultiple,
+                  existingPdf: existente,
+                })
+              );
+              if (isMultiple) successCount++;
               // Documento único (sem combinar) — já é a folha pronta a enviar.
               if (!isMultiple && danosPdf) {
                 void emailFolhaDanos({
@@ -509,34 +517,37 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
               }
             } else {
               // Fallback para o gerador básico se o template não existir
-              const targetPdf = isMultiple && combinedPdf ? combinedPdf : undefined;
-              gerarFolhaDanos({
-                matricula: viatura.matricula,
-                motoristaNome,
-                tipo: 'checkout',
-                tipoCombustivel: viatura.combustivel ?? '',
-                km: checkinDados.km,
-                combustivel: checkinDados.combustivel,
-                nivelEletrico: checkinDados.nivelEletrico,
-                nivelGpl: checkinDados.nivelGpl,
-                danosExistentes,
-                novosDanos: checkinDados.novosDanos,
-                dataEvento: dataInicio,
-                contratoNumero: ct.numero_contrato,
-                existingPdf: targetPdf,
-                assinaturaMotoristaPng: sigs.motorista,
-                assinaturaResponsavelPng: sigs.responsavel,
-              });
-              if (targetPdf) successCount++;
+              await compositor.anexar((existente) =>
+                gerarFolhaDanos({
+                  matricula: viatura.matricula,
+                  motoristaNome,
+                  tipo: 'checkout',
+                  tipoCombustivel: viatura.combustivel ?? '',
+                  km: checkinDados.km,
+                  combustivel: checkinDados.combustivel,
+                  nivelEletrico: checkinDados.nivelEletrico,
+                  nivelGpl: checkinDados.nivelGpl,
+                  danosExistentes,
+                  novosDanos: checkinDados.novosDanos,
+                  dataEvento: dataInicio,
+                  contratoNumero: ct.numero_contrato,
+                  existingPdf: existente,
+                  assinaturaMotoristaPng: sigs.motorista,
+                  assinaturaResponsavelPng: sigs.responsavel,
+                })
+              );
+              if (isMultiple) successCount++;
             }
           } catch {
             /* PDF non-critical */
           }
         }
 
-        // Imprimir PDF combinado quando múltiplos documentos
+        // Imprimir PDF combinado quando múltiplos documentos. Sem deletePage:
+        // a página 1 é a primeira página do primeiro documento, não uma folha
+        // em branco (ver o comentário do anexarAoCombinado acima).
+        const combinedPdf = compositor.pdf;
         if (isMultiple && combinedPdf && successCount > 0) {
-          combinedPdf.deletePage(1);
           const fileName = `Documentos_CT-${String(ct.numero_contrato ?? 0).padStart(4, '0')}.pdf`;
           printPdf(combinedPdf, fileName);
           void emailFolhaDanos({
