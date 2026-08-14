@@ -169,7 +169,12 @@ serve(async (req) => {
       vehicles: { total: 0, upserted: 0, matched: 0, km_atualizado: 0, errors: 0, erro_api: null as string | null },
       trips: { total: 0, upserted: 0, errors: 0, erro_api: null as string | null },
       events: { total: 0, upserted: 0, errors: 0, erro_api: null as string | null },
+      // Tempo por fase, em ms. Sem isto, um sync lento é um número só e não se
+      // sabe se o custo está na API da Cartrack ou nas escritas — foi
+      // exactamente essa a dúvida que obrigou a medir à mão da primeira vez.
+      ms: { api: 0, upsert: 0, km: 0, total: 0 },
     };
+    const tTotal0 = Date.now();
 
     // Registar a falha de fetch no contador da secção respectiva.
     const falhaEm = (secao: 'vehicles' | 'trips' | 'events') => (msg: string) => {
@@ -181,10 +186,16 @@ serve(async (req) => {
     // O /vehicles só traz metadados (matrícula, modelo, chassis, vehicle_id).
     // O odómetro e a posição GPS vêm do /vehicles/status, num objeto `location`
     // aninhado; odometer_in_km=true devolve o odómetro já em km.
-    const vehicles = await fetchAll("vehicles", auth, {}, falhaEm("vehicles"));
+    // As duas listagens não dependem uma da outra — pedidas em paralelo, o que
+    // corta praticamente para metade o tempo passado à espera da Cartrack.
+    const tApi0 = Date.now();
+    const [vehicles, statuses] = await Promise.all([
+      fetchAll("vehicles", auth, {}, falhaEm("vehicles")),
+      fetchAll("vehicles/status", auth, { odometer_in_km: "true" }, falhaEm("vehicles")),
+    ]);
+    result.ms.api = Date.now() - tApi0;
     result.vehicles.total = vehicles.length;
 
-    const statuses = await fetchAll("vehicles/status", auth, { odometer_in_km: "true" }, falhaEm("vehicles"));
     const statusByVid = new Map<string, any>();
     const statusByReg = new Map<string, any>();
     for (const s of statuses) {
@@ -193,6 +204,20 @@ serve(async (req) => {
       const reg = pick(s, ["registration"]);
       if (reg) statusByReg.set(normPlate(reg), s);
     }
+
+    // As linhas são montadas em memória e gravadas em lote a seguir. Antes disto
+    // o ciclo fazia um upsert por viatura e ainda um update de km_atual por
+    // viatura — até ~500 idas e voltas à base de dados em série, cada uma a
+    // pagar a latência completa. Numa frota de 250 viaturas isso punha o botão
+    // "sincronizar" do mapa nos ~40 s, tempo suficiente para quem carrega
+    // desistir a meio e dar o sync como bloqueado.
+    type LinhaViatura = {
+      row: Record<string, unknown>;
+      viaturaId: string | null;
+      odometer: number | null;
+      plate: string;
+    };
+    const linhas: LinhaViatura[] = [];
 
     for (const v of vehicles) {
       const vid = pick(v, ["vehicle_id", "vehicleId", "id"]);
@@ -222,8 +247,8 @@ serve(async (req) => {
           ? null
           : ignitionRaw === true || ignitionRaw === "true" || ignitionRaw === 1 || ignitionRaw === "1";
 
-      const { error: upErr } = await supabase.from("cartrack_vehicles").upsert(
-        {
+      linhas.push({
+        row: {
           integracao_id,
           org_id: orgId,
           cartrack_vehicle_id: String(externalId),
@@ -244,29 +269,82 @@ serve(async (req) => {
           raw_data: { vehicle: v, status: st },
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "integracao_id,cartrack_vehicle_id" }
-      );
+        viaturaId,
+        odometer,
+        plate: normPlate(registration),
+      });
+    }
 
-      if (upErr) {
-        console.error("Upsert cartrack_vehicles:", upErr);
-        result.vehicles.errors++;
+    // Deduplicar pela chave de conflito. O ciclo linha-a-linha tolerava a mesma
+    // viatura repetida (o segundo upsert limitava-se a reescrever o primeiro),
+    // mas num upsert em lote o Postgres rejeita o comando inteiro com "ON
+    // CONFLICT DO UPDATE command cannot affect row a second time". Fica a
+    // última ocorrência, que é a mais recente.
+    const porChave = new Map<string, LinhaViatura>();
+    for (const l of linhas) porChave.set(String(l.row.cartrack_vehicle_id), l);
+    const unicas = [...porChave.values()];
+
+    // 3a. Gravar as viaturas em lotes. 100 por lote e não tudo de uma vez
+    // porque cada linha leva o `raw_data` completo (vehicle + status) — um
+    // único pedido com a frota toda dá vários MB de corpo.
+    const tUpsert0 = Date.now();
+    const LOTE = 100;
+    const gravadas: LinhaViatura[] = [];
+    for (let i = 0; i < unicas.length; i += LOTE) {
+      const lote = unicas.slice(i, i + LOTE);
+      const { error: upErr } = await supabase
+        .from("cartrack_vehicles")
+        .upsert(lote.map((l) => l.row), { onConflict: "integracao_id,cartrack_vehicle_id" });
+
+      if (!upErr) {
+        gravadas.push(...lote);
         continue;
       }
-      result.vehicles.upserted++;
-      if (viaturaId) result.vehicles.matched++;
 
-      // Actualizar km_atual da viatura (só se o odómetro Cartrack for maior/mais recente)
-      if (viaturaId && odometer !== null) {
-        const current = plateToViatura.get(normPlate(registration))?.km_atual ?? null;
-        if (current === null || odometer > current) {
-          const { error: kmErr } = await supabase
-            .from("viaturas")
-            .update({ km_atual: Math.round(odometer) })
-            .eq("id", viaturaId);
-          if (!kmErr) result.vehicles.km_atualizado++;
+      // Uma linha má não pode levar o lote todo à frente: repete-se linha-a-linha
+      // só neste lote, para se perder apenas a que está de facto errada.
+      console.error("Upsert cartrack_vehicles (lote):", upErr);
+      for (const l of lote) {
+        const { error: e1 } = await supabase
+          .from("cartrack_vehicles")
+          .upsert(l.row, { onConflict: "integracao_id,cartrack_vehicle_id" });
+        if (e1) {
+          console.error("Upsert cartrack_vehicles:", e1);
+          result.vehicles.errors++;
+        } else {
+          gravadas.push(l);
         }
       }
     }
+    result.vehicles.upserted = gravadas.length;
+    result.vehicles.matched = gravadas.filter((l) => l.viaturaId).length;
+    result.ms.upsert = Date.now() - tUpsert0;
+
+    // 3b. km_atual das viaturas WeGest — só as que subiram de facto.
+    // Continuam a ser updates individuais (cada uma tem o seu valor e o seu id,
+    // e um upsert parcial em `viaturas` esbarraria nas colunas NOT NULL), mas
+    // deixam de ser em série: em grupos de 20 concorrentes o custo passa a ser
+    // a latência de um punhado de rondas em vez de uma por viatura.
+    const tKm0 = Date.now();
+    const kmParaAtualizar = gravadas.filter((l) => {
+      if (!l.viaturaId || l.odometer === null) return false;
+      const atual = plateToViatura.get(l.plate)?.km_atual ?? null;
+      return atual === null || l.odometer > atual;
+    });
+    const CONCORRENTES = 20;
+    for (let i = 0; i < kmParaAtualizar.length; i += CONCORRENTES) {
+      const grupo = kmParaAtualizar.slice(i, i + CONCORRENTES);
+      const res = await Promise.all(
+        grupo.map((l) =>
+          supabase
+            .from("viaturas")
+            .update({ km_atual: Math.round(l.odometer as number) })
+            .eq("id", l.viaturaId as string)
+        )
+      );
+      result.vehicles.km_atualizado += res.filter((r) => !r.error).length;
+    }
+    result.ms.km = Date.now() - tKm0;
 
     // 4 + 5. TRIPS e EVENTS — histórico (parte lenta). Saltado no positions_only
     // e, por omissão, também no sync normal: ver a nota do `incluir_trips` no
@@ -386,6 +464,8 @@ serve(async (req) => {
       .from("plataformas_configuracao")
       .update({ ultimo_sync: new Date().toISOString() })
       .eq("id", integracao_id);
+
+    result.ms.total = Date.now() - tTotal0;
 
     return new Response(
       JSON.stringify({ success: true, ...result }),
