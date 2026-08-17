@@ -222,3 +222,8 @@ verify_jwt = false
 # o autor pode não ter conta; autoriza pelo acesso_token do ticket.
 [functions.ti-sugestao-responder]
 verify_jwt = false
+
+# Aviso ao autor de um ticket de TI de que há sugestão. Iniciada sempre pela app
+# autenticada (o admin que escreve a sugestão) → exige JWT.
+[functions.ti-ticket-sugestao-email]
+verify_jwt = true
