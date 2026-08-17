@@ -212,3 +212,8 @@ verify_jwt = true
 # função, mais um limite por origem contra flood.
 [functions.ti-ticket-submeter]
 verify_jwt = false
+
+# Leitura de um ticket de TI pelo token do próprio ticket (vai no email da
+# sugestão). Anónimo porque o autor pode não ter conta; devolve só aquele ticket.
+[functions.ti-ticket-por-token]
+verify_jwt = false
