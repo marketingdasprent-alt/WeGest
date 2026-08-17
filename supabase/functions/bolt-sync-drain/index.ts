@@ -35,6 +35,9 @@ interface LinhaFila {
   periodo_inicio: string;
   periodo_fim: string;
   formula_id: string | null;
+  /** completo | viagens | agregar — ver migração 20260813100000. */
+  fase: string | null;
+  semana_inicio: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -76,12 +79,35 @@ Deno.serve(async (req) => {
     const resultados = await Promise.all(
       linhas.map(async (linha) => {
         try {
+          // Um 'agregar' só pode correr depois de TODOS os dias da sua semana
+          // estarem gravados — senão agregava uma semana pela metade. Enquanto
+          // faltar algum, volta para a fila em vez de falhar: o dia que falta
+          // está algures atrás nesta mesma fila.
+          if (linha.fase === 'agregar' && linha.semana_inicio) {
+            const { count } = await supabase
+              .from('bolt_sync_queue')
+              .select('id', { count: 'exact', head: true })
+              .eq('integracao_id', linha.integracao_id)
+              .eq('semana_inicio', linha.semana_inicio)
+              .eq('fase', 'viagens')
+              .neq('status', 'completed');
+            if ((count ?? 0) > 0) {
+              await supabase
+                .from('bolt_sync_queue')
+                .update({ status: 'pending', started_at: null })
+                .eq('id', linha.id);
+              return { id: linha.id, adiado: true, dias_em_falta: count };
+            }
+          }
+
           const corpo: Record<string, unknown> = {
             integracao_id: linha.integracao_id,
             periodo_inicio: linha.periodo_inicio,
             periodo_fim: linha.periodo_fim,
           };
           if (linha.formula_id) corpo.formula_id = linha.formula_id;
+          if (linha.fase && linha.fase !== 'completo') corpo.fase = linha.fase;
+          if (linha.semana_inicio) corpo.semana_inicio = linha.semana_inicio;
 
           const resposta = await fetch(`${SUPABASE_URL}/functions/v1/bolt-sync-semana`, {
             method: 'POST',

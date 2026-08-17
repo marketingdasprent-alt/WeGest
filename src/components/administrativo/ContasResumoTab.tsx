@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -34,7 +34,6 @@ import { ContasResumoFiltros } from './ContasResumoFiltros';
 import { ContasResumoStats } from './ContasResumoStats';
 import { ContasResumoTabela } from './ContasResumoTabela';
 import { ContasResumoBulkBar } from './ContasResumoBulkBar';
-import { BOLT_FONTE_FINANCEIRA, csvBoltEntraNoResumo } from '@/config/bolt';
 
 // Semana: Segunda (1) a Domingo (0)
 const WEEK_STARTS_ON = 1;
@@ -200,6 +199,9 @@ export function ContasResumoTab() {
       toast.success(
         `Período fechado: ${resultado.viaturasAtualizadas} viaturas, ${resultado.motoristasAtualizados} motoristas atualizados.`
       );
+      // Destranca o resumo: é o fecho que o faz existir. O efeito que observa
+      // `periodoFechado` encarrega-se de carregar os valores a seguir.
+      setPeriodoFechado(true);
       loadResumos();
     } catch (error) {
       console.error('Erro ao fechar período:', error);
@@ -250,9 +252,58 @@ export function ContasResumoTab() {
     return label;
   };
 
+  // O resumo só existe depois de o período ser FECHADO.
+  //
+  // Antes, abrir o separador calculava tudo ao vivo a partir das tabelas de
+  // origem — e isso dava a impressão de um número final quando ainda faltavam
+  // importações e o valor mudava sozinho de um dia para o outro. Agora a
+  // conta faz-se uma vez, no fecho, e é esse retrato que se mostra.
+  //
+  // `motorista_resumo_semanal` é o que o fechar-semana-financeiro grava; a
+  // existência de linhas que cubram esta semana é o sinal de que foi fechada.
+  //
+  // SOBREPOSIÇÃO, não igualdade. O botão deixa escolher um intervalo qualquer
+  // no calendário e a função grava-o tal e qual — em produção há fechos de
+  // 8 dias a começar a um domingo (02/08→09/08), de 3 dias e até de 1 dia.
+  // Comparar `semana_inicio` com a segunda-feira da semana vista deixaria
+  // trancadas semanas que já tinham sido fechadas por um período que as cobre.
+  const [periodoFechado, setPeriodoFechado] = useState<boolean | null>(null);
+
+  // As datas em TEXTO, não os Date. weekStart/weekEnd são objectos novos a cada
+  // render; postos nas dependências de um efeito que muda estado, davam um
+  // ciclo infinito (efeito → setState → render → Date novos → efeito).
+  const semanaInicioStr = format(weekStart, 'yyyy-MM-dd');
+  const semanaFimStr = format(weekEnd, 'yyyy-MM-dd');
+
   useEffect(() => {
+    let cancelado = false;
+    const verificar = async () => {
+      setPeriodoFechado(null);
+      const { count, error } = await supabase
+        .from('motorista_resumo_semanal')
+        .select('id', { count: 'exact', head: true })
+        .lte('semana_inicio', semanaFimStr)
+        .gte('semana_fim', semanaInicioStr);
+      if (cancelado) return;
+      // Em caso de erro assume-se fechado: melhor mostrar o que há do que
+      // esconder o resumo todo por causa de uma falha de rede.
+      setPeriodoFechado(error ? true : (count ?? 0) > 0);
+    };
+    verificar();
+    return () => {
+      cancelado = true;
+    };
+  }, [semanaInicioStr, semanaFimStr]);
+
+  useEffect(() => {
+    if (periodoFechado === false) {
+      setResumos([]);
+      setLoading(false);
+      return;
+    }
+    if (periodoFechado === null) return;
     loadResumos();
-  }, [selectedWeek]);
+  }, [selectedWeek, periodoFechado]);
 
   // Navegar de semana reseta o período custom — evita fechar sem querer um
   // período de outra semana que ficou escolhido no popover.
@@ -330,26 +381,28 @@ export function ContasResumoTab() {
         if (!motoristaById.has(v.id)) motoristaById.set(v.id, v);
       }
 
-      // 3. Buscar viagens Bolt (API) — só quando a API é a fonte financeira.
-      // Enquanto BOLT_FONTE_FINANCEIRA for 'csv' a API fica em modo sombra:
-      // não é consultada, para não substituir silenciosamente os ganhos do CSV
-      // (ver src/config/bolt.ts).
-      const usarApiBolt = BOLT_FONTE_FINANCEIRA === 'api';
-      const boltQuery: PromiseLike<{ data: any[] | null; error: any }> = usarApiBolt
-        ? (supabase
-            .from('bolt_viagens')
-            .select('driver_name, driver_uuid, driver_earnings, order_status, integracao_id')
-            .gt('driver_earnings', 0)
-            .gte('payment_confirmed_timestamp', weekStart.toISOString())
-            .lte('payment_confirmed_timestamp', weekEnd.toISOString()) as any)
-        : Promise.resolve({ data: [], error: null });
+      // 3. Bolt: NÃO se consulta bolt_viagens. O dinheiro Bolt está todo em
+      // bolt_resumos_semanais.ganhos_liquidos (ver src/config/bolt.ts), escrito
+      // tanto pela API como pelo CSV. bolt_viagens tem uma linha por TENTATIVA
+      // de despacho e somá-la conta a mesma corrida várias vezes.
+      const boltQuery: PromiseLike<{ data: any[] | null; error: any }> = Promise.resolve({
+        data: [],
+        error: null,
+      });
 
-      // 4. Buscar transações Uber no mesmo período
+      // 4. Uber: o resumo semanal, não as transacções em bruto.
+      //
+      // uber_resumos_semanais é para a Uber o que bolt_resumos_semanais é para
+      // a Bolt: uma linha por motorista e semana, mantida por gatilho, com a
+      // API a mandar quando tem dados do período. Somar uber_transactions
+      // directamente duplicava a receita no dia em que a API oficial ligasse —
+      // ela escreve uma linha por VIAGEM e o CSV uma linha SEMANAL, e as duas
+      // conviviam na mesma soma. Ver a migração 20260814170000.
       const uberQuery = supabase
-        .from('uber_transactions')
-        .select('uber_driver_id, gross_amount, raw_transaction')
-        .gte('occurred_at', weekStart.toISOString())
-        .lte('occurred_at', weekEnd.toISOString());
+        .from('uber_resumos_semanais')
+        .select('uber_driver_id, motorista_nome, motorista_id, ganhos_brutos, gorjetas, viagens')
+        .lte('periodo_inicio', format(weekEnd, 'yyyy-MM-dd'))
+        .gte('periodo_fim', format(weekStart, 'yyyy-MM-dd'));
 
       // 4b. Buscar atividade Uber (viagens_concluidas reais) para o período
       // Gerar período normalizado: Segunda → Domingo (YYYYMMDD-YYYYMMDD)
@@ -715,9 +768,8 @@ export function ContasResumoTab() {
             (gorjetaBoltById[motoristaId] || 0) + (Number(r.gorjetas) || 0);
         }
 
-        // A API só ganha ao CSV quando é ela a fonte financeira. Com fonte
-        // 'csv' o CSV entra sempre — nada de precedência silenciosa da API.
-        if (!csvBoltEntraNoResumo(boltResumosTracked.has(key))) return;
+        // Não há precedência entre origens: bolt_resumos_semanais é a fonte
+        // única e ganhos_liquidos já traz o valor certo, venha da API ou do CSV.
 
         if (!agrupado[key]) {
           agrupado[key] = {
@@ -742,28 +794,26 @@ export function ContasResumoTab() {
         string,
         { firstName: string; lastName: string; total: number; count: number; gorjeta: number }
       > = {};
+      // Uma linha por motorista e semana — o nome e a gorjeta já vêm no
+      // resumo, extraídos pelo gatilho. Não é preciso abrir o raw_transaction.
       (uberResult.data || []).forEach((t) => {
         const driverId = t.uber_driver_id || 'unknown';
-        const csvRow = (t.raw_transaction as any)?.csv_row || {};
+        const nome = (t.motorista_nome || '').trim();
+        const espaco = nome.indexOf(' ');
         if (!uberByDriver[driverId]) {
           uberByDriver[driverId] = {
-            firstName: csvRow['Nome próprio do motorista'] || '',
-            lastName: csvRow['Apelido do motorista'] || '',
+            firstName: espaco > 0 ? nome.slice(0, espaco) : nome,
+            lastName: espaco > 0 ? nome.slice(espaco + 1) : '',
             total: 0,
             count: 0,
             gorjeta: 0,
           };
         }
-        uberByDriver[driverId].total += Number(t.gross_amount) || 0;
+        uberByDriver[driverId].total += Number(t.ganhos_brutos) || 0;
+        uberByDriver[driverId].gorjeta += Number(t.gorjetas) || 0;
+        // As viagens vêm da atividade (viagens_concluidas), que é o número que
+        // a Uber reporta; o resumo só conta linhas de transacção.
         uberByDriver[driverId].count = uberViagensByDriver[driverId] || 0;
-        // Gorjeta Uber: coluna "Pago a si:Os seus rendimentos:Gratificação" no raw_transaction.
-        const gratKey = Object.keys(csvRow).find(
-          (k) => k.includes('Gratificação') || k.includes('Gratificacao')
-        );
-        if (gratKey) {
-          uberByDriver[driverId].gorjeta +=
-            parseFloat(String(csvRow[gratKey]).replace(',', '.')) || 0;
-        }
       });
 
       // Also inject drivers that only have atividade but no payment transactions
@@ -1219,38 +1269,53 @@ export function ContasResumoTab() {
         </Popover>
       </div>
 
-      <ContasResumoStats
-        totalMotoristas={filteredResumos.length}
-        totais={totais}
-        formatCurrency={formatCurrency}
-      />
+      {periodoFechado === false ? (
+        <div className="rounded-lg border border-dashed bg-muted/20 p-10 text-center">
+          <Lock className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+          <p className="text-base font-medium">Período por fechar</p>
+          <p className="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">
+            O resumo de {format(weekStart, 'dd/MM', { locale: pt })} a{' '}
+            {format(weekEnd, 'dd/MM/yyyy', { locale: pt })} ainda não foi calculado. Fecha o período
+            para gerar os valores — assim o que aparece aqui é um retrato fixo, e não uma conta que
+            muda sozinha à medida que as importações vão chegando.
+          </p>
+        </div>
+      ) : (
+        <>
+          <ContasResumoStats
+            totalMotoristas={filteredResumos.length}
+            totais={totais}
+            formatCurrency={formatCurrency}
+          />
 
-      <ContasResumoTabela
-        filteredResumos={filteredResumos}
-        pageItems={pageItems}
-        sortField={sortField}
-        sortDir={sortDir}
-        onSort={handleSort}
-        selectedIds={selectedIds}
-        onToggleSelectAll={toggleSelectAll}
-        onToggleSelectOne={toggleSelectOne}
-        onRowClick={handleRowClick}
-        formatCurrency={formatCurrency}
-        showGorjeta={showGorjeta}
-      />
+          <ContasResumoTabela
+            filteredResumos={filteredResumos}
+            pageItems={pageItems}
+            sortField={sortField}
+            sortDir={sortDir}
+            onSort={handleSort}
+            selectedIds={selectedIds}
+            onToggleSelectAll={toggleSelectAll}
+            onToggleSelectOne={toggleSelectOne}
+            onRowClick={handleRowClick}
+            formatCurrency={formatCurrency}
+            showGorjeta={showGorjeta}
+          />
 
-      {total > 0 && (
-        <TablePagination
-          page={page}
-          totalPages={totalPages}
-          total={total}
-          start={start}
-          end={end}
-          onPageChange={setPage}
-          noun={['motorista', 'motoristas']}
-          pageSizeStr={pageSizeStr}
-          onPageSizeChange={setPageSizeStr}
-        />
+          {total > 0 && (
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              start={start}
+              end={end}
+              onPageChange={setPage}
+              noun={['motorista', 'motoristas']}
+              pageSizeStr={pageSizeStr}
+              onPageSizeChange={setPageSizeStr}
+            />
+          )}
+        </>
       )}
 
       <ContasResumoBulkBar

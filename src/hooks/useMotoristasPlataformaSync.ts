@@ -97,26 +97,112 @@ export function useUnmappedBoltDrivers(enabled: boolean) {
   });
 }
 
-/** Confirma o mapeamento manual de um motorista a um identificador Bolt. */
+/**
+ * Liga um identificador Bolt (driver_uuid) a um motorista.
+ *
+ * Escreve em `bolt_mapeamento_motoristas`, que é a fonte de verdade do sync.
+ * A coluna `motoristas_ativos.bolt_id` só guarda UM uuid, e a Bolt emite um
+ * novo sempre que o motorista sai da frota e volta — por isso a ligação tem
+ * de viver numa tabela com N uuids por motorista. Fica lá como "último uuid
+ * conhecido", para o código antigo que ainda a lê.
+ *
+ * `auto_mapped: false` marca que foi uma pessoa a confirmar, ao contrário das
+ * ligações semeadas a partir do histórico (auditoria 2026-08-12).
+ */
 export function useMapearMotoristaBolt() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
     mutationFn: async ({ motoristaId, boltId }: { motoristaId: string; boltId: string }) => {
-      const { error } = await supabase
+      // Contexto (org, integração, nome) do que a Bolt reportou para este uuid.
+      const { data: ctx } = await supabase
+        .from('bolt_resumos_semanais')
+        .select('org_id, integracao_id, motorista_nome, telefone')
+        .eq('identificador_motorista', boltId)
+        .order('periodo_inicio', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const { data: mot } = await supabase
+        .from('motoristas_ativos')
+        .select('org_id')
+        .eq('id', motoristaId)
+        .maybeSingle();
+
+      const { error: erroMapa } = await (supabase as any).from('bolt_mapeamento_motoristas').upsert(
+        {
+          driver_uuid: boltId,
+          motorista_id: motoristaId,
+          org_id: (ctx as any)?.org_id ?? (mot as any)?.org_id ?? null,
+          integracao_id: (ctx as any)?.integracao_id ?? null,
+          driver_name: (ctx as any)?.motorista_nome ?? null,
+          driver_phone: (ctx as any)?.telefone ?? null,
+          auto_mapped: false,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'driver_uuid' }
+      );
+      if (erroMapa) throw erroMapa;
+
+      // Reatribui o histórico deste uuid. É isto que corrige semanas que
+      // tinham ficado sem dono — ou com o dono errado.
+      const { error: erroResumos } = await supabase
+        .from('bolt_resumos_semanais')
+        .update({ motorista_id: motoristaId })
+        .eq('identificador_motorista', boltId);
+      if (erroResumos) throw erroResumos;
+
+      // Compatibilidade, best-effort: o índice único (org_id, bolt_id) recusa
+      // se o uuid estiver noutra ficha. Não é motivo para falhar a ligação —
+      // quem manda agora é o mapa.
+      const { error: erroFicha } = await supabase
         .from('motoristas_ativos')
         .update({ bolt_id: boltId })
         .eq('id', motoristaId);
-      if (error) throw error;
+      if (erroFicha) {
+        console.warn(
+          '[useMapearMotoristaBolt] bolt_id da ficha não actualizado:',
+          erroFicha.message
+        );
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['motoristas'] });
-      toast({ title: 'Sucesso', description: 'Motorista mapeado com sucesso!' });
+      qc.invalidateQueries({ queryKey: ['motoristas-plataforma-nao-associados-count'] });
+      qc.invalidateQueries({ queryKey: ['bolt-mapeamento'] });
+      toast({
+        title: 'Motorista ligado',
+        description:
+          'A ligação vale para sempre, mesmo que a Bolt mude o ID. O histórico deste ID foi reatribuído.',
+      });
     },
     onError: (error: unknown) => {
       const msg = error instanceof Error ? error.message : 'Erro inesperado';
       toast({ title: 'Erro', description: msg, variant: 'destructive' });
+    },
+  });
+}
+
+/** Identidades de plataforma já ligadas a um motorista (Bolt: N uuids). */
+export function useIdentidadesPlataforma(motoristaId: string | null) {
+  return useQuery({
+    queryKey: ['bolt-mapeamento', motoristaId],
+    enabled: !!motoristaId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('bolt_mapeamento_motoristas')
+        .select('driver_uuid, driver_name, auto_mapped, integracao_id, created_at')
+        .eq('motorista_id', motoristaId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        driver_uuid: string;
+        driver_name: string | null;
+        auto_mapped: boolean;
+        integracao_id: string | null;
+        created_at: string;
+      }>;
     },
   });
 }
@@ -257,6 +343,56 @@ export function useSincronizarMotoristasPlataformaIds() {
         description: msg,
         variant: 'destructive',
       });
+    },
+  });
+}
+
+/**
+ * UUIDs Bolt vistos nos resumos que ainda não pertencem a ninguém.
+ *
+ * Vive aqui e não no componente: a regra no-restricted-syntax proíbe
+ * supabase.from() directo em components/pages, e com razão — uma consulta
+ * dentro de um ecrã é uma consulta que ninguém reutiliza nem testa.
+ */
+export function useIdentidadesBoltPorLigar() {
+  return useQuery({
+    queryKey: ['bolt-identidades-por-ligar'],
+    queryFn: async () => {
+      const { data: mapeados } = await (supabase as any)
+        .from('bolt_mapeamento_motoristas')
+        .select('driver_uuid');
+      const jaLigados = new Set<string>(
+        ((mapeados ?? []) as Array<{ driver_uuid: string }>).map((m) => m.driver_uuid)
+      );
+
+      const { data, error } = await supabase
+        .from('bolt_resumos_semanais')
+        .select('identificador_motorista, motorista_nome, telefone, periodo_inicio')
+        .not('identificador_motorista', 'is', null)
+        .order('periodo_inicio', { ascending: false })
+        .limit(2000);
+      if (error) throw error;
+
+      const porUuid = new Map<
+        string,
+        { uuid: string; nome: string | null; telefone: string | null; ultima: string }
+      >();
+      for (const r of (data ?? []) as Array<{
+        identificador_motorista: string;
+        motorista_nome: string | null;
+        telefone: string | null;
+        periodo_inicio: string;
+      }>) {
+        const uuid = r.identificador_motorista;
+        if (jaLigados.has(uuid) || porUuid.has(uuid)) continue;
+        porUuid.set(uuid, {
+          uuid,
+          nome: r.motorista_nome,
+          telefone: r.telefone,
+          ultima: r.periodo_inicio,
+        });
+      }
+      return [...porUuid.values()];
     },
   });
 }

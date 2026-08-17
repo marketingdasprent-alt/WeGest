@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Calendar as CalendarIcon,
@@ -146,7 +147,12 @@ interface Integracao {
   ativo: boolean;
   plataforma: string;
   robot_target_platform: string | null;
+  /** 'oauth' = API oficial da Bolt. Muda o que este ficheiro pode escrever. */
+  auth_mode: string | null;
 }
+
+/** A conta está ligada à API oficial da Bolt? */
+const contaViaApiOficial = (i?: Integracao) => i?.auth_mode === 'oauth';
 
 interface ImportarDadosWizardProps {
   open: boolean;
@@ -214,6 +220,10 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
   // Confirmação explícita exigida quando já existe importação nesta conta+semana
   // (evita reimportar/importar na conta errada sem querer).
   const [confirmarReimport, setConfirmarReimport] = useState(false);
+  // Idem, quando a conta Bolt está ligada à API oficial: o ficheiro entra na
+  // mesma (é o único que traz campanhas), mas quem manda nas viagens e no
+  // líquido é a API — e isso tem de ser dito antes, não descoberto depois.
+  const [confirmarSobreApi, setConfirmarSobreApi] = useState(false);
 
   // Última importação por conta (carregado quando entra no passo 2)
   // Map: integracao_id → { ultimaData, ultimaSemana? }
@@ -236,8 +246,14 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
       setExisteImportacao(null);
       setUltimaImportPorConta({});
       setConfirmarReimport(false);
+      setConfirmarSobreApi(false);
     }
   }, [open]);
+
+  // Trocar de conta invalida a confirmação: foi dada para outra.
+  useEffect(() => {
+    setConfirmarSobreApi(false);
+  }, [integracaoId]);
 
   // Quando muda para plataforma definida + tem integrações, carregar última
   // importação por cada conta para mostrar badge no passo 2.
@@ -297,7 +313,7 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
       try {
         const { data, error } = await supabase
           .from('plataformas_configuracao')
-          .select('id, nome, company_name, ativo, plataforma, robot_target_platform')
+          .select('id, nome, company_name, ativo, plataforma, robot_target_platform, auth_mode')
           .or(
             `plataforma.eq.${plataforma},and(plataforma.eq.robot,robot_target_platform.eq.${plataforma})`
           )
@@ -524,11 +540,18 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
     }
   };
 
+  const integracaoEscolhida = integracoes.find((i) => i.id === integracaoId);
+  const sobreApiOficial = plataforma === 'bolt' && contaViaApiOficial(integracaoEscolhida);
+
   const podeAvancar =
     (passo === 1 && !!plataforma) ||
     (passo === 2 && !!integracaoId) ||
     (passo === 3 && !!selectedWeek) ||
-    (passo === 4 && !!file && !importando && (!existeImportacao || confirmarReimport));
+    (passo === 4 &&
+      !!file &&
+      !importando &&
+      (!existeImportacao || confirmarReimport) &&
+      (!sobreApiOficial || confirmarSobreApi));
 
   const avancar = () => {
     if (!podeAvancar) return;
@@ -588,10 +611,13 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
               file={file}
               setFile={setFile}
               weekLabel={weekLabel}
-              integracao={integracoes.find((i) => i.id === integracaoId)}
+              integracao={integracaoEscolhida}
               existeImportacao={existeImportacao}
               confirmarReimport={confirmarReimport}
               setConfirmarReimport={setConfirmarReimport}
+              sobreApiOficial={sobreApiOficial}
+              confirmarSobreApi={confirmarSobreApi}
+              setConfirmarSobreApi={setConfirmarSobreApi}
             />
           )}
         </div>
@@ -781,7 +807,16 @@ const PassoConta: React.FC<{
                   <Icon className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold leading-tight">{i.company_name || i.nome}</p>
+                  <p className="flex flex-wrap items-center gap-1.5 font-semibold leading-tight">
+                    {i.company_name || i.nome}
+                    {/* Onde a API oficial manda, o ficheiro entra só com os
+                        extras. Melhor saber-se aqui do que no passo 4. */}
+                    {contaViaApiOficial(i) && (
+                      <span className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-px text-[10px] font-medium text-red-700 dark:text-red-300">
+                        API oficial
+                      </span>
+                    )}
+                  </p>
                   {i.company_name && i.company_name !== i.nome && (
                     <p className="text-xs text-muted-foreground">{i.nome}</p>
                   )}
@@ -1000,6 +1035,9 @@ const PassoFicheiro: React.FC<{
   existeImportacao: { quantidade: number; ultimaData: string | null } | null;
   confirmarReimport: boolean;
   setConfirmarReimport: (v: boolean) => void;
+  sobreApiOficial: boolean;
+  confirmarSobreApi: boolean;
+  setConfirmarSobreApi: (v: boolean) => void;
 }> = ({
   cfg,
   file,
@@ -1009,6 +1047,9 @@ const PassoFicheiro: React.FC<{
   existeImportacao,
   confirmarReimport,
   setConfirmarReimport,
+  sobreApiOficial,
+  confirmarSobreApi,
+  setConfirmarSobreApi,
 }) => {
   const Icon = cfg.icon;
   return (
@@ -1038,6 +1079,36 @@ const PassoFicheiro: React.FC<{
           <p className="text-muted-foreground">{weekLabel}</p>
         </div>
       </div>
+
+      {sobreApiOficial && (
+        <div className="mb-3 rounded-lg border-2 border-red-500/60 bg-red-500/10 p-3 text-xs">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+            <div className="text-red-700 dark:text-red-300">
+              <p className="font-semibold">Esta conta está ligada à API oficial da Bolt.</p>
+              <p className="mt-1">
+                As viagens, os ganhos brutos e o líquido desta semana vêm da API — o ficheiro{' '}
+                <strong>não os substitui</strong>. Do CSV entra só o que a API não devolve:
+                campanhas, reembolsos de despesas, IVA e as métricas do portal (pontuação, taxa de
+                aceitação, tempo online).
+              </p>
+              <p className="mt-1">
+                Se o ficheiro trouxer valores de viagens diferentes dos da API, os da API é que
+                ficam.
+              </p>
+            </div>
+          </div>
+          <label className="mt-2 flex cursor-pointer items-center gap-2 font-medium text-red-800 dark:text-red-200">
+            <input
+              type="checkbox"
+              checked={confirmarSobreApi}
+              onChange={(e) => setConfirmarSobreApi(e.target.checked)}
+              className="h-4 w-4 accent-red-600"
+            />
+            Percebi — quero importar na mesma (campanhas e extras).
+          </label>
+        </div>
+      )}
 
       {existeImportacao && (
         <div className="mb-3 rounded-lg border border-amber-500/50 bg-amber-500/10 p-2.5 text-xs">

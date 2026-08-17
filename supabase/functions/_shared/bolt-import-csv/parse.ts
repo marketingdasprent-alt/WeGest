@@ -218,22 +218,52 @@ export function criarMatcherMotoristas(
   motoristas: readonly MotoristaConhecido[],
 ): MatcherMotoristas {
   const todos = motoristas ?? [];
-  const porNome: Record<string, string> = {};
-  const porTelefone: Record<string, string> = {};
-  const porBolt: Record<string, string> = {};
+
+  // Índices com detecção de colisão. Uma chave que aponta para mais do que um
+  // motorista NÃO identifica ninguém e é descartada.
+  //
+  // Isto não é hipotético: na Década Ousada há 16 telefones repetidos em duas
+  // fichas e um (`910225915`) em SETE — provavelmente um número de escritório
+  // copiado para várias fichas. Com `mapa[chave] = id`, ganhava o último a ser
+  // escrito, em ordem arbitrária, e mandava o dinheiro para uma ficha à sorte.
+  // Descartar é o comportamento certo: o motorista fica por ligar e aparece no
+  // aviso do sync, em vez de ser ligado a alguém ao calhas.
+  const indexar = (pares: Array<[string, string]>): Record<string, string> => {
+    const mapa: Record<string, string> = {};
+    const ambiguas = new Set<string>();
+    for (const [chave, id] of pares) {
+      if (ambiguas.has(chave)) continue;
+      const jaLa = mapa[chave];
+      if (jaLa && jaLa !== id) {
+        delete mapa[chave];
+        ambiguas.add(chave);
+        continue;
+      }
+      mapa[chave] = id;
+    }
+    return mapa;
+  };
+
+  const paresNome: Array<[string, string]> = [];
+  const paresTelefone: Array<[string, string]> = [];
+  const paresBolt: Array<[string, string]> = [];
 
   for (const m of todos) {
     if (!m?.id) continue;
 
     const nome = normalizeStr(m.nome ?? '');
-    if (nome) porNome[nome] = m.id;
+    if (nome) paresNome.push([nome, m.id]);
 
     const digitos = digitosTelefone(m.telefone);
-    if (digitos) porTelefone[digitos] = m.id;
+    if (digitos) paresTelefone.push([digitos, m.id]);
 
     const bolt = (m.bolt_id ?? '').trim();
-    if (bolt) porBolt[bolt] = m.id;
+    if (bolt) paresBolt.push([bolt, m.id]);
   }
+
+  const porNome = indexar(paresNome);
+  const porTelefone = indexar(paresTelefone);
+  const porBolt = indexar(paresBolt);
 
   return {
     porBoltId(boltId?: string | null): string | null {
@@ -241,45 +271,59 @@ export function criarMatcherMotoristas(
       return chave ? porBolt[chave] ?? null : null;
     },
 
+    // ORDEM: telefone → email → nome exacto → nome parcial (sem ambiguidade).
+    //
+    // O telefone vem PRIMEIRO de propósito. A Bolt verifica documentos, por
+    // isso o número identifica a pessoa; o nome que a API devolve é curto
+    // ("Paulo Silva", "Fernando Pereira") e casa com mais do que um motorista.
+    //
+    // Antes o nome vinha primeiro e o match parcial escolhia `todos.find` — o
+    // PRIMEIRO da lista, por ordem arbitrária. Isso juntou pessoas diferentes
+    // na mesma ficha (auditoria 2026-08-12): os ganhos do Paulo Sérgio da
+    // Silva #480 foram parar ao Paulo Alexandre Mena Antunes #25, e os do
+    // Fernando da Silva Pereira #418 ao Fernando Pereira #313 — em ambos os
+    // casos o telefone da Bolt apontava, correctamente, para o outro.
     encontrar(nome?: string | null, telefone?: string | null, email?: string | null): string | null {
       if (!nome && !telefone && !email) return null;
 
-      const normNome = nome ? normalizeStr(nome) : '';
-
-      // 1. Nome exacto (normalizado).
-      if (normNome && porNome[normNome]) return porNome[normNome];
-
-      // 2. Telefone.
+      // 1. Telefone — identificador forte.
       const digitos = digitosTelefone(telefone);
       if (digitos && porTelefone[digitos]) return porTelefone[digitos];
 
-      // 3. Email.
+      // 2. Email — também só quando é de um só motorista.
       if (email) {
         const alvo = email.toLowerCase().trim();
-        const achado = todos.find((m) => (m.email ?? '').toLowerCase().trim() === alvo);
-        if (achado) return achado.id;
+        const achados = todos.filter((m) => (m.email ?? '').toLowerCase().trim() === alvo);
+        if (achados.length === 1) return achados[0].id;
+        if (achados.length > 1) return null;
       }
 
-      // 4. Nome parcial. Primeiro: todas as palavras do nome da Bolt existem no
-      //    nome da WeGest ("Joao Silva" → "João Manuel Silva").
+      const normNome = nome ? normalizeStr(nome) : '';
+
+      // 3. Nome exacto (normalizado).
+      if (normNome && porNome[normNome]) return porNome[normNome];
+
+      // 4/5. Nome parcial, nos dois sentidos. `filter` em vez de `find`: com
+      // mais do que um candidato o nome NAO chega para decidir, e adivinhar
+      // manda dinheiro para a ficha errada. Devolve null e o motorista fica
+      // por ligar — visível no aviso do sync, que é o comportamento correcto.
       if (normNome) {
         const partes = normNome.split(' ').filter((p) => p.length > 2);
         if (partes.length >= 2) {
-          const achado = todos.find((m) => {
+          const achados = todos.filter((m) => {
             const alvo = normalizeStr(m.nome ?? '');
             return alvo ? partes.every((p) => alvo.includes(p)) : false;
           });
-          if (achado) return achado.id;
+          if (achados.length === 1) return achados[0].id;
+          if (achados.length > 1) return null;
         }
 
-        // 5. E ao contrário: todas as palavras do nome da WeGest existem no da
-        //    Bolt (o portal costuma trazer o nome completo).
-        const inverso = todos.find((m) => {
+        const inversos = todos.filter((m) => {
           const partesAlvo = normalizeStr(m.nome ?? '').split(' ').filter((p) => p.length > 2);
           if (partesAlvo.length < 2) return false;
           return partesAlvo.every((p) => normNome.includes(p));
         });
-        if (inverso) return inverso.id;
+        if (inversos.length === 1) return inversos[0].id;
       }
 
       return null;

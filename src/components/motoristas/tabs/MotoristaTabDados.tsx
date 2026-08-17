@@ -412,7 +412,7 @@ export function MotoristaTabDados({
 
         {/* Linha 4: Integrações + Observações */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 py-4">
-          <IntegracoesSection control={form.control} />
+          <IntegracoesSection control={form.control} motoristaId={motorista?.id ?? null} />
           <ObservacoesSection control={form.control} />
         </div>
 
