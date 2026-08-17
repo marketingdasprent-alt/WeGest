@@ -15,6 +15,7 @@ import { RECURSOS } from '@/utils/permissions';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { matchesSearch } from '@/lib/utils';
+import { buildSlotPeriodos, type ViaturaPeriodoInput } from './motorista-resumo/slotPeriodos';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import {
@@ -458,11 +459,20 @@ export function ContasResumoTab() {
         .lte('transaction_date', weekEndUtc)
         .not('motorista_id', 'is', null);
 
-      // 4d-bis. Buscar viaturas ativas e respetivo grupo/modelo para cruzar com tarifa
+      // 4d-bis. Viaturas atribuídas DURANTE a semana e respetivo grupo/modelo
+      // para cruzar com tarifa. Filtra por DATAS, não por status='ativo': o
+      // aluguer de uma semana já passada não pode desaparecer só porque a
+      // viatura foi entretanto devolvida (a atribuição passa a 'encerrado').
+      // Era o que acontecia — o motorista #252 devolveu a viatura a 17/08 e o
+      // aluguer da semana 03–09/08, que ele tem de pagar, ficou a 0,00 €
+      // enquanto o detalhe do resumo continuava a mostrar os 175,00 €.
       const viaturasQuery = supabase
         .from('motorista_viaturas')
-        .select('motorista_id, viaturas(matricula, grupo_id, modelo_id)')
-        .eq('status', 'ativo');
+        .select(
+          'motorista_id, viatura_id, data_inicio, data_fim, viaturas(matricula, grupo_id, modelo_id)'
+        )
+        .lte('data_inicio', format(weekEnd, 'yyyy-MM-dd'))
+        .or(`data_fim.is.null,data_fim.gte.${format(weekStart, 'yyyy-MM-dd')}`);
 
       // 4e. Buscar resumos semanais Bolt (dados CSV) cujo intervalo intersecte a semana seleccionada
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
@@ -602,21 +612,40 @@ export function ContasResumoTab() {
         }
       });
 
-      // Mapa: motorista_id → preco_semana via grupo da viatura ativa, com
-      // fallback para a tarifa TVDE do modelo quando o grupo não tem preço.
-      const aluguerByMotorista: Record<string, number> = {};
+      // Mapa: motorista_id → aluguer da semana. Usa o MESMO cálculo do
+      // "Aluguer — Detalhe" do resumo individual (buildSlotPeriodos): dias
+      // realmente cobertos × taxa diária, agrupados por veículo. Antes esta
+      // tabela cobrava a semana inteira por atribuição activa e o detalhe
+      // fazia pro-rata — os dois números discordavam no mesmo ecrã (o
+      // detalhe é o que vai impresso/enviado ao motorista).
+      const viaturasPorMotorista = new Map<string, ViaturaPeriodoInput[]>();
       (viaturasResult.data || []).forEach((mv: any) => {
-        if (mv.motorista_id) {
-          const grupoId = (mv.viaturas as any)?.grupo_id;
-          const modeloId = (mv.viaturas as any)?.modelo_id;
-          const preco =
-            (grupoId ? grupoTarifaMap[grupoId] : undefined) ??
-            (modeloId ? modeloTvdeTarifaMap[modeloId] : undefined);
-          if (preco != null && preco > 0) {
-            aluguerByMotorista[mv.motorista_id] = preco;
-          }
-        }
+        if (!mv.motorista_id) return;
+        const grupoId = (mv.viaturas as any)?.grupo_id;
+        const modeloId = (mv.viaturas as any)?.modelo_id;
+        const preco =
+          (grupoId ? grupoTarifaMap[grupoId] : undefined) ??
+          (modeloId ? modeloTvdeTarifaMap[modeloId] : undefined) ??
+          null;
+        const lista = viaturasPorMotorista.get(mv.motorista_id) ?? [];
+        lista.push({
+          viatura_id: mv.viatura_id,
+          data_inicio: mv.data_inicio,
+          data_fim: mv.data_fim,
+          preco_semana: preco,
+          viaturas: null,
+        });
+        viaturasPorMotorista.set(mv.motorista_id, lista);
       });
+
+      const aluguerByMotorista: Record<string, number> = {};
+      for (const [motoristaId, linhas] of viaturasPorMotorista) {
+        const total = buildSlotPeriodos(linhas, weekStart, weekEnd, new Map()).reduce(
+          (s, p) => s + p.custo,
+          0
+        );
+        if (total > 0) aluguerByMotorista[motoristaId] = total;
+      }
 
       // Mapa: motorista_id → total reparações da semana
       const reparacoesByMotorista: Record<string, number> = {};
