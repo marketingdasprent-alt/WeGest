@@ -94,14 +94,16 @@ Deno.serve(async (req) => {
       return json({ success: false, error: 'Este ticket já não aceita resposta.' }, 409);
     }
 
-    // Compare-and-swap no UPDATE: .eq('util', null) impede race condition onde dois
+    // Compare-and-swap no UPDATE: .is('util', null) impede race condition onde dois
     // pedidos simultâneos (duplo clique, retry) ambos lêem util=null e ambos escrevem.
     // Assim, apenas um UPDATE afecta linhas; o outro acha que já foi respondido.
+    // Nota: usamos .is() e não .eq() porque em Postgres, coluna = NULL nunca é verdadeiro
+    // (lógica de três valores); .is() é o método correcto para comparar com NULL.
     const { data: updateSugestaoData, error: updateSugestaoError } = await sb
       .from('ti_ticket_sugestoes')
       .update({ util, respondida_em: new Date().toISOString() })
       .eq('id', sugestao.id)
-      .eq('util', null) // CRITICAL #1: compare-and-swap
+      .is('util', null) // CRITICAL #1: compare-and-swap com .is() para NULL
       .select('id');
 
     if (updateSugestaoError) {
