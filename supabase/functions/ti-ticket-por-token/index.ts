@@ -1,7 +1,7 @@
-// Leitura de UM ticket pelo token dele. verify_jwt = false: o autor nao tem
-// conta. O acesso_token e por ticket -- nao confundir com ti_tokens.token, que
-// so da direito a submeter. Se fossem o mesmo, quem tivesse o link de
-// submissao lia os tickets de todos os colegas.
+// Leitura de UM ticket pelo token dele. verify_jwt = false: o autor não tem
+// conta. O acesso_token é por ticket -- não confundir com ti_tokens.token, que
+// só da direito a submeter. Se fossem o mesmo, quem tivesse o link de
+// submissão lia os tickets de todos os colegas.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const cors = {
@@ -29,21 +29,31 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Devolve o ticket deste token e SO este. O email do autor nao volta para
-    // fora: quem abre o link ja o sabe, e nao ha razao para o expor.
-    const { data: ticket } = await sb
+    // Devolve o ticket deste token e SÓ este. O email do autor não volta para
+    // fora: quem abre o link já o sabe, e não há razão para o expor.
+    const { data: ticket, error: ticketError } = await sb
       .from('ti_tickets')
       .select('id, numero, autor_nome, descricao, status, created_at')
       .eq('acesso_token', acesso_token)
       .maybeSingle();
 
+    if (ticketError) {
+      console.error('Erro ao buscar ticket:', ticketError);
+      return json({ success: false, error: 'Não foi possível abrir o ticket.' }, 500);
+    }
+
     if (!ticket) return json({ success: false, error: 'Ticket não encontrado.' }, 404);
 
-    const { data: sugestoes } = await sb
+    const { data: sugestoes, error: sugestoesError } = await sb
       .from('ti_ticket_sugestoes')
       .select('id, texto, util, created_at')
       .eq('ticket_id', ticket.id)
       .order('created_at', { ascending: true });
+
+    if (sugestoesError) {
+      console.error('Erro ao buscar sugestões:', sugestoesError);
+      return json({ success: false, error: 'Não foi possível abrir o ticket.' }, 500);
+    }
 
     const { id: _id, ...publico } = ticket;
     return json({ success: true, ticket: publico, sugestoes: sugestoes ?? [] });
