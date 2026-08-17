@@ -74,8 +74,12 @@ export function useCriarSugestao() {
       // O email é o último passo e NÃO desfaz o resto se falhar: a sugestão já
       // está gravada e visível. Perder o trabalho do admin porque o SMTP não
       // respondeu seria pior do que um email que não saiu.
+      // A origem vai no pedido porque cada organização corre no seu próprio
+      // domínio: um valor fixo do lado do servidor serviria uma e mandava as
+      // outras para o sítio errado. A função valida-a contra os domínios da
+      // plataforma antes de a meter no email.
       const { error: erroEmail } = await supabase.functions.invoke('ti-ticket-sugestao-email', {
-        body: { ticket_id: ticketId },
+        body: { ticket_id: ticketId, origem: window.location.origin },
       });
       return { emailFalhou: !!erroEmail };
     },

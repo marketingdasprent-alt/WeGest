@@ -25,11 +25,43 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * Base do link que vai no email.
+ *
+ * NÃO se usa um domínio fixo: este produto é multi-tenant e cada organização
+ * corre no seu próprio domínio (decada-ousada.lovable.app,
+ * marketingdasprent-alt.lovable.app, ...). Um valor fixo no código serve uma
+ * organização e manda todas as outras para o sítio errado — e a primeira versão
+ * disto apontava para `app.wegest.pt`, que nem existe.
+ *
+ * Por isso a app envia a sua própria origem. Como quem dispara é um admin
+ * autenticado, o valor tem de ser validado: sem isto, um admin podia fazer o
+ * email apontar para um site à escolha dele e usá-lo para phishing com a nossa
+ * assinatura. Só passam os domínios da plataforma (e localhost, para
+ * desenvolvimento).
+ */
+function baseValida(origem: unknown): string | null {
+  if (typeof origem !== 'string' || origem.length > 200) return null;
+  let u: URL;
+  try {
+    u = new URL(origem);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.toLowerCase();
+  const localDev = u.protocol === 'http:' && (host === 'localhost' || host === '127.0.0.1');
+  const plataforma =
+    u.protocol === 'https:' &&
+    (host.endsWith('.lovable.app') || host === 'wegest.pt' || host.endsWith('.wegest.pt'));
+  if (!localDev && !plataforma) return null;
+  return u.origin;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
 
   try {
-    const { ticket_id } = await req.json();
+    const { ticket_id, origem } = await req.json();
     const sb = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -63,7 +95,15 @@ Deno.serve(async (req) => {
       return json({ success: false, error: 'Não foi possível obter a sugestão.' }, 500);
     }
 
-    const base = Deno.env.get('APP_URL') ?? 'https://app.wegest.pt';
+    // Preferência: a origem que a app enviou (validada). Em alternativa, um
+    // APP_URL configurado. Se nenhuma servir, NÃO se envia um email com um link
+    // roto — falha-se de forma visível para o admin poder avisar a pessoa por
+    // outra via, em vez de a mandar clicar em nada.
+    const base = baseValida(origem) ?? baseValida(Deno.env.get('APP_URL'));
+    if (!base) {
+      console.error('ti-ticket-sugestao-email: sem origem válida', { origem });
+      return json({ success: false, error: 'Não foi possível construir o link do pedido.' }, 400);
+    }
     const link = `${base}/ti/ticket/${t.acesso_token}`;
 
     const html = `
