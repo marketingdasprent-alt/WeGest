@@ -55,12 +55,21 @@ Deno.serve(async (req) => {
     );
 
     // O token resolve a organização. Desativado = link rodado, já não serve.
-    const { data: linha } = await sb
+    const { data: linha, error: tokenError } = await sb
       .from('ti_tokens')
       .select('org_id')
       .eq('token', token)
       .eq('ativo', true)
       .maybeSingle();
+
+    // Uma falha da base de dados NÃO é um link inválido. Sem esta distinção, um
+    // problema de infraestrutura aparecia ao utilizador como "o teu link não
+    // serve" — foi exactamente o que se viu no primeiro teste em produção, com
+    // a tabela ainda por criar: devolvia 403 em vez de sinalizar a avaria.
+    if (tokenError) {
+      console.error('ti-ticket-submeter: falha a ler ti_tokens:', tokenError);
+      return json({ success: false, error: 'Serviço indisponível. Tente mais tarde.' }, 503);
+    }
 
     if (!linha) return json({ success: false, error: 'Este link já não é válido.' }, 403);
 
