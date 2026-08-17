@@ -102,6 +102,9 @@ export function ContasResumoTab() {
   const [matriculaMap, setMatriculaMap] = useState<Record<string, string>>({});
   const [dataContratacaoMap, setDataContratacaoMap] = useState<Record<string, string>>({});
   const [statusAtivoMap, setStatusAtivoMap] = useState<Record<string, boolean>>({});
+  // motorista_id → quando foi desativado. Um motorista inativo continua a
+  // contar nas semanas ANTERIORES a esta data (ver filtro em filteredResumos).
+  const [desativadoEmMap, setDesativadoEmMap] = useState<Record<string, string>>({});
 
   // Print settings (persisted)
   const PRINT_KEY = 'contas_print_settings';
@@ -343,7 +346,7 @@ export function ContasResumoTab() {
       const { data: todosMotoristas } = await supabase
         .from('motoristas_ativos')
         .select(
-          'id, nome, recibo_verde, uber_uuid, bolt_id, gestor_responsavel, data_contratacao, status_ativo, created_at'
+          'id, nome, recibo_verde, uber_uuid, bolt_id, gestor_responsavel, data_contratacao, status_ativo, desativado_em, created_at'
         );
 
       // Mapa: uber_uuid -> motorista_id
@@ -563,15 +566,18 @@ export function ContasResumoTab() {
       const gMap: Record<string, string> = {};
       const dcMap: Record<string, string> = {};
       const saMap: Record<string, boolean> = {};
+      const deMap: Record<string, string> = {};
       (todosMotoristas || []).forEach((m: any) => {
         if (m.gestor_responsavel) gMap[m.id] = m.gestor_responsavel;
         // Usar data_contratacao se disponível, senão usar created_at (sempre preenchido)
         dcMap[m.id] = m.data_contratacao || m.created_at;
         saMap[m.id] = m.status_ativo !== false;
+        if (m.desativado_em) deMap[m.id] = m.desativado_em;
       });
       setGestorMap(gMap);
       setDataContratacaoMap(dcMap);
       setStatusAtivoMap(saMap);
+      setDesativadoEmMap(deMap);
       const mMap: Record<string, string> = {};
       (viaturasResult.data || []).forEach((mv: any) => {
         if (mv.motorista_id && (mv.viaturas as any)?.matricula)
@@ -1086,8 +1092,20 @@ export function ContasResumoTab() {
   const filteredResumos = useMemo(() => {
     let result = resumos.filter((r) => {
       if (isCompanyName(r.driver_name)) return false;
-      // Excluir inativos (motoristas com status_ativo = false no CRM)
-      if (r.motorista_id && statusAtivoMap[r.motorista_id] === false) return false;
+      // Motorista inativo: só se esconde nas semanas que começam DEPOIS de ele
+      // ter sido desativado. Nas anteriores continua a aparecer normalmente —
+      // são semanas que ele trabalhou e que podem ter contas por fechar
+      // (ganhos das plataformas, saldo pendente). Antes escondia-se em todas,
+      // e como fechar um contrato TVDE desativa o motorista automaticamente
+      // (useContratosRenting), recolher a viatura fazia desaparecer dinheiro
+      // real do ecrã onde se fazem os acertos — caso do motorista #252.
+      if (r.motorista_id && statusAtivoMap[r.motorista_id] === false) {
+        const desativadoEm = desativadoEmMap[r.motorista_id];
+        // Sem data conhecida (inativo de antes desta funcionalidade): mantém o
+        // comportamento antigo de esconder, para não ressuscitar histórico
+        // antigo sem querer.
+        if (!desativadoEm || new Date(desativadoEm) < weekStart) return false;
+      }
       if (searchTerm && !matchesSearch(r.driver_name, searchTerm)) return false;
       if (filterRecibo === 'verde' && !r.recibo_verde) return false;
       if (filterRecibo === 'nao_verde' && r.recibo_verde) return false;
@@ -1137,6 +1155,7 @@ export function ContasResumoTab() {
     gestorMap,
     dataContratacaoMap,
     statusAtivoMap,
+    desativadoEmMap,
     weekStart,
     weekEnd,
     sortField,

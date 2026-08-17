@@ -59,6 +59,7 @@ import {
 } from '@/components/ui/pagination';
 
 import type { Contrato } from '@/types/contrato';
+import { matchesSearch } from '@/lib/utils';
 
 export default function Contratos() {
   const [contratos, setContratos] = useState<Contrato[]>([]);
@@ -331,8 +332,10 @@ export default function Contratos() {
     }
   };
 
+  // Nome por palavras soltas e sem acentos: "josé b" encontra
+  // "José Werley Carvalho Braga" — com `.includes()` do texto seguido não.
   const filteredContratos = contratos.filter((contrato) =>
-    contrato.motorista_nome.toLowerCase().includes(searchTerm.toLowerCase())
+    matchesSearch(contrato.motorista_nome, searchTerm)
   );
 
   const sortedContratos = useMemo(() => {
