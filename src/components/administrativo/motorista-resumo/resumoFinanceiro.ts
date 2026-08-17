@@ -25,9 +25,15 @@ export interface ResumoFinanceiroInput {
 export interface ResumoFinanceiroResult {
   gorjeta: number;
   totalReceitas: number;
-  /** Receitas para exibição, já com a gorjeta embutida por plataforma e o
-   *  ajuste de recibo verde aplicado à base. Somam sempre à receita mostrada. */
+  /** Receitas por plataforma tal como as plataformas as pagaram — BRUTO, o
+   *  mesmo número que a lista de Contas/Resumo mostra. Mostrar aqui o valor
+   *  já deduzido fazia o mesmo motorista aparecer com "Bolt 100,76" na lista
+   *  e "Bolt 95,06" no resumo, sem nada a explicar a diferença. */
   receitasExibidas: { bolt: number; uber: number; outras_receitas: number };
+  /** Quanto os 6% do recibo verde cortam ao bruto (0 quando passa recibo
+   *  verde ou é recibo importado). Existe para o resumo poder mostrar o
+   *  bruto e continuar a fechar: bruto − dedução = receitaAjustada. */
+  deducaoReciboVerde: number;
   receitaAjustada: number;
   totalAReceber: number;
   liquido: number;
@@ -61,17 +67,23 @@ export function deriveResumoFinanceiro(input: ResumoFinanceiroInput): ResumoFina
 
   const boltExibido = ajustarBase(receitas.bolt, gBolt);
   const uberExibido = ajustarBase(receitas.uber, gUber);
+
+  // Exibe-se o BRUTO por plataforma (igual à lista de Contas/Resumo) e o
+  // corte dos 6% aparece numa linha própria — em vez de estar diluído nos
+  // valores de cada plataforma, onde ninguém o via.
   const receitasExibidas = {
-    bolt: boltExibido,
-    uber: uberExibido,
+    bolt: receitas.bolt,
+    uber: receitas.uber,
     outras_receitas: receitas.outras_receitas,
   };
 
-  // Receita ajustada = soma das linhas exibidas (gorjeta já embutida uma vez).
+  // Receita ajustada = base já com os 6% aplicados (gorjeta embutida uma vez).
   // Quando importado usa-se o total bruto do recibo.
   const receitaAjustada = isImportado
     ? totalReceitas
     : boltExibido + uberExibido + receitas.outras_receitas;
+
+  const deducaoReciboVerde = isImportado ? 0 : totalReceitas - receitaAjustada;
 
   // NÃO somar `+ gorjeta` aqui — já está em `receitaAjustada`.
   const totalAReceber = isImportado
@@ -84,6 +96,7 @@ export function deriveResumoFinanceiro(input: ResumoFinanceiroInput): ResumoFina
     gorjeta,
     totalReceitas,
     receitasExibidas,
+    deducaoReciboVerde,
     receitaAjustada,
     totalAReceber,
     liquido,

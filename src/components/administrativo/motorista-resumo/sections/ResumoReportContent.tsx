@@ -43,6 +43,8 @@ interface ResumoReportContentProps {
   isImportado: boolean;
   receitas: { bolt: number; uber: number; outras_receitas: number };
   totalReceitas: number;
+  /** Corte dos 6% do recibo verde, mostrado como linha própria. */
+  deducaoReciboVerde: number;
   receitaAjustada: number;
   despesas: {
     aluguer: number;
@@ -74,6 +76,7 @@ export function ResumoReportContent({
   isImportado,
   receitas,
   totalReceitas,
+  deducaoReciboVerde,
   receitaAjustada,
   despesas,
   totalDespesas,
@@ -199,6 +202,17 @@ export function ResumoReportContent({
                 label="— da qual, Gorjeta (já incluída acima)"
                 value={fmt(gorjeta)}
                 colored="text-green-700/70 dark:text-green-300/70 italic"
+              />
+            )}
+            {/* As linhas acima são o BRUTO das plataformas (o mesmo da lista
+                de Contas/Resumo). Sem recibo verde há um corte de 6%, que
+                aparece aqui explicitamente para o total continuar a fechar
+                — antes estava diluído nos valores de cada plataforma. */}
+            {deducaoReciboVerde > 0.005 && (
+              <Row
+                label="Dedução recibo verde (6%)"
+                value={`- ${fmt(deducaoReciboVerde)}`}
+                colored="text-green-700/80 dark:text-green-300/80"
               />
             )}
             <Separator className="bg-green-200 dark:bg-green-800" />
