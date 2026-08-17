@@ -207,8 +207,8 @@ verify_jwt = true
 [functions.acordos-parcelas-diario]
 verify_jwt = true
 
-# Submissao publica de tickets de TI. Quem reporta pode nao ter conta nenhuma,
-# por isso aceita anon; a autorizacao e o token do link, validado dentro da
-# funcao, mais um limite por origem contra flood.
+# Submissão pública de tickets de TI. Quem reporta pode não ter conta nenhuma,
+# por isso aceita anónimo; a autorização é o token do link, validado dentro da
+# função, mais um limite por origem contra flood.
 [functions.ti-ticket-submeter]
 verify_jwt = false

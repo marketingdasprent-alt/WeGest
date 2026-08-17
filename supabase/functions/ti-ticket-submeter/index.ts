@@ -1,6 +1,6 @@
-// Submissao publica de tickets de TI. verify_jwt = false: quem submete pode nao
-// ter conta nenhuma. A autorizacao e o token do link, validado aqui dentro; as
-// tabelas continuam fechadas por RLS a quem tem sessao.
+// Submissão pública de tickets de TI. verify_jwt = false: quem submete pode não
+// ter conta nenhuma. A autorização é o token do link, validado aqui dentro; as
+// tabelas continuam fechadas por RLS a quem tem sessão.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const cors = {
@@ -26,6 +26,15 @@ async function hashOrigem(ip: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** Valida um email simples: algo@algo.algo (algo antes de @, algo depois, e um ponto no domínio). */
+function isValidEmail(email: string): boolean {
+  const parts = email.split('@');
+  if (parts.length !== 2) return false;
+  const [local, domain] = parts;
+  if (!local || !domain) return false;
+  return domain.includes('.');
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
 
@@ -33,17 +42,19 @@ Deno.serve(async (req) => {
     const { token, nome, email, descricao } = await req.json();
 
     if (!token) return json({ success: false, error: 'Link inválido.' }, 400);
-    if (!nome?.trim()) return json({ success: false, error: 'Indique o seu nome.' }, 400);
-    if (!email?.includes('@'))
+    if (typeof nome !== 'string' || !nome.trim())
+      return json({ success: false, error: 'Indique o seu nome.' }, 400);
+    if (typeof email !== 'string' || !isValidEmail(email))
       return json({ success: false, error: 'Indique um email válido.' }, 400);
-    if (!descricao?.trim()) return json({ success: false, error: 'Descreva o problema.' }, 400);
+    if (typeof descricao !== 'string' || !descricao.trim())
+      return json({ success: false, error: 'Descreva o problema.' }, 400);
 
     const sb = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // O token resolve a organizacao. Desativado = link rodado, ja nao serve.
+    // O token resolve a organização. Desativado = link rodado, já não serve.
     const { data: linha } = await sb
       .from('ti_tokens')
       .select('org_id')
@@ -53,20 +64,31 @@ Deno.serve(async (req) => {
 
     if (!linha) return json({ success: false, error: 'Este link já não é válido.' }, 403);
 
-    // Limite por origem. Um endpoint anonimo de escrita e uma porta aberta, e o
-    // token circula por email e WhatsApp.
+    // Limite por origem. Um endpoint anónimo de escrita e uma porta aberta, e o
+    // token circula por email e WhatsApp. Prioridade de confiança: cf-connecting-ip
+    // (sobreposto pelo proxy Cloudflare/Supabase) antes de x-forwarded-for (cliente
+    // pode falsificar o primeiro valor). Se x-forwarded-for, usa o ÚLTIMO, não o
+    // primeiro: o gateway acrescenta o IP verdadeiro no fim da lista.
+    const cfConnectingIp = req.headers.get('cf-connecting-ip');
+    const xForwardedFor = req.headers.get('x-forwarded-for');
     const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
-      req.headers.get('cf-connecting-ip') ??
+      cfConnectingIp ??
+      (xForwardedFor ? xForwardedFor.split(',').pop()?.trim() : undefined) ??
       'desconhecido';
     const origem = await hashOrigem(ip);
     const desde = new Date(Date.now() - 3_600_000).toISOString();
 
-    const { count } = await sb
+    const { count, error: countError } = await sb
       .from('ti_submissoes')
       .select('id', { count: 'exact', head: true })
+      .eq('org_id', linha.org_id)
       .eq('origem_hash', origem)
       .gte('created_at', desde);
+
+    if (countError) {
+      console.error('Erro ao contar submissões:', countError);
+      return json({ success: false, error: 'Não foi possível verificar o limite.' }, 429);
+    }
 
     if ((count ?? 0) >= LIMITE_POR_HORA) {
       return json({ success: false, error: 'Demasiados pedidos. Tente dentro de uma hora.' }, 429);
@@ -85,7 +107,13 @@ Deno.serve(async (req) => {
 
     if (error) throw error;
 
-    await sb.from('ti_submissoes').insert({ org_id: linha.org_id, origem_hash: origem });
+    const { error: submissaoError } = await sb
+      .from('ti_submissoes')
+      .insert({ org_id: linha.org_id, origem_hash: origem });
+
+    if (submissaoError) {
+      console.error('Erro ao registar submissão (ticket já criado):', submissaoError);
+    }
 
     return json({ success: true, numero: ticket.numero });
   } catch (e) {
