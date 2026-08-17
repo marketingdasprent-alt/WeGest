@@ -206,3 +206,9 @@ verify_jwt = true
 # o orçamento de 3 tentativas de aviso por parcela.
 [functions.acordos-parcelas-diario]
 verify_jwt = true
+
+# Submissao publica de tickets de TI. Quem reporta pode nao ter conta nenhuma,
+# por isso aceita anon; a autorizacao e o token do link, validado dentro da
+# funcao, mais um limite por origem contra flood.
+[functions.ti-ticket-submeter]
+verify_jwt = false
