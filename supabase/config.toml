@@ -217,3 +217,8 @@ verify_jwt = false
 # sugestão). Anónimo porque o autor pode não ter conta; devolve só aquele ticket.
 [functions.ti-ticket-por-token]
 verify_jwt = false
+
+# Resposta do autor a uma sugestão de TI ("ajudou" / "não ajudou"). Anon porque
+# o autor pode não ter conta; autoriza pelo acesso_token do ticket.
+[functions.ti-sugestao-responder]
+verify_jwt = false
