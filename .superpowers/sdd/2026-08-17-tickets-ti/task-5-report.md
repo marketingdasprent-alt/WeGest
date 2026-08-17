@@ -229,3 +229,81 @@ Duration    192.81s
 
 Ficheiro modificado:
 - `supabase/functions/ti-sugestao-responder/index.ts` (+39 linhas, -3 linhas)
+
+---
+
+## Correcção 2 da Revisão — `.is()` vs `.eq()` em PostgREST
+
+A revisão do coordinador identificou uma regressão crítica introduzida pela própria instrução da Correcção 1.
+
+### Problema: `.eq('util', null)` nunca casa com linhas
+
+**Antes:** A instrução dizia para usar `.eq('util', null)` no compare-and-swap:
+```ts
+.eq('util', null) // ❌ Gera WHERE util=eq.null — nunca verdadeiro
+.select('id');
+
+if (!updateSugestaoData || updateSugestaoData.length === 0) {
+  return json({ success: false, error: 'Já respondeu a esta sugestão.' }, 409);
+}
+```
+
+Em Postgres, a **lógica de três valores** faz com que `coluna = NULL` **nunca** seja verdadeiro para nenhuma linha. O WHERE resultante nunca casava, o SELECT retornava sempre lista vazia, e a guarda disparava sempre, mesmo na primeira resposta a uma sugestão nova. **A função ficava completamente inoperante: devolvia 409 a toda a gente.**
+
+**Depois:** Usar `.is('util', null)`, que é o método correcto em PostgREST para comparar com NULL:
+```ts
+.is('util', null) // ✅ Gera WHERE util IS NULL — correcto
+.select('id');
+```
+
+O método `.is()` é especificamente para comparações com `NULL` porque gera `IS NULL` em SQL, que é o padrão correcto.
+
+### Nota importante: diferença entre `.eq()` e `.is()` em PostgREST
+
+Este erro é invisível aos nossos portões de validação:
+- **type-check:** Não o apanha porque `createClient` é criado sem generic `Database`
+- **lint:** Não o apanha porque é código válido de Supabase JS
+- **teste-espelho:** Só compara a tabela de transições, nunca chama o handler
+- **testes completos:** Sem acesso a BD, não consigo testar o comportamento real do UPDATE
+
+O bug só seria descoberto no deploy. Portanto: **esta lógica continua sem cobertura automática e só será provada no ambiente de produção.**
+
+### Validação pós-correcção
+
+**Confirmação por leitura:** Linha 107 agora tem `.is('util', null)` com comentário explicativo a quatro linhas (linhas 100-106) que justifica por que é `.is` e não `.eq`.
+
+**Comando:** `npx vitest run src/lib/tiTicketEstados.espelho.test.ts`
+```
+✓ src/lib/tiTicketEstados.espelho.test.ts (1 test) 7ms
+
+Test Files  1 passed (1)
+Tests       1 passed (1)
+```
+
+**Comando:** `npx esbuild supabase/functions/ti-sugestao-responder/index.ts --loader:.ts=ts --format=esm --outfile=/dev/null`
+```
+nul  4.2kb
+Done in 13ms
+```
+
+**Comando:** `npx prettier --write supabase/functions/ti-sugestao-responder/index.ts`
+```
+supabase/functions/ti-sugestao-responder/index.ts 192ms (unchanged)
+```
+
+**Comando:** `pnpm type-check` → 0 erros
+**Comando:** `pnpm lint` → 0 erros (617 warnings de ficheiros não tocados)
+
+**Comando:** `pnpm test` (completo)
+```
+Test Files  159 passed (159)
+Tests       1165 passed (1165)
+Duration    234.98s
+```
+
+### Novo commit
+
+`38a2d9f` — fix(ti): corrige compare-and-swap no UPDATE da sugestão — .is() em vez de .eq()
+
+Ficheiro modificado:
+- `supabase/functions/ti-sugestao-responder/index.ts` (+4 linhas, -2 linhas)
