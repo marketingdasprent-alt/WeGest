@@ -30,6 +30,12 @@ function json(body: unknown, status = 200) {
   });
 }
 
+// Valida formato básico de UUID v4
+function isValidUUID(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
 
@@ -39,14 +45,20 @@ Deno.serve(async (req) => {
       return json({ success: false, error: 'Pedido incompleto.' }, 400);
     }
 
+    // Valida formato de UUID antes de ir à base de dados (Minor #3)
+    if (!isValidUUID(acesso_token) || !isValidUUID(sugestao_id)) {
+      return json({ success: false, error: 'Pedido incompleto.' }, 400);
+    }
+
     const sb = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    // Remove org_id do select (Minor #4)
     const { data: ticket, error: ticketError } = await sb
       .from('ti_tickets')
-      .select('id, status, org_id')
+      .select('id, status')
       .eq('acesso_token', acesso_token)
       .maybeSingle();
 
@@ -82,14 +94,24 @@ Deno.serve(async (req) => {
       return json({ success: false, error: 'Este ticket já não aceita resposta.' }, 409);
     }
 
-    const { error: updateSugestaoError } = await sb
+    // Compare-and-swap no UPDATE: .eq('util', null) impede race condition onde dois
+    // pedidos simultâneos (duplo clique, retry) ambos lêem util=null e ambos escrevem.
+    // Assim, apenas um UPDATE afecta linhas; o outro acha que já foi respondido.
+    const { data: updateSugestaoData, error: updateSugestaoError } = await sb
       .from('ti_ticket_sugestoes')
       .update({ util, respondida_em: new Date().toISOString() })
-      .eq('id', sugestao.id);
+      .eq('id', sugestao.id)
+      .eq('util', null) // CRITICAL #1: compare-and-swap
+      .select('id');
 
     if (updateSugestaoError) {
       console.error('Erro ao atualizar sugestão:', updateSugestaoError);
       throw updateSugestaoError;
+    }
+
+    // Se nenhuma linha foi afectada, outro pedido venceu a race condition
+    if (!updateSugestaoData || updateSugestaoData.length === 0) {
+      return json({ success: false, error: 'Já respondeu a esta sugestão.' }, 409);
     }
 
     const { error: updateTicketError } = await sb
@@ -99,6 +121,20 @@ Deno.serve(async (req) => {
 
     if (updateTicketError) {
       console.error('Erro ao atualizar ticket:', updateTicketError);
+      // IMPORTANT #2: Mitiga falta de atomicidade. Se o ticket falhar, reverte a sugestão
+      // para evitar que o utilizador fique preso num 409 permanente (já respondido)
+      // sem culpa sua.
+      const { error: revertError } = await sb
+        .from('ti_ticket_sugestoes')
+        .update({ util: null, respondida_em: null })
+        .eq('id', sugestao.id);
+
+      if (revertError) {
+        console.error(
+          'CRÍTICO: falha ao atualizar ticket E falha ao revert da sugestão. Dessincronização!',
+          { updateTicketError, revertError }
+        );
+      }
       throw updateTicketError;
     }
 
