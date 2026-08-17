@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import type { MotoristaResumoProps, SlotPeriodo } from '../MotoristaResumoDialog';
 import { deriveAluguerSemTarifa } from './aluguerSemTarifa';
@@ -17,12 +17,6 @@ export interface UseMotoristaResumoDataReturn {
   outrasReceitas: number;
   slotPeriodos: SlotPeriodo[];
   aluguerSemTarifa: boolean;
-  /** Saldo pendente ANTES desta semana começar (motorista_saldo_pendente até
-   *  ao dia anterior a dateRange.from) — alimenta a linha "Valores a
-   *  Transportar (Semana Anterior)" do resumo. Positivo = a favor do
-   *  motorista (soma ao que recebe); negativo = motorista já devia antes
-   *  desta semana (desconta). */
-  valoresSemanaAnterior: number;
 }
 
 /**
@@ -51,7 +45,6 @@ export function useMotoristaResumoData(
   const [outrasReceitas, setOutrasReceitas] = useState(0);
   const [slotPeriodos, setSlotPeriodos] = useState<SlotPeriodo[]>([]);
   const [aluguerSemTarifa, setAluguerSemTarifa] = useState(false);
-  const [valoresSemanaAnterior, setValoresSemanaAnterior] = useState(0);
 
   useEffect(() => {
     if (open && (motorista?.motorista_id || motorista?.driver_uuid)) {
@@ -71,7 +64,6 @@ export function useMotoristaResumoData(
     setExtraCosts({ caucao: 0, seguros: 0, outros: 0 });
     setSlotPeriodos([]);
     setAluguerSemTarifa(false);
-    setValoresSemanaAnterior(0);
 
     try {
       let resolvedMotoristaId = motorista.motorista_id || null;
@@ -149,15 +141,6 @@ export function useMotoristaResumoData(
             .select('modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
             .eq('renting_tarifas.tipo', 'tvde')
             .eq('renting_tarifas.ativa', true),
-          // Saldo pendente ANTES desta semana — mesma RPC usada no portal do
-          // motorista e no separador Financeiro do admin, nunca recalculado
-          // à mão aqui. "Antes desta semana" = até ao dia anterior a
-          // dateRange.from, para nunca contar duas vezes os movimentos da
-          // própria semana (esses já entram directamente no resumo).
-          supabase.rpc('motorista_saldo_pendente', {
-            p_motorista_id: resolvedMotoristaId,
-            p_ate_data: format(subDays(dateRange.from, 1), 'yyyy-MM-dd'),
-          }),
         ]);
 
         const viaturaData = results[0].data;
@@ -181,7 +164,6 @@ export function useMotoristaResumoData(
             (r) => [r.modelo_id, Number(r.preco_semana)]
           )
         );
-        setValoresSemanaAnterior(Number((results[5] as { data: number | null }).data) || 0);
 
         if (viaturaData?.viaturas) {
           setMatricula((viaturaData.viaturas as any).matricula);
@@ -251,6 +233,5 @@ export function useMotoristaResumoData(
     outrasReceitas,
     slotPeriodos,
     aluguerSemTarifa,
-    valoresSemanaAnterior,
   };
 }
