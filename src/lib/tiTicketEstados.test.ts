@@ -55,4 +55,18 @@ describe('proximoEstado', () => {
   it('não se responde duas vezes à mesma sugestão', () => {
     expect(proximoEstado('nao_resolvido', 'nao_ajudou')).toBeNull();
   });
+
+  it('o admin reabre um ticket resolvido e ele volta a precisar de atenção', () => {
+    expect(proximoEstado('resolvido', 'reabrir')).toBe('nao_resolvido');
+  });
+
+  // Reabrir só faz sentido a partir de resolvido. Sem estas guardas, um botão
+  // mal ligado podia "reabrir" um ticket que nunca foi fechado e mandá-lo para
+  // nao_resolvido sem ninguém ter tentado resolvê-lo.
+  it('não se reabre o que não está resolvido', () => {
+    expect(proximoEstado('aberto', 'reabrir')).toBeNull();
+    expect(proximoEstado('com_sugestao', 'reabrir')).toBeNull();
+    expect(proximoEstado('nao_resolvido', 'reabrir')).toBeNull();
+    expect(proximoEstado('presencial', 'reabrir')).toBeNull();
+  });
 });

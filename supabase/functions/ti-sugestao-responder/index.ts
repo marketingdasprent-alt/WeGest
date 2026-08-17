@@ -20,7 +20,7 @@ const TRANSICOES: Record<string, Record<string, string>> = {
   },
   nao_resolvido: { sugerir: 'com_sugestao', marcar_presencial: 'presencial', fechar: 'resolvido' },
   presencial: { sugerir: 'com_sugestao', fechar: 'resolvido' },
-  resolvido: {},
+  resolvido: { reabrir: 'nao_resolvido' },
 };
 
 function json(body: unknown, status = 200) {

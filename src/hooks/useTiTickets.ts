@@ -109,6 +109,46 @@ export function useMarcarPresencial() {
   });
 }
 
+/**
+ * Muda o estado do ticket por um evento da máquina de estados, em vez de
+ * escrever o estado à mão. São três linhas a mais do que um `update` directo, e
+ * são elas que impedem um botão futuro de pôr um ticket num estado impossível —
+ * a regra continua num sítio só, em `tiTicketEstados.ts`.
+ */
+function useTransicaoTicket(evento: 'fechar' | 'reabrir', erroSeProibido: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ticketId }: { ticketId: string }) => {
+      const { data: ticket, error } = await (supabase as any)
+        .from('ti_tickets')
+        .select('status')
+        .eq('id', ticketId)
+        .single();
+      if (error) throw error;
+
+      const novo = proximoEstado(ticket.status as EstadoTicket, evento);
+      if (!novo) throw new Error(erroSeProibido);
+
+      const { error: erroUpd } = await (supabase as any)
+        .from('ti_tickets')
+        .update({ status: novo, updated_at: new Date().toISOString() })
+        .eq('id', ticketId);
+      if (erroUpd) throw erroUpd;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: CHAVE }),
+  });
+}
+
+/** Fecha o pedido: o admin dá-o por resolvido. Funciona de qualquer estado. */
+export function useMarcarResolvido() {
+  return useTransicaoTicket('fechar', 'Este pedido já está resolvido.');
+}
+
+/** Reabre um pedido resolvido — volta a `nao_resolvido`, a precisar de atenção. */
+export function useReabrirTicket() {
+  return useTransicaoTicket('reabrir', 'Só se reabre um pedido que esteja resolvido.');
+}
+
 /** Ticket aberto pelo próprio admin dentro da aplicação: fica com `criado_por`. */
 export function useCriarTicketComoAdmin() {
   const qc = useQueryClient();

@@ -10,6 +10,8 @@ import {
   useCriarSugestao,
   useCriarTicketComoAdmin,
   useMarcarPresencial,
+  useMarcarResolvido,
+  useReabrirTicket,
   useTiTickets,
 } from '@/hooks/useTiTickets';
 import type { EstadoTicket } from '@/lib/tiTicketEstados';
@@ -30,6 +32,8 @@ export function TiTicketLista() {
   const { data = [], isLoading, error } = useTiTickets();
   const criarSugestao = useCriarSugestao();
   const marcarPresencial = useMarcarPresencial();
+  const marcarResolvido = useMarcarResolvido();
+  const reabrir = useReabrirTicket();
   const criarComoAdmin = useCriarTicketComoAdmin();
 
   const [aSugerir, setASugerir] = useState<string | null>(null);
@@ -41,6 +45,24 @@ export function TiTicketLista() {
   if (error) {
     return <p className="text-sm text-destructive">Não foi possível carregar os pedidos.</p>;
   }
+
+  /**
+   * Corre uma transição e mostra o resultado. As mutações rejeitam transições
+   * proibidas pela máquina de estados — sem este catch, o erro morria em
+   * silêncio e o admin ficava a olhar para um botão que parecia não fazer nada.
+   */
+  const executar = async (
+    mutacao: { mutateAsync: (v: { ticketId: string }) => Promise<unknown> },
+    ticketId: string,
+    sucesso: string
+  ) => {
+    try {
+      await mutacao.mutateAsync({ ticketId });
+      toast.success(sucesso);
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Não foi possível mudar o estado do pedido.');
+    }
+  };
 
   const enviarSugestao = async (ticketId: string) => {
     try {
@@ -125,22 +147,44 @@ export function TiTicketLista() {
               </div>
             ))}
 
-            {t.status !== 'resolvido' && (
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => setASugerir(t.id)}>
-                  Sugerir resolução
-                </Button>
-                {t.status !== 'presencial' && (
+            <div className="flex flex-wrap gap-2">
+              {t.status !== 'resolvido' ? (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => setASugerir(t.id)}>
+                    Sugerir resolução
+                  </Button>
                   <Button
                     size="sm"
-                    variant="ghost"
-                    onClick={() => marcarPresencial.mutateAsync({ ticketId: t.id })}
+                    disabled={marcarResolvido.isPending}
+                    onClick={() =>
+                      executar(marcarResolvido, t.id, 'Pedido marcado como resolvido.')
+                    }
                   >
-                    Ver presencialmente
+                    Marcar como resolvido
                   </Button>
-                )}
-              </div>
-            )}
+                  {t.status !== 'presencial' && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        executar(marcarPresencial, t.id, 'Pedido marcado para resolver em pessoa.')
+                      }
+                    >
+                      Ver presencialmente
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={reabrir.isPending}
+                  onClick={() => executar(reabrir, t.id, 'Pedido reaberto.')}
+                >
+                  Reabrir
+                </Button>
+              )}
+            </div>
 
             {aSugerir === t.id && (
               <div className="space-y-2">

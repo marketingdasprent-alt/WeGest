@@ -8,7 +8,13 @@
  */
 export type EstadoTicket = 'aberto' | 'com_sugestao' | 'nao_resolvido' | 'presencial' | 'resolvido';
 
-export type EventoTicket = 'sugerir' | 'foi_util' | 'nao_ajudou' | 'marcar_presencial' | 'fechar';
+export type EventoTicket =
+  | 'sugerir'
+  | 'foi_util'
+  | 'nao_ajudou'
+  | 'marcar_presencial'
+  | 'fechar'
+  | 'reabrir';
 
 const TRANSICOES: Record<EstadoTicket, Partial<Record<EventoTicket, EstadoTicket>>> = {
   aberto: { sugerir: 'com_sugestao', marcar_presencial: 'presencial', fechar: 'resolvido' },
@@ -20,7 +26,11 @@ const TRANSICOES: Record<EstadoTicket, Partial<Record<EventoTicket, EstadoTicket
   },
   nao_resolvido: { sugerir: 'com_sugestao', marcar_presencial: 'presencial', fechar: 'resolvido' },
   presencial: { sugerir: 'com_sugestao', fechar: 'resolvido' },
-  resolvido: {},
+  // Reabrir devolve o ticket a `nao_resolvido`, não a `aberto`: um pedido que já
+  // passou por aqui e voltou precisa de atenção, e é isso que `nao_resolvido`
+  // significa na lista do admin. Voltar a `aberto` apagaria o sinal de que já se
+  // tentou resolver.
+  resolvido: { reabrir: 'nao_resolvido' },
 };
 
 /** `null` = transição não permitida. Quem chama decide o erro a mostrar. */
