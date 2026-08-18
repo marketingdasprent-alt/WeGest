@@ -32,6 +32,12 @@ interface Dano {
 
 interface MotoristaDanosCardProps {
   motoristaId: string;
+  /**
+   * Dentro de um dialogo, a moldura propria deste cartao criava caixa dentro de
+   * caixa — o dialogo ja e a caixa. Com isto o conteudo vem solto e o utilizador
+   * ve um cartao so.
+   */
+  semMoldura?: boolean;
 }
 
 const STATUS_PAGAMENTO = {
@@ -49,7 +55,7 @@ const STATUS_PAGAMENTO = {
   },
 };
 
-export function MotoristaDanosCard({ motoristaId }: MotoristaDanosCardProps) {
+export function MotoristaDanosCard({ motoristaId, semMoldura = false }: MotoristaDanosCardProps) {
   const [danos, setDanos] = useState<Dano[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDano, setSelectedDano] = useState<Dano | null>(null);
@@ -172,8 +178,15 @@ export function MotoristaDanosCard({ motoristaId }: MotoristaDanosCardProps) {
 
   return (
     <>
-      <Card className="shadow-sm rounded-[2rem] overflow-hidden border-border bg-background leading-relaxed">
-        <CardHeader className="p-8 pb-4">
+      <Card
+        className={cn(
+          'leading-relaxed',
+          semMoldura
+            ? 'border-0 bg-transparent shadow-none rounded-none'
+            : 'shadow-sm rounded-[2rem] overflow-hidden border-border bg-background'
+        )}
+      >
+        <CardHeader className={cn('pb-4', semMoldura ? 'p-0' : 'p-8')}>
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg font-black flex items-center gap-3">
               <div className="p-2 bg-destructive/10 rounded-xl">

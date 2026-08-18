@@ -843,7 +843,7 @@ export function MotoristaDashboard() {
           <DialogHeader>
             <DialogTitle>Danos da viatura</DialogTitle>
           </DialogHeader>
-          <MotoristaDanosCard motoristaId={motorista.id} />
+          <MotoristaDanosCard motoristaId={motorista.id} semMoldura />
         </DialogContent>
       </Dialog>
 
