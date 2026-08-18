@@ -50,3 +50,7 @@ docs/**/*.md
 .claude/worktrees/
 
 .sisyphus/
+
+# Artefactos do fluxo de trabalho com agentes (relatorios, briefs, ledger).
+# Sao rascunho interno, nunca produto.
+.superpowers/
