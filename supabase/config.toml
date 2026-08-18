@@ -206,3 +206,31 @@ verify_jwt = true
 # o orçamento de 3 tentativas de aviso por parcela.
 [functions.acordos-parcelas-diario]
 verify_jwt = true
+
+# Submissão pública de tickets de TI. Quem reporta pode não ter conta nenhuma,
+# por isso aceita anónimo; a autorização é o token do link, validado dentro da
+# função, mais um limite por origem contra flood.
+[functions.ti-ticket-submeter]
+verify_jwt = false
+
+# Leitura de um ticket de TI pelo token do próprio ticket (vai no email da
+# sugestão). Anónimo porque o autor pode não ter conta; devolve só aquele ticket.
+[functions.ti-ticket-por-token]
+verify_jwt = false
+
+# Resposta do autor a uma sugestão de TI ("ajudou" / "não ajudou"). Anon porque
+# o autor pode não ter conta; autoriza pelo acesso_token do ticket.
+[functions.ti-sugestao-responder]
+verify_jwt = false
+
+# Aviso ao autor de um ticket de TI de que há sugestão. Iniciada sempre pela app
+# autenticada (o admin que escreve a sugestão) → exige JWT.
+[functions.ti-ticket-sugestao-email]
+verify_jwt = true
+
+# Aviso ao email de suporte da organização de que entrou um pedido novo. Exige
+# JWT: os dois chamadores trazem um — a app autenticada (o admin que abre o
+# pedido) e o ti-ticket-submeter, cuja service role key já é um JWT assinado
+# pelo projecto. Deixá-la a false abria um gatilho anónimo de envio de email.
+[functions.ti-ticket-novo-email]
+verify_jwt = true

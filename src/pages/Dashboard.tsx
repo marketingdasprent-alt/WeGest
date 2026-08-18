@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { useTiLinkPublico } from '@/hooks/useTiTickets';
+import { linkSubmissaoTickets } from '@/lib/ticketsUrl';
 import {
   CircleCheck,
   Car,
@@ -14,6 +16,7 @@ import {
   UserPlus,
   RefreshCw,
   LayoutDashboard,
+  LifeBuoy,
   CalendarRange,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -234,6 +237,21 @@ function useCountUp(target: number, durationMs = 850): number {
 const Dashboard = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  // Link público de pedidos de informática da própria organização. Abre em
+  // separador novo porque o objectivo é poder ser partilhado com quem não tem
+  // conta no WeGest.
+  const { data: tiToken } = useTiLinkPublico();
+  const abrirTicketsTI = () => {
+    if (!tiToken) {
+      toast({
+        title: 'Link de pedidos indisponível',
+        description: 'A organização ainda não tem link de pedidos de informática.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    window.open(linkSubmissaoTickets(tiToken), '_blank', 'noopener,noreferrer');
+  };
   const { isExecutivo } = useDashboardVariant();
   // Query própria (não faz parte do fetchData sequencial abaixo) — dá-lhe o
   // seu próprio loading, em vez de ficar bloqueada atrás do resto da homepage.
@@ -628,6 +646,9 @@ const Dashboard = () => {
           title="Atualizar"
         >
           <RefreshCw className={cn('h-4 w-4', atualizando && 'animate-spin')} />
+        </Button>
+        <Button variant="ghost" size="icon" onClick={abrirTicketsTI} title="Pedidos de informática">
+          <LifeBuoy className="h-4 w-4" />
         </Button>
         <ThemeToggle />
       </StickyPageHeader>
