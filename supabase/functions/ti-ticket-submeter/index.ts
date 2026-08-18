@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
         autor_email: email.trim().toLowerCase(),
         descricao: descricao.trim(),
       })
-      .select('numero')
+      .select('id, numero')
       .single();
 
     if (error) throw error;
@@ -122,6 +122,24 @@ Deno.serve(async (req) => {
 
     if (submissaoError) {
       console.error('Erro ao registar submissão (ticket já criado):', submissaoError);
+    }
+
+    // Aviso ao suporte. É o último passo e nunca faz falhar a submissão: o
+    // pedido já está gravado e quem o submeteu já tem direito ao número. Dizer
+    // "não foi possível registar o pedido" porque o email não saiu mandava a
+    // pessoa submeter outra vez e duplicava o ticket.
+    // O invoke devolve o erro em `error` em vez de o lançar — sem verificar o
+    // valor devolvido, uma falha do aviso passava calada; o try/catch fica na
+    // mesma para o que rebenta antes de haver resposta.
+    try {
+      const { error: emailError } = await sb.functions.invoke('ti-ticket-novo-email', {
+        body: { ticket_id: ticket.id },
+      });
+      if (emailError) {
+        console.error('ti-ticket-submeter: aviso ao suporte não saiu:', emailError);
+      }
+    } catch (emailError) {
+      console.error('ti-ticket-submeter: aviso ao suporte não saiu:', emailError);
     }
 
     return json({ success: true, numero: ticket.numero });

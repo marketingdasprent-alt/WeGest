@@ -104,10 +104,16 @@ export function TiTicketLista() {
             disabled={!novaDescricao.trim() || criarComoAdmin.isPending}
             onClick={async () => {
               try {
-                await criarComoAdmin.mutateAsync({ descricao: novaDescricao });
+                const r = await criarComoAdmin.mutateAsync({ descricao: novaDescricao });
                 setNovaDescricao('');
                 setNovoAberto(false);
-                toast.success('Pedido aberto.');
+                // Mesma distinção da sugestão: "aberto" não é o mesmo que
+                // "aberto e o suporte foi avisado".
+                if (r?.emailFalhou) {
+                  toast.warning('Pedido aberto, mas o aviso ao suporte não saiu.');
+                } else {
+                  toast.success('Pedido aberto.');
+                }
               } catch (e: any) {
                 toast.error(e.message ?? 'Não foi possível abrir o pedido.');
               }

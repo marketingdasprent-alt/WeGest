@@ -163,14 +163,26 @@ export function useCriarTicketComoAdmin() {
         .single();
       if (erroPerfil) throw erroPerfil;
 
-      const { error } = await (supabase as any).from('ti_tickets').insert({
-        org_id: perfil?.org_id,
-        autor_nome: perfil?.nome ?? 'Administrador',
-        autor_email: perfil?.email ?? '',
-        descricao,
-        criado_por: uid || null,
-      });
+      const { data: ticket, error } = await (supabase as any)
+        .from('ti_tickets')
+        .insert({
+          org_id: perfil?.org_id,
+          autor_nome: perfil?.nome ?? 'Administrador',
+          autor_email: perfil?.email ?? '',
+          descricao,
+          criado_por: uid || null,
+        })
+        .select('id')
+        .single();
       if (error) throw error;
+
+      // Mesmo raciocínio do aviso de sugestão: o email é o último passo e não
+      // desfaz o pedido se falhar. Quando a organização não tem email de
+      // suporte configurado, a função devolve sucesso sem enviar nada.
+      const { error: erroEmail } = await supabase.functions.invoke('ti-ticket-novo-email', {
+        body: { ticket_id: ticket.id },
+      });
+      return { emailFalhou: !!erroEmail };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: CHAVE }),
   });

@@ -227,3 +227,10 @@ verify_jwt = false
 # autenticada (o admin que escreve a sugestão) → exige JWT.
 [functions.ti-ticket-sugestao-email]
 verify_jwt = true
+
+# Aviso ao email de suporte da organização de que entrou um pedido novo. Exige
+# JWT: os dois chamadores trazem um — a app autenticada (o admin que abre o
+# pedido) e o ti-ticket-submeter, cuja service role key já é um JWT assinado
+# pelo projecto. Deixá-la a false abria um gatilho anónimo de envio de email.
+[functions.ti-ticket-novo-email]
+verify_jwt = true

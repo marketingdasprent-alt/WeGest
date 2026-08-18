@@ -107,6 +107,7 @@
     "src/hooks/useMotoristasAudiencia.ts",
     "src/hooks/useMotoristasNaoAssociadosCounts.ts",
     "src/hooks/useMotoristasPlataformaSync.ts",
+    "src/hooks/useTiTickets.test.tsx",
     "src/hooks/usePagination.ts",
     "src/hooks/usePedidosTrocaKms.ts",
     "src/hooks/useQuadroLive.ts",
