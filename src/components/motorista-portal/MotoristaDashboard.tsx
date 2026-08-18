@@ -93,12 +93,15 @@ export function MotoristaDashboard() {
   const { user, signOut } = useAuth();
   const [motorista, setMotorista] = useState<MotoristaAtivo | null>(null);
 
-  // Semana actual, de segunda a domingo. Calculada uma vez por render do
-  // painel; o extrato abre sempre aqui e os outros periodos ficam para
-  // interface, ja que a funcao no servidor recebe inicio e fim.
-
-  const semanaInicio = useMemo(() => inicioDaSemana(), []);
-  const semanaFim = useMemo(() => fimDaSemana(), []);
+  // Semana de segunda a domingo. Abre na actual e recua com as setas do cartao;
+  // a funcao no servidor recebe inicio e fim, logo isto e so contar semanas.
+  const [semanasAtras, setSemanasAtras] = useState(0);
+  const semanaInicio = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - semanasAtras * 7);
+    return inicioDaSemana(d);
+  }, [semanasAtras]);
+  const semanaFim = useMemo(() => fimDaSemana(semanaInicio), [semanaInicio]);
   const {
     data: extrato,
     isLoading: extratoALoad,
@@ -766,6 +769,9 @@ export function MotoristaDashboard() {
         error={extratoErro}
         inicio={semanaInicio}
         fim={semanaFim}
+        semanasAtras={semanasAtras}
+        onAnterior={() => setSemanasAtras((n) => n + 1)}
+        onSeguinte={() => setSemanasAtras((n) => Math.max(0, n - 1))}
       />
 
       <MotoristaAcordoCard />

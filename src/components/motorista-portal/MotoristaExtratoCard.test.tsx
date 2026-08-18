@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MotoristaExtratoCard } from './MotoristaExtratoCard';
 import type { ExtratoMotorista } from '@/hooks/useMotoristaExtratoPeriodo';
 
@@ -33,7 +33,16 @@ function extrato(over: Partial<ExtratoMotorista> = {}): ExtratoMotorista {
   };
 }
 
-function ver(e: ExtratoMotorista | null, opts: { isLoading?: boolean; error?: unknown } = {}) {
+function ver(
+  e: ExtratoMotorista | null,
+  opts: {
+    isLoading?: boolean;
+    error?: unknown;
+    semanasAtras?: number;
+    onAnterior?: () => void;
+    onSeguinte?: () => void;
+  } = {}
+) {
   return render(
     <MotoristaExtratoCard
       extrato={e}
@@ -41,6 +50,9 @@ function ver(e: ExtratoMotorista | null, opts: { isLoading?: boolean; error?: un
       error={opts.error ?? null}
       inicio={INICIO}
       fim={FIM}
+      semanasAtras={opts.semanasAtras ?? 0}
+      onAnterior={opts.onAnterior ?? (() => {})}
+      onSeguinte={opts.onSeguinte ?? (() => {})}
     />
   );
 }
@@ -103,5 +115,34 @@ describe('MotoristaExtratoCard', () => {
     ver(null, { error: new Error('falhou') });
     expect(screen.getByText(/não foi possível carregar/i)).toBeTruthy();
     expect(screen.queryByText(/0,00/)).toBeNull();
+  });
+
+  it('recua para a semana anterior', () => {
+    const anterior = vi.fn();
+    ver(extrato(), { onAnterior: anterior });
+    fireEvent.click(screen.getByLabelText(/semana anterior/i));
+    expect(anterior).toHaveBeenCalledTimes(1);
+  });
+
+  it('na semana actual nao deixa avancar — nao ha ganhos do futuro', () => {
+    ver(extrato(), { semanasAtras: 0 });
+    expect(screen.getByLabelText(/semana seguinte/i).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('numa semana passada ja deixa voltar para a frente', () => {
+    const seguinte = vi.fn();
+    ver(extrato(), { semanasAtras: 2, onSeguinte: seguinte });
+    fireEvent.click(screen.getByLabelText(/semana seguinte/i));
+    expect(seguinte).toHaveBeenCalledTimes(1);
+  });
+
+  // Sem isto, uma semana que falhe a carregar prende o motorista nela: fica sem
+  // setas e sem forma de voltar a uma que funcione.
+  it('as setas continuam la quando a semana falha ou esta a carregar', () => {
+    const { unmount } = ver(null, { error: new Error('falhou'), semanasAtras: 1 });
+    expect(screen.getByLabelText(/semana anterior/i)).toBeTruthy();
+    unmount();
+    ver(null, { isLoading: true, semanasAtras: 1 });
+    expect(screen.getByLabelText(/semana anterior/i)).toBeTruthy();
   });
 });

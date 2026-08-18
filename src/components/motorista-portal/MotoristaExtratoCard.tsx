@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, TrendingUp } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import type { ExtratoMotorista } from '@/hooks/useMotoristaExtratoPeriodo';
@@ -15,6 +16,10 @@ interface Props {
   error: unknown;
   inicio: Date;
   fim: Date;
+  /** 0 = semana actual, 1 = a anterior, e por aí adiante. */
+  semanasAtras: number;
+  onAnterior: () => void;
+  onSeguinte: () => void;
 }
 
 /**
@@ -22,15 +27,63 @@ interface Props {
  * já calculados no servidor e não faz contas próprias, para não existir uma
  * segunda versão da mesma regra.
  */
-export function MotoristaExtratoCard({ extrato, isLoading, error, inicio, fim }: Props) {
+export function MotoristaExtratoCard({
+  extrato,
+  isLoading,
+  error,
+  inicio,
+  fim,
+  semanasAtras,
+  onAnterior,
+  onSeguinte,
+}: Props) {
   const periodo = `${format(inicio, "d 'de' MMM", { locale: pt })} a ${format(fim, "d 'de' MMM", { locale: pt })}`;
+  const titulo =
+    semanasAtras === 0 ? 'A minha semana' : semanasAtras === 1 ? 'Semana passada' : 'Semana de';
+
+  // O cabecalho e o mesmo nos tres estados (a carregar, erro, com dados): as
+  // setas tem de funcionar mesmo quando a semana escolhida falha ou esta
+  // vazia, senao o motorista fica preso nela sem forma de voltar atras.
+  const cabecalho = (
+    <CardHeader className="pb-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            {titulo}
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">{periodo}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={onAnterior}
+            aria-label="Semana anterior"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          {/* Desligado na semana actual: nao ha ganhos do futuro para mostrar. */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={onSeguinte}
+            disabled={semanasAtras === 0}
+            aria-label="Semana seguinte"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </CardHeader>
+  );
 
   if (isLoading) {
     return (
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">A minha semana</CardTitle>
-        </CardHeader>
+        {cabecalho}
         <CardContent>
           <Skeleton className="h-40 w-full" />
         </CardContent>
@@ -43,9 +96,7 @@ export function MotoristaExtratoCard({ extrato, isLoading, error, inicio, fim }:
   if (error || !extrato) {
     return (
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">A minha semana</CardTitle>
-        </CardHeader>
+        {cabecalho}
         <CardContent>
           <p className="text-sm text-destructive">
             Não foi possível carregar os seus valores. Tente daqui a pouco.
@@ -70,19 +121,14 @@ export function MotoristaExtratoCard({ extrato, isLoading, error, inicio, fim }:
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <TrendingUp className="h-4 w-4 text-primary" />A minha semana
-        </CardTitle>
-        <p className="text-xs text-muted-foreground">{periodo}</p>
-      </CardHeader>
+      {cabecalho}
 
       <CardContent className="space-y-4">
         {/* Zero viagens não é "ganhaste zero", é "ainda não chegou". Mostrar 0 €
             aqui seria dizer ao motorista uma coisa que não sabemos. */}
         {!extrato.temDadosReceita ? (
           <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-            Os ganhos desta semana ainda não foram importados. Assim que entrarem, aparecem aqui.
+            Os ganhos deste período ainda não foram importados. Assim que entrarem, aparecem aqui.
           </p>
         ) : (
           <>
