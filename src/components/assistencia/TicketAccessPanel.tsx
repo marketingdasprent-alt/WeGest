@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { matchesSearch } from '@/lib/utils';
 
 interface TicketAccessPanelProps {
   ticketId: string;
@@ -204,7 +205,9 @@ export const TicketAccessPanel = forwardRef<TicketAccessPanelRef, TicketAccessPa
               <ScrollArea className="h-[300px]">
                 <div className="space-y-2">
                   {allProfiles
-                    .filter((p) => p.nome?.toLowerCase().includes(searchUser.toLowerCase()))
+                    // Nome por palavras soltas e sem acentos — "josé b"
+                    // encontra "José ... Braga".
+                    .filter((p) => matchesSearch(p.nome, searchUser))
                     .map((profile) => (
                       <button
                         key={profile.id}

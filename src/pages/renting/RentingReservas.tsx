@@ -35,6 +35,7 @@ import {
 } from '@/components/renting/reservas/reservasUtils';
 
 import { ESTADO_LABELS, type Reserva } from '@/types/reserva';
+import { matchesSearch } from '@/lib/utils';
 
 const FILTROS_INICIAIS: ReservasFiltrosState = {
   estacao: 'todas',
@@ -122,7 +123,6 @@ const RentingReservas = () => {
 
   const filtered = useMemo(() => {
     const searchRaw = search.trim();
-    const searchLower = searchRaw.toLowerCase();
     const matriculaNorm = normalizeMatricula(searchRaw);
     const dataInicioMin = filtros.dataInicio
       ? new Date(`${filtros.dataInicio}T00:00:00`).getTime()
@@ -141,7 +141,8 @@ const RentingReservas = () => {
         const matches =
           matchesCodigo(r.codigo, searchRaw) ||
           normalizeMatricula(r.matricula ?? '').includes(matriculaNorm) ||
-          condutorNome.toLowerCase().includes(searchLower) ||
+          // Nome por palavras soltas e sem acentos — ver nota em RentingContratos.
+          matchesSearch(condutorNome, searchRaw) ||
           condutorNif.startsWith(searchRaw) ||
           clienteNif.startsWith(searchRaw);
         if (!matches) return false;

@@ -5,6 +5,10 @@ export interface ViaturaPeriodoInput {
   viatura_id: string;
   data_inicio: string;
   data_fim: string | null;
+  /** Preço semanal já resolvido pelo chamador. Tem prioridade sobre a tarifa
+   *  do grupo/modelo abaixo — para quem já traz os preços em mapas próprios
+   *  (ContasResumoTab) não ter de replicar a query encadeada do diálogo. */
+  preco_semana?: number | null;
   viaturas: {
     matricula: string;
     modelo_id: string | null;
@@ -43,7 +47,9 @@ export function buildSlotPeriodos(
     const tarifa = tarifas.find((t) => t.ativa);
     const modeloId = mv.viaturas?.modelo_id;
     const valorSemanal =
-      Number(tarifa?.preco_semana ?? 0) || (modeloId ? (tvdeModeloPrecoMap.get(modeloId) ?? 0) : 0);
+      Number(mv.preco_semana ?? 0) ||
+      Number(tarifa?.preco_semana ?? 0) ||
+      (modeloId ? (tvdeModeloPrecoMap.get(modeloId) ?? 0) : 0);
     if (!valorSemanal) return;
 
     const periodStart = max([parseISO(mv.data_inicio), weekStart]);

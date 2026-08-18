@@ -189,6 +189,9 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Uber</span><span style="color:#15803d">${fmtEur(receitas.uber)}</span></div>
             <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Outras Receitas</span><span style="color:#15803d">${fmtEur(receitas.outras_receitas)}</span></div>
             <!-- Gorjeta sem linha própria: já embutida no TOTAL RECEITAS. Ver resumoFinanceiro.ts -->
+            <!-- Linhas em BRUTO (igual à lista de Contas/Resumo); o corte de 6%
+                 do recibo verde está no TOTAL mas não é discriminado — decisão
+                 de negócio, ver ResumoReportContent. -->
             <div style="border-top:1px solid #86efac;margin:6px 0"></div>
             <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:3px 0"><span>TOTAL RECEITAS</span><span style="color:#15803d">${fmtEur(isImportado ? totalReceitas : receitaAjustada)}</span></div>
           </div>
