@@ -106,6 +106,9 @@ export function ContasResumoTab() {
   // motorista_id → quando foi desativado. Um motorista inativo continua a
   // contar nas semanas ANTERIORES a esta data (ver filtro em filteredResumos).
   const [desativadoEmMap, setDesativadoEmMap] = useState<Record<string, string>>({});
+  // motorista_id → aluguer sem contrato por trás (preço vindo da tarifa do
+  // modelo). Assinalado no resumo para se ver quem falta regularizar.
+  const [aluguerEstimadoMap, setAluguerEstimadoMap] = useState<Record<string, boolean>>({});
 
   // Print settings (persisted)
   const PRINT_KEY = 'contas_print_settings';
@@ -499,16 +502,29 @@ export function ContasResumoTab() {
       // 4g. Tarifas de renting ativas — preco_semana é o custo semanal do motorista
       const tarifasQuery = supabase
         .from('renting_tarifas')
-        .select('grupo_id, preco_semana')
+        .select('id, grupo_id, preco_semana')
         .eq('ativa', true);
 
       // 4g-bis. TVDE não tem preço por grupo — é por MODELO. Sem isto, o
       // aluguer de motoristas TVDE ficava sempre a 0€ (grupo sem tarifa direta).
+      // `tarifa_id` vem no select para se poder escolher a tarifa QUE O
+      // CONTRATO diz, e não uma qualquer que esteja ativa para o modelo.
       const tarifasTvdeModeloQuery = supabase
         .from('renting_tarifa_precos_modelo')
-        .select('modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
+        .select('tarifa_id, modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
         .eq('renting_tarifas.tipo', 'tvde')
         .eq('renting_tarifas.ativa', true);
+
+      // 4g-ter. Contratos da viatura — o CONTRATO é a fonte de verdade do
+      // preço, não o modelo. Um modelo pode ter várias tarifas ativas em
+      // simultâneo (ex.: "TVDE - Base" 325 € e "Açores" 225 €) e escolher
+      // "uma qualquer" dava o preço errado a 16 motoristas, ~1.100 €/semana
+      // cobrados a menos — e mudava sozinho se a ordem das linhas mudasse.
+      const contratosQuery = supabase
+        .from('contratos_renting')
+        .select('viatura_id, tarifa_id, estado_operacional, data_inicio, created_at')
+        .is('deleted_at', null)
+        .not('viatura_id', 'is', null);
 
       // 4f. Buscar movimentos financeiros unificados para a semana.
       // Contam TODOS os movimentos da semana excepto cancelados — um débito
@@ -543,6 +559,7 @@ export function ContasResumoTab() {
         viaVerdeResult,
         tarifasResult,
         tarifasTvdeModeloResult,
+        contratosResult,
       ] = await Promise.all([
         boltQuery,
         uberQuery,
@@ -557,6 +574,7 @@ export function ContasResumoTab() {
         viaVerdeQuery,
         tarifasQuery,
         tarifasTvdeModeloQuery,
+        contratosQuery,
       ]);
 
       if (boltResult.error) throw boltResult.error;
@@ -622,13 +640,70 @@ export function ContasResumoTab() {
       });
 
       // Mapa: modelo_id → preco_semana da tarifa TVDE ativa (preço por modelo,
-      // não por grupo — ver comentário na query acima).
+      // não por grupo — ver comentário na query acima). Só usado como ÚLTIMO
+      // recurso, quando não há contrato: um modelo pode ter várias tarifas
+      // ativas e aqui não há como saber qual é a do motorista.
       const modeloTvdeTarifaMap: Record<string, number> = {};
+      // Mapa: `${tarifa_id}|${modelo_id}` → preco_semana. É por aqui que se
+      // resolve o preço da tarifa QUE O CONTRATO indica.
+      const precoPorTarifaModelo: Record<string, number> = {};
       (tarifasTvdeModeloResult.data || []).forEach((t: any) => {
         if (t.modelo_id && t.preco_semana != null) {
           modeloTvdeTarifaMap[t.modelo_id] = Number(t.preco_semana) || 0;
+          if (t.tarifa_id) {
+            precoPorTarifaModelo[`${t.tarifa_id}|${t.modelo_id}`] = Number(t.preco_semana) || 0;
+          }
         }
       });
+
+      // Mapa: tarifa_id → preco_semana (tarifas de grupo, regime renting).
+      const precoPorTarifaId: Record<string, number> = {};
+      (tarifasResult.data || []).forEach((t: any) => {
+        if (t.id && t.preco_semana != null) precoPorTarifaId[t.id] = Number(t.preco_semana) || 0;
+      });
+
+      // Mapa: viatura_id → tarifa do CONTRATO. Prefere o contrato em curso;
+      // se não houver, o mais recente da viatura (há viaturas a faturar há
+      // meses cujo último contrato já expirou — sem este fallback ficariam a
+      // 0 € de aluguer). A ordenação é explícita para o resultado não
+      // depender da ordem física das linhas.
+      const contratoTarifaPorViatura: Record<string, string> = {};
+      const contratosOrdenados = [...((contratosResult.data as any[]) || [])].sort((a, b) => {
+        const emCurso = (c: any) => (c.estado_operacional === 'em_curso' ? 1 : 0);
+        if (emCurso(a) !== emCurso(b)) return emCurso(a) - emCurso(b);
+        return String(a.data_inicio ?? a.created_at ?? '').localeCompare(
+          String(b.data_inicio ?? b.created_at ?? '')
+        );
+      });
+      // Ordem crescente de prioridade → o último a escrever é o melhor.
+      contratosOrdenados.forEach((c: any) => {
+        if (c.viatura_id && c.tarifa_id) contratoTarifaPorViatura[c.viatura_id] = c.tarifa_id;
+      });
+
+      /** Preço semanal da viatura, pela cascata acordada: tarifa do contrato →
+       *  tarifa do grupo → tarifa TVDE do modelo. `estimado` assinala que o
+       *  preço NÃO veio de um contrato, para o resumo poder avisar em vez de
+       *  mostrar um número de origem desconhecida como se fosse certo. */
+      const precoSemanalViatura = (
+        viaturaId: string | null,
+        grupoId: string | null,
+        modeloId: string | null
+      ): { preco: number | null; estimado: boolean } => {
+        const tarifaContrato = viaturaId ? contratoTarifaPorViatura[viaturaId] : undefined;
+        if (tarifaContrato) {
+          const doModelo = modeloId
+            ? precoPorTarifaModelo[`${tarifaContrato}|${modeloId}`]
+            : undefined;
+          if (doModelo != null) return { preco: doModelo, estimado: false };
+          const doGrupo = precoPorTarifaId[tarifaContrato];
+          if (doGrupo != null) return { preco: doGrupo, estimado: false };
+        }
+        const fallback =
+          (grupoId ? grupoTarifaMap[grupoId] : undefined) ??
+          (modeloId ? modeloTvdeTarifaMap[modeloId] : undefined) ??
+          null;
+        return { preco: fallback, estimado: fallback != null };
+      };
 
       // Mapa: motorista_id → aluguer da semana. Usa o MESMO cálculo do
       // "Aluguer — Detalhe" do resumo individual (buildSlotPeriodos): dias
@@ -637,14 +712,16 @@ export function ContasResumoTab() {
       // fazia pro-rata — os dois números discordavam no mesmo ecrã (o
       // detalhe é o que vai impresso/enviado ao motorista).
       const viaturasPorMotorista = new Map<string, ViaturaPeriodoInput[]>();
+      // motorista_id → true quando o aluguer NÃO veio de um contrato. Mostra-se
+      // como aviso no resumo: melhor dizer "sem contrato" do que apresentar um
+      // preço de origem desconhecida como se fosse acordado.
+      const aluguerEstimadoMap: Record<string, boolean> = {};
       (viaturasResult.data || []).forEach((mv: any) => {
         if (!mv.motorista_id) return;
-        const grupoId = (mv.viaturas as any)?.grupo_id;
-        const modeloId = (mv.viaturas as any)?.modelo_id;
-        const preco =
-          (grupoId ? grupoTarifaMap[grupoId] : undefined) ??
-          (modeloId ? modeloTvdeTarifaMap[modeloId] : undefined) ??
-          null;
+        const grupoId = (mv.viaturas as any)?.grupo_id ?? null;
+        const modeloId = (mv.viaturas as any)?.modelo_id ?? null;
+        const { preco, estimado } = precoSemanalViatura(mv.viatura_id, grupoId, modeloId);
+        if (estimado) aluguerEstimadoMap[mv.motorista_id] = true;
         const lista = viaturasPorMotorista.get(mv.motorista_id) ?? [];
         lista.push({
           viatura_id: mv.viatura_id,
@@ -655,6 +732,7 @@ export function ContasResumoTab() {
         });
         viaturasPorMotorista.set(mv.motorista_id, lista);
       });
+      setAluguerEstimadoMap(aluguerEstimadoMap);
 
       const aluguerByMotorista: Record<string, number> = {};
       for (const [motoristaId, linhas] of viaturasPorMotorista) {

@@ -113,6 +113,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     outrasReceitas,
     slotPeriodos,
     aluguerSemTarifa,
+    aluguerEstimado,
   } = useMotoristaResumoData(open, motorista, dateRange);
   const [isSending, setIsSending] = useState(false);
   const [settings, setSettings] = useState<PrintSettings>(loadSettings);
@@ -376,6 +377,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             despesas={despesas}
             totalDespesas={totalDespesas}
             aluguerSemTarifa={mostrarAvisoAluguer}
+            aluguerEstimado={aluguerEstimado}
             slotPeriodos={slotPeriodos}
             totalSlot={totalSlot}
             valoresSemanaAnterior={valoresSemanaAnterior}
