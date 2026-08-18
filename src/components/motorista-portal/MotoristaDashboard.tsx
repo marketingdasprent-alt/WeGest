@@ -713,7 +713,7 @@ export function MotoristaDashboard() {
               </CardContent>
             </Card>
           </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-xl rounded-[1.5rem] md:rounded-[2rem] border-border bg-background p-0 overflow-hidden">
+          <DialogContent className="max-h-[90vh] w-[95vw] overflow-hidden rounded-[1.5rem] border-border bg-background p-0 sm:max-w-xl md:rounded-[2rem]">
             <div className="p-5 md:p-8">
               <DialogHeader className="mb-6 md:mb-8">
                 <div className="flex items-center gap-3 mb-2">
@@ -731,74 +731,12 @@ export function MotoristaDashboard() {
                 </div>
               </DialogHeader>
 
-              {/* Os documentos do motorista, com o carregamento e a leitura das
-                  validades. O aviso de expiracao fica em cima, para nao se
-                  perder no meio da lista. */}
-              <div className="space-y-3 md:space-y-4">
-                <div className="mb-4">
-                  <div id="motorista-documentos-card">
-                    <MotoristaDocumentosCard motoristaId={motorista.id} />
-                  </div>
-                </div>
-
-                {stats.docsExpirando.length === 0 ? (
-                  <div className="text-center py-8 md:py-12 bg-muted/20 rounded-[1.5rem] md:rounded-[2rem] border border-dashed">
-                    <Check className="h-10 w-10 md:h-12 md:w-12 text-green-500 mx-auto mb-3 opacity-20" />
-                    <p className="font-bold text-sm md:text-base">Documentos em dia!</p>
-                    <p className="text-[10px] md:text-xs text-muted-foreground">
-                      Não existem documentos a expirar nos próximos 30 dias.
-                    </p>
-                  </div>
-                ) : (
-                  stats.docsExpirando.map((doc, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-4 md:p-5 bg-orange-500/5 hover:bg-orange-500/10 rounded-2xl border border-orange-500/10 transition-all group"
-                    >
-                      <div className="flex items-center gap-3 md:gap-4">
-                        <div className="p-2 bg-background rounded-xl border border-border shadow-sm group-hover:border-orange-500/20 transition-all">
-                          <FileText className="h-4 w-4 md:h-5 md:w-5 text-orange-500" />
-                        </div>
-                        <div>
-                          <p className="text-xs md:text-sm font-bold text-foreground">
-                            {doc.label}
-                          </p>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <Clock className="h-3 w-3 text-orange-500" />
-                            <span className="text-[9px] md:text-[10px] text-orange-500 font-black uppercase tracking-wider">
-                              Expira em {doc.data}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 md:h-9 rounded-xl font-bold text-[10px] md:text-xs hover:bg-orange-500 hover:text-white border-orange-500/20 px-2 md:px-3"
-                        onClick={() => {
-                          // O cartao de carregamento esta agora NESTE dialogo,
-                          // logo nao se fecha nada — so se sobe ate ele.
-                          const element = document.getElementById('motorista-documentos-card');
-                          if (element) {
-                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            element.classList.add('ring-2', 'ring-orange-500', 'ring-offset-2');
-                            setTimeout(() => {
-                              element.classList.remove(
-                                'ring-2',
-                                'ring-orange-500',
-                                'ring-offset-2'
-                              );
-                            }, 3000);
-                          }
-                          toast.warning(`Atualize o documento ${doc.label} acima.`);
-                        }}
-                      >
-                        <Upload className="h-3.5 w-3.5 mr-2" />
-                        Atualizar
-                      </Button>
-                    </div>
-                  ))
-                )}
+              {/* Um cartao so. A lista de "a expirar" que estava aqui mostrava os
+                  mesmos documentos que o cartao ja mostra, com a validade de cada
+                  um — era a mesma informacao duas vezes, e era ela que empurrava o
+                  dialogo para fora do ecra. */}
+              <div className="max-h-[55vh] overflow-y-auto pr-1">
+                <MotoristaDocumentosCard motoristaId={motorista.id} semMoldura />
               </div>
 
               {stats.docsExpirando.length > 0 && (

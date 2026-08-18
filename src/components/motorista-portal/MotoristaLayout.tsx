@@ -1,7 +1,7 @@
 import React from 'react';
 import { MotoristaSidebar } from './MotoristaSidebar';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
-import { Bell, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -38,11 +38,6 @@ export const MotoristaLayout: React.FC<MotoristaLayoutProps> = ({
             <div className="flex items-center gap-2 shrink-0">
               {/* Tema: claro / escuro / sistema — escolha do motorista */}
               <ThemeToggle />
-
-              <button className="relative w-9 h-9 flex items-center justify-center rounded-xl bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                <Bell className="w-4 h-4" />
-                <div className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-background" />
-              </button>
 
               <Avatar className="h-8 w-8 border border-border">
                 <AvatarImage src={userPhoto} />

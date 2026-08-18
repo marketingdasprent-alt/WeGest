@@ -21,6 +21,10 @@ import { cn } from '@/lib/utils';
 
 interface Props {
   motoristaId: string;
+  /** Dentro de um dialogo: sem moldura e sem cabecalho proprio — o dialogo ja e
+   *  a caixa e ja tem titulo. Repetir ambos dava caixa dentro de caixa e o
+   *  mesmo titulo duas vezes. */
+  semMoldura?: boolean;
 }
 
 // Documentos pessoais necessários (espelha o backoffice). `field` = coluna de
@@ -95,7 +99,7 @@ const FICHA_COLS =
   'carta_conducao_verso_url, licenca_tvde_ficheiro_url, registo_criminal_url, ' +
   'comprovativo_morada_url, comprovativo_iban_url, documento_validade, carta_validade, licenca_tvde_validade';
 
-export function MotoristaDocumentosCard({ motoristaId }: Props) {
+export function MotoristaDocumentosCard({ motoristaId, semMoldura = false }: Props) {
   const { user } = useAuth();
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [extras, setExtras] = useState<DocExtra[]>([]);
@@ -245,15 +249,24 @@ export function MotoristaDocumentosCard({ motoristaId }: Props) {
   }
 
   return (
-    <Card className="bg-card border-border shadow-sm rounded-[1.5rem] md:rounded-[2rem] overflow-hidden leading-relaxed">
-      <CardHeader className="p-5 md:p-8 pb-3 md:pb-4 border-b border-border/50">
-        <CardTitle className="text-base md:text-lg font-black text-foreground flex items-center gap-2 md:gap-3">
-          <div className="p-2 bg-teal-500/10 rounded-xl">
-            <FileText className="w-4 h-4 md:w-5 md:h-5 text-teal-600 dark:text-teal-400" />
-          </div>
-          Os Meus Documentos
-        </CardTitle>
-      </CardHeader>
+    <Card
+      className={cn(
+        'leading-relaxed',
+        semMoldura
+          ? 'border-0 bg-transparent shadow-none rounded-none'
+          : 'bg-card border-border shadow-sm rounded-[1.5rem] md:rounded-[2rem] overflow-hidden'
+      )}
+    >
+      {!semMoldura && (
+        <CardHeader className="p-5 md:p-8 pb-3 md:pb-4 border-b border-border/50">
+          <CardTitle className="text-base md:text-lg font-black text-foreground flex items-center gap-2 md:gap-3">
+            <div className="p-2 bg-teal-500/10 rounded-xl">
+              <FileText className="w-4 h-4 md:w-5 md:h-5 text-teal-600 dark:text-teal-400" />
+            </div>
+            Os Meus Documentos
+          </CardTitle>
+        </CardHeader>
+      )}
       <CardContent className="p-0">
         {loading ? (
           <div className="p-5 md:p-8 space-y-3">
