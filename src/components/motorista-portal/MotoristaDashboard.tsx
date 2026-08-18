@@ -38,7 +38,6 @@ import { MotoristaMovimentosCard } from './MotoristaMovimentosCard';
 import { MotoristaRecibosCard } from './MotoristaRecibosCard';
 import { MotoristaDanosCard } from './MotoristaDanosCard';
 import { MotoristaAcordoCard } from './MotoristaAcordoCard';
-import { MotoristaRelatoriosCard } from './MotoristaRelatoriosCard';
 import { MotoristaCombustivelCard } from './MotoristaCombustivelCard';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -98,6 +97,8 @@ export function MotoristaDashboard() {
   // Semana actual, de segunda a domingo. Calculada uma vez por render do
   // painel; o extrato abre sempre aqui e os outros periodos ficam para
   // interface, ja que a funcao no servidor recebe inicio e fim.
+  const [danosAbertos, setDanosAbertos] = useState(false);
+
   const semanaInicio = useMemo(() => inicioDaSemana(), []);
   const semanaFim = useMemo(() => fimDaSemana(), []);
   const {
@@ -679,7 +680,7 @@ export function MotoristaDashboard() {
               <CardContent className="p-5 md:p-6">
                 <div className="flex justify-between items-start mb-3 md:mb-4">
                   <span className="text-muted-foreground text-[10px] font-black tracking-widest uppercase">
-                    DOCs a Expirar
+                    Os meus documentos
                   </span>
                   <div
                     className={cn(
@@ -707,7 +708,7 @@ export function MotoristaDashboard() {
                 </p>
                 <div className="flex items-center justify-between">
                   <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-tight">
-                    Próximos 30 dias
+                    {stats.documentosAExpirar > 0 ? 'A expirar em 30 dias' : 'Todos em dia'}
                   </p>
                   <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
                 </div>
@@ -723,16 +724,23 @@ export function MotoristaDashboard() {
                   </div>
                   <div>
                     <DialogTitle className="text-xl md:text-2xl font-black tracking-tight">
-                      Documentos a Expirar
+                      Os meus documentos
                     </DialogTitle>
                     <p className="text-xs md:text-sm text-muted-foreground font-medium">
-                      Documentos que requerem a sua atenção brevemente
+                      Carregue os seus documentos — a validade e lida do que inserir
                     </p>
                   </div>
                 </div>
               </DialogHeader>
 
+              {/* Os documentos do motorista, com o carregamento e a leitura das
+                  validades. O aviso de expiracao fica em cima, para nao se
+                  perder no meio da lista. */}
               <div className="space-y-3 md:space-y-4">
+                <div className="mb-4">
+                  <MotoristaDocumentosCard motoristaId={motorista.id} />
+                </div>
+
                 {stats.docsExpirando.length === 0 ? (
                   <div className="text-center py-8 md:py-12 bg-muted/20 rounded-[1.5rem] md:rounded-[2rem] border border-dashed">
                     <Check className="h-10 w-10 md:h-12 md:w-12 text-green-500 mx-auto mb-3 opacity-20" />
@@ -808,6 +816,36 @@ export function MotoristaDashboard() {
         </Dialog>
       </div>
 
+      {/* A viatura vem primeiro: e o que o motorista quer ver de relance, e e
+          tambem a porta de entrada para os danos dela — o cartao de danos solto
+          obrigava a procurar noutro sitio uma informacao que e da viatura. */}
+      <Dialog open={danosAbertos} onOpenChange={setDanosAbertos}>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setDanosAbertos(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setDanosAbertos(true);
+            }
+          }}
+          className="rounded-[1.5rem] md:rounded-[2rem] ring-1 ring-primary/20 bg-gradient-to-br from-primary/10 via-background to-background cursor-pointer transition-all hover:ring-primary/40 active:scale-[0.995]"
+        >
+          <MotoristaViaturaCard motoristaId={motorista.id} />
+          <p className="px-5 pb-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground md:px-6">
+            Toque para ver os danos da viatura
+          </p>
+        </div>
+
+        <DialogContent className="w-[95vw] sm:max-w-2xl rounded-[1.5rem] md:rounded-[2rem] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Danos da viatura</DialogTitle>
+          </DialogHeader>
+          <MotoristaDanosCard motoristaId={motorista.id} />
+        </DialogContent>
+      </Dialog>
+
       <MotoristaExtratoCard
         extrato={extrato}
         isLoading={extratoALoad}
@@ -823,14 +861,7 @@ export function MotoristaDashboard() {
         <MotoristaMovimentosCard motoristaId={motorista.id} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <MotoristaRelatoriosCard motoristaId={motorista.id} />
-        <MotoristaDanosCard motoristaId={motorista.id} />
-      </div>
-
       <div className="space-y-8">
-        <MotoristaViaturaCard motoristaId={motorista.id} />
-
         <MotoristaHistoricoViaturasCard motoristaId={motorista.id} />
 
         <div id="motorista-documentos-card">
