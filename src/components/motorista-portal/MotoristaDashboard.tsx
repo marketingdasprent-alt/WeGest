@@ -738,7 +738,9 @@ export function MotoristaDashboard() {
                   perder no meio da lista. */}
               <div className="space-y-3 md:space-y-4">
                 <div className="mb-4">
-                  <MotoristaDocumentosCard motoristaId={motorista.id} />
+                  <div id="motorista-documentos-card">
+                    <MotoristaDocumentosCard motoristaId={motorista.id} />
+                  </div>
                 </div>
 
                 {stats.docsExpirando.length === 0 ? (
@@ -776,7 +778,8 @@ export function MotoristaDashboard() {
                         variant="outline"
                         className="h-8 md:h-9 rounded-xl font-bold text-[10px] md:text-xs hover:bg-orange-500 hover:text-white border-orange-500/20 px-2 md:px-3"
                         onClick={() => {
-                          setDocsModalOpen(false);
+                          // O cartao de carregamento esta agora NESTE dialogo,
+                          // logo nao se fecha nada — so se sobe ate ele.
                           const element = document.getElementById('motorista-documentos-card');
                           if (element) {
                             element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -789,7 +792,7 @@ export function MotoristaDashboard() {
                               );
                             }, 3000);
                           }
-                          toast.warning(`Atualize o documento ${doc.label} abaixo.`);
+                          toast.warning(`Atualize o documento ${doc.label} acima.`);
                         }}
                       >
                         <Upload className="h-3.5 w-3.5 mr-2" />
@@ -817,12 +820,13 @@ export function MotoristaDashboard() {
       </div>
 
       {/* A viatura vem primeiro: e o que o motorista quer ver de relance, e e
-          tambem a porta de entrada para os danos dela — o cartao de danos solto
-          obrigava a procurar noutro sitio uma informacao que e da viatura. */}
+          tambem a porta de entrada para os danos dela. Sem moldura propria — o
+          cartao ja traz a dele, e envolve-lo noutra dava borda dupla. */}
       <Dialog open={danosAbertos} onOpenChange={setDanosAbertos}>
         <div
           role="button"
           tabIndex={0}
+          aria-label="Ver danos da viatura"
           onClick={() => setDanosAbertos(true)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -830,15 +834,12 @@ export function MotoristaDashboard() {
               setDanosAbertos(true);
             }
           }}
-          className="rounded-[1.5rem] md:rounded-[2rem] ring-1 ring-primary/20 bg-gradient-to-br from-primary/10 via-background to-background cursor-pointer transition-all hover:ring-primary/40 active:scale-[0.995]"
+          className="cursor-pointer rounded-[1.5rem] transition-transform active:scale-[0.995] md:rounded-[2rem]"
         >
           <MotoristaViaturaCard motoristaId={motorista.id} />
-          <p className="px-5 pb-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground md:px-6">
-            Toque para ver os danos da viatura
-          </p>
         </div>
 
-        <DialogContent className="w-[95vw] sm:max-w-2xl rounded-[1.5rem] md:rounded-[2rem] max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-h-[85vh] w-[95vw] overflow-y-auto rounded-[1.5rem] sm:max-w-2xl md:rounded-[2rem]">
           <DialogHeader>
             <DialogTitle>Danos da viatura</DialogTitle>
           </DialogHeader>
@@ -863,10 +864,6 @@ export function MotoristaDashboard() {
 
       <div className="space-y-8">
         <MotoristaHistoricoViaturasCard motoristaId={motorista.id} />
-
-        <div id="motorista-documentos-card">
-          <MotoristaDocumentosCard motoristaId={motorista.id} />
-        </div>
 
         {usaRecibos && (
           <div id="recibos-verdes-card">
