@@ -1,13 +1,12 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { linkSubmissaoTickets, tokenDoDominioTickets } from './ticketsUrl';
+import { linkListaTickets, tokenDoDominioTickets } from './ticketsUrl';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** Põe o domínio de pedidos configurado, como estará em produção. */
+/** Põe o domínio de pedidos configurado, como está em produção. */
 function comDominioConfigurado() {
-  vi.stubEnv('VITE_TICKETS_BASE_URL', 'https://tickets.wegest.pt');
   vi.stubEnv('VITE_TICKETS_HOST', 'tickets.wegest.pt');
   vi.stubEnv('VITE_TICKETS_TOKEN', 'token-da-decada');
 }
@@ -18,11 +17,11 @@ describe('tokenDoDominioTickets', () => {
     expect(tokenDoDominioTickets('tickets.wegest.pt')).toBe('token-da-decada');
   });
 
-  // É isto que impede a raiz do wegest.pt de passar a mostrar o formulário de
-  // pedidos em vez da página inicial.
+  // É isto que impede a raiz do www.wegest.pt de passar a mostrar o formulário
+  // de pedidos em vez da página inicial.
   it('noutro dominio devolve null', () => {
     comDominioConfigurado();
-    expect(tokenDoDominioTickets('wegest.pt')).toBeNull();
+    expect(tokenDoDominioTickets('www.wegest.pt')).toBeNull();
     expect(tokenDoDominioTickets('decada.wegest.pt')).toBeNull();
   });
 
@@ -33,31 +32,25 @@ describe('tokenDoDominioTickets', () => {
   });
 });
 
-describe('linkSubmissaoTickets', () => {
-  // O link curto que se partilha: só o domínio, sem token à vista.
-  it('para a organizacao do dominio devolve so o dominio', () => {
+describe('linkListaTickets', () => {
+  // REGRESSÃO 2026-08-18: o botão do dashboard passou a abrir
+  // https://tickets.wegest.pt, uma origem diferente de www.wegest.pt. A sessão
+  // do Supabase vive em localStorage, que é por origem, por isso o admin
+  // chegava lá anónimo e a lista de pedidos desaparecia — sem erro nenhum.
+  // Este link é a porta de entrada do admin: tem de ficar na mesma origem.
+  it('fica sempre relativo, mesmo com o dominio de pedidos configurado', () => {
     comDominioConfigurado();
-    expect(linkSubmissaoTickets('token-da-decada')).toBe('https://tickets.wegest.pt');
+    const link = linkListaTickets('token-da-decada');
+    expect(link).toBe('/ti/token-da-decada');
+    expect(link).not.toMatch(/^https?:\/\//);
   });
 
-  // Outra organização não pode receber o link curto: nesse domínio a raiz
-  // mostra o formulário da Década Ousada, e os pedidos iam parar à org errada.
-  it('para outra organizacao mantem o token no caminho', () => {
+  it('fica relativo para qualquer organizacao', () => {
     comDominioConfigurado();
-    expect(linkSubmissaoTickets('token-de-outro')).toBe(
-      'https://tickets.wegest.pt/ti/token-de-outro'
-    );
+    expect(linkListaTickets('token-de-outro')).toBe('/ti/token-de-outro');
   });
 
-  it('sem configuracao devolve caminho relativo', () => {
-    vi.stubEnv('VITE_TICKETS_BASE_URL', '');
-    vi.stubEnv('VITE_TICKETS_TOKEN', '');
-    expect(linkSubmissaoTickets('abc-123')).toBe('/ti/abc-123');
-  });
-
-  it('barra final na base nao duplica a barra do caminho', () => {
-    vi.stubEnv('VITE_TICKETS_BASE_URL', 'https://tickets.wegest.pt/');
-    vi.stubEnv('VITE_TICKETS_TOKEN', '');
-    expect(linkSubmissaoTickets('abc-123')).toBe('https://tickets.wegest.pt/ti/abc-123');
+  it('sem configuracao nenhuma continua relativo', () => {
+    expect(linkListaTickets('abc-123')).toBe('/ti/abc-123');
   });
 });
