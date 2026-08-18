@@ -140,6 +140,28 @@ Deno.serve(async (req) => {
       throw updateTicketError;
     }
 
+    // Só quando a sugestão NÃO ajudou: é aí que o pedido regride para
+    // `nao_resolvido` e alguém tem de voltar a olhar para ele. Quem responde é
+    // o autor, não alguém que esteja a ver a lista — sem este aviso o pedido
+    // ficava a apodrecer sem ninguém dar por ela.
+    //
+    // É o último passo e nunca faz falhar a resposta: o autor já respondeu, e
+    // devolver-lhe erro por causa de um email seria dar-lhe um problema que
+    // não é dele. O invoke devolve o erro em `error` em vez de o lançar, por
+    // isso verifica-se o valor devolvido além do try/catch.
+    if (!util) {
+      try {
+        const { error: emailError } = await sb.functions.invoke('ti-sugestao-nao-ajudou-email', {
+          body: { ticket_id: ticket.id },
+        });
+        if (emailError) {
+          console.error('ti-sugestao-responder: aviso ao suporte não saiu:', emailError);
+        }
+      } catch (emailError) {
+        console.error('ti-sugestao-responder: aviso ao suporte não saiu:', emailError);
+      }
+    }
+
     return json({ success: true, status: novo });
   } catch (e) {
     console.error('ti-sugestao-responder:', e);
