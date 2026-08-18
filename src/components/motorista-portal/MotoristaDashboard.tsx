@@ -36,7 +36,6 @@ import { MotoristaHistoricoViaturasCard } from './MotoristaHistoricoViaturasCard
 import { MotoristaDocumentosCard } from './MotoristaDocumentosCard';
 import { MotoristaMovimentosCard } from './MotoristaMovimentosCard';
 import { MotoristaRecibosCard } from './MotoristaRecibosCard';
-import { MotoristaDanosCard } from './MotoristaDanosCard';
 import { MotoristaAcordoCard } from './MotoristaAcordoCard';
 import { MotoristaCombustivelCard } from './MotoristaCombustivelCard';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
@@ -97,7 +96,6 @@ export function MotoristaDashboard() {
   // Semana actual, de segunda a domingo. Calculada uma vez por render do
   // painel; o extrato abre sempre aqui e os outros periodos ficam para
   // interface, ja que a funcao no servidor recebe inicio e fim.
-  const [danosAbertos, setDanosAbertos] = useState(false);
 
   const semanaInicio = useMemo(() => inicioDaSemana(), []);
   const semanaFim = useMemo(() => fimDaSemana(), []);
@@ -819,33 +817,10 @@ export function MotoristaDashboard() {
         </Dialog>
       </div>
 
-      {/* A viatura vem primeiro: e o que o motorista quer ver de relance, e e
-          tambem a porta de entrada para os danos dela. Sem moldura propria — o
-          cartao ja traz a dele, e envolve-lo noutra dava borda dupla. */}
-      <Dialog open={danosAbertos} onOpenChange={setDanosAbertos}>
-        <div
-          role="button"
-          tabIndex={0}
-          aria-label="Ver danos da viatura"
-          onClick={() => setDanosAbertos(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setDanosAbertos(true);
-            }
-          }}
-          className="cursor-pointer rounded-[1.5rem] transition-transform active:scale-[0.995] md:rounded-[2rem]"
-        >
-          <MotoristaViaturaCard motoristaId={motorista.id} />
-        </div>
-
-        <DialogContent className="max-h-[85vh] w-[95vw] overflow-y-auto rounded-[1.5rem] sm:max-w-2xl md:rounded-[2rem]">
-          <DialogHeader>
-            <DialogTitle>Danos da viatura</DialogTitle>
-          </DialogHeader>
-          <MotoristaDanosCard motoristaId={motorista.id} semMoldura />
-        </DialogContent>
-      </Dialog>
+      {/* A viatura vem primeiro: e o que o motorista quer ver de relance. O
+          proprio cartao ja abre um dialogo com a viatura, os documentos dela e
+          os danos — envolve-lo noutro dialogo abria dois ao mesmo tempo. */}
+      <MotoristaViaturaCard motoristaId={motorista.id} />
 
       <MotoristaExtratoCard
         extrato={extrato}
