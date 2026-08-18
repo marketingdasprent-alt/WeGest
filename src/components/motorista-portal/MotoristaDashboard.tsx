@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,6 +44,12 @@ import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { legendaSaldoMotorista } from '@/lib/saldoMotorista';
+import { MotoristaExtratoCard } from './MotoristaExtratoCard';
+import {
+  useMotoristaExtratoPeriodo,
+  inicioDaSemana,
+  fimDaSemana,
+} from '@/hooks/useMotoristaExtratoPeriodo';
 
 interface MotoristaAtivo {
   id: string;
@@ -88,6 +94,17 @@ interface DashboardStats {
 export function MotoristaDashboard() {
   const { user, signOut } = useAuth();
   const [motorista, setMotorista] = useState<MotoristaAtivo | null>(null);
+
+  // Semana actual, de segunda a domingo. Calculada uma vez por render do
+  // painel; o extrato abre sempre aqui e os outros periodos ficam para
+  // interface, ja que a funcao no servidor recebe inicio e fim.
+  const semanaInicio = useMemo(() => inicioDaSemana(), []);
+  const semanaFim = useMemo(() => fimDaSemana(), []);
+  const {
+    data: extrato,
+    isLoading: extratoALoad,
+    error: extratoErro,
+  } = useMotoristaExtratoPeriodo(motorista?.id, semanaInicio, semanaFim);
   const [stats, setStats] = useState<DashboardStats>({
     saldoPendente: 0,
     recibosPendentesAceitacao: 0,
@@ -790,6 +807,14 @@ export function MotoristaDashboard() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <MotoristaExtratoCard
+        extrato={extrato}
+        isLoading={extratoALoad}
+        error={extratoErro}
+        inicio={semanaInicio}
+        fim={semanaFim}
+      />
 
       <MotoristaAcordoCard />
 
