@@ -1,13 +1,11 @@
 /**
  * Domínio próprio dos pedidos de informática.
  *
- * Estas páginas — ao contrário do resto da aplicação — não precisam do domínio
- * da organização: quem as abre pode não ter conta nenhuma, e a autorização vem
- * do token do próprio URL. Isso permite servi-las todas de um domínio só.
- *
- * Uma organização pode ser a "dona" desse domínio: aí a raiz mostra o
- * formulário dela e o link a partilhar fica só `tickets.wegest.pt`, sem token à
- * vista. As outras continuam a usar `/ti/<token>`.
+ * A página pública de pedidos — ao contrário do resto da aplicação — não
+ * precisa do domínio da organização: quem a abre pode não ter conta nenhuma, e
+ * a autorização vem do token do próprio URL. Isso permite servi-la de um
+ * domínio só, e a organização dona desse domínio vê o formulário logo na raiz,
+ * sem token à vista.
  *
  * Tudo isto é opcional. Sem as variáveis definidas — em desenvolvimento e nos
  * previews, onde o domínio não existe — o comportamento é o de sempre.
@@ -18,16 +16,6 @@
  * testes poderem trocar o ambiente.
  */
 
-function base(): string {
-  // A barra final é removida: `https://x/` + `/ti/…` daria `https://x//ti/…`,
-  // e num URL absoluto uma barra a dobrar muda o host.
-  return (import.meta.env.VITE_TICKETS_BASE_URL ?? '').trim().replace(/\/+$/, '');
-}
-
-function tokenConfigurado(): string {
-  return (import.meta.env.VITE_TICKETS_TOKEN ?? '').trim();
-}
-
 /**
  * Token da organização dona deste domínio, ou `null` se o domínio não for o dos
  * pedidos. É o que decide se a raiz mostra o formulário ou a página inicial.
@@ -37,17 +25,22 @@ function tokenConfigurado(): string {
  */
 export function tokenDoDominioTickets(hostname: string): string | null {
   const host = (import.meta.env.VITE_TICKETS_HOST ?? '').trim();
-  const token = tokenConfigurado();
+  const token = (import.meta.env.VITE_TICKETS_TOKEN ?? '').trim();
   if (!host || !token) return null;
   return hostname.toLowerCase() === host.toLowerCase() ? token : null;
 }
 
-/** Link público de submissão, para partilhar com quem não tem conta. */
-export function linkSubmissaoTickets(token: string): string {
-  const dominio = base();
-  // A organização dona do domínio leva o link curto — nesse domínio a raiz já
-  // mostra o formulário dela. Qualquer outra tem de levar o token no caminho,
-  // senão os pedidos iam parar à organização errada.
-  if (dominio && token === tokenConfigurado()) return dominio;
-  return `${dominio}/ti/${token}`;
+/**
+ * Entrada do ADMIN para os pedidos. Relativo de propósito, sempre.
+ *
+ * A lista de pedidos só aparece a quem tem sessão, e a sessão do Supabase vive
+ * em `localStorage`, que é por origem. Mandar o admin para o domínio de
+ * pedidos levava-o para uma origem onde não tem sessão: a lista desaparecia
+ * sem erro nenhum. Aconteceu em produção a 2026-08-18.
+ *
+ * O domínio curto serve para PARTILHAR com quem não tem conta — não para
+ * navegar a partir da aplicação.
+ */
+export function linkListaTickets(token: string): string {
+  return `/ti/${token}`;
 }
