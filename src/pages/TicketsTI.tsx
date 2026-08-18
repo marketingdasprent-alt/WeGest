@@ -4,6 +4,7 @@ import { TiTicketFormulario } from '@/components/ti/TiTicketFormulario';
 import { TiTicketLista } from '@/components/ti/TiTicketLista';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
+import { tokenDoDominioTickets } from '@/lib/ticketsUrl';
 
 /**
  * Pedidos de informática. Uma rota, comportamento conforme quem olha: quem
@@ -12,7 +13,11 @@ import { RECURSOS } from '@/utils/permissions';
  * as duas coisas.
  */
 export default function TicketsTI() {
-  const { token } = useParams<{ token: string }>();
+  const params = useParams<{ token: string }>();
+  // Sem token no caminho, esta página só é servida na raiz do domínio próprio
+  // de pedidos — e aí a organização é a dona desse domínio. É o que permite
+  // partilhar `tickets.wegest.pt` em vez de `.../ti/<token>`.
+  const token = params.token ?? tokenDoDominioTickets(window.location.hostname) ?? undefined;
   const { canEdit } = usePermissions();
   const podeGerir = canEdit(RECURSOS.TI_TICKETS_GERIR);
 

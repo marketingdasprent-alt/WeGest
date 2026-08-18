@@ -95,11 +95,22 @@ Deno.serve(async (req) => {
       return json({ success: false, error: 'Não foi possível obter a sugestão.' }, 500);
     }
 
-    // Preferência: a origem que a app enviou (validada). Em alternativa, um
-    // APP_URL configurado. Se nenhuma servir, NÃO se envia um email com um link
-    // roto — falha-se de forma visível para o admin poder avisar a pessoa por
-    // outra via, em vez de a mandar clicar em nada.
-    const base = baseValida(origem) ?? baseValida(Deno.env.get('APP_URL'));
+    // Preferência: TICKETS_BASE_URL, o domínio próprio dos pedidos. Vem em
+    // primeiro de propósito — sendo fixo do lado do servidor, o chamador deixa
+    // de poder influenciar o link que sai no email, e o problema que a
+    // validação abaixo existe para tapar deixa de se pôr. Estas páginas podem
+    // usar um domínio só para todas as organizações porque não precisam do
+    // domínio de nenhuma: a autorização vem do token do próprio URL.
+    //
+    // A origem enviada pela app fica como alternativa, para quem ainda não
+    // tenha a variável definida; sem isso, esta mudança partia o envio. Se
+    // nenhuma servir, NÃO se envia um email com um link roto — falha-se de
+    // forma visível para o admin poder avisar a pessoa por outra via, em vez
+    // de a mandar clicar em nada.
+    const base =
+      baseValida(Deno.env.get('TICKETS_BASE_URL')) ??
+      baseValida(origem) ??
+      baseValida(Deno.env.get('APP_URL'));
     if (!base) {
       console.error('ti-ticket-sugestao-email: sem origem válida', { origem });
       return json({ success: false, error: 'Não foi possível construir o link do pedido.' }, 400);

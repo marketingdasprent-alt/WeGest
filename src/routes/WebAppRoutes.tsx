@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { usePageTracking } from '@/hooks/usePageTracking';
+import { tokenDoDominioTickets } from '@/lib/ticketsUrl';
 import { RECURSOS } from '@/utils/permissions';
 import { REALIZE_ORG_IDS } from '@/config/realize';
 import { Loader2 } from 'lucide-react';
@@ -111,7 +112,14 @@ const WebAppRoutes = () => {
       <ScrollToTop />
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/" element={<Landing />} />
+          {/* No domínio próprio de pedidos a raiz É o formulário — é o que
+              torna o link partilhável apenas `tickets.wegest.pt`. Em qualquer
+              outro domínio, e sem as variáveis definidas, continua a página
+              inicial de sempre. */}
+          <Route
+            path="/"
+            element={tokenDoDominioTickets(window.location.hostname) ? <TicketsTI /> : <Landing />}
+          />
           <Route path="/entrar" element={<Entrar />} />
           <Route path="/sobre" element={<Sobre />} />
           <Route path="/contactos" element={<Contactos />} />

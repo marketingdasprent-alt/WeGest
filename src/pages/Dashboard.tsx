@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useTiLinkPublico } from '@/hooks/useTiTickets';
+import { linkSubmissaoTickets } from '@/lib/ticketsUrl';
 import {
   CircleCheck,
   Car,
@@ -249,7 +250,7 @@ const Dashboard = () => {
       });
       return;
     }
-    window.open(`/ti/${tiToken}`, '_blank', 'noopener,noreferrer');
+    window.open(linkSubmissaoTickets(tiToken), '_blank', 'noopener,noreferrer');
   };
   const { isExecutivo } = useDashboardVariant();
   // Query própria (não faz parte do fetchData sequencial abaixo) — dá-lhe o
