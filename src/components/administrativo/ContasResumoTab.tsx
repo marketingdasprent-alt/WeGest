@@ -362,14 +362,32 @@ export function ContasResumoTab() {
       > = {};
       // Mapa: motorista_id → nome canónico do CRM (fonte de verdade do nome a exibir)
       const crmNomeById: Record<string, string> = {};
+      // Passagem prévia: preciso de saber se um motorista está ativo ANTES de
+      // decidir quem fica com um identificador de plataforma duplicado.
+      const statusAtivoPorId: Record<string, boolean> = {};
+      (todosMotoristas || []).forEach((m) => {
+        statusAtivoPorId[m.id] = m.status_ativo !== false;
+      });
       (todosMotoristas || []).forEach((m) => {
         const norm = normalizeName(m.nome);
         nomeToMotoristaMap[norm] = { id: m.id, nome: m.nome, recibo_verde: m.recibo_verde ?? true };
         crmNomeById[m.id] = m.nome;
 
-        // Mapear IDs de plataforma se existirem
-        if (m.uber_uuid) uberIdMap[m.uber_uuid] = m.id;
-        if (m.bolt_id) boltIdMap[m.bolt_id] = m.id;
+        // Mapear IDs de plataforma se existirem. Quando o MESMO identificador
+        // está em mais do que um motorista (duplicados por limpar), ganha
+        // sempre o ATIVO — antes era "o último a ser lido", sem ordenação
+        // nenhuma, e os ganhos podiam cair no registo inativo, que o filtro
+        // desta tabela depois esconde: a faturação desaparecia do resumo sem
+        // deixar rasto (caso real: Marco Reis, #1 ativo vs #338 inativo com o
+        // mesmo uber_uuid).
+        const ganhaSobre = (existenteId: string | undefined) => {
+          if (!existenteId) return true;
+          const existenteAtivo = statusAtivoPorId[existenteId] !== false;
+          const novoAtivo = m.status_ativo !== false;
+          return novoAtivo && !existenteAtivo;
+        };
+        if (m.uber_uuid && ganhaSobre(uberIdMap[m.uber_uuid])) uberIdMap[m.uber_uuid] = m.id;
+        if (m.bolt_id && ganhaSobre(boltIdMap[m.bolt_id])) boltIdMap[m.bolt_id] = m.id;
 
         // Também guardar recibo_verde para qualquer motorista
         if (!(m.id in reciboVerdeMap)) {
