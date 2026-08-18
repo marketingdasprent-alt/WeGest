@@ -30,10 +30,6 @@ export interface ResumoFinanceiroResult {
    *  já deduzido fazia o mesmo motorista aparecer com "Bolt 100,76" na lista
    *  e "Bolt 95,06" no resumo, sem nada a explicar a diferença. */
   receitasExibidas: { bolt: number; uber: number; outras_receitas: number };
-  /** Quanto os 6% do recibo verde cortam ao bruto (0 quando passa recibo
-   *  verde ou é recibo importado). Existe para o resumo poder mostrar o
-   *  bruto e continuar a fechar: bruto − dedução = receitaAjustada. */
-  deducaoReciboVerde: number;
   receitaAjustada: number;
   totalAReceber: number;
   liquido: number;
@@ -83,8 +79,6 @@ export function deriveResumoFinanceiro(input: ResumoFinanceiroInput): ResumoFina
     ? totalReceitas
     : boltExibido + uberExibido + receitas.outras_receitas;
 
-  const deducaoReciboVerde = isImportado ? 0 : totalReceitas - receitaAjustada;
-
   // NÃO somar `+ gorjeta` aqui — já está em `receitaAjustada`.
   const totalAReceber = isImportado
     ? liquidoImportado
@@ -96,7 +90,6 @@ export function deriveResumoFinanceiro(input: ResumoFinanceiroInput): ResumoFina
     gorjeta,
     totalReceitas,
     receitasExibidas,
-    deducaoReciboVerde,
     receitaAjustada,
     totalAReceber,
     liquido,

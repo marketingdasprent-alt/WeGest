@@ -174,7 +174,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
 
   // Cálculo puro (testado em resumoFinanceiro.test.ts). A gorjeta entra uma
   // única vez, na receita ajustada — não voltar a somar no total a receber.
-  const { receitasExibidas, deducaoReciboVerde, receitaAjustada, totalAReceber, liquido, gorjeta } =
+  const { receitasExibidas, receitaAjustada, totalAReceber, liquido, gorjeta } =
     deriveResumoFinanceiro({
       isImportado,
       reciboVerde: motorista.recibo_verde,
@@ -242,7 +242,6 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       isImportado,
       receitas: receitasExibidas,
       totalReceitas,
-      deducaoReciboVerde,
       receitaAjustada,
       despesas,
       totalDespesas,
@@ -373,7 +372,6 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             isImportado={isImportado}
             receitas={receitasExibidas}
             totalReceitas={totalReceitas}
-            deducaoReciboVerde={deducaoReciboVerde}
             receitaAjustada={receitaAjustada}
             despesas={despesas}
             totalDespesas={totalDespesas}
