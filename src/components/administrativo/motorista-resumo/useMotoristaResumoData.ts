@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import type { MotoristaResumoProps, SlotPeriodo } from '../MotoristaResumoDialog';
 import { deriveAluguerSemTarifa } from './aluguerSemTarifa';
@@ -17,12 +17,9 @@ export interface UseMotoristaResumoDataReturn {
   outrasReceitas: number;
   slotPeriodos: SlotPeriodo[];
   aluguerSemTarifa: boolean;
-  /** Saldo pendente ANTES desta semana começar (motorista_saldo_pendente até
-   *  ao dia anterior a dateRange.from) — alimenta a linha "Valores a
-   *  Transportar (Semana Anterior)" do resumo. Positivo = a favor do
-   *  motorista (soma ao que recebe); negativo = motorista já devia antes
-   *  desta semana (desconta). */
-  valoresSemanaAnterior: number;
+  /** O aluguer NAO veio de um contrato (preco tirado da tarifa do modelo).
+   *  O resumo avisa, em vez de mostrar um preco de origem desconhecida. */
+  aluguerEstimado: boolean;
 }
 
 /**
@@ -51,7 +48,7 @@ export function useMotoristaResumoData(
   const [outrasReceitas, setOutrasReceitas] = useState(0);
   const [slotPeriodos, setSlotPeriodos] = useState<SlotPeriodo[]>([]);
   const [aluguerSemTarifa, setAluguerSemTarifa] = useState(false);
-  const [valoresSemanaAnterior, setValoresSemanaAnterior] = useState(0);
+  const [aluguerEstimado, setAluguerEstimado] = useState(false);
 
   useEffect(() => {
     if (open && (motorista?.motorista_id || motorista?.driver_uuid)) {
@@ -71,7 +68,7 @@ export function useMotoristaResumoData(
     setExtraCosts({ caucao: 0, seguros: 0, outros: 0 });
     setSlotPeriodos([]);
     setAluguerSemTarifa(false);
-    setValoresSemanaAnterior(0);
+    setAluguerEstimado(false);
 
     try {
       let resolvedMotoristaId = motorista.motorista_id || null;
@@ -146,18 +143,17 @@ export function useMotoristaResumoData(
           // porque o grupo em si não tem tarifa direta.
           supabase
             .from('renting_tarifa_precos_modelo')
-            .select('modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
+            .select('tarifa_id, modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
             .eq('renting_tarifas.tipo', 'tvde')
             .eq('renting_tarifas.ativa', true),
-          // Saldo pendente ANTES desta semana — mesma RPC usada no portal do
-          // motorista e no separador Financeiro do admin, nunca recalculado
-          // à mão aqui. "Antes desta semana" = até ao dia anterior a
-          // dateRange.from, para nunca contar duas vezes os movimentos da
-          // própria semana (esses já entram directamente no resumo).
-          supabase.rpc('motorista_saldo_pendente', {
-            p_motorista_id: resolvedMotoristaId,
-            p_ate_data: format(subDays(dateRange.from, 1), 'yyyy-MM-dd'),
-          }),
+          // O CONTRATO é a fonte de verdade do preço do aluguer — o modelo da
+          // viatura pode ter várias tarifas ativas e escolher "uma qualquer"
+          // dava o preço errado (ver ContasResumoTab, mesma cascata).
+          supabase
+            .from('contratos_renting')
+            .select('viatura_id, tarifa_id, estado_operacional, data_inicio, created_at')
+            .is('deleted_at', null)
+            .not('viatura_id', 'is', null),
         ]);
 
         const viaturaData = results[0].data;
@@ -176,12 +172,38 @@ export function useMotoristaResumoData(
             } | null;
           } | null;
         }>;
+        const tarifasModelo = (results[4].data ?? []) as Array<{
+          tarifa_id: string | null;
+          modelo_id: string;
+          preco_semana: number;
+        }>;
         const tvdeModeloPrecoMap = new Map<string, number>(
-          ((results[4].data ?? []) as Array<{ modelo_id: string; preco_semana: number }>).map(
-            (r) => [r.modelo_id, Number(r.preco_semana)]
-          )
+          tarifasModelo.map((r) => [r.modelo_id, Number(r.preco_semana)])
         );
-        setValoresSemanaAnterior(Number((results[5] as { data: number | null }).data) || 0);
+        // `${tarifa_id}|${modelo_id}` → preço, para resolver a tarifa que o
+        // contrato indica em vez de uma qualquer que esteja ativa.
+        const precoPorTarifaModelo = new Map<string, number>(
+          tarifasModelo
+            .filter((r) => r.tarifa_id)
+            .map((r) => [`${r.tarifa_id}|${r.modelo_id}`, Number(r.preco_semana)])
+        );
+
+        // viatura_id → tarifa do contrato (em curso primeiro, senão o mais
+        // recente). Mesma cascata da tabela de Contas/Resumo — os dois ecrãs
+        // têm de mostrar o mesmo aluguer.
+        const contratoTarifaPorViatura = new Map<string, string>();
+        [...((results[5].data as any[]) ?? [])]
+          .sort((a, b) => {
+            const emCurso = (c: any) => (c.estado_operacional === 'em_curso' ? 1 : 0);
+            if (emCurso(a) !== emCurso(b)) return emCurso(a) - emCurso(b);
+            return String(a.data_inicio ?? a.created_at ?? '').localeCompare(
+              String(b.data_inicio ?? b.created_at ?? '')
+            );
+          })
+          .forEach((c: any) => {
+            if (c.viatura_id && c.tarifa_id)
+              contratoTarifaPorViatura.set(c.viatura_id, c.tarifa_id);
+          });
 
         if (viaturaData?.viaturas) {
           setMatricula((viaturaData.viaturas as any).matricula);
@@ -205,9 +227,23 @@ export function useMotoristaResumoData(
         }
 
         if (viaturasPeriodoData.length > 0) {
+          // Resolve o preço pela tarifa do CONTRATO quando existe; sem
+          // contrato, buildSlotPeriodos cai na tarifa do grupo/modelo (o
+          // comportamento antigo) e o resumo assinala isso como estimado.
+          let algumEstimado = false;
+          const comPrecoDoContrato = viaturasPeriodoData.map((mv) => {
+            const tarifaContrato = contratoTarifaPorViatura.get(mv.viatura_id);
+            const preco =
+              tarifaContrato && mv.viaturas?.modelo_id
+                ? precoPorTarifaModelo.get(`${tarifaContrato}|${mv.viaturas.modelo_id}`)
+                : undefined;
+            if (preco == null) algumEstimado = true;
+            return { ...mv, preco_semana: preco ?? null };
+          });
           setSlotPeriodos(
-            buildSlotPeriodos(viaturasPeriodoData, dateRange.from, dateRange.to, tvdeModeloPrecoMap)
+            buildSlotPeriodos(comPrecoDoContrato, dateRange.from, dateRange.to, tvdeModeloPrecoMap)
           );
+          setAluguerEstimado(algumEstimado);
         }
 
         if (financeiroData) {
@@ -251,6 +287,6 @@ export function useMotoristaResumoData(
     outrasReceitas,
     slotPeriodos,
     aluguerSemTarifa,
-    valoresSemanaAnterior,
+    aluguerEstimado,
   };
 }

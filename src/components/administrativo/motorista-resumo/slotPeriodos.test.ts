@@ -116,4 +116,47 @@ describe('buildSlotPeriodos', () => {
     expect(periodos).toHaveLength(1);
     expect(periodos[0].custo).toBeCloseTo(350, 2);
   });
+
+  it('aceita preco_semana já resolvido pelo chamador (ContasResumoTab)', () => {
+    const linha: ViaturaPeriodoInput = {
+      viatura_id: 'v1',
+      data_inicio: '2026-07-27',
+      data_fim: null,
+      preco_semana: 175,
+      viaturas: null,
+    };
+    const periodos = buildSlotPeriodos([linha], ...semana('2026-07-27', '2026-08-02'), new Map());
+    expect(periodos).toHaveLength(1);
+    expect(periodos[0].custo).toBeCloseTo(175, 2);
+  });
+
+  // Caso real: motorista #252 (José Braga) devolveu a BH-50-HF a 17/08. As
+  // duas atribuições ficaram 'encerrado' e o aluguer da semana 03–09/08, que
+  // ele tem de pagar, desaparecia da tabela (que só olhava para 'ativo').
+  // Aqui garante-se que continua a dar os 175,00 € do detalhe do resumo.
+  it('cobra a semana já passada mesmo com a viatura devolvida depois', () => {
+    const linhas: ViaturaPeriodoInput[] = [
+      // atribuição anterior, terminada no início da semana
+      {
+        viatura_id: 'v-bh50hf',
+        data_inicio: '2026-03-02',
+        data_fim: '2026-08-03',
+        preco_semana: 175,
+        viaturas: null,
+      },
+      // atribuição seguinte, já encerrada (devolução a 17/08)
+      {
+        viatura_id: 'v-bh50hf',
+        data_inicio: '2026-08-03',
+        data_fim: '2026-08-17',
+        preco_semana: 175,
+        viaturas: null,
+      },
+    ];
+    const periodos = buildSlotPeriodos(linhas, ...semana('2026-08-03', '2026-08-09'), new Map());
+    expect(periodos).toHaveLength(1);
+    // 7 dias (união, o dia 03/08 está nas duas linhas e não conta a dobrar)
+    expect(periodos[0].dias).toBe(7);
+    expect(periodos[0].custo).toBeCloseTo(175, 2);
+  });
 });

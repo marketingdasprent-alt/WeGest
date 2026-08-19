@@ -58,13 +58,16 @@ describe('deriveResumoFinanceiro', () => {
       gorjetaUber: 10,
       totalDespesas: 0,
     });
-    // (106-5)/1.06 + 5 = 101/1.06 + 5 = 95.2830... + 5 = 100.2830...
-    expect(r.receitasExibidas.bolt).toBeCloseTo(100.28, 2);
-    // (212-10)/1.06 + 10 = 202/1.06 + 10 = 190.5660... + 10 = 200.5660...
-    expect(r.receitasExibidas.uber).toBeCloseTo(200.57, 2);
+    // Exibido = BRUTO da plataforma (igual à lista de Contas/Resumo).
+    expect(r.receitasExibidas.bolt).toBeCloseTo(106, 2);
+    expect(r.receitasExibidas.uber).toBeCloseTo(212, 2);
+    // (106-5)/1.06 + 5 = 100.2830... ; (212-10)/1.06 + 10 = 200.5660...
     // 100.28 + 200.57 + 40 = 340.85
     expect(r.receitaAjustada).toBeCloseTo(340.85, 2);
     expect(r.liquido).toBeCloseTo(340.85, 2);
+    // O bruto (358) fica acima do total: o corte dos 6% está no total, sem
+    // linha própria (decisão de negócio — ver ResumoReportContent).
+    expect(r.totalReceitas).toBeCloseTo(358, 2);
   });
 
   it('caso real JORGE: 732,14 faturado + 11,13 gorjeta, sem recibo verde', () => {
@@ -78,9 +81,20 @@ describe('deriveResumoFinanceiro', () => {
       receitas: { bolt: 0, uber: 732.14, outras_receitas: 0 },
       gorjetaUber: 11.13,
     });
-    expect(r.receitasExibidas.uber).toBeCloseTo(691.33, 2);
+    // Exibido = bruto que a Uber pagou; o ajuste está só no total.
+    expect(r.receitasExibidas.uber).toBeCloseTo(732.14, 2);
     expect(r.receitaAjustada).toBeCloseTo(691.33, 2);
     expect(r.liquido).toBeCloseTo(691.33, 2);
+  });
+
+  it('com recibo verde o exibido e o total coincidem (sem corte)', () => {
+    const r = deriveResumoFinanceiro({
+      ...base,
+      reciboVerde: true,
+      receitas: { bolt: 100, uber: 200, outras_receitas: 0 },
+    });
+    expect(r.receitasExibidas.bolt).toBeCloseTo(100, 2);
+    expect(r.receitaAjustada).toBeCloseTo(300, 2);
   });
 
   it('importado: usa o líquido do recibo e ignora gorjeta/ajuste', () => {

@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       _backup_viaturas_20260710: {
@@ -6912,6 +6887,51 @@ export type Database = {
           },
         ]
       }
+      motorista_historico: {
+        Row: {
+          ator_id: string | null
+          criado_em: string
+          detalhe: string | null
+          evento_tipo: string
+          id: string
+          motorista_id: string
+          org_id: string
+        }
+        Insert: {
+          ator_id?: string | null
+          criado_em?: string
+          detalhe?: string | null
+          evento_tipo: string
+          id?: string
+          motorista_id: string
+          org_id?: string
+        }
+        Update: {
+          ator_id?: string | null
+          criado_em?: string
+          detalhe?: string | null
+          evento_tipo?: string
+          id?: string
+          motorista_id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motorista_historico_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_historico_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       motorista_recibos: {
         Row: {
           codigo: number
@@ -7263,6 +7283,7 @@ export type Database = {
           created_at: string | null
           data_contratacao: string | null
           data_renovacao_contratacao: string | null
+          desativado_em: string | null
           documento_ficheiro_url: string | null
           documento_identificacao_verso_url: string | null
           documento_numero: string | null
@@ -7316,6 +7337,7 @@ export type Database = {
           created_at?: string | null
           data_contratacao?: string | null
           data_renovacao_contratacao?: string | null
+          desativado_em?: string | null
           documento_ficheiro_url?: string | null
           documento_identificacao_verso_url?: string | null
           documento_numero?: string | null
@@ -7369,6 +7391,7 @@ export type Database = {
           created_at?: string | null
           data_contratacao?: string | null
           data_renovacao_contratacao?: string | null
+          desativado_em?: string | null
           documento_ficheiro_url?: string | null
           documento_identificacao_verso_url?: string | null
           documento_numero?: string | null
@@ -10317,6 +10340,165 @@ export type Database = {
           },
           {
             foreignKeyName: "sync_queue_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ti_submissoes: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          origem_hash: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          origem_hash: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          origem_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ti_submissoes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ti_ticket_sugestoes: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          id: string
+          org_id: string
+          respondida_em: string | null
+          texto: string
+          ticket_id: string
+          util: boolean | null
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          id?: string
+          org_id: string
+          respondida_em?: string | null
+          texto: string
+          ticket_id: string
+          util?: boolean | null
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          id?: string
+          org_id?: string
+          respondida_em?: string | null
+          texto?: string
+          ticket_id?: string
+          util?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ti_ticket_sugestoes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ti_ticket_sugestoes_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "ti_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ti_tickets: {
+        Row: {
+          acesso_token: string
+          autor_email: string
+          autor_nome: string
+          created_at: string
+          criado_por: string | null
+          descricao: string
+          id: string
+          numero: number | null
+          org_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          acesso_token?: string
+          autor_email: string
+          autor_nome: string
+          created_at?: string
+          criado_por?: string | null
+          descricao: string
+          id?: string
+          numero?: number | null
+          org_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          acesso_token?: string
+          autor_email?: string
+          autor_nome?: string
+          created_at?: string
+          criado_por?: string | null
+          descricao?: string
+          id?: string
+          numero?: number | null
+          org_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ti_tickets_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ti_tokens: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          org_id: string
+          token: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          org_id?: string
+          token?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          org_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ti_tokens_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
@@ -14241,9 +14423,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: ["admin", "gestor_tvde", "gestor_comercial", "colaborador"],

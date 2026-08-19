@@ -55,6 +55,8 @@ interface ResumoReportContentProps {
   };
   totalDespesas: number;
   aluguerSemTarifa?: boolean;
+  /** Preco do aluguer sem contrato por tras (veio da tarifa do modelo). */
+  aluguerEstimado?: boolean;
   slotPeriodos: SlotPeriodo[];
   totalSlot: number;
   valoresSemanaAnterior: number;
@@ -78,6 +80,7 @@ export function ResumoReportContent({
   despesas,
   totalDespesas,
   aluguerSemTarifa,
+  aluguerEstimado,
   slotPeriodos,
   totalSlot,
   valoresSemanaAnterior,
@@ -201,6 +204,12 @@ export function ResumoReportContent({
                 colored="text-green-700/70 dark:text-green-300/70 italic"
               />
             )}
+            {/* As linhas acima são o BRUTO das plataformas — o mesmo número
+                que a lista de Contas/Resumo mostra. Sem recibo verde, o
+                TOTAL RECEITAS já vem com o corte de 6% aplicado; por decisão
+                do negócio esse corte NÃO é discriminado neste documento (é
+                enviado ao motorista). Por isso as linhas acima não somam ao
+                total — é intencional, não é erro de cálculo. */}
             <Separator className="bg-green-200 dark:bg-green-800" />
             <Row
               label="TOTAL RECEITAS"
@@ -223,11 +232,14 @@ export function ResumoReportContent({
             </h2>
           </div>
           <div className="p-4 print:p-3 space-y-2 print:space-y-1 bg-red-50 dark:bg-red-950/20 print:bg-red-50">
+            {/* "estimado" = o preço não veio de um contrato, veio da tarifa do
+                modelo. Dito à frente do valor para nunca passar por acordado
+                quem ainda não tem contrato em vigor no sistema. */}
             <Row
-              label="Aluguer"
+              label={aluguerEstimado && !aluguerSemTarifa ? 'Aluguer ⚠ sem contrato' : 'Aluguer'}
               value={aluguerSemTarifa ? '⚠ Sem tarifa configurada' : fmt(despesas.aluguer)}
               colored={
-                aluguerSemTarifa
+                aluguerSemTarifa || aluguerEstimado
                   ? 'text-amber-600 dark:text-amber-400'
                   : 'text-red-700 dark:text-red-300'
               }

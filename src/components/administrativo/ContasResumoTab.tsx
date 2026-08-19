@@ -15,6 +15,7 @@ import { RECURSOS } from '@/utils/permissions';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { matchesSearch } from '@/lib/utils';
+import { buildSlotPeriodos, type ViaturaPeriodoInput } from './motorista-resumo/slotPeriodos';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import {
@@ -102,6 +103,12 @@ export function ContasResumoTab() {
   const [matriculaMap, setMatriculaMap] = useState<Record<string, string>>({});
   const [dataContratacaoMap, setDataContratacaoMap] = useState<Record<string, string>>({});
   const [statusAtivoMap, setStatusAtivoMap] = useState<Record<string, boolean>>({});
+  // motorista_id → quando foi desativado. Um motorista inativo continua a
+  // contar nas semanas ANTERIORES a esta data (ver filtro em filteredResumos).
+  const [desativadoEmMap, setDesativadoEmMap] = useState<Record<string, string>>({});
+  // motorista_id → aluguer sem contrato por trás (preço vindo da tarifa do
+  // modelo). Assinalado no resumo para se ver quem falta regularizar.
+  const [aluguerEstimadoMap, setAluguerEstimadoMap] = useState<Record<string, boolean>>({});
 
   // Print settings (persisted)
   const PRINT_KEY = 'contas_print_settings';
@@ -343,7 +350,7 @@ export function ContasResumoTab() {
       const { data: todosMotoristas } = await supabase
         .from('motoristas_ativos')
         .select(
-          'id, nome, recibo_verde, uber_uuid, bolt_id, gestor_responsavel, data_contratacao, status_ativo, created_at'
+          'id, nome, recibo_verde, uber_uuid, bolt_id, gestor_responsavel, data_contratacao, status_ativo, desativado_em, created_at'
         );
 
       // Mapa: uber_uuid -> motorista_id
@@ -358,14 +365,32 @@ export function ContasResumoTab() {
       > = {};
       // Mapa: motorista_id → nome canónico do CRM (fonte de verdade do nome a exibir)
       const crmNomeById: Record<string, string> = {};
+      // Passagem prévia: preciso de saber se um motorista está ativo ANTES de
+      // decidir quem fica com um identificador de plataforma duplicado.
+      const statusAtivoPorId: Record<string, boolean> = {};
+      (todosMotoristas || []).forEach((m) => {
+        statusAtivoPorId[m.id] = m.status_ativo !== false;
+      });
       (todosMotoristas || []).forEach((m) => {
         const norm = normalizeName(m.nome);
         nomeToMotoristaMap[norm] = { id: m.id, nome: m.nome, recibo_verde: m.recibo_verde ?? true };
         crmNomeById[m.id] = m.nome;
 
-        // Mapear IDs de plataforma se existirem
-        if (m.uber_uuid) uberIdMap[m.uber_uuid] = m.id;
-        if (m.bolt_id) boltIdMap[m.bolt_id] = m.id;
+        // Mapear IDs de plataforma se existirem. Quando o MESMO identificador
+        // está em mais do que um motorista (duplicados por limpar), ganha
+        // sempre o ATIVO — antes era "o último a ser lido", sem ordenação
+        // nenhuma, e os ganhos podiam cair no registo inativo, que o filtro
+        // desta tabela depois esconde: a faturação desaparecia do resumo sem
+        // deixar rasto (caso real: Marco Reis, #1 ativo vs #338 inativo com o
+        // mesmo uber_uuid).
+        const ganhaSobre = (existenteId: string | undefined) => {
+          if (!existenteId) return true;
+          const existenteAtivo = statusAtivoPorId[existenteId] !== false;
+          const novoAtivo = m.status_ativo !== false;
+          return novoAtivo && !existenteAtivo;
+        };
+        if (m.uber_uuid && ganhaSobre(uberIdMap[m.uber_uuid])) uberIdMap[m.uber_uuid] = m.id;
+        if (m.bolt_id && ganhaSobre(boltIdMap[m.bolt_id])) boltIdMap[m.bolt_id] = m.id;
 
         // Também guardar recibo_verde para qualquer motorista
         if (!(m.id in reciboVerdeMap)) {
@@ -455,11 +480,20 @@ export function ContasResumoTab() {
         .lte('transaction_date', weekEndUtc)
         .not('motorista_id', 'is', null);
 
-      // 4d-bis. Buscar viaturas ativas e respetivo grupo/modelo para cruzar com tarifa
+      // 4d-bis. Viaturas atribuídas DURANTE a semana e respetivo grupo/modelo
+      // para cruzar com tarifa. Filtra por DATAS, não por status='ativo': o
+      // aluguer de uma semana já passada não pode desaparecer só porque a
+      // viatura foi entretanto devolvida (a atribuição passa a 'encerrado').
+      // Era o que acontecia — o motorista #252 devolveu a viatura a 17/08 e o
+      // aluguer da semana 03–09/08, que ele tem de pagar, ficou a 0,00 €
+      // enquanto o detalhe do resumo continuava a mostrar os 175,00 €.
       const viaturasQuery = supabase
         .from('motorista_viaturas')
-        .select('motorista_id, viaturas(matricula, grupo_id, modelo_id)')
-        .eq('status', 'ativo');
+        .select(
+          'motorista_id, viatura_id, data_inicio, data_fim, viaturas(matricula, grupo_id, modelo_id)'
+        )
+        .lte('data_inicio', format(weekEnd, 'yyyy-MM-dd'))
+        .or(`data_fim.is.null,data_fim.gte.${format(weekStart, 'yyyy-MM-dd')}`);
 
       // 4e. Buscar resumos semanais Bolt (dados CSV) cujo intervalo intersecte a semana seleccionada
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
@@ -468,16 +502,29 @@ export function ContasResumoTab() {
       // 4g. Tarifas de renting ativas — preco_semana é o custo semanal do motorista
       const tarifasQuery = supabase
         .from('renting_tarifas')
-        .select('grupo_id, preco_semana')
+        .select('id, grupo_id, preco_semana')
         .eq('ativa', true);
 
       // 4g-bis. TVDE não tem preço por grupo — é por MODELO. Sem isto, o
       // aluguer de motoristas TVDE ficava sempre a 0€ (grupo sem tarifa direta).
+      // `tarifa_id` vem no select para se poder escolher a tarifa QUE O
+      // CONTRATO diz, e não uma qualquer que esteja ativa para o modelo.
       const tarifasTvdeModeloQuery = supabase
         .from('renting_tarifa_precos_modelo')
-        .select('modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
+        .select('tarifa_id, modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
         .eq('renting_tarifas.tipo', 'tvde')
         .eq('renting_tarifas.ativa', true);
+
+      // 4g-ter. Contratos da viatura — o CONTRATO é a fonte de verdade do
+      // preço, não o modelo. Um modelo pode ter várias tarifas ativas em
+      // simultâneo (ex.: "TVDE - Base" 325 € e "Açores" 225 €) e escolher
+      // "uma qualquer" dava o preço errado a 16 motoristas, ~1.100 €/semana
+      // cobrados a menos — e mudava sozinho se a ordem das linhas mudasse.
+      const contratosQuery = supabase
+        .from('contratos_renting')
+        .select('viatura_id, tarifa_id, estado_operacional, data_inicio, created_at')
+        .is('deleted_at', null)
+        .not('viatura_id', 'is', null);
 
       // 4f. Buscar movimentos financeiros unificados para a semana.
       // Contam TODOS os movimentos da semana excepto cancelados — um débito
@@ -512,6 +559,7 @@ export function ContasResumoTab() {
         viaVerdeResult,
         tarifasResult,
         tarifasTvdeModeloResult,
+        contratosResult,
       ] = await Promise.all([
         boltQuery,
         uberQuery,
@@ -526,6 +574,7 @@ export function ContasResumoTab() {
         viaVerdeQuery,
         tarifasQuery,
         tarifasTvdeModeloQuery,
+        contratosQuery,
       ]);
 
       if (boltResult.error) throw boltResult.error;
@@ -563,15 +612,18 @@ export function ContasResumoTab() {
       const gMap: Record<string, string> = {};
       const dcMap: Record<string, string> = {};
       const saMap: Record<string, boolean> = {};
+      const deMap: Record<string, string> = {};
       (todosMotoristas || []).forEach((m: any) => {
         if (m.gestor_responsavel) gMap[m.id] = m.gestor_responsavel;
         // Usar data_contratacao se disponível, senão usar created_at (sempre preenchido)
         dcMap[m.id] = m.data_contratacao || m.created_at;
         saMap[m.id] = m.status_ativo !== false;
+        if (m.desativado_em) deMap[m.id] = m.desativado_em;
       });
       setGestorMap(gMap);
       setDataContratacaoMap(dcMap);
       setStatusAtivoMap(saMap);
+      setDesativadoEmMap(deMap);
       const mMap: Record<string, string> = {};
       (viaturasResult.data || []).forEach((mv: any) => {
         if (mv.motorista_id && (mv.viaturas as any)?.matricula)
@@ -588,29 +640,108 @@ export function ContasResumoTab() {
       });
 
       // Mapa: modelo_id → preco_semana da tarifa TVDE ativa (preço por modelo,
-      // não por grupo — ver comentário na query acima).
+      // não por grupo — ver comentário na query acima). Só usado como ÚLTIMO
+      // recurso, quando não há contrato: um modelo pode ter várias tarifas
+      // ativas e aqui não há como saber qual é a do motorista.
       const modeloTvdeTarifaMap: Record<string, number> = {};
+      // Mapa: `${tarifa_id}|${modelo_id}` → preco_semana. É por aqui que se
+      // resolve o preço da tarifa QUE O CONTRATO indica.
+      const precoPorTarifaModelo: Record<string, number> = {};
       (tarifasTvdeModeloResult.data || []).forEach((t: any) => {
         if (t.modelo_id && t.preco_semana != null) {
           modeloTvdeTarifaMap[t.modelo_id] = Number(t.preco_semana) || 0;
-        }
-      });
-
-      // Mapa: motorista_id → preco_semana via grupo da viatura ativa, com
-      // fallback para a tarifa TVDE do modelo quando o grupo não tem preço.
-      const aluguerByMotorista: Record<string, number> = {};
-      (viaturasResult.data || []).forEach((mv: any) => {
-        if (mv.motorista_id) {
-          const grupoId = (mv.viaturas as any)?.grupo_id;
-          const modeloId = (mv.viaturas as any)?.modelo_id;
-          const preco =
-            (grupoId ? grupoTarifaMap[grupoId] : undefined) ??
-            (modeloId ? modeloTvdeTarifaMap[modeloId] : undefined);
-          if (preco != null && preco > 0) {
-            aluguerByMotorista[mv.motorista_id] = preco;
+          if (t.tarifa_id) {
+            precoPorTarifaModelo[`${t.tarifa_id}|${t.modelo_id}`] = Number(t.preco_semana) || 0;
           }
         }
       });
+
+      // Mapa: tarifa_id → preco_semana (tarifas de grupo, regime renting).
+      const precoPorTarifaId: Record<string, number> = {};
+      (tarifasResult.data || []).forEach((t: any) => {
+        if (t.id && t.preco_semana != null) precoPorTarifaId[t.id] = Number(t.preco_semana) || 0;
+      });
+
+      // Mapa: viatura_id → tarifa do CONTRATO. Prefere o contrato em curso;
+      // se não houver, o mais recente da viatura (há viaturas a faturar há
+      // meses cujo último contrato já expirou — sem este fallback ficariam a
+      // 0 € de aluguer). A ordenação é explícita para o resultado não
+      // depender da ordem física das linhas.
+      const contratoTarifaPorViatura: Record<string, string> = {};
+      const contratosOrdenados = [...((contratosResult.data as any[]) || [])].sort((a, b) => {
+        const emCurso = (c: any) => (c.estado_operacional === 'em_curso' ? 1 : 0);
+        if (emCurso(a) !== emCurso(b)) return emCurso(a) - emCurso(b);
+        return String(a.data_inicio ?? a.created_at ?? '').localeCompare(
+          String(b.data_inicio ?? b.created_at ?? '')
+        );
+      });
+      // Ordem crescente de prioridade → o último a escrever é o melhor.
+      contratosOrdenados.forEach((c: any) => {
+        if (c.viatura_id && c.tarifa_id) contratoTarifaPorViatura[c.viatura_id] = c.tarifa_id;
+      });
+
+      /** Preço semanal da viatura, pela cascata acordada: tarifa do contrato →
+       *  tarifa do grupo → tarifa TVDE do modelo. `estimado` assinala que o
+       *  preço NÃO veio de um contrato, para o resumo poder avisar em vez de
+       *  mostrar um número de origem desconhecida como se fosse certo. */
+      const precoSemanalViatura = (
+        viaturaId: string | null,
+        grupoId: string | null,
+        modeloId: string | null
+      ): { preco: number | null; estimado: boolean } => {
+        const tarifaContrato = viaturaId ? contratoTarifaPorViatura[viaturaId] : undefined;
+        if (tarifaContrato) {
+          const doModelo = modeloId
+            ? precoPorTarifaModelo[`${tarifaContrato}|${modeloId}`]
+            : undefined;
+          if (doModelo != null) return { preco: doModelo, estimado: false };
+          const doGrupo = precoPorTarifaId[tarifaContrato];
+          if (doGrupo != null) return { preco: doGrupo, estimado: false };
+        }
+        const fallback =
+          (grupoId ? grupoTarifaMap[grupoId] : undefined) ??
+          (modeloId ? modeloTvdeTarifaMap[modeloId] : undefined) ??
+          null;
+        return { preco: fallback, estimado: fallback != null };
+      };
+
+      // Mapa: motorista_id → aluguer da semana. Usa o MESMO cálculo do
+      // "Aluguer — Detalhe" do resumo individual (buildSlotPeriodos): dias
+      // realmente cobertos × taxa diária, agrupados por veículo. Antes esta
+      // tabela cobrava a semana inteira por atribuição activa e o detalhe
+      // fazia pro-rata — os dois números discordavam no mesmo ecrã (o
+      // detalhe é o que vai impresso/enviado ao motorista).
+      const viaturasPorMotorista = new Map<string, ViaturaPeriodoInput[]>();
+      // motorista_id → true quando o aluguer NÃO veio de um contrato. Mostra-se
+      // como aviso no resumo: melhor dizer "sem contrato" do que apresentar um
+      // preço de origem desconhecida como se fosse acordado.
+      const aluguerEstimadoMap: Record<string, boolean> = {};
+      (viaturasResult.data || []).forEach((mv: any) => {
+        if (!mv.motorista_id) return;
+        const grupoId = (mv.viaturas as any)?.grupo_id ?? null;
+        const modeloId = (mv.viaturas as any)?.modelo_id ?? null;
+        const { preco, estimado } = precoSemanalViatura(mv.viatura_id, grupoId, modeloId);
+        if (estimado) aluguerEstimadoMap[mv.motorista_id] = true;
+        const lista = viaturasPorMotorista.get(mv.motorista_id) ?? [];
+        lista.push({
+          viatura_id: mv.viatura_id,
+          data_inicio: mv.data_inicio,
+          data_fim: mv.data_fim,
+          preco_semana: preco,
+          viaturas: null,
+        });
+        viaturasPorMotorista.set(mv.motorista_id, lista);
+      });
+      setAluguerEstimadoMap(aluguerEstimadoMap);
+
+      const aluguerByMotorista: Record<string, number> = {};
+      for (const [motoristaId, linhas] of viaturasPorMotorista) {
+        const total = buildSlotPeriodos(linhas, weekStart, weekEnd, new Map()).reduce(
+          (s, p) => s + p.custo,
+          0
+        );
+        if (total > 0) aluguerByMotorista[motoristaId] = total;
+      }
 
       // Mapa: motorista_id → total reparações da semana
       const reparacoesByMotorista: Record<string, number> = {};
@@ -1086,8 +1217,20 @@ export function ContasResumoTab() {
   const filteredResumos = useMemo(() => {
     let result = resumos.filter((r) => {
       if (isCompanyName(r.driver_name)) return false;
-      // Excluir inativos (motoristas com status_ativo = false no CRM)
-      if (r.motorista_id && statusAtivoMap[r.motorista_id] === false) return false;
+      // Motorista inativo: só se esconde nas semanas que começam DEPOIS de ele
+      // ter sido desativado. Nas anteriores continua a aparecer normalmente —
+      // são semanas que ele trabalhou e que podem ter contas por fechar
+      // (ganhos das plataformas, saldo pendente). Antes escondia-se em todas,
+      // e como fechar um contrato TVDE desativa o motorista automaticamente
+      // (useContratosRenting), recolher a viatura fazia desaparecer dinheiro
+      // real do ecrã onde se fazem os acertos — caso do motorista #252.
+      if (r.motorista_id && statusAtivoMap[r.motorista_id] === false) {
+        const desativadoEm = desativadoEmMap[r.motorista_id];
+        // Sem data conhecida (inativo de antes desta funcionalidade): mantém o
+        // comportamento antigo de esconder, para não ressuscitar histórico
+        // antigo sem querer.
+        if (!desativadoEm || new Date(desativadoEm) < weekStart) return false;
+      }
       if (searchTerm && !matchesSearch(r.driver_name, searchTerm)) return false;
       if (filterRecibo === 'verde' && !r.recibo_verde) return false;
       if (filterRecibo === 'nao_verde' && r.recibo_verde) return false;
@@ -1137,6 +1280,7 @@ export function ContasResumoTab() {
     gestorMap,
     dataContratacaoMap,
     statusAtivoMap,
+    desativadoEmMap,
     weekStart,
     weekEnd,
     sortField,
