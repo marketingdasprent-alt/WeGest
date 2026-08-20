@@ -195,7 +195,12 @@ export function useContratoForm(): UseContratoFormReturn {
 
   // ── Server state ──────────────────────────────────────────────
   const { data: clientes = [] } = useClientes();
-  const { data: motoristas = [] } = useMotoristas({ apenasAtivos: true });
+  // Não filtra por activo: um contrato existente pode ter condutores que
+  // entretanto ficaram inactivos (ex. ao fechar o contrato) — filtrar aqui
+  // fazia-os desaparecer da lista e o CondutoresFields mostrava-os como
+  // "Motorista removido" mesmo continuando corretamente associados. A
+  // dropdown de "Adicionar Motorista" filtra por activo internamente.
+  const { data: motoristas = [] } = useMotoristas();
   const { empresas } = useClientesEmpresas();
   const { data: viaturas = [] } = useViaturas();
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
