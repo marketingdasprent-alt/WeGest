@@ -111,9 +111,10 @@ interface FecharContratoDialogProps {
    *  motivo. O contrato fecha-se sempre a sério primeiro (este dialog) —
    *  onFechado é quem cria a seguir a nova versão com os valores novos. */
   alteracoesTroca?: AlteracaoMaterial[];
-  /** Chamado depois do fecho ter sucesso, com o motivo introduzido. Usado
-   *  em modo troca para encadear a criação da nova versão do contrato. */
-  onFechado?: (motivo: string | undefined) => void | Promise<void>;
+  /** Chamado depois do fecho ter sucesso, com o motivo introduzido e a data
+   *  do evento (ISO). Usado em modo troca para encadear a criação da nova
+   *  versão do contrato — a data é a fronteira temporal entre os dois elos. */
+  onFechado?: (motivo: string | undefined, dataEventoIso?: string) => void | Promise<void>;
 }
 
 export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
@@ -188,7 +189,13 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   // Registar a recolha (km/combustível/fotos) já no fecho — evita ter de ir
   // depois ao Calendário para o check-in. Estado próprio (fora do zod) pelo
   // mesmo padrão usado em RealizarEntregaPage/CheckOutPendentesDrawer.
-  const [registarAgora, setRegistarAgora] = useState(true);
+  const [registarAgoraEscolhido, setRegistarAgora] = useState(true);
+  // Numa TROCA a folha de danos de devolução não é opcional: é a única prova
+  // do estado em que a viatura antiga voltou, e o contrato vai fechar já a
+  // seguir — deixá-la para depois torna-a impossível de fazer (o trigger de
+  // imutabilidade congela a versão substituída). Fora da troca, mantém-se a
+  // escolha do gestor: fechar agora ou agendar a recolha para mais tarde.
+  const registarAgora = emModoTroca ? true : registarAgoraEscolhido;
   const [km, setKm] = useState('');
   const [combustivel, setCombustivel] = useState('');
   const [files, setFiles] = useState<SelectedFile[]>([]);
@@ -572,6 +579,11 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       // definitivo — motorista desactivado e toast "Contrato fechado", não
       // "Recolha agendada".
       fecharAgora: viaturaEhSlot,
+      // Numa troca o motorista NÃO saiu — fica com a viatura nova, no contrato
+      // sucessor. Desactivá-lo aqui fazia-o desaparecer dos resumos semanais e
+      // das listas de cobrança durante a janela em que o sucessor ainda não
+      // existe (e, se algo falhasse a meio, para sempre).
+      manterMotoristaActivo: emModoTroca,
     });
     if (!viaturaEhSlot && registarAgora) {
       await gerarFolha('print');
@@ -579,7 +591,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     form.reset();
     resetRecolhaState();
     onOpenChange(false);
-    await onFechado?.(values.motivo);
+    await onFechado?.(values.motivo, new Date(values.dataEvento).toISOString());
   };
 
   const isPending = fecharMutation.isPending || gerandoFolha;
@@ -896,10 +908,13 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                       id="registar-agora"
                       checked={registarAgora}
                       onCheckedChange={setRegistarAgora}
+                      disabled={emModoTroca}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    KM, combustível e fotos — sem precisar de ir depois ao Calendário.
+                    {emModoTroca
+                      ? 'Obrigatório numa troca: é a folha de danos de devolução da viatura que sai. Depois de o contrato fechar já não é possível registá-la.'
+                      : 'KM, combustível e fotos — sem precisar de ir depois ao Calendário.'}
                   </p>
 
                   {registarAgora && (
