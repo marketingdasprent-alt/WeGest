@@ -8,7 +8,8 @@ export const SENTINEL_NONE = '__none__';
 export const ESTADO_OP_OPTIONS = [
   { value: 'agendado', label: 'Agendado' },
   { value: 'em_curso', label: 'Em Curso' },
-  { value: 'devolvido', label: 'Devolvido' },
+  // Ver CONTRATO_ESTADO_OP_LABELS — manter os dois rótulos alinhados.
+  { value: 'devolvido', label: 'Fechado (devolvido)' },
   { value: 'cancelado', label: 'Fechado' },
 ] as const;
 

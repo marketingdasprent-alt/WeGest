@@ -37,6 +37,13 @@ DECLARE
   v_closed_motorista_id uuid;
   v_tem_outro_contrato boolean;
 BEGIN
+  -- Linha já era história antes desta alteração: o vínculo motorista-viatura
+  -- pertence agora ao contrato sucessor — não tocar. (No momento da
+  -- substituição OLD.substituido_em ainda é NULL → fecho normal mantém-se.)
+  IF OLD.substituido_em IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
+
   IF NEW.viatura_id IS NULL THEN
     RETURN NEW;
   END IF;

@@ -6,10 +6,15 @@ import type { ExtraTipoCalculo } from './rentingExtra';
 export const CONTRATO_ESTADOS_OP = ['agendado', 'em_curso', 'devolvido', 'cancelado'] as const;
 export type ContratoEstadoOperacional = (typeof CONTRATO_ESTADOS_OP)[number];
 
+// 'devolvido' e 'cancelado' são AMBOS estados de contrato fechado — só diferem
+// no porquê, e isso conta para a facturação (fechar-semana-financeiro exclui
+// 'cancelado', inclui 'devolvido'). Enquanto 'devolvido' se chamava só
+// "Devolvido" ninguém o lia como fechado: os gestores faziam "Reverter fecho"
+// só para o botão "Fechar contrato…" reaparecer e o contrato ficar "Fechado".
 export const CONTRATO_ESTADO_OP_LABELS: Record<ContratoEstadoOperacional, string> = {
   agendado: 'Agendado',
   em_curso: 'Em Curso',
-  devolvido: 'Devolvido',
+  devolvido: 'Fechado (devolvido)',
   cancelado: 'Fechado',
 };
 
