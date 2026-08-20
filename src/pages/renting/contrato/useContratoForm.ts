@@ -181,7 +181,7 @@ export interface UseContratoFormReturn {
   handleSubmit: () => void;
   handleDelete: () => void;
   confirmDelete: () => void;
-  confirmarNovaVersao: (motivo: string) => void;
+  confirmarNovaVersao: (motivo: string, dataTrocaIso?: string) => void;
   handleClienteCriado: (clienteId: string) => void;
   handleMotoristaCriado: (motoristaId: string) => void;
 }
@@ -982,7 +982,7 @@ export function useContratoForm(): UseContratoFormReturn {
   };
 
   // ── confirmarNovaVersao ────────────────────────────────────────
-  const confirmarNovaVersao = (motivo: string) => {
+  const confirmarNovaVersao = (motivo: string, dataTrocaIso?: string) => {
     if (!contrato || !novaVersaoCtx) return;
     const motivoFinal =
       motivo ||
@@ -990,7 +990,7 @@ export function useContratoForm(): UseContratoFormReturn {
         .map((a) => `${a.label}: ${a.valorAntes} → ${a.valorDepois}`)
         .join('; ');
     criarVersaoMutation.mutate(
-      { contratoId: contrato.id, motivo: motivoFinal },
+      { contratoId: contrato.id, motivo: motivoFinal, dataTroca: dataTrocaIso },
       {
         onSuccess: (novaId) => {
           const values = novaVersaoCtx.valores;
@@ -1048,15 +1048,21 @@ export function useContratoForm(): UseContratoFormReturn {
               matricula: matriculaFinal,
               grupo: values.grupo || null,
               estacao_entrega_id: values.estacao_entrega_id || null,
-              data_inicio: localInputToIso(values.data_inicio),
+              // data_inicio, estado_operacional e estado_financeiro NÃO vão aqui
+              // de propósito. Quem os define é criar_versao_contrato_renting:
+              //   · data_inicio        = data da troca (abre a fronteira temporal);
+              //   · estado_operacional = 'agendado' (a entrega da viatura NOVA
+              //     está por fazer — é o que faz o contrato pedir a folha de
+              //     ENTREGA em vez de uma recolha);
+              //   · estado_financeiro  = 'pendente' (a facturação recomeça neste elo).
+              // Reenviá-los aqui era sobrepor os três com os valores hidratados
+              // do contrato ANTIGO e desfazer a troca acabada de fazer.
               estacao_recolha_id: values.estacao_recolha_id || null,
               data_fim:
                 values.regime === 'tvde' && !values.is_longa_duracao
                   ? null
                   : localInputToIso(values.data_fim ?? ''),
               estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
-              estado_operacional: values.estado_operacional,
-              estado_financeiro: values.estado_financeiro,
               origem: values.origem,
               regime: values.regime,
               tarifa_diaria: values.tarifa_diaria,
@@ -1086,7 +1092,12 @@ export function useContratoForm(): UseContratoFormReturn {
                   subtotal: subtotalTaxas,
                 });
                 setNovaVersaoCtx(null);
-                navigate(`/renting/contratos/${novaId}`);
+                // `criado=1` é a condição que abre o RealizarEntregaDialog no
+                // contrato novo (ver o efeito de `abriuEntregaAoCriarRef`).
+                // Sem ele, a folha de danos de ENTREGA da viatura nova não era
+                // pedida a ninguém: o gestor era largado no contrato novo sem
+                // qualquer indicação de que faltava fazer o handover.
+                navigate(`/renting/contratos/${novaId}?criado=1`);
               },
             }
           );

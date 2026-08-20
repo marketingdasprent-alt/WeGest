@@ -83,7 +83,13 @@ export const SectionViatura: React.FC<SectionViaturaProps> = ({
   const selecionarViatura = (viaturaId: string, onChange: (id: string) => void) => {
     onChange(viaturaId);
     const via = viaturas.find((x) => x.id === viaturaId);
-    if (via) form.setValue('matricula', via.matricula);
+    // shouldDirty é obrigatório: o `reset` de hidratação do formulário corre com
+    // `keepDirtyValues`, que só preserva campos MARCADOS como sujos. Sem isto, um
+    // refetch entre a escolha da viatura e o Guardar repunha a matrícula antiga
+    // por cima da viatura nova — contrato com viatura_id de um carro e matrícula
+    // de outro, e todos os cruzamentos por matrícula (portagens, combustível,
+    // multas) a ir para a viatura errada.
+    if (via) form.setValue('matricula', via.matricula, { shouldDirty: true });
     onViaturaChange?.(viaturaId);
     setPopoverOpen(false);
   };
