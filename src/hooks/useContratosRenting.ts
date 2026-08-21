@@ -1177,9 +1177,7 @@ export function useCancelarContratoRenting() {
         .maybeSingle();
       if (error) throw error;
       if (!updated) {
-        throw new Error(
-          'Esta versão do contrato já foi substituída — cancela a versão actual.'
-        );
+        throw new Error('Esta versão do contrato já foi substituída — cancela a versão actual.');
       }
     },
     onSuccess: () => {
