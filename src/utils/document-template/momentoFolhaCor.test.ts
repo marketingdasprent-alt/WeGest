@@ -5,6 +5,7 @@ import {
   COR_ENTREGA,
   COR_NEUTRA,
   COR_RECOLHA,
+  TAMANHO_MOMENTO_PT,
   corDoMomentoFolha,
   momentoFolhaHtml,
 } from './momentoFolhaCor';
@@ -40,8 +41,10 @@ describe('corDoMomentoFolha', () => {
 });
 
 describe('momentoFolhaHtml', () => {
-  it('embrulha o momento num span com a cor inline', () => {
-    expect(momentoFolhaHtml('RECOLHA')).toBe(`<span style="color:${COR_RECOLHA}">RECOLHA</span>`);
+  it('embrulha o momento num strong com cor e tamanho inline', () => {
+    expect(momentoFolhaHtml('RECOLHA')).toBe(
+      `<strong style="color:${COR_RECOLHA};font-size:${TAMANHO_MOMENTO_PT}px">RECOLHA</strong>`
+    );
   });
 
   it('preserva o texto tal como veio — é o que sai impresso', () => {
@@ -51,5 +54,14 @@ describe('momentoFolhaHtml', () => {
   it('sem momento não produz span nenhum', () => {
     expect(momentoFolhaHtml('')).toBe('');
     expect(momentoFolhaHtml(null)).toBe('');
+  });
+
+  it('vem a NEGRITO — <strong> é o que liga o bold no parser', () => {
+    expect(momentoFolhaHtml('ENTREGA')).toMatch(/^<strong/);
+  });
+
+  it('vem maior que o resto do título, que sai a 10pt por omissão', () => {
+    expect(TAMANHO_MOMENTO_PT).toBeGreaterThan(10);
+    expect(momentoFolhaHtml('DEVOLUÇÃO')).toContain('font-size:' + TAMANHO_MOMENTO_PT + 'px');
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { htmlToText } from './parser';
+import { COR_RECOLHA, TAMANHO_MOMENTO_PT, momentoFolhaHtml } from './momentoFolhaCor';
 
 describe('htmlToText', () => {
   it('não cola o texto de um parágrafo ao elemento anterior quando há um parágrafo em branco entre eles', () => {
@@ -111,5 +112,31 @@ describe('htmlToText — cor', () => {
 
     expect(els).toHaveLength(1);
     expect(els[0].text).toBe('DOIS RUNS');
+  });
+});
+
+describe('htmlToText — momento da folha de danos', () => {
+  it('o momento chega ao PDF a negrito, colorido e maior', () => {
+    // Prova o HTML REAL que momentoFolhaHtml produz, e não uma imitação:
+    // negrito, cor e tamanho vêm de caminhos diferentes no parser (a tag liga
+    // o bold, os estilos inline dão cor e tamanho) e todos têm de sobreviver.
+    const html =
+      '<h1 style="text-align:center">FOLHA DE REGISTO DE DANOS — ' +
+      momentoFolhaHtml('RECOLHA') +
+      '</h1>';
+
+    const els = htmlToText(html).filter(
+      (e) => e.type === 'text' && e.text !== String.fromCharCode(10)
+    );
+    const momento = els.find((e) => e.text.includes('RECOLHA'));
+
+    expect(momento).toBeDefined();
+    expect(momento!.style.bold).toBe(true);
+    expect(momento!.style.color).toEqual([213, 0, 0]);
+    expect(momento!.style.fontSize).toBe(TAMANHO_MOMENTO_PT);
+    // e o texto antes continua preto e no tamanho normal
+    const antes = els.find((e) => e.text.includes('FOLHA DE REGISTO'));
+    expect(antes!.style.color).toBeUndefined();
+    expect(COR_RECOLHA).toBe('#D50000');
   });
 });

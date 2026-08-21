@@ -11,16 +11,28 @@
  *   RECOLHA    vermelho  — a empresa foi buscá-la (o motorista não a entregou)
  *   DEVOLUÇÃO  azul      — o motorista trouxe-a, fim normal
  *
- * Tons escuros de propósito: têm de sobreviver a fotocópia e a impressão a
- * jacto de tinta. Nada de cores claras ou saturadas.
+ * Cores saturadas e a dobrar do tamanho do resto do título, a negrito. A
+ * primeira tentativa usou tons escuros discretos, a pensar em fotocópias — na
+ * folha real passavam despercebidos, que é o oposto do objectivo. Saturado
+ * continua a imprimir sólido; é o cinzento-claro que desaparece.
  */
 
-/** #C0392B */
-export const COR_RECOLHA = '#C0392B';
-/** #1E8449 */
-export const COR_ENTREGA = '#1E8449';
-/** #1F618D */
-export const COR_DEVOLUCAO = '#1F618D';
+/** Vermelho vivo. */
+export const COR_RECOLHA = '#D50000';
+/** Verde vivo. */
+export const COR_ENTREGA = '#009640';
+/** Azul vivo. */
+export const COR_DEVOLUCAO = '#0050C8';
+
+/**
+ * Tamanho do momento, em pontos.
+ *
+ * O resto do título sai a 10pt — é o valor por omissão do compositor, e o
+ * template não impõe tamanho nenhum ao `<h1>`. A 20pt o momento fica ao dobro
+ * e é a primeira coisa que se lê na folha. O compositor usa o maior tamanho da
+ * linha para calcular a altura (`maxFontSize`), por isso nada se sobrepõe.
+ */
+export const TAMANHO_MOMENTO_PT = 20;
 /** Preto — momento desconhecido ou vazio. */
 export const COR_NEUTRA = '#000000';
 
@@ -43,12 +55,21 @@ export function corDoMomentoFolha(momento: string | null | undefined): string {
 /**
  * O momento pronto a substituir no `{{momento_folha}}` do template.
  *
- * Devolve um `<span>` com a cor inline — o parser do template lê `color` dos
- * estilos e o compositor pinta o segmento. Fica em código e não no HTML do
- * template de propósito: os templates são editáveis na interface, e a cor
- * perder-se-ia na primeira vez que alguém mexesse no título.
+ * Um `<strong>` com cor e tamanho inline: o parser liga o negrito pela tag e lê
+ * `color` e `font-size` dos estilos de qualquer elemento; o compositor pinta e
+ * dimensiona cada segmento.
+ *
+ * Fica em código e não no HTML do template DE PROPÓSITO: os templates são
+ * editáveis na interface e existe um por organização, portanto isto perder-se-ia
+ * na primeira vez que alguém mexesse no título — e teria de ser reposto em cada
+ * empresa nova.
+ *
+ * Nada de fundo colorido: o compositor não sabe desenhar rectângulos
+ * (`render-html-block.ts` só escreve texto), pelo que um crachá exigiria
+ * reescrevê-lo.
  */
 export function momentoFolhaHtml(momento: string | null | undefined): string {
   if (!momento) return '';
-  return `<span style="color:${corDoMomentoFolha(momento)}">${momento}</span>`;
+  const cor = corDoMomentoFolha(momento);
+  return `<strong style="color:${cor};font-size:${TAMANHO_MOMENTO_PT}px">${momento}</strong>`;
 }
