@@ -91,9 +91,6 @@ const ContratoForm = () => {
     setNovaVersaoCtx,
     realizarDialog,
     setRealizarDialog,
-    confirmarRealizacaoDireta,
-    setConfirmarRealizacaoDireta,
-    marcarRealizacaoDireta,
     docsDialogOpen,
     setDocsDialogOpen,
     viaturasParaSelecao,
@@ -322,53 +319,9 @@ const ContratoForm = () => {
               <FileText className="h-4 w-4" />
               Realizar {realizacaoPendente.tipo === 'entrega' ? 'entrega' : 'recolha'}
             </Button>
-            {realizacaoPendente.tipo === 'entrega' && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setConfirmarRealizacaoDireta(true)}
-                disabled={marcarRealizacaoDireta.isPending}
-                title="Marca a entrega como realizada sem passar pelo check (fotos/km) — para contratos já existentes no Any Rent."
-              >
-                {marcarRealizacaoDireta.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  'Any Rent'
-                )}
-              </Button>
-            )}
           </div>
         </div>
       )}
-
-      {/* Confirmação do atalho "marcar entrega como já realizada" (sem check).
-          Recolha/fecho não têm atalho — passam sempre por "Fechar contrato",
-          pelo fluxo QR/Realizar recolha, ou por troca de viatura. */}
-      <AlertDialog open={confirmarRealizacaoDireta} onOpenChange={setConfirmarRealizacaoDireta}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Marcar entrega como já realizada?</AlertDialogTitle>
-            <AlertDialogDescription>
-              O contrato passa a "Em curso" sem registar fotos, km ou confirmação no terreno. Usa
-              isto só para contratos já existentes no <strong>Any Rent</strong> — essa informação
-              nunca existiu porque foram migrados de outro sistema.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (!contrato || !realizacaoPendente) return;
-                marcarRealizacaoDireta.mutate({ contratoId: contrato.id });
-                setConfirmarRealizacaoDireta(false);
-              }}
-            >
-              Confirmar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
         <Card className="bg-card border-border">
