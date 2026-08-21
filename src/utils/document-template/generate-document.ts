@@ -1,3 +1,4 @@
+import { momentoFolhaHtml } from './momentoFolhaCor';
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
@@ -65,7 +66,7 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
       ...(combustivel_entrada != null ? { combustivel_entrada } : {}),
       ...(eletricidade_saida != null ? { eletricidade_saida } : {}),
       ...(eletricidade_entrada != null ? { eletricidade_entrada } : {}),
-      ...(momentoFolha != null ? { momento_folha: momentoFolha } : {}),
+      ...(momentoFolha != null ? { momento_folha: momentoFolhaHtml(momentoFolha) } : {}),
       ...(observacoesMomento != null ? { observacoes_momento: observacoesMomento } : {}),
     };
 
