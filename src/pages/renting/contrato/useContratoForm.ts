@@ -990,46 +990,15 @@ export function useContratoForm(): UseContratoFormReturn {
           const values = novaVersaoCtx.valores;
           const viatura = viaturas.find((v) => v.id === values.viatura_id);
           const matriculaFinal = values.matricula || viatura?.matricula || null;
-          const msDia = 86400000;
-          const dias =
-            values.regime === 'tvde' || !values.data_fim
-              ? Math.max(1, values.renovacao_intervalo_dias ?? 30)
-              : Math.max(
-                  1,
-                  Math.ceil(
-                    (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) /
-                      msDia
-                  )
-                );
-          const isTvdeVer = values.regime === 'tvde';
-          const linhaModeloVer =
-            values.tarifa_id && viatura?.modelo_id
-              ? (precosModeloTvde.find(
-                  (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viatura.modelo_id
-                ) ?? null)
-              : null;
-          const baseAluguer = calcularBaseAluguerRenting({
-            regime: values.regime,
-            isLongaDuracao: values.is_longa_duracao,
-            dias,
-            tarifa: values.tarifa_id
-              ? (tarifas.find((t) => t.id === values.tarifa_id) ?? null)
-              : (tarifas.find((t) => t.grupo_id === values.grupo) ?? null),
-            valorTotalManual: values.valor_total_manual,
-            precoModeloSemana: isTvdeVer ? (linhaModeloVer?.preco_semana ?? null) : null,
-            precoModeloDia: !isTvdeVer ? (linhaModeloVer?.preco_dia ?? null) : null,
-            precoModeloMes: !isTvdeVer ? (linhaModeloVer?.preco_mes ?? null) : null,
-          });
-          const custoCoberturas =
-            values.coberturas.reduce((s, c) => s + (c.preco_dia ?? 0), 0) * dias;
-          const condutores = values.condutores as CondutorFormItem[];
-          const coberturas = values.coberturas as CoberturaFormItem[];
-          const extras = values.extras as ExtraFormItem[];
-          const taxas = values.taxas as TaxaFormItem[];
-          const custoExtras = extras.reduce((s, e) => s + calcExtraTotal(e, dias), 0);
-          const subtotalTaxas =
-            (baseAluguer + custoCoberturas + custoExtras) *
-            (1 - (values.desconto_percentagem ?? 0) / 100);
+          // Nada é recalculado aqui. criar_versao_contrato_renting já copiou
+          // condutores, coberturas, extras e taxas do contrato antigo, tal e
+          // qual — numa troca as condições transitam, não se refazem.
+          //
+          // Re-sincronizá-las a seguir, como se fazia, tinha dois defeitos: o
+          // `dias` era medido a partir do início ORIGINAL do contrato, e o elo
+          // novo passou a começar na data da TROCA — num rent-a-car de 30 dias
+          // trocado ao dia 20, extras e coberturas eram cobrados sobre 30 dias
+          // em vez de 10. E era trabalho a desfazer o que a base já fizera bem.
 
           updateMutation.mutate(
             {
@@ -1077,14 +1046,6 @@ export function useContratoForm(): UseContratoFormReturn {
             },
             {
               onSuccess: () => {
-                syncCondutoresMutation.mutate({ contratoId: novaId, desejados: condutores });
-                syncCoberturasMutation.mutate({ contratoId: novaId, desejadas: coberturas });
-                syncExtrasMutation.mutate({ contratoId: novaId, desejados: extras, dias });
-                syncTaxasMutation.mutate({
-                  contratoId: novaId,
-                  desejadas: taxas,
-                  subtotal: subtotalTaxas,
-                });
                 setNovaVersaoCtx(null);
                 // `criado=1` é a condição que abre o RealizarEntregaDialog no
                 // contrato novo (ver o efeito de `abriuEntregaAoCriarRef`).
