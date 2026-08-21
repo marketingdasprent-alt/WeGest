@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { nivelEnergia } from '@/utils/combustivel';
+import { useRascunho } from '@/hooks/useRascunho';
 import { supabase } from '@/integrations/supabase/client';
 import { gerarContratoAtomico } from '@/hooks/useContratos';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,7 @@ import {
   validateCheckinDados,
   saveCheckinDados,
   gerarFolhaDanos,
+  reidratarCheckinDados,
 } from './CheckinDadosSection';
 import type { CheckinDadosState } from './CheckinDadosSection';
 import {
@@ -98,6 +100,15 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
   const [cidadeAssinatura, setCidadeAssinatura] = useState('Leiria');
   const [files, setFiles] = useState<SelectedFile[]>([]);
   const [checkinDados, setCheckinDados] = useState<CheckinDadosState>(emptyCheckinDados);
+
+  // Um refresh a meio de uma folha de danos apagava km, descrições e — o que
+  // custa mesmo — as fotos já tiradas. Guarda por viatura/contrato, nunca
+  // global, para não misturar carros.
+  const { limpar: limparRascunho } = useRascunho({
+    chave: viaturaId ? `folha-entrega-${viaturaId}` : null,
+    valor: checkinDados,
+    restaurar: (d) => setCheckinDados(reidratarCheckinDados(d)),
+  });
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
   const [contratoNumero, setContratoNumero] = useState<number | null>(null);
@@ -584,6 +595,9 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
           ? `CT-${String(ct.numero_contrato ?? 0).padStart(4, '0')} criado — check-out pendente`
           : `Contrato CT-${String(ct.numero_contrato ?? 0).padStart(4, '0')} criado`
       );
+      // Só aqui: enquanto a submissão não passar, o rascunho tem de aguentar
+      // um refresh, um erro de rede ou um fecho por engano.
+      void limparRascunho();
       setDone(true);
       setTimeout(() => onConcluir(), 1500);
     } catch (err: any) {

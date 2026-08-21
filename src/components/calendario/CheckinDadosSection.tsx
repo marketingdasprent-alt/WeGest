@@ -50,6 +50,29 @@ export function emptyCheckinDados(): CheckinDadosState {
   return { km: '', combustivel: '', nivelEletrico: '', nivelGpl: '', novosDanos: [] };
 }
 
+/**
+ * Repõe um rascunho vindo do IndexedDB em estado utilizável.
+ *
+ * Os `File` sobrevivem intactos (structured clone), mas os `preview` são
+ * object URLs da sessão anterior — a página que os criou já não existe e o
+ * browser revogou-os, por isso as miniaturas apareceriam partidas. Criam-se
+ * de novo a partir do ficheiro, que é o que interessa guardar.
+ */
+export function reidratarCheckinDados(dados: CheckinDadosState): CheckinDadosState {
+  return {
+    ...dados,
+    novosDanos: (dados.novosDanos ?? []).map((dano) => ({
+      ...dano,
+      files: (dano.files ?? [])
+        .filter((f) => f.file instanceof File)
+        .map((f) => ({
+          ...f,
+          preview: f.file.type.startsWith('image/') ? URL.createObjectURL(f.file) : null,
+        })),
+    })),
+  };
+}
+
 export function validateCheckinDados(
   dados: CheckinDadosState,
   kmMinimo: number,
