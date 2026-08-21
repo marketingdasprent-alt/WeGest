@@ -470,7 +470,10 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         },
         viaturaId: contexto?.viaturaId ?? viaturaId ?? undefined,
         contratoId,
-        momentoFolha: 'RECOLHA',
+        // Recolha e devolução são momentos distintos na folha, com cores
+        // distintas: vermelho quando fomos buscar a viatura, azul quando o
+        // motorista a trouxe. Estava fixo em RECOLHA para os dois casos.
+        momentoFolha: form.getValues('tipoEvento') === 'devolvido' ? 'DEVOLUÇÃO' : 'RECOLHA',
         observacoesMomento: motivo,
         km_entrada: km,
         combustivel_entrada: combustivel,
