@@ -629,7 +629,6 @@ export function useFecharContrato() {
   });
 }
 
-
 // ────────────────────────────────────────────────────────────
 // Preencher manualmente km/combustível/bateria de saída — só para
 // contratos marcados com entrega_via_any_rent=true (ver

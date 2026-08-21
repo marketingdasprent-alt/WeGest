@@ -148,7 +148,9 @@ export const RealizarEntregaDialog: React.FC<Props> = ({
         {showAutoMobile && (
           <div className="flex flex-col items-center justify-center gap-3 py-8 text-muted-foreground">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <p className="text-sm">A abrir a folha de {tipo === 'entrega' ? 'entrega' : 'recolha'}…</p>
+            <p className="text-sm">
+              A abrir a folha de {tipo === 'entrega' ? 'entrega' : 'recolha'}…
+            </p>
           </div>
         )}
 
