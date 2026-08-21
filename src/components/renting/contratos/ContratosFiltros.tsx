@@ -105,8 +105,8 @@ export const ContratosFiltros: React.FC<ContratosFiltrosProps> = ({
             <SelectItem value="todos">Todos</SelectItem>
             <SelectItem value="agendado">Agendado</SelectItem>
             <SelectItem value="em_curso">Em Curso</SelectItem>
-            <SelectItem value="devolvido">Fechado (devolvido)</SelectItem>
-            <SelectItem value="cancelado">Fechado</SelectItem>
+            <SelectItem value="fechado">Fechado</SelectItem>
+            <SelectItem value="cancelado">Cancelado</SelectItem>
           </SelectContent>
         </Select>
       </div>

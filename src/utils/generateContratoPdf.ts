@@ -529,7 +529,9 @@ export const generateContratoPdf = async ({
           viaturaId: viatura?.id,
           contratoId: contrato.id,
           folhaDanosMomentoActual: false,
-          momentoFolha: contrato.estado_operacional === 'devolvido' ? 'RECOLHA' : 'ENTREGA',
+          momentoFolha: ['fechado', 'devolvido'].includes(contrato.estado_operacional)
+            ? 'RECOLHA'
+            : 'ENTREGA',
           km_saida: contrato.km_saida != null ? String(contrato.km_saida) : '',
           km_entrada: contrato.km_entrada != null ? String(contrato.km_entrada) : '',
           combustivel_saida: contrato.combustivel_saida ?? '',

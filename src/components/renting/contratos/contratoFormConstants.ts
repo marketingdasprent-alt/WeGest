@@ -9,8 +9,10 @@ export const ESTADO_OP_OPTIONS = [
   { value: 'agendado', label: 'Agendado' },
   { value: 'em_curso', label: 'Em Curso' },
   // Ver CONTRATO_ESTADO_OP_LABELS — manter os dois rótulos alinhados.
-  { value: 'devolvido', label: 'Fechado (devolvido)' },
-  { value: 'cancelado', label: 'Fechado' },
+  // 'devolvido'/'recolhido' NÃO aparecem aqui: não são estados do contrato,
+  // são o `tipo_fecho`, e só se escolhem no diálogo de fecho.
+  { value: 'fechado', label: 'Fechado' },
+  { value: 'cancelado', label: 'Cancelado' },
 ] as const;
 
 export const ESTADO_FIN_OPTIONS = [

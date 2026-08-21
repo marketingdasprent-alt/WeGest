@@ -21,6 +21,7 @@ import {
   useContratoVizinhos,
   useCreateContratoRenting,
   useCriarVersaoContrato,
+  useCancelarContratoRenting,
   useDeleteContratoRenting,
   useMarcarRealizacaoDireta,
   useUpdateContratoRenting,
@@ -137,6 +138,11 @@ export interface UseContratoFormReturn {
   setActiveTab: (tab: string) => void;
   confirmDeleteOpen: boolean;
   setConfirmDeleteOpen: (open: boolean) => void;
+  confirmCancelOpen: boolean;
+  setConfirmCancelOpen: (open: boolean) => void;
+  /** Cancelar está disponível em qualquer estado; só não se cancela uma
+   *  versão já substituída (essa é história). Ver useCancelarContratoRenting. */
+  podeCancelar: boolean;
   clienteDialogOpen: boolean;
   setClienteDialogOpen: (open: boolean) => void;
   motoristaDialogOpen: boolean;
@@ -181,6 +187,8 @@ export interface UseContratoFormReturn {
   handleSubmit: () => void;
   handleDelete: () => void;
   confirmDelete: () => void;
+  handleCancelar: () => void;
+  confirmCancelar: () => void;
   confirmarNovaVersao: (motivo: string) => void;
   handleClienteCriado: (clienteId: string) => void;
   handleMotoristaCriado: (motoristaId: string) => void;
@@ -228,6 +236,7 @@ export function useContratoForm(): UseContratoFormReturn {
   const createMutation = useCreateContratoRenting();
   const updateMutation = useUpdateContratoRenting();
   const deleteMutation = useDeleteContratoRenting();
+  const cancelarMutation = useCancelarContratoRenting();
   const criarVersaoMutation = useCriarVersaoContrato();
   const marcarRealizacaoDireta = useMarcarRealizacaoDireta();
   const syncCondutoresMutation = useSyncContratoCondutores();
@@ -250,6 +259,7 @@ export function useContratoForm(): UseContratoFormReturn {
   // ── UI state ──────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('geral');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [clienteDialogOpen, setClienteDialogOpen] = useState(false);
   const [motoristaDialogOpen, setMotoristaDialogOpen] = useState(false);
   const [novaVersaoCtx, setNovaVersaoCtx] = useState<{
@@ -304,6 +314,20 @@ export function useContratoForm(): UseContratoFormReturn {
         setConfirmDeleteOpen(false);
         navigate('/renting/contratos');
       },
+    });
+  };
+
+  const handleCancelar = () => {
+    if (!contrato) return;
+    setConfirmCancelOpen(true);
+  };
+
+  // Ao contrário do eliminar, cancelar NÃO navega para fora: o contrato
+  // continua a existir e o gestor deve ficar a vê-lo já como "Cancelado".
+  const confirmCancelar = () => {
+    if (!contrato) return;
+    cancelarMutation.mutate(contrato.id, {
+      onSuccess: () => setConfirmCancelOpen(false),
     });
   };
 
@@ -1132,6 +1156,9 @@ export function useContratoForm(): UseContratoFormReturn {
     setActiveTab,
     confirmDeleteOpen,
     setConfirmDeleteOpen,
+    confirmCancelOpen,
+    setConfirmCancelOpen,
+    podeCancelar: !!contrato && !contrato.substituido_em,
     clienteDialogOpen,
     setClienteDialogOpen,
     motoristaDialogOpen,
@@ -1166,6 +1193,8 @@ export function useContratoForm(): UseContratoFormReturn {
     handleSubmit: form.handleSubmit(onSubmit, onInvalid),
     handleDelete,
     confirmDelete,
+    handleCancelar,
+    confirmCancelar,
     confirmarNovaVersao,
     handleClienteCriado,
     handleMotoristaCriado,
