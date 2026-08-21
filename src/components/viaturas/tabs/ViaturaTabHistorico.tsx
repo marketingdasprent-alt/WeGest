@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { FileText } from 'lucide-react';
+import { useContratosDaViaturaPorMotorista } from '@/hooks/useContratosDaViaturaPorMotorista';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,6 +31,11 @@ interface ViaturaTabHistoricoProps {
 export function ViaturaTabHistorico({ viaturaId }: ViaturaTabHistoricoProps) {
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // O histórico lista vínculos motorista↔viatura, e essa tabela não sabe nada
+  // de contratos. Sem isto o nº do contrato não aparecia em lado nenhum e era
+  // preciso ir procurá-lo à mão na lista de contratos.
+  const { data: contratosPorMotorista } = useContratosDaViaturaPorMotorista(viaturaId);
   const [desvinculando, setDesvinculando] = useState<string | null>(null);
 
   useEffect(() => {
@@ -191,6 +199,29 @@ export function ViaturaTabHistorico({ viaturaId }: ViaturaTabHistoricoProps) {
                         {item.motorista?.email && (
                           <p className="text-sm text-muted-foreground">{item.motorista.email}</p>
                         )}
+                        {(() => {
+                          const contratos = item.motorista_id
+                            ? (contratosPorMotorista?.get(item.motorista_id) ?? [])
+                            : [];
+                          // Sem contrato não se inventa uma linha vazia: acontece
+                          // mesmo (viaturas atribuídas sem contrato criado) e o
+                          // silêncio aqui é a informação.
+                          if (contratos.length === 0) return null;
+                          return (
+                            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                              <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              {contratos.map((c) => (
+                                <Link
+                                  key={c.id}
+                                  to={`/renting/contratos/${c.id}`}
+                                  className="font-medium text-primary hover:underline"
+                                >
+                                  #{c.codigo ?? '—'}
+                                </Link>
+                              ))}
+                            </p>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
