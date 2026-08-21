@@ -99,13 +99,20 @@ export const NotificacoesPopup = () => {
             key={n.id}
             role="alert"
             className={cn(
-              'pointer-events-auto rounded-xl border p-4 shadow-lg duration-300 animate-in slide-in-from-bottom-4 fade-in',
-              urgente
-                ? 'border-destructive bg-destructive/5 ring-2 ring-destructive/30'
-                : 'border-border bg-card'
+              // `bg-card` é a base OPACA e vem sempre — este cartão flutua por
+              // cima do conteúdo da página (fixed bottom-right). O tom vermelho
+              // do urgente é uma camada por cima, não o fundo: com
+              // `bg-destructive/5` sozinho o cartão ficava a 5% de opacidade e
+              // via-se a página através dele.
+              'pointer-events-auto relative overflow-hidden rounded-xl border bg-card p-4 shadow-lg duration-300 animate-in slide-in-from-bottom-4 fade-in',
+              urgente ? 'border-destructive ring-2 ring-destructive/30' : 'border-border'
             )}
           >
-            <div className="flex items-start gap-3">
+            {urgente && (
+              <div className="pointer-events-none absolute inset-0 bg-destructive/5" aria-hidden />
+            )}
+            {/* `relative` para o conteúdo ficar acima da camada de cor. */}
+            <div className="relative flex items-start gap-3">
               <div
                 className={cn(
                   'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',

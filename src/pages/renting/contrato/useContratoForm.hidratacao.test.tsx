@@ -80,7 +80,6 @@ vi.mock('@/hooks/useContratosRenting', () => ({
   useDeleteContratoRenting: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useCancelarContratoRenting: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useCriarVersaoContrato: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
-  useMarcarRealizacaoDireta: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('@/hooks/useContratoCondutores', () => ({
   useContratoCondutores: () => ({ data: undefined }),

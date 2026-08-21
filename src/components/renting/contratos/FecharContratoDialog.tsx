@@ -461,7 +461,11 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
           assinatura_motorista: sigs.motorista ?? '',
           assinatura_responsavel: sigs.responsavel ?? '',
           responsavel_nome: responsavelNome,
-          momento_responsavel: 'Recolhido por',
+          // Recolhida (fomos buscá-la) e devolvida (o motorista trouxe-a) são
+          // factos diferentes, e este documento é assinado: dizer 'Recolhido por'
+          // a quem cumpriu e entregou a viatura descreve o oposto do que aconteceu.
+          momento_responsavel:
+            form.getValues('tipoEvento') === 'devolvido' ? 'Devolvido por' : 'Recolhido por',
           ...(contexto?.empresaData ? { empresaData: contexto.empresaData } : {}),
         },
         viaturaId: contexto?.viaturaId ?? viaturaId ?? undefined,
@@ -551,6 +555,13 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         toast.error('Este contrato não tem viatura associada — não é possível anexar fotos.');
         return;
       }
+    }
+
+    // Recolhida = o motorista não entregou a viatura e fomos buscá-la; quase
+    // sempre fica a dever. Avisa, não bloqueia: há recolhas sem nada a cobrar,
+    // e prender o fecho por isso deixaria a viatura por registar.
+    if (values.tipoEvento === 'recolhido' && !values.valorDivida && temMotorista) {
+      toast.warning('Recolha sem valor em dívida — confirma que não há nada a cobrar.');
     }
 
     await fecharMutation.mutateAsync({
@@ -854,7 +865,9 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                   <div className="space-y-1.5">
                     <Label htmlFor="valorDivida" className="text-xs">
                       {temMotorista
-                        ? 'Opcional — fica como débito pendente no financeiro do motorista.'
+                        ? tipoEvento === 'recolhido'
+                          ? 'A viatura foi recolhida — indica o valor em dívida.'
+                          : 'Opcional — fica como débito pendente no financeiro do motorista.'
                         : 'Sem motorista associado — não será registado.'}
                     </Label>
                     <div className="relative">

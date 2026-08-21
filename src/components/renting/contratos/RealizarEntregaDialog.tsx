@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { ArrowLeft, CheckCircle2, Clock, Loader2, Monitor, Smartphone } from 'lucide-react';
@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 
 import { useGerarTokenRealizacao, usePollEventoRealizado } from '@/hooks/useRealizacaoToken';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Props {
   open: boolean;
@@ -45,6 +46,8 @@ export const RealizarEntregaDialog: React.FC<Props> = ({
   const navigate = useNavigate();
   const gerarToken = useGerarTokenRealizacao();
   const realizado = usePollEventoRealizado(eventoId, !!tokenId);
+  const isMobile = useIsMobile();
+  const autoAbriuRef = useRef(false);
 
   // Fazer o check no próprio computador: gera o token e abre a página de
   // realização neste browser (não precisa de telemóvel).
@@ -54,6 +57,20 @@ export const RealizarEntregaDialog: React.FC<Props> = ({
       onSuccess: (id) => navigate(`/realizar/${id}`),
     });
   };
+
+  // No telemóvel não há escolha a fazer: "Fazer neste computador" está errado
+  // (já estamos no telemóvel) e o QR existe justamente para saltar do
+  // computador PARA o telemóvel. Quem abre o contrato no telemóvel e carrega
+  // em "Realizar entrega" — o transferista no terreno — vai direto à folha.
+  useEffect(() => {
+    if (!open) {
+      autoAbriuRef.current = false;
+      return;
+    }
+    if (!isMobile || !eventoId || autoAbriuRef.current) return;
+    autoAbriuRef.current = true;
+    gerarToken.mutate(eventoId, { onSuccess: (id) => navigate(`/realizar/${id}`) });
+  }, [open, isMobile, eventoId, gerarToken, navigate]);
 
   useEffect(() => {
     if (!open) setTokenId(null);
@@ -83,7 +100,10 @@ export const RealizarEntregaDialog: React.FC<Props> = ({
   }, [realizado, tokenId, onOpenChange, onDone]);
 
   // Determina o que mostrar
-  const showInitial = !tokenId && !realizado;
+  // No telemóvel as opções nunca chegam a aparecer — o efeito acima já
+  // navegou para a folha; mostra-se só o estado de transição.
+  const showInitial = !tokenId && !realizado && !isMobile;
+  const showAutoMobile = !tokenId && !realizado && isMobile;
   const showQR = !!tokenId && !realizado;
   const showRealizado = !!realizado;
 
@@ -122,6 +142,15 @@ export const RealizarEntregaDialog: React.FC<Props> = ({
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> À espera da confirmação...
             </div>
+          </div>
+        )}
+
+        {showAutoMobile && (
+          <div className="flex flex-col items-center justify-center gap-3 py-8 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <p className="text-sm">
+              A abrir a folha de {tipo === 'entrega' ? 'entrega' : 'recolha'}…
+            </p>
           </div>
         )}
 
