@@ -408,6 +408,12 @@ export interface FecharContratoArgs {
    *  simplificado de viaturas slot, que não captura km/combustível/fotos mas
    *  fecha o contrato por completo na mesma (não fica "a aguardar recolha"). */
   fecharAgora?: boolean;
+  /** true quando este fecho é o primeiro passo de uma TROCA de viatura. O
+   *  motorista não sai — passa para o contrato sucessor com outra viatura —,
+   *  por isso não pode ser desactivado aqui. Sem isto ficava inactivo durante
+   *  a janela entre o fecho e a criação do sucessor, e desaparecia dos resumos
+   *  semanais e das listas de cobrança dessa semana. */
+  manterMotoristaActivo?: boolean;
 }
 
 /** Título/descrição do toast final — depende de a recolha ter sido
@@ -443,6 +449,7 @@ export function useFecharContrato() {
       recolha,
       marcarDuaDevolvida,
       fecharAgora,
+      manterMotoristaActivo,
     }: FecharContratoArgs): Promise<{ fechouAgora: boolean }> => {
       const { data: estacao, error: errEstacao } = await supabase
         .from('estacoes')
@@ -604,7 +611,7 @@ export function useFecharContrato() {
       // motorista continua de posse da viatura até a recolha real acontecer)
       // ou quando o fecho é forçado como definitivo (fecharAgora — slot, que
       // não tem recolha física a capturar mas fecha por completo na mesma).
-      if (motoristaId && (recolha || fecharAgora)) {
+      if (motoristaId && (recolha || fecharAgora) && !manterMotoristaActivo) {
         const { error: errMotorista } = await supabase
           .from('motoristas_ativos')
           .update({ status_ativo: false })
@@ -1004,10 +1011,20 @@ export function useCriarVersaoContrato() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (args: { contratoId: string; motivo: string }): Promise<string> => {
+    mutationFn: async (args: {
+      contratoId: string;
+      motivo: string;
+      /** Instante em que a troca acontece — é a fronteira temporal entre os
+       *  dois elos: fecha `data_fim` do antigo e abre `data_inicio` do novo.
+       *  Vem da data de recolha escolhida no FecharContratoDialog, para que a
+       *  linha temporal do histórico bata certo com a devolução real. Omitido
+       *  (ex.: chamadas antigas), a RPC assume `now()`. */
+      dataTroca?: string;
+    }): Promise<string> => {
       const { data, error } = await supabase.rpc('criar_versao_contrato_renting', {
         p_contrato_id: args.contratoId,
         p_motivo: args.motivo,
+        p_data_troca: args.dataTroca ?? new Date().toISOString(),
       });
       if (error) throw error;
       return data as string;

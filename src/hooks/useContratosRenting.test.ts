@@ -332,6 +332,55 @@ describe('useFecharContrato', () => {
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Contrato fechado' }));
   });
 
+  it('troca de viatura (manterMotoristaActivo) → fecha com recolha mas NÃO desactiva o motorista', async () => {
+    // Sentinela da regra: numa troca/upgrade/downgrade o motorista não sai —
+    // passa para o contrato sucessor com outra viatura. Desactivá-lo aqui
+    // fazia-o desaparecer dos resumos semanais e das listas de cobrança na
+    // janela entre o fecho e a criação do sucessor (e, se algo falhasse a
+    // meio dos três round-trips da troca, ficava inactivo para sempre).
+    const chains = setupSupabase({
+      estacoes: { data: { nome: 'Estação A', cidade: 'Lisboa' }, error: null },
+      contratos_renting: { data: null, error: null },
+      calendario_eventos: { data: null, error: null },
+      viatura_danos: { data: { id: 'dano-1' }, error: null },
+    });
+
+    const args: FecharContratoArgs = {
+      contratoId: 'c1',
+      contratoCodigo: 42,
+      tipoEvento: 'recolhido',
+      estacaoId: 'est-1',
+      dataEvento: '2026-08-20T10:00:00Z',
+      matricula: 'AB-12-CD',
+      viaturaId: 'vit-1',
+      motoristaId: 'mot-1',
+      recolha: { km: '12345', combustivel: 'meio', fotos: [] },
+      manterMotoristaActivo: true,
+    };
+
+    const { result } = renderHook(() => useFecharContrato(), {
+      wrapper: createWrapper(),
+    });
+
+    let fechouAgora: boolean | undefined;
+    await act(async () => {
+      const r = await result.current.mutateAsync(args);
+      fechouAgora = r.fechouAgora;
+    });
+
+    // O contrato fecha na mesma — a troca exige o fecho formal do elo antigo.
+    expect(chains.contratos_renting.update).toHaveBeenCalledWith(
+      expect.objectContaining({ estado_operacional: 'cancelado' })
+    );
+    // …e a recolha física fica registada (é a folha de danos de devolução).
+    expect(chains.contratos_renting.update).toHaveBeenCalledWith(
+      expect.objectContaining({ km_entrada: 12345, combustivel_entrada: 'meio' })
+    );
+    // Mas o motorista continua activo.
+    expect(chains.motoristas_ativos).toBeUndefined();
+    expect(fechouAgora).toBe(true);
+  });
+
   it('sem recolha física → fica agendado (fechouAgora=false) e motorista mantém-se activo', async () => {
     const chains = setupSupabase({
       estacoes: { data: { nome: 'Estação A', cidade: 'Lisboa' }, error: null },
