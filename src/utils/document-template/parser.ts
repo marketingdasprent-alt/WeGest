@@ -430,6 +430,11 @@ export const htmlToText = (html: string): DocEl[] => {
 
   const elements: DocEl[] = [];
 
+  // Duas cores são a mesma se tiverem os mesmos componentes — são arrays
+  // [r,g,b] novos a cada nó, por isso comparar por referência nunca bate.
+  const mesmaCor = (a?: RGB, b?: RGB): boolean =>
+    a === b || (!!a && !!b && a[0] === b[0] && a[1] === b[1] && a[2] === b[2]);
+
   const processNode = (node: Node, inheritedStyle: any = {}, parentIsBlock: boolean = false) => {
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent;
@@ -448,7 +453,8 @@ export const htmlToText = (html: string): DocEl[] => {
             last.type === 'text' &&
             last.text !== '\n' &&
             last.style?.bold === inheritedStyle.bold &&
-            last.style?.align === inheritedStyle.align
+            last.style?.align === inheritedStyle.align &&
+            mesmaCor(last.style?.color, inheritedStyle.color)
           ) {
             last.text += text;
           } else if (text.trim().length > 0) {

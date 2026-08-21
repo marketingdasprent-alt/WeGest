@@ -80,3 +80,36 @@ describe('htmlToText', () => {
     expect(elements.map((e) => e.text).join('')).not.toContain('Página');
   });
 });
+
+describe('htmlToText — cor', () => {
+  it('não cola um run colorido ao run preto anterior', () => {
+    // O título da Folha de Danos: texto normal + o momento colorido. Os dois
+    // runs têm o mesmo bold e o mesmo alinhamento, e o merge colava-os —
+    // o segundo perdia a cor e a folha saía toda preta.
+    const html =
+      '<h1 style="text-align:center">FOLHA DE REGISTO DE DANOS — ' +
+      '<span style="color:#C0392B">RECOLHA</span></h1>';
+
+    const els = htmlToText(html).filter(
+      (e) => e.type === 'text' && e.text !== String.fromCharCode(10)
+    );
+
+    expect(els).toHaveLength(2);
+    expect(els[0].text).toContain('FOLHA DE REGISTO DE DANOS');
+    expect(els[0].style.color).toBeUndefined();
+    expect(els[1].text).toBe('RECOLHA');
+    expect(els[1].style.color).toEqual([192, 57, 43]);
+  });
+
+  it('continua a colar runs da mesma cor — o merge não se perdeu', () => {
+    const html =
+      '<p><span style="color:#C0392B">DOIS </span>' + '<span style="color:#C0392B">RUNS</span></p>';
+
+    const els = htmlToText(html).filter(
+      (e) => e.type === 'text' && e.text !== String.fromCharCode(10)
+    );
+
+    expect(els).toHaveLength(1);
+    expect(els[0].text).toBe('DOIS RUNS');
+  });
+});
