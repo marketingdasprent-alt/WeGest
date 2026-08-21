@@ -369,8 +369,9 @@ describe('useFecharContrato', () => {
     });
 
     // O contrato fecha na mesma — a troca exige o fecho formal do elo antigo.
+    // 'fechado', não 'cancelado': o elo antigo aconteceu e é facturável.
     expect(chains.contratos_renting.update).toHaveBeenCalledWith(
-      expect.objectContaining({ estado_operacional: 'cancelado' })
+      expect.objectContaining({ estado_operacional: 'fechado' })
     );
     // …e a recolha física fica registada (é a folha de danos de devolução).
     expect(chains.contratos_renting.update).toHaveBeenCalledWith(
