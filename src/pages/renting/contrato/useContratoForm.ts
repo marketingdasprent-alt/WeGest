@@ -22,7 +22,6 @@ import {
   useCreateContratoRenting,
   useCriarVersaoContrato,
   useDeleteContratoRenting,
-  useMarcarRealizacaoDireta,
   useUpdateContratoRenting,
 } from '@/hooks/useContratosRenting';
 import { useEstacoes } from '@/hooks/useEstacoes';
@@ -147,9 +146,6 @@ export interface UseContratoFormReturn {
   ) => void;
   realizarDialog: { eventoId: string; tipo: 'entrega' | 'recolha' } | null;
   setRealizarDialog: (dialog: { eventoId: string; tipo: 'entrega' | 'recolha' } | null) => void;
-  confirmarRealizacaoDireta: boolean;
-  setConfirmarRealizacaoDireta: (open: boolean) => void;
-  marcarRealizacaoDireta: ReturnType<typeof useMarcarRealizacaoDireta>;
   docsDialogOpen: boolean;
   setDocsDialogOpen: (open: boolean) => void;
 
@@ -224,7 +220,6 @@ export function useContratoForm(): UseContratoFormReturn {
   const updateMutation = useUpdateContratoRenting();
   const deleteMutation = useDeleteContratoRenting();
   const criarVersaoMutation = useCriarVersaoContrato();
-  const marcarRealizacaoDireta = useMarcarRealizacaoDireta();
   const syncCondutoresMutation = useSyncContratoCondutores();
   const syncCoberturasMutation = useSyncContratoCoberturas();
   const syncExtrasMutation = useSyncContratoExtras();
@@ -255,7 +250,6 @@ export function useContratoForm(): UseContratoFormReturn {
     eventoId: string;
     tipo: 'entrega' | 'recolha';
   } | null>(null);
-  const [confirmarRealizacaoDireta, setConfirmarRealizacaoDireta] = useState(false);
   const [docsDialogOpen, setDocsDialogOpen] = useState(false);
 
   // ── Handlers ──────────────────────────────────────────────────
@@ -1146,9 +1140,6 @@ export function useContratoForm(): UseContratoFormReturn {
     setNovaVersaoCtx,
     realizarDialog,
     setRealizarDialog,
-    confirmarRealizacaoDireta,
-    setConfirmarRealizacaoDireta,
-    marcarRealizacaoDireta,
     docsDialogOpen,
     setDocsDialogOpen,
     viaturasParaSelecao,

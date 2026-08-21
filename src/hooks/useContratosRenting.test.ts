@@ -8,7 +8,6 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   useCreateContratoRenting,
   useFecharContrato,
-  useMarcarRealizacaoDireta,
   usePreencherDadosSaidaAnyRent,
   resolveFechoContratoToast,
   type FecharContratoArgs,
@@ -467,41 +466,6 @@ describe('useFecharContrato', () => {
 
     expect(fechouAgora).toBe(true);
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Contrato fechado' }));
-  });
-});
-
-// ─── useMarcarRealizacaoDireta: atalho "Any Rent" ──────────
-
-describe('useMarcarRealizacaoDireta', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('marca em_curso e entrega_via_any_rent=true (bypass Any Rent)', async () => {
-    const chains = setupSupabase({
-      contratos_renting: { data: null, error: null },
-    });
-    (supabase.auth as unknown as { getUser: ReturnType<typeof vi.fn> }).getUser = vi
-      .fn()
-      .mockResolvedValue({ data: { user: { id: 'user-1' } } });
-
-    const { result } = renderHook(() => useMarcarRealizacaoDireta(), {
-      wrapper: createWrapper(),
-    });
-
-    await act(async () => {
-      await result.current.mutateAsync({ contratoId: 'c1' });
-    });
-
-    // A flag identifica este contrato como "sem check-in" — é o que
-    // restringe o banner de preenchimento manual (AnyRentDadosSaidaAlert)
-    // só a contratos que passaram por este atalho.
-    expect(chains.contratos_renting.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        estado_operacional: 'em_curso',
-        entrega_via_any_rent: true,
-      })
-    );
   });
 });
 

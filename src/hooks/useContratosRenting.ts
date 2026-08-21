@@ -470,6 +470,11 @@ export function useFecharContrato() {
         .update({
           estacao_recolha_id: estacaoId,
           estado_operacional: 'cancelado' as const,
+          // Como o contrato acabou: 'devolvido' (o motorista trouxe a viatura) ou
+          // 'recolhido' (não a quis entregar e fomos buscá-la). Era pedido ao gestor
+          // e deitado fora — só sobrevivia dentro do texto do débito, e apenas
+          // quando havia débito. É informação sobre o motorista, tem de ficar.
+          tipo_fecho: tipoEvento,
           // Fecha o ciclo da DUA original: se o motorista a tinha levado e o
           // gestor confirmou a devolução, regista o momento.
           ...(marcarDuaDevolvida ? { dua_devolvida_em: new Date().toISOString() } : {}),
@@ -626,62 +631,6 @@ export function useFecharContrato() {
   });
 }
 
-// ────────────────────────────────────────────────────────────
-// Marcar ENTREGA como já realizada, sem o fluxo de check (fotos/km/QR) —
-// atalho para contratos antigos/legado (ex.: migrados de outro sistema)
-// onde a informação de check-in nunca existiu. Só entrega: recolha/fecho
-// têm sempre de passar por "Fechar contrato", pelo fluxo QR ou por troca
-// de viatura — um clique aqui não pode encerrar um contrato sozinho (foi
-// exactamente isso que aconteceu por engano ao contrato #587, quando o
-// banner de recolha apareceu cedo demais).
-// ────────────────────────────────────────────────────────────
-
-export interface MarcarRealizacaoDiretaArgs {
-  contratoId: string;
-}
-
-export function useMarcarRealizacaoDireta() {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async ({ contratoId }: MarcarRealizacaoDiretaArgs): Promise<void> => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      // Muda estado_operacional — dispara trg_contrato_renting_cascata_realizacao,
-      // que marca o evento de calendário de entrega pendente como realizado,
-      // sem passar pelo fluxo de check (fotos/km/QR). Guard no estado de
-      // origem: só avança agendado→em_curso.
-      const { error } = await supabase
-        .from('contratos_renting')
-        .update({
-          estado_operacional: 'em_curso',
-          entrega_via_any_rent: true,
-          updated_by: user?.id ?? null,
-        })
-        .eq('id', contratoId)
-        .eq('estado_operacional', 'agendado');
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
-      invalidarOcupacaoViaturas(qc);
-      qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
-      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
-      qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
-      toast({
-        title: 'Entrega marcada como realizada',
-        description: 'Sem fotos/km — apenas o estado do contrato foi actualizado.',
-      });
-    },
-    onError: (error: unknown) => {
-      const { title, description } = contratoErrorMessage(error);
-      toast({ title, description, variant: 'destructive' });
-    },
-  });
-}
 
 // ────────────────────────────────────────────────────────────
 // Preencher manualmente km/combustível/bateria de saída — só para
