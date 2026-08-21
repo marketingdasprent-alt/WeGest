@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { NivelBateriaInput } from '@/components/viaturas/NivelBateriaInput';
 import {
   AlertTriangle,
   Battery,
@@ -24,7 +25,6 @@ import {
   precisaCombustivel,
   precisaEletrico,
   precisaGpl,
-  ELETRICO_OPTS,
   GPL_OPTS,
   COMBUSTIVEL_NIVEL_OPTS as COMBUSTIVEL_OPTS,
 } from '@/utils/combustivel';
@@ -669,14 +669,17 @@ export const CheckinDadosSection: React.FC<CheckinDadosSectionProps> = ({
           />
         )}
         {mostraEletrico && (
-          <LevelSelector
-            label="Bateria Elétrica"
-            icon={<Battery className="h-3 w-3 text-green-500" />}
-            opts={ELETRICO_OPTS}
-            value={dados.nivelEletrico}
-            onSelect={(v) => set({ nivelEletrico: v })}
-            required
-          />
+          <div className="space-y-1.5">
+            <Label className="text-xs flex items-center gap-1">
+              <Battery className="h-3 w-3 text-green-500" />
+              Bateria Elétrica <span className="text-destructive">*</span>
+            </Label>
+            <NivelBateriaInput
+              valor={dados.nivelEletrico}
+              onChange={(v) => set({ nivelEletrico: v })}
+              compacto
+            />
+          </div>
         )}
       </div>
 

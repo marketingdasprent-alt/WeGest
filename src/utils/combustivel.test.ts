@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 
-import { nivelEnergia, precisaCombustivel, precisaEletrico, precisaGpl } from './combustivel';
+import {
+  nivelEnergia,
+  normalizarPercentagem,
+  precisaCombustivel,
+  precisaEletrico,
+  precisaGpl,
+} from './combustivel';
 
 describe('precisaCombustivel', () => {
   it('true para combustão e desconhecido', () => {
@@ -122,5 +128,33 @@ describe('nivelEnergia', () => {
   it('elétrica com combustível preenchido por engano ignora-o', () => {
     // Dados antigos, de quando a UI mostrava combustível a toda a gente.
     expect(nivelEnergia('Elétrico', { combustivel: 'Cheio', eletricidade: '90%' })).toBe('90%');
+  });
+});
+
+// A bateria passou de cinco botões fixos (0/25/50/75/100) para número livre:
+// um carro entregue a 73% não é 75%, e a diferença discute-se na devolução.
+describe('normalizarPercentagem', () => {
+  it('aceita número solto e acrescenta o %', () => {
+    expect(normalizarPercentagem('73')).toBe('73%');
+  });
+
+  it('aceita já com % e não duplica', () => {
+    expect(normalizarPercentagem('73%')).toBe('73%');
+  });
+
+  it('trava nos limites — não há bateria a 150% nem negativa', () => {
+    expect(normalizarPercentagem('150')).toBe('100%');
+    expect(normalizarPercentagem('-5')).toBe('0%');
+  });
+
+  it('arredonda decimais: o painel do carro não mostra casas', () => {
+    expect(normalizarPercentagem('73,6')).toBe('74%');
+    expect(normalizarPercentagem('73.4')).toBe('73%');
+  });
+
+  it('vazio ou lixo devolve vazio, para não gravar disparates na folha', () => {
+    expect(normalizarPercentagem('')).toBe('');
+    expect(normalizarPercentagem('   ')).toBe('');
+    expect(normalizarPercentagem('abc')).toBe('');
   });
 });

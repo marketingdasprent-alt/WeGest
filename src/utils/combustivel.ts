@@ -12,7 +12,29 @@ export const COMBUSTIVEL_NIVEL_OPTS = [
   '7/8',
   'Cheio',
 ] as const;
+/**
+ * Atalhos para a bateria. Deixaram de ser as únicas opções — o nível escreve-se
+ * livremente (ver normalizarPercentagem) porque um carro entregue a 73% não é
+ * 75%, e a diferença discute-se na devolução. Ficam como atalho para os casos
+ * redondos, que são a maioria.
+ */
 export const ELETRICO_OPTS = ['0%', '25%', '50%', '75%', '100%'] as const;
+
+/**
+ * Põe o que a pessoa escreveu na forma que fica guardada e impressa: `"73%"`.
+ *
+ * Aceita com ou sem `%`, com vírgula ou ponto, e trava entre 0 e 100 — uma
+ * bateria a 150% é engano de dedo, não um dado a gravar na folha de danos.
+ * Devolve string vazia para lixo, para o campo ficar por preencher em vez de
+ * guardar disparates.
+ */
+export function normalizarPercentagem(entrada: string | null | undefined): string {
+  const cru = (entrada ?? '').trim().replace('%', '').replace(',', '.');
+  if (!cru) return '';
+  const n = Number(cru);
+  if (!Number.isFinite(n)) return '';
+  return `${Math.min(100, Math.max(0, Math.round(n)))}%`;
+}
 export const GPL_OPTS = ['Vazio', '1/4', '1/2', '3/4', 'Cheio'] as const;
 
 function norm(tipoCombustivel: string | null | undefined): string {
