@@ -470,11 +470,9 @@ export function useFecharContrato() {
         .update({
           estacao_recolha_id: estacaoId,
           estado_operacional: 'cancelado' as const,
-          // Como o contrato acabou: 'devolvido' (o motorista trouxe a viatura) ou
-          // 'recolhido' (não a quis entregar e fomos buscá-la). Era pedido ao gestor
-          // e deitado fora — só sobrevivia dentro do texto do débito, e apenas
-          // quando havia débito. É informação sobre o motorista, tem de ficar.
-          tipo_fecho: tipoEvento,
+          // TODO: tipo_fecho fica por gravar até a migração
+          // 20260820140000_tipo_fecho_contrato.sql correr em produção.
+          // Sem a coluna, este update rebenta e nenhum contrato fecha.
           // Fecha o ciclo da DUA original: se o motorista a tinha levado e o
           // gestor confirmou a devolução, regista o momento.
           ...(marcarDuaDevolvida ? { dua_devolvida_em: new Date().toISOString() } : {}),

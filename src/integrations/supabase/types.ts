@@ -3993,7 +3993,6 @@ export type Database = {
           tarifa_diaria: number | null
           tarifa_id: string | null
           tarifa_nome: string | null
-          tipo_fecho: string | null
           taxa_iva: number
           total_final: number | null
           total_iva: number | null
@@ -4072,7 +4071,6 @@ export type Database = {
           tarifa_diaria?: number | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
-          tipo_fecho?: string | null
           taxa_iva?: number
           total_final?: number | null
           total_iva?: number | null
@@ -4151,7 +4149,6 @@ export type Database = {
           tarifa_diaria?: number | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
-          tipo_fecho?: string | null
           taxa_iva?: number
           total_final?: number | null
           total_iva?: number | null
