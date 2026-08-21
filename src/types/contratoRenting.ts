@@ -193,6 +193,11 @@ export type ContratoRenting = {
    *  Um dos dois fica preenchido consoante o tipo de combustível da viatura. */
   combustivel_saida: string | null;
   eletricidade_saida: string | null;
+  /** O mesmo par, na recolha. Existiam na BD e no RPC do QR desde sempre, mas
+   *  faltavam aqui — por isso a folha de danos de recolha nunca os conseguiu
+   *  mostrar e a metade direita saía vazia. */
+  combustivel_entrada: string | null;
+  eletricidade_entrada: string | null;
 
   /** true quando a entrega foi marcada via o atalho "Any Rent" (sem
    *  check-in) — restringe o banner/botão de preenchimento manual de
@@ -253,6 +258,8 @@ export type ContratoRentingInsert = Omit<
   | 'km_entrada'
   | 'combustivel_saida'
   | 'eletricidade_saida'
+  | 'combustivel_entrada'
+  | 'eletricidade_entrada'
   | 'entrega_via_any_rent'
   // Os campos DUA são escritos no fluxo de entrega/recolha da viatura
   // (RealizarEntregaPage) e no fecho, nunca no formulário do contrato.

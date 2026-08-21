@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { nivelEnergia } from '@/utils/combustivel';
 import { supabase } from '@/integrations/supabase/client';
 import { gerarContratoAtomico } from '@/hooks/useContratos';
 import { Button } from '@/components/ui/button';
@@ -495,7 +496,13 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
                   },
                   viaturaId: viatura.id,
                   km_saida: checkinDados.km,
-                  combustivel_saida: checkinDados.combustivel,
+                  // Numa eléctrica o nível está em nivelEletrico, não em
+                  // combustivel — a folha lê sempre combustivel_saida, por isso
+                  // sem isto saía em branco. Ver nivelEnergia.
+                  combustivel_saida: nivelEnergia(viatura.combustivel, {
+                    combustivel: checkinDados.combustivel,
+                    eletricidade: checkinDados.nivelEletrico,
+                  }),
                   momentoFolha: 'ENTREGA',
                   action: 'print',
                   skipOutput: isMultiple,

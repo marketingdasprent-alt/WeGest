@@ -41,3 +41,31 @@ export function precisaEletrico(tipoCombustivel: string | null | undefined): boo
 export function precisaGpl(tipoCombustivel: string | null | undefined): boolean {
   return norm(tipoCombustivel).includes('gpl');
 }
+
+/**
+ * O que escrever no campo de nível de energia de uma folha de danos ou PDF.
+ *
+ * As folhas lêem `combustivel_saida`/`combustivel_entrada`, mas numa viatura
+ * eléctrica o nível está guardado em `eletricidade_*` — o campo saía em branco
+ * e o motorista assinava uma folha sem o dado que mais gera discussão na
+ * devolução. Isto resolve pelo tipo da viatura, sem obrigar as organizações a
+ * editar os templates que já têm.
+ *
+ * Híbridas devolvem os dois valores: têm mesmo depósito e bateria, e um único
+ * campo não pode fingir que só têm um. Se só um lado estiver preenchido, sai
+ * esse — nunca um separador solto.
+ */
+export function nivelEnergia(
+  tipoCombustivel: string | null | undefined,
+  valores: { combustivel?: string | null; eletricidade?: string | null }
+): string {
+  const partes: string[] = [];
+
+  const comb = valores.combustivel?.trim();
+  if (comb && precisaCombustivel(tipoCombustivel)) partes.push(comb);
+
+  const elec = valores.eletricidade?.trim();
+  if (elec && precisaEletrico(tipoCombustivel)) partes.push(elec);
+
+  return partes.join(' · ');
+}
