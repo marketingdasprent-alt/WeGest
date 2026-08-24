@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "wegest-dev",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "run", "dev"],
       "port": 8080
     }
   ]
