@@ -46,8 +46,8 @@ export function NotaDataMovimento() {
         </p>
         <p>
           Depois de lançado, só o estado <strong>Cancelado</strong> tira o valor do resumo. Marcar
-          como <strong>Pago</strong> não o remove — o resumo é onde a cobrança acontece, e o pagamento
-          regista-se depois de a semana fechar.
+          como <strong>Pago</strong> não o remove — o resumo é onde a cobrança acontece, e o
+          pagamento regista-se depois de a semana fechar.
         </p>
       </div>
     </div>
