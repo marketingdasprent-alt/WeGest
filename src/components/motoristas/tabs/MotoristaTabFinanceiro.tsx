@@ -15,6 +15,7 @@ import {
 } from './NovoMovimentoFinanceiroOverlay';
 import { RecorrenciasAtivasList } from './RecorrenciasAtivasList';
 import { MovimentosHistoricoTable } from './MovimentosHistoricoTable';
+import { calcularResumoMovimentos } from './resumoMovimentos';
 import { legendaSaldoMotorista } from '@/lib/saldoMotorista';
 import { cn } from '@/lib/utils';
 
@@ -144,19 +145,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
     }
   };
 
-  const calcularResumo = () => {
-    let totalCreditos = 0;
-    let totalDebitos = 0;
-
-    movimentos.forEach((m) => {
-      if (m.status !== 'cancelado') {
-        if (m.tipo === 'credito') totalCreditos += Number(m.valor);
-        else totalDebitos += Number(m.valor);
-      }
-    });
-
-    return { totalCreditos, totalDebitos };
-  };
+  const calcularResumo = () => calcularResumoMovimentos(movimentos);
 
   const resumo = calcularResumo();
   const legendaSaldo = legendaSaldoMotorista(saldoPendente ?? 0);
@@ -398,9 +387,12 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Créditos</p>
+                  <p className="text-sm text-muted-foreground">Créditos por Liquidar</p>
                   <p className="text-2xl font-bold text-green-600">
-                    {formatCurrency(resumo.totalCreditos)}
+                    {formatCurrency(resumo.creditos)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {resumo.creditos === 0 ? 'Nada a devolver' : 'Ainda por devolver'}
                   </p>
                 </div>
                 <div className="p-2 rounded-lg bg-green-500/10">
@@ -413,9 +405,12 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Débitos</p>
+                  <p className="text-sm text-muted-foreground">Débitos por Cobrar</p>
                   <p className="text-2xl font-bold text-red-600">
-                    {formatCurrency(resumo.totalDebitos)}
+                    {formatCurrency(resumo.debitos)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {resumo.debitos === 0 ? 'Nada em aberto' : 'Ainda por cobrar'}
                   </p>
                 </div>
                 <div className="p-2 rounded-lg bg-red-500/10">
@@ -448,6 +443,27 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
           onMarcarPago={handleMarcarPago}
           onCancelar={handleCancelar}
         />
+
+        {/*
+          Acumulado histórico. Vive aqui, colado à lista que o explica, e não
+          nos cartões do topo: um total de tudo o que já foi debitado não é
+          dívida, e a vermelho num cartão ao lado do saldo lia-se como tal.
+          Cancelados ficam de fora dos dois.
+        */}
+        {movimentos.length > 0 && (
+          <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1 px-1 text-xs text-muted-foreground">
+            <span>
+              Acumulado histórico (inclui já liquidados) — creditado:{' '}
+              <span className="font-medium text-foreground">
+                {formatCurrency(resumo.acumuladoCreditos)}
+              </span>
+              , debitado:{' '}
+              <span className="font-medium text-foreground">
+                {formatCurrency(resumo.acumuladoDebitos)}
+              </span>
+            </span>
+          </div>
+        )}
       </div>
     </>
   );

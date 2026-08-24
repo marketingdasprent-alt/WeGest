@@ -21,8 +21,32 @@ function getLisbonDayHour(): { dayOfWeek: number; hour: number } {
   return { dayOfWeek: dayMap[weekdayShort] ?? 0, hour: parseInt(hourStr, 10) % 24 };
 }
 
+/**
+ * Horas decorridas desde o momento agendado mais recente desta integração.
+ *
+ * Antes comparava-se `sync_dia_semana`/`sync_hora` com o instante actual por
+ * igualdade exacta: uma janela de UMA hora, uma vez por semana. Bastava um 502
+ * do gateway nessa hora para a Via Verde saltar a semana inteira — a hora
+ * seguinte respondia "não é devida" e nada recuperava. O Bolt tem a passagem
+ * de reconciliação de quinta-feira a apanhá-lo; a Via Verde não tinha nada.
+ * (A 24/08/2026 houve sete 502 num só dia, portanto isto não era hipotético.)
+ *
+ * Contam-se as horas em tempo de Lisboa, não em UTC, para a mudança de hora
+ * não deslocar o agendamento.
+ */
+function horasDesdeAgendamento(
+  agora: { dayOfWeek: number; hour: number },
+  syncDiaSemana: number,
+  syncHora: number,
+): number {
+  const decorridas = (agora.dayOfWeek - syncDiaSemana) * 24 + (agora.hour - syncHora);
+  // Negativo = o momento desta semana ainda não chegou; o relevante é o da
+  // semana passada, 168 horas antes.
+  return decorridas < 0 ? decorridas + 168 : decorridas;
+}
+
 // Multi-tenant: percorre as integrações Via Verde com sync_automatico=true
-// cujo sync_dia_semana/sync_hora corresponde à hora atual em Lisboa, e
+// que já passaram do seu momento agendado sem terem corrido, e
 // ENFILEIRA cada uma em via_verde_sync_queue (em vez de disparar o
 // robot-execute diretamente) — quem processa a fila, com concorrência
 // limitada, é o via-verde-sync-drain (cron a cada 5 min). Isto evita que
@@ -42,22 +66,56 @@ Deno.serve(async (req) => {
 
     const { dayOfWeek, hour } = getLisbonDayHour();
 
-    const { data: integracoes, error } = await supabase
+    const { data: candidatas, error } = await supabase
       .from('plataformas_configuracao')
-      .select('id, nome, org_id')
+      .select('id, nome, org_id, sync_dia_semana, sync_hora, ultimo_sync')
       .eq('plataforma', 'via_verde')
       .eq('ativo', true)
-      .eq('sync_automatico', true)
-      .eq('sync_dia_semana', dayOfWeek)
-      .eq('sync_hora', hour);
+      .eq('sync_automatico', true);
 
     if (error) throw error;
 
-    if (!integracoes || integracoes.length === 0) {
+    // Devida = o momento agendado já passou e não houve sync desde então.
+    // Assim, uma hora falhada é recuperada na hora seguinte em vez de custar
+    // a semana toda.
+    // Travão de repetição: o ultimo_sync só avança quando o sync termina bem,
+    // portanto uma integração avariada voltaria a entrar na fila todas as
+    // horas — 168 scrapes do Apify numa semana partida, a pagar. Uma tentativa
+    // recente, mesmo falhada, chega para esta passagem. O aviso de que ficou
+    // por resolver vem do vigia das filas, não daqui.
+    const HORAS_ENTRE_TENTATIVAS = 6;
+    const desde = new Date(Date.now() - HORAS_ENTRE_TENTATIVAS * 3_600_000).toISOString();
+    const { data: tentativasRecentes, error: erroTentativas } = await supabase
+      .from('via_verde_sync_queue')
+      .select('integracao_id')
+      .gte('created_at', desde);
+
+    if (erroTentativas) throw erroTentativas;
+    const jaTentadas = new Set((tentativasRecentes ?? []).map((t) => t.integracao_id));
+
+    const agora = Date.now();
+    const integracoes = (candidatas ?? []).filter((int) => {
+      if (jaTentadas.has(int.id)) return false;
+      if (int.sync_dia_semana === null || int.sync_hora === null) return false;
+      const horas = horasDesdeAgendamento({ dayOfWeek, hour }, int.sync_dia_semana, int.sync_hora);
+      // A partir do INÍCIO da hora, não de agora: dentro da própria hora
+      // agendada `horas` é 0, e usar o instante actual faria um sync acabado
+      // há dois minutos parecer anterior ao agendamento — disparava outra vez.
+      // Os fusos de Lisboa são deslocamentos de hora inteira, por isso o
+      // início da hora UTC e o da hora de Lisboa coincidem.
+      const inicioDaHora = Math.floor(agora / 3_600_000) * 3_600_000;
+      const momentoAgendado = inicioDaHora - horas * 3_600_000;
+      const ultimo = int.ultimo_sync ? new Date(int.ultimo_sync).getTime() : 0;
+      return ultimo < momentoAgendado;
+    });
+
+    if (integracoes.length === 0) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: `Nenhuma integração Via Verde devida agora (dia=${dayOfWeek}, hora=${hour} Lisboa).`,
+          message:
+            `Nenhuma integração Via Verde por correr (dia=${dayOfWeek}, hora=${hour} Lisboa); ` +
+            `${candidatas?.length ?? 0} activa(s), todas já sincronizadas desde o último agendamento.`,
           triggered: 0,
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

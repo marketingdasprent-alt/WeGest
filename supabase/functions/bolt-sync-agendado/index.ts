@@ -69,7 +69,24 @@ Deno.serve(async (req) => {
         data: { user },
         error: erroAuth,
       } = await anon.auth.getUser();
-      if (erroAuth || !user) return json({ success: false, error: 'Sessão inválida.' }, 401);
+      if (erroAuth || !user) {
+        // A chave anon é um JWT válido sem utilizador por trás. Quem chega
+        // aqui com ela não é um browser com sessão expirada — é o cron a
+        // invocar com o segredo errado. Durante dez dias este ramo devolveu
+        // "Sessão inválida." às segundas às 06:00 e ninguém percebeu que a
+        // sync semanal do Bolt tinha parado. Vale a pena distinguir.
+        const ehChaveAnon = bearer === ANON_KEY;
+        return json(
+          {
+            success: false,
+            error: ehChaveAnon
+              ? 'Chamada sem utilizador: o cron invocou com a chave anon em vez da service-role. ' +
+                'Falta o segredo cron_service_role_jwt no Vault.'
+              : 'Sessão inválida.',
+          },
+          401,
+        );
+      }
       callerUserId = user.id;
     }
 

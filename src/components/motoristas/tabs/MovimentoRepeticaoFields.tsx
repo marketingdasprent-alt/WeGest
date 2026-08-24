@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { descreverSemanaDoMes } from '@/lib/recorrenciaFinanceira';
+import { NotaDataMovimento } from './NotaDataMovimento';
 
 export interface MovimentoRepeticaoFieldsProps {
   isEdicao: boolean;
@@ -105,6 +106,8 @@ export function MovimentoRepeticaoFields({
             />
           </div>
         </div>
+
+        <NotaDataMovimento />
 
         {isRecurring && valorNum > 0 && (
           <ResumoParcelas numSemanas={numSemanas} semanaInicio={semanaInicio} valorNum={valorNum} />
