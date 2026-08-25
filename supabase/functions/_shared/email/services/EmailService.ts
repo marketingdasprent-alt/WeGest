@@ -9,6 +9,10 @@ import {
   assinaturaPedidoTemplate,
   type AssinaturaPedidoInput,
 } from '../templates/assinaturaPedido.ts';
+import {
+  assinaturaConcluidaTemplate,
+  type AssinaturaConcluidaInput,
+} from '../templates/assinaturaConcluida.ts';
 import { documentoFiscalTemplate } from '../templates/documentoFiscal.ts';
 import {
   assistanceNotificationTemplate,
@@ -171,6 +175,38 @@ export class EmailService {
     };
 
     return this.send(orgId, 'assinatura_pedido', message);
+  }
+
+  /**
+   * Documento assinado, para quem assinou e para quem o enviou.
+   *
+   * O anexo é o ponto do email: é a cópia que fica com cada parte. Um aviso a
+   * dizer "foi assinado" sem o documento obrigaria a ir buscá-lo à aplicação —
+   * e quem assinou não tem conta na aplicação.
+   */
+  async sendDocumentoAssinado(
+    orgId: string,
+    args: AssinaturaConcluidaInput & {
+      to: string;
+      pdfBase64: string;
+      filename: string;
+    }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = assinaturaConcluidaTemplate(args);
+    const attachments: EmailAttachment[] = [{ content: args.pdfBase64, name: args.filename }];
+
+    const message: EmailMessage = {
+      to: [{ email: args.to, name: args.destinatarioNome }],
+      subject,
+      html,
+      attachments,
+    };
+
+    return this.send(orgId, 'assinatura_concluida', message);
   }
 
   async sendDocumentoFiscal(
