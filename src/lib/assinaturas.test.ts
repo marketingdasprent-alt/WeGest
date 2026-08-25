@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { agruparPorPessoa, validarSignatarios, type Signatario } from './assinaturas';
+import {
+  agruparPorPessoa,
+  estadoDoToken,
+  validarSignatarios,
+  type Signatario,
+} from './assinaturas';
 
 /**
  * Regras de quem pode ser enviado para assinar.
@@ -81,5 +86,39 @@ describe('agruparPorPessoa', () => {
         { papel: 'motorista', nome: 'Rui Dias', email: 'rui@exemplo.pt', motoristaId: 'm1' },
       ])
     ).toEqual([]);
+  });
+});
+
+describe('estadoDoToken', () => {
+  const AGORA = new Date('2026-08-25T12:00:00Z');
+
+  it('é válido dentro do prazo e por assinar', () => {
+    expect(estadoDoToken({ expires_at: '2026-09-24T12:00:00Z', assinado_em: null }, AGORA)).toBe(
+      'valido'
+    );
+  });
+
+  it('é expirado depois do prazo', () => {
+    expect(estadoDoToken({ expires_at: '2026-08-24T12:00:00Z', assinado_em: null }, AGORA)).toBe(
+      'expirado'
+    );
+  });
+
+  it('assinado ganha ao prazo, mesmo já expirado', () => {
+    // Quem assinou tem de conseguir voltar a abrir o link e descarregar o
+    // documento assinado, mesmo passado o prazo. Dizer-lhe "expirou" seria
+    // esconder-lhe um documento que é dele.
+    expect(
+      estadoDoToken(
+        { expires_at: '2026-08-24T12:00:00Z', assinado_em: '2026-08-23T09:00:00Z' },
+        AGORA
+      )
+    ).toBe('assinado');
+  });
+
+  it('expira no instante exacto do prazo', () => {
+    expect(estadoDoToken({ expires_at: '2026-08-25T12:00:00Z', assinado_em: null }, AGORA)).toBe(
+      'expirado'
+    );
   });
 });

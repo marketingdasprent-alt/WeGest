@@ -68,3 +68,22 @@ export function agruparPorPessoa(lista: Signatario[]): string[] {
 
   return [...vistos.values()].filter((p) => p.vezes > 1).map((p) => p.nome);
 }
+
+/** Em que pé está um pedido de assinatura, do ponto de vista de quem abre o link. */
+export type EstadoToken = 'valido' | 'expirado' | 'assinado';
+
+/**
+ * O link morre de duas maneiras: quando o prazo passa e quando é assinado.
+ *
+ * A ordem importa e não é arbitrária. Já assinado ganha sempre ao prazo: quem
+ * assinou tem de poder voltar a abrir o link e descarregar o documento
+ * assinado, mesmo semanas depois. Mostrar-lhe "o link expirou" seria esconder-
+ * lhe um documento que é dele — e gera um telefonema que não devia existir.
+ */
+export function estadoDoToken(
+  pedido: { expires_at: string; assinado_em: string | null },
+  agora: Date
+): EstadoToken {
+  if (pedido.assinado_em) return 'assinado';
+  return new Date(pedido.expires_at) <= agora ? 'expirado' : 'valido';
+}
