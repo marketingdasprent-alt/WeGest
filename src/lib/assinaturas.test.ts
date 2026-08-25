@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   agruparPorPessoa,
+  candidatosDoContrato,
   estadoDoToken,
   validarSignatarios,
   type Signatario,
@@ -122,5 +123,51 @@ describe('estadoDoToken', () => {
     expect(estadoDoToken({ expires_at: '2026-08-25T12:00:00Z', assinado_em: null }, AGORA)).toBe(
       'expirado'
     );
+  });
+});
+
+describe('candidatosDoContrato', () => {
+  const clientes = [{ id: 'c1', nome: 'Ana Reis', email: 'ana@exemplo.pt' }];
+  const motoristas = [{ id: 'm1', nome: 'Rui Dias', email: 'rui@exemplo.pt' }];
+
+  it('junta clientes e motoristas dos condutores, com o papel certo', () => {
+    const r = candidatosDoContrato({
+      condutores: [{ cliente_id: 'c1' }, { motorista_id: 'm1' }],
+      clientes,
+      motoristas,
+    });
+
+    expect(r).toEqual([
+      { papel: 'cliente', nome: 'Ana Reis', email: 'ana@exemplo.pt', clienteId: 'c1' },
+      { papel: 'motorista', nome: 'Rui Dias', email: 'rui@exemplo.pt', motoristaId: 'm1' },
+    ]);
+  });
+
+  it('não repete a mesma ficha em dois condutores', () => {
+    const r = candidatosDoContrato({
+      condutores: [{ cliente_id: 'c1' }, { cliente_id: 'c1' }],
+      clientes,
+      motoristas: [],
+    });
+
+    expect(r).toHaveLength(1);
+  });
+
+  it('ignora fichas que não estão nas listas', () => {
+    expect(
+      candidatosDoContrato({ condutores: [{ cliente_id: 'inexistente' }], clientes, motoristas })
+    ).toEqual([]);
+  });
+
+  it('deixa passar quem não tem email — o ecrã é que o assinala', () => {
+    const r = candidatosDoContrato({
+      condutores: [{ motorista_id: 'm2' }],
+      clientes: [],
+      motoristas: [{ id: 'm2', nome: 'Juliano Cury', email: null }],
+    });
+
+    expect(r).toEqual([
+      { papel: 'motorista', nome: 'Juliano Cury', email: null, motoristaId: 'm2' },
+    ]);
   });
 });

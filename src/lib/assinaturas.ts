@@ -87,3 +87,82 @@ export function estadoDoToken(
   if (pedido.assinado_em) return 'assinado';
   return new Date(pedido.expires_at) <= agora ? 'expirado' : 'valido';
 }
+
+/** O mínimo que se precisa de saber de um condutor do contrato. */
+export interface CondutorDoContrato {
+  cliente_id?: string | null;
+  motorista_id?: string | null;
+}
+
+interface FichaComEmail {
+  id: string;
+  nome?: string | null;
+  email?: string | null;
+}
+
+/**
+ * Quem pode assinar os documentos de um contrato.
+ *
+ * Um condutor é uma ficha de cliente ou de motorista — e é isso que decide o
+ * papel, porque um cliente que conduz assina como cliente. Quem não for
+ * encontrado na respectiva lista é ignorado em vez de aparecer com o nome
+ * vazio: um "(sem nome)" na lista de quem assina é pior do que não aparecer.
+ *
+ * A ordem é estável — clientes primeiro, depois motoristas — para a lista não
+ * dançar entre aberturas do diálogo.
+ */
+export function candidatosDoContrato(dados: {
+  condutores: CondutorDoContrato[];
+  clientes: FichaComEmail[];
+  motoristas: FichaComEmail[];
+}): Signatario[] {
+  const { condutores, clientes, motoristas } = dados;
+  const porIdCliente = new Map(clientes.map((c) => [c.id, c]));
+  const porIdMotorista = new Map(motoristas.map((m) => [m.id, m]));
+
+  const candidatos: Signatario[] = [];
+  const jaVistos = new Set<string>();
+
+  for (const condutor of condutores) {
+    if (condutor.cliente_id) {
+      const ficha = porIdCliente.get(condutor.cliente_id);
+      if (ficha && !jaVistos.has(`c:${ficha.id}`)) {
+        jaVistos.add(`c:${ficha.id}`);
+        candidatos.push({
+          papel: 'cliente',
+          nome: ficha.nome ?? '',
+          email: ficha.email ?? null,
+          clienteId: ficha.id,
+        });
+      }
+    }
+  }
+
+  for (const condutor of condutores) {
+    if (condutor.motorista_id) {
+      const ficha = porIdMotorista.get(condutor.motorista_id);
+      if (ficha && !jaVistos.has(`m:${ficha.id}`)) {
+        jaVistos.add(`m:${ficha.id}`);
+        candidatos.push({
+          papel: 'motorista',
+          nome: ficha.nome ?? '',
+          email: ficha.email ?? null,
+          motoristaId: ficha.id,
+        });
+      }
+    }
+  }
+
+  return candidatos.filter((c) => c.nome.trim() !== '');
+}
+
+/**
+ * Estreitamento explícito do resultado da validação.
+ *
+ * O `tsconfig.app.json` tem `"strict": false`, e sem `strictNullChecks` o
+ * TypeScript não estreita uma união discriminada por `if (!r.ok)`. Um type
+ * guard nomeado funciona em qualquer configuração — e lê-se melhor.
+ */
+export function validacaoFalhou(v: ValidacaoSignatarios): v is { ok: false; semEmail: string[] } {
+  return !v.ok;
+}
