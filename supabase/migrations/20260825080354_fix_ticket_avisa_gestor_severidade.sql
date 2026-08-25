@@ -1,34 +1,16 @@
 -- ============================================================
--- Ticket de assistência avisa o gestor do contrato TVDE activo
+-- Correcção: severidade da notificação de ticket ao gestor
 -- ============================================================
--- Hoje, abrir um ticket para uma viatura não avisa ninguém — fica à espera
--- que alguém repare na lista. Passa a chegar email e notificação ao gestor
--- do contrato activo daquela viatura.
+-- A versão anterior de fn_ticket_avisa_gestor_contrato escrevia 'info' na
+-- severidade da notificação. A restrição notifications_severidade_check só
+-- aceita baixa/normal/alta/urgente, por isso o INSERT falhava — e, por ser
+-- dentro de um trigger AFTER INSERT, a falha desfazia também o ticket:
+-- deixou de ser possível abrir assistências às viaturas com contrato TVDE
+-- activo (as outras saem antes do INSERT e nunca foram afectadas).
 --
--- ÂMBITO: só TVDE, como pedido. Rent-a-car não avisa. Das 226 viaturas com
--- contrato activo, 174 são TVDE.
---
--- PORQUE NÃO USA O MOTOR DE AUTOMAÇÃO (ao contrário do aviso de danos)
--- O motor resolve destinatários por três estratégias: `cargo`, `motorista` e
--- `gestor_responsavel`. Nenhuma serve aqui:
---   · `cargo` mandaria a TODOS os 13 gestores TVDE, e o pedido é o gestor
---     DAQUELE contrato;
---   · `gestor_responsavel` lê o nome de uma coluna da entidade, e `viaturas`
---     não tem essa coluna;
---   · `motorista` é outro destinatário.
--- Acrescentar uma estratégia obrigava a reescrever execute_automation_runs
--- (11 KB) por inteiro, às cegas, com o risco de partir os avisos que já
--- funcionam. Preferi gravar directamente em `notifications` +
--- `notification_queue`, exactamente com a forma que o motor usa — a fila de
--- email e o sino não notam a diferença.
---
--- O que se perde por não passar pelo motor: não aparece em Automações para
--- ligar/desligar, e não tem cooldown. O cooldown não faz falta — um ticket
--- nasce uma vez.
---
--- SÓ PARA A FRENTE: é AFTER INSERT. Tickets antigos não disparam.
--- ============================================================
-
+-- Passa a mapear a prioridade do ticket (baixa/media/urgente) para os
+-- valores que a restrição aceita. Já aplicada em produção a 25/08/2026;
+-- este ficheiro fica para o histórico ficar reproduzível.
 create or replace function public.fn_ticket_avisa_gestor_contrato()
 returns trigger
 language plpgsql
@@ -123,29 +105,3 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_ticket_avisa_gestor_contrato on public.assistencia_tickets;
-create trigger trg_ticket_avisa_gestor_contrato
-  after insert on public.assistencia_tickets
-  for each row
-  execute function public.fn_ticket_avisa_gestor_contrato();
-
--- Template do email, por organização. Mesmo formato dos restantes.
-insert into public.notification_templates
-  (org_id, codigo, canal, idioma, assunto, corpo_template, corpo_formato, variaveis_esperadas)
-select o.id,
-       'assistencia.ticket_aberto_gestor',
-       'email',
-       'pt-PT',
-       'Ticket aberto na viatura {{matricula}} (contrato {{contrato}})',
-       'Foi aberto um ticket de assistência numa viatura de um contrato teu.' || chr(10) || chr(10) ||
-       'Viatura: {{matricula}}' || chr(10) ||
-       'Contrato: {{contrato}}' || chr(10) ||
-       'Assunto: {{titulo}}' || chr(10) ||
-       'Categoria: {{categoria}}' || chr(10) ||
-       'Prioridade: {{prioridade}}' || chr(10) || chr(10) ||
-       'Descrição: {{descricao}}' || chr(10) || chr(10) ||
-       'Abrir o ticket: {{link}}',
-       'text',
-       array['matricula', 'contrato', 'titulo', 'categoria', 'prioridade', 'descricao', 'link']
-  from public.organizacoes o
-on conflict (codigo, canal, idioma, versao, org_id) do nothing;
