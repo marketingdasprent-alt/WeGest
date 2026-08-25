@@ -71,6 +71,20 @@ export const loadImage = (src: string): Promise<HTMLImageElement> => {
  * Substitute all supported {{placeholder}} patterns in template HTML content
  * with real values from motoristaData and documentData.
  */
+/**
+ * Papéis que podem assinar um documento. A ordem não importa; o nome do papel
+ * dá o marcador (`{{assinatura_<papel>}}`) e a classe da imagem (`sig-<papel>`),
+ * por isso acrescentar um papel novo é acrescentar uma linha a esta lista e o
+ * espaço correspondente no template.
+ */
+const PAPEIS_ASSINATURA = [
+  'colaborador',
+  'motorista',
+  'responsavel',
+  'cliente',
+  'condutor',
+] as const;
+
 export const replaceDynamicFields = (
   content: string,
   motoristaData: Record<string, any>,
@@ -78,34 +92,21 @@ export const replaceDynamicFields = (
 ): string => {
   let result = content;
 
-  // Assinatura do colaborador
-  {
-    const assinatura = documentData['assinatura_colaborador'];
+  // Assinaturas. O marcador só vira imagem se houver uma: num documento
+  // impresso para assinar à mão o valor vem vazio, o marcador desaparece e fica
+  // o espaço em branco. Sem passar por aqui, o marcador ficaria escrito à letra
+  // no meio da página, porque o parser só substitui o que conhece.
+  //
+  // Cliente e condutor não estão guardados em lado nenhum, ao contrário do
+  // colaborador, que traz a assinatura do próprio perfil: nascem no momento em
+  // que a pessoa assina no link que lhe foi enviado.
+  for (const papel of PAPEIS_ASSINATURA) {
+    const assinatura = documentData[`assinatura_${papel}`];
     const replacement =
       typeof assinatura === 'string' && assinatura.startsWith('data:image')
-        ? `<img class="sig-colaborador" src="${assinatura.replace(/"/g, '&quot;')}">`
+        ? `<img class="sig-${papel}" src="${assinatura.replace(/"/g, '&quot;')}">`
         : '';
-    result = result.replace(/\{\{assinatura_colaborador\}\}/g, replacement);
-  }
-
-  // Assinatura do motorista
-  {
-    const assinatura = documentData['assinatura_motorista'];
-    const replacement =
-      typeof assinatura === 'string' && assinatura.startsWith('data:image')
-        ? `<img class="sig-motorista" src="${assinatura.replace(/"/g, '&quot;')}">`
-        : '';
-    result = result.replace(/\{\{assinatura_motorista\}\}/g, replacement);
-  }
-
-  // Assinatura do responsável
-  {
-    const assinatura = documentData['assinatura_responsavel'];
-    const replacement =
-      typeof assinatura === 'string' && assinatura.startsWith('data:image')
-        ? `<img class="sig-responsavel" src="${assinatura.replace(/"/g, '&quot;')}">`
-        : '';
-    result = result.replace(/\{\{assinatura_responsavel\}\}/g, replacement);
+    result = result.replace(new RegExp(`\\{\\{assinatura_${papel}\\}\\}`, 'g'), replacement);
   }
 
   // Mapear campos do motorista
