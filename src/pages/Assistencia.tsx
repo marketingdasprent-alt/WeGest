@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { NaOficinaSection } from '@/components/assistencia/NaOficinaSection';
 import {
   Select,
   SelectContent,
@@ -303,6 +304,11 @@ const Assistencia = () => {
           Nova Assistência
         </Button>
       </StickyPageHeader>
+
+      {/* Viaturas paradas na oficina. Antes so se viam abrindo a ficha de
+          cada viatura, uma a uma — nao havia forma de perguntar "quais estao
+          fora de servico?". Nao aparece quando nao ha nenhuma. */}
+      <NaOficinaSection />
 
       {/* Stats Cards - Focused on Management */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

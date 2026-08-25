@@ -3961,6 +3961,7 @@ export type Database = {
           estacao_recolha_id: string | null
           estado_financeiro: Database["public"]["Enums"]["contrato_estado_financeiro_enum"]
           estado_operacional: Database["public"]["Enums"]["contrato_estado_operacional_enum"]
+          tipo_fecho: string | null
           facturado_em: string | null
           franquia_valor: number | null
           gestor_id: string | null
@@ -3993,7 +3994,6 @@ export type Database = {
           tarifa_diaria: number | null
           tarifa_id: string | null
           tarifa_nome: string | null
-          tipo_fecho: string | null
           taxa_iva: number
           total_final: number | null
           total_iva: number | null
@@ -4040,6 +4040,7 @@ export type Database = {
           estacao_recolha_id?: string | null
           estado_financeiro?: Database["public"]["Enums"]["contrato_estado_financeiro_enum"]
           estado_operacional?: Database["public"]["Enums"]["contrato_estado_operacional_enum"]
+          tipo_fecho?: string | null
           facturado_em?: string | null
           franquia_valor?: number | null
           gestor_id?: string | null
@@ -4072,7 +4073,6 @@ export type Database = {
           tarifa_diaria?: number | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
-          tipo_fecho?: string | null
           taxa_iva?: number
           total_final?: number | null
           total_iva?: number | null
@@ -4119,6 +4119,7 @@ export type Database = {
           estacao_recolha_id?: string | null
           estado_financeiro?: Database["public"]["Enums"]["contrato_estado_financeiro_enum"]
           estado_operacional?: Database["public"]["Enums"]["contrato_estado_operacional_enum"]
+          tipo_fecho?: string | null
           facturado_em?: string | null
           franquia_valor?: number | null
           gestor_id?: string | null
@@ -4151,7 +4152,6 @@ export type Database = {
           tarifa_diaria?: number | null
           tarifa_id?: string | null
           tarifa_nome?: string | null
-          tipo_fecho?: string | null
           taxa_iva?: number
           total_final?: number | null
           total_iva?: number | null
@@ -14281,6 +14281,7 @@ export type Database = {
         | "em_curso"
         | "devolvido"
         | "cancelado"
+        | "fechado"
       contrato_origem_enum: "sistema" | "online" | "telefone" | "balcao"
       contrato_regime_enum: "rent_a_car" | "tvde" | "slot"
       contrato_renovacao_opcao_enum:
@@ -14441,6 +14442,7 @@ export const Constants = {
         "em_curso",
         "devolvido",
         "cancelado",
+        "fechado",
       ],
       contrato_origem_enum: ["sistema", "online", "telefone", "balcao"],
       contrato_regime_enum: ["rent_a_car", "tvde", "slot"],

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useRascunho } from '@/hooks/useRascunho';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -138,6 +139,39 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
   // Fotos temporárias (antes de guardar)
   const [fotosTemp, setFotosTemp] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+
+  // Registar um dano é escrever descrição, localização, valor e tirar fotos à
+  // volta do carro. Um refresh a meio deitava tudo fora — e as fotos são o que
+  // obriga a repetir o trabalho todo. Guarda por viatura, e só com o diálogo
+  // aberto: fechado, não há nada em curso para proteger.
+  const { limpar: limparRascunho } = useRascunho({
+    chave: dialogOpen && viaturaId ? `dano-viatura-${viaturaId}` : null,
+    valor: {
+      descricao,
+      localizacao,
+      estado,
+      observacoes,
+      valor,
+      dataOcorrencia,
+      motoristaId,
+      categoriaId,
+      fotosTemp,
+    },
+    restaurar: (r) => {
+      setDescricao(r.descricao ?? '');
+      setLocalizacao(r.localizacao ?? '');
+      setEstado(r.estado ?? 'existente');
+      setObservacoes(r.observacoes ?? '');
+      setValor(r.valor ?? '');
+      setDataOcorrencia(r.dataOcorrencia ?? '');
+      setMotoristaId(r.motoristaId ?? '');
+      setCategoriaId(r.categoriaId ?? '');
+      // Os File sobrevivem; os object URLs da sessão anterior não — recriam-se.
+      const fotos = (r.fotosTemp ?? []).filter((f): f is File => f instanceof File);
+      setFotosTemp(fotos);
+      setPreviewUrls(fotos.map((f) => URL.createObjectURL(f)));
+    },
+  });
 
   useEffect(() => {
     if (viaturaId) {
@@ -372,8 +406,11 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
       }
 
       toast.success('Dano registado com sucesso!');
-      setDialogOpen(false);
+      // resetForm antes de fechar: é ele que apaga o rascunho, e a chave do
+      // rascunho depende de o diálogo estar aberto. Fechar primeiro deixava o
+      // rascunho para trás, e a próxima abertura vinha com o dano anterior.
       resetForm();
+      setDialogOpen(false);
       loadDanos();
     } catch (error) {
       console.error('Erro ao registar dano:', error);
@@ -444,6 +481,9 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
   };
 
   const resetForm = () => {
+    // O rascunho morre com o formulário — senão a próxima abertura vinha
+    // pré-preenchida com o dano anterior.
+    void limparRascunho();
     setDescricao('');
     setLocalizacao('');
     setEstado('pendente');

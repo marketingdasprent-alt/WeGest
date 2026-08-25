@@ -2,7 +2,7 @@ import type jsPDF from 'jspdf';
 import { supabase } from '@/integrations/supabase/client';
 import { empresaDocData, empresaFooterText, type EmpresaConfig } from '@/config/empresas';
 import { resolveCartaoFrota } from './document-template/resolveCartaoFrota';
-import { precisaEletrico } from './combustivel';
+import { nivelEnergia, precisaEletrico } from './combustivel';
 
 import {
   generateDocumentosCombinados,
@@ -529,11 +529,26 @@ export const generateContratoPdf = async ({
           viaturaId: viatura?.id,
           contratoId: contrato.id,
           folhaDanosMomentoActual: false,
-          momentoFolha: contrato.estado_operacional === 'devolvido' ? 'RECOLHA' : 'ENTREGA',
+          momentoFolha: ['fechado', 'devolvido'].includes(contrato.estado_operacional)
+            ? 'RECOLHA'
+            : 'ENTREGA',
           km_saida: contrato.km_saida != null ? String(contrato.km_saida) : '',
           km_entrada: contrato.km_entrada != null ? String(contrato.km_entrada) : '',
-          combustivel_saida: contrato.combustivel_saida ?? '',
+          // Numa eléctrica o nível vive em eletricidade_*, não em combustivel_*
+          // — sem isto a folha saía em branco no campo que mais gera discussão
+          // na devolução. nivelEnergia resolve pelo tipo da viatura.
+          combustivel_saida: nivelEnergia(viatura?.combustivel, {
+            combustivel: contrato.combustivel_saida,
+            eletricidade: contrato.eletricidade_saida,
+          }),
+          // A folha de RECOLHA precisa dos valores de entrada; antes só iam os
+          // de saída, por isso a metade direita da folha vinha sempre vazia.
+          combustivel_entrada: nivelEnergia(viatura?.combustivel, {
+            combustivel: contrato.combustivel_entrada,
+            eletricidade: contrato.eletricidade_entrada,
+          }),
           eletricidade_saida: contrato.eletricidade_saida ?? '',
+          eletricidade_entrada: contrato.eletricidade_entrada ?? '',
         }
       : {}),
   }));

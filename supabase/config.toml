@@ -234,3 +234,10 @@ verify_jwt = true
 # pelo projecto. Deixá-la a false abria um gatilho anónimo de envio de email.
 [functions.ti-ticket-novo-email]
 verify_jwt = true
+
+# Aviso ao suporte de que o autor respondeu "não ajudou" — o pedido regrediu e
+# volta a precisar de atenção. Exige JWT: quem chama é o ti-sugestao-responder
+# com a service_role key, que já é um JWT assinado pelo projecto. Deixá-la a
+# false abria um gatilho anónimo de envio de email.
+[functions.ti-sugestao-nao-ajudou-email]
+verify_jwt = true

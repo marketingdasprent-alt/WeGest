@@ -242,7 +242,7 @@ describe('useFecharContrato', () => {
     vi.clearAllMocks();
   });
 
-  it('fecha contrato rent-a-car com recolha → estado cancelado + invalida queries', async () => {
+  it('fecha contrato rent-a-car com recolha → estado fechado + tipo_fecho + invalida queries', async () => {
     const chains = setupSupabase({
       estacoes: { data: { nome: 'Estação A', cidade: 'Lisboa' }, error: null },
       contratos_renting: { data: null, error: null },
@@ -281,10 +281,14 @@ describe('useFecharContrato', () => {
       fechouAgora = r.fechouAgora;
     });
 
-    // 1. Contrato foi fechado (estado_operacional = 'cancelado')
+    // 1. Contrato foi FECHADO — não cancelado. Fechar e cancelar deixaram de
+    //    partilhar estado (ver 20260820150000): cancelar é só para o que nunca
+    //    saiu, e o fecho semanal exclui 'cancelado'. O tipoEvento escolhido no
+    //    diálogo passa a ficar guardado em tipo_fecho, em vez de ser deitado fora.
     expect(chains.contratos_renting.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        estado_operacional: 'cancelado',
+        estado_operacional: 'fechado',
+        tipo_fecho: 'recolhido',
         estacao_recolha_id: 'est-1',
       })
     );
@@ -364,8 +368,9 @@ describe('useFecharContrato', () => {
     });
 
     // O contrato fecha na mesma — a troca exige o fecho formal do elo antigo.
+    // 'fechado', não 'cancelado': o elo antigo aconteceu e é facturável.
     expect(chains.contratos_renting.update).toHaveBeenCalledWith(
-      expect.objectContaining({ estado_operacional: 'cancelado' })
+      expect.objectContaining({ estado_operacional: 'fechado' })
     );
     // …e a recolha física fica registada (é a folha de danos de devolução).
     expect(chains.contratos_renting.update).toHaveBeenCalledWith(
@@ -405,9 +410,9 @@ describe('useFecharContrato', () => {
       fechouAgora = r.fechouAgora;
     });
 
-    // Contrato ainda foi fechado (estado_operacional = 'cancelado')
+    // Contrato ainda foi fechado (estado_operacional = 'fechado')
     expect(chains.contratos_renting.update).toHaveBeenCalledWith(
-      expect.objectContaining({ estado_operacional: 'cancelado' })
+      expect.objectContaining({ estado_operacional: 'fechado' })
     );
 
     // Motorista NÃO foi desactivado (sem recolha confirmada)
@@ -451,9 +456,9 @@ describe('useFecharContrato', () => {
       fechouAgora = r.fechouAgora;
     });
 
-    // Contrato fechado (estado_operacional = 'cancelado'), como qualquer fecho.
+    // Contrato fechado (estado_operacional = 'fechado'), como qualquer fecho.
     expect(chains.contratos_renting.update).toHaveBeenCalledWith(
-      expect.objectContaining({ estado_operacional: 'cancelado' })
+      expect.objectContaining({ estado_operacional: 'fechado' })
     );
 
     // Motorista desactivado mesmo sem recolha física — fecharAgora força o

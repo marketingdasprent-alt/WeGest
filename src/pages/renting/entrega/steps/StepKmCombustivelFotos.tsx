@@ -6,12 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { LOCALIZACOES, type FilePreview } from '@/utils/entrega';
-import {
-  COMBUSTIVEL_NIVEL_OPTS,
-  ELETRICO_OPTS,
-  precisaCombustivel,
-  precisaEletrico,
-} from '@/utils/combustivel';
+import { NivelBateriaInput } from '@/components/viaturas/NivelBateriaInput';
+import { COMBUSTIVEL_NIVEL_OPTS, precisaCombustivel, precisaEletrico } from '@/utils/combustivel';
 
 interface StepKmCombustivelFotosProps {
   titulo: string;
@@ -104,22 +100,7 @@ export const StepKmCombustivelFotos: React.FC<StepKmCombustivelFotosProps> = ({
             <Label>
               Nível da Bateria <span className="text-destructive">*</span>
             </Label>
-            <div className="grid grid-cols-5 gap-2">
-              {ELETRICO_OPTS.map((nivel) => (
-                <button
-                  key={nivel}
-                  type="button"
-                  onClick={() => onEletricidadeChange(nivel)}
-                  className={`rounded-md border-2 py-2 text-sm font-medium transition-colors ${
-                    eletricidade === nivel
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border hover:border-primary/40'
-                  }`}
-                >
-                  {nivel}
-                </button>
-              ))}
-            </div>
+            <NivelBateriaInput valor={eletricidade} onChange={onEletricidadeChange} />
           </div>
         )}
 

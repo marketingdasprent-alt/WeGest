@@ -100,19 +100,52 @@ function matchesVendaScope(v: { is_vendida?: boolean | null }, statusFilter: str
 
 export default function Viaturas() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [viaturas, setViaturas] = useState<Viatura[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>(
-    () => searchParams.get('status') || 'all'
-  );
-  const [categoriaFilter, setCategoriaFilter] = useState<string>('all');
-  const [combustivelFilter, setCombustivelFilter] = useState<string>('all');
-  const [tipoFilter, setTipoFilter] = useState<string>('all');
   const [tipos, setTipos] = useState<ViaturasTipo[]>([]);
-  const [sortField, setSortField] = useState<string>('matricula');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  // Os filtros vivem no endereço, como já acontece em Motoristas.
+  //
+  // Antes eram estado local: filtrar a lista, abrir uma viatura e voltar atrás
+  // devolvia a lista inteira, sem ordenação, e era preciso filtrar tudo de
+  // novo. O browser guarda o endereço em cada passo do histórico — é a única
+  // coisa que o "voltar" consegue repor.
+  //
+  // `replace` em vez de push: senão cada tecla escrita na pesquisa criava uma
+  // entrada no histórico e o "voltar" andava filtro a filtro.
+  //
+  // A forma funcional de setSearchParams é obrigatória aqui: o toggleSort faz
+  // duas chamadas seguidas (campo e direcção), e com o objecto capturado a
+  // segunda escrevia por cima da primeira.
+  const filtroNoUrl = useCallback(
+    (chave: string, omissao: string) =>
+      [
+        searchParams.get(chave) ?? omissao,
+        (valor: string) =>
+          setSearchParams(
+            (anterior) => {
+              const proximo = new URLSearchParams(anterior);
+              // Valores por omissão não vão para o endereço — senão ficava
+              // cheio de ruído logo ao abrir a página.
+              if (!valor || valor === omissao) proximo.delete(chave);
+              else proximo.set(chave, valor);
+              return proximo;
+            },
+            { replace: true }
+          ),
+      ] as const,
+    [searchParams, setSearchParams]
+  );
+
+  const [searchTerm, setSearchTerm] = filtroNoUrl('search', '');
+  const [statusFilter, setStatusFilter] = filtroNoUrl('status', 'all');
+  const [categoriaFilter, setCategoriaFilter] = filtroNoUrl('categoria', 'all');
+  const [combustivelFilter, setCombustivelFilter] = filtroNoUrl('combustivel', 'all');
+  const [tipoFilter, setTipoFilter] = filtroNoUrl('tipo', 'all');
+  const [sortField, setSortField] = filtroNoUrl('sort', 'matricula');
+  const [sortDirRaw, setSortDir] = filtroNoUrl('dir', 'asc');
+  const sortDir = sortDirRaw as 'asc' | 'desc';
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   // Dialog states

@@ -176,7 +176,10 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
   const disponiveis = useMemo(() => {
     if (isTvde) {
       const usados = new Set(fields.map((f) => f.motorista_id).filter(Boolean));
-      return motoristas.filter((mo) => !usados.has(mo.id));
+      // `motoristas` inclui inactivos (para a tabela conseguir mostrar
+      // condutores já associados que entretanto ficaram inactivos) — a
+      // dropdown de adicionar só deve oferecer quem está activo agora.
+      return motoristas.filter((mo) => mo.status_ativo !== false && !usados.has(mo.id));
     }
     const usados = new Set(fields.map((f) => f.cliente_id).filter(Boolean));
     return clientes.filter((c) => !usados.has(c.id));
@@ -271,58 +274,54 @@ export const CondutoresFields: React.FC<CondutoresFieldsProps> = ({
                   <CommandEmpty>{emptyTexto}</CommandEmpty>
                   <CommandGroup>
                     {isTvde
-                      ? motoristas
-                          .filter((mo) => !fields.some((f) => f.motorista_id === mo.id))
-                          .map((mo) => (
-                            <CommandItem
-                              key={mo.id}
-                              value={`${mo.nome} ${mo.nif ?? ''} ${mo.telefone ?? ''}`}
-                              onSelect={() => handleAdicionar(mo.id)}
-                              className="cursor-pointer flex flex-col items-start gap-0.5"
-                            >
-                              <span className="font-medium">
-                                {mo.nome}
-                                {mo.codigo ? (
-                                  <span className="ml-1 text-xs text-muted-foreground">
-                                    #{mo.codigo}
-                                  </span>
-                                ) : null}
-                              </span>
-                              {(mo.nif || mo.telefone) && (
-                                <span className="text-xs text-muted-foreground">
-                                  {mo.nif && <>NIF {mo.nif}</>}
-                                  {mo.nif && mo.telefone && ' · '}
-                                  {mo.telefone}
+                      ? (disponiveis as Motorista[]).map((mo) => (
+                          <CommandItem
+                            key={mo.id}
+                            value={`${mo.nome} ${mo.nif ?? ''} ${mo.telefone ?? ''}`}
+                            onSelect={() => handleAdicionar(mo.id)}
+                            className="cursor-pointer flex flex-col items-start gap-0.5"
+                          >
+                            <span className="font-medium">
+                              {mo.nome}
+                              {mo.codigo ? (
+                                <span className="ml-1 text-xs text-muted-foreground">
+                                  #{mo.codigo}
                                 </span>
-                              )}
-                            </CommandItem>
-                          ))
-                      : clientes
-                          .filter((c) => !fields.some((f) => f.cliente_id === c.id))
-                          .map((c) => (
-                            <CommandItem
-                              key={c.id}
-                              value={`${c.nome} ${c.nif ?? ''} ${c.telefone ?? ''} ${c.codigo}`}
-                              onSelect={() => handleAdicionar(c.id)}
-                              className="cursor-pointer flex flex-col items-start gap-0.5"
-                            >
-                              <span className="font-medium">
-                                {c.nome}
-                                {c.codigo ? (
-                                  <span className="ml-1 text-xs text-muted-foreground">
-                                    #{c.codigo}
-                                  </span>
-                                ) : null}
+                              ) : null}
+                            </span>
+                            {(mo.nif || mo.telefone) && (
+                              <span className="text-xs text-muted-foreground">
+                                {mo.nif && <>NIF {mo.nif}</>}
+                                {mo.nif && mo.telefone && ' · '}
+                                {mo.telefone}
                               </span>
-                              {(c.nif || c.telefone) && (
-                                <span className="text-xs text-muted-foreground">
-                                  {c.nif && <>NIF {c.nif}</>}
-                                  {c.nif && c.telefone && ' · '}
-                                  {c.telefone}
+                            )}
+                          </CommandItem>
+                        ))
+                      : (disponiveis as ClienteComDocumentos[]).map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={`${c.nome} ${c.nif ?? ''} ${c.telefone ?? ''} ${c.codigo}`}
+                            onSelect={() => handleAdicionar(c.id)}
+                            className="cursor-pointer flex flex-col items-start gap-0.5"
+                          >
+                            <span className="font-medium">
+                              {c.nome}
+                              {c.codigo ? (
+                                <span className="ml-1 text-xs text-muted-foreground">
+                                  #{c.codigo}
                                 </span>
-                              )}
-                            </CommandItem>
-                          ))}
+                              ) : null}
+                            </span>
+                            {(c.nif || c.telefone) && (
+                              <span className="text-xs text-muted-foreground">
+                                {c.nif && <>NIF {c.nif}</>}
+                                {c.nif && c.telefone && ' · '}
+                                {c.telefone}
+                              </span>
+                            )}
+                          </CommandItem>
+                        ))}
                   </CommandGroup>
                 </CommandList>
                 {isTvde && (onCriarNovoMotorista || onCriarCondutorProvisorio) && (

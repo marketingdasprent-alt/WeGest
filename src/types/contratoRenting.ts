@@ -1,16 +1,49 @@
 import type { ExtraTipoCalculo } from './rentingExtra';
 
 // ============================================================
-// Estado operacional (ciclo físico da viatura)
+// Estado operacional (ciclo do CONTRATO)
 // ============================================================
-export const CONTRATO_ESTADOS_OP = ['agendado', 'em_curso', 'devolvido', 'cancelado'] as const;
+//   agendado ──► em_curso ──► fechado   (tipo_fecho: recolhido | devolvido)
+//       │
+//       └──────────────────► cancelado  (não chegou a acontecer)
+//
+// Isto já se chamou "ciclo físico da viatura" e misturava dois vocabulários
+// na mesma coluna: 'agendado'/'cancelado' falam do contrato, 'em_curso' e
+// 'devolvido' falavam de onde estava o carro. Como só cabe um facto, o da
+// viatura ocupava o lugar do do contrato — foi assim que o #577 ficou
+// "Devolvido" em vez de fechado, e assim que fechar passou a escrever
+// 'cancelado', a única palavra de contrato que sobrava.
+//
+// "A viatura voltou?" responde-se onde sempre foi registado: o evento de
+// recolha com realizado_em preenchido.
+//
+// 'devolvido' é legado — a migração 20260820150200 esvaziou-o e nada o volta
+// a escrever. Fica no union porque o valor continua no enum da BD.
+export const CONTRATO_ESTADOS_OP = [
+  'agendado',
+  'em_curso',
+  'fechado',
+  'cancelado',
+  'devolvido',
+] as const;
 export type ContratoEstadoOperacional = (typeof CONTRATO_ESTADOS_OP)[number];
 
 export const CONTRATO_ESTADO_OP_LABELS: Record<ContratoEstadoOperacional, string> = {
   agendado: 'Agendado',
   em_curso: 'Em Curso',
+  fechado: 'Fechado',
+  cancelado: 'Cancelado',
+  devolvido: 'Fechado',
+};
+
+// Como o contrato terminou. NÃO é um estado — é registo, escolhido no
+// diálogo de fecho. Nunca aparece como filtro nem no formulário do contrato.
+export const CONTRATO_TIPOS_FECHO = ['recolhido', 'devolvido'] as const;
+export type ContratoTipoFecho = (typeof CONTRATO_TIPOS_FECHO)[number];
+
+export const CONTRATO_TIPO_FECHO_LABELS: Record<ContratoTipoFecho, string> = {
+  recolhido: 'Recolhido',
   devolvido: 'Devolvido',
-  cancelado: 'Fechado',
 };
 
 // ============================================================
@@ -160,6 +193,11 @@ export type ContratoRenting = {
    *  Um dos dois fica preenchido consoante o tipo de combustível da viatura. */
   combustivel_saida: string | null;
   eletricidade_saida: string | null;
+  /** O mesmo par, na recolha. Existiam na BD e no RPC do QR desde sempre, mas
+   *  faltavam aqui — por isso a folha de danos de recolha nunca os conseguiu
+   *  mostrar e a metade direita saía vazia. */
+  combustivel_entrada: string | null;
+  eletricidade_entrada: string | null;
 
   /** true quando a entrega foi marcada via o atalho "Any Rent" (sem
    *  check-in) — restringe o banner/botão de preenchimento manual de
@@ -220,6 +258,8 @@ export type ContratoRentingInsert = Omit<
   | 'km_entrada'
   | 'combustivel_saida'
   | 'eletricidade_saida'
+  | 'combustivel_entrada'
+  | 'eletricidade_entrada'
   | 'entrega_via_any_rent'
   // Os campos DUA são escritos no fluxo de entrega/recolha da viatura
   // (RealizarEntregaPage) e no fecho, nunca no formulário do contrato.

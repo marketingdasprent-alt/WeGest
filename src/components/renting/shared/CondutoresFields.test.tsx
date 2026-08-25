@@ -46,6 +46,13 @@ const motoristas: Motorista[] = [
   { id: 'm1', nome: 'Ana', nif: '111111111', codigo: 1 } as Motorista,
   { id: 'm2', nome: 'Bruno', nif: '222222222', codigo: 2 } as Motorista,
   { id: 'm3', nome: 'Carla', nif: '333333333', codigo: 3 } as Motorista,
+  {
+    id: 'm4',
+    nome: 'Diana',
+    nif: '444444444',
+    codigo: 4,
+    status_ativo: false,
+  } as Motorista,
 ];
 
 interface HarnessProps {
@@ -140,5 +147,27 @@ describe('CondutoresFields — sincronização do useFieldArray', () => {
         { cliente_id: null, motorista_id: 'm3', is_principal: false },
       ]);
     });
+  });
+
+  // Regressão: um condutor já associado ao contrato que entretanto ficou
+  // inactivo (ex. ao fechar o contrato) tem de continuar a aparecer pelo
+  // nome — não como "Motorista removido" — e não deve voltar a aparecer na
+  // dropdown de adicionar (ver bug BN-36-MG / Premium Ride).
+  it('condutor já associado que está inactivo mostra o nome, não "removido"', async () => {
+    render(
+      <Harness defaultCondutores={[{ cliente_id: null, motorista_id: 'm4', is_principal: true }]} />
+    );
+
+    expect(await screen.findByText('Diana')).toBeInTheDocument();
+    expect(screen.queryByText(/removido/i)).not.toBeInTheDocument();
+  });
+
+  it('condutor inactivo não aparece na dropdown de adicionar', async () => {
+    render(<Harness />);
+
+    fireEvent.click(screen.getByRole('button', { name: /adicionar motorista/i }));
+
+    expect(await screen.findByText('Ana')).toBeInTheDocument();
+    expect(screen.queryByText('Diana')).not.toBeInTheDocument();
   });
 });

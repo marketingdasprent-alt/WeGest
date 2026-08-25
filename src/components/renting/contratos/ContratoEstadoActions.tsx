@@ -25,7 +25,9 @@ import { contratoRenovavel, estadoRenovacaoContrato } from '@/lib/renovacaoContr
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 const ESTADOS_ORIGEM_FECHO = ['agendado', 'em_curso'] as const;
-const ESTADOS_REVERTER_FECHO = ['devolvido', 'cancelado'] as const;
+// 'devolvido' é legado — nada o escreve desde 20260820150200, mas linhas
+// antigas ainda têm de poder ser revertidas.
+const ESTADOS_REVERTER_FECHO = ['fechado', 'devolvido', 'cancelado'] as const;
 
 interface ContratoEstadoActionsProps {
   contrato: ContratoRenting;
