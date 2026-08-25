@@ -32,15 +32,17 @@ describe('validarSignatarios', () => {
       { papel: 'motorista', nome: 'Rui Dias', email: '   ' },
     ]);
 
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.semEmail).toEqual(['Juliano Cury', 'Rui Dias']);
+    // Asserção sobre o objecto todo: com \"strict\": false o TypeScript não
+    // estreita a união por `if (!r.ok)`, e assim verifica-se mais.
+    expect(r).toEqual({ ok: false, semEmail: ['Juliano Cury', 'Rui Dias'] });
   });
 
   it('recusa uma lista vazia — não há a quem enviar', () => {
     const r = validarSignatarios([]);
 
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.semEmail).toEqual([]);
+    // Asserção sobre o objecto todo: com \"strict\": false o TypeScript não
+    // estreita a união por `if (!r.ok)`, e assim verifica-se mais.
+    expect(r).toEqual({ ok: false, semEmail: [] });
   });
 
   it('limpa espaços à volta do email', () => {
