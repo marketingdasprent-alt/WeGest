@@ -5,6 +5,10 @@ import {
   type CalendarNotificationInput,
 } from '../templates/calendarNotification.ts';
 import { folhaDanosTemplate } from '../templates/folhaDanos.ts';
+import {
+  assinaturaPedidoTemplate,
+  type AssinaturaPedidoInput,
+} from '../templates/assinaturaPedido.ts';
 import { documentoFiscalTemplate } from '../templates/documentoFiscal.ts';
 import {
   assistanceNotificationTemplate,
@@ -136,6 +140,37 @@ export class EmailService {
     };
 
     return this.send(resolvedOrgId, 'folha_danos', message);
+  }
+
+  /**
+   * Pedido de assinatura: o documento em anexo e o link onde a pessoa assina.
+   *
+   * O anexo vai de propósito, além do link: quem recebe deve poder ler o que
+   * lhe pedem para assinar sem depender de um link funcionar.
+   */
+  async sendPedidoAssinatura(
+    orgId: string,
+    args: AssinaturaPedidoInput & {
+      to: string;
+      pdfBase64: string;
+      filename: string;
+    }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = assinaturaPedidoTemplate(args);
+    const attachments: EmailAttachment[] = [{ content: args.pdfBase64, name: args.filename }];
+
+    const message: EmailMessage = {
+      to: [{ email: args.to, name: args.destinatarioNome }],
+      subject,
+      html,
+      attachments,
+    };
+
+    return this.send(orgId, 'assinatura_pedido', message);
   }
 
   async sendDocumentoFiscal(
