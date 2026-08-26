@@ -401,10 +401,7 @@ export function DispositivosObeTab() {
 
   const handleDelete = async () => {
     if (!deleteTarget || !podeGerir) return;
-    const { error } = await supabase
-      .from('dispositivos_obe')
-      .delete()
-      .eq('id', deleteTarget.id);
+    const { error } = await supabase.from('dispositivos_obe').delete().eq('id', deleteTarget.id);
     if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
     else {
       toast({ title: 'Dispositivo eliminado' });

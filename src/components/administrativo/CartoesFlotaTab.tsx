@@ -316,10 +316,7 @@ export function CartoesFlotaTab() {
 
   const handleDelete = async () => {
     if (!deleteTarget || !podeGerir) return;
-    const { error } = await supabase
-      .from('cartoes_frota')
-      .delete()
-      .eq('id', deleteTarget.id);
+    const { error } = await supabase.from('cartoes_frota').delete().eq('id', deleteTarget.id);
     if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
     else {
       toast({ title: 'Cartão eliminado' });
