@@ -6,7 +6,15 @@ import { useNotificacoes, type Notificacao } from '@/hooks/useNotificacoes';
 import { isRotaPublica } from '@/lib/rotasPublicas';
 
 interface NotificacoesContextValue {
+  /** Tudo o que está por resolver — o sino e /notificacoes. */
   notificacoes: Notificacao[];
+  /**
+   * Só o que chegou depois de a app arrancar — o canto do ecrã.
+   * Ver o cabeçalho de NotificacoesPopup para o porquê da separação.
+   */
+  chegadas: Notificacao[];
+  /** Tira um aviso do canto sem lhe tocar no estado (≠ resolver). */
+  dispensarChegada: (id: string) => void;
   resolver: (id: string) => Promise<void>;
   enabled: boolean;
   /** Contagem exacta vinda do servidor — não depende da lista carregada. */
@@ -51,11 +59,28 @@ export function NotificacoesProvider({ children }: { children: ReactNode }) {
     tipoUtilizador !== 'motorista' &&
     !isRotaPublica(pathname);
 
-  const { notificacoes, resolver, totalNaoResolvidas, erro, aCarregar } = useNotificacoes(enabled);
+  const {
+    notificacoes,
+    chegadas,
+    dispensarChegada,
+    resolver,
+    totalNaoResolvidas,
+    erro,
+    aCarregar,
+  } = useNotificacoes(enabled);
 
   return (
     <NotificacoesContext.Provider
-      value={{ notificacoes, resolver, enabled, totalNaoResolvidas, erro, aCarregar }}
+      value={{
+        notificacoes,
+        chegadas,
+        dispensarChegada,
+        resolver,
+        enabled,
+        totalNaoResolvidas,
+        erro,
+        aCarregar,
+      }}
     >
       {children}
     </NotificacoesContext.Provider>

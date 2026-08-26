@@ -69,6 +69,20 @@ const db = supabase as unknown as {
  */
 export const useNotificacoes = (enabled: boolean) => {
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+  /**
+   * O que chegou DEPOIS de o hook arrancar — e só isso.
+   *
+   * O canto do ecrã (NotificacoesPopup) mostrava `notificacoes`, a lista
+   * inteira de não-resolvidas. Isso fazia dele um espelho permanente do
+   * backlog em vez de um aviso de chegada: tudo o que estava por resolver
+   * voltava ao canto em cada aba nova e em cada arranque do browser, e como o
+   * agrupamento cria uma linha por (tipo, dia) o backlog engordava sozinho
+   * todos os dias. O utilizador passava o dia a fechar os mesmos avisos.
+   *
+   * Separar as duas coisas é o que permite ao canto dizer "aconteceu agora" e
+   * ao sino/página dizerem "está por tratar" — que são perguntas diferentes.
+   */
+  const [chegadas, setChegadas] = useState<Notificacao[]>([]);
   const [totalNaoResolvidas, setTotalNaoResolvidas] = useState(0);
   // Distingue "não há avisos" de "não foi possível saber". Sem isto, uma falha
   // de rede era engolida para a consola e o sino mostrava "Sem notificações" —
@@ -86,6 +100,11 @@ export const useNotificacoes = (enabled: boolean) => {
       .select('*', { count: 'exact' })
       .eq('resolvida', false)
       .order('created_at', { ascending: false })
+      // Desempate estável: um scan insere dezenas de linhas na mesma
+      // transacção, todas com o mesmo `created_at` (`now()` é fixo por
+      // transacção). Sem isto, QUAIS 200 avisos o corte deixa passar é
+      // indeterminado e muda de leitura para leitura.
+      .order('id', { ascending: false })
       .limit(LIMITE_ATIVAS);
     if (error) {
       console.error('Erro ao carregar notificações:', error);
@@ -98,13 +117,13 @@ export const useNotificacoes = (enabled: boolean) => {
     const lista = (data as Notificacao[]) || [];
     setTotalNaoResolvidas(typeof count === 'number' ? count : lista.length);
 
-    // Som para avisos urgentes novos detetados via polling/foco
-    // (exceto no primeiro carregamento, para não tocar ao abrir a app).
-    if (!primeiroFetchRef.current) {
-      const haNovoUrgente = lista.some(
-        (n) => n.severidade === 'urgente' && !conhecidasRef.current.has(n.id)
-      );
-      if (haNovoUrgente) playNotificationSound(true);
+    // Avisos que ainda não conhecíamos. No primeiro carregamento são o backlog
+    // (nada "chegou": já lá estavam), a partir daí são chegadas a sério — este
+    // é o caminho que apanha o aviso quando o realtime falha ou cai.
+    const novas = lista.filter((n) => !conhecidasRef.current.has(n.id));
+    if (!primeiroFetchRef.current && novas.length > 0) {
+      if (novas.some((n) => n.severidade === 'urgente')) playNotificationSound(true);
+      setChegadas((cur) => [...novas.filter((n) => !cur.some((c) => c.id === n.id)), ...cur]);
     }
     lista.forEach((n) => conhecidasRef.current.add(n.id));
     primeiroFetchRef.current = false;
@@ -115,6 +134,9 @@ export const useNotificacoes = (enabled: boolean) => {
   useEffect(() => {
     if (!enabled) {
       setNotificacoes([]);
+      // Sair para uma rota pública (ou fazer logout) tem de limpar o canto: um
+      // cartão sobrevivente apareceria por cima da landing ou do quadro de TV.
+      setChegadas([]);
       return;
     }
 
@@ -139,6 +161,7 @@ export const useNotificacoes = (enabled: boolean) => {
             });
             if (!conhecidasRef.current.has(nova.id)) {
               conhecidasRef.current.add(nova.id);
+              setChegadas((cur) => (cur.some((c) => c.id === nova.id) ? cur : [nova, ...cur]));
               // Som apenas para o aviso intenso (escalonamento / urgente).
               if (nova.severidade === 'urgente') playNotificationSound(true);
             }
@@ -149,9 +172,17 @@ export const useNotificacoes = (enabled: boolean) => {
                 ? cur.filter((n) => n.id !== atual.id)
                 : cur.map((n) => (n.id === atual.id ? atual : n))
             );
+            // Resolvida em qualquer sítio (outro separador, outro utilizador,
+            // o trigger da candidatura) sai também do canto.
+            setChegadas((cur) =>
+              atual.resolvida
+                ? cur.filter((n) => n.id !== atual.id)
+                : cur.map((n) => (n.id === atual.id ? atual : n))
+            );
           } else if (payload.eventType === 'DELETE') {
             const old = payload.old as { id: string };
             setNotificacoes((cur) => cur.filter((n) => n.id !== old.id));
+            setChegadas((cur) => cur.filter((n) => n.id !== old.id));
           }
         }
       )
@@ -170,10 +201,22 @@ export const useNotificacoes = (enabled: boolean) => {
     };
   }, [enabled, fetchAtivas]);
 
+  /**
+   * Tira o cartão do canto sem tocar no estado da notificação.
+   *
+   * Ao contrário de `resolver`, isto é puramente visual e não sobrevive à
+   * sessão — nem precisa: o canto só volta a mostrar o que chegar de novo, e
+   * o aviso continua no sino e em /notificacoes até alguém o tratar.
+   */
+  const dispensarChegada = useCallback((id: string) => {
+    setChegadas((cur) => cur.filter((n) => n.id !== id));
+  }, []);
+
   const resolver = useCallback(
     async (id: string) => {
       // Otimista: remove já do ecrã; o real-time confirma para os restantes.
       setNotificacoes((cur) => cur.filter((n) => n.id !== id));
+      setChegadas((cur) => cur.filter((n) => n.id !== id));
       const { error } = await db.rpc('resolver_notificacao', { p_id: id });
       if (error) {
         console.error('Erro ao resolver notificação:', error);
@@ -184,5 +227,13 @@ export const useNotificacoes = (enabled: boolean) => {
     [fetchAtivas]
   );
 
-  return { notificacoes, resolver, totalNaoResolvidas, erro, aCarregar };
+  return {
+    notificacoes,
+    chegadas,
+    dispensarChegada,
+    resolver,
+    totalNaoResolvidas,
+    erro,
+    aCarregar,
+  };
 };

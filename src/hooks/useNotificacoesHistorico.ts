@@ -29,10 +29,21 @@ export function useNotificacoesHistorico(apenasNaoResolvidas: boolean, enabled =
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
+      // O desempate por `id` NÃO é cosmético.
+      //
+      // execute_automation_runs() insere dezenas de linhas na mesma
+      // transacção, e `now()` em Postgres devolve o MESMO instante para toda
+      // a transacção — todas essas linhas ficam com `created_at` idêntico.
+      // Com um único critério de ordenação, a ordem entre empates é
+      // indefinida e o planeador pode devolvê-la diferente entre queries:
+      // a página 2 repetia linhas da página 1 e saltava outras, sem erro
+      // nenhum. Num produto onde a lista é a prova de que um aviso foi
+      // mostrado, saltar linhas em silêncio é o pior resultado possível.
       let q = supabase
         .from('notificacoes')
         .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .range(from, to);
 
       if (apenasNaoResolvidas) {
