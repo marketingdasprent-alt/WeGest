@@ -76,6 +76,15 @@ export interface DocumentTemplate {
 
 export interface GenerateDocumentParams {
   templateId: string;
+  /**
+   * Template já resolvido, em vez de ser lido da base de dados por `templateId`.
+   *
+   * Serve a regeneração a partir de uma fotografia congelada (ver `snapshot.ts`):
+   * um documento enviado para assinar tem de continuar a produzir-se igual mesmo
+   * que alguém edite o template entretanto, senão a pessoa acaba a assinar coisa
+   * diferente da que recebeu.
+   */
+  templateOverride?: DocumentTemplate;
   motoristaData: Record<string, any>;
   documentData?: Record<string, any>;
   action?: 'print' | 'download';

@@ -27,6 +27,7 @@ const Contratos = lazy(() => import('@/pages/Contratos'));
 const Formularios = lazy(() => import('@/pages/Formularios'));
 const FormularioPublico = lazy(() => import('@/pages/FormularioPublico'));
 const DanosPublicosPage = lazy(() => import('@/pages/DanosPublicosPage'));
+const AssinarDocumento = lazy(() => import('@/pages/AssinarDocumento'));
 const QuadroLive = lazy(() => import('@/pages/QuadroLive'));
 const TicketsTI = lazy(() => import('@/pages/TicketsTI'));
 const TicketTIAutor = lazy(() => import('@/pages/TicketTIAutor'));
@@ -131,6 +132,8 @@ const WebAppRoutes = () => {
           <Route path="/formulario/:id" element={<FormularioPublico />} />
           {/* Galeria pública de danos (QR da folha de danos) — sem login */}
           <Route path="/danos/:token" element={<DanosPublicosPage />} />
+          {/* Assinar um documento por link, sem login — mesma familia do /danos/:token */}
+          <Route path="/assinar/:token" element={<AssinarDocumento />} />
           {/* Quadro TV público — sem login, acesso por token */}
           <Route path="/quadro/:token" element={<QuadroLive />} />
           {/* A rota do autor vem ANTES: /ti/:token capturaria /ti/ticket/xxx com

@@ -49,10 +49,24 @@ export interface GenerateContratoPdfParams {
   separados?: boolean;
 }
 
+/**
+ * Um anexo gerado à parte.
+ *
+ * Leva consigo o `templateId` e os dados que o produziram porque quem o envia
+ * para assinatura precisa de congelar uma fotografia deles — sem isso, o
+ * documento assinado teria de ser reconstruído a partir dos dados vivos, que
+ * entretanto podem ter mudado. Quem só quer imprimir ou anexar ignora estes
+ * dois campos.
+ */
+export interface ContratoAnexo {
+  pdf: jsPDF;
+  fileName: string;
+  templateId: string;
+  doc: DocumentoCombinado;
+}
+
 /** Um PDF combinado, ou vários (um por documento) quando `separados`. */
-export type ContratoPdfResultado =
-  | { pdf: jsPDF; fileName: string }
-  | { anexos: Array<{ pdf: jsPDF; fileName: string }> };
+export type ContratoPdfResultado = { pdf: jsPDF; fileName: string } | { anexos: ContratoAnexo[] };
 
 /** Nome de ficheiro seguro a partir do nome do template. */
 function nomeFicheiro(nomeTemplate: string, codigo: number | null | undefined): string {
@@ -556,11 +570,18 @@ export const generateContratoPdf = async ({
   // Um PDF por documento — cada um gerado à parte, para irem como anexos
   // distintos no mesmo email.
   if (separados) {
-    const anexos: Array<{ pdf: jsPDF; fileName: string }> = [];
+    const anexos: ContratoAnexo[] = [];
     for (let i = 0; i < docs.length; i++) {
       const nome = nomeFicheiro(templatesEscolhidos[i].nome, contrato.codigo);
       const pdfDoc = await generateDocumentosCombinados([docs[i]], { action, fileName: nome });
-      if (pdfDoc) anexos.push({ pdf: pdfDoc, fileName: `${nome}.pdf` });
+      if (pdfDoc) {
+        anexos.push({
+          pdf: pdfDoc,
+          fileName: `${nome}.pdf`,
+          templateId: templatesEscolhidos[i].id,
+          doc: docs[i],
+        });
+      }
     }
     return anexos.length ? { anexos } : null;
   }

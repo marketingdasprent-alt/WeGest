@@ -33,6 +33,8 @@ import {
   useDeleteContratoAnexo,
   getContratoAnexoSignedUrl,
 } from '@/hooks/useContratoAnexos';
+import { useAssinaturaPedidos } from '@/hooks/useAssinaturaPedidos';
+import { AssinaturasPedidosList } from './AssinaturasPedidosList';
 import type { ContratoAnexo } from '@/types/contratoRenting';
 
 interface ContratoTabAnexosProps {
@@ -79,6 +81,7 @@ export const ContratoTabAnexos: React.FC<ContratoTabAnexosProps> = ({ contratoId
   const uploadMutation = useUploadContratoAnexo(contratoId);
   const renameMutation = useRenameContratoAnexo(contratoId);
   const deleteMutation = useDeleteContratoAnexo(contratoId);
+  const { data: pedidosAssinatura = [] } = useAssinaturaPedidos(contratoId);
 
   if (!contratoId) {
     return (
@@ -131,6 +134,11 @@ export const ContratoTabAnexos: React.FC<ContratoTabAnexosProps> = ({ contratoId
 
   return (
     <div className="space-y-4">
+      {/* Os pedidos de assinatura vivem ao pé dos anexos porque são a mesma
+          pergunta vista de dois lados: que documentos existem neste contrato, e
+          quais deles já voltaram assinados. */}
+      <AssinaturasPedidosList pedidos={pedidosAssinatura} />
+
       <div
         onDragOver={(e) => {
           e.preventDefault();

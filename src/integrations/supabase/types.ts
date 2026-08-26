@@ -4345,6 +4345,75 @@ export type Database = {
         }
         Relationships: []
       }
+      documento_assinatura_pedidos: {
+        Row: {
+          assinado_em: string | null
+          assinado_ip: string | null
+          assinado_user_agent: string | null
+          assinatura_path: string | null
+          cliente_id: string | null
+          contrato_id: string | null
+          created_at: string
+          created_by: string | null
+          documento_assinado_path: string | null
+          documento_nome: string
+          documento_path: string
+          expires_at: string
+          id: string
+          motorista_id: string | null
+          org_id: string
+          papel: string
+          signatario_email: string
+          signatario_nome: string
+          snapshot_path: string
+          template_id: string | null
+        }
+        Insert: {
+          assinado_em?: string | null
+          assinado_ip?: string | null
+          assinado_user_agent?: string | null
+          assinatura_path?: string | null
+          cliente_id?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          documento_assinado_path?: string | null
+          documento_nome: string
+          documento_path: string
+          expires_at: string
+          id?: string
+          motorista_id?: string | null
+          org_id: string
+          papel: string
+          signatario_email: string
+          signatario_nome: string
+          snapshot_path: string
+          template_id?: string | null
+        }
+        Update: {
+          assinado_em?: string | null
+          assinado_ip?: string | null
+          assinado_user_agent?: string | null
+          assinatura_path?: string | null
+          cliente_id?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          documento_assinado_path?: string | null
+          documento_nome?: string
+          documento_path?: string
+          expires_at?: string
+          id?: string
+          motorista_id?: string | null
+          org_id?: string
+          papel?: string
+          signatario_email?: string
+          signatario_nome?: string
+          snapshot_path?: string
+          template_id?: string | null
+        }
+        Relationships: []
+      }
       danos_tokens: {
         Row: {
           contrato_renting_id: string | null

@@ -44,6 +44,7 @@ const ContratoForm = lazy(() => import('@/pages/renting/ContratoForm'));
 const PedidosTrocaKms = lazy(() => import('@/pages/renting/PedidosTrocaKms'));
 const RealizarEntregaPage = lazy(() => import('@/pages/renting/RealizarEntregaPage'));
 const DanosPublicosPage = lazy(() => import('@/pages/DanosPublicosPage'));
+const AssinarDocumento = lazy(() => import('@/pages/AssinarDocumento'));
 const RentingReservas = lazy(() => import('@/pages/renting/RentingReservas'));
 const RentingReservaForm = lazy(() => import('@/pages/renting/RentingReservaForm'));
 const RentingMovimentacoes = lazy(() => import('@/pages/renting/RentingMovimentacoes'));
@@ -375,6 +376,8 @@ const NativeAppRoutes = () => {
         />
         {/* Galeria pública de danos (QR da folha de danos) — sem login */}
         <Route path="/danos/:token" element={<DanosPublicosPage />} />
+        {/* Assinar um documento por link, sem login — mesma familia do /danos/:token */}
+        <Route path="/assinar/:token" element={<AssinarDocumento />} />
         {/* Deep link via QR — usado pelo modal de "Realizar agora" */}
         <Route
           path="/realizar/:token"
