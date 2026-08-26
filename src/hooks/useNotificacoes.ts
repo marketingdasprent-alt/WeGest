@@ -1,45 +1,20 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { playNotificationSound } from '@/lib/notificationSound';
-import type { Json } from '@/integrations/supabase/types';
+import type { Notificacao } from '@/types/notificacao';
 
-export interface Notificacao {
-  id: string;
-  org_id: string | null;
-  tipo:
-    | 'motorista_pendente'
-    | 'escalonamento'
-    | 'viatura_disponivel'
-    | 'pedido_troca_kms'
-    | 'recibo_anulado';
-  candidatura_id: string | null;
-  /** Rota de destino do botão "Ver" (notificações genéricas, ex.: lista de espera). */
-  link: string | null;
-  /** Destinatário específico (avisos dirigidos a 1 utilizador, ex: lista de espera). */
-  destinatario_id: string | null;
-  /** Utilizador destinatário (RLS por user_id, ex.: lista de espera). */
-  destinatario_user_id: string | null;
-  /** Evento de calendário associado (ex.: escalar viatura). */
-  evento_id: string | null;
-  /** Viatura alvo (tipo 'viatura_disponivel') — o popup abre /viaturas/:id. */
-  viatura_id: string | null;
-  titulo: string;
-  mensagem: string | null;
-  severidade: 'normal' | 'urgente';
-  resolvida: boolean;
-  resolvida_por: string | null;
-  resolvida_por_nome: string | null;
-  resolvida_em: string | null;
-  created_at: string;
-  /**
-   * Entidades desta notificação agrupada — ver src/types/notificacao.ts.
-   * `Json` (e não `NotificacaoItem[]`) para acompanhar a coluna gerada; a
-   * leitura tipada faz-se com `itensDaNotificacao`.
-   */
-  itens: Json | null;
-  /** Quantos avisos esta linha representa (1 = única). */
-  agrupadas: number;
-}
+/**
+ * `Notificacao` era aqui uma interface escrita à mão que duplicava a linha
+ * gerada — o anti-pattern "Tipo duplicado à mão" do §12. E tinha divergido:
+ * declarava `org_id: string | null` e um union fechado de 5 valores em `tipo`,
+ * quando a coluna passou a NOT NULL (20260826101138) e o CHECK aceita 25 tipos.
+ *
+ * Passa a reutilizar `Tables<'notificacoes'>` via src/types/notificacao.ts, que
+ * é o mesmo tipo que os utilitários (notificacaoLink, notificacaoTitulo) já
+ * consomem — era essa divergência que o type-check estrito apanhou assim que os
+ * tipos foram regenerados.
+ */
+export type { Notificacao };
 
 /**
  * Tecto de notificações activas carregadas de uma vez.

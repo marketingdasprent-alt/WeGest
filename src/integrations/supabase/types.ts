@@ -1446,6 +1446,7 @@ export type Database = {
       }
       bolt_sync_queue: {
         Row: {
+          alertado_em: string | null
           completed_at: string | null
           created_at: string
           error_message: string | null
@@ -1463,6 +1464,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          alertado_em?: string | null
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
@@ -1480,6 +1482,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          alertado_em?: string | null
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
@@ -2241,6 +2244,64 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "cargos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cartao_atribuicoes: {
+        Row: {
+          ate: string | null
+          cartao_id: string
+          created_at: string
+          criado_por: string | null
+          de: string
+          id: string
+          motorista_id: string
+          org_id: string
+          origem: string
+        }
+        Insert: {
+          ate?: string | null
+          cartao_id: string
+          created_at?: string
+          criado_por?: string | null
+          de: string
+          id?: string
+          motorista_id: string
+          org_id: string
+          origem?: string
+        }
+        Update: {
+          ate?: string | null
+          cartao_id?: string
+          created_at?: string
+          criado_por?: string | null
+          de?: string
+          id?: string
+          motorista_id?: string
+          org_id?: string
+          origem?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cartao_atribuicoes_cartao_id_fkey"
+            columns: ["cartao_id"]
+            isOneToOne: false
+            referencedRelation: "cartoes_frota"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cartao_atribuicoes_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cartao_atribuicoes_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
@@ -3961,7 +4022,6 @@ export type Database = {
           estacao_recolha_id: string | null
           estado_financeiro: Database["public"]["Enums"]["contrato_estado_financeiro_enum"]
           estado_operacional: Database["public"]["Enums"]["contrato_estado_operacional_enum"]
-          tipo_fecho: string | null
           facturado_em: string | null
           franquia_valor: number | null
           gestor_id: string | null
@@ -3995,6 +4055,7 @@ export type Database = {
           tarifa_id: string | null
           tarifa_nome: string | null
           taxa_iva: number
+          tipo_fecho: string | null
           total_final: number | null
           total_iva: number | null
           total_subtotal: number | null
@@ -4040,7 +4101,6 @@ export type Database = {
           estacao_recolha_id?: string | null
           estado_financeiro?: Database["public"]["Enums"]["contrato_estado_financeiro_enum"]
           estado_operacional?: Database["public"]["Enums"]["contrato_estado_operacional_enum"]
-          tipo_fecho?: string | null
           facturado_em?: string | null
           franquia_valor?: number | null
           gestor_id?: string | null
@@ -4074,6 +4134,7 @@ export type Database = {
           tarifa_id?: string | null
           tarifa_nome?: string | null
           taxa_iva?: number
+          tipo_fecho?: string | null
           total_final?: number | null
           total_iva?: number | null
           total_subtotal?: number | null
@@ -4119,7 +4180,6 @@ export type Database = {
           estacao_recolha_id?: string | null
           estado_financeiro?: Database["public"]["Enums"]["contrato_estado_financeiro_enum"]
           estado_operacional?: Database["public"]["Enums"]["contrato_estado_operacional_enum"]
-          tipo_fecho?: string | null
           facturado_em?: string | null
           franquia_valor?: number | null
           gestor_id?: string | null
@@ -4153,6 +4213,7 @@ export type Database = {
           tarifa_id?: string | null
           tarifa_nome?: string | null
           taxa_iva?: number
+          tipo_fecho?: string | null
           total_final?: number | null
           total_iva?: number | null
           total_subtotal?: number | null
@@ -4323,6 +4384,7 @@ export type Database = {
       }
       cron_http_log: {
         Row: {
+          alertado_em: string | null
           id: number
           invoked_at: string
           jobname: string
@@ -4330,6 +4392,7 @@ export type Database = {
           url: string
         }
         Insert: {
+          alertado_em?: string | null
           id?: number
           invoked_at?: string
           jobname: string
@@ -4337,6 +4400,7 @@ export type Database = {
           url: string
         }
         Update: {
+          alertado_em?: string | null
           id?: number
           invoked_at?: string
           jobname?: string
@@ -4513,6 +4577,75 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      documento_assinatura_pedidos: {
+        Row: {
+          assinado_em: string | null
+          assinado_ip: string | null
+          assinado_user_agent: string | null
+          assinatura_path: string | null
+          cliente_id: string | null
+          contrato_id: string | null
+          created_at: string
+          created_by: string | null
+          documento_assinado_path: string | null
+          documento_nome: string
+          documento_path: string
+          expires_at: string
+          id: string
+          motorista_id: string | null
+          org_id: string
+          papel: string
+          signatario_email: string
+          signatario_nome: string
+          snapshot_path: string
+          template_id: string | null
+        }
+        Insert: {
+          assinado_em?: string | null
+          assinado_ip?: string | null
+          assinado_user_agent?: string | null
+          assinatura_path?: string | null
+          cliente_id?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          documento_assinado_path?: string | null
+          documento_nome: string
+          documento_path: string
+          expires_at: string
+          id?: string
+          motorista_id?: string | null
+          org_id: string
+          papel: string
+          signatario_email: string
+          signatario_nome: string
+          snapshot_path: string
+          template_id?: string | null
+        }
+        Update: {
+          assinado_em?: string | null
+          assinado_ip?: string | null
+          assinado_user_agent?: string | null
+          assinatura_path?: string | null
+          cliente_id?: string | null
+          contrato_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          documento_assinado_path?: string | null
+          documento_nome?: string
+          documento_path?: string
+          expires_at?: string
+          id?: string
+          motorista_id?: string | null
+          org_id?: string
+          papel?: string
+          signatario_email?: string
+          signatario_nome?: string
+          snapshot_path?: string
+          template_id?: string | null
+        }
+        Relationships: []
       }
       documento_suplementar_empresas: {
         Row: {
@@ -4729,6 +4862,7 @@ export type Database = {
           station_name: string | null
           transaction_date: string
           transaction_id: string
+          updated_at: string | null
           viatura_id: string | null
         }
         Insert: {
@@ -4746,6 +4880,7 @@ export type Database = {
           station_name?: string | null
           transaction_date: string
           transaction_id: string
+          updated_at?: string | null
           viatura_id?: string | null
         }
         Update: {
@@ -4763,6 +4898,7 @@ export type Database = {
           station_name?: string | null
           transaction_date?: string
           transaction_id?: string
+          updated_at?: string | null
           viatura_id?: string | null
         }
         Relationships: [
@@ -6935,6 +7071,61 @@ export type Database = {
           },
         ]
       }
+      motorista_plataforma_identidades: {
+        Row: {
+          created_at: string
+          id: string
+          identificador: string
+          integracao_id: string | null
+          motorista_id: string
+          org_id: string
+          origem: string
+          plataforma: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          identificador: string
+          integracao_id?: string | null
+          motorista_id: string
+          org_id: string
+          origem?: string
+          plataforma: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          identificador?: string
+          integracao_id?: string | null
+          motorista_id?: string
+          org_id?: string
+          origem?: string
+          plataforma?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motorista_plataforma_identidades_integracao_id_fkey"
+            columns: ["integracao_id"]
+            isOneToOne: false
+            referencedRelation: "plataformas_configuracao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_plataforma_identidades_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_plataforma_identidades_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       motorista_recibos: {
         Row: {
           codigo: number
@@ -7761,6 +7952,24 @@ export type Database = {
           },
         ]
       }
+      notificacao_tipo_map: {
+        Row: {
+          descricao: string | null
+          event_type: string
+          tipo_legado: string
+        }
+        Insert: {
+          descricao?: string | null
+          event_type: string
+          tipo_legado: string
+        }
+        Update: {
+          descricao?: string | null
+          event_type?: string
+          tipo_legado?: string
+        }
+        Relationships: []
+      }
       notificacoes: {
         Row: {
           agrupadas: number
@@ -7773,7 +7982,7 @@ export type Database = {
           itens: Json | null
           link: string | null
           mensagem: string | null
-          org_id: string | null
+          org_id: string
           resolvida: boolean
           resolvida_em: string | null
           resolvida_por: string | null
@@ -7794,7 +8003,7 @@ export type Database = {
           itens?: Json | null
           link?: string | null
           mensagem?: string | null
-          org_id?: string | null
+          org_id: string
           resolvida?: boolean
           resolvida_em?: string | null
           resolvida_por?: string | null
@@ -7815,7 +8024,7 @@ export type Database = {
           itens?: Json | null
           link?: string | null
           mensagem?: string | null
-          org_id?: string | null
+          org_id?: string
           resolvida?: boolean
           resolvida_em?: string | null
           resolvida_por?: string | null
@@ -8275,6 +8484,7 @@ export type Database = {
           created_at: string
           dominio_erro: string | null
           dominio_status: string
+          email_suporte: string | null
           id: string
           logo_url: string | null
           morada: string | null
@@ -8289,6 +8499,7 @@ export type Database = {
           created_at?: string
           dominio_erro?: string | null
           dominio_status?: string
+          email_suporte?: string | null
           id?: string
           logo_url?: string | null
           morada?: string | null
@@ -8303,6 +8514,7 @@ export type Database = {
           created_at?: string
           dominio_erro?: string | null
           dominio_status?: string
+          email_suporte?: string | null
           id?: string
           logo_url?: string | null
           morada?: string | null
@@ -8404,6 +8616,7 @@ export type Database = {
           cookies_json: string | null
           created_at: string | null
           criado_por: string | null
+          csv_sem_metricas_atividade: boolean
           email_api_key_encrypted: string | null
           email_provider: string | null
           email_provider_config: Json | null
@@ -8452,6 +8665,7 @@ export type Database = {
           cookies_json?: string | null
           created_at?: string | null
           criado_por?: string | null
+          csv_sem_metricas_atividade?: boolean
           email_api_key_encrypted?: string | null
           email_provider?: string | null
           email_provider_config?: Json | null
@@ -8500,6 +8714,7 @@ export type Database = {
           cookies_json?: string | null
           created_at?: string | null
           criado_por?: string | null
+          csv_sem_metricas_atividade?: boolean
           email_api_key_encrypted?: string | null
           email_provider?: string | null
           email_provider_config?: Json | null
@@ -9078,6 +9293,47 @@ export type Database = {
           nome?: string
         }
         Relationships: []
+      }
+      refecho_pendente: {
+        Row: {
+          criado_em: string
+          detalhe: Json | null
+          id: string
+          motivo: string
+          org_id: string
+          resolvido_em: string | null
+          semana_fim: string
+          semana_inicio: string
+        }
+        Insert: {
+          criado_em?: string
+          detalhe?: Json | null
+          id?: string
+          motivo: string
+          org_id: string
+          resolvido_em?: string | null
+          semana_fim: string
+          semana_inicio: string
+        }
+        Update: {
+          criado_em?: string
+          detalhe?: Json | null
+          id?: string
+          motivo?: string
+          org_id?: string
+          resolvido_em?: string | null
+          semana_fim?: string
+          semana_inicio?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refecho_pendente_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       relatorio_pagamento_pagos: {
         Row: {
@@ -9703,6 +9959,7 @@ export type Database = {
           station_name: string | null
           transaction_date: string
           transaction_id: string
+          updated_at: string | null
           viatura_id: string | null
         }
         Insert: {
@@ -9720,6 +9977,7 @@ export type Database = {
           station_name?: string | null
           transaction_date: string
           transaction_id: string
+          updated_at?: string | null
           viatura_id?: string | null
         }
         Update: {
@@ -9737,6 +9995,7 @@ export type Database = {
           station_name?: string | null
           transaction_date?: string
           transaction_id?: string
+          updated_at?: string | null
           viatura_id?: string | null
         }
         Relationships: [
@@ -11904,6 +12163,7 @@ export type Database = {
       }
       via_verde_sync_queue: {
         Row: {
+          alertado_em: string | null
           completed_at: string | null
           created_at: string
           error_message: string | null
@@ -11916,6 +12176,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          alertado_em?: string | null
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
@@ -11928,6 +12189,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          alertado_em?: string | null
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
@@ -11954,9 +12216,13 @@ export type Database = {
           amount: number | null
           barreira_entrada: string | null
           barreira_saida: string | null
+          cliente_id: string | null
           contrato: string | null
+          contrato_id: string | null
           created_at: string | null
+          devedor_tipo: string | null
           id: string
+          imputado_motorista_id: string | null
           integracao_id: string | null
           integracao_nome: string | null
           matricula: string | null
@@ -11974,9 +12240,13 @@ export type Database = {
           amount?: number | null
           barreira_entrada?: string | null
           barreira_saida?: string | null
+          cliente_id?: string | null
           contrato?: string | null
+          contrato_id?: string | null
           created_at?: string | null
+          devedor_tipo?: string | null
           id?: string
+          imputado_motorista_id?: string | null
           integracao_id?: string | null
           integracao_nome?: string | null
           matricula?: string | null
@@ -11994,9 +12264,13 @@ export type Database = {
           amount?: number | null
           barreira_entrada?: string | null
           barreira_saida?: string | null
+          cliente_id?: string | null
           contrato?: string | null
+          contrato_id?: string | null
           created_at?: string | null
+          devedor_tipo?: string | null
           id?: string
+          imputado_motorista_id?: string | null
           integracao_id?: string | null
           integracao_nome?: string | null
           matricula?: string | null
@@ -12011,6 +12285,34 @@ export type Database = {
           viatura_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "via_verde_transacoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "via_verde_transacoes_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contrato_renting_totais"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "via_verde_transacoes_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos_renting"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "via_verde_transacoes_imputado_motorista_id_fkey"
+            columns: ["imputado_motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "via_verde_transacoes_integracao_id_fkey"
             columns: ["integracao_id"]
@@ -13290,6 +13592,10 @@ export type Database = {
         Args: { p_card: string; p_motorista: string; p_plataforma: string }
         Returns: number
       }
+      atribuir_cartao_frota: {
+        Args: { p_cartao_id: string; p_motorista_id: string }
+        Returns: undefined
+      }
       automation_runs_claim: {
         Args: { p_max?: number }
         Returns: {
@@ -13435,6 +13741,7 @@ export type Database = {
       bolt_sync_queue_claim: {
         Args: { p_max: number }
         Returns: {
+          alertado_em: string | null
           completed_at: string | null
           created_at: string
           error_message: string | null
@@ -13492,6 +13799,8 @@ export type Database = {
           evento_id: string
           matricula: string
           matricula_devolver: string
+          modelo: string
+          modelo_devolver: string
           tipo: string
         }[]
       }
@@ -13538,10 +13847,16 @@ export type Database = {
         }
         Returns: boolean
       }
-      criar_versao_contrato_renting: {
-        Args: { p_contrato_id: string; p_motivo: string }
-        Returns: string
-      }
+      criar_versao_contrato_renting:
+        | { Args: { p_contrato_id: string; p_motivo: string }; Returns: string }
+        | {
+            Args: {
+              p_contrato_id: string
+              p_data_troca: string
+              p_motivo: string
+            }
+            Returns: string
+          }
       cron_invocar_edge: {
         Args: {
           p_body?: Json
@@ -13552,6 +13867,10 @@ export type Database = {
         Returns: number
       }
       current_user_cargo: { Args: never; Returns: string }
+      devolver_cartao_frota: {
+        Args: { p_cartao_id: string }
+        Returns: undefined
+      }
       email_caixa_tem_credenciais: {
         Args: { _caixa_id: string }
         Returns: boolean
@@ -13987,6 +14306,30 @@ export type Database = {
         Args: { p_principal: string; p_secundaria: string }
         Returns: undefined
       }
+      motorista_extrato_periodo: {
+        Args: { p_fim: string; p_inicio: string; p_motorista_id: string }
+        Returns: {
+          acerto_liquido: number
+          aluguer: number
+          combustivel: number
+          extras: number
+          gorjetas: number
+          liquido: number
+          outros: number
+          periodo_fim: string
+          periodo_inicio: string
+          portagens: number
+          receita: number
+          receita_bolt: number
+          receita_uber: number
+          reparacoes: number
+          tem_acerto: boolean
+          tem_custos_lancados: boolean
+          tem_dados_receita: boolean
+          total_custos: number
+          viagens_bolt: number
+        }[]
+      }
       motorista_meus_acordos_ativos: { Args: never; Returns: Json }
       motorista_saldo_pendente: {
         Args: { p_ate_data?: string; p_motorista_id: string }
@@ -14001,10 +14344,15 @@ export type Database = {
       }
       nif_pt_valido: { Args: { p_nif: string }; Returns: boolean }
       norm_nome_match: { Args: { t: string }; Returns: string }
+      normalizar_numero_cartao: { Args: { p_numero: string }; Returns: string }
       normalize_owner_name: { Args: { input_name: string }; Returns: string }
       normalize_phone: { Args: { input_phone: string }; Returns: string }
       normalize_plate: { Args: { input_plate: string }; Returns: string }
       notificacao_dispensada: { Args: { p_id: string }; Returns: boolean }
+      notificacao_link_entidade: {
+        Args: { p_entity_id: string; p_entity_table: string }
+        Returns: string
+      }
       notification_queue_claim: {
         Args: { p_canal: string; p_max?: number }
         Returns: {
@@ -14086,6 +14434,7 @@ export type Database = {
       org_codigo_disponivel: { Args: { p_codigo: string }; Returns: boolean }
       org_por_codigo: { Args: { p_codigo: string }; Returns: Json }
       org_privacidade_por_gestor: { Args: never; Returns: boolean }
+      org_sistema: { Args: never; Returns: string }
       primavera_jobs_claim: {
         Args: { p_max: number; p_org_id: string }
         Returns: {
@@ -14141,6 +14490,11 @@ export type Database = {
         Args: { p_viatura_id: string }
         Returns: undefined
       }
+      recalcular_movimentos_do_cartao: {
+        Args: { p_cartao_id: string }
+        Returns: undefined
+      }
+      recalculo_e_forcado: { Args: never; Returns: boolean }
       rejeitar_candidatura_motorista: {
         Args: { p_candidatura_id: string; p_motivo?: string }
         Returns: boolean
@@ -14158,6 +14512,35 @@ export type Database = {
         }
         Returns: boolean
       }
+      resolver_contrato_da_viatura: {
+        Args: { p_data: string; p_viatura_id: string }
+        Returns: string
+      }
+      resolver_devedor_da_viatura: {
+        Args: { p_data: string; p_viatura_id: string }
+        Returns: Record<string, unknown>
+      }
+      resolver_motorista_por_cartao: {
+        Args: {
+          p_data: string
+          p_numero: string
+          p_org_id: string
+          p_tipo: string
+        }
+        Returns: string
+      }
+      resolver_motorista_por_plataforma: {
+        Args: {
+          p_identificador: string
+          p_org_id: string
+          p_plataforma: string
+        }
+        Returns: string
+      }
+      resolver_motorista_por_viatura: {
+        Args: { p_data: string; p_viatura_id: string }
+        Returns: string
+      }
       resolver_notificacao: { Args: { p_id: string }; Returns: undefined }
       responder_pedido_troca_kms: {
         Args: {
@@ -14172,6 +14555,10 @@ export type Database = {
         Args: { p_linhas: Json; p_tarifa_id: string }
         Returns: undefined
       }
+      seed_automacao_danos_assistencia: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
       seed_automacao_defaults: {
         Args: { p_org_id: string }
         Returns: undefined
@@ -14182,6 +14569,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sincronizar_ficha_cartao_frota: {
+        Args: { p_cartao_id: string }
+        Returns: undefined
+      }
       trocar_condutor: {
         Args: {
           p_contrato_id: string
@@ -14191,6 +14582,7 @@ export type Database = {
         }
         Returns: string
       }
+      uber_automap_todas_integracoes: { Args: never; Returns: number }
       uber_resumo_merge: {
         Args: {
           p_comissoes?: number
@@ -14224,6 +14616,7 @@ export type Database = {
       via_verde_sync_queue_claim: {
         Args: { p_max: number }
         Returns: {
+          alertado_em: string | null
           completed_at: string | null
           created_at: string
           error_message: string | null
@@ -14267,6 +14660,8 @@ export type Database = {
           viatura_id: string
         }[]
       }
+      vigiar_cron_edge: { Args: never; Returns: number }
+      vigiar_filas_sync: { Args: never; Returns: number }
     }
     Enums: {
       app_role: "admin" | "gestor_tvde" | "gestor_comercial" | "colaborador"
@@ -14297,10 +14692,10 @@ export type Database = {
         | "cancelada"
         | "expirada"
       tipo_documento_enum:
-        | "Cartão Cidadão"
+        | "CartÃ£o CidadÃ£o"
         | "Passaporte"
-        | "Autorização de Residência"
-        | "Carta de Condução"
+        | "AutorizaÃ§Ã£o de ResidÃªncia"
+        | "Carta de ConduÃ§Ã£o"
         | "Outro"
     }
     CompositeTypes: {
@@ -14461,10 +14856,10 @@ export const Constants = {
         "expirada",
       ],
       tipo_documento_enum: [
-        "Cartão Cidadão",
+        "CartÃ£o CidadÃ£o",
         "Passaporte",
-        "Autorização de Residência",
-        "Carta de Condução",
+        "AutorizaÃ§Ã£o de ResidÃªncia",
+        "Carta de ConduÃ§Ã£o",
         "Outro",
       ],
     },

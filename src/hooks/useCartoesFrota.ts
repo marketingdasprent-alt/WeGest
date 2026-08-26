@@ -7,14 +7,18 @@ import { supabase } from '@/integrations/supabase/client';
  * Extraído de MotoristaCartoesFrota, que fazia sete `supabase.from()` directos
  * com `useState` + `useEffect` + um `refetchAll()` chamado à mão.
  *
- * NOTA SOBRE ATOMICIDADE (comportamento preservado, não corrigido aqui)
- * Associar e devolver escrevem em DUAS tabelas — `cartoes_frota` e a coluna
- * `cartao_<tipo>` da ficha em `motoristas_ativos` (que serve o match das
- * transações importadas). São duas chamadas PostgREST, sem transação: se a
- * segunda falhar, o cartão fica atribuído e a ficha não. Fechar isto a sério
- * exige uma RPC `SECURITY DEFINER` que faça as duas escritas numa transacção —
- * está fora do âmbito desta extracção, que não muda comportamento. O que se
- * garante já é que a primeira falha aborta antes da segunda escrita.
+ * ATOMICIDADE — resolvida em 20260826131640
+ * Atribuir e devolver tocam em DUAS tabelas: `cartoes_frota` e a coluna
+ * `cartao_<tipo>` da ficha em `motoristas_ativos` (que alimenta o match das
+ * transacções importadas). Feitas daqui eram duas chamadas PostgREST sem
+ * transacção: se a segunda falhasse, o cartão ficava atribuído e a ficha não,
+ * e o consumo desse cartão deixava de ser imputado ao motorista em silêncio.
+ *
+ * Passaram para RPC `SECURITY DEFINER`, que faz as duas escritas numa só
+ * transacção. Por isso `tipo`, `numero` e a data deixaram de ser argumentos:
+ * são lidos do próprio cartão, no servidor. Antes o cliente escolhia a coluna
+ * da ficha e o valor — um payload trocado escrevia o número de um cartão BP na
+ * coluna EDP.
  */
 
 export type TipoCartao = 'bp' | 'repsol' | 'edp';
@@ -39,8 +43,8 @@ export const cartoesAssociadosKey = (motoristaId: string) =>
 export const cartoesDisponiveisKey = (tipo: TipoCartao | undefined) =>
   ['cartoes-frota', 'disponiveis', tipo] as const;
 
-/** A coluna da ficha do motorista que guarda o número deste tipo de cartão. */
-const colunaFicha = (tipo: TipoCartao) => `cartao_${tipo}`;
+// A coluna da ficha (`cartao_<tipo>`) deixou de ser calculada aqui: passou
+// para dentro das RPC, num CASE estático sobre as três colunas conhecidas.
 
 /** Cartões actualmente atribuídos a este motorista. */
 export function useCartoesAssociados(motoristaId: string) {
@@ -88,99 +92,54 @@ function useInvalidarCartoes() {
   };
 }
 
-export interface AssociarCartaoArgs {
+export interface MovimentoCartaoArgs {
   cartaoId: string;
-  numero: string;
-  tipo: TipoCartao;
+  /**
+   * NÃO vai no payload da RPC — o servidor lê o motorista do próprio cartão.
+   * Serve só para invalidar a lista certa depois de gravar.
+   */
   motoristaId: string;
-  /** Data de entrega (ISO, só dia) — injectada para o teste ser determinista. */
-  hoje: string;
 }
 
+/** Marca o cartão em uso E grava o número na ficha, numa só transacção. */
 export function useAssociarCartaoAoMotorista() {
   const invalidar = useInvalidarCartoes();
   return useMutation({
-    mutationFn: async ({
-      cartaoId,
-      numero,
-      tipo,
-      motoristaId,
-      hoje,
-    }: AssociarCartaoArgs): Promise<void> => {
-      const { error: e1 } = await supabase
-        .from('cartoes_frota')
-        .update({ motorista_id: motoristaId, status: 'em_uso', data_entrega: hoje })
-        .eq('id', cartaoId);
-      if (e1) throw e1;
-
-      // A ficha do motorista alimenta o match das transações importadas.
-      const { error: e2 } = await supabase
-        .from('motoristas_ativos')
-        .update({ [colunaFicha(tipo)]: numero } as never)
-        .eq('id', motoristaId);
-      if (e2) throw e2;
+    mutationFn: async ({ cartaoId, motoristaId }: MovimentoCartaoArgs): Promise<void> => {
+      const { error } = await supabase.rpc('atribuir_cartao_frota', {
+        p_cartao_id: cartaoId,
+        p_motorista_id: motoristaId,
+      });
+      if (error) throw error;
     },
     onSuccess: (_r, { motoristaId }) => invalidar(motoristaId),
   });
 }
 
-export interface DevolverCartaoArgs {
-  cartaoId: string;
-  tipo: TipoCartao;
-  motoristaId: string;
-  /** Só limpar a ficha se ela apontar mesmo para ESTE cartão. */
-  limparFicha: boolean;
-  hoje: string;
-}
-
+/**
+ * Liberta o cartão, guarda quem o tinha, e limpa a ficha — mas só se ela
+ * apontava mesmo para este número. Essa comparação passou para o servidor: era
+ * feita no componente com os dados que ele por acaso tinha em memória.
+ */
 export function useDevolverCartaoDoMotorista() {
   const invalidar = useInvalidarCartoes();
   return useMutation({
-    mutationFn: async ({
-      cartaoId,
-      tipo,
-      motoristaId,
-      limparFicha,
-      hoje,
-    }: DevolverCartaoArgs): Promise<void> => {
-      const { error: e1 } = await supabase
-        .from('cartoes_frota')
-        .update({
-          motorista_id: null,
-          ultimo_motorista_id: motoristaId,
-          status: 'disponivel',
-          data_devolucao: hoje,
-        })
-        .eq('id', cartaoId);
-      if (e1) throw e1;
-
-      if (limparFicha) {
-        const { error: e2 } = await supabase
-          .from('motoristas_ativos')
-          .update({ [colunaFicha(tipo)]: null } as never)
-          .eq('id', motoristaId);
-        if (e2) throw e2;
-      }
+    mutationFn: async ({ cartaoId }: MovimentoCartaoArgs): Promise<void> => {
+      const { error } = await supabase.rpc('devolver_cartao_frota', { p_cartao_id: cartaoId });
+      if (error) throw error;
     },
     onSuccess: (_r, { motoristaId }) => invalidar(motoristaId),
   });
-}
-
-export interface SincronizarFichaArgs {
-  motoristaId: string;
-  tipo: TipoCartao;
-  numero: string;
 }
 
 /** Repõe na ficha o número do cartão que o motorista tem mesmo atribuído. */
 export function useSincronizarFichaCartao() {
   const invalidar = useInvalidarCartoes();
   return useMutation({
-    mutationFn: async ({ motoristaId, tipo, numero }: SincronizarFichaArgs): Promise<void> => {
-      const { error } = await supabase
-        .from('motoristas_ativos')
-        .update({ [colunaFicha(tipo)]: numero } as never)
-        .eq('id', motoristaId);
+    mutationFn: async ({ cartaoId }: MovimentoCartaoArgs): Promise<void> => {
+      const { error } = await supabase.rpc('sincronizar_ficha_cartao_frota', {
+        p_cartao_id: cartaoId,
+      });
       if (error) throw error;
     },
     onSuccess: (_r, { motoristaId }) => invalidar(motoristaId),

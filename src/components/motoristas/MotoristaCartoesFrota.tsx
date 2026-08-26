@@ -57,7 +57,6 @@ const fmtEur = (v: number | null) =>
   v == null
     ? '—'
     : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v);
-const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged }) => {
   const { toast } = useToast();
@@ -83,13 +82,8 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
     const cartao = disponiveis.find((c) => c.id === selectedId);
     if (!cartao) return;
     try {
-      await associarCartao.mutateAsync({
-        cartaoId: cartao.id,
-        numero: cartao.numero,
-        tipo,
-        motoristaId: motorista.id,
-        hoje: todayISO(),
-      });
+      // Só o id: tipo, número e data são lidos do cartão no servidor.
+      await associarCartao.mutateAsync({ cartaoId: cartao.id, motoristaId: motorista.id });
       toast({ title: `Cartão ${TIPO_INFO[tipo].label} ${cartao.numero} associado` });
       setSelectedId('');
       onChanged?.();
@@ -104,14 +98,10 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
 
   const devolver = async (c: CartaoAssociado) => {
     try {
-      await devolverCartao.mutateAsync({
-        cartaoId: c.id,
-        tipo: c.tipo,
-        motoristaId: motorista.id,
-        // Só limpar a ficha se ela apontava mesmo para este cartão.
-        limparFicha: fichaDe(c.tipo).trim() === c.numero.trim(),
-        hoje: todayISO(),
-      });
+      // A decisão de limpar a ficha (só se ela apontava para ESTE número)
+      // passou para a RPC — aqui era tomada com o que o componente tinha em
+      // memória, que pode estar desactualizado.
+      await devolverCartao.mutateAsync({ cartaoId: c.id, motoristaId: motorista.id });
       toast({ title: `Cartão ${c.numero} devolvido` });
       onChanged?.();
     } catch (err: unknown) {
@@ -125,11 +115,7 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
 
   const sincronizarFicha = async (c: CartaoAssociado) => {
     try {
-      await sincronizarCartao.mutateAsync({
-        motoristaId: motorista.id,
-        tipo: c.tipo,
-        numero: c.numero,
-      });
+      await sincronizarCartao.mutateAsync({ cartaoId: c.id, motoristaId: motorista.id });
       toast({ title: 'Ficha sincronizada' });
       onChanged?.();
     } catch (err: unknown) {
