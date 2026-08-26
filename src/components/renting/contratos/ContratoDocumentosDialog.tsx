@@ -491,7 +491,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
           </p>
         </div>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={gerando}>
             Cancelar
           </Button>

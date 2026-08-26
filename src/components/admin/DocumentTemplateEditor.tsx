@@ -32,6 +32,7 @@ const CATEGORIA_EMOJI: Record<BaseCategoria, string> = {
   empresa: '🏢',
   viatura: '🚗',
   contrato: '📄',
+  assinatura: '✍️',
   danos: '🛠️',
 };
 

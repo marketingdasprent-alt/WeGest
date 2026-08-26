@@ -19,7 +19,14 @@
  */
 
 /** Categorias base (código). O provider pode criar outras (string livre). */
-export type BaseCategoria = 'motorista' | 'cliente' | 'empresa' | 'viatura' | 'contrato' | 'danos';
+export type BaseCategoria =
+  | 'motorista'
+  | 'cliente'
+  | 'empresa'
+  | 'viatura'
+  | 'contrato'
+  | 'assinatura'
+  | 'danos';
 /** Uma categoria pode ser uma das base OU uma criada pelo provider. */
 export type CampoCategoria = string;
 
@@ -50,6 +57,7 @@ export const CATEGORIA_LABELS: Record<BaseCategoria, string> = {
   empresa: 'Empresa',
   viatura: 'Viatura',
   contrato: 'Contrato',
+  assinatura: 'Assinatura',
   danos: 'Folha de Danos',
 };
 
@@ -59,6 +67,7 @@ export const CATEGORIA_ORDEM: BaseCategoria[] = [
   'empresa',
   'viatura',
   'contrato',
+  'assinatura',
   'danos',
 ];
 
@@ -163,6 +172,17 @@ export const CAMPOS_CATALOGO: CampoDinamico[] = [
   { chave: 'observacoes', label: 'Observações', categoria: 'contrato' },
   { chave: 'data_atual', label: 'Data actual', categoria: 'contrato' },
   { chave: 'data_atual_extenso', label: 'Data actual (extenso)', categoria: 'contrato' },
+
+  // ── Assinatura ─────────────────────────────────────────────
+  // Cada chip insere o marcador que replaceDynamicFields (parser.ts) já
+  // resolve para uma imagem, ou apaga se não houver assinatura. Colaborador e
+  // responsável vêm do perfil de quem gera; cliente, condutor e motorista
+  // nascem quando a pessoa assina o documento pelo link.
+  { chave: 'assinatura_colaborador', label: 'Colaborador (quem gera)', categoria: 'assinatura' },
+  { chave: 'assinatura_responsavel', label: 'Responsável', categoria: 'assinatura' },
+  { chave: 'assinatura_cliente', label: 'Cliente', categoria: 'assinatura' },
+  { chave: 'assinatura_condutor', label: 'Condutor', categoria: 'assinatura' },
+  { chave: 'assinatura_motorista', label: 'Motorista', categoria: 'assinatura' },
 
   // ── Folha de Danos (templates anexo_danos) ──────────────────
   { chave: 'momento_folha', label: 'Momento (ENTREGA/RECOLHA)', categoria: 'danos' },

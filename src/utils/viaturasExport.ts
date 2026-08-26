@@ -10,6 +10,7 @@ import { getStatusLabel } from '@/lib/viaturas';
 
 export interface ViaturaExport {
   matricula: string;
+  data_matricula?: string | null;
   marca: string;
   modelo: string;
   ano?: number | null;
@@ -211,6 +212,7 @@ export async function exportViaturasExcel(viaturas: ViaturaExport[]): Promise<vo
   const XLSX = await import('xlsx');
   const headers = [
     'Matrícula',
+    'Data de Matrícula',
     'Marca',
     'Modelo',
     'Ano',
@@ -225,6 +227,7 @@ export async function exportViaturasExcel(viaturas: ViaturaExport[]): Promise<vo
 
   const rows = viaturas.map((v) => [
     v.matricula,
+    PT_DATE(v.data_matricula),
     v.marca || '',
     v.modelo || '',
     v.ano ?? '',
@@ -240,6 +243,7 @@ export async function exportViaturasExcel(viaturas: ViaturaExport[]): Promise<vo
   const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
   worksheet['!cols'] = [
     { wch: 12 },
+    { wch: 16 },
     { wch: 16 },
     { wch: 18 },
     { wch: 8 },

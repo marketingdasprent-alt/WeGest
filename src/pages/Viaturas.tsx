@@ -65,6 +65,7 @@ interface ViaturasTipo {
 interface Viatura {
   id: string;
   matricula: string;
+  data_matricula?: string | null;
   marca: string;
   modelo: string;
   ano?: number | null;
