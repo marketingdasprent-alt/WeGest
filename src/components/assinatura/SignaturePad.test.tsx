@@ -1,0 +1,116 @@
+import { createRef } from 'react';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+
+import { SignaturePad, type SignaturePadHandle } from './SignaturePad';
+
+/**
+ * O pad de assinatura.
+ *
+ * O jsdom não desenha em canvas, por isso substitui-se o contexto 2D e o
+ * `toDataURL` do próprio canvas por duplos. Não é o desenho que está a ser
+ * verificado — é a **coordenação**: quando o pad avisa que houve traço, o valor
+ * já tem de estar disponível a quem for buscá-lo.
+ */
+beforeAll(() => {
+  const contextoFalso = {
+    lineWidth: 0,
+    lineCap: '',
+    lineJoin: '',
+    strokeStyle: '',
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    stroke: vi.fn(),
+    clearRect: vi.fn(),
+    drawImage: vi.fn(),
+  };
+
+  HTMLCanvasElement.prototype.getContext = vi.fn(() => contextoFalso) as never;
+  HTMLCanvasElement.prototype.toDataURL = vi.fn(() => 'data:image/png;base64,DESENHO') as never;
+
+  // O jsdom não implementa captura de ponteiro; sem isto o handler rebenta.
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+});
+
+function desenharUmTraco() {
+  const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+  // O canvas em jsdom não tem dimensões; dá-se-lhe uma caixa para que a
+  // conversão de coordenadas não divida por zero.
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 200 }) as DOMRect;
+
+  fireEvent.pointerDown(canvas, { clientX: 100, clientY: 50, pointerId: 1 });
+  return canvas;
+}
+
+describe('SignaturePad', () => {
+  /**
+   * O bug que obrigava a assinar duas vezes: `toDataURL` guardava-se com
+   * `if (empty) return null`, lendo o estado do React. No primeiro traço esse
+   * estado ainda era `true` — o React só o actualiza no render seguinte — por
+   * isso quem respondia ao aviso recebia `null`, o botão de submeter ficava
+   * desligado, e só o segundo traço é que "pegava".
+   */
+  it('já devolve a assinatura no primeiro traço, quando avisa que houve traço', () => {
+    const ref = createRef<SignaturePadHandle>();
+    let valorNoMomentoDoAviso: string | null | undefined;
+
+    render(
+      <SignaturePad
+        ref={ref}
+        onChange={(vazio) => {
+          valorNoMomentoDoAviso = vazio ? null : ref.current?.toDataURL();
+        }}
+      />
+    );
+
+    desenharUmTraco();
+
+    expect(valorNoMomentoDoAviso).toBe('data:image/png;base64,DESENHO');
+  });
+
+  it('diz que já não está vazio no mesmo instante do aviso', () => {
+    const ref = createRef<SignaturePadHandle>();
+    let vazioNoMomentoDoAviso: boolean | undefined;
+
+    render(
+      <SignaturePad ref={ref} onChange={() => (vazioNoMomentoDoAviso = ref.current?.isEmpty())} />
+    );
+
+    desenharUmTraco();
+
+    expect(vazioNoMomentoDoAviso).toBe(false);
+  });
+
+  it('devolve null enquanto ninguém desenhou', () => {
+    const ref = createRef<SignaturePadHandle>();
+    render(<SignaturePad ref={ref} />);
+
+    expect(ref.current?.isEmpty()).toBe(true);
+    expect(ref.current?.toDataURL()).toBeNull();
+  });
+
+  it('volta a ficar vazio depois de limpar', () => {
+    const ref = createRef<SignaturePadHandle>();
+    render(<SignaturePad ref={ref} />);
+
+    desenharUmTraco();
+    expect(ref.current?.isEmpty()).toBe(false);
+
+    ref.current?.clear();
+
+    expect(ref.current?.isEmpty()).toBe(true);
+    expect(ref.current?.toDataURL()).toBeNull();
+  });
+
+  it('mostra a indicação de desenhar só enquanto está vazio', () => {
+    render(<SignaturePad />);
+
+    expect(screen.getByText(/desenhe aqui a sua assinatura/i)).toBeInTheDocument();
+
+    desenharUmTraco();
+
+    expect(screen.queryByText(/desenhe aqui a sua assinatura/i)).not.toBeInTheDocument();
+  });
+});
