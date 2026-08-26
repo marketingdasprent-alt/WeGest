@@ -20,6 +20,9 @@ import { supabase } from '@/integrations/supabase/client';
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({ hasAccessToResource: () => true, isAdmin: true }),
 }));
+vi.mock('@/contexts/TenantContext', () => ({
+  useOrgId: () => 'org-teste',
+}));
 vi.mock('@/hooks/useThemedLogo', () => ({ useThemedLogo: () => '/Logo.png' }));
 vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: () => false }));
 

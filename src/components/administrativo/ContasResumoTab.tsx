@@ -11,11 +11,17 @@ import { MotoristaResumoDialog } from './MotoristaResumoDialog';
 import { ImportarDadosWizard } from './ImportarDadosWizard';
 import { RelatorioPagamentoDialog } from './RelatorioPagamentoDialog';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useOrgId } from '@/contexts/TenantContext';
 import { RECURSOS } from '@/utils/permissions';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { matchesSearch } from '@/lib/utils';
 import { buildSlotPeriodos, type ViaturaPeriodoInput } from './motorista-resumo/slotPeriodos';
+import {
+  buildTvdeModeloPrecoMap,
+  buildPrecoPorTarifaModelo,
+  type TarifaModeloRow,
+} from './motorista-resumo/tvdeModeloPreco';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import {
@@ -42,12 +48,17 @@ const WEEK_STARTS_ON = 1;
 export async function fecharSemanaFinanceiro(
   client: Pick<typeof supabase, 'functions'>,
   periodoInicio: Date,
-  periodoFim: Date
+  periodoFim: Date,
+  // A organização a fechar. Sem isto, a edge function usava a organização
+  // activa do utilizador — e, antes de 2026-08-19, nem sequer filtrava por
+  // organização nenhuma: fechar numa fechava em todas.
+  orgId?: string | null
 ) {
   const { data, error } = await client.functions.invoke('fechar-semana-financeiro', {
     body: {
       semanaInicio: format(periodoInicio, 'yyyy-MM-dd'),
       semanaFim: format(periodoFim, 'yyyy-MM-dd'),
+      ...(orgId ? { orgId } : {}),
     },
   });
   if (error) throw new Error(error.message);
@@ -55,7 +66,12 @@ export async function fecharSemanaFinanceiro(
   // período no futuro) — invoke() só popula `error` em falha de transporte,
   // por isso o success:false do corpo tem de ser verificado à parte.
   if (!data?.success) throw new Error(data?.error || 'Falha ao fechar o período.');
-  return data as { success: boolean; viaturasAtualizadas: number; motoristasAtualizados: number };
+  return data as {
+    success: boolean;
+    orgId: string;
+    viaturasAtualizadas: number;
+    motoristasAtualizados: number;
+  };
 }
 
 // Coluna Gorjeta: dados sensíveis (gorjeta é rendimento do motorista, não da
@@ -75,6 +91,7 @@ const getWeekShortcuts = () => [
 export function ContasResumoTab() {
   const isMobile = useIsMobile();
   const { hasAccessToResource } = usePermissions();
+  const orgId = useOrgId();
   const canImportar = hasAccessToResource(RECURSOS.ADMINISTRATIVO_IMPORTAR);
   const showGorjeta = hasAccessToResource(RECURSOS.ADMINISTRATIVO_VER_GORJETA);
   const [loading, setLoading] = useState(true);
@@ -201,7 +218,8 @@ export function ContasResumoTab() {
       const resultado = await fecharSemanaFinanceiro(
         supabase,
         rangeParaFechar.from,
-        rangeParaFechar.to
+        rangeParaFechar.to,
+        orgId
       );
       toast.success(
         `Período fechado: ${resultado.viaturasAtualizadas} viaturas, ${resultado.motoristasAtualizados} motoristas atualizados.`
@@ -646,15 +664,15 @@ export function ContasResumoTab() {
       const modeloTvdeTarifaMap: Record<string, number> = {};
       // Mapa: `${tarifa_id}|${modelo_id}` → preco_semana. É por aqui que se
       // resolve o preço da tarifa QUE O CONTRATO indica.
-      const precoPorTarifaModelo: Record<string, number> = {};
-      (tarifasTvdeModeloResult.data || []).forEach((t: any) => {
-        if (t.modelo_id && t.preco_semana != null) {
-          modeloTvdeTarifaMap[t.modelo_id] = Number(t.preco_semana) || 0;
-          if (t.tarifa_id) {
-            precoPorTarifaModelo[`${t.tarifa_id}|${t.modelo_id}`] = Number(t.preco_semana) || 0;
-          }
-        }
-      });
+      // Construídos por buildPrecoPorTarifaModelo/buildTvdeModeloPrecoMap, e
+      // não por `map[chave] = valor` num forEach: com duas tarifas activas a
+      // dar preço ao mesmo modelo, ficava a última que a base devolvesse — e a
+      // base não promete ordem. Ver tvdeModeloPreco.ts.
+      const linhasTarifaModelo = (tarifasTvdeModeloResult.data || []) as TarifaModeloRow[];
+      const precoPorTarifaModelo = buildPrecoPorTarifaModelo(linhasTarifaModelo);
+      for (const [modeloId, preco] of buildTvdeModeloPrecoMap(linhasTarifaModelo)) {
+        modeloTvdeTarifaMap[modeloId] = preco;
+      }
 
       // Mapa: tarifa_id → preco_semana (tarifas de grupo, regime renting).
       const precoPorTarifaId: Record<string, number> = {};
@@ -692,7 +710,7 @@ export function ContasResumoTab() {
         const tarifaContrato = viaturaId ? contratoTarifaPorViatura[viaturaId] : undefined;
         if (tarifaContrato) {
           const doModelo = modeloId
-            ? precoPorTarifaModelo[`${tarifaContrato}|${modeloId}`]
+            ? precoPorTarifaModelo.get(`${tarifaContrato}|${modeloId}`)
             : undefined;
           if (doModelo != null) return { preco: doModelo, estimado: false };
           const doGrupo = precoPorTarifaId[tarifaContrato];

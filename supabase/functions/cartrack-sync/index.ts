@@ -372,6 +372,24 @@ serve(async (req) => {
         continue;
       }
       const registration = pick(t, ["registration", "license_plate", "licensePlate", "reg_number", "plate"]);
+
+      // ── Os nomes reais dos campos da API ──────────────────────────────
+      // Estes candidatos foram tirados às 1.764 viagens já guardadas em
+      // cartrack_trips: a API manda `start_timestamp`/`end_timestamp`,
+      // `trip_distance` e `trip_duration_seconds`. Os nomes que estavam aqui
+      // (`start_time`, `distance_km`, `duration_seconds`) não existem em
+      // resposta nenhuma — resultado: start_at a NULL em 100% das viagens, e
+      // a integração inútil apesar de ter os dados todos no raw_data.
+      //
+      // `trip_distance` vem em METROS (63900 = 63,9 km numa viagem de 76 min
+      // com máxima de 129 km/h) e a coluna é distance_km.
+      //
+      // As coordenadas vêm num objecto aninhado, não em campos soltos:
+      //   "start_coordinates": { "latitude": 40.694332, "longitude": -8.483854 }
+      const distanciaMetros = toNum(pick(t, ["trip_distance"]));
+      const coordIni = (t as Record<string, unknown>)?.start_coordinates ?? {};
+      const coordFim = (t as Record<string, unknown>)?.end_coordinates ?? {};
+
       const { error: upErr } = await supabase.from("cartrack_trips").upsert(
         {
           integracao_id,
@@ -384,14 +402,25 @@ serve(async (req) => {
           registration: registration ? String(registration) : null,
           viatura_id: matchViatura(registration),
           driver_name: pick(t, ["driver_name", "driver", "driverName"]),
-          start_at: pick(t, ["start_time", "start_ts", "started_at", "trip_start"]) || null,
-          end_at: pick(t, ["end_time", "end_ts", "ended_at", "trip_end"]) || null,
-          start_latitude: toNum(pick(t, ["start_latitude", "start_lat"])),
-          start_longitude: toNum(pick(t, ["start_longitude", "start_lng", "start_lon"])),
-          end_latitude: toNum(pick(t, ["end_latitude", "end_lat"])),
-          end_longitude: toNum(pick(t, ["end_longitude", "end_lng", "end_lon"])),
-          distance_km: toNum(pick(t, ["distance_km", "distance", "km", "mileage"])),
-          duration_seconds: toNum(pick(t, ["duration_seconds", "duration", "duration_sec"])),
+          start_at: pick(t, ["start_timestamp", "start_time", "start_ts", "started_at", "trip_start"]) || null,
+          end_at: pick(t, ["end_timestamp", "end_time", "end_ts", "ended_at", "trip_end"]) || null,
+          start_latitude:
+            toNum(pick(coordIni, ["latitude", "lat"])) ?? toNum(pick(t, ["start_latitude", "start_lat"])),
+          start_longitude:
+            toNum(pick(coordIni, ["longitude", "lng", "lon"])) ??
+            toNum(pick(t, ["start_longitude", "start_lng", "start_lon"])),
+          end_latitude:
+            toNum(pick(coordFim, ["latitude", "lat"])) ?? toNum(pick(t, ["end_latitude", "end_lat"])),
+          end_longitude:
+            toNum(pick(coordFim, ["longitude", "lng", "lon"])) ??
+            toNum(pick(t, ["end_longitude", "end_lng", "end_lon"])),
+          distance_km:
+            distanciaMetros !== null
+              ? distanciaMetros / 1000
+              : toNum(pick(t, ["distance_km", "distance", "km", "mileage"])),
+          duration_seconds: toNum(
+            pick(t, ["trip_duration_seconds", "duration_seconds", "duration", "duration_sec"])
+          ),
           max_speed: toNum(pick(t, ["max_speed", "top_speed", "maxSpeed"])),
           odometer_start: toNum(pick(t, ["odometer_start", "start_odometer"])),
           odometer_end: toNum(pick(t, ["odometer_end", "end_odometer"])),

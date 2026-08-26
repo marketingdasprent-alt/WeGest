@@ -1,6 +1,7 @@
 // supabase/functions/fechar-semana-financeiro/index.ts
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { buildWeeklyContractSummary } from '../_shared/resumo-semanal-viatura/calc.ts';
+import { repartirDiasPorMotorista } from '../_shared/resumo-semanal-viatura/diasPorMotorista.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,68 +34,6 @@ interface ContratoRow {
   substituido_em: string | null;
 }
 
-/**
- * Um contrato pode ter várias linhas em `contratos_renting` para a mesma
- * viatura na mesma semana: versionamento (edição/renovação, substituido_em
- * setado no antigo), ou reservas placeholder nunca por diante. Duas linhas
- * podem ter datas IDÊNTICAS (edição administrativa sem mudar o período —
- * nesse caso só a mais recente conta) ou datas DIFERENTES/adjacentes
- * (renovação real — as duas contam, cada uma pelos seus próprios dias).
- *
- * Em vez de somar todos os contratos que se sobrepõem à semana (o que
- * duplica no caso das datas idênticas), atribuímos cada DIA da semana a no
- * máximo um contrato: o de maior prioridade (versão ainda não substituída
- * primeiro, depois `versao` mais alta) entre os que cobrem esse dia. Um
- * contrato cujos dias foram todos "roubados" por uma versão mais recente
- * com as mesmas datas fica com 0 dias reivindicados e não conta nada.
- */
-function reivindicarDiasPorContrato(
-  candidatos: ContratoRow[],
-  weekStart: Date,
-  weekEnd: Date
-): Map<string, { inicio: string; fim: string; dias: number }> {
-  const ordenados = [...candidatos].sort((a, b) => {
-    const aVivo = a.substituido_em == null;
-    const bVivo = b.substituido_em == null;
-    if (aVivo !== bVivo) return aVivo ? -1 : 1;
-    return (b.versao ?? 0) - (a.versao ?? 0);
-  });
-
-  const diasReivindicados = new Set<string>();
-  const resultado = new Map<string, { inicio: string; fim: string; dias: number }>();
-
-  for (const c of ordenados) {
-    const cInicio = new Date(`${c.data_inicio.split('T')[0]}T00:00:00Z`);
-    const cFim = c.data_fim ? new Date(`${c.data_fim.split('T')[0]}T00:00:00Z`) : weekEnd;
-    const overlapInicio = cInicio > weekStart ? cInicio : weekStart;
-    const overlapFim = cFim < weekEnd ? cFim : weekEnd;
-    if (overlapInicio > overlapFim) continue;
-
-    const diasLivres: string[] = [];
-    for (
-      let d = new Date(overlapInicio);
-      d.getTime() <= overlapFim.getTime();
-      d.setUTCDate(d.getUTCDate() + 1)
-    ) {
-      const iso = toIsoDate(d);
-      if (!diasReivindicados.has(iso)) {
-        diasLivres.push(iso);
-        diasReivindicados.add(iso);
-      }
-    }
-    if (diasLivres.length > 0) {
-      diasLivres.sort();
-      resultado.set(c.id, {
-        inicio: diasLivres[0],
-        fim: diasLivres[diasLivres.length - 1],
-        dias: diasLivres.length,
-      });
-    }
-  }
-
-  return resultado;
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -102,6 +41,7 @@ Deno.serve(async (req) => {
 
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
   const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   try {
@@ -109,6 +49,54 @@ Deno.serve(async (req) => {
     let semanaFim: string;
 
     const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
+
+    // ─── A que organização pertence este fecho ───────────────────────────
+    // Até 2026-08-19 esta função não filtrava por organização nenhuma:
+    // percorria `contratos_renting` inteira e escrevia resumos para toda a
+    // gente. Quem carregasse em "Fechar Período" numa organização fechava o
+    // período de TODAS — foi assim que a Década Ousada ficou com um fecho de
+    // 10–16/08 que ninguém lá pediu (mesmo carimbo da Premium: 17/08 10:00:46).
+    //
+    // A função corre com service role, portanto ignora o RLS: o org_id tem de
+    // ser resolvido e validado aqui à mão, a partir do JWT de quem chama.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new Error('Pedido sem autenticação.');
+    }
+    const authClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: authData } = await authClient.auth.getUser();
+    const userId = authData?.user?.id ?? null;
+    if (!userId) {
+      throw new Error('Não foi possível identificar quem está a fechar o período.');
+    }
+
+    // org do corpo do pedido, ou a organização activa do utilizador
+    let orgId: string | null =
+      typeof body?.orgId === 'string' && body.orgId ? body.orgId : null;
+    if (!orgId) {
+      const { data: ativa } = await supabase
+        .from('user_org_ativa')
+        .select('org_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+      orgId = (ativa as { org_id: string } | null)?.org_id ?? null;
+    }
+    if (!orgId) {
+      throw new Error('Sem organização activa para fechar o período.');
+    }
+
+    // Pertence mesmo a esta organização? (o orgId pode vir do corpo do pedido)
+    const { data: membro } = await supabase
+      .from('user_organizacoes')
+      .select('org_id')
+      .eq('user_id', userId)
+      .eq('org_id', orgId)
+      .maybeSingle();
+    if (!membro) {
+      throw new Error('Sem acesso a esta organização.');
+    }
     if (body?.semanaInicio && body?.semanaFim) {
       // Período explícito (UI "Fechar Semana" com range custom) — usado tal
       // como veio, sem forçar semana civil de 7 dias.
@@ -148,10 +136,18 @@ Deno.serve(async (req) => {
     }
     const weekStart = new Date(`${semanaInicio}T00:00:00Z`);
     const weekEnd = new Date(`${semanaFim}T00:00:00Z`);
-    // Limite exclusivo (dia seguinte) para colunas timestamptz como
-    // uber_transactions.occurred_at — um `.lte(semanaFim)` com string de
-    // data pura seria coagido para meia-noite de domingo, perdendo o
-    // domingo inteiro.
+    // Limite EXCLUSIVO (dia seguinte) para as colunas `timestamptz`.
+    //
+    // `contratos_renting.data_inicio` e `contrato_condutores.data_inicio` são
+    // timestamptz, e metade das linhas em produção tem hora (50,7% e 58,9%).
+    // Um `.lte('data_inicio', '2026-08-16')` é coagido para
+    // `2026-08-16 00:00:00+00`, portanto um contrato que começa às 14:00 do
+    // último dia do período fica de fora do fecho, em silêncio.
+    //
+    // As restantes colunas de data usadas aqui — viatura_multas.data_infracao,
+    // motorista_financeiro.data_movimento e os periodo_inicio/fim dos resumos
+    // Bolt e Uber — são `date` e continuam com `.lte()` inclusivo, que é o
+    // correcto para elas.
     const semanaFimExclusivo = new Date(weekEnd);
     semanaFimExclusivo.setUTCDate(semanaFimExclusivo.getUTCDate() + 1);
     const semanaFimExclusivoStr = toIsoDate(semanaFimExclusivo);
@@ -167,8 +163,12 @@ Deno.serve(async (req) => {
       .select(
         'id, org_id, viatura_id, regime, data_inicio, data_fim, tarifa_id, tarifa_diaria, valor_total_manual, estado_operacional, versao, substituido_em'
       )
+      // Sem isto o fecho atravessa organizações — ver a resolução do orgId acima.
+      .eq('org_id', orgId)
       .is('deleted_at', null)
-      .lte('data_inicio', semanaFim)
+      // timestamptz → limite exclusivo, senão perde-se quem começa com hora
+      // no último dia do período (ver o comentário acima).
+      .lt('data_inicio', semanaFimExclusivoStr)
       .or(`data_fim.is.null,data_fim.gte.${semanaInicio}`)
       .or('estado_operacional.neq.cancelado,substituido_em.not.is.null');
     if (contratosError) throw contratosError;
@@ -188,9 +188,56 @@ Deno.serve(async (req) => {
     // primeiraVezEsteMotoristaNaSemana, abaixo.
     const motoristasComTotaisSemana = new Set<string>();
 
+    // ─── Quem conduz cada contrato, tudo de uma vez ──────────────────────
+    // Era uma query por contrato dentro do ciclo. Passa para aqui porque o
+    // livro de dias (a seguir) precisa de saber o motorista ANTES de repartir
+    // os dias, e de caminho poupa uma ida à base por contrato.
+    const condutorPorContrato = new Map<string, { motorista_id: string | null; cliente_id: string | null }>();
+    if (todosContratos.length > 0) {
+      const { data: condutores } = await supabase
+        .from('contrato_condutores')
+        .select('contrato_id, motorista_id, cliente_id, data_inicio')
+        .in(
+          'contrato_id',
+          todosContratos.map((c) => c.id)
+        )
+        .eq('is_principal', true)
+        // timestamptz — mesmo motivo do contrato: limite exclusivo.
+        .lt('data_inicio', semanaFimExclusivoStr)
+        .or(`data_fim.is.null,data_fim.gte.${semanaInicio}`)
+        .order('data_inicio', { ascending: false });
+      // Havendo mais do que um condutor principal a cobrir a semana (dados
+      // ambíguos), fica o que começou mais tarde. Antes disto a query usava
+      // .maybeSingle() e, nesse caso, devolvia erro e o contrato perdia o
+      // motorista por completo.
+      for (const cc of (condutores ?? []) as Array<{
+        contrato_id: string;
+        motorista_id: string | null;
+        cliente_id: string | null;
+      }>) {
+        if (!condutorPorContrato.has(cc.contrato_id)) {
+          condutorPorContrato.set(cc.contrato_id, {
+            motorista_id: cc.motorista_id ?? null,
+            cliente_id: cc.cliente_id ?? null,
+          });
+        }
+      }
+    }
+
+    // ─── Um dia, um dono — e o dono é a PESSOA, não a viatura ────────────
+    // O livro de dias era por viatura: um motorista com duas viaturas
+    // atribuídas em simultâneo era cobrado 7 + 7 dias numa semana de 7.
+    // A regra e os casos estão em _shared/resumo-semanal-viatura/diasPorMotorista.ts,
+    // com testes — é a contraparte do buildSlotPeriodos do ecrã.
+    const claims = repartirDiasPorMotorista(
+      todosContratos,
+      (contratoId) => condutorPorContrato.get(contratoId)?.motorista_id ?? null,
+      weekStart,
+      weekEnd
+    );
+
     for (const viaturaId of viaturaIds) {
       const candidatos = todosContratos.filter((c) => c.viatura_id === viaturaId);
-      const claims = reivindicarDiasPorContrato(candidatos, weekStart, weekEnd);
 
       for (const contrato of candidatos) {
         const claim = claims.get(contrato.id);
@@ -203,15 +250,12 @@ Deno.serve(async (req) => {
             .eq('id', viaturaId)
             .maybeSingle();
           if (!viatura) continue;
+          // Cinto e suspensórios: os contratos já vêm filtrados por org, mas a
+          // viatura é lida por id e é dela que sai o org_id que se GRAVA nos
+          // resumos. Se divergir, não se escreve nada na organização errada.
+          if (viatura.org_id !== orgId) continue;
 
-          const { data: condutorRow } = await supabase
-            .from('contrato_condutores')
-            .select('motorista_id, cliente_id')
-            .eq('contrato_id', contrato.id)
-            .eq('is_principal', true)
-            .lte('data_inicio', semanaFim)
-            .or(`data_fim.is.null,data_fim.gte.${semanaInicio}`)
-            .maybeSingle();
+          const condutorRow = condutorPorContrato.get(contrato.id) ?? null;
 
           let valorSemanalTvde = 0;
           const tarifaDiariaRentACar = Number(contrato.tarifa_diaria) || 0;
@@ -445,7 +489,14 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, semanaInicio, semanaFim, viaturasAtualizadas, motoristasAtualizados }),
+      JSON.stringify({
+        success: true,
+        orgId,
+        semanaInicio,
+        semanaFim,
+        viaturasAtualizadas,
+        motoristasAtualizados,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {

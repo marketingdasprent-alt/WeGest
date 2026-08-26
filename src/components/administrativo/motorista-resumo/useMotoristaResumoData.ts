@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { MotoristaResumoProps, SlotPeriodo } from '../MotoristaResumoDialog';
 import { deriveAluguerSemTarifa } from './aluguerSemTarifa';
 import { buildSlotPeriodos } from './slotPeriodos';
+import { buildTvdeModeloPrecoMap, buildPrecoPorTarifaModelo } from './tvdeModeloPreco';
 import { formatCartoesFrota, type CartaoFrotaResumo } from './cartoesFrota';
 
 export interface UseMotoristaResumoDataReturn {
@@ -185,16 +186,13 @@ export function useMotoristaResumoData(
           modelo_id: string;
           preco_semana: number;
         }>;
-        const tvdeModeloPrecoMap = new Map<string, number>(
-          tarifasModelo.map((r) => [r.modelo_id, Number(r.preco_semana)])
-        );
+        // Mesma construção que o ecrã de Contas/Resumo usa — os dois têm de
+        // dar o mesmo aluguer, e nenhum dos dois pode depender da ordem por
+        // que a base devolve as tarifas. Ver tvdeModeloPreco.ts.
+        const tvdeModeloPrecoMap = buildTvdeModeloPrecoMap(tarifasModelo);
         // `${tarifa_id}|${modelo_id}` → preço, para resolver a tarifa que o
         // contrato indica em vez de uma qualquer que esteja ativa.
-        const precoPorTarifaModelo = new Map<string, number>(
-          tarifasModelo
-            .filter((r) => r.tarifa_id)
-            .map((r) => [`${r.tarifa_id}|${r.modelo_id}`, Number(r.preco_semana)])
-        );
+        const precoPorTarifaModelo = buildPrecoPorTarifaModelo(tarifasModelo);
 
         // viatura_id → tarifa do contrato (em curso primeiro, senão o mais
         // recente). Mesma cascata da tabela de Contas/Resumo — os dois ecrãs
