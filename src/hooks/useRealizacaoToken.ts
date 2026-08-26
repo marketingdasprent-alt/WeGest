@@ -3,6 +3,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { errorMessage } from '@/utils/errorMessage';
+import type { Database } from '@/integrations/supabase/types';
+
+/**
+ * O gerador de tipos da Supabase não exprime nulabilidade de ARGUMENTOS de RPC:
+ * mapeia `p_km numeric` para `number`, mesmo quando a função aceita NULL. Estas
+ * duas aceitam — uma entrega pode ser confirmada sem leitura de km — e
+ * `p_km`/`p_combustivel` NÃO têm DEFAULT, pelo que passar `undefined` faria o
+ * supabase-js omitir a chave e o PostgREST deixar de encontrar a função.
+ *
+ * Passar NULL explícito é o comportamento correcto; estes aliases só
+ * reconciliam o tipo com a assinatura real, sem mudar nada em runtime.
+ * `useRealizacaoToken.test.ts` fixa o payload exacto contra esta troca.
+ */
+type ArgsRealizacao = Database['public']['Functions']['realizar_token_realizacao']['Args'];
+type ArgsTroca = Database['public']['Functions']['realizar_token_troca']['Args'];
 
 export interface TokenRealizacaoInfo {
   evento_id: string;
@@ -172,7 +187,7 @@ export function useRealizarFromToken() {
           p_km_nova: troca.kmNova,
           p_combustivel_nova: troca.combustivelNova,
           p_eletricidade_nova: troca?.eletricidadeNova ?? null,
-        });
+        } as unknown as ArgsTroca);
         if (error) throw error;
         return;
       }
@@ -185,7 +200,7 @@ export function useRealizarFromToken() {
         p_eletricidade: eletricidade ?? null,
         p_dua_original_levada: duaOriginalLevada ?? null,
         p_dua_devolvida: duaDevolvida ?? null,
-      });
+      } as unknown as ArgsRealizacao);
       if (error) throw error;
     },
     onSuccess: (_, vars) => {

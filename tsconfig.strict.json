@@ -112,6 +112,7 @@
     "src/hooks/usePedidosTrocaKms.ts",
     "src/hooks/useQuadroLive.ts",
     "src/hooks/useQuadroToken.ts",
+    "src/hooks/useRealizacaoToken.test.ts",
     "src/hooks/useRentingCoberturas.ts",
     "src/hooks/useRentingExtras.ts",
     "src/hooks/useRentingGruposTarifas.test.ts",
