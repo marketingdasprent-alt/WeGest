@@ -54,6 +54,14 @@ export function AssinarDocumento({
   const [aEnviar, setAEnviar] = useState(false);
   const [concluido, setConcluido] = useState(false);
 
+  // O que o SignaturePad carrega no canvas — nunca o que ele próprio acabou de
+  // produzir. Só muda por uma fonte externa: o valor inicial, ou o rascunho
+  // restaurado. Passar `assinatura` (o estado vivo, actualizado a cada traço)
+  // de volta como `value` fazia o `useEffect` do SignaturePad reagir à sua
+  // própria saída e limpar o canvas a meio do desenho — daí ser preciso
+  // desenhar duas vezes para "pegar".
+  const [valorParaCarregar, setValorParaCarregar] = useState<string | null>(assinaturaInicial);
+
   // O rascunho é a rede de segurança de quem assina no telemóvel: um refresh
   // sem querer, ou a aplicação a ir para segundo plano, não pode obrigar a
   // desenhar outra vez.
@@ -61,7 +69,10 @@ export function AssinarDocumento({
     chave: `assinatura-documento:${token}`,
     valor: assinatura,
     restaurar: (guardado) => {
-      if (guardado) setAssinatura(guardado);
+      if (guardado) {
+        setAssinatura(guardado);
+        setValorParaCarregar(guardado);
+      }
     },
   });
 
@@ -94,9 +105,19 @@ export function AssinarDocumento({
     setErroSubmeter(null);
 
     try {
-      const pdf = await gerarDeSnapshot(pedido.snapshot, {
-        [`assinatura_${pedido.papel}`]: assinatura,
-      });
+      // "O Condutor", na célula do template, não é uma pessoa à parte — é
+      // sempre um cliente que conduz (rent-a-car) ou um motorista (TVDE/
+      // slot). {{motorista_nome}}, na mesma célula, já segue esta regra
+      // (generateContratoPdf.ts): preenche-se a partir de qualquer um dos
+      // dois. A assinatura tem de fazer o mesmo — sem isto,
+      // {{assinatura_condutor}} nunca via imagem nenhuma, porque só
+      // 'cliente' e 'motorista' chegam a ser papéis reais de quem assina.
+      const assinaturas: Record<string, string> = { [`assinatura_${pedido.papel}`]: assinatura };
+      if (pedido.papel === 'cliente' || pedido.papel === 'motorista') {
+        assinaturas.assinatura_condutor = assinatura;
+      }
+
+      const pdf = await gerarDeSnapshot(pedido.snapshot, assinaturas);
 
       await submeter({
         token,
@@ -190,7 +211,7 @@ export function AssinarDocumento({
         <CardContent className="space-y-4">
           <div>
             <p className="mb-2 text-sm font-medium">A sua assinatura</p>
-            <SignaturePad ref={padRef} value={assinatura} onChange={aoDesenhar} />
+            <SignaturePad ref={padRef} value={valorParaCarregar} onChange={aoDesenhar} />
             {assinatura && (
               <p data-testid="assinatura-presente" className="mt-2 text-xs text-muted-foreground">
                 Assinatura desenhada. Pode voltar a desenhar se quiser.
