@@ -34,8 +34,9 @@ describe('buildSlotPeriodos', () => {
       new Map()
     );
     expect(periodos).toHaveLength(1);
-    expect(periodos[0].dias).toBe(7);
-    expect(periodos[0].custo).toBeCloseTo(230, 2);
+    // Levantou a 27/07, o primeiro dia da semana: cobram-se 28/07 a 02/08.
+    expect(periodos[0].dias).toBe(6);
+    expect(periodos[0].custo).toBeCloseTo((230 / 7) * 6, 2);
   });
 
   // Caso real: motorista #582 (Rui Teixeira) — atribuição "encerrado"
@@ -77,7 +78,9 @@ describe('buildSlotPeriodos', () => {
     expect(periodos).toHaveLength(2);
     expect(periodos.map((p) => p.matricula).sort()).toEqual(['AA-00-AA', 'BB-00-BB']);
     const totalDias = periodos.reduce((s, p) => s + p.dias, 0);
-    expect(totalDias).toBe(7); // 3 + 4, sem sobreposição — cada dia contado uma vez
+    // 2 + 3. Não são 7: o dia em que levanta cada carro (27/07 e 30/07) não é
+    // cobrado a ninguém, por isso uma semana com uma troca fecha em 5 dias.
+    expect(totalDias).toBe(5);
   });
 
   it('ignora atribuições sem tarifa configurada (0€)', () => {
@@ -114,7 +117,8 @@ describe('buildSlotPeriodos', () => {
       tvdeModeloPrecoMap
     );
     expect(periodos).toHaveLength(1);
-    expect(periodos[0].custo).toBeCloseTo(350, 2);
+    // 6 dias: levanta a 27/07, cobra-se de 28/07 a 02/08. 350/7 × 6 = 300.
+    expect(periodos[0].custo).toBeCloseTo(300, 2);
   });
 
   it('aceita preco_semana já resolvido pelo chamador (ContasResumoTab)', () => {
@@ -127,7 +131,8 @@ describe('buildSlotPeriodos', () => {
     };
     const periodos = buildSlotPeriodos([linha], ...semana('2026-07-27', '2026-08-02'), new Map());
     expect(periodos).toHaveLength(1);
-    expect(periodos[0].custo).toBeCloseTo(175, 2);
+    // 6 dias: levanta a 27/07, cobra-se de 28/07 a 02/08. 175/7 × 6 = 150.
+    expect(periodos[0].custo).toBeCloseTo(150, 2);
   });
 
   // Caso real: motorista #252 (José Braga) devolveu a BH-50-HF a 17/08. As
@@ -158,5 +163,56 @@ describe('buildSlotPeriodos', () => {
     // 7 dias (união, o dia 03/08 está nas duas linhas e não conta a dobrar)
     expect(periodos[0].dias).toBe(7);
     expect(periodos[0].custo).toBeCloseTo(175, 2);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Bloco 1.2 da auditoria: um dia é cobrado UMA vez ao motorista, mesmo que
+// várias viaturas o reclamem. Antes disto o fecho de 10–16/08/2026 gravou
+// 1.050,00 € a um motorista com três viaturas e os sete dias sobrepostos.
+// ─────────────────────────────────────────────────────────────────────────
+describe('buildSlotPeriodos — um dia, um dono', () => {
+  it('três viaturas com a semana toda sobreposta não dão 21 dias', () => {
+    const linhas = [
+      tarifado('v1', 'BN-07-BO', '2026-08-10', null, 500),
+      tarifado('v2', 'BI-81-IR', '2026-08-10', null, 275),
+      tarifado('v3', 'BQ-28-AQ', '2026-08-10', null, 275),
+    ];
+    const periodos = buildSlotPeriodos(linhas, ...semana('2026-08-10', '2026-08-16'), new Map());
+    const totalDias = periodos.reduce((s, p) => s + p.dias, 0);
+    // 6, não 7: as três foram levantadas a 10/08 e esse dia não se cobra.
+    expect(totalDias).toBe(6);
+  });
+
+  it('na sobreposição manda a atribuição que começou mais tarde', () => {
+    const linhas = [
+      tarifado('v1', 'AA-00-AA', '2026-07-27', '2026-08-02', 700), // a antiga, mal fechada
+      tarifado('v2', 'BB-00-BB', '2026-07-30', null, 700), // a nova
+    ];
+    const periodos = buildSlotPeriodos(linhas, ...semana('2026-07-27', '2026-08-02'), new Map());
+    const porMatricula = Object.fromEntries(periodos.map((p) => [p.matricula, p.dias]));
+    expect(porMatricula['AA-00-AA']).toBe(3); // 28, 29, 30 — levantou a 27
+    expect(porMatricula['BB-00-BB']).toBe(3); // 31, 01, 02 — levantou a 30
+    expect(periodos.reduce((s, p) => s + p.dias, 0)).toBe(6);
+  });
+
+  it('não depende da ordem por que as linhas vêm da base de dados', () => {
+    const a = tarifado('v1', 'AA-00-AA', '2026-07-27', '2026-08-02', 700);
+    const b = tarifado('v2', 'BB-00-BB', '2026-07-30', null, 700);
+    const umaOrdem = buildSlotPeriodos([a, b], ...semana('2026-07-27', '2026-08-02'), new Map());
+    const outraOrdem = buildSlotPeriodos([b, a], ...semana('2026-07-27', '2026-08-02'), new Map());
+    expect(outraOrdem).toEqual(umaOrdem);
+  });
+
+  it('o custo total nunca excede o valor semanal quando há uma só tarifa', () => {
+    const linhas = [
+      tarifado('v1', 'AA-00-AA', '2026-08-10', null, 210),
+      tarifado('v2', 'BB-00-BB', '2026-08-12', null, 210),
+    ];
+    const periodos = buildSlotPeriodos(linhas, ...semana('2026-08-10', '2026-08-16'), new Map());
+    const custo = periodos.reduce((s, p) => s + p.custo, 0);
+    // 6 dias cobrados (11 a 16): a viatura levantada a 10/08 e a levantada a
+    // 12/08 perdem cada uma o seu dia de levantamento. 210/7 × 6 = 180.
+    expect(custo).toBeCloseTo(180, 6);
   });
 });

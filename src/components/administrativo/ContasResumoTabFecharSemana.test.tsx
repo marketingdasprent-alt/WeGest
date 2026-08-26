@@ -28,6 +28,33 @@ describe('fecharSemanaFinanceiro', () => {
     });
   });
 
+  // Bloco 0.3 da auditoria: até 2026-08-19 a edge function não filtrava por
+  // organização nenhuma — quem fechasse numa fechava em todas (a Década Ousada
+  // apanhou um fecho de 10–16/08 que só a Premium pediu, com o mesmo carimbo).
+  it('envia o orgId para o fecho ficar preso a uma só organização', async () => {
+    const invoke = vi.fn().mockResolvedValue({ data: { success: true }, error: null });
+    await fecharSemanaFinanceiro(
+      { functions: { invoke } } as any,
+      new Date('2026-07-06T12:00:00Z'),
+      new Date('2026-07-12T12:00:00Z'),
+      'org-abc'
+    );
+    expect(invoke).toHaveBeenCalledWith('fechar-semana-financeiro', {
+      body: { semanaInicio: '2026-07-06', semanaFim: '2026-07-12', orgId: 'org-abc' },
+    });
+  });
+
+  it('sem orgId não inventa um: a edge function resolve a organização activa', async () => {
+    const invoke = vi.fn().mockResolvedValue({ data: { success: true }, error: null });
+    await fecharSemanaFinanceiro(
+      { functions: { invoke } } as any,
+      new Date('2026-07-06T12:00:00Z'),
+      new Date('2026-07-12T12:00:00Z'),
+      null
+    );
+    expect(invoke.mock.calls[0][1].body).not.toHaveProperty('orgId');
+  });
+
   it('propaga erro quando a edge function falha (erro de transporte)', async () => {
     const invoke = vi.fn().mockResolvedValue({ data: null, error: { message: 'boom' } });
     await expect(
