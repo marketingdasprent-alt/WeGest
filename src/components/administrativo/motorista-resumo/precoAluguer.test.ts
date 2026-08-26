@@ -2,11 +2,7 @@
 // O ficheiro vive em supabase/functions/_shared/resumo/ e chega aqui pelo
 // alias `@shared` — se este import partir, é porque a partilha partiu.
 import { describe, it, expect } from 'vitest';
-import {
-  resolverPrecoAluguer,
-  precoACobrar,
-  type TabelasDePreco,
-} from '@shared/precoAluguer.ts';
+import { resolverPrecoAluguer, precoACobrar, type TabelasDePreco } from '@shared/precoAluguer.ts';
 
 const tabelas: TabelasDePreco = {
   porTarifaEModelo: new Map([['tarifa-tvde|modelo-a', 224.99]]),
@@ -46,7 +42,11 @@ describe('resolverPrecoAluguer — a cascata', () => {
   });
 
   it('tarifa do contrato sem preço por modelo cai na tarifa de grupo do próprio contrato', () => {
-    const r = resolverPrecoAluguer({ tarifa_id: 'tarifa-grupo' }, { modelo_id: 'modelo-a' }, tabelas);
+    const r = resolverPrecoAluguer(
+      { tarifa_id: 'tarifa-grupo' },
+      { modelo_id: 'modelo-a' },
+      tabelas
+    );
     expect(r).toEqual({ precoSemana: 300, origem: 'tarifa-do-contrato', estimado: false });
   });
 
@@ -69,7 +69,11 @@ describe('resolverPrecoAluguer — a cascata', () => {
   it('um preço de 0 no contrato é um preço, não uma ausência', () => {
     // Viatura cedida ou campanha. Antes disto, o 0 caía na cascata e o
     // sistema inventava a tarifa do grupo.
-    const r = resolverPrecoAluguer({ preco_semana_acordado: 0, tarifa_id: 'tarifa-tvde' }, { grupo_id: 'grupo-1' }, tabelas);
+    const r = resolverPrecoAluguer(
+      { preco_semana_acordado: 0, tarifa_id: 'tarifa-tvde' },
+      { grupo_id: 'grupo-1' },
+      tabelas
+    );
     expect(r.precoSemana).toBe(0);
     expect(r.origem).toBe('contrato');
     expect(r.estimado).toBe(false);

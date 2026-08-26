@@ -42,11 +42,7 @@ export function buildTvdeModeloPrecoMap(rows: readonly TarifaModeloRow[]): Map<s
 
     const tarifaId = r.tarifa_id ?? '';
     const actual = melhor.get(modeloId);
-    if (
-      !actual ||
-      preco < actual.preco ||
-      (preco === actual.preco && tarifaId < actual.tarifaId)
-    ) {
+    if (!actual || preco < actual.preco || (preco === actual.preco && tarifaId < actual.tarifaId)) {
       melhor.set(modeloId, { preco, tarifaId });
     }
   }

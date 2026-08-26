@@ -29,8 +29,14 @@ describe('buildTvdeModeloPrecoMap', () => {
   });
 
   it('empate no preço desempata pelo tarifa_id, para ser reproduzível', () => {
-    const m1 = buildTvdeModeloPrecoMap([linha('zzz', 'modelo-a', 200), linha('aaa', 'modelo-a', 200)]);
-    const m2 = buildTvdeModeloPrecoMap([linha('aaa', 'modelo-a', 200), linha('zzz', 'modelo-a', 200)]);
+    const m1 = buildTvdeModeloPrecoMap([
+      linha('zzz', 'modelo-a', 200),
+      linha('aaa', 'modelo-a', 200),
+    ]);
+    const m2 = buildTvdeModeloPrecoMap([
+      linha('aaa', 'modelo-a', 200),
+      linha('zzz', 'modelo-a', 200),
+    ]);
     expect(m1.get('modelo-a')).toBe(200);
     expect(m1).toEqual(m2);
   });
@@ -63,7 +69,10 @@ describe('buildTvdeModeloPrecoMap', () => {
 
 describe('buildPrecoPorTarifaModelo', () => {
   it('chaveia por tarifa e modelo — é assim que o contrato resolve o preço', () => {
-    const m = buildPrecoPorTarifaModelo([linha('t1', 'modelo-a', 250), linha('t2', 'modelo-a', 210)]);
+    const m = buildPrecoPorTarifaModelo([
+      linha('t1', 'modelo-a', 250),
+      linha('t2', 'modelo-a', 210),
+    ]);
     expect(m.get('t1|modelo-a')).toBe(250);
     expect(m.get('t2|modelo-a')).toBe(210);
   });

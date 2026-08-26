@@ -116,21 +116,23 @@ export function buildSlotPeriodos(
     porViatura.set(dono.viaturaId, entry);
   }
 
-  return Array.from(porViatura.values())
-    .map((entry) => {
-      const datasOrdenadas = entry.dias.slice().sort();
-      const dias = datasOrdenadas.length;
-      return {
-        matricula: entry.matricula,
-        dias,
-        taxaDiaria: entry.taxaDiaria,
-        custo: dias * entry.taxaDiaria,
-        dataInicioStr: format(parseISO(datasOrdenadas[0]), 'dd/MM'),
-        dataFimStr: format(parseISO(datasOrdenadas[datasOrdenadas.length - 1]), 'dd/MM'),
-        _ordena: datasOrdenadas[0],
-      };
-    })
-    // Ordem cronológica e estável: quem começou primeiro aparece primeiro.
-    .sort((a, b) => (a._ordena < b._ordena ? -1 : a._ordena > b._ordena ? 1 : 0))
-    .map(({ _ordena: _descartado, ...periodo }) => periodo);
+  return (
+    Array.from(porViatura.values())
+      .map((entry) => {
+        const datasOrdenadas = entry.dias.slice().sort();
+        const dias = datasOrdenadas.length;
+        return {
+          matricula: entry.matricula,
+          dias,
+          taxaDiaria: entry.taxaDiaria,
+          custo: dias * entry.taxaDiaria,
+          dataInicioStr: format(parseISO(datasOrdenadas[0]), 'dd/MM'),
+          dataFimStr: format(parseISO(datasOrdenadas[datasOrdenadas.length - 1]), 'dd/MM'),
+          _ordena: datasOrdenadas[0],
+        };
+      })
+      // Ordem cronológica e estável: quem começou primeiro aparece primeiro.
+      .sort((a, b) => (a._ordena < b._ordena ? -1 : a._ordena > b._ordena ? 1 : 0))
+      .map(({ _ordena: _descartado, ...periodo }) => periodo)
+  );
 }
