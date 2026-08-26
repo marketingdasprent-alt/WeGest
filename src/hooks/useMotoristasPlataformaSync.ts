@@ -215,22 +215,33 @@ export function useSincronizarMotoristasPlataformaIds() {
   return useMutation({
     mutationFn: async () => {
       // 1. Buscar todos os motoristas
+      //
+      // O `org_id` vem em todas as queries daqui para baixo porque o cruzamento
+      // é por nome/telefone/email — dados que a mesma pessoa tem iguais em duas
+      // empresas. Quem tem acesso a mais do que uma org vê motoristas das duas,
+      // e sem este campo o casamento saía cruzado: em 08/2026 quatro motoristas
+      // da Premium Ride (Hugo Palma, Kuldeep Singh, Rakesh Kumar, Paulo Silva)
+      // ficaram pendurados nas fichas da Década Ousada, com 7 transações Uber
+      // na conta-corrente da empresa errada.
+      //
+      // A mesma pessoa DEVE ter uma ficha por empresa — são contas-correntes
+      // independentes. O que não pode é a ficha de uma org apanhar o ID da outra.
       const { data: currentMotoristas, error: motError } = await supabase
         .from('motoristas_ativos')
-        .select('id, nome, email, telefone, bolt_id, uber_uuid');
+        .select('id, nome, email, telefone, bolt_id, uber_uuid, org_id');
       if (motError) throw motError;
 
       // 2. Buscar resumos Bolt com IDs
       const { data: resumos, error: resError } = await supabase
         .from('bolt_resumos_semanais')
-        .select('motorista_nome, identificador_motorista, telefone, email, motorista_id')
+        .select('motorista_nome, identificador_motorista, telefone, email, motorista_id, org_id')
         .not('identificador_motorista', 'is', null);
       if (resError) throw resError;
 
       // 3. Buscar Uber Drivers mapeados
       const { data: uberDrivers, error: uberError } = await supabase
         .from('uber_drivers')
-        .select('full_name, uber_driver_id, motorista_id')
+        .select('full_name, uber_driver_id, motorista_id, org_id')
         .not('uber_driver_id', 'is', null);
       if (uberError) throw uberError;
 
@@ -251,6 +262,9 @@ export function useSincronizarMotoristasPlataformaIds() {
         // Tentar encontrar na Bolt
         if (!m.bolt_id || !m.email || !m.telefone) {
           const match = (resumos || []).find((r) => {
+            // Nunca cruzar empresas — ver nota nas queries acima.
+            if (!r.org_id || !m.org_id || r.org_id !== m.org_id) return false;
+
             const rClean = normalizeStr(r.motorista_nome || '');
             const rWords = rClean.split(' ').filter((w) => w.length > 2 && !PARTICLES.includes(w));
             const rPhone = r.telefone ? r.telefone.replace(/\D/g, '').slice(-9) : null;
@@ -294,6 +308,9 @@ export function useSincronizarMotoristasPlataformaIds() {
         // Tentar encontrar na Uber
         if (!m.uber_uuid) {
           const matchUber = (uberDrivers || []).find((u) => {
+            // Nunca cruzar empresas — ver nota nas queries acima.
+            if (!u.org_id || !m.org_id || u.org_id !== m.org_id) return false;
+
             const uClean = normalizeStr(u.full_name || '');
             const uWords = uClean.split(' ').filter((w) => w.length > 2 && !PARTICLES.includes(w));
 

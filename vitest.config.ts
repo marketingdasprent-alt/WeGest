@@ -49,6 +49,17 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Cálculo partilhado entre a aplicação e as edge functions. Vive em
+      // supabase/functions/_shared/resumo/ porque é de lá que a publicação
+      // das functions o sabe empacotar; a aplicação alcança-o por este alias.
+      // Só entram ali ficheiros PUROS — sem imports, sem globais do Deno —
+      // senão deixam de compilar de um dos dois lados.
+      //
+      // O `exclude` acima tira supabase/** da DESCOBERTA de testes (são
+      // ficheiros Deno), o que não impede importar de lá. Os testes deste
+      // código partilhado vivem em src/, e cobrem os dois consumidores por
+      // ser o mesmo ficheiro.
+      '@shared': path.resolve(__dirname, './supabase/functions/_shared/resumo'),
     },
   },
 });

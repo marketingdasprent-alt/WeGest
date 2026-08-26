@@ -20,12 +20,14 @@ interface CartaoAssoc {
   tipo: TipoCartao;
   status: string;
   limite: number | null;
+  org_id: string | null;
 }
 interface CartaoDisp {
   id: string;
   numero: string;
   detentor: string | null;
   limite: number | null;
+  org_id: string | null;
 }
 
 interface Props {
@@ -84,7 +86,7 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
     try {
       const { data, error } = await (supabase as any)
         .from('cartoes_frota')
-        .select('id, numero, tipo, status, limite')
+        .select('id, numero, tipo, status, limite, org_id')
         .eq('motorista_id', motorista.id)
         .order('tipo')
         .order('numero');
@@ -103,7 +105,7 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
     try {
       const { data, error } = await (supabase as any)
         .from('cartoes_frota')
-        .select('id, numero, detentor, limite')
+        .select('id, numero, detentor, limite, org_id')
         .eq('tipo', tipo)
         .eq('status', 'disponivel')
         .is('motorista_id', null)
@@ -145,7 +147,25 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
         .update({ [`cartao_${tipo}`]: cartao.numero })
         .eq('id', motorista.id);
       if (e2) throw e2;
-      toast({ title: `Cartão ${TIPO_INFO[tipo].label} ${cartao.numero} associado` });
+      // Histórico de atribuição: é isto que decide de quem é o combustível de
+      // cada dia. Sem esta linha, os movimentos deste cartão entram por
+      // atribuir. Falhar aqui não desfaz a associação — mas tem de se ver.
+      const { error: e3 } = await (supabase as any).from('cartao_atribuicoes').insert({
+        org_id: cartao.org_id,
+        cartao_id: cartao.id,
+        motorista_id: motorista.id,
+        de: todayISO(),
+        origem: 'associacao',
+      });
+      if (e3) {
+        toast({
+          title: 'Cartão associado, mas sem registo de atribuição',
+          description: `O combustível deste cartão vai entrar por atribuir. ${e3.message}`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: `Cartão ${TIPO_INFO[tipo].label} ${cartao.numero} associado` });
+      }
       await refetchAll();
     } catch (err: any) {
       toast({ title: 'Erro ao associar', description: err.message, variant: 'destructive' });
@@ -174,7 +194,23 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
           .update({ [`cartao_${c.tipo}`]: null })
           .eq('id', motorista.id);
       }
-      toast({ title: `Cartão ${c.numero} devolvido` });
+      // Fecha o período no histórico. O que ele gastou até hoje continua dele
+      // — devolver um cartão não reescreve o passado.
+      const { error: e3 } = await (supabase as any)
+        .from('cartao_atribuicoes')
+        .update({ ate: todayISO() })
+        .eq('cartao_id', c.id)
+        .eq('motorista_id', motorista.id)
+        .is('ate', null);
+      if (e3) {
+        toast({
+          title: 'Cartão devolvido, mas o histórico não fechou',
+          description: `Enquanto o período ficar aberto, movimentos futuros deste cartão continuam a cair neste motorista. ${e3.message}`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: `Cartão ${c.numero} devolvido` });
+      }
       await refetchAll();
     } catch (err: any) {
       toast({ title: 'Erro ao devolver', description: err.message, variant: 'destructive' });
