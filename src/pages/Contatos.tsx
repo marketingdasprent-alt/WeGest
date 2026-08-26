@@ -29,45 +29,13 @@ import { CRMFilters, FilterState } from '@/components/crm/CRMFilters';
 import { useCampaignTags } from '@/hooks/useCampaignTags';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
-interface Lead {
-  id: string;
-  nome: string;
-  email: string;
-  telefone?: string;
-  zona?: string;
-  data_aluguer?: string;
-  status: string;
-  campaign_tags?: string[];
-  created_at: string;
-  formulario_id?: string;
-  observacoes?: string;
-}
-
-const statusColors = {
-  novo: 'bg-blue-500',
-  contactado: 'bg-yellow-500',
-  interessado: 'bg-green-500',
-  convertido: 'bg-purple-500',
-  perdido: 'bg-red-500',
-};
-
-const statusLabels = {
-  novo: 'Novo',
-  contactado: 'Contactado',
-  interessado: 'Interessado',
-  convertido: 'Convertido',
-  perdido: 'Perdido',
-};
-
-const statusColumns = [
-  { id: 'novo', title: 'Novo', color: '#3b82f6', icon: '🆕' },
-  { id: 'contactado', title: 'Contactado', color: '#eab308', icon: '📞' },
-  { id: 'interessado', title: 'Interessado', color: '#22c55e', icon: '👍' },
-  { id: 'convertido', title: 'Convertido', color: '#8b5cf6', icon: '✅' },
-  { id: 'perdido', title: 'Perdido', color: '#ef4444', icon: '❌' },
-];
-
-const ITEMS_PER_PAGE = 50;
+import {
+  type Lead,
+  statusColors,
+  statusLabels,
+  statusColumns,
+  ITEMS_PER_PAGE,
+} from './contatos.types';
 
 const Contatos = () => {
   const [leads, setLeads] = useState<Lead[]>([]);

@@ -186,3 +186,99 @@ export function useSincronizarFichaCartao() {
     onSuccess: (_r, { motoristaId }) => invalidar(motoristaId),
   });
 }
+
+// ── Administração (CartoesFlotaTab) ──────────────────────────────────────────
+// Mesmo domínio, outra perspectiva: aqui gere-se o catálogo de cartões, não a
+// atribuição a um motorista.
+
+export const cartoesListaKey = ['cartoes-frota', 'lista'] as const;
+
+/** Catálogo completo, com os nomes das entidades ligadas já embebidos. */
+export function useCartoesFrotaLista<T>() {
+  return useQuery({
+    queryKey: cartoesListaKey,
+    queryFn: async (): Promise<T[]> => {
+      const { data, error } = await supabase
+        .from('cartoes_frota')
+        .select(
+          '*, motorista:motorista_id(nome), ultimo_motorista:ultimo_motorista_id(nome), cliente:cliente_id(nome)'
+        )
+        .order('tipo')
+        .order('numero');
+      if (error) throw error;
+      return (data ?? []) as unknown as T[];
+    },
+  });
+}
+
+/** Motoristas para o dropdown de atribuição. */
+export function useMotoristasParaCartoes() {
+  return useQuery({
+    queryKey: ['cartoes-frota', 'motoristas-opcoes'],
+    queryFn: async (): Promise<Array<{ id: string; nome: string }>> => {
+      const { data, error } = await supabase
+        .from('motoristas_ativos')
+        .select('id, nome')
+        .order('nome');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+function useInvalidarLista() {
+  const qc = useQueryClient();
+  return () => qc.invalidateQueries({ queryKey: ['cartoes-frota'] });
+}
+
+/** Cria ou actualiza — `cartaoId` ausente significa criar. */
+export function useGuardarCartaoFrota() {
+  const invalidar = useInvalidarLista();
+  return useMutation({
+    mutationFn: async ({
+      cartaoId,
+      payload,
+    }: {
+      cartaoId?: string;
+      payload: Record<string, unknown>;
+    }): Promise<void> => {
+      const { error } = cartaoId
+        ? await supabase
+            .from('cartoes_frota')
+            .update(payload as never)
+            .eq('id', cartaoId)
+        : await supabase.from('cartoes_frota').insert(payload as never);
+      if (error) throw error;
+    },
+    onSuccess: invalidar,
+  });
+}
+
+export function useEliminarCartaoFrota() {
+  const invalidar = useInvalidarLista();
+  return useMutation({
+    mutationFn: async (cartaoId: string): Promise<void> => {
+      const { error } = await supabase.from('cartoes_frota').delete().eq('id', cartaoId);
+      if (error) throw error;
+    },
+    onSuccess: invalidar,
+  });
+}
+
+/**
+ * Importação em massa. `onConflict: 'org_id,tipo,numero'` — reimportar o mesmo
+ * ficheiro actualiza em vez de duplicar.
+ */
+export function useImportarCartoesFrota() {
+  const invalidar = useInvalidarLista();
+  return useMutation({
+    mutationFn: async (linhas: Array<Record<string, unknown>>): Promise<number> => {
+      const { error } = await supabase
+        .from('cartoes_frota')
+        .upsert(linhas as never, { onConflict: 'org_id,tipo,numero', ignoreDuplicates: false });
+      if (error) throw error;
+      return linhas.length;
+    },
+    onSuccess: invalidar,
+  });
+}
