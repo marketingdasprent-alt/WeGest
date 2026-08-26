@@ -241,3 +241,22 @@ verify_jwt = true
 # false abria um gatilho anónimo de envio de email.
 [functions.ti-sugestao-nao-ajudou-email]
 verify_jwt = true
+
+# Pede assinatura de um documento: guarda o PDF e a fotografia dos dados, cria
+# um pedido por signatário e envia o link. Exige JWT — quem a chama é a app
+# autenticada, e deixá-la aberta dava a qualquer um um gatilho de envio de email
+# com anexo.
+[functions.assinatura-pedir]
+verify_jwt = true
+
+# Leitura de um pedido de assinatura pelo token do link (vai no email). Anónimo
+# porque quem assina não tem conta na aplicação; a autorização é o token,
+# validado dentro da função, e devolve só aquele documento.
+[functions.assinatura-por-token]
+verify_jwt = false
+
+# Recebe a assinatura e o documento assinado, pelo mesmo token. Anónimo pela
+# mesma razão; recusa se o token não estiver válido e nunca marca nada antes de
+# os ficheiros estarem guardados.
+[functions.assinatura-submeter]
+verify_jwt = false
