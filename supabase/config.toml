@@ -260,3 +260,8 @@ verify_jwt = false
 # os ficheiros estarem guardados.
 [functions.assinatura-submeter]
 verify_jwt = false
+
+# Devolve o token/actor_id Apify partilhado por plataforma (conta Apify é do
+# WeGest, não da org) — só a utilizadores autenticados.
+[functions.apify-credenciais-partilhadas]
+verify_jwt = true
