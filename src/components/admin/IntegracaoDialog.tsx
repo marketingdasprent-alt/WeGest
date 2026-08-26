@@ -31,25 +31,37 @@ import {
   VIAVERDE_DEFAULTS,
   type PlataformaOperacional,
 } from './integracoes/types';
+import { BoltApiCredenciais } from './integracoes/BoltApiCredenciais';
+import {
+  CREDENCIAIS_BOLT_VAZIAS,
+  type EstadoCredenciaisBolt,
+  payloadCriacaoBolt,
+} from './integracoes/boltIntegracao';
 import { presetToCronExpression } from '@/lib/cronPresets';
 import { cn } from '@/lib/utils';
+import { FATURACAO_PROVIDER_OPTIONS } from '@/lib/faturacaoProviders';
 
 interface IntegracaoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
   /**
-   * KeyInvoice (faturação) tem o seu próprio dialog dedicado
-   * (FaturacaoIntegracaoDialog — testar ligação, definições avançadas,
-   * doctypes), mais completo do que o wizard genérico login+password. Em vez
-   * de duplicar essa lógica aqui, selecionar "KeyInvoice" no passo 1 fecha
-   * este wizard e pede ao pai (IntegracoesTab) para abrir esse dialog.
+   * Cada software de faturação (KeyInvoice, Primavera, ...) tem o seu próprio
+   * dialog dedicado (FaturacaoIntegracaoDialog — testar ligação, definições
+   * avançadas, doctypes), mais completo do que o wizard genérico
+   * login+password. Em vez de duplicar essa lógica aqui, selecionar um tile
+   * de faturação no passo 1 fecha este wizard e pede ao pai (IntegracoesTab)
+   * para abrir esse dialog já preso a esse provider (não é escolhido lá
+   * dentro — são integrações separadas, cada uma com a sua própria linha).
    */
-  onOpenFaturacao?: () => void;
+  onOpenFaturacao?: (provider: string) => void;
 }
 
-const PLATFORMS: { id: PlataformaOperacional | 'keyinvoice'; name: string; logo: string }[] = [
+const PLATFORMS: { id: PlataformaOperacional | string; name: string; logo: string }[] = [
   { id: 'uber', name: 'Uber', logo: '/images/logo-uber.png' },
+  // Um só tile Bolt: a integração nasce sempre pela API oficial (OAuth). O tile
+  // separado "Bolt (API)" desapareceu — criava uma linha nova em vez de usar a
+  // conta que já existe, e o histórico ficava dividido por dois integracao_id.
   { id: 'bolt', name: 'Bolt', logo: '/images/logo-bolt.png' },
   { id: 'bp', name: 'BP', logo: '/images/logo-bp.png' },
   { id: 'repsol', name: 'Repsol', logo: '/images/logo-repsol.png' },
@@ -57,8 +69,17 @@ const PLATFORMS: { id: PlataformaOperacional | 'keyinvoice'; name: string; logo:
   { id: 'viaverde', name: 'Via Verde', logo: '/images/logo-via-verde.png' },
   { id: 'brevo', name: 'Brevo (Email)', logo: '/images/logo-brevo.png' },
   { id: 'cartrack', name: 'Cartrack', logo: '/images/logo-cartrack.png' },
-  { id: 'keyinvoice', name: 'KeyInvoice', logo: '/images/logo-keyinvoice.svg' },
+  // Um tile por provider de faturação registado (KeyInvoice, Primavera, ...) —
+  // gerado a partir do registo único em faturacaoProviders.ts, nunca
+  // hardcoded aqui, para um novo provider aparecer sozinho.
+  ...FATURACAO_PROVIDER_OPTIONS.map((p) => ({
+    id: p.slug,
+    name: p.label,
+    logo: `/images/logo-${p.slug}.png`,
+  })),
 ];
+
+const FATURACAO_SLUGS = new Set(FATURACAO_PROVIDER_OPTIONS.map((p) => p.slug));
 
 const STEP_LABELS = ['Seleção de plataforma', 'Credenciais', 'Confirmação'];
 
@@ -135,6 +156,12 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
     'idle' | 'testing' | 'success' | 'error'
   >('idle');
   const [cartrackTestError, setCartrackTestError] = useState('');
+  // Credenciais da API Bolt — o bloco BoltApiCredenciais é dono do teste de
+  // ligação e da escolha da empresa; aqui só se guarda o resultado.
+  const [boltCred, setBoltCred] = useState<EstadoCredenciaisBolt>(CREDENCIAIS_BOLT_VAZIAS);
+  // Remonta o bloco Bolt (e limpa o Client Secret que ele tem em memória)
+  // sempre que o wizard fecha ou se muda de plataforma.
+  const [boltFormKey, setBoltFormKey] = useState(0);
 
   const resetForm = () => {
     setFormData({
@@ -155,6 +182,8 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
     setBrevoTestError('');
     setCartrackTestState('idle');
     setCartrackTestError('');
+    setBoltCred(CREDENCIAIS_BOLT_VAZIAS);
+    setBoltFormKey((k) => k + 1);
   };
 
   const handleClose = (nextOpen: boolean) => {
@@ -182,7 +211,6 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
   const isBrevo = formData.plataforma === 'brevo';
   // Cartrack: API REST directa (HTTP Basic Auth), não robô Apify.
   const isCartrack = formData.plataforma === 'cartrack';
-  const needsLoginPassword = isUber || isBolt || isBp || isRepsol || isEdp || isViaVerde;
   const selectedPlatform = PLATFORMS.find((p) => p.id === formData.plataforma);
 
   const canProceedStep1 = !!formData.plataforma;
@@ -191,11 +219,15 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
   // e silencioso é pior do que um robot mal configurado (ver brevo-test-connection).
   // Cartrack exige igualmente teste de ligação aprovado (Basic Auth: credencial
   // errada é um 401 silencioso no sync).
+  // Bolt idem: sem teste aprovado não se sabe se o Fleet Integration API está
+  // sequer activo na conta — a Bolt não o liga por omissão.
   const canProceedStep2 = isBrevo
     ? !!(formData.senderName && formData.senderEmail) && brevoTestState === 'success'
     : isCartrack
       ? !!(formData.login && formData.password) && cartrackTestState === 'success'
-      : !!(formData.login && formData.password);
+      : isBolt
+        ? boltCred.completo
+        : !!(formData.login && formData.password);
 
   const handleTestBrevoConnection = async () => {
     if (!formData.apiKey) {
@@ -254,7 +286,12 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
       return;
     }
     if (step === 2 && !canProceedStep2) {
-      toast({ title: 'Preencha as credenciais', variant: 'destructive' });
+      // Na Bolt o passo tem três condições (chave, teste, empresa) — dizer
+      // qual delas falta poupa uma adivinha.
+      toast({
+        title: (isBolt && boltCred.motivo) || 'Preencha as credenciais',
+        variant: 'destructive',
+      });
       return;
     }
     setStep((s) => Math.min(s + 1, 3));
@@ -337,13 +374,62 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
         return;
       }
 
+      // Bolt: API oficial Bolt Fleet (OAuth client_credentials). Grava-se como
+      // plataforma='robot' + robot_target_platform='bolt' + auth_mode='oauth' —
+      // a mesma forma das contas que já existem, para converter uma delas ser
+      // só um UPDATE do auth_mode e nunca uma linha nova (ver boltIntegracao.ts).
+      //
+      // O token Apify é best-effort aqui: a linha nasce em oauth, o robô não
+      // corre, e não faz sentido impedir a ligação à API por faltar um token de
+      // um robô que não vai ser usado. Guarda-se se existir.
+      if (isBolt) {
+        if (!boltCred.completo) {
+          throw new Error(boltCred.motivo ?? 'Teste a ligação antes de criar a integração.');
+        }
+
+        const { data: comToken } = await supabase
+          .from('plataformas_configuracao')
+          .select('apify_api_token')
+          .in('plataforma', ['robot', 'via_verde'])
+          .eq('robot_target_platform', 'bolt')
+          .not('apify_api_token', 'is', null)
+          .limit(1);
+
+        const { error: boltError } = await supabase.from('plataformas_configuracao').insert(
+          payloadCriacaoBolt({
+            nome: formData.nome,
+            clientId: boltCred.clientId,
+            clientSecret: boltCred.clientSecret,
+            companyId: boltCred.companyId,
+            companyName: boltCred.companyName,
+            apifyApiToken: (comToken?.[0] as any)?.apify_api_token ?? null,
+          }) as any
+        );
+        if (boltError) throw boltError;
+
+        toast({
+          title: 'Integração criada',
+          description: `Bolt "${formData.nome}" ligada à API oficial. A importação manual do CSV continua disponível.`,
+        });
+        setSaving(false);
+        // handleClose limpa o formulário — o Client Secret não pode ficar em
+        // memória (nem reaparecer no campo se o wizard for reaberto).
+        handleClose(false);
+        onSuccess();
+        return;
+      }
+
       // Via Verde segue o fluxo de robot Apify abaixo (mesmo caminho de
       // Uber/Bolt/BP/Repsol/EDP), incluindo a criação da via_verde_contas.
-      let apifyApiToken: string | null = null;
-      const { data: existingIntegrations } = await supabase
+      // O token Apify vem SEMPRE da configuração já existente em
+      // plataformas_configuracao (tabela protegida por RLS) — nunca de uma
+      // constante no código, que acabaria no bundle público de wegest.pt.
+      // Via Verde procura em plataforma='via_verde' e as restantes em
+      // plataforma='robot'; ambas gravam o robot_target_platform.
+      const { data: existingIntegrations, error: tokenLookupError } = await supabase
         .from('plataformas_configuracao')
         .select('apify_api_token')
-        .eq('plataforma', 'robot')
+        .in('plataforma', ['robot', 'via_verde'])
         // Sem este filtro, uma integração Via Verde nova podia herdar o
         // token PARTILHADO do Uber/Bolt/BP/Repsol/EDP em vez do seu próprio
         // token dedicado — plataforma='robot' sozinho não distingue entre
@@ -352,12 +438,19 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
         .not('apify_api_token', 'is', null)
         .limit(1);
 
-      if (existingIntegrations && existingIntegrations.length > 0) {
-        apifyApiToken = (existingIntegrations[0] as any).apify_api_token;
-      }
+      if (tokenLookupError) throw tokenLookupError;
 
+      const apifyApiToken: string | null =
+        (existingIntegrations?.[0] as any)?.apify_api_token || null;
+
+      // Antes havia aqui um fallback silencioso para um token em hardcode. Sem
+      // token a integração era criada na mesma e só falhava mais tarde, no
+      // primeiro robot-execute, com um 401 do Apify difícil de diagnosticar.
       if (!apifyApiToken) {
-        apifyApiToken = (defaults as any).apify_api_token || null;
+        throw new Error(
+          `Não há nenhum token Apify configurado para ${selectedPlatform?.name ?? defaults.robot_target_platform}. ` +
+            'Abra uma integração existente desta plataforma e preencha o token Apify, ou peça-o ao administrador, antes de criar esta.'
+        );
       }
 
       const insertData: Record<string, any> = {
@@ -470,12 +563,15 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                     type="button"
                     onClick={() => {
                       const plataformaId = platform.id;
-                      if (plataformaId === 'keyinvoice') {
+                      if (FATURACAO_SLUGS.has(plataformaId)) {
                         handleClose(false);
-                        onOpenFaturacao?.();
+                        onOpenFaturacao?.(plataformaId);
                         return;
                       }
-                      setFormData((prev) => ({ ...prev, plataforma: plataformaId }));
+                      setFormData((prev) => ({
+                        ...prev,
+                        plataforma: plataformaId as PlataformaOperacional,
+                      }));
                     }}
                     className={cn(
                       'flex flex-col items-center justify-center gap-3 rounded-xl border-2 p-6 transition-all hover:shadow-md cursor-pointer bg-card',
@@ -746,6 +842,13 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                     )}
                   </div>
                 </>
+              ) : isBolt ? (
+                <BoltApiCredenciais
+                  key={boltFormKey}
+                  contexto="criar"
+                  modoGravado="password"
+                  onEstado={setBoltCred}
+                />
               ) : (
                 <>
                   <p className="text-sm text-muted-foreground">
@@ -816,7 +919,17 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
                 {isBrevo && formData.senderEmail && (
                   <p className="text-sm text-muted-foreground">{formData.senderEmail}</p>
                 )}
-                {!isBrevo && formData.login && (
+                {/* Bolt e Cartrack não usam email — mascarar um Client ID como
+                    se fosse endereço só confundia. O Client Secret nunca é
+                    reapresentado, aqui nem em lado nenhum. */}
+                {isBolt && (
+                  <p className="text-sm text-muted-foreground">
+                    {boltCred.companyName
+                      ? `${boltCred.companyName} (${boltCred.companyId}) · API oficial`
+                      : `Company ID ${boltCred.companyId} · API oficial`}
+                  </p>
+                )}
+                {!isBrevo && !isBolt && formData.login && (
                   <p className="text-sm text-muted-foreground">{maskEmail(formData.login)}</p>
                 )}
               </div>
@@ -840,8 +953,11 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
 
             {/* Schedule — não aplicável ao Brevo (só envio sob-demanda) nem ao
                 Cartrack (robot-schedule dispara robot-execute, não cartrack-sync;
-                o Cartrack sincroniza pelo botão no detalhe da integração). */}
-            {!isBrevo && !isCartrack && (
+                o Cartrack sincroniza pelo botão no detalhe da integração).
+                Bolt pelo mesmo motivo do Cartrack: o robot-schedule agenda
+                robot-execute (robô Apify), e uma integração Bolt nova nasce em
+                auth_mode='oauth' — quem sincroniza é a API, não o robô. */}
+            {!isBrevo && !isCartrack && !isBolt && (
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Clock className="h-4 w-4" />
@@ -866,7 +982,7 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
               </div>
             )}
 
-            {!isBrevo && !isCartrack && formData.cron_schedule === 'custom' && (
+            {!isBrevo && !isCartrack && !isBolt && formData.cron_schedule === 'custom' && (
               <div className="space-y-2">
                 <Label htmlFor="cron_custom">Expressão Cron</Label>
                 <Input

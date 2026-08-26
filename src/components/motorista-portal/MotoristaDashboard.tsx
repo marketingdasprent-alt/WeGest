@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,13 +36,18 @@ import { MotoristaHistoricoViaturasCard } from './MotoristaHistoricoViaturasCard
 import { MotoristaDocumentosCard } from './MotoristaDocumentosCard';
 import { MotoristaMovimentosCard } from './MotoristaMovimentosCard';
 import { MotoristaRecibosCard } from './MotoristaRecibosCard';
-import { MotoristaDanosCard } from './MotoristaDanosCard';
 import { MotoristaAcordoCard } from './MotoristaAcordoCard';
-import { MotoristaRelatoriosCard } from './MotoristaRelatoriosCard';
 import { MotoristaCombustivelCard } from './MotoristaCombustivelCard';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { legendaSaldoMotorista } from '@/lib/saldoMotorista';
+import { MotoristaExtratoCard } from './MotoristaExtratoCard';
+import {
+  useMotoristaExtratoPeriodo,
+  inicioDaSemana,
+  fimDaSemana,
+} from '@/hooks/useMotoristaExtratoPeriodo';
 
 interface MotoristaAtivo {
   id: string;
@@ -87,6 +92,21 @@ interface DashboardStats {
 export function MotoristaDashboard() {
   const { user, signOut } = useAuth();
   const [motorista, setMotorista] = useState<MotoristaAtivo | null>(null);
+
+  // Semana de segunda a domingo. Abre na actual e recua com as setas do cartao;
+  // a funcao no servidor recebe inicio e fim, logo isto e so contar semanas.
+  const [semanasAtras, setSemanasAtras] = useState(0);
+  const semanaInicio = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - semanasAtras * 7);
+    return inicioDaSemana(d);
+  }, [semanasAtras]);
+  const semanaFim = useMemo(() => fimDaSemana(semanaInicio), [semanaInicio]);
+  const {
+    data: extrato,
+    isLoading: extratoALoad,
+    error: extratoErro,
+  } = useMotoristaExtratoPeriodo(motorista?.id, semanaInicio, semanaFim);
   const [stats, setStats] = useState<DashboardStats>({
     saldoPendente: 0,
     recibosPendentesAceitacao: 0,
@@ -165,19 +185,12 @@ export function MotoristaDashboard() {
 
   async function loadStats(motoristaId: string, motoristaData: MotoristaAtivo) {
     try {
-      const { data: movimentos } = await supabase
-        .from('motorista_financeiro')
-        .select('tipo, valor, status')
-        .eq('motorista_id', motoristaId)
-        .eq('status', 'pendente');
-
-      let saldoPendente = 0;
-      if (movimentos) {
-        movimentos.forEach((m) => {
-          if (m.tipo === 'credito') saldoPendente += Number(m.valor);
-          else saldoPendente -= Number(m.valor);
-        });
-      }
+      // RPC única, reutilizada em toda a app (admin, resumo semanal, este
+      // dashboard) — nunca mais recalculado à mão em JS aqui.
+      const { data: saldoData } = await supabase.rpc('motorista_saldo_pendente', {
+        p_motorista_id: motoristaId,
+      });
+      const saldoPendente = Number(saldoData) || 0;
 
       const { data: recibosPendentes } = await supabase
         .from('motorista_recibos')
@@ -351,6 +364,7 @@ export function MotoristaDashboard() {
   // que lhes diz respeito (cartões "Recibos Pendentes"/"Em Falta" + secção de
   // recibos). null/true = usa (comportamento normal).
   const usaRecibos = motorista.recibo_verde !== false;
+  const legendaSaldo = legendaSaldoMotorista(stats.saldoPendente);
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-700 pb-12">
@@ -377,12 +391,22 @@ export function MotoristaDashboard() {
                 <Wallet className="w-4 h-4 text-primary" />
               </div>
             </div>
-            <p className="text-2xl md:text-3xl font-black mb-1 md:mb-2">
+            <p
+              className={cn(
+                'text-2xl md:text-3xl font-black mb-1 md:mb-2',
+                legendaSaldo.tone === 'negativo' && 'text-destructive'
+              )}
+            >
               {formatCurrency(stats.saldoPendente)}
             </p>
-            <div className="flex items-center text-primary text-[10px] font-bold">
+            <div
+              className={cn(
+                'flex items-center text-[10px] font-bold',
+                legendaSaldo.tone === 'negativo' ? 'text-destructive' : 'text-primary'
+              )}
+            >
               <TrendingUp className="w-3 h-3 mr-1" />
-              Disponível para levantamento
+              {legendaSaldo.texto}
             </div>
           </CardContent>
         </Card>
@@ -657,7 +681,7 @@ export function MotoristaDashboard() {
               <CardContent className="p-5 md:p-6">
                 <div className="flex justify-between items-start mb-3 md:mb-4">
                   <span className="text-muted-foreground text-[10px] font-black tracking-widest uppercase">
-                    DOCs a Expirar
+                    Os meus documentos
                   </span>
                   <div
                     className={cn(
@@ -685,14 +709,14 @@ export function MotoristaDashboard() {
                 </p>
                 <div className="flex items-center justify-between">
                   <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-tight">
-                    Próximos 30 dias
+                    {stats.documentosAExpirar > 0 ? 'A expirar em 30 dias' : 'Todos em dia'}
                   </p>
                   <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
                 </div>
               </CardContent>
             </Card>
           </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-xl rounded-[1.5rem] md:rounded-[2rem] border-border bg-background p-0 overflow-hidden">
+          <DialogContent className="max-h-[90vh] w-[95vw] overflow-hidden rounded-[1.5rem] border-border bg-background p-0 sm:max-w-xl md:rounded-[2rem]">
             <div className="p-5 md:p-8">
               <DialogHeader className="mb-6 md:mb-8">
                 <div className="flex items-center gap-3 mb-2">
@@ -701,73 +725,21 @@ export function MotoristaDashboard() {
                   </div>
                   <div>
                     <DialogTitle className="text-xl md:text-2xl font-black tracking-tight">
-                      Documentos a Expirar
+                      Os meus documentos
                     </DialogTitle>
                     <p className="text-xs md:text-sm text-muted-foreground font-medium">
-                      Documentos que requerem a sua atenção brevemente
+                      Carregue os seus documentos — a validade e lida do que inserir
                     </p>
                   </div>
                 </div>
               </DialogHeader>
 
-              <div className="space-y-3 md:space-y-4">
-                {stats.docsExpirando.length === 0 ? (
-                  <div className="text-center py-8 md:py-12 bg-muted/20 rounded-[1.5rem] md:rounded-[2rem] border border-dashed">
-                    <Check className="h-10 w-10 md:h-12 md:w-12 text-green-500 mx-auto mb-3 opacity-20" />
-                    <p className="font-bold text-sm md:text-base">Documentos em dia!</p>
-                    <p className="text-[10px] md:text-xs text-muted-foreground">
-                      Não existem documentos a expirar nos próximos 30 dias.
-                    </p>
-                  </div>
-                ) : (
-                  stats.docsExpirando.map((doc, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-4 md:p-5 bg-orange-500/5 hover:bg-orange-500/10 rounded-2xl border border-orange-500/10 transition-all group"
-                    >
-                      <div className="flex items-center gap-3 md:gap-4">
-                        <div className="p-2 bg-background rounded-xl border border-border shadow-sm group-hover:border-orange-500/20 transition-all">
-                          <FileText className="h-4 w-4 md:h-5 md:w-5 text-orange-500" />
-                        </div>
-                        <div>
-                          <p className="text-xs md:text-sm font-bold text-foreground">
-                            {doc.label}
-                          </p>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <Clock className="h-3 w-3 text-orange-500" />
-                            <span className="text-[9px] md:text-[10px] text-orange-500 font-black uppercase tracking-wider">
-                              Expira em {doc.data}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 md:h-9 rounded-xl font-bold text-[10px] md:text-xs hover:bg-orange-500 hover:text-white border-orange-500/20 px-2 md:px-3"
-                        onClick={() => {
-                          setDocsModalOpen(false);
-                          const element = document.getElementById('motorista-documentos-card');
-                          if (element) {
-                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            element.classList.add('ring-2', 'ring-orange-500', 'ring-offset-2');
-                            setTimeout(() => {
-                              element.classList.remove(
-                                'ring-2',
-                                'ring-orange-500',
-                                'ring-offset-2'
-                              );
-                            }, 3000);
-                          }
-                          toast.warning(`Atualize o documento ${doc.label} abaixo.`);
-                        }}
-                      >
-                        <Upload className="h-3.5 w-3.5 mr-2" />
-                        Atualizar
-                      </Button>
-                    </div>
-                  ))
-                )}
+              {/* Um cartao so. A lista de "a expirar" que estava aqui mostrava os
+                  mesmos documentos que o cartao ja mostra, com a validade de cada
+                  um — era a mesma informacao duas vezes, e era ela que empurrava o
+                  dialogo para fora do ecra. */}
+              <div className="max-h-[55vh] overflow-y-auto pr-1">
+                <MotoristaDocumentosCard motoristaId={motorista.id} semMoldura />
               </div>
 
               {stats.docsExpirando.length > 0 && (
@@ -786,28 +758,31 @@ export function MotoristaDashboard() {
         </Dialog>
       </div>
 
+      {/* A viatura vem primeiro: e o que o motorista quer ver de relance. O
+          proprio cartao ja abre um dialogo com a viatura, os documentos dela e
+          os danos — envolve-lo noutro dialogo abria dois ao mesmo tempo. */}
+      <MotoristaViaturaCard motoristaId={motorista.id} />
+
+      <MotoristaExtratoCard
+        extrato={extrato}
+        isLoading={extratoALoad}
+        error={extratoErro}
+        inicio={semanaInicio}
+        fim={semanaFim}
+        semanasAtras={semanasAtras}
+        onAnterior={() => setSemanasAtras((n) => n + 1)}
+        onSeguinte={() => setSemanasAtras((n) => Math.max(0, n - 1))}
+      />
+
       <MotoristaAcordoCard />
 
-      {/*
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <MotoristaCombustivelCard motoristaId={motorista.id} />
         <MotoristaMovimentosCard motoristaId={motorista.id} />
       </div>
-      */}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <MotoristaRelatoriosCard motoristaId={motorista.id} />
-        <MotoristaDanosCard motoristaId={motorista.id} />
-      </div>
 
       <div className="space-y-8">
-        <MotoristaViaturaCard motoristaId={motorista.id} />
-
         <MotoristaHistoricoViaturasCard motoristaId={motorista.id} />
-
-        <div id="motorista-documentos-card">
-          <MotoristaDocumentosCard motoristaId={motorista.id} />
-        </div>
 
         {usaRecibos && (
           <div id="recibos-verdes-card">

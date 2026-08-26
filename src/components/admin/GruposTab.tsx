@@ -23,6 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, Pencil, Trash2, Users, Eye, Edit2, ShieldOff } from 'lucide-react';
 import type { Cargo } from '@/hooks/useRBAC';
@@ -67,11 +68,72 @@ const GrupoPermSummary: React.FC<GrupoPermSummaryProps> = ({ summary }) => {
   );
 };
 
+// ── Utilizadores do grupo ────────────────────────────────────────────────────
+
+interface MembroGrupo {
+  nome: string | null;
+  email: string | null;
+}
+
+interface GrupoMembrosProps {
+  membros: MembroGrupo[] | undefined;
+  grupoNome: string;
+}
+
+/** Contagem de utilizadores do grupo, ao lado das acções. Clicar abre a lista
+ *  com os nomes — os membros já vêm resolvidos do fetchGrupos, por isso não há
+ *  query nova ao abrir. */
+const GrupoMembros: React.FC<GrupoMembrosProps> = ({ membros, grupoNome }) => {
+  const lista = membros ?? [];
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 text-muted-foreground hover:text-foreground"
+          title={`Ver utilizadores de "${grupoNome}"`}
+        >
+          <Users className="h-4 w-4 shrink-0" />
+          {/* Largura fixa: sem isto o botão cresce com o 2.º dígito e o ícone
+              salta de linha para linha (as acções estão encostadas à direita). */}
+          <span className="min-w-[1.5rem] text-left text-xs font-medium tabular-nums">
+            {lista.length}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-0">
+        <div className="border-b border-border px-3 py-2">
+          <p className="text-xs font-semibold text-foreground">
+            {lista.length} utilizador{lista.length !== 1 ? 'es' : ''}
+          </p>
+          <p className="truncate text-[11px] text-muted-foreground">{grupoNome}</p>
+        </div>
+        {lista.length === 0 ? (
+          <p className="px-3 py-3 text-xs text-muted-foreground">Nenhum utilizador neste grupo.</p>
+        ) : (
+          <ul className="max-h-64 overflow-y-auto py-1">
+            {lista.map((m, i) => (
+              <li key={m.email ?? m.nome ?? i} className="px-3 py-1.5 hover:bg-muted/40">
+                <p className="truncate text-xs text-foreground">{m.nome || m.email || '—'}</p>
+                {m.nome && m.email && (
+                  <p className="truncate text-[11px] text-muted-foreground">{m.email}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export const GruposTab = () => {
   const [grupos, setGrupos] = useState<Cargo[]>([]);
-  const [membrosCount, setMembrosCount] = useState<Record<string, number>>({});
+  const [membros, setMembros] = useState<Record<string, MembroGrupo[]>>({});
   const [permCounts, setPermCounts] = useState<Record<string, { ver: number; editar: number }>>({});
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -95,18 +157,21 @@ export const GruposTab = () => {
       if (error) throw error;
       setGrupos(data || []);
 
-      // Contar membros por grupo
+      // Membros por grupo — traz os nomes, não só a contagem: a lista abre num
+      // popover sem ir outra vez à base de dados.
       if (data && data.length > 0) {
         const ids = data.map((g: Cargo) => g.id);
         const { data: profiles } = await supabase
           .from('profiles')
-          .select('cargo_id')
-          .in('cargo_id', ids);
-        const counts: Record<string, number> = {};
+          .select('cargo_id, nome, email')
+          .in('cargo_id', ids)
+          .order('nome');
+        const porGrupo: Record<string, MembroGrupo[]> = {};
+        ids.forEach((id) => (porGrupo[id] = []));
         (profiles || []).forEach((p: any) => {
-          counts[p.cargo_id] = (counts[p.cargo_id] || 0) + 1;
+          (porGrupo[p.cargo_id] ||= []).push({ nome: p.nome, email: p.email });
         });
-        setMembrosCount(counts);
+        setMembros(porGrupo);
 
         // Contar permissões (ver/editar) por grupo — numa só query, para os
         // badges atualizarem sempre que se recarrega (ex.: após guardar).
@@ -296,13 +361,6 @@ export const GruposTab = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-semibold text-foreground">{grupo.nome}</span>
-                      {membrosCount[grupo.id] > 0 && (
-                        <Badge variant="secondary" className="text-xs">
-                          <Users className="h-2.5 w-2.5 mr-1" />
-                          {membrosCount[grupo.id]} utilizador
-                          {membrosCount[grupo.id] !== 1 ? 'es' : ''}
-                        </Badge>
-                      )}
                     </div>
                     {grupo.descricao && (
                       <p className="text-xs text-muted-foreground truncate">{grupo.descricao}</p>
@@ -316,6 +374,7 @@ export const GruposTab = () => {
 
                   {/* Acções */}
                   <div className="flex items-center gap-1 shrink-0">
+                    <GrupoMembros membros={membros[grupo.id]} grupoNome={grupo.nome} />
                     <Button
                       variant="ghost"
                       size="sm"

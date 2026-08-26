@@ -9,6 +9,10 @@ export const RECURSOS = {
   TICKETS_CRIAR: 'tickets_criar',
   TICKETS_GERIR: 'tickets_gerir',
 
+  // Tickets de informática — distinto de TICKETS_*, que é a assistência a
+  // viaturas: quem trata da oficina não trata necessariamente da informática.
+  TI_TICKETS_GERIR: 'ti_tickets_gerir',
+
   // Motoristas
   MOTORISTAS_VER: 'motoristas_ver',
   MOTORISTAS_CRIAR: 'motoristas_criar',

@@ -10,6 +10,7 @@ import { Form, FormMessage } from '@/components/ui/form';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Motorista } from '@/pages/Motoristas';
+import { useGestoresTvdeNomes } from '@/hooks/useGestoresTvde';
 import { MotoristaCartoesFrota } from '../MotoristaCartoesFrota';
 import { validateDateYear, YEAR_RANGE_MESSAGE } from '@/utils/dateValidators';
 import {
@@ -149,33 +150,13 @@ export function MotoristaTabDados({
   onCreated,
 }: MotoristaTabDadosProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [gestores, setGestores] = useState<{ nome: string }[]>([]);
   const [hasChanges, setHasChanges] = useState(!!draft);
   const suppressHasChangesRef = useRef(false);
 
-  useEffect(() => {
-    const fetchGestores = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('nome, cargo')
-          .not('nome', 'is', null)
-          .ilike('cargo', '%Gestor%TVDE%')
-          .order('nome');
-        if (error) throw error;
-        const uniqueGestores = (data || []).reduce((acc: { nome: string }[], current) => {
-          if (!acc.find((item) => item.nome === current.nome)) {
-            acc.push({ nome: current.nome });
-          }
-          return acc;
-        }, []);
-        setGestores(uniqueGestores);
-      } catch (error) {
-        console.error('Erro ao buscar gestores:', error);
-      }
-    };
-    fetchGestores();
-  }, []);
+  // Fonte única (RPC). Antes era uma query directa a `profiles` aqui mesmo, que
+  // a RLS esvaziava para qualquer não-admin sem dar erro — o campo aparecia
+  // vazio e não havia pista nenhuma na consola.
+  const { gestores, isError: erroGestores } = useGestoresTvdeNomes();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchemaValidado),
@@ -392,7 +373,11 @@ export function MotoristaTabDados({
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
         {/* Linha 1: Dados Pessoais + Morada */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <DadosPessoaisSection control={form.control} gestores={gestores} />
+          <DadosPessoaisSection
+            control={form.control}
+            gestores={gestores}
+            erroGestores={erroGestores}
+          />
           <ContactosSection control={form.control} />
         </div>
 
@@ -427,7 +412,7 @@ export function MotoristaTabDados({
 
         {/* Linha 4: Integrações + Observações */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 py-4">
-          <IntegracoesSection control={form.control} />
+          <IntegracoesSection control={form.control} motoristaId={motorista?.id ?? null} />
           <ObservacoesSection control={form.control} />
         </div>
 

@@ -63,6 +63,7 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
   const dataInicio = form.watch('data_inicio');
   const dataFim = form.watch('data_fim');
   const valorTotal = form.watch('valor_total');
+  const valorTotalManual = form.watch('valor_total_manual');
   const grupo = form.watch('grupo');
   const viaturaId = form.watch('viatura_id');
   const kmsIncluidos = form.watch('kms_incluidos');
@@ -87,7 +88,10 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
   const dias = diferencaDias(dataInicio, dataFim);
   // Valor guardado no formulário — Rent-a-Car: preço SEM IVA (o que se
   // digita). Slot/TVDE: preço já com IVA incluído (inalterado).
-  const rawTotal = isSlot ? (slotValorMensal ?? 0) : (valorTotal ?? 0);
+  // O preço escrito à mão ganha ao automático da tarifa; enquanto estiver
+  // preenchido é ele que manda em todo o resumo.
+  const valorBase = valorTotalManual ?? valorTotal ?? 0;
+  const rawTotal = isSlot ? (slotValorMensal ?? 0) : valorBase;
   const isRentACar = regime === 'rent_a_car';
   const taxaIVA = isSlot ? 0.23 : ivaRate(regime);
 
@@ -144,30 +148,46 @@ export const ReservaResumoSidebar: React.FC<ReservaResumoSidebarProps> = ({
   // Só sincroniza quando o input não está em foco (mudança externa, ex: carregar dados)
   useEffect(() => {
     if (inputFocused.current) return;
-    const novo = dias && dias > 0 && rawTotal > 0 ? (rawTotal / dias).toFixed(2) : '';
-    setPrecoUnitInput(novo);
-  }, [rawTotal, dias]);
+    if (!dias || dias <= 0) {
+      setPrecoUnitInput('');
+      return;
+    }
+    // Um 0 escrito à mão é um preço válido (aluguer oferecido) e tem de
+    // continuar a aparecer como "0.00" — campo vazio significa "segue a tarifa".
+    if (!isSlot && valorTotalManual != null) {
+      setPrecoUnitInput((valorTotalManual / dias).toFixed(2));
+      return;
+    }
+    setPrecoUnitInput(rawTotal > 0 ? (rawTotal / dias).toFixed(2) : '');
+  }, [rawTotal, dias, isSlot, valorTotalManual]);
 
+  // Escreve o override manual, nunca o `valor_total` automático — senão o
+  // recálculo da tarifa (que dispara quando as tarifas/preços chegam do
+  // servidor) apagava o que foi digitado. Campo vazio = volta à tarifa.
   const handlePrecoUnitarioChange = (raw: string) => {
     const normalized = raw.replace(',', '.').replace(/[^0-9.]/g, '');
     setPrecoUnitInput(normalized);
     if (!dias || dias <= 0) return;
     if (normalized === '' || normalized === '.') {
-      form.setValue('valor_total', null, { shouldValidate: true });
+      form.setValue('valor_total_manual', null, { shouldValidate: true, shouldDirty: true });
       return;
     }
     const n = Number(normalized);
     if (!Number.isFinite(n) || n < 0) return;
-    form.setValue('valor_total', Number((n * dias).toFixed(2)), { shouldValidate: true });
+    form.setValue('valor_total_manual', Number((n * dias).toFixed(2)), {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
   };
 
   const handlePrecoBlur = () => {
     inputFocused.current = false;
-    // Formata ao sair do campo
+    // Formata ao sair do campo. O 0 formata-se como qualquer outro número —
+    // só o campo vazio fica vazio (= devolve o controlo à tarifa).
     const n = Number(precoUnitInput);
-    if (precoUnitInput && Number.isFinite(n) && n > 0) {
+    if (precoUnitInput !== '' && Number.isFinite(n) && n >= 0) {
       setPrecoUnitInput(n.toFixed(2));
-    } else if (!precoUnitInput || n === 0) {
+    } else {
       setPrecoUnitInput('');
     }
   };

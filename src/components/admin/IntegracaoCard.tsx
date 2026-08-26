@@ -86,8 +86,11 @@ const PLATFORM_META: Record<IntegracaoCardType, { label: string; logo: string; c
     color: 'hsl(var(--chart-5))',
   },
   faturacao: {
+    // Sem logo fixo: há mais que um provider possível (KeyInvoice,
+    // Primavera, ...) — o fallback genérico evita mostrar a marca errada
+    // num cartão de outro software.
     label: 'Faturação',
-    logo: '/images/logo-keyinvoice.svg',
+    logo: '/images/comfort.png',
     color: 'hsl(var(--chart-1))',
   },
   email: {

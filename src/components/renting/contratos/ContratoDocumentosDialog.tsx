@@ -22,7 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useDocumentTemplates } from '@/hooks/useDocumentTemplates';
+import { gravarCidadeAssinaturaVigente } from '@/hooks/useContratosRenting';
+import { useDocumentTemplates, useFolhasDanosDaOrg } from '@/hooks/useDocumentTemplates';
 import { useContactosDocumento } from '@/hooks/useContactosDocumento';
 
 import { generateContratoPdf, type CondutorPrincipal } from '@/utils/generateContratoPdf';
@@ -33,6 +34,7 @@ import type { Motorista } from '@/types/motorista';
 import type { ViaturaBasic } from '@/hooks/useViaturas';
 import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
 import { EnviarContratoEmailDialog } from './EnviarContratoEmailDialog';
+import { templatesComFolhaDanos } from './templatesComFolhaDanos';
 
 interface Props {
   open: boolean;
@@ -78,12 +80,57 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
     '';
 
   const [empresaId, setEmpresaId] = useState(empresaPorDefeito);
+  const empresaSelecionada = empresas.find((e) => e.id === empresaId) ?? null;
+
+  // Dados do contrato que vão no corpo do email — é isto que faz o email ser
+  // um template com informação, em vez de um texto escrito à mão.
+  const fmtData = (d?: string | null) =>
+    d
+      ? new Date(d).toLocaleDateString('pt-PT', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+      : '';
+  const fmtEur = (v?: number | null) =>
+    v == null ? '' : v.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
+
+  const detalhesEmail = [
+    { label: 'Contrato', valor: contrato.codigo ? `#${contrato.codigo}` : '' },
+    { label: 'Viatura', valor: contrato.matricula ?? '' },
+    {
+      label: 'Período',
+      valor: [fmtData(contrato.data_inicio), fmtData(contrato.data_fim)]
+        .filter(Boolean)
+        .join(' a '),
+    },
+    { label: 'Valor', valor: fmtEur(contrato.total_final) },
+  ].filter((d) => d.valor);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gerando, setGerando] = useState(false);
-  const [cidadeAssinatura, setCidadeAssinatura] = useState('');
+  // Pré-preenchida com a cidade vigente do contrato (gravada da última vez que
+  // se gerou algo para ele) — um contrato que já teve documentos gerados não
+  // volta a perguntar. Só nasce vazia mesmo na primeira geração de sempre.
+  const [cidadeAssinatura, setCidadeAssinatura] = useState(contrato.cidade_assinatura ?? '');
+
+  // Reabrir o diálogo (ou trocar de contrato sem desmontar) tem de reflectir
+  // o valor mais recente gravado — sem isto, gerar uma vez com uma cidade
+  // nova e reabrir logo a seguir mostrava outra vez a antiga.
+  useEffect(() => {
+    if (open) setCidadeAssinatura(contrato.cidade_assinatura ?? '');
+  }, [open, contrato.cidade_assinatura]);
+
+  // Fica "vigente": a próxima geração para este mesmo contrato (aqui ou no
+  // fecho) já não pergunta.
+  const persistirCidadeVigente = (cidade: string) => {
+    const valor = cidade.trim();
+    if (!valor || valor === (contrato.cidade_assinatura ?? '')) return;
+    void gravarCidadeAssinaturaVigente(contrato.id, valor);
+  };
   const [enviarEmailOpen, setEnviarEmailOpen] = useState(false);
-  const [pdfParaEnviar, setPdfParaEnviar] = useState<jsPDF | null>(null);
-  const [filenameParaEnviar, setFilenameParaEnviar] = useState('');
+  const [anexosParaEnviar, setAnexosParaEnviar] = useState<Array<{ pdf: jsPDF; filename: string }>>(
+    []
+  );
 
   // Chave estável de um condutor (cliente_id em rent-a-car, motorista_id em
   // TVDE/slot) — usada para seleccionar para quem gerar os documentos.
@@ -117,17 +164,32 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
       : null,
   });
 
-  const { data: todosTemplates = [], isLoading: loading } = useDocumentTemplates(
+  const { data: todosTemplates = [], isLoading: loadingEmpresa } = useDocumentTemplates(
     open ? empresaId : null
   );
-  // A Folha de Danos (anexo_danos) gera-se só no fluxo de check-in/out
-  // (entrega/recolha), nunca por este diálogo do contrato.
-  // useMemo estabiliza a referência: sem ele, `.filter()` devolvia array novo
-  // a cada render e a pré-selecção (effect abaixo) corria sempre, esmagando
-  // a escolha do utilizador a cada clique.
+
+  // Folhas de Danos da org — ver o hook: não são filtráveis por empresa.
+  const { data: folhasOrg = [], isLoading: loadingFolhas } = useFolhasDanosDaOrg(
+    contrato.org_id,
+    open
+  );
+
+  const loading = loadingEmpresa || loadingFolhas;
+
+  // A Folha de Danos aparece aqui como qualquer outro documento. Entra UMA:
+  // a da empresa seleccionada se existir, senão a da org — nunca uma lista de
+  // folhas quase iguais.
+  //
+  // Note-se que sai GERADA NA HORA: leva os danos activos da viatura neste
+  // momento e não as assinaturas do handover — essas só existem na folha
+  // impressa durante a entrega/recolha.
+  //
+  // useMemo estabiliza a referência: sem ele, o array novo a cada render fazia
+  // a pré-selecção (effect abaixo) correr sempre, esmagando a escolha do
+  // utilizador a cada clique.
   const templates = useMemo(
-    () => todosTemplates.filter((t) => t.tipo !== 'anexo_danos'),
-    [todosTemplates]
+    () => templatesComFolhaDanos(todosTemplates, folhasOrg, empresaId),
+    [todosTemplates, folhasOrg, empresaId]
   );
 
   // Guarda a chave (open+empresa) já pré-seleccionada, para o effect correr
@@ -212,6 +274,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
         templateIds,
         cidadeAssinatura,
       });
+      persistirCidadeVigente(cidadeAssinatura);
       onOpenChange(false);
     } catch (err) {
       toast({
@@ -247,10 +310,16 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
         action: 'email',
         templateIds,
         cidadeAssinatura,
+        // Por email vai um ficheiro por documento (Contrato, Declaração,
+        // Termo...), não um PDF único com tudo colado: quem recebe assina e
+        // arquiva cada um por si.
+        separados: true,
       });
-      if (!resultado) throw new Error('Não foi possível gerar o documento.');
-      setPdfParaEnviar(resultado.pdf);
-      setFilenameParaEnviar(resultado.fileName);
+      if (!resultado || !('anexos' in resultado) || resultado.anexos.length === 0) {
+        throw new Error('Não foi possível gerar os documentos.');
+      }
+      persistirCidadeVigente(cidadeAssinatura);
+      setAnexosParaEnviar(resultado.anexos.map((a) => ({ pdf: a.pdf, filename: a.fileName })));
       setEnviarEmailOpen(true);
     } catch (err) {
       toast({
@@ -403,11 +472,15 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
       <EnviarContratoEmailDialog
         open={enviarEmailOpen}
         onOpenChange={setEnviarEmailOpen}
-        pdf={pdfParaEnviar}
-        filename={filenameParaEnviar}
+        anexos={anexosParaEnviar}
         contextoLabel={`Contrato #${contrato.codigo ?? ''}`}
         entidades={contactosEnvio}
         orgId={contrato.org_id}
+        // A empresa escolhida acima é quem emite o contrato — é ela que
+        // encabeça e assina o email, não uma marca fixa.
+        emissorNome={empresaSelecionada?.nomeCompleto || empresaSelecionada?.nome}
+        emissorLogoUrl={empresaSelecionada?.logoUrl ?? null}
+        detalhes={detalhesEmail}
       />
     </Dialog>
   );

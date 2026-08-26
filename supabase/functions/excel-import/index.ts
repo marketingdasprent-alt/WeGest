@@ -158,21 +158,39 @@ Deno.serve(async (req) => {
       let motoristaId: string | null = null;
 
       const nifTrim = row.nif?.trim() || '';
+      // O Excel traz as INICIAIS do gestor ("JC"). `gestor_responsavel` guarda
+      // o nome por extenso ("Juliano Cury") — é assim que as 424 fichas actuais
+      // estão. Resolve-se as iniciais até ao perfil e guarda-se o nome dele.
       const gestorId = resolveGestorId(row.gestor || '', allProfiles || []);
+      const gestorNome = gestorId
+        ? (allProfiles || []).find((p) => p.id === gestorId)?.nome ?? null
+        : null;
       const caucaoVal = parseCurrency(row.caucao || '');
       const valorViatura = parseCurrency(row.valor_viatura || '');
       const kmVal = parseKm(row.km || '');
       const isSlot = (row.tvde?.trim().toUpperCase() === 'SLOT');
 
+      // A tabela é `motoristas_ativos`, não `motoristas`. São duas tabelas
+      // diferentes, com ZERO ids em comum (265 linhas contra 532), e a
+      // aplicação só lê `motoristas_ativos`. Enquanto isto escrevia na legada,
+      // os motoristas importados por Excel NUNCA APARECIAM no WeGest: 137 das
+      // 265 linhas de `motoristas` não têm sequer nome correspondente do outro
+      // lado. Ver a migração 20260814150000.
+      //
+      // Três campos mudam de nome no destino:
+      //   nib       -> iban
+      //   caucao    -> caucao_valor
+      //   gestor_id -> gestor_responsavel, que guarda o NOME do gestor em
+      //                texto, não o uuid do perfil.
       const motoristaPayload: Record<string, unknown> = {
         nome: nomeTrim || null,
         nif: nifTrim || null,
         email: row.email?.trim().toLowerCase() || null,
         morada: row.localizacao?.trim() || null,
         telefone: row.movel?.trim() || null,
-        nib: row.nib?.trim() || null,
-        caucao: caucaoVal,
-        gestor_id: gestorId,
+        iban: row.nib?.trim() || null,
+        caucao_valor: caucaoVal,
+        gestor_responsavel: gestorNome,
         observacoes: row.observacoes?.trim() || null,
         org_id: callerOrgId,
       };
@@ -187,28 +205,28 @@ Deno.serve(async (req) => {
       if (nifTrim && nifTrim !== 'N/A') {
         // Upsert by NIF (filtered by org)
         const { data: existing } = await supabase
-          .from('motoristas').select('id').eq('nif', nifTrim).eq('org_id', callerOrgId).maybeSingle();
+          .from('motoristas_ativos').select('id').eq('nif', nifTrim).eq('org_id', callerOrgId).maybeSingle();
 
         if (existing) {
-          await supabase.from('motoristas').update(motoristaPayload).eq('id', existing.id);
+          await supabase.from('motoristas_ativos').update(motoristaPayload).eq('id', existing.id);
           motoristaId = existing.id;
         } else {
           const { data: inserted, error: insErr } = await supabase
-            .from('motoristas').insert({ ...motoristaPayload, nif: nifTrim }).select('id').single();
+            .from('motoristas_ativos').insert({ ...motoristaPayload, nif: nifTrim }).select('id').single();
           if (insErr) throw new Error(`Motorista insert: ${insErr.message}`);
           motoristaId = inserted.id;
         }
       } else if (nomeTrim) {
         // Fallback: match by nome (case-insensitive, filtered by org)
         const { data: existing } = await supabase
-          .from('motoristas').select('id').ilike('nome', nomeTrim).eq('org_id', callerOrgId).maybeSingle();
+          .from('motoristas_ativos').select('id').ilike('nome', nomeTrim).eq('org_id', callerOrgId).maybeSingle();
 
         if (existing) {
-          await supabase.from('motoristas').update(motoristaPayload).eq('id', existing.id);
+          await supabase.from('motoristas_ativos').update(motoristaPayload).eq('id', existing.id);
           motoristaId = existing.id;
         } else {
           const { data: inserted, error: insErr } = await supabase
-            .from('motoristas').insert(motoristaPayload).select('id').single();
+            .from('motoristas_ativos').insert(motoristaPayload).select('id').single();
           if (insErr) throw new Error(`Motorista insert: ${insErr.message}`);
           motoristaId = inserted.id;
         }

@@ -261,30 +261,23 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
 
       // 2. Uber Data (Official Transactions for ALL associated IDs)
       const { data: uberTrans } = await supabase
-        .from('uber_transactions')
-        .select('gross_amount')
+        // O resumo semanal, não as transacções em bruto — a mesma fonte que o
+        // ecrã de Contas e o painel do motorista usam. Ver 20260814170000.
+        .from('uber_resumos_semanais')
+        .select('ganhos_brutos')
         .in('uber_driver_id', associatedUberIds)
-        .gte('occurred_at', weekStartISO)
-        .lte('occurred_at', weekEndISO);
+        .lte('periodo_inicio', weekEndStr)
+        .gte('periodo_fim', weekStartStr);
 
       const uberTotal = (uberTrans || []).reduce(
-        (acc, curr) => acc + (Number(curr.gross_amount) || 0),
+        (acc, curr) => acc + (Number(curr.ganhos_brutos) || 0),
         0
       );
 
-      // 3. Bolt Data: SUM BOTH Viagens AND Weekly Summaries (Just like Admin)
-      const { data: boltViagens } = await supabase
-        .from('bolt_viagens')
-        .select('driver_earnings')
-        .eq('motorista_id', motoristaId)
-        .gte('payment_confirmed_timestamp', weekStartISO)
-        .lte('payment_confirmed_timestamp', weekEndISO);
-
-      const boltViagensTotal = (boltViagens || []).reduce(
-        (acc, curr) => acc + (Number(curr.driver_earnings) || 0),
-        0
-      );
-
+      // 3. Bolt: um sítio só — bolt_resumos_semanais.ganhos_liquidos, escrito
+      // tanto pela API oficial como pelo CSV (ver src/config/bolt.ts). Já não
+      // se consulta bolt_viagens: tem uma linha por TENTATIVA de despacho e
+      // somá-la conta a mesma corrida várias vezes.
       const { data: boltResumos } = await supabase
         .from('bolt_resumos_semanais')
         .select('ganhos_liquidos')
@@ -383,7 +376,9 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       // 6. FINAL AGGREGATION (MIRROR OF ContasResumoTab.tsx:resumosCalculados)
       const passesReciboVerde = motorista.recibo_verde ?? true;
 
-      const boltTotal = boltViagensTotal + boltResumosTotal;
+      // Fonte única: bolt_resumos_semanais.ganhos_liquidos — o mesmo campo que
+      // o ecrã de resumos e o painel do motorista mostram.
+      const boltTotal = boltResumosTotal;
       const faturadoPlataformas = uberTotal + boltTotal;
       const totalFaturadoReal = faturadoPlataformas + extraCredits;
 

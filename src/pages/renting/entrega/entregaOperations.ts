@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
+import { guardarFolhaDanos } from '@/lib/guardarFolhaDanos';
 import { fileToDataUrl, type FilePreview } from '@/utils/entrega';
 import type { AssinaturasHandoverHandle } from '@/components/assinatura/AssinaturasHandoverSection';
 
@@ -41,6 +42,8 @@ interface GerarFolhaParams {
     contrato_id: string;
     tipo: string;
   };
+  /** Token de realização — autoriza o arquivo da folha nos anexos do contrato. */
+  token?: string | null;
 }
 
 /**
@@ -48,7 +51,8 @@ interface GerarFolhaParams {
  * Chamado 1x na entrega/recolha simples, 2x na troca.
  */
 export async function gerarFolhaBloco(params: GerarFolhaParams): Promise<void> {
-  const { modo, bloco, assinaturasRef, observacoes, contexto, responsavelNome, info } = params;
+  const { modo, bloco, assinaturasRef, observacoes, contexto, responsavelNome, info, token } =
+    params;
 
   // Resolvido no servidor por contexto_folha_por_token (SECURITY DEFINER) —
   // a query directa a document_templates fica bloqueada por RLS aqui, pois
@@ -146,6 +150,16 @@ export async function gerarFolhaBloco(params: GerarFolhaParams): Promise<void> {
       // Function deriva a org a partir de viaturaId (viaturas.org_id).
       orgId: null,
       viaturaId,
+    });
+    // Arquiva esta mesma cópia nos anexos do contrato — é a única forma de a
+    // voltar a descarregar: a folha só se gera aqui, e regerá-la mais tarde
+    // daria outro documento (sem assinaturas, com os danos de então).
+    void guardarFolhaDanos({
+      pdf,
+      contratoId: info?.contrato_id,
+      matricula,
+      momento: isEntrega ? 'ENTREGA' : 'RECOLHA',
+      token,
     });
   }
 }

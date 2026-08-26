@@ -3,12 +3,15 @@ import { Input } from '@/components/ui/input';
 import { SectionCard } from '@/components/ui/section-card';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import type { Control } from 'react-hook-form';
+import { IdentidadesBoltSection } from './IdentidadesBoltSection';
 
 interface IntegracoesSectionProps {
   control: Control;
+  /** Ficha já gravada — sem id não há identidades para listar nem ligar. */
+  motoristaId?: string | null;
 }
 
-export function IntegracoesSection({ control }: IntegracoesSectionProps) {
+export function IntegracoesSection({ control, motoristaId = null }: IntegracoesSectionProps) {
   return (
     <SectionCard
       icon={<Smartphone className="h-4 w-4 text-purple-600 dark:text-purple-400" />}
@@ -45,10 +48,12 @@ export function IntegracoesSection({ control }: IntegracoesSectionProps) {
           )}
         />
         <p className="text-[10px] text-muted-foreground sm:col-span-2 mt-1">
-          Estes IDs são usados para unificar automaticamente os ganhos das plataformas no Dashboard
-          financeiro.
+          O Bolt ID acima é apenas o <strong>último</strong> ID conhecido. A ligação a sério vive na
+          lista abaixo — um motorista pode ter vários IDs na Bolt (sai da frota e volta com outro).
         </p>
       </div>
+
+      <IdentidadesBoltSection motoristaId={motoristaId} />
     </SectionCard>
   );
 }

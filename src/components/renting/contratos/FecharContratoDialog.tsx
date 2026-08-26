@@ -52,6 +52,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useOrgId } from '@/contexts/TenantContext';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
+import { guardarFolhaDanos } from '@/lib/guardarFolhaDanos';
 import {
   AssinaturasHandoverSection,
   type AssinaturasHandoverHandle,
@@ -79,6 +80,10 @@ interface SelectedFile {
   id: string;
   file: File;
   preview: string | null;
+  /** Descrição do que se está a ver. Vai para viatura_dano_fotos.descricao e
+   *  passa a ser a legenda da imagem na Folha de Danos — sem ela a legenda
+   *  só dizia de onde a foto veio, não o que mostra. */
+  descricao: string;
 }
 
 export interface AlteracaoMaterial {
@@ -106,9 +111,10 @@ interface FecharContratoDialogProps {
    *  motivo. O contrato fecha-se sempre a sério primeiro (este dialog) —
    *  onFechado é quem cria a seguir a nova versão com os valores novos. */
   alteracoesTroca?: AlteracaoMaterial[];
-  /** Chamado depois do fecho ter sucesso, com o motivo introduzido. Usado
-   *  em modo troca para encadear a criação da nova versão do contrato. */
-  onFechado?: (motivo: string | undefined) => void | Promise<void>;
+  /** Chamado depois do fecho ter sucesso, com o motivo introduzido e a data
+   *  do evento (ISO). Usado em modo troca para encadear a criação da nova
+   *  versão do contrato — a data é a fronteira temporal entre os dois elos. */
+  onFechado?: (motivo: string | undefined, dataEventoIso?: string) => void | Promise<void>;
 }
 
 export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
@@ -183,7 +189,13 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   // Registar a recolha (km/combustível/fotos) já no fecho — evita ter de ir
   // depois ao Calendário para o check-in. Estado próprio (fora do zod) pelo
   // mesmo padrão usado em RealizarEntregaPage/CheckOutPendentesDrawer.
-  const [registarAgora, setRegistarAgora] = useState(true);
+  const [registarAgoraEscolhido, setRegistarAgora] = useState(true);
+  // Numa TROCA a folha de danos de devolução não é opcional: é a única prova
+  // do estado em que a viatura antiga voltou, e o contrato vai fechar já a
+  // seguir — deixá-la para depois torna-a impossível de fazer (o trigger de
+  // imutabilidade congela a versão substituída). Fora da troca, mantém-se a
+  // escolha do gestor: fechar agora ou agendar a recolha para mais tarde.
+  const registarAgora = emModoTroca ? true : registarAgoraEscolhido;
   const [km, setKm] = useState('');
   const [combustivel, setCombustivel] = useState('');
   const [files, setFiles] = useState<SelectedFile[]>([]);
@@ -228,7 +240,9 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     queryFn: async () => {
       const { data } = await supabase
         .from('contratos_renting')
-        .select('viatura_id, emissor_id, cliente_id, km_saida, combustivel_saida')
+        .select(
+          'viatura_id, emissor_id, cliente_id, km_saida, combustivel_saida, cidade_assinatura'
+        )
         .eq('id', contratoId)
         .maybeSingle();
       const empty = {
@@ -239,6 +253,11 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         clienteNome: '',
         kmSaida: null as number | null,
         combustivelSaida: null as string | null,
+        // Cidade vigente do contrato — gravada por ContratoDocumentosDialog na
+        // primeira vez que se gerou algo para ele. O fecho não tem picker
+        // nenhum: usa o que já está, e fica vazia (como sempre foi) só quando
+        // o contrato nunca gerou documento algum.
+        cidadeAssinatura: null as string | null,
       };
       if (!data) return empty;
 
@@ -330,6 +349,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         clienteNome,
         kmSaida: (data.km_saida as number | null) ?? null,
         combustivelSaida: (data.combustivel_saida as string | null) ?? null,
+        cidadeAssinatura: (data.cidade_assinatura as string | null) ?? null,
       };
     },
   });
@@ -349,9 +369,13 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       file: f,
       preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null,
+      descricao: '',
     }));
     setFiles((prev) => [...prev, ...novos]);
   };
+
+  const setDescricaoFicheiro = (id: string, descricao: string) =>
+    setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, descricao } : f)));
 
   const handleDropFiles = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -428,16 +452,28 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         documentData: {
           viatura_matricula: matricula ?? '',
           data_assinatura: hoje,
+          // Cidade vigente do contrato — sem picker aqui de propósito: quem
+          // está a fechar um contrato já usado não devia ter de escolher outra
+          // vez algo que já ficou definido. Fica vazia só se este contrato
+          // nunca gerou nenhum documento (mesmo comportamento de sempre).
+          cidade_assinatura: contexto?.cidadeAssinatura ?? '',
           clienteData: { nome: contexto?.clienteNome ?? '' },
           assinatura_motorista: sigs.motorista ?? '',
           assinatura_responsavel: sigs.responsavel ?? '',
           responsavel_nome: responsavelNome,
-          momento_responsavel: 'Recolhido por',
+          // Recolhida (fomos buscá-la) e devolvida (o motorista trouxe-a) são
+          // factos diferentes, e este documento é assinado: dizer 'Recolhido por'
+          // a quem cumpriu e entregou a viatura descreve o oposto do que aconteceu.
+          momento_responsavel:
+            form.getValues('tipoEvento') === 'devolvido' ? 'Devolvido por' : 'Recolhido por',
           ...(contexto?.empresaData ? { empresaData: contexto.empresaData } : {}),
         },
         viaturaId: contexto?.viaturaId ?? viaturaId ?? undefined,
         contratoId,
-        momentoFolha: 'RECOLHA',
+        // Recolha e devolução são momentos distintos na folha, com cores
+        // distintas: vermelho quando fomos buscar a viatura, azul quando o
+        // motorista a trouxe. Estava fixo em RECOLHA para os dois casos.
+        momentoFolha: form.getValues('tipoEvento') === 'devolvido' ? 'DEVOLUÇÃO' : 'RECOLHA',
         observacoesMomento: motivo,
         km_entrada: km,
         combustivel_entrada: combustivel,
@@ -459,6 +495,14 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
           momento: 'RECOLHA',
           orgId,
           viaturaId: contexto?.viaturaId ?? viaturaId ?? undefined,
+        });
+        // Guarda a mesma cópia assinada nos anexos do contrato, para poder ser
+        // descarregada de novo a partir do separador "Anexos".
+        void guardarFolhaDanos({
+          pdf,
+          contratoId,
+          matricula: matricula ?? '',
+          momento: 'RECOLHA',
         });
       }
     } catch {
@@ -516,6 +560,13 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       }
     }
 
+    // Recolhida = o motorista não entregou a viatura e fomos buscá-la; quase
+    // sempre fica a dever. Avisa, não bloqueia: há recolhas sem nada a cobrar,
+    // e prender o fecho por isso deixaria a viatura por registar.
+    if (values.tipoEvento === 'recolhido' && !values.valorDivida && temMotorista) {
+      toast.warning('Recolha sem valor em dívida — confirma que não há nada a cobrar.');
+    }
+
     await fecharMutation.mutateAsync({
       contratoId,
       contratoCodigo,
@@ -529,7 +580,11 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       valorDivida: values.valorDivida,
       recolha:
         !viaturaEhSlot && registarAgora
-          ? { km, combustivel, fotos: files.map((f) => f.file) }
+          ? {
+              km,
+              combustivel,
+              fotos: files.map((f) => ({ file: f.file, descricao: f.descricao })),
+            }
           : undefined,
       // Se o motorista tinha levado a DUA original e o gestor confirma a
       // devolução, regista dua_devolvida_em no contrato (fecha o ciclo do aviso).
@@ -538,6 +593,11 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       // definitivo — motorista desactivado e toast "Contrato fechado", não
       // "Recolha agendada".
       fecharAgora: viaturaEhSlot,
+      // Numa troca o motorista NÃO saiu — fica com a viatura nova, no contrato
+      // sucessor. Desactivá-lo aqui fazia-o desaparecer dos resumos semanais e
+      // das listas de cobrança durante a janela em que o sucessor ainda não
+      // existe (e, se algo falhasse a meio, para sempre).
+      manterMotoristaActivo: emModoTroca,
     });
     if (!viaturaEhSlot && registarAgora) {
       await gerarFolha('print');
@@ -545,7 +605,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     form.reset();
     resetRecolhaState();
     onOpenChange(false);
-    await onFechado?.(values.motivo);
+    await onFechado?.(values.motivo, new Date(values.dataEvento).toISOString());
   };
 
   const isPending = fecharMutation.isPending || gerandoFolha;
@@ -808,7 +868,9 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                   <div className="space-y-1.5">
                     <Label htmlFor="valorDivida" className="text-xs">
                       {temMotorista
-                        ? 'Opcional — fica como débito pendente no financeiro do motorista.'
+                        ? tipoEvento === 'recolhido'
+                          ? 'A viatura foi recolhida — indica o valor em dívida.'
+                          : 'Opcional — fica como débito pendente no financeiro do motorista.'
                         : 'Sem motorista associado — não será registado.'}
                     </Label>
                     <div className="relative">
@@ -862,10 +924,13 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                       id="registar-agora"
                       checked={registarAgora}
                       onCheckedChange={setRegistarAgora}
+                      disabled={emModoTroca}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    KM, combustível e fotos — sem precisar de ir depois ao Calendário.
+                    {emModoTroca
+                      ? 'Obrigatório numa troca: é a folha de danos de devolução da viatura que sai. Depois de o contrato fechar já não é possível registá-la.'
+                      : 'KM, combustível e fotos — sem precisar de ir depois ao Calendário.'}
                   </p>
 
                   {registarAgora && (
@@ -911,11 +976,14 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className="text-xs">Fotos / Vídeos (opcional)</Label>
+                        <Label className="text-xs">Fotos / Vídeos / PDF (opcional)</Label>
                         <input
                           ref={fileInputRef}
                           type="file"
-                          accept="image/*,video/*"
+                          // PDF entra para peritagens e orçamentos de oficina. Não
+                          // se desenha na grelha da folha (o jsPDF não rasteriza
+                          // PDFs) — sai como moldura "PDF" e vê-se pelo QR.
+                          accept="image/*,video/*,application/pdf"
                           multiple
                           hidden
                           onChange={(e) => addFiles(e.target.files)}
@@ -971,32 +1039,53 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                             </button>
                           </div>
                           <p className="text-center text-[10px] text-muted-foreground">
-                            ou arrasta fotos/vídeos para aqui
+                            ou arrasta fotos, vídeos ou PDF para aqui
                           </p>
+                          {/* Lista, não grelha de quadrados: cada ficheiro leva
+                              a sua descrição ao lado, e é ela que fica como
+                              legenda na Folha de Danos. Em quadrados de 6
+                              colunas não cabia campo nenhum. */}
                           {files.length > 0 && (
-                            <div className="grid grid-cols-6 gap-1.5 mt-1.5">
+                            <div className="mt-1.5 space-y-1.5">
                               {files.map((f) => (
-                                <div
-                                  key={f.id}
-                                  className="relative rounded overflow-hidden border border-border aspect-square bg-muted"
-                                >
-                                  {f.preview ? (
-                                    <img
-                                      src={f.preview}
-                                      alt={f.file.name}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="flex items-center justify-center w-full h-full">
-                                      <Film className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                  )}
+                                <div key={f.id} className="flex items-center gap-2">
+                                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded border border-border bg-muted">
+                                    {f.preview ? (
+                                      <img
+                                        src={f.preview}
+                                        alt={f.file.name}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center">
+                                        {f.file.type === 'application/pdf' ? (
+                                          <FileText className="h-4 w-4 text-muted-foreground" />
+                                        ) : (
+                                          <Film className="h-4 w-4 text-muted-foreground" />
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <Input
+                                    value={f.descricao}
+                                    onChange={(e) => setDescricaoFicheiro(f.id, e.target.value)}
+                                    placeholder={
+                                      f.preview
+                                        ? 'Descrição da foto (ex: risco no para-choques)'
+                                        : f.file.type === 'application/pdf'
+                                          ? 'Descrição do documento (ex: peritagem)'
+                                          : 'Descrição do vídeo'
+                                    }
+                                    className="h-8 text-xs"
+                                    aria-label={`Descrição de ${f.file.name}`}
+                                  />
                                   <button
                                     type="button"
                                     onClick={() => removeFile(f.id)}
-                                    className="absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5 text-white"
+                                    aria-label={`Remover ${f.file.name}`}
+                                    className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-destructive"
                                   >
-                                    <X className="h-2.5 w-2.5" />
+                                    <X className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
                               ))}

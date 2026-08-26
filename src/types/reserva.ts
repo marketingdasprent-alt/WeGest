@@ -93,7 +93,12 @@ export type Reserva = {
   slot_valor_semanal: number | null;
   /** Valor mensal BRUTO (IVA incl.) cobrado ao motorista no regime slot. */
   slot_valor_mensal: number | null;
+  /** Valor EFECTIVO do aluguer — o manual quando existe, senão o da tarifa. */
   valor_total: number | null;
+  /** Preço escrito à mão no card de Preço. Quando preenchido sobrepõe-se ao
+   *  cálculo automático da tarifa, que de outra forma o apagaria a cada
+   *  re-hidratação do formulário. */
+  valor_total_manual: number | null;
   /** FK para renting_tarifas — usada em TVDE para associar a tarifa por modelo. */
   tarifa_id: string | null;
   observacoes: string | null;

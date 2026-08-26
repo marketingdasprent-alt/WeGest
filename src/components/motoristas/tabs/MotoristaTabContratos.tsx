@@ -50,7 +50,7 @@ interface ContratoRentingResumo {
   matricula: string | null;
   data_inicio: string;
   data_fim: string | null;
-  estado_operacional: 'agendado' | 'em_curso' | 'devolvido' | 'cancelado';
+  estado_operacional: 'agendado' | 'em_curso' | 'fechado' | 'cancelado' | 'devolvido';
   estado_financeiro: ContratoEstadoFinanceiro;
   regime: 'rent_a_car' | 'tvde' | 'slot';
   viaturas: { marca: string; modelo: string } | null;

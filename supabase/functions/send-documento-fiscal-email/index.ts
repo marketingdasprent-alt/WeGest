@@ -11,12 +11,25 @@ interface SendDocumentoFiscalEmailRequest {
   to: string;
   toNome?: string;
   subject: string;
-  /** Mensagem em texto simples escrita pelo utilizador (quebras de linha preservadas). */
-  mensagem: string;
-  /** PDF em base64 puro (sem prefixo data:...;base64,). */
-  pdfBase64: string;
-  filename: string;
+  /** Nota livre opcional escrita pelo utilizador (quebras de linha preservadas).
+   *  O corpo do email é o template — `intro` + `detalhes` abaixo. */
+  mensagem?: string;
+  intro?: string;
+  detalhes?: Array<{ label: string; valor: string }>;
+  /** PDF em base64 puro (sem prefixo data:...;base64,). Forma antiga, um só
+   *  ficheiro — continua a servir o envio de documentos fiscais. */
+  pdfBase64?: string;
+  filename?: string;
+  /** Vários documentos no mesmo email, cada um como anexo próprio. */
+  anexos?: Array<{ content: string; name: string }>;
   org_id: string;
+  /** Empresa emissora do documento — encabeça o email com a marca dela.
+   *  Opcional: sem isto o email sai com a marca WeGest (comportamento antigo). */
+  emissorNome?: string;
+  emissorLogoUrl?: string | null;
+  /** Título e etiqueta do email, ex.: "Contrato de Aluguer" / "Contrato". */
+  titulo?: string;
+  categoria?: string;
 }
 
 serve(async (req) => {
@@ -30,14 +43,29 @@ serve(async (req) => {
       toNome,
       subject,
       mensagem,
+      intro,
+      detalhes,
       pdfBase64,
       filename,
+      anexos,
       org_id,
+      emissorNome,
+      emissorLogoUrl,
+      titulo,
+      categoria,
     }: SendDocumentoFiscalEmailRequest = await req.json();
 
-    if (!to || !subject || !pdfBase64 || !filename || !org_id) {
+    // Aceita as duas formas: `anexos` (vários documentos) ou o par
+    // pdfBase64+filename da versão anterior (um só).
+    const ficheiros = anexos?.length
+      ? anexos
+      : pdfBase64 && filename
+        ? [{ content: pdfBase64, name: filename }]
+        : [];
+
+    if (!to || !subject || ficheiros.length === 0 || !org_id) {
       return new Response(
-        JSON.stringify({ error: 'to, subject, pdfBase64, filename e org_id são obrigatórios' }),
+        JSON.stringify({ error: 'to, subject, org_id e pelo menos um anexo são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -52,8 +80,13 @@ serve(async (req) => {
       toNome,
       subject,
       mensagem: mensagem || '',
-      pdfBase64,
-      filename,
+      intro,
+      detalhes,
+      ficheiros,
+      emissorNome,
+      emissorLogoUrl,
+      titulo,
+      categoria,
     });
 
     if (!result.success) throw new Error(result.error || 'Falha ao enviar email');

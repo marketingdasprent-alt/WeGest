@@ -132,13 +132,61 @@ Deno.test("EmailService.sendDocumentoFiscal usa sempre o sender-padrão da integ
       to: "cliente@empresa.pt",
       subject: "Fatura 123",
       mensagem: "Segue em anexo.",
-      pdfBase64: "base64==",
-      filename: "fatura.pdf",
+      ficheiros: [{ content: "base64==", name: "fatura.pdf" }],
     });
 
     assertEquals(result.success, true);
     assertEquals(capturedSender, { name: "WeGest", email: "noreply@dasprent.pt" });
     assertEquals(inserted[0].origem, "documento_fiscal");
+  } finally {
+    restoreFactory();
+  }
+});
+
+// Vários documentos do contrato (Aluguer + TVDE + Declaração) vão num só
+// email, cada um como ficheiro próprio — e todos têm de chegar ao provider.
+Deno.test("EmailService.sendDocumentoFiscal anexa todos os ficheiros recebidos", async () => {
+  let capturedMsg: EmailMessage | undefined;
+  const fakeProvider: EmailProvider = {
+    send: async (msg: EmailMessage) => {
+      capturedMsg = msg;
+      return { success: true, providerMessageId: "msg-3" };
+    },
+  };
+  EmailProviderFactory.getProvider = async () => ({
+    provider: fakeProvider,
+    sender: { name: "WeGest", email: "noreply@dasprent.pt" },
+  });
+
+  const { client } = makeMockSupabase();
+
+  try {
+    const service = new EmailService(client);
+    const result = await service.sendDocumentoFiscal("org-1", {
+      to: "cliente@empresa.pt",
+      subject: "Contrato de Aluguer — Contrato #720",
+      intro: "Segue em anexo o seu contrato de aluguer.",
+      detalhes: [{ label: "Contrato", valor: "#720" }],
+      ficheiros: [
+        { content: "AAA=", name: "Contrato_Aluguer_720.pdf" },
+        { content: "BBB=", name: "Declaracao_720.pdf" },
+        { content: "CCC=", name: "Termo_720.pdf" },
+      ],
+      emissorNome: "Distância Arrojada - Unipessoal Lda",
+    });
+
+    assertEquals(result.success, true);
+    assertEquals(capturedMsg?.attachments?.length, 3);
+    assertEquals(capturedMsg?.attachments?.[1], {
+      content: "BBB=",
+      name: "Declaracao_720.pdf",
+    });
+    // O corpo é o template: nomes dos anexos, dados do contrato e a marca da
+    // empresa emissora têm de lá estar.
+    assertEquals(capturedMsg?.html?.includes("Declaracao_720.pdf"), true);
+    assertEquals(capturedMsg?.html?.includes("3 documentos em anexo"), true);
+    assertEquals(capturedMsg?.html?.includes("Distância Arrojada - Unipessoal Lda"), true);
+    assertEquals(capturedMsg?.html?.includes("#720"), true);
   } finally {
     restoreFactory();
   }

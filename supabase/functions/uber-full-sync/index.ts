@@ -284,7 +284,11 @@ serve(async (req) => {
       const { data: upsertResult, error: upsertError } = await supabase
         .from("uber_transactions")
         .upsert(transactions as never[], {
-          onConflict: "uber_transaction_id",
+          // A restrição é (integracao_id, uber_transaction_id) — a única que
+          // existe na tabela. Um ON CONFLICT que não corresponda a nenhuma
+          // restrição é recusado pelo Postgres (42P10), portanto isto falhava
+          // na primeira linha que tentasse escrever.
+          onConflict: "integracao_id,uber_transaction_id",
           ignoreDuplicates: false,
         })
         .select("id");

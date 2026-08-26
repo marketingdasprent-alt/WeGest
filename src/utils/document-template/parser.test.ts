@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { htmlToText } from './parser';
+import { COR_RECOLHA, TAMANHO_MOMENTO_PT, momentoFolhaHtml } from './momentoFolhaCor';
 
 describe('htmlToText', () => {
   it('não cola o texto de um parágrafo ao elemento anterior quando há um parágrafo em branco entre eles', () => {
@@ -78,5 +79,64 @@ describe('htmlToText', () => {
     expect(elements).toHaveLength(1);
     expect(elements[0].type).toBe('pagebreak');
     expect(elements.map((e) => e.text).join('')).not.toContain('Página');
+  });
+});
+
+describe('htmlToText — cor', () => {
+  it('não cola um run colorido ao run preto anterior', () => {
+    // O título da Folha de Danos: texto normal + o momento colorido. Os dois
+    // runs têm o mesmo bold e o mesmo alinhamento, e o merge colava-os —
+    // o segundo perdia a cor e a folha saía toda preta.
+    const html =
+      '<h1 style="text-align:center">FOLHA DE REGISTO DE DANOS — ' +
+      '<span style="color:#C0392B">RECOLHA</span></h1>';
+
+    const els = htmlToText(html).filter(
+      (e) => e.type === 'text' && e.text !== String.fromCharCode(10)
+    );
+
+    expect(els).toHaveLength(2);
+    expect(els[0].text).toContain('FOLHA DE REGISTO DE DANOS');
+    expect(els[0].style.color).toBeUndefined();
+    expect(els[1].text).toBe('RECOLHA');
+    expect(els[1].style.color).toEqual([192, 57, 43]);
+  });
+
+  it('continua a colar runs da mesma cor — o merge não se perdeu', () => {
+    const html =
+      '<p><span style="color:#C0392B">DOIS </span>' + '<span style="color:#C0392B">RUNS</span></p>';
+
+    const els = htmlToText(html).filter(
+      (e) => e.type === 'text' && e.text !== String.fromCharCode(10)
+    );
+
+    expect(els).toHaveLength(1);
+    expect(els[0].text).toBe('DOIS RUNS');
+  });
+});
+
+describe('htmlToText — momento da folha de danos', () => {
+  it('o momento chega ao PDF a negrito, colorido e maior', () => {
+    // Prova o HTML REAL que momentoFolhaHtml produz, e não uma imitação:
+    // negrito, cor e tamanho vêm de caminhos diferentes no parser (a tag liga
+    // o bold, os estilos inline dão cor e tamanho) e todos têm de sobreviver.
+    const html =
+      '<h1 style="text-align:center">FOLHA DE REGISTO DE DANOS — ' +
+      momentoFolhaHtml('RECOLHA') +
+      '</h1>';
+
+    const els = htmlToText(html).filter(
+      (e) => e.type === 'text' && e.text !== String.fromCharCode(10)
+    );
+    const momento = els.find((e) => e.text.includes('RECOLHA'));
+
+    expect(momento).toBeDefined();
+    expect(momento!.style.bold).toBe(true);
+    expect(momento!.style.color).toEqual([213, 0, 0]);
+    expect(momento!.style.fontSize).toBe(TAMANHO_MOMENTO_PT);
+    // e o texto antes continua preto e no tamanho normal
+    const antes = els.find((e) => e.text.includes('FOLHA DE REGISTO'));
+    expect(antes!.style.color).toBeUndefined();
+    expect(COR_RECOLHA).toBe('#D50000');
   });
 });

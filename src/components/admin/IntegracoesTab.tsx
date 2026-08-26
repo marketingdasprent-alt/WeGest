@@ -113,13 +113,19 @@ export const IntegracoesTab: React.FC = () => {
   const [selectedViaVerdeConta, setSelectedViaVerdeConta] = useState<ViaVerdeConta | null>(null);
   const [importRobotDialogOpen, setImportRobotDialogOpen] = useState(false);
   const [selectedRobotIntegracaoId, setSelectedRobotIntegracaoId] = useState<string>('');
+  const [importRobotTab, setImportRobotTab] = useState<'uber' | 'bolt' | 'bp' | 'repsol' | 'edp'>(
+    'uber'
+  );
   const [importUberDialogOpen, setImportUberDialogOpen] = useState(false);
   const [selectedUberIntegracaoId, setSelectedUberIntegracaoId] = useState<string>('');
   const [executingRobots, setExecutingRobots] = useState<Set<string>>(new Set());
 
-  // Faturação fiscal (config por-org)
+  // Faturação fiscal (config por-org) — KeyInvoice e Primavera são
+  // integrações SEPARADAS (uma linha cada em plataformas_configuracao,
+  // distinguidas por config.provider), nunca uma partilhada por dropdown.
   const [faturacaoDialogOpen, setFaturacaoDialogOpen] = useState(false);
   const [faturacaoRow, setFaturacaoRow] = useState<FaturacaoConfigRow | null>(null);
+  const [faturacaoProvider, setFaturacaoProvider] = useState<string>('keyinvoice');
   const [editEmailDialogOpen, setEditEmailDialogOpen] = useState(false);
   const [editEmailRow, setEditEmailRow] = useState<EmailIntegracaoRow | null>(null);
 
@@ -243,10 +249,18 @@ export const IntegracoesTab: React.FC = () => {
               : i.plataforma === 'robot'
                 ? 'api'
                 : 'api',
+          // A Bolt é uma plataforma só; o que muda é COMO se lê a conta. O
+          // auth_mode diz qual dos dois é ('oauth' = API oficial, 'password' =
+          // robô Apify ainda por converter) e convém vê-lo na lista: são
+          // caminhos diferentes e é bom saber qual deles falhou.
           subLabel:
             i.plataforma === 'robot' && !isSimplifiedRobot
               ? (i as any).apify_actor_id || undefined
-              : i.company_name || undefined,
+              : isBoltRobot || i.plataforma === 'bolt'
+                ? i.auth_mode === 'oauth'
+                  ? `API oficial${i.company_name ? ` · ${i.company_name}` : ''}`
+                  : 'Robô · CSV semanal'
+                : i.company_name || undefined,
           rawData: i,
           logoUrl:
             i.logo_url ||
@@ -356,24 +370,29 @@ export const IntegracoesTab: React.FC = () => {
         });
       });
 
-    // Faturação fiscal (KeyInvoice, etc.) — igual às restantes plataformas:
-    // só aparece na grelha depois de configurada, via "Adicionar Plataforma".
-    const fatRow = (integracoes as any[]).find((i) => i.plataforma === 'faturacao') || null;
-    if (fatRow) {
-      result.push({
-        id: fatRow.id,
-        type: 'faturacao',
-        nome: 'Faturação',
-        ativo: !!fatRow.ativo,
-        ultimoSync: null,
-        username: null,
-        password: null,
-        connectionMode: 'api',
-        subLabel: faturacaoProviderLabel(fatRow.config?.provider),
-        rawData: fatRow,
-        logoUrl: null,
+    // Faturação fiscal — KeyInvoice e Primavera (e futuros providers) são
+    // integrações independentes: uma linha e um cartão por provider, nunca
+    // uma linha só partilhada. Só a que estiver `ativo=true` é a que emite
+    // de facto (garantido por índice único na BD — ver migração
+    // 20260807150000_faturacao_unica_ativa_por_org.sql); as outras ficam
+    // configuradas/testáveis mas inativas.
+    (integracoes as any[])
+      .filter((i) => i.plataforma === 'faturacao')
+      .forEach((fatRow) => {
+        result.push({
+          id: fatRow.id,
+          type: 'faturacao',
+          nome: faturacaoProviderLabel(fatRow.config?.provider),
+          ativo: !!fatRow.ativo,
+          ultimoSync: null,
+          username: null,
+          password: null,
+          connectionMode: 'api',
+          subLabel: fatRow.ativo ? 'A emitir documentos' : 'Configurado, inativo',
+          rawData: fatRow,
+          logoUrl: null,
+        });
       });
-    }
 
     setCards(result);
   };
@@ -381,7 +400,9 @@ export const IntegracoesTab: React.FC = () => {
   // Card handlers
   const handleCardEdit = (card: IntegracaoCardData) => {
     if (card.type === 'faturacao') {
-      setFaturacaoRow((card.rawData as FaturacaoConfigRow | null) ?? null);
+      const row = (card.rawData as FaturacaoConfigRow | null) ?? null;
+      setFaturacaoRow(row);
+      setFaturacaoProvider((row?.config as any)?.provider || 'keyinvoice');
       setFaturacaoDialogOpen(true);
     } else if (card.type === 'via_verde') {
       // Distinguir: rawData é ViaVerdeConta (legado FTP) OU IntegracaoConfig (novo wizard via_verde).
@@ -429,6 +450,13 @@ export const IntegracoesTab: React.FC = () => {
       setImportUberDialogOpen(true);
     } else {
       setSelectedRobotIntegracaoId(integracao.id);
+      // Abrir já no separador da plataforma do cartão — o dialog é partilhado
+      // pelas cinco e importar o CSV certo no separador errado é um erro caro.
+      const alvo = (integracao.robot_target_platform ??
+        (integracao.plataforma === 'bolt' ? 'bolt' : null)) as string | null;
+      setImportRobotTab(
+        alvo === 'bolt' || alvo === 'bp' || alvo === 'repsol' || alvo === 'edp' ? alvo : 'uber'
+      );
       setImportRobotDialogOpen(true);
     }
   };
@@ -784,11 +812,21 @@ export const IntegracoesTab: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {cards.map((card) => {
-            const rawPlataforma = (card.rawData as IntegracaoConfig)?.plataforma;
-            const isRobotBacked = rawPlataforma === 'robot' || rawPlataforma === 'via_verde';
+            const raw = card.rawData as IntegracaoConfig | undefined;
+            const rawPlataforma = raw?.plataforma;
+            // Bolt convertida para a API: o botão Play dispara robot-execute
+            // (Apify) e o login do portal desta conta já foi substituído pelas
+            // credenciais da API — deixaria de entrar. Sincroniza-se pelo botão
+            // "Sincronizar semana" dentro do detalhe da integração.
+            const isBoltApi = card.type === 'bolt' && raw?.auth_mode === 'oauth';
+            const isRobotBacked =
+              (rawPlataforma === 'robot' && !isBoltApi) || rawPlataforma === 'via_verde';
             const isUberBacked = rawPlataforma === 'uber';
             const isCartrackBacked = rawPlataforma === 'cartrack';
-            const hasImport = rawPlataforma === 'robot' || isUberBacked;
+            // Importação manual do CSV: em TODAS as integrações Bolt,
+            // independentemente do auth_mode — a API e o CSV convivem (o CSV é
+            // o único que traz campanhas e reembolsos de despesas).
+            const hasImport = rawPlataforma === 'robot' || isUberBacked || card.type === 'bolt';
             return (
               <IntegracaoCard
                 key={card.id}
@@ -950,8 +988,16 @@ export const IntegracoesTab: React.FC = () => {
         open={newIntegracaoDialogOpen}
         onOpenChange={setNewIntegracaoDialogOpen}
         onSuccess={fetchAll}
-        onOpenFaturacao={() => {
-          setFaturacaoRow(null);
+        onOpenFaturacao={(provider) => {
+          // A linha desse provider pode já existir (voltar a abrir "Primavera"
+          // quando já foi configurada antes) — reencontra-se por config.provider,
+          // nunca a primeira linha de faturação que aparecer.
+          const existing =
+            (rawIntegracoes as any[]).find(
+              (i) => i.plataforma === 'faturacao' && i.config?.provider === provider
+            ) ?? null;
+          setFaturacaoRow(existing as FaturacaoConfigRow | null);
+          setFaturacaoProvider(provider);
           setFaturacaoDialogOpen(true);
         }}
       />
@@ -978,7 +1024,15 @@ export const IntegracoesTab: React.FC = () => {
       <FaturacaoIntegracaoDialog
         open={faturacaoDialogOpen}
         onOpenChange={setFaturacaoDialogOpen}
+        provider={faturacaoProvider}
         row={faturacaoRow}
+        // Existe outra integração de faturação já activa (a emitir a sério)
+        // além desta? Determina o valor por omissão do interruptor "activar" —
+        // nunca activar sozinho por omissão quando isso ia desligar outra que
+        // já está em produção.
+        existeOutraIntegracaoAtiva={(rawIntegracoes as any[]).some(
+          (i) => i.plataforma === 'faturacao' && i.ativo && i.id !== faturacaoRow?.id
+        )}
         onSuccess={fetchAll}
       />
 
@@ -1135,6 +1189,7 @@ export const IntegracoesTab: React.FC = () => {
         open={importRobotDialogOpen}
         onOpenChange={setImportRobotDialogOpen}
         integracaoId={selectedRobotIntegracaoId}
+        tabInicial={importRobotTab}
         onImportComplete={fetchAll}
       />
 

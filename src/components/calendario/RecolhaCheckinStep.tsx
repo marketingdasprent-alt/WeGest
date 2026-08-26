@@ -1,5 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { nivelEnergia } from '@/utils/combustivel';
+import { useRascunho } from '@/hooks/useRascunho';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -23,6 +25,7 @@ import {
   emptyCheckinDados,
   validateCheckinDados,
   saveCheckinDados,
+  reidratarCheckinDados,
 } from './CheckinDadosSection';
 import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
@@ -77,6 +80,14 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
   const queryClient = useQueryClient();
   const [files, setFiles] = useState<SelectedFile[]>([]);
   const [checkinDados, setCheckinDados] = useState<CheckinDadosState>(emptyCheckinDados);
+
+  // Um refresh a meio de uma folha de danos apagava km, descrições e — o que
+  // custa mesmo — as fotos já tiradas. Guarda por viatura, nunca global.
+  const { limpar: limparRascunho } = useRascunho({
+    chave: viaturaId ? `folha-recolha-${viaturaId}` : null,
+    valor: checkinDados,
+    restaurar: (d) => setCheckinDados(reidratarCheckinDados(d)),
+  });
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -91,7 +102,9 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
     queryFn: async () => {
       const query = supabase
         .from('contratos')
-        .select('id, numero_contrato, status, km_checkout, combustivel_checkout')
+        .select(
+          'id, numero_contrato, status, km_checkout, combustivel_checkout, eletricidade_checkout'
+        )
         .eq('status', 'ativo')
         .order('criado_em', { ascending: false })
         .limit(1);
@@ -105,6 +118,7 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
         status: string;
         km_checkout: number | null;
         combustivel_checkout: string | null;
+        eletricidade_checkout: string | null;
       } | null;
     },
     enabled: !!motoristaId || !!viaturaId,
@@ -342,8 +356,17 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
                 contratoId: contrato.id,
                 km_saida: contrato.km_checkout?.toString() ?? '',
                 km_entrada: checkinDados.km,
-                combustivel_saida: contrato.combustivel_checkout ?? '',
-                combustivel_entrada: checkinDados.combustivel,
+                // Numa eléctrica o nível vive nas colunas eletricidade_*; a
+                // folha lê sempre combustivel_*, por isso sem isto as duas
+                // metades saíam em branco. Ver nivelEnergia.
+                combustivel_saida: nivelEnergia(viatura.combustivel, {
+                  combustivel: contrato.combustivel_checkout,
+                  eletricidade: contrato.eletricidade_checkout,
+                }),
+                combustivel_entrada: nivelEnergia(viatura.combustivel, {
+                  combustivel: checkinDados.combustivel,
+                  eletricidade: checkinDados.nivelEletrico,
+                }),
                 momentoFolha: isDevolucao ? 'DEVOLUÇÃO' : 'RECOLHA',
                 action: 'print',
               });
@@ -410,6 +433,9 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
             ? 'Devolução confirmada'
             : 'Recolha confirmada'
       );
+      // Só aqui: enquanto a submissão não passar, o rascunho tem de aguentar
+      // um refresh, um erro de rede ou um fecho por engano.
+      void limparRascunho();
       setDone(true);
       setTimeout(() => onConcluir(), 1500);
     } catch (err: any) {

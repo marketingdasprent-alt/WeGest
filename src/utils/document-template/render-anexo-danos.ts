@@ -1,5 +1,5 @@
 import type jsPDF from 'jspdf';
-import type { AnexoDanos, AnexoDanoItem, AnexoFotoItem } from './types';
+import type { AnexoDanos, AnexoDanoItem, AnexoFotoItem, AnexoParteItem } from './types';
 import { loadImage } from './parser';
 import { LOCALIZACAO_LABELS, ESTADO_LABELS } from './labels';
 
@@ -31,6 +31,117 @@ const estadoLabels: Record<string, string> = {
   irreparavel: 'Irreparável',
   pendente: 'Pendente',
 };
+
+/**
+ * Legenda por baixo de cada imagem.
+ *
+ * A descrição escrita por quem registou manda sobre a origem: diz o que se
+ * está a ver ("risco no para-choques traseiro"), enquanto a origem só diz de
+ * onde a foto veio ("Nesta recolha/entrega"). Sem descrição, mantém-se a
+ * origem, que é o que sempre lá esteve.
+ *
+ * Vídeos levam prefixo — no papel não se distingue um vídeo de uma foto, e
+ * sem aviso o leitor ficava à espera de ver uma imagem que não existe.
+ */
+export function legendaFoto(foto: AnexoFotoItem): string {
+  const texto = foto.descricao?.trim() || foto.origem?.trim() || '—';
+  if (foto.pdf) return `[PDF] ${texto}`;
+  return foto.video ? `[Vídeo] ${texto}` : texto;
+}
+
+/** Rótulo da moldura para o que não é imagem. null = desenha-se a imagem. */
+export function rotuloNaoImagem(foto: AnexoFotoItem): string | null {
+  if (foto.pdf) return 'PDF';
+  if (foto.video) return 'VÍDEO';
+  return null;
+}
+
+/**
+ * Bloco "quem alugou" — titular e/ou condutor, lado a lado.
+ *
+ * Vive fora de renderAnexoDanos de propósito: pela leitura da folha, a
+ * identificação das partes pertence ao cabeçalho (logo a seguir à empresa
+ * emissora), não ao anexo de danos que vem lá mais abaixo. Renderizado no
+ * sítio do {{secao_partes}} do template.
+ *
+ * Devolve o novo yPos.
+ */
+export function renderPartes(
+  pdf: jsPDF,
+  partes: AnexoParteItem[],
+  ctx: AnexoDanosCtx,
+  startY: number
+): number {
+  if (partes.length === 0) return startY;
+
+  const { leftMargin, maxWidth } = ctx;
+  const blue: [number, number, number] = [43, 58, 107];
+  const gray: [number, number, number] = [90, 90, 100];
+  const borderColor: [number, number, number] = [200, 202, 210];
+
+  const colGap = 6;
+  const visiveis = partes.slice(0, 2);
+  const colW = visiveis.length > 1 ? (maxWidth - colGap) / 2 : maxWidth;
+  const linhasMax = Math.max(...visiveis.map((p) => p.detalhes.length));
+  const blocoH = 4.5 + 4.5 + linhasMax * 3.6 + 3;
+
+  let ty = startY;
+  pdf.setDrawColor(...borderColor);
+  pdf.setLineWidth(0.2);
+  pdf.setFillColor(248, 249, 252);
+  pdf.rect(leftMargin, ty, maxWidth, blocoH, 'FD');
+
+  visiveis.forEach((parte, i) => {
+    const cx = leftMargin + i * (colW + colGap) + 3;
+    const larguraTexto = colW - 6;
+    let py = ty + 4.5;
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(...gray);
+    pdf.text(parte.papel, cx, py);
+    py += 4.5;
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9);
+    pdf.setTextColor(...blue);
+    pdf.text(pdf.splitTextToSize(parte.nome, larguraTexto)[0] ?? parte.nome, cx, py);
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7);
+    pdf.setTextColor(60, 60, 70);
+    for (const detalhe of parte.detalhes) {
+      py += 3.6;
+      pdf.text(pdf.splitTextToSize(detalhe, larguraTexto)[0] ?? detalhe, cx, py);
+    }
+  });
+
+  pdf.setTextColor(0, 0, 0);
+  return ty + blocoH + 5;
+}
+
+/**
+ * Número do contrato no canto superior direito da página, como no contrato de
+ * aluguer. Fica acima da margem de conteúdo para não empurrar o texto.
+ */
+export function renderNumeroContrato(
+  pdf: jsPDF,
+  numero: number,
+  ctx: Pick<AnexoDanosCtx, 'pageWidth' | 'rightMargin' | 'topMargin'>
+): void {
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.setTextColor(43, 58, 107);
+  pdf.text(
+    `Contrato n.º ${numero}`,
+    ctx.pageWidth - ctx.rightMargin,
+    Math.max(ctx.topMargin - 5, 12),
+    {
+      align: 'right',
+    }
+  );
+  pdf.setTextColor(0, 0, 0);
+}
 
 /**
  * Renderiza o anexo de danos da viatura (fotos + tabela + QR code) no PDF.
@@ -112,6 +223,16 @@ export async function renderAnexoDanos(
 
         // Carregar e desenhar a imagem
         try {
+          // Vídeo: ver a nota no bloco equivalente abaixo.
+          const rotuloN = rotuloNaoImagem(ad.fotos[fi]);
+          if (rotuloN) {
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(7);
+            pdf.setTextColor(...gray);
+            pdf.text(rotuloN, nfx + photoW / 2, nfy + imgAreaH / 2, { align: 'center' });
+            pdf.setTextColor(0, 0, 0);
+            throw new Error('sem-imagem');
+          }
           const imgUrl = ad.fotos[fi].url;
           const img = imagens?.get(imgUrl) ?? (await loadImage(imgUrl));
           if (img) {
@@ -128,11 +249,11 @@ export async function renderAnexoDanos(
           /* skip */
         }
 
-        const origemTexto = ad.fotos[fi].origem ?? '—';
+        const legenda = legendaFoto(ad.fotos[fi]);
         pdf.setFont('helvetica', 'italic');
         pdf.setFontSize(7);
         pdf.setTextColor(...gray);
-        const captionFit = pdf.splitTextToSize(origemTexto, photoW - 3)[0] ?? origemTexto;
+        const captionFit = pdf.splitTextToSize(legenda, photoW - 3)[0] ?? legenda;
         pdf.text(captionFit, nfx + photoW / 2, nfy + imgAreaH + captionH / 2 + 1.5, {
           align: 'center',
         });
@@ -144,6 +265,17 @@ export async function renderAnexoDanos(
       pdf.rect(fx, fy, photoW, imgAreaH, 'S');
 
       try {
+        // Vídeo: nada a desenhar (o jsPDF não extrai frames). A moldura fica
+        // com o rótulo e a legenda diz "[Vídeo]" — vê-se pelo QR.
+        const rotulo = rotuloNaoImagem(ad.fotos[fi]);
+        if (rotulo) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(7);
+          pdf.setTextColor(...gray);
+          pdf.text(rotulo, fx + photoW / 2, fy + imgAreaH / 2, { align: 'center' });
+          pdf.setTextColor(0, 0, 0);
+          throw new Error('sem-imagem');
+        }
         const imgUrl = ad.fotos[fi].url;
         const img = imagens?.get(imgUrl) ?? (await loadImage(imgUrl));
         if (img) {
@@ -163,8 +295,8 @@ export async function renderAnexoDanos(
       pdf.setFont('helvetica', 'italic');
       pdf.setFontSize(7);
       pdf.setTextColor(...gray);
-      const origemTexto = ad.fotos[fi].origem ?? '—';
-      const captionFit = pdf.splitTextToSize(origemTexto, photoW - 3)[0] ?? origemTexto;
+      const legenda = legendaFoto(ad.fotos[fi]);
+      const captionFit = pdf.splitTextToSize(legenda, photoW - 3)[0] ?? legenda;
       pdf.text(captionFit, fx + photoW / 2, fy + imgAreaH + captionH / 2 + 1.5, {
         align: 'center',
       });

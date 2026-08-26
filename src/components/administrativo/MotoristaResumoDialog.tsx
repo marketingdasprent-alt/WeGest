@@ -113,6 +113,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     outrasReceitas,
     slotPeriodos,
     aluguerSemTarifa,
+    aluguerEstimado,
   } = useMotoristaResumoData(open, motorista, dateRange);
   const [isSending, setIsSending] = useState(false);
   const [settings, setSettings] = useState<PrintSettings>(loadSettings);
@@ -161,6 +162,15 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
   // Só avisar quando o valor mostrado é mesmo 0 — se houver renda manual
   // (renda_viatura) o aluguer já vem preenchido e não há falha a assinalar.
   const mostrarAvisoAluguer = !isImportado && aluguerSemTarifa && despesas.aluguer === 0;
+  // Fixo a 0 de propósito. Chegou a ser ligado ao saldo pendente do motorista
+  // (motorista_saldo_pendente até à véspera desta semana), mas NADA liquida
+  // esses movimentos: "Fechar Período" só lê motorista_financeiro, nunca os
+  // marca como pagos. O mesmo crédito antigo era arrastado para TODAS as
+  // semanas seguintes — pagando-se a dobrar a quem recebe pelo resumo — e o
+  // total divergia da lista de Contas/Resumo, que nunca somou isto (caso
+  // real: motorista #252, +50 € de uma caução de Fevereiro a aparecer em
+  // Agosto). Só reactivar depois de existir liquidação: ao fechar o período,
+  // marcar como pagos os movimentos até essa data.
   const valoresSemanaAnterior = 0;
 
   // Cálculo puro (testado em resumoFinanceiro.test.ts). A gorjeta entra uma
@@ -367,6 +377,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             despesas={despesas}
             totalDespesas={totalDespesas}
             aluguerSemTarifa={mostrarAvisoAluguer}
+            aluguerEstimado={aluguerEstimado}
             slotPeriodos={slotPeriodos}
             totalSlot={totalSlot}
             valoresSemanaAnterior={valoresSemanaAnterior}

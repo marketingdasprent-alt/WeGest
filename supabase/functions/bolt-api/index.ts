@@ -26,11 +26,27 @@ async function getBoltToken(supabase: any, integracaoId?: string): Promise<{ tok
     query = query.eq("id", integracaoId);
   }
 
-  const { data: config, error } = await query.single();
+  // Sem .single(): há uma integração Bolt POR EMPRESA (a frota tem várias
+  // company_id na Bolt). Com mais do que uma linha activa, o .single() antigo
+  // rebentava com "multiple rows returned" em vez de dizer o que faltava —
+  // e o erro chegava à UI como "Configuração Bolt não encontrada", que é
+  // precisamente o contrário do que se passava.
+  const { data: configs, error } = await query;
 
-  if (error || !config) {
+  if (error) {
+    throw new Error(`Erro ao ler configuração Bolt: ${error.message}`);
+  }
+  if (!configs || configs.length === 0) {
     throw new Error("Configuração Bolt não encontrada ou inactiva");
   }
+  if (configs.length > 1) {
+    const nomes = configs.map((c: any) => `${c.nome} (${c.id})`).join(", ");
+    throw new Error(
+      `Há ${configs.length} integrações Bolt activas — indique integracao_id. Disponíveis: ${nomes}`,
+    );
+  }
+
+  const config = configs[0];
 
   const response = await fetch("https://oidc.bolt.eu/token", {
     method: "POST",

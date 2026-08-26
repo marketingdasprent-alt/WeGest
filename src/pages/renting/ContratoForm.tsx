@@ -11,6 +11,7 @@ import {
   Loader2,
   Printer,
   Trash2,
+  XCircle,
 } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -48,6 +49,7 @@ import { ContratoTabFaturar } from '@/components/renting/contratos/ContratoTabFa
 import { ResumoContrato } from '@/components/renting/contratos/ResumoContrato';
 import { HistoricoEdicoesContrato } from '@/components/renting/contratos/HistoricoEdicoesContrato';
 
+import { usePermissions } from '@/hooks/usePermissions';
 import { useContratoForm } from './contrato/useContratoForm';
 import { ContratoTabGeral } from './contrato/tabs/ContratoTabGeral';
 import { ContratoTabCoberturas } from './contrato/tabs/ContratoTabCoberturas';
@@ -82,6 +84,11 @@ const ContratoForm = () => {
     activeTab,
     setActiveTab,
     confirmDeleteOpen,
+    confirmCancelOpen,
+    setConfirmCancelOpen,
+    podeCancelar,
+    handleCancelar,
+    confirmCancelar,
     setConfirmDeleteOpen,
     clienteDialogOpen,
     setClienteDialogOpen,
@@ -91,9 +98,6 @@ const ContratoForm = () => {
     setNovaVersaoCtx,
     realizarDialog,
     setRealizarDialog,
-    confirmarRealizacaoDireta,
-    setConfirmarRealizacaoDireta,
-    marcarRealizacaoDireta,
     docsDialogOpen,
     setDocsDialogOpen,
     viaturasParaSelecao,
@@ -120,6 +124,9 @@ const ContratoForm = () => {
     handleClienteCriado,
     handleMotoristaCriado,
   } = useContratoForm();
+
+  // Eliminar contratos é de admin — ver o botão mais abaixo.
+  const { isAdmin } = usePermissions();
 
   const motoristaIdPrincipal =
     condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null;
@@ -234,13 +241,30 @@ const ContratoForm = () => {
             Documentos
           </Button>
         )}
-        {isEdit && contrato && (
+        {/* Cancelar ≠ eliminar. Os dois estão disponíveis em qualquer altura;
+            o que muda é o significado e quem pode. Cancelar é um facto de
+            negócio e o contrato fica visível; eliminar é para enganos, esconde
+            a linha do histórico, e por isso é só de admin. */}
+        {isEdit && contrato && podeCancelar && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleCancelar}
+            className="gap-2"
+            title="O contrato passa a Cancelado e a viatura volta a ficar disponível. Continua visível no histórico."
+          >
+            <XCircle className="h-4 w-4" />
+            Cancelar contrato
+          </Button>
+        )}
+        {isEdit && contrato && isAdmin && (
           <Button
             type="button"
             variant="outline"
             onClick={handleDelete}
             disabled={false}
             className="gap-2"
+            title="Remove o contrato do histórico. Só para enganos — um cancelamento usa Cancelar contrato."
           >
             <Trash2 className="h-4 w-4" />
             Eliminar
@@ -322,53 +346,9 @@ const ContratoForm = () => {
               <FileText className="h-4 w-4" />
               Realizar {realizacaoPendente.tipo === 'entrega' ? 'entrega' : 'recolha'}
             </Button>
-            {realizacaoPendente.tipo === 'entrega' && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setConfirmarRealizacaoDireta(true)}
-                disabled={marcarRealizacaoDireta.isPending}
-                title="Marca a entrega como realizada sem passar pelo check (fotos/km) — para contratos já existentes no Any Rent."
-              >
-                {marcarRealizacaoDireta.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  'Any Rent'
-                )}
-              </Button>
-            )}
           </div>
         </div>
       )}
-
-      {/* Confirmação do atalho "marcar entrega como já realizada" (sem check).
-          Recolha/fecho não têm atalho — passam sempre por "Fechar contrato",
-          pelo fluxo QR/Realizar recolha, ou por troca de viatura. */}
-      <AlertDialog open={confirmarRealizacaoDireta} onOpenChange={setConfirmarRealizacaoDireta}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Marcar entrega como já realizada?</AlertDialogTitle>
-            <AlertDialogDescription>
-              O contrato passa a "Em curso" sem registar fotos, km ou confirmação no terreno. Usa
-              isto só para contratos já existentes no <strong>Any Rent</strong> — essa informação
-              nunca existiu porque foram migrados de outro sistema.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (!contrato || !realizacaoPendente) return;
-                marcarRealizacaoDireta.mutate({ contratoId: contrato.id });
-                setConfirmarRealizacaoDireta(false);
-              }}
-            >
-              Confirmar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
         <Card className="bg-card border-border">
@@ -477,10 +457,42 @@ const ContratoForm = () => {
             totalSnapshot={contrato?.total_final}
             subtotalSnapshot={contrato?.total_subtotal}
             ivaSnapshot={contrato?.total_iva}
+            editavel
+            onValorTotalManualChange={(valor) =>
+              // Nota sobre shouldDirty: o que se escreve aqui sobrevive aos
+              // `form.reset` dos efeitos de hidratação das relações (condutores,
+              // coberturas, extras e taxas, em useContratoForm) porque esses
+              // fazem reset com { ...form.getValues(), <relação>: fresca } e o
+              // spread já transporta valor_total_manual. shouldDirty fica só por
+              // consistência com `aplicarDadosViatura`, o outro sítio que
+              // escreve neste campo.
+              form.setValue('valor_total_manual', valor, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
           />
           {isEdit && contrato && <HistoricoEdicoesContrato contratoId={contrato.id} />}
         </aside>
       </div>
+
+      <AlertDialog open={confirmCancelOpen} onOpenChange={setConfirmCancelOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar contrato?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O contrato passa a &quot;Cancelado&quot;, a reserva é cancelada e a viatura volta a
+              ficar disponível. O contrato continua visível no histórico — só deixa de ocupar o
+              carro. As entregas e recolhas já confirmadas mantêm-se; só se apagam as que estavam
+              por realizar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancelar}>Cancelar contrato</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ContratoDeleteConfirm
         open={confirmDeleteOpen}

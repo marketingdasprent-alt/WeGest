@@ -4,6 +4,7 @@ import { Fuel, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NivelBateriaInput } from '@/components/viaturas/NivelBateriaInput';
 import {
   Dialog,
   DialogContent,
@@ -14,12 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { useTipoCombustivel } from '@/hooks/useTipoCombustivel';
 import { usePreencherDadosSaidaAnyRent } from '@/hooks/useContratosRenting';
-import {
-  COMBUSTIVEL_NIVEL_OPTS,
-  ELETRICO_OPTS,
-  precisaCombustivel,
-  precisaEletrico,
-} from '@/utils/combustivel';
+import { COMBUSTIVEL_NIVEL_OPTS, precisaCombustivel, precisaEletrico } from '@/utils/combustivel';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 interface AnyRentDadosSaidaAlertProps {
@@ -149,22 +145,7 @@ export function AnyRentDadosSaidaAlert({ contrato }: AnyRentDadosSaidaAlertProps
                 <Label>
                   Nível da bateria <span className="text-destructive">*</span>
                 </Label>
-                <div className="grid grid-cols-5 gap-2">
-                  {ELETRICO_OPTS.map((nivel) => (
-                    <button
-                      key={nivel}
-                      type="button"
-                      onClick={() => setEletricidade(nivel)}
-                      className={`rounded-md border-2 py-2 text-sm font-medium transition-colors ${
-                        eletricidade === nivel
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border hover:border-primary/40'
-                      }`}
-                    >
-                      {nivel}
-                    </button>
-                  ))}
-                </div>
+                <NivelBateriaInput valor={eletricidade} onChange={setEletricidade} />
               </div>
             )}
           </div>

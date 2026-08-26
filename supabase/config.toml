@@ -10,6 +10,14 @@ verify_jwt = false
 [functions.send-folha-danos-email]
 verify_jwt = false
 
+# Arquiva a Folha de Danos assinada nos anexos do contrato. Chamada tanto pela
+# UI autenticada como pela página de check-in/out por token — quem confirma no
+# terreno não tem permissão de renting_contratos, por isso a RLS não serve de
+# porta aqui. A autorização é feita DENTRO da função (token de realização que
+# bate certo com o contrato, ou o contrato ser visível à sessão do chamador).
+[functions.guardar-folha-danos]
+verify_jwt = false
+
 # Envio de documento fiscal (fatura/FR/NC/recibo) por email ao cliente/condutor.
 # Iniciada sempre pela UI autenticada → exige JWT válido (evita relay anónimo de anexos).
 [functions.send-documento-fiscal-email]
@@ -40,8 +48,12 @@ verify_jwt = false
 [functions.bolt-sync]
 verify_jwt = false
 
+# Teste de ligação à API da Bolt. Recebe client_id/client_secret no corpo e é
+# invocado só pelos ecrãs de administração (já autenticados) → exige JWT.
+# Sem isto, a função era um proxy anónimo para o OIDC da Bolt: qualquer um
+# podia usá-la para testar pares de credenciais em massa a partir do nosso IP.
 [functions.bolt-test-connection]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bolt-api]
 verify_jwt = false
@@ -136,7 +148,37 @@ verify_jwt = false
 [functions.bolt-import-csv]
 verify_jwt = false
 
+# Sincronização de UMA semana pela API oficial da Bolt (getFleetOrders).
+# Escreve no financeiro (bolt_resumos_semanais), por isso exige JWT válido:
+# a chave service_role do agendador já é um JWT assinado pelo projecto e passa
+# na verificação, tal como a sessão do administrador que carrega no botão.
+# Deixá-la a false abria um gatilho anónimo para uma função que consome quota
+# da API da Bolt e reescreve valores financeiros. A autorização a sério é feita
+# dentro da função (service-role OU admin da org dona da integração).
+[functions.bolt-sync-semana]
+verify_jwt = true
+
+# Enfileira o sync semanal. Chamada pelo cron (service-role) e pelo botão
+# "Atualizar" (sessão do utilizador) — daí verify_jwt = false: a própria
+# função distingue os dois e exige admin da org ao chamador autenticado.
+[functions.bolt-sync-agendado]
+verify_jwt = false
+
+# Só o cron lhe toca; não há caminho pela UI.
+[functions.bolt-sync-drain]
+verify_jwt = false
+
 [functions.primavera-api]
+verify_jwt = false
+
+# Chamadas pelo agente local Primavera (agent/primavera-agent/), fora de
+# qualquer sessão Supabase — autenticam com a chave do agente (pva_...) no
+# header Authorization, validada dentro da própria função contra
+# plataformas_configuracao.client_secret.
+[functions.primavera-agent-poll]
+verify_jwt = false
+
+[functions.primavera-agent-result]
 verify_jwt = false
 
 # Faturação fiscal (provider-agnostic). Iniciada sempre por utilizador
@@ -163,4 +205,39 @@ verify_jwt = true
 # verify_jwt=true; deixar false expunha um gatilho público que podia queimar
 # o orçamento de 3 tentativas de aviso por parcela.
 [functions.acordos-parcelas-diario]
+verify_jwt = true
+
+# Submissão pública de tickets de TI. Quem reporta pode não ter conta nenhuma,
+# por isso aceita anónimo; a autorização é o token do link, validado dentro da
+# função, mais um limite por origem contra flood.
+[functions.ti-ticket-submeter]
+verify_jwt = false
+
+# Leitura de um ticket de TI pelo token do próprio ticket (vai no email da
+# sugestão). Anónimo porque o autor pode não ter conta; devolve só aquele ticket.
+[functions.ti-ticket-por-token]
+verify_jwt = false
+
+# Resposta do autor a uma sugestão de TI ("ajudou" / "não ajudou"). Anon porque
+# o autor pode não ter conta; autoriza pelo acesso_token do ticket.
+[functions.ti-sugestao-responder]
+verify_jwt = false
+
+# Aviso ao autor de um ticket de TI de que há sugestão. Iniciada sempre pela app
+# autenticada (o admin que escreve a sugestão) → exige JWT.
+[functions.ti-ticket-sugestao-email]
+verify_jwt = true
+
+# Aviso ao email de suporte da organização de que entrou um pedido novo. Exige
+# JWT: os dois chamadores trazem um — a app autenticada (o admin que abre o
+# pedido) e o ti-ticket-submeter, cuja service role key já é um JWT assinado
+# pelo projecto. Deixá-la a false abria um gatilho anónimo de envio de email.
+[functions.ti-ticket-novo-email]
+verify_jwt = true
+
+# Aviso ao suporte de que o autor respondeu "não ajudou" — o pedido regrediu e
+# volta a precisar de atenção. Exige JWT: quem chama é o ti-sugestao-responder
+# com a service_role key, que já é um JWT assinado pelo projecto. Deixá-la a
+# false abria um gatilho anónimo de envio de email.
+[functions.ti-sugestao-nao-ajudou-email]
 verify_jwt = true

@@ -8,8 +8,11 @@ export const SENTINEL_NONE = '__none__';
 export const ESTADO_OP_OPTIONS = [
   { value: 'agendado', label: 'Agendado' },
   { value: 'em_curso', label: 'Em Curso' },
-  { value: 'devolvido', label: 'Devolvido' },
-  { value: 'cancelado', label: 'Fechado' },
+  // Ver CONTRATO_ESTADO_OP_LABELS — manter os dois rótulos alinhados.
+  // 'devolvido'/'recolhido' NÃO aparecem aqui: não são estados do contrato,
+  // são o `tipo_fecho`, e só se escolhem no diálogo de fecho.
+  { value: 'fechado', label: 'Fechado' },
+  { value: 'cancelado', label: 'Cancelado' },
 ] as const;
 
 export const ESTADO_FIN_OPTIONS = [

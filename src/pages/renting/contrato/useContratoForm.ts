@@ -21,8 +21,8 @@ import {
   useContratoVizinhos,
   useCreateContratoRenting,
   useCriarVersaoContrato,
+  useCancelarContratoRenting,
   useDeleteContratoRenting,
-  useMarcarRealizacaoDireta,
   useUpdateContratoRenting,
 } from '@/hooks/useContratosRenting';
 import { useEstacoes } from '@/hooks/useEstacoes';
@@ -66,6 +66,20 @@ import {
 
 // Mapeia o 1º campo do schema com erro para o separador onde ele vive —
 // os restantes campos ficam todos no separador "Geral" (ContratoFormSecoes).
+//
+// `valor_total_manual`, `desconto_percentagem` e `voucher_codigo` caem neste
+// grupo. Desde que o SectionGeral foi apagado (tinha os únicos <FormMessage />
+// destes três campos), um erro de validação neles deixa de ter superfície
+// ACIONÁVEL: o `onInvalid` (mais abaixo) continua a abrir o separador "Geral" e
+// a mostrar o toast, mas lá não há nenhum destes campos para corrigir — e o
+// cartão lateral (ResumoContrato) não lê form.formState.errors.
+// Decisão deliberada, não um esquecimento: os três só entram no formulário
+// por hidratação de um contrato/reserva já gravado, e só se grava um
+// contrato passando por este mesmo schema (ou pela função SQL
+// renovar_contrato_renting, que copia uma linha já validada) — não há forma
+// de os tornar inválidos pela aplicação. `valor_total_manual` tem ainda o
+// CHECK chk_contratos_valor_total_manual_valido (>= 0) na BD como garantia
+// extra.
 const FIELD_TAB_MAP: Partial<Record<keyof ContratoFormValues, string>> = {
   coberturas: 'coberturas',
   extras: 'extras',
@@ -123,6 +137,11 @@ export interface UseContratoFormReturn {
   setActiveTab: (tab: string) => void;
   confirmDeleteOpen: boolean;
   setConfirmDeleteOpen: (open: boolean) => void;
+  confirmCancelOpen: boolean;
+  setConfirmCancelOpen: (open: boolean) => void;
+  /** Cancelar está disponível em qualquer estado; só não se cancela uma
+   *  versão já substituída (essa é história). Ver useCancelarContratoRenting. */
+  podeCancelar: boolean;
   clienteDialogOpen: boolean;
   setClienteDialogOpen: (open: boolean) => void;
   motoristaDialogOpen: boolean;
@@ -133,9 +152,6 @@ export interface UseContratoFormReturn {
   ) => void;
   realizarDialog: { eventoId: string; tipo: 'entrega' | 'recolha' } | null;
   setRealizarDialog: (dialog: { eventoId: string; tipo: 'entrega' | 'recolha' } | null) => void;
-  confirmarRealizacaoDireta: boolean;
-  setConfirmarRealizacaoDireta: (open: boolean) => void;
-  marcarRealizacaoDireta: ReturnType<typeof useMarcarRealizacaoDireta>;
   docsDialogOpen: boolean;
   setDocsDialogOpen: (open: boolean) => void;
 
@@ -167,7 +183,9 @@ export interface UseContratoFormReturn {
   handleSubmit: () => void;
   handleDelete: () => void;
   confirmDelete: () => void;
-  confirmarNovaVersao: (motivo: string) => void;
+  handleCancelar: () => void;
+  confirmCancelar: () => void;
+  confirmarNovaVersao: (motivo: string, dataTrocaIso?: string) => void;
   handleClienteCriado: (clienteId: string) => void;
   handleMotoristaCriado: (motoristaId: string) => void;
 }
@@ -181,7 +199,12 @@ export function useContratoForm(): UseContratoFormReturn {
 
   // ── Server state ──────────────────────────────────────────────
   const { data: clientes = [] } = useClientes();
-  const { data: motoristas = [] } = useMotoristas({ apenasAtivos: true });
+  // Não filtra por activo: um contrato existente pode ter condutores que
+  // entretanto ficaram inactivos (ex. ao fechar o contrato) — filtrar aqui
+  // fazia-os desaparecer da lista e o CondutoresFields mostrava-os como
+  // "Motorista removido" mesmo continuando corretamente associados. A
+  // dropdown de "Adicionar Motorista" filtra por activo internamente.
+  const { data: motoristas = [] } = useMotoristas();
   const { empresas } = useClientesEmpresas();
   const { data: viaturas = [] } = useViaturas();
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
@@ -209,8 +232,8 @@ export function useContratoForm(): UseContratoFormReturn {
   const createMutation = useCreateContratoRenting();
   const updateMutation = useUpdateContratoRenting();
   const deleteMutation = useDeleteContratoRenting();
+  const cancelarMutation = useCancelarContratoRenting();
   const criarVersaoMutation = useCriarVersaoContrato();
-  const marcarRealizacaoDireta = useMarcarRealizacaoDireta();
   const syncCondutoresMutation = useSyncContratoCondutores();
   const syncCoberturasMutation = useSyncContratoCoberturas();
   const syncExtrasMutation = useSyncContratoExtras();
@@ -231,6 +254,7 @@ export function useContratoForm(): UseContratoFormReturn {
   // ── UI state ──────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('geral');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [clienteDialogOpen, setClienteDialogOpen] = useState(false);
   const [motoristaDialogOpen, setMotoristaDialogOpen] = useState(false);
   const [novaVersaoCtx, setNovaVersaoCtx] = useState<{
@@ -241,7 +265,6 @@ export function useContratoForm(): UseContratoFormReturn {
     eventoId: string;
     tipo: 'entrega' | 'recolha';
   } | null>(null);
-  const [confirmarRealizacaoDireta, setConfirmarRealizacaoDireta] = useState(false);
   const [docsDialogOpen, setDocsDialogOpen] = useState(false);
 
   // ── Handlers ──────────────────────────────────────────────────
@@ -288,10 +311,30 @@ export function useContratoForm(): UseContratoFormReturn {
     });
   };
 
+  const handleCancelar = () => {
+    if (!contrato) return;
+    setConfirmCancelOpen(true);
+  };
+
+  // Ao contrário do eliminar, cancelar NÃO navega para fora: o contrato
+  // continua a existir e o gestor deve ficar a vê-lo já como "Cancelado".
+  const confirmCancelar = () => {
+    if (!contrato) return;
+    cancelarMutation.mutate(contrato.id, {
+      onSuccess: () => setConfirmCancelOpen(false),
+    });
+  };
+
   // ── Form ──────────────────────────────────────────────────────
-  // Garante que a hidratação (contrato existente OU reserva) só corre UMA vez —
-  // senão um refetch (react-query) volta a fazer reset e apaga edições/condutores.
-  const hidratou = useRef(false);
+  // Instantâneo do servidor a partir do qual o formulário já foi hidratado —
+  // guardado por IDENTIDADE de objecto (o react-query, com structural sharing,
+  // só devolve uma referência nova quando os dados mudam mesmo). Faz dois
+  // trabalhos: re-hidratar quando os dados mudam, e não voltar a fazer reset
+  // quando não mudaram (o efeito também corre por causa de listas auxiliares —
+  // `viaturas`/`grupos` são `= []` por omissão, ou seja, referência nova a cada
+  // render enquanto a query não resolve; sem esta guarda, reset → render →
+  // reset, em ciclo). Nulo = ainda não houve hidratação nenhuma.
+  const hidratadoDeRef = useRef<{ fonte: unknown; condutores: unknown } | null>(null);
 
   const form = useForm<ContratoFormValues>({
     resolver: zodResolver(contratoFormSchema),
@@ -311,46 +354,76 @@ export function useContratoForm(): UseContratoFormReturn {
     }
   }, [isEdit, reservaIdFromQuery, navigate]);
 
-  // Hydration: contrato existente OU pré-preenchimento via reserva_id
-  // Só corre UMA vez — depois disso o utilizador pode editar livremente
-  // sem que refetchs (react-query) lhe apaguem as alterações.
+  // Hydration: contrato existente OU pré-preenchimento via reserva_id.
+  //
+  // Volta a correr sempre que os dados do servidor mudam. Antes corria UMA só
+  // vez e era isso que fazia o contrato nascer com o preço/tarifa/emissora
+  // ANTERIORES ao último "Guardar" da reserva: `useReserva` tem staleTime de
+  // 30 s e a reserva navega para cá logo a seguir a invalidar a query, por isso
+  // o react-query serve primeiro a cópia em cache e só depois entrega o
+  // refetch — que chegava tarde demais para um formulário já hidratado.
+  //
+  // `keepDirtyValues: true` é o que substitui a guarda antiga (e faz melhor o
+  // trabalho dela): os campos que o utilizador tocou ficam, os outros
+  // acompanham o servidor. O primeiro reset é integral, para o arranque não
+  // mudar de comportamento.
   useEffect(() => {
-    if (hidratou.current) return;
+    // Instantâneo do servidor desta corrida. Em edição manda o contrato; a
+    // criar, a reserva de origem mais os seus condutores (que chegam numa query
+    // à parte e entram neste mesmo reset).
+    const fonte = isEdit ? contrato : reservaFromQuery;
+    const condutoresFonte = isEdit ? null : condutoresDaReserva;
+    const jaHidratado = hidratadoDeRef.current;
+    if (jaHidratado && jaHidratado.fonte === fonte && jaHidratado.condutores === condutoresFonte) {
+      return;
+    }
+    const opcoesReset = jaHidratado ? { keepDirtyValues: true } : undefined;
+
     if (isEdit && contrato) {
-      hidratou.current = true;
-      form.reset({
-        cliente_id: contrato.cliente_id,
-        viatura_id: contrato.viatura_id,
-        grupo: contrato.grupo ?? '',
-        matricula: contrato.matricula ?? '',
-        reserva_id: contrato.reserva_id,
-        emissor_id: contrato.emissor_id ?? '',
-        gestor_id: contrato.gestor_id ?? null,
-        estacao_entrega_id: contrato.estacao_entrega_id,
-        data_inicio: isoToLocalInput(contrato.data_inicio),
-        estacao_recolha_id: contrato.estacao_recolha_id,
-        data_fim: isoToLocalInput(contrato.data_fim),
-        estacao_origem_viatura_id: contrato.estacao_origem_viatura_id,
-        estado_operacional: contrato.estado_operacional,
-        estado_financeiro: contrato.estado_financeiro,
-        origem: contrato.origem,
-        regime: contrato.regime,
-        tarifa_diaria: contrato.tarifa_diaria,
-        tarifa_id: (contrato as any).tarifa_id ?? null,
-        desconto_percentagem: contrato.desconto_percentagem,
-        taxa_iva: contrato.taxa_iva,
-        valor_total_manual: contrato.valor_total_manual,
-        is_longa_duracao: contrato.is_longa_duracao,
-        renovacao_opcao: contrato.renovacao_opcao,
-        renovacao_intervalo_dias: contrato.renovacao_intervalo_dias,
-        franquia_valor: contrato.franquia_valor,
-        caucao_valor: contrato.caucao_valor,
-        kms_incluidos: contrato.kms_incluidos,
-        km_adicional_valor: contrato.km_adicional_valor,
-        voucher_codigo: contrato.voucher_codigo ?? '',
-        observacoes: contrato.observacoes ?? '',
-        observacoes_internas: contrato.observacoes_internas ?? '',
-      });
+      hidratadoDeRef.current = { fonte, condutores: condutoresFonte };
+      form.reset(
+        {
+          cliente_id: contrato.cliente_id,
+          viatura_id: contrato.viatura_id,
+          grupo: contrato.grupo ?? '',
+          matricula: contrato.matricula ?? '',
+          reserva_id: contrato.reserva_id,
+          emissor_id: contrato.emissor_id ?? '',
+          gestor_id: contrato.gestor_id ?? null,
+          estacao_entrega_id: contrato.estacao_entrega_id,
+          data_inicio: isoToLocalInput(contrato.data_inicio),
+          estacao_recolha_id: contrato.estacao_recolha_id,
+          data_fim: isoToLocalInput(contrato.data_fim),
+          estacao_origem_viatura_id: contrato.estacao_origem_viatura_id,
+          estado_operacional: contrato.estado_operacional,
+          estado_financeiro: contrato.estado_financeiro,
+          origem: contrato.origem,
+          regime: contrato.regime,
+          tarifa_diaria: contrato.tarifa_diaria,
+          tarifa_id: (contrato as any).tarifa_id ?? null,
+          desconto_percentagem: contrato.desconto_percentagem,
+          taxa_iva: contrato.taxa_iva,
+          valor_total_manual: contrato.valor_total_manual,
+          is_longa_duracao: contrato.is_longa_duracao,
+          renovacao_opcao: contrato.renovacao_opcao,
+          renovacao_intervalo_dias: contrato.renovacao_intervalo_dias,
+          franquia_valor: contrato.franquia_valor,
+          caucao_valor: contrato.caucao_valor,
+          kms_incluidos: contrato.kms_incluidos,
+          km_adicional_valor: contrato.km_adicional_valor,
+          voucher_codigo: contrato.voucher_codigo ?? '',
+          observacoes: contrato.observacoes ?? '',
+          observacoes_internas: contrato.observacoes_internas ?? '',
+          // As listas m:n vivem nos efeitos próprios logo abaixo (só voltam a
+          // correr quando a SUA query muda): repetem-se aqui as que já estão no
+          // formulário para uma re-hidratação não as apagar.
+          condutores: form.getValues('condutores'),
+          coberturas: form.getValues('coberturas'),
+          extras: form.getValues('extras'),
+          taxas: form.getValues('taxas'),
+        },
+        opcoesReset
+      );
       return;
     }
     if (!isEdit && reservaFromQuery) {
@@ -391,42 +464,62 @@ export function useContratoForm(): UseContratoFormReturn {
       // Fallback do emissor (mesma lógica de aplicarDadosViatura): se a
       // reserva não trouxe emissor, usa o da viatura em vez de deixar vazio.
       const emissorResolvido = reservaFromQuery.emissor_id ?? viaturaReserva?.emissor_id ?? '';
-      hidratou.current = true;
-      form.reset({
-        ...DEFAULT_CONTRATO_VALUES,
-        reserva_id: reservaFromQuery.id,
-        cliente_id: reservaFromQuery.cliente_id ?? '',
-        emissor_id: emissorResolvido,
-        gestor_id: reservaFromQuery.gestor_id ?? null,
-        viatura_id: reservaFromQuery.viatura_id ?? '',
-        matricula: reservaFromQuery.matricula ?? '',
-        grupo: grupoResolvido,
-        estacao_entrega_id: reservaFromQuery.estacao_entrega_id,
-        estacao_recolha_id: reservaFromQuery.estacao_recolha_id,
-        data_inicio: isoToLocalInput(reservaFromQuery.data_inicio),
-        data_fim:
-          reservaFromQuery.regime === 'tvde' ? '' : isoToLocalInput(reservaFromQuery.data_fim),
-        origem: 'sistema',
-        regime: reservaFromQuery.regime,
-        tarifa_id: (reservaFromQuery as any).tarifa_id ?? null,
-        valor_total_manual: reservaFromQuery.valor_total,
-        is_longa_duracao: reservaFromQuery.is_longa_duracao ?? false,
-        renovacao_opcao: reservaFromQuery.renovacao_opcao ?? null,
-        renovacao_intervalo_dias: reservaFromQuery.renovacao_intervalo_dias,
-        franquia_valor: reservaFromQuery.franquia_valor,
-        caucao_valor: reservaFromQuery.caucao_valor,
-        kms_incluidos: reservaFromQuery.kms_incluidos,
-        km_adicional_valor: reservaFromQuery.km_adicional_valor,
-        observacoes: reservaFromQuery.observacoes ?? '',
-        observacoes_internas: reservaFromQuery.observacoes_internas ?? '',
-        condutores: condutoresDaReserva
-          .filter((c) => c.cliente_id || c.motorista_id)
-          .map((c) => ({
-            cliente_id: c.cliente_id,
-            motorista_id: c.motorista_id,
-            is_principal: c.is_principal,
-          })),
-      });
+      hidratadoDeRef.current = { fonte, condutores: condutoresFonte };
+      form.reset(
+        {
+          ...DEFAULT_CONTRATO_VALUES,
+          reserva_id: reservaFromQuery.id,
+          cliente_id: reservaFromQuery.cliente_id ?? '',
+          emissor_id: emissorResolvido,
+          gestor_id: reservaFromQuery.gestor_id ?? null,
+          viatura_id: reservaFromQuery.viatura_id ?? '',
+          matricula: reservaFromQuery.matricula ?? '',
+          grupo: grupoResolvido,
+          estacao_entrega_id: reservaFromQuery.estacao_entrega_id,
+          estacao_recolha_id: reservaFromQuery.estacao_recolha_id,
+          data_inicio: isoToLocalInput(reservaFromQuery.data_inicio),
+          data_fim:
+            reservaFromQuery.regime === 'tvde' ? '' : isoToLocalInput(reservaFromQuery.data_fim),
+          origem: 'sistema',
+          regime: reservaFromQuery.regime,
+          tarifa_id: (reservaFromQuery as any).tarifa_id ?? null,
+          // O override manual manda sobre o valor efectivo. Em teoria são o
+          // mesmo número (`valor_total` é definido como "o manual quando
+          // existe"), mas as reservas gravadas enquanto o formulário passava o
+          // campo errado ao cálculo da base ficaram com um `valor_total`
+          // desactualizado e um `valor_total_manual` correcto. Ler primeiro o
+          // manual faz essas converterem-se com o preço certo, sem ninguém ter
+          // de lhes tocar.
+          valor_total_manual: reservaFromQuery.valor_total_manual ?? reservaFromQuery.valor_total,
+          is_longa_duracao: reservaFromQuery.is_longa_duracao ?? false,
+          renovacao_opcao: reservaFromQuery.renovacao_opcao ?? null,
+          renovacao_intervalo_dias: reservaFromQuery.renovacao_intervalo_dias,
+          franquia_valor: reservaFromQuery.franquia_valor,
+          caucao_valor: reservaFromQuery.caucao_valor,
+          kms_incluidos: reservaFromQuery.kms_incluidos,
+          km_adicional_valor: reservaFromQuery.km_adicional_valor,
+          observacoes: reservaFromQuery.observacoes ?? '',
+          observacoes_internas: reservaFromQuery.observacoes_internas ?? '',
+          // O IVA nunca vem da reserva: é derivado do regime + definições da
+          // organização por um efeito à parte, que só volta a correr quando o
+          // regime muda. Repetir o valor actual impede que uma re-hidratação o
+          // devolva ao 23 % de DEFAULT_CONTRATO_VALUES sem ninguém o recalcular.
+          taxa_iva: form.getValues('taxa_iva'),
+          // Coberturas/extras/taxas não têm origem na reserva (nem efeito que
+          // as volte a encher aqui): preserva-se o que o utilizador já montou.
+          coberturas: form.getValues('coberturas'),
+          extras: form.getValues('extras'),
+          taxas: form.getValues('taxas'),
+          condutores: condutoresDaReserva
+            .filter((c) => c.cliente_id || c.motorista_id)
+            .map((c) => ({
+              cliente_id: c.cliente_id,
+              motorista_id: c.motorista_id,
+              is_principal: c.is_principal,
+            })),
+        },
+        opcoesReset
+      );
     }
   }, [
     isEdit,
@@ -541,7 +634,9 @@ export function useContratoForm(): UseContratoFormReturn {
     });
   }, [condutoresWatch, motoristas]);
 
-  // IVA derivado do regime
+  // IVA derivado do regime. Nunca é editável no formulário — sai sempre do
+  // regime + taxas da organização —, mas `taxa_iva` continua a ser calculado
+  // aqui e gravado normalmente no submit.
   useEffect(() => {
     const modalidade = regime === 'tvde' ? 'tvde' : 'rent_a_car';
     form.setValue('taxa_iva', ivaParaModalidade(orgDefinicoes, modalidade), {
@@ -910,7 +1005,7 @@ export function useContratoForm(): UseContratoFormReturn {
   };
 
   // ── confirmarNovaVersao ────────────────────────────────────────
-  const confirmarNovaVersao = (motivo: string) => {
+  const confirmarNovaVersao = (motivo: string, dataTrocaIso?: string) => {
     if (!contrato || !novaVersaoCtx) return;
     const motivoFinal =
       motivo ||
@@ -918,52 +1013,21 @@ export function useContratoForm(): UseContratoFormReturn {
         .map((a) => `${a.label}: ${a.valorAntes} → ${a.valorDepois}`)
         .join('; ');
     criarVersaoMutation.mutate(
-      { contratoId: contrato.id, motivo: motivoFinal },
+      { contratoId: contrato.id, motivo: motivoFinal, dataTroca: dataTrocaIso },
       {
         onSuccess: (novaId) => {
           const values = novaVersaoCtx.valores;
           const viatura = viaturas.find((v) => v.id === values.viatura_id);
           const matriculaFinal = values.matricula || viatura?.matricula || null;
-          const msDia = 86400000;
-          const dias =
-            values.regime === 'tvde' || !values.data_fim
-              ? Math.max(1, values.renovacao_intervalo_dias ?? 30)
-              : Math.max(
-                  1,
-                  Math.ceil(
-                    (new Date(values.data_fim).getTime() - new Date(values.data_inicio).getTime()) /
-                      msDia
-                  )
-                );
-          const isTvdeVer = values.regime === 'tvde';
-          const linhaModeloVer =
-            values.tarifa_id && viatura?.modelo_id
-              ? (precosModeloTvde.find(
-                  (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viatura.modelo_id
-                ) ?? null)
-              : null;
-          const baseAluguer = calcularBaseAluguerRenting({
-            regime: values.regime,
-            isLongaDuracao: values.is_longa_duracao,
-            dias,
-            tarifa: values.tarifa_id
-              ? (tarifas.find((t) => t.id === values.tarifa_id) ?? null)
-              : (tarifas.find((t) => t.grupo_id === values.grupo) ?? null),
-            valorTotalManual: values.valor_total_manual,
-            precoModeloSemana: isTvdeVer ? (linhaModeloVer?.preco_semana ?? null) : null,
-            precoModeloDia: !isTvdeVer ? (linhaModeloVer?.preco_dia ?? null) : null,
-            precoModeloMes: !isTvdeVer ? (linhaModeloVer?.preco_mes ?? null) : null,
-          });
-          const custoCoberturas =
-            values.coberturas.reduce((s, c) => s + (c.preco_dia ?? 0), 0) * dias;
-          const condutores = values.condutores as CondutorFormItem[];
-          const coberturas = values.coberturas as CoberturaFormItem[];
-          const extras = values.extras as ExtraFormItem[];
-          const taxas = values.taxas as TaxaFormItem[];
-          const custoExtras = extras.reduce((s, e) => s + calcExtraTotal(e, dias), 0);
-          const subtotalTaxas =
-            (baseAluguer + custoCoberturas + custoExtras) *
-            (1 - (values.desconto_percentagem ?? 0) / 100);
+          // Nada é recalculado aqui. criar_versao_contrato_renting já copiou
+          // condutores, coberturas, extras e taxas do contrato antigo, tal e
+          // qual — numa troca as condições transitam, não se refazem.
+          //
+          // Re-sincronizá-las a seguir, como se fazia, tinha dois defeitos: o
+          // `dias` era medido a partir do início ORIGINAL do contrato, e o elo
+          // novo passou a começar na data da TROCA — num rent-a-car de 30 dias
+          // trocado ao dia 20, extras e coberturas eram cobrados sobre 30 dias
+          // em vez de 10. E era trabalho a desfazer o que a base já fizera bem.
 
           updateMutation.mutate(
             {
@@ -976,15 +1040,21 @@ export function useContratoForm(): UseContratoFormReturn {
               matricula: matriculaFinal,
               grupo: values.grupo || null,
               estacao_entrega_id: values.estacao_entrega_id || null,
-              data_inicio: localInputToIso(values.data_inicio),
+              // data_inicio, estado_operacional e estado_financeiro NÃO vão aqui
+              // de propósito. Quem os define é criar_versao_contrato_renting:
+              //   · data_inicio        = data da troca (abre a fronteira temporal);
+              //   · estado_operacional = 'agendado' (a entrega da viatura NOVA
+              //     está por fazer — é o que faz o contrato pedir a folha de
+              //     ENTREGA em vez de uma recolha);
+              //   · estado_financeiro  = 'pendente' (a facturação recomeça neste elo).
+              // Reenviá-los aqui era sobrepor os três com os valores hidratados
+              // do contrato ANTIGO e desfazer a troca acabada de fazer.
               estacao_recolha_id: values.estacao_recolha_id || null,
               data_fim:
                 values.regime === 'tvde' && !values.is_longa_duracao
                   ? null
                   : localInputToIso(values.data_fim ?? ''),
               estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
-              estado_operacional: values.estado_operacional,
-              estado_financeiro: values.estado_financeiro,
               origem: values.origem,
               regime: values.regime,
               tarifa_diaria: values.tarifa_diaria,
@@ -1005,16 +1075,13 @@ export function useContratoForm(): UseContratoFormReturn {
             },
             {
               onSuccess: () => {
-                syncCondutoresMutation.mutate({ contratoId: novaId, desejados: condutores });
-                syncCoberturasMutation.mutate({ contratoId: novaId, desejadas: coberturas });
-                syncExtrasMutation.mutate({ contratoId: novaId, desejados: extras, dias });
-                syncTaxasMutation.mutate({
-                  contratoId: novaId,
-                  desejadas: taxas,
-                  subtotal: subtotalTaxas,
-                });
                 setNovaVersaoCtx(null);
-                navigate(`/renting/contratos/${novaId}`);
+                // `criado=1` é a condição que abre o RealizarEntregaDialog no
+                // contrato novo (ver o efeito de `abriuEntregaAoCriarRef`).
+                // Sem ele, a folha de danos de ENTREGA da viatura nova não era
+                // pedida a ninguém: o gestor era largado no contrato novo sem
+                // qualquer indicação de que faltava fazer o handover.
+                navigate(`/renting/contratos/${novaId}?criado=1`);
               },
             }
           );
@@ -1055,6 +1122,9 @@ export function useContratoForm(): UseContratoFormReturn {
     setActiveTab,
     confirmDeleteOpen,
     setConfirmDeleteOpen,
+    confirmCancelOpen,
+    setConfirmCancelOpen,
+    podeCancelar: !!contrato && !contrato.substituido_em,
     clienteDialogOpen,
     setClienteDialogOpen,
     motoristaDialogOpen,
@@ -1063,9 +1133,6 @@ export function useContratoForm(): UseContratoFormReturn {
     setNovaVersaoCtx,
     realizarDialog,
     setRealizarDialog,
-    confirmarRealizacaoDireta,
-    setConfirmarRealizacaoDireta,
-    marcarRealizacaoDireta,
     docsDialogOpen,
     setDocsDialogOpen,
     viaturasParaSelecao,
@@ -1089,6 +1156,8 @@ export function useContratoForm(): UseContratoFormReturn {
     handleSubmit: form.handleSubmit(onSubmit, onInvalid),
     handleDelete,
     confirmDelete,
+    handleCancelar,
+    confirmCancelar,
     confirmarNovaVersao,
     handleClienteCriado,
     handleMotoristaCriado,

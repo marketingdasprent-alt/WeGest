@@ -29,11 +29,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { fillEmptyFormFields } from '@/lib/fillEmptyFormFields';
 import { findLeadMatch, type LeadMatch } from '@/lib/leadMatch';
 import { normalizeNif, type FormValues } from './motoristaDialog.schema';
-import type { GestorTvde } from './useGestoresTvde';
 
 interface MotoristaFormDadosPessoaisProps {
   form: UseFormReturn<FormValues>;
-  gestores: GestorTvde[];
+  /** Só o nome: este formulário guarda `gestor_responsavel` (text), não um id. */
+  gestores: { nome: string }[];
   gestorPopoverOpen: boolean;
   setGestorPopoverOpen: (open: boolean) => void;
   /** Só em criação — avisa de NIF duplicado ao sair do campo, em vez de só no submit. */

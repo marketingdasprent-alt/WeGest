@@ -152,7 +152,11 @@ export function calcularBaseAluguerRenting(input: CalculoBaseAluguerRentingInput
     precoModeloMes,
   } = input;
 
-  if (valorTotalManual != null && valorTotalManual > 0) return valorTotalManual;
+  // `null` = sem override, segue a tarifa. Qualquer número escrito à mão manda
+  // — incluindo 0 (aluguer oferecido/incluído). Antes o 0 caía no cálculo
+  // automático, o que tornava impossível pôr um aluguer a zero: gravava-se 0 e
+  // reaparecia o preço da tarifa.
+  if (valorTotalManual != null) return valorTotalManual;
 
   if (regime === 'tvde') {
     return precoModeloSemana ?? null;

@@ -11,6 +11,13 @@ export type PlataformaIntegracao =
 // (exceto 'viaverde', que é manual: armazenada como plataforma='viaverde', sem robot/credenciais;
 // e 'brevo', armazenada como plataforma='email' + email_provider='brevo' — integração de email
 // da própria empresa, sem robot/Apify, API key cifrada via RPC set_email_api_key)
+// A Bolt é UMA plataforma só ('bolt'): grava-se sempre como plataforma='robot'
+// + robot_target_platform='bolt', e o que distingue as duas formas de ligar é o
+// `auth_mode` — 'oauth' (API oficial Bolt Fleet) ou 'password' (robô Apify, o
+// modo legado das contas ainda por converter). Ver boltIntegracao.ts. Já não
+// existe um tile "Bolt (API)" separado: uma integração Bolt nova nasce sempre
+// em oauth, e converter uma antiga é um UPDATE na mesma linha (o id não muda,
+// senão o histórico de bolt_resumos_semanais ficava órfão).
 export type PlataformaOperacional =
   | 'uber'
   | 'bolt'
@@ -63,13 +70,22 @@ export interface IntegracaoConfig {
   sync_hora?: number | null;
 }
 
+// NOTA DE SEGURANÇA — os tokens Apify NÃO vivem aqui.
+// Este ficheiro é código de frontend: tudo o que estiver nestas constantes vai
+// literalmente dentro do bundle JavaScript público de wegest.pt, legível por
+// qualquer visitante. Os tokens Apify que aqui estavam em hardcode foram
+// removidos; o token passa a ser lido de `plataformas_configuracao`
+// (apify_api_token de uma integração já existente do mesmo
+// robot_target_platform, protegida por RLS). Se não houver nenhum, a criação
+// falha com erro explícito — ver IntegracaoDialog.handleSave. Nunca voltar a
+// colar um `apify_api_token` neste ficheiro.
+
 // Pre-configured defaults for Uber integrations (stored as robot internally)
 export const UBER_DEFAULTS = {
   apify_actor_id: 'V0XdIalMut9LfL17V',
   site_url: 'https://supplier.uber.com/',
   auth_mode: 'password' as const,
   robot_target_platform: 'uber',
-  apify_api_token: 'apify_api_zyXNhVu0c2aYqhETTy6fgfDI5ZNrOA3DM0vc',
 };
 
 // Pre-configured defaults for Bolt integrations (stored as robot internally)
@@ -82,7 +98,6 @@ export const BOLT_DEFAULTS = {
   site_url: 'https://fleets.bolt.eu/',
   auth_mode: 'password' as const,
   robot_target_platform: 'bolt',
-  apify_api_token: 'apify_api_rZZQbfp7yP3gfexNRAHYQKJ0zK1zTK2wwwoH',
 };
 
 // Pre-configured defaults for BP integrations (stored as robot internally)
@@ -91,7 +106,6 @@ export const BP_DEFAULTS = {
   site_url: 'https://www.bpplus.com/',
   auth_mode: 'password' as const,
   robot_target_platform: 'bp',
-  apify_api_token: 'apify_api_zyXNhVu0c2aYqhETTy6fgfDI5ZNrOA3DM0vc',
 };
 
 // Pre-configured defaults for Repsol integrations
@@ -100,7 +114,6 @@ export const REPSOL_DEFAULTS = {
   site_url: 'https://misolred.repsol.com/movimientos',
   auth_mode: 'password' as const,
   robot_target_platform: 'repsol',
-  apify_api_token: 'apify_api_zyXNhVu0c2aYqhETTy6fgfDI5ZNrOA3DM0vc',
 };
 
 // Pre-configured defaults for EDP integrations
@@ -109,7 +122,6 @@ export const EDP_DEFAULTS = {
   site_url: 'https://empresas.edpcharge.edp.pt/home/consumption',
   auth_mode: 'password' as const,
   robot_target_platform: 'edp',
-  apify_api_token: 'apify_api_zyXNhVu0c2aYqhETTy6fgfDI5ZNrOA3DM0vc',
 };
 
 // Via Verde — suporta dois modos: manual (CSV upload via viaverde-import-csv)
@@ -119,5 +131,12 @@ export const VIAVERDE_DEFAULTS = {
   manual: true as const,
   robot_target_platform: 'viaverde',
   apify_actor_id: '8fz3SqtaKV6RTT4sa',
-  apify_api_token: 'apify_api_rZZQbfp7yP3gfexNRAHYQKJ0zK1zTK2wwwoH',
 };
+
+// Bolt (API oficial) — uma empresa devolvida por getCompanies. O endpoint só
+// devolve IDs (`data.company_ids`); o nome, quando existe, vem enriquecido pela
+// edge function bolt-test-connection (getFleetOrders devolve `company_name`).
+export interface BoltCompanyOption {
+  company_id: number;
+  company_name: string | null;
+}

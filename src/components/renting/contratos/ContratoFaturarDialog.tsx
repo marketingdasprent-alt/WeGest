@@ -32,6 +32,7 @@ import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import type { ItemFatura } from '@/types/faturacao';
 import type { ContratoRenting } from '@/types/contratoRenting';
 import { semCodigo } from '@/types/codigoPorOrg';
+import { resolverDestinatario, type DestinatarioEntidade } from './destinatarioFatura';
 
 export interface FaturaItem {
   descricao: string;
@@ -51,12 +52,7 @@ export interface FaturaCalculo {
   valorRegistado: number;
   taxaIva: number;
 }
-export interface EntidadeOption {
-  id: string;
-  nome: string;
-  /** preenchido quando é um condutor (liga à vigência) */
-  contratoCondutorId?: string;
-}
+export type EntidadeOption = DestinatarioEntidade;
 
 interface Props {
   open: boolean;
@@ -65,7 +61,7 @@ interface Props {
   fatura: FaturaCalculo;
   clienteEntidade: EntidadeOption;
   condutorEntidade: EntidadeOption | null;
-  /** Motorista TVDE principal do contrato — dívida cedida na emissão, nunca destinatário fiscal. */
+  /** Motorista TVDE principal do contrato — pode ser o destinatário fiscal. */
   motoristaEntidade?: EntidadeOption | null;
   emitente?: FaturacaoDocEmitente | null;
   onFaturado: () => void;
@@ -101,13 +97,16 @@ export function ContratoFaturarDialog({
   const [dataVenc, setDataVenc] = useState<string>(maisDias(30));
   const [submitting, setSubmitting] = useState(false);
 
-  const destinatario =
-    entidade === 'condutor' && condutorEntidade ? condutorEntidade : clienteEntidade;
+  const { destinatario, papel, contratoCondutorId, precisaFichaCliente } = resolverDestinatario(
+    entidade,
+    { cliente: clienteEntidade, condutor: condutorEntidade, motorista: motoristaEntidade }
+  );
   const faturaZero = fatura.valorRegistado === 0;
   const podeFaturar = fatura.valorRegistado >= 0; // 0€ é permitido (cortesia / 100% desconto)
 
-  /** Documento HTML local — fallback quando a emissão fiscal falha ou em faturas a 0€. */
-  async function abrirDocumentoLocal(numeroDoc: string) {
+  /** Documento HTML local — fallback quando a emissão fiscal falha ou em faturas a 0€.
+   *  `clienteId` é sempre um id de `clientes` (num motorista é o da ficha dele). */
+  async function abrirDocumentoLocal(numeroDoc: string, clienteId: string) {
     // NIF/morada do cliente para o cabeçalho — best-effort, não bloqueia
     let clienteNif: string | null = null;
     let clienteMorada: string | null = null;
@@ -115,7 +114,7 @@ export function ContratoFaturarDialog({
       const { data: cli } = await supabase
         .from('clientes')
         .select('nif, morada, codigo_postal, cidade')
-        .eq('id', destinatario.id)
+        .eq('id', clienteId)
         .single();
       if (cli) {
         clienteNif = (cli as any).nif ?? null;
@@ -144,18 +143,35 @@ export function ContratoFaturarDialog({
     if (!aberto) toast.warning('Pop-up bloqueado — não foi possível abrir o documento local.');
   }
 
-  /** Dados do cliente (cabeçalho fiscal) para o documento. */
-  async function fetchClienteFatura() {
+  /** Dados do cliente (cabeçalho fiscal) para o documento.
+   *  `clienteId` é sempre um id de `clientes` (num motorista é o da ficha dele). */
+  async function fetchClienteFatura(clienteId: string) {
     try {
       const { data } = await supabase
         .from('clientes')
         .select('nome, nif, email, morada, codigo_postal, localidade')
-        .eq('id', destinatario.id)
+        .eq('id', clienteId)
         .single();
       return clienteRowToFatura(data, destinatario.nome);
     } catch {
       return clienteRowToFatura(null, destinatario.nome);
     }
+  }
+
+  /** Id de `clientes` que representa o destinatário escolhido. Num motorista,
+   *  garante (criando se preciso) a ficha de cliente dele — `destinatario_id`
+   *  tem FK para `clientes` e não aceita um id de `motoristas_ativos`. */
+  async function resolverIdFiscal(): Promise<string> {
+    if (!precisaFichaCliente) return destinatario.id;
+    const { data, error } = await supabase.rpc('garantir_cliente_do_motorista' as any, {
+      p_motorista_id: destinatario.id,
+    });
+    if (error || !data) {
+      throw new Error(
+        `Não foi possível preparar a ficha de faturação de ${destinatario.nome}: ${error?.message ?? 'sem resposta'}`
+      );
+    }
+    return data as string;
   }
 
   async function handleCriar() {
@@ -197,8 +213,10 @@ export function ContratoFaturarDialog({
       let periodoAte = (contrato.data_fim ?? '').slice(0, 10) || hoje();
       if (periodoAte < periodoDe) periodoAte = periodoDe;
 
-      const papel: 'cliente' | 'condutor' =
-        entidade === 'condutor' && condutorEntidade ? 'condutor' : 'cliente';
+      // Id fiscal ANTES de gravar: num motorista troca-se o id dele pelo da
+      // ficha de cliente, senão a FK de destinatario_id rebenta.
+      const destinatarioIdFiscal = await resolverIdFiscal();
+
       const tipoLabel = tipo === 'fatura_recibo' ? 'Factura-Recibo' : 'Factura';
       const descricao = `${tipoLabel} — Contrato #${String(contrato.codigo).padStart(4, '0')} · Venc: ${dataVenc.split('-').reverse().join('/')}`;
       const emitidaEm = new Date(`${dataDoc}T12:00:00`).toISOString();
@@ -212,11 +230,10 @@ export function ContratoFaturarDialog({
           periodo_de: periodoDe,
           periodo_ate: periodoAte,
           descricao,
-          destinatario_id: destinatario.id,
+          destinatario_id: destinatarioIdFiscal,
           destinatario_papel: papel,
           destinatario_nome: destinatario.nome,
-          contrato_condutor_id:
-            papel === 'condutor' ? (destinatario.contratoCondutorId ?? null) : null,
+          contrato_condutor_id: contratoCondutorId,
           valor_sem_iva: valorSemIva,
           taxa_iva: taxaIva,
           emite_fatura_fiscal: true,
@@ -234,7 +251,7 @@ export function ContratoFaturarDialog({
         const { error: recErr } = await supabase.from('recibos').insert(
           semCodigo<'recibos'>({
             org_id: contrato.org_id,
-            entidade_id: destinatario.id,
+            entidade_id: destinatarioIdFiscal,
             contrato_id: contrato.id,
             valor: fatura.valorRegistado,
             data_recibo: dataDoc,
@@ -263,35 +280,18 @@ export function ContratoFaturarDialog({
 
       const cobrancaId = cobInserida?.id ?? null;
 
-      // 1.5) Cedência ao motorista — dívida passa da conta-corrente do
-      // destinatário fiscal para motorista_financeiro (ver
-      // 20260730170000_cobranca_cessao_motorista_na_emissao.sql). A fatura
-      // continua emitida em nome de clienteEntidade; isto é só o lançamento
-      // interno. Best-effort: um erro aqui não deve impedir a fatura já
-      // registada de seguir para a emissão fiscal (Fase 2).
-      //
-      // `tipo === 'fatura'` é obrigatório: uma Factura-Recibo nasce liquidada
-      // (o recibo acima credita logo o titular), por isso não há dívida
-      // nenhuma para ceder — ceder à mesma deixava o titular CREDOR do valor
-      // da fatura e o motorista a dever um valor que ninguém deve (achado ao
-      // rever os dados reais do teste de 30/07/2026, onde isto aconteceu).
-      if (entidade === 'motorista' && motoristaEntidade && cobrancaId && tipo === 'fatura') {
-        const { error: cessaoErr } = await supabase.rpc('cobranca_ceder_a_motorista' as any, {
-          p_cobranca_id: cobrancaId,
-          p_motorista_id: motoristaEntidade.id,
-        });
-        if (cessaoErr) {
-          console.error('Falha a ceder a dívida ao motorista:', cessaoErr);
-          toast.warning(
-            `Fatura registada, mas não foi possível ceder a dívida ao motorista: ${cessaoErr.message}`
-          );
-        }
-      }
+      // 1.5) Já NÃO há cedência de dívida ao escolher "Motorista".
+      // Antes, a fatura saía em nome do titular e a dívida era cedida à parte
+      // (20260730170000_cobranca_cessao_motorista_na_emissao.sql). Agora a
+      // fatura é emitida ao próprio motorista, por isso a dívida já nasce na
+      // conta-corrente dele — ceder por cima duplicava o valor.
+      // A RPC cobranca_ceder_a_motorista continua a existir para as cobranças
+      // antigas emitidas ao titular.
 
       // ── Fase 2 — emissão fiscal no provider configurado (NUNCA reverte a Fase 1) ────
       if (faturaZero || !cobrancaId) {
         // Fatura a 0€ não gera documento fiscal — só o documento interno.
-        await abrirDocumentoLocal(descricao);
+        await abrirDocumentoLocal(descricao, destinatarioIdFiscal);
         toast.success('Fatura a 0€ registada (sem movimento de conta-corrente).');
       } else {
         try {
@@ -315,7 +315,7 @@ export function ContratoFaturarDialog({
               taxa_iva: taxaIva,
               desconto: contrato.desconto_percentagem ?? 0,
             }));
-          const cliente = await fetchClienteFatura();
+          const cliente = await fetchClienteFatura(destinatarioIdFiscal);
           const res = await emitirMut.mutateAsync({
             payload: {
               tipo: tipo === 'fatura_recibo' ? 'FR' : 'FT',
@@ -344,7 +344,7 @@ export function ContratoFaturarDialog({
           toast.warning(
             'Fatura registada, mas o documento fiscal ficou por emitir. Pode reemiti-lo na lista de faturas.'
           );
-          await abrirDocumentoLocal(descricao);
+          await abrirDocumentoLocal(descricao, destinatarioIdFiscal);
         }
       }
 
@@ -410,13 +410,11 @@ export function ContratoFaturarDialog({
                   variant={entidade === 'motorista' ? 'default' : 'outline'}
                   size="sm"
                   className="flex-1"
-                  disabled={!motoristaEntidade || tipo === 'fatura_recibo'}
+                  disabled={!motoristaEntidade}
                   title={
                     !motoristaEntidade
                       ? 'O condutor principal do contrato não é um motorista TVDE.'
-                      : tipo === 'fatura_recibo'
-                        ? 'Uma Factura-Recibo já nasce liquidada — não há dívida para ceder.'
-                        : undefined
+                      : undefined
                   }
                   onClick={() => setEntidade('motorista')}
                 >
@@ -426,9 +424,9 @@ export function ContratoFaturarDialog({
               <p className="text-[11px] text-muted-foreground truncate">{destinatario.nome}</p>
               {entidade === 'motorista' && motoristaEntidade && (
                 <p className="text-[11px] text-muted-foreground rounded-md border p-2 mt-1.5">
-                  ⓘ A fatura é emitida em nome de {clienteEntidade.nome}. A dívida passa para a
-                  conta-corrente de {motoristaEntidade.nome} — exigência legal: a fatura fiscal fica
-                  sempre em nome do cliente.
+                  ⓘ A fatura sai em nome de {motoristaEntidade.nome}, com o NIF e a morada dele. A
+                  dívida fica na conta-corrente do próprio — o titular {clienteEntidade.nome} não é
+                  debitado.
                 </p>
               )}
             </div>
@@ -450,14 +448,7 @@ export function ContratoFaturarDialog({
                   variant={tipo === 'fatura_recibo' ? 'default' : 'outline'}
                   size="sm"
                   className="flex-1"
-                  onClick={() => {
-                    setTipo('fatura_recibo');
-                    // Sem isto a escolha "Motorista" ficava presa em estado
-                    // (botão já desativado, mas `entidade` continuava
-                    // 'motorista' e o aviso de cessão continuava visível a
-                    // prometer algo que handleCriar já não faz).
-                    setEntidade((e) => (e === 'motorista' ? 'cliente' : e));
-                  }}
+                  onClick={() => setTipo('fatura_recibo')}
                 >
                   Factura-Recibo
                 </Button>

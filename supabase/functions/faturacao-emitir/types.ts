@@ -72,6 +72,12 @@ export interface ProviderConfig {
   apiKey?: string | null;
   /** Settings específicos do provider (plataformas_configuracao.config jsonb). */
   settings?: Record<string, unknown> | null;
+  /** Organização resolvida pelo index.ts. Providers síncronos (KeyInvoice)
+   *  não precisam disto — falam directo com o serviço externo. Providers
+   *  baseados em fila (Primavera/AS Connect) precisam para saber em que
+   *  fila pôr o pedido. NULL no teste de credenciais ainda não guardadas
+   *  (acção 'health' com apiKey no body, antes de existir uma org por trás). */
+  orgId?: string | null;
 }
 
 /** Identificadores genéricos devolvidos pela emissão. */

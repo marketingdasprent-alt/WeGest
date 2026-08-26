@@ -49,7 +49,13 @@ export const reservaDialogSchema = z
     estado: z.enum(RESERVA_ESTADOS),
     regime: z.enum(RESERVA_REGIMES).default('rent_a_car'),
 
+    // `valor_total` é o valor AUTOMÁTICO (tarifa × duração), recalculado
+    // sempre que regime/datas/tarifa mudam. `valor_total_manual` é o override
+    // escrito à mão no card de Preço: quando está preenchido manda ele, e o
+    // recálculo automático nunca lhe toca. Apagá-lo devolve o controlo à
+    // tarifa. Espelha o par equivalente nos contratos.
     valor_total: optionalNumber,
+    valor_total_manual: optionalNumber,
     slot_valor_semanal: optionalNumber,
     slot_valor_mensal: optionalNumber,
     franquia_valor: optionalNumber,

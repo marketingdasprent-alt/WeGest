@@ -625,6 +625,7 @@ export type Database = {
           km_fim_indisponivel: boolean
           km_inicio: number | null
           km_inicio_indisponivel: boolean
+          mecanico_id: string | null
           motorista_id: string | null
           numero: number
           numero_fatura: string | null
@@ -660,6 +661,7 @@ export type Database = {
           km_fim_indisponivel?: boolean
           km_inicio?: number | null
           km_inicio_indisponivel?: boolean
+          mecanico_id?: string | null
           motorista_id?: string | null
           numero?: number
           numero_fatura?: string | null
@@ -695,6 +697,7 @@ export type Database = {
           km_fim_indisponivel?: boolean
           km_inicio?: number | null
           km_inicio_indisponivel?: boolean
+          mecanico_id?: string | null
           motorista_id?: string | null
           numero?: number
           numero_fatura?: string | null
@@ -715,6 +718,13 @@ export type Database = {
             columns: ["categoria_id"]
             isOneToOne: false
             referencedRelation: "assistencia_categorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assistencia_tickets_mecanico_id_fkey"
+            columns: ["mecanico_id"]
+            isOneToOne: false
+            referencedRelation: "mecanicos"
             referencedColumns: ["id"]
           },
           {
@@ -1135,16 +1145,34 @@ export type Database = {
       }
       bolt_resumos_semanais: {
         Row: {
+          api_booking_fee: number | null
+          api_cancellation_fee: number | null
+          api_cash_discount: number | null
+          api_commission: number | null
+          api_in_app_discount: number | null
+          api_net_earnings: number | null
+          api_orders_cash: number | null
+          api_orders_finished: number | null
+          api_orders_total: number | null
+          api_ride_distance: number | null
+          api_ride_price: number | null
+          api_sincronizado_em: string | null
+          api_tip: number | null
+          api_toll_fee: number | null
           categorias_ativas: string | null
+          chave_motorista: string | null
           classificacao_media: number | null
           comissoes: number | null
           created_at: string | null
+          csv_importado_em: string | null
           desconto_comissao_app: number | null
           desconto_comissao_dinheiro: number | null
           dinheiro_recebido: number | null
           distancia_media_km: number | null
           distancia_total_km: number | null
           email: string | null
+          fonte_extras: string | null
+          fonte_viagens: string | null
           ganhos_brutos_app: number | null
           ganhos_brutos_dinheiro: number | null
           ganhos_brutos_hora: number | null
@@ -1189,16 +1217,34 @@ export type Database = {
           viagens_terminadas: number | null
         }
         Insert: {
+          api_booking_fee?: number | null
+          api_cancellation_fee?: number | null
+          api_cash_discount?: number | null
+          api_commission?: number | null
+          api_in_app_discount?: number | null
+          api_net_earnings?: number | null
+          api_orders_cash?: number | null
+          api_orders_finished?: number | null
+          api_orders_total?: number | null
+          api_ride_distance?: number | null
+          api_ride_price?: number | null
+          api_sincronizado_em?: string | null
+          api_tip?: number | null
+          api_toll_fee?: number | null
           categorias_ativas?: string | null
+          chave_motorista?: string | null
           classificacao_media?: number | null
           comissoes?: number | null
           created_at?: string | null
+          csv_importado_em?: string | null
           desconto_comissao_app?: number | null
           desconto_comissao_dinheiro?: number | null
           dinheiro_recebido?: number | null
           distancia_media_km?: number | null
           distancia_total_km?: number | null
           email?: string | null
+          fonte_extras?: string | null
+          fonte_viagens?: string | null
           ganhos_brutos_app?: number | null
           ganhos_brutos_dinheiro?: number | null
           ganhos_brutos_hora?: number | null
@@ -1243,16 +1289,34 @@ export type Database = {
           viagens_terminadas?: number | null
         }
         Update: {
+          api_booking_fee?: number | null
+          api_cancellation_fee?: number | null
+          api_cash_discount?: number | null
+          api_commission?: number | null
+          api_in_app_discount?: number | null
+          api_net_earnings?: number | null
+          api_orders_cash?: number | null
+          api_orders_finished?: number | null
+          api_orders_total?: number | null
+          api_ride_distance?: number | null
+          api_ride_price?: number | null
+          api_sincronizado_em?: string | null
+          api_tip?: number | null
+          api_toll_fee?: number | null
           categorias_ativas?: string | null
+          chave_motorista?: string | null
           classificacao_media?: number | null
           comissoes?: number | null
           created_at?: string | null
+          csv_importado_em?: string | null
           desconto_comissao_app?: number | null
           desconto_comissao_dinheiro?: number | null
           dinheiro_recebido?: number | null
           distancia_media_km?: number | null
           distancia_total_km?: number | null
           email?: string | null
+          fonte_extras?: string | null
+          fonte_viagens?: string | null
           ganhos_brutos_app?: number | null
           ganhos_brutos_dinheiro?: number | null
           ganhos_brutos_hora?: number | null
@@ -1380,6 +1444,68 @@ export type Database = {
           },
         ]
       }
+      bolt_sync_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          fase: string
+          formula_id: string | null
+          id: string
+          integracao_id: string
+          org_id: string
+          origem: string
+          periodo_fim: string
+          periodo_inicio: string
+          resultado: Json | null
+          semana_inicio: string | null
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          fase?: string
+          formula_id?: string | null
+          id?: string
+          integracao_id: string
+          org_id: string
+          origem?: string
+          periodo_fim: string
+          periodo_inicio: string
+          resultado?: Json | null
+          semana_inicio?: string | null
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          fase?: string
+          formula_id?: string | null
+          id?: string
+          integracao_id?: string
+          org_id?: string
+          origem?: string
+          periodo_fim?: string
+          periodo_inicio?: string
+          resultado?: Json | null
+          semana_inicio?: string | null
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bolt_sync_queue_integracao_id_fkey"
+            columns: ["integracao_id"]
+            isOneToOne: false
+            referencedRelation: "plataformas_configuracao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bolt_vehicles: {
         Row: {
           brand: string | null
@@ -1455,7 +1581,11 @@ export type Database = {
       }
       bolt_viagens: {
         Row: {
+          booking_fee: number | null
+          cancellation_fee: number | null
+          cash_discount: number | null
           commission: number | null
+          company_id: number | null
           created_at: string | null
           dados_raw: Json | null
           destination_address: string | null
@@ -1463,9 +1593,12 @@ export type Database = {
           driver_name: string | null
           driver_phone: string | null
           driver_uuid: string | null
+          fonte: string | null
           id: string
+          in_app_discount: number | null
           integracao_id: string | null
           motorista_id: string | null
+          net_earnings: number | null
           order_created_timestamp: string | null
           order_reference: string
           order_status: string | null
@@ -1473,6 +1606,10 @@ export type Database = {
           payment_confirmed_timestamp: string | null
           payment_method: string | null
           pickup_address: string | null
+          ride_distance: number | null
+          ride_price: number | null
+          tip: number | null
+          toll_fee: number | null
           total_price: number | null
           updated_at: string | null
           vehicle_license_plate: string | null
@@ -1480,7 +1617,11 @@ export type Database = {
           viatura_id: string | null
         }
         Insert: {
+          booking_fee?: number | null
+          cancellation_fee?: number | null
+          cash_discount?: number | null
           commission?: number | null
+          company_id?: number | null
           created_at?: string | null
           dados_raw?: Json | null
           destination_address?: string | null
@@ -1488,9 +1629,12 @@ export type Database = {
           driver_name?: string | null
           driver_phone?: string | null
           driver_uuid?: string | null
+          fonte?: string | null
           id?: string
+          in_app_discount?: number | null
           integracao_id?: string | null
           motorista_id?: string | null
+          net_earnings?: number | null
           order_created_timestamp?: string | null
           order_reference: string
           order_status?: string | null
@@ -1498,6 +1642,10 @@ export type Database = {
           payment_confirmed_timestamp?: string | null
           payment_method?: string | null
           pickup_address?: string | null
+          ride_distance?: number | null
+          ride_price?: number | null
+          tip?: number | null
+          toll_fee?: number | null
           total_price?: number | null
           updated_at?: string | null
           vehicle_license_plate?: string | null
@@ -1505,7 +1653,11 @@ export type Database = {
           viatura_id?: string | null
         }
         Update: {
+          booking_fee?: number | null
+          cancellation_fee?: number | null
+          cash_discount?: number | null
           commission?: number | null
+          company_id?: number | null
           created_at?: string | null
           dados_raw?: Json | null
           destination_address?: string | null
@@ -1513,9 +1665,12 @@ export type Database = {
           driver_name?: string | null
           driver_phone?: string | null
           driver_uuid?: string | null
+          fonte?: string | null
           id?: string
+          in_app_discount?: number | null
           integracao_id?: string | null
           motorista_id?: string | null
+          net_earnings?: number | null
           order_created_timestamp?: string | null
           order_reference?: string
           order_status?: string | null
@@ -1523,6 +1678,10 @@ export type Database = {
           payment_confirmed_timestamp?: string | null
           payment_method?: string | null
           pickup_address?: string | null
+          ride_distance?: number | null
+          ride_price?: number | null
+          tip?: number | null
+          toll_fee?: number | null
           total_price?: number | null
           updated_at?: string | null
           vehicle_license_plate?: string | null
@@ -3772,6 +3931,7 @@ export type Database = {
         Row: {
           aluguer_longa_duracao: boolean
           caucao_valor: number | null
+          cidade_assinatura: string | null
           cliente_id: string
           cobertura_franquia: number | null
           cobertura_id: string | null
@@ -3801,6 +3961,7 @@ export type Database = {
           estacao_recolha_id: string | null
           estado_financeiro: Database["public"]["Enums"]["contrato_estado_financeiro_enum"]
           estado_operacional: Database["public"]["Enums"]["contrato_estado_operacional_enum"]
+          tipo_fecho: string | null
           facturado_em: string | null
           franquia_valor: number | null
           gestor_id: string | null
@@ -3849,6 +4010,7 @@ export type Database = {
         Insert: {
           aluguer_longa_duracao?: boolean
           caucao_valor?: number | null
+          cidade_assinatura?: string | null
           cliente_id: string
           cobertura_franquia?: number | null
           cobertura_id?: string | null
@@ -3878,6 +4040,7 @@ export type Database = {
           estacao_recolha_id?: string | null
           estado_financeiro?: Database["public"]["Enums"]["contrato_estado_financeiro_enum"]
           estado_operacional?: Database["public"]["Enums"]["contrato_estado_operacional_enum"]
+          tipo_fecho?: string | null
           facturado_em?: string | null
           franquia_valor?: number | null
           gestor_id?: string | null
@@ -3926,6 +4089,7 @@ export type Database = {
         Update: {
           aluguer_longa_duracao?: boolean
           caucao_valor?: number | null
+          cidade_assinatura?: string | null
           cliente_id?: string
           cobertura_franquia?: number | null
           cobertura_id?: string | null
@@ -3955,6 +4119,7 @@ export type Database = {
           estacao_recolha_id?: string | null
           estado_financeiro?: Database["public"]["Enums"]["contrato_estado_financeiro_enum"]
           estado_operacional?: Database["public"]["Enums"]["contrato_estado_operacional_enum"]
+          tipo_fecho?: string | null
           facturado_em?: string | null
           franquia_valor?: number | null
           gestor_id?: string | null
@@ -6244,6 +6409,39 @@ export type Database = {
           },
         ]
       }
+      mecanicos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome: string
+          observacoes: string | null
+          org_id: string
+          telefone: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome: string
+          observacoes?: string | null
+          org_id?: string
+          telefone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          org_id?: string
+          telefone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       motorista_candidaturas: {
         Row: {
           carta_categorias: string[] | null
@@ -6692,6 +6890,51 @@ export type Database = {
           },
         ]
       }
+      motorista_historico: {
+        Row: {
+          ator_id: string | null
+          criado_em: string
+          detalhe: string | null
+          evento_tipo: string
+          id: string
+          motorista_id: string
+          org_id: string
+        }
+        Insert: {
+          ator_id?: string | null
+          criado_em?: string
+          detalhe?: string | null
+          evento_tipo: string
+          id?: string
+          motorista_id: string
+          org_id?: string
+        }
+        Update: {
+          ator_id?: string | null
+          criado_em?: string
+          detalhe?: string | null
+          evento_tipo?: string
+          id?: string
+          motorista_id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motorista_historico_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_historico_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       motorista_recibos: {
         Row: {
           codigo: number
@@ -7043,6 +7286,7 @@ export type Database = {
           created_at: string | null
           data_contratacao: string | null
           data_renovacao_contratacao: string | null
+          desativado_em: string | null
           documento_ficheiro_url: string | null
           documento_identificacao_verso_url: string | null
           documento_numero: string | null
@@ -7096,6 +7340,7 @@ export type Database = {
           created_at?: string | null
           data_contratacao?: string | null
           data_renovacao_contratacao?: string | null
+          desativado_em?: string | null
           documento_ficheiro_url?: string | null
           documento_identificacao_verso_url?: string | null
           documento_numero?: string | null
@@ -7149,6 +7394,7 @@ export type Database = {
           created_at?: string | null
           data_contratacao?: string | null
           data_renovacao_contratacao?: string | null
+          desativado_em?: string | null
           documento_ficheiro_url?: string | null
           documento_identificacao_verso_url?: string | null
           documento_numero?: string | null
@@ -8410,6 +8656,53 @@ export type Database = {
           },
           {
             foreignKeyName: "primavera_api_logs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      primavera_jobs: {
+        Row: {
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          org_id: string
+          payload: Json
+          resultado: Json | null
+          status: string
+          tipo: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          org_id: string
+          payload: Json
+          resultado?: Json | null
+          status?: string
+          tipo: string
+        }
+        Update: {
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          org_id?: string
+          payload?: Json
+          resultado?: Json | null
+          status?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "primavera_jobs_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
@@ -10057,6 +10350,165 @@ export type Database = {
           },
         ]
       }
+      ti_submissoes: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          origem_hash: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          origem_hash: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          origem_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ti_submissoes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ti_ticket_sugestoes: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          id: string
+          org_id: string
+          respondida_em: string | null
+          texto: string
+          ticket_id: string
+          util: boolean | null
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          id?: string
+          org_id: string
+          respondida_em?: string | null
+          texto: string
+          ticket_id: string
+          util?: boolean | null
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          id?: string
+          org_id?: string
+          respondida_em?: string | null
+          texto?: string
+          ticket_id?: string
+          util?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ti_ticket_sugestoes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ti_ticket_sugestoes_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "ti_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ti_tickets: {
+        Row: {
+          acesso_token: string
+          autor_email: string
+          autor_nome: string
+          created_at: string
+          criado_por: string | null
+          descricao: string
+          id: string
+          numero: number | null
+          org_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          acesso_token?: string
+          autor_email: string
+          autor_nome: string
+          created_at?: string
+          criado_por?: string | null
+          descricao: string
+          id?: string
+          numero?: number | null
+          org_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          acesso_token?: string
+          autor_email?: string
+          autor_nome?: string
+          created_at?: string
+          criado_por?: string | null
+          descricao?: string
+          id?: string
+          numero?: number | null
+          org_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ti_tickets_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ti_tokens: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          org_id: string
+          token: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          org_id?: string
+          token?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          org_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ti_tokens_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       troca_viatura_registos: {
         Row: {
           combustivel_antiga: string | null
@@ -10573,6 +11025,97 @@ export type Database = {
           },
         ]
       }
+      uber_resumos_semanais: {
+        Row: {
+          api_sincronizado_em: string | null
+          chave_motorista: string
+          comissoes: number | null
+          created_at: string
+          csv_importado_em: string | null
+          fonte: string
+          ganhos_brutos: number
+          ganhos_liquidos: number | null
+          gorjetas: number
+          id: string
+          integracao_id: string
+          motorista_id: string | null
+          motorista_nome: string | null
+          org_id: string
+          periodo: string
+          periodo_fim: string
+          periodo_inicio: string
+          uber_driver_id: string | null
+          updated_at: string
+          viagens: number
+        }
+        Insert: {
+          api_sincronizado_em?: string | null
+          chave_motorista: string
+          comissoes?: number | null
+          created_at?: string
+          csv_importado_em?: string | null
+          fonte: string
+          ganhos_brutos?: number
+          ganhos_liquidos?: number | null
+          gorjetas?: number
+          id?: string
+          integracao_id: string
+          motorista_id?: string | null
+          motorista_nome?: string | null
+          org_id: string
+          periodo: string
+          periodo_fim: string
+          periodo_inicio: string
+          uber_driver_id?: string | null
+          updated_at?: string
+          viagens?: number
+        }
+        Update: {
+          api_sincronizado_em?: string | null
+          chave_motorista?: string
+          comissoes?: number | null
+          created_at?: string
+          csv_importado_em?: string | null
+          fonte?: string
+          ganhos_brutos?: number
+          ganhos_liquidos?: number | null
+          gorjetas?: number
+          id?: string
+          integracao_id?: string
+          motorista_id?: string | null
+          motorista_nome?: string | null
+          org_id?: string
+          periodo?: string
+          periodo_fim?: string
+          periodo_inicio?: string
+          uber_driver_id?: string | null
+          updated_at?: string
+          viagens?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uber_resumos_semanais_integracao_id_fkey"
+            columns: ["integracao_id"]
+            isOneToOne: false
+            referencedRelation: "plataformas_configuracao"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "uber_resumos_semanais_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "uber_resumos_semanais_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uber_sync_cursors: {
         Row: {
           created_at: string
@@ -10692,6 +11235,7 @@ export type Database = {
           commission_amount: number | null
           created_at: string
           currency: string | null
+          fonte: string
           gross_amount: number | null
           id: string
           integracao_id: string
@@ -10714,6 +11258,7 @@ export type Database = {
           commission_amount?: number | null
           created_at?: string
           currency?: string | null
+          fonte?: string
           gross_amount?: number | null
           id?: string
           integracao_id: string
@@ -10736,6 +11281,7 @@ export type Database = {
           commission_amount?: number | null
           created_at?: string
           currency?: string | null
+          fonte?: string
           gross_amount?: number | null
           id?: string
           integracao_id?: string
@@ -12828,6 +13374,90 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      bolt_actualizar_bolt_id_recente: {
+        Args: { p_integracao_id?: string }
+        Returns: number
+      }
+      bolt_normalizar_nome: { Args: { p_nome: string }; Returns: string }
+      bolt_resumo_merge_api: {
+        Args: {
+          p_api_booking_fee?: number
+          p_api_cancellation_fee?: number
+          p_api_cash_discount?: number
+          p_api_commission?: number
+          p_api_in_app_discount?: number
+          p_api_net_earnings?: number
+          p_api_orders_cash?: number
+          p_api_orders_finished?: number
+          p_api_orders_total?: number
+          p_api_ride_distance?: number
+          p_api_ride_price?: number
+          p_api_tip?: number
+          p_api_toll_fee?: number
+          p_comissoes?: number
+          p_distancia_media_km?: number
+          p_distancia_total_km?: number
+          p_email?: string
+          p_ganhos_brutos_app?: number
+          p_ganhos_brutos_dinheiro?: number
+          p_gorjetas?: number
+          p_identificador_motorista?: string
+          p_integracao_id: string
+          p_motorista_id?: string
+          p_motorista_nome?: string
+          p_org_id: string
+          p_periodo?: string
+          p_periodo_fim: string
+          p_periodo_inicio: string
+          p_portagens?: number
+          p_taxas_cancelamento?: number
+          p_taxas_reserva?: number
+          p_telefone?: string
+          p_viagens_terminadas?: number
+        }
+        Returns: number
+      }
+      bolt_resumo_merge_csv: {
+        Args: {
+          p_escrever_viagens?: boolean
+          p_importado_em?: string
+          p_integracao_id: string
+          p_motorista_id?: string
+          p_org_id: string
+          p_periodo?: string
+          p_periodo_fim: string
+          p_periodo_inicio: string
+          p_valores: Json
+        }
+        Returns: number
+      }
+      bolt_resumo_recalcular_total: { Args: { p_id: string }; Returns: number }
+      bolt_sync_queue_claim: {
+        Args: { p_max: number }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          fase: string
+          formula_id: string | null
+          id: string
+          integracao_id: string
+          org_id: string
+          origem: string
+          periodo_fim: string
+          periodo_inicio: string
+          resultado: Json | null
+          semana_inicio: string | null
+          started_at: string | null
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "bolt_sync_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       calcular_valor_aluguer: {
         Args: {
           p_dias: number
@@ -13062,7 +13692,12 @@ export type Database = {
         Returns: number
       }
       formulario_publico_por_id: { Args: { p_id: string }; Returns: Json }
+      garantir_cliente_do_motorista: {
+        Args: { p_motorista_id: string }
+        Returns: string
+      }
       generate_primavera_api_key: { Args: never; Returns: string }
+      gerar_chave_agente_primavera: { Args: never; Returns: string }
       gerar_cobranca_dano: { Args: { p_dano_id: string }; Returns: string }
       gerar_cobranca_renta_car: {
         Args: { p_contrato_id: string }
@@ -13177,6 +13812,13 @@ export type Database = {
       get_gestores: {
         Args: never
         Returns: {
+          nome: string
+        }[]
+      }
+      get_gestores_tvde: {
+        Args: never
+        Returns: {
+          id: string
           nome: string
         }[]
       }
@@ -13346,6 +13988,17 @@ export type Database = {
         Returns: undefined
       }
       motorista_meus_acordos_ativos: { Args: never; Returns: Json }
+      motorista_saldo_pendente: {
+        Args: { p_ate_data?: string; p_motorista_id: string }
+        Returns: number
+      }
+      motoristas_saldo_pendente_lote: {
+        Args: { p_motorista_ids: string[] }
+        Returns: {
+          motorista_id: string
+          saldo: number
+        }[]
+      }
       nif_pt_valido: { Args: { p_nif: string }; Returns: boolean }
       norm_nome_match: { Args: { t: string }; Returns: string }
       normalize_owner_name: { Args: { input_name: string }; Returns: string }
@@ -13433,6 +14086,27 @@ export type Database = {
       org_codigo_disponivel: { Args: { p_codigo: string }; Returns: boolean }
       org_por_codigo: { Args: { p_codigo: string }; Returns: Json }
       org_privacidade_por_gestor: { Args: never; Returns: boolean }
+      primavera_jobs_claim: {
+        Args: { p_max: number; p_org_id: string }
+        Returns: {
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          org_id: string
+          payload: Json
+          resultado: Json | null
+          status: string
+          tipo: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "primavera_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       process_domain_events: { Args: { p_max?: number }; Returns: undefined }
       proxima_data_renovacao: {
         Args: { p_inicio: string; p_intervalo: number; p_opcao: string }
@@ -13517,6 +14191,23 @@ export type Database = {
         }
         Returns: string
       }
+      uber_resumo_merge: {
+        Args: {
+          p_comissoes?: number
+          p_fonte: string
+          p_ganhos_brutos?: number
+          p_ganhos_liquidos?: number
+          p_integracao_id: string
+          p_motorista_id?: string
+          p_motorista_nome?: string
+          p_org_id: string
+          p_periodo_fim: string
+          p_periodo_inicio: string
+          p_uber_driver_id?: string
+          p_viagens?: number
+        }
+        Returns: string
+      }
       unaccent: { Args: { "": string }; Returns: string }
       validar_convite_token: {
         Args: { p_token: string }
@@ -13590,6 +14281,7 @@ export type Database = {
         | "em_curso"
         | "devolvido"
         | "cancelado"
+        | "fechado"
       contrato_origem_enum: "sistema" | "online" | "telefone" | "balcao"
       contrato_regime_enum: "rent_a_car" | "tvde" | "slot"
       contrato_renovacao_opcao_enum:
@@ -13750,6 +14442,7 @@ export const Constants = {
         "em_curso",
         "devolvido",
         "cancelado",
+        "fechado",
       ],
       contrato_origem_enum: ["sistema", "online", "telefone", "balcao"],
       contrato_regime_enum: ["rent_a_car", "tvde", "slot"],

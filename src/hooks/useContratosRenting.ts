@@ -48,9 +48,11 @@ const SELECT_COLUMNS = `
   franquia_valor, caucao_valor, kms_incluidos, km_adicional_valor,
   km_saida, km_entrada,
   combustivel_saida, eletricidade_saida,
+  combustivel_entrada, eletricidade_entrada,
   entrega_via_any_rent,
   dua_original_com_motorista, dua_devolvida_em, dua_observacoes,
   voucher_codigo,
+  cidade_assinatura,
   numero_processo, voo_referencia,
   local_entrega, local_recolha,
   comentarios_entrega, comentarios_recolha,
@@ -296,6 +298,26 @@ export function contratoErrorMessage(error: unknown): { title: string; descripti
 // Mutations
 // ────────────────────────────────────────────────────────────
 
+/**
+ * Grava a cidade de assinatura vigente do contrato — em silêncio, sem toast
+ * nem invalidação de queries. Chamada depois de gerar documentos com sucesso
+ * (ContratoDocumentosDialog); a acção que importa ao utilizador (o PDF) já
+ * teve sucesso, isto é só housekeeping para a próxima geração não voltar a
+ * perguntar. Falhar aqui não pode incomodar quem só queria o documento.
+ */
+export async function gravarCidadeAssinaturaVigente(
+  contratoId: string,
+  cidade: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('contratos_renting')
+    .update({ cidade_assinatura: cidade })
+    .eq('id', contratoId);
+  if (error) {
+    console.warn('Não foi possível gravar a cidade de assinatura vigente:', error.message);
+  }
+}
+
 export function useCreateContratoRenting() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -362,7 +384,9 @@ export function useUpdateContratoRenting() {
 export interface FecharContratoRecolhaInfo {
   km: string;
   combustivel: string;
-  fotos: File[];
+  /** Cada ficheiro leva a descrição escrita no fecho — é ela que vira legenda
+   *  da imagem na Folha de Danos (viatura_dano_fotos.descricao). */
+  fotos: { file: File; descricao?: string }[];
 }
 
 export interface FecharContratoArgs {
@@ -385,6 +409,12 @@ export interface FecharContratoArgs {
    *  simplificado de viaturas slot, que não captura km/combustível/fotos mas
    *  fecha o contrato por completo na mesma (não fica "a aguardar recolha"). */
   fecharAgora?: boolean;
+  /** true quando este fecho é o primeiro passo de uma TROCA de viatura. O
+   *  motorista não sai — passa para o contrato sucessor com outra viatura —,
+   *  por isso não pode ser desactivado aqui. Sem isto ficava inactivo durante
+   *  a janela entre o fecho e a criação do sucessor, e desaparecia dos resumos
+   *  semanais e das listas de cobrança dessa semana. */
+  manterMotoristaActivo?: boolean;
 }
 
 /** Título/descrição do toast final — depende de a recolha ter sido
@@ -420,6 +450,7 @@ export function useFecharContrato() {
       recolha,
       marcarDuaDevolvida,
       fecharAgora,
+      manterMotoristaActivo,
     }: FecharContratoArgs): Promise<{ fechouAgora: boolean }> => {
       const { data: estacao, error: errEstacao } = await supabase
         .from('estacoes')
@@ -430,16 +461,29 @@ export function useFecharContrato() {
       const cidadeEvento = estacao.cidade?.trim() || estacao.nome;
 
       // Fechar o contrato é uma decisão explícita do gestor: passa sempre a
-      // 'cancelado' (fechado), quer a recolha física seja registada já aqui
+      // 'fechado', quer a recolha física seja registada já aqui
       // (km/combustível/fotos, `recolha` presente) quer fique para confirmar
       // depois via QR/Calendário. Antes, sem `recolha`, o estado não mudava e
       // o contrato ficava preso (parecia que não fechava) à espera de uma
       // confirmação que muitas vezes nunca chegava.
+      //
+      // Fechar NÃO é cancelar: até 20260820150200 isto escrevia 'cancelado',
+      // e como o fecho semanal exclui 'cancelado', 54 contratos que rodaram
+      // ficaram fora da facturação. Cancelar é agora acção própria — ver
+      // useCancelarContratoRenting.
+      //
+      // `tipoEvento` (recolhido/devolvido) já era pedido no diálogo e deitado
+      // fora; passa a ficar em tipo_fecho. É registo, não muda comportamento.
       const { error: errUpdate } = await supabase
         .from('contratos_renting')
         .update({
           estacao_recolha_id: estacaoId,
-          estado_operacional: 'cancelado' as const,
+          estado_operacional: 'fechado' as const,
+          // Como o contrato acabou: 'devolvido' (o motorista trouxe a viatura) ou
+          // 'recolhido' (não a quis entregar e fomos buscá-la). Era pedido ao gestor
+          // num radio obrigatório e deitado fora — só sobrevivia dentro do texto do
+          // débito, e apenas quando havia débito. É informação sobre o motorista.
+          tipo_fecho: tipoEvento,
           // Fecha o ciclo da DUA original: se o motorista a tinha levado e o
           // gestor confirmou a devolução, regista o momento.
           ...(marcarDuaDevolvida ? { dua_devolvida_em: new Date().toISOString() } : {}),
@@ -526,7 +570,7 @@ export function useFecharContrato() {
             .single();
           if (dErr) throw dErr;
 
-          for (const file of recolha.fotos) {
+          for (const { file, descricao } of recolha.fotos) {
             const ext = file.name.split('.').pop() || 'bin';
             const path = `${dano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
             const { error: upErr } = await supabase.storage
@@ -537,6 +581,7 @@ export function useFecharContrato() {
               dano_id: dano.id,
               ficheiro_url: path,
               nome_ficheiro: file.name,
+              descricao: descricao?.trim() || null,
               uploaded_by: userId,
             });
             if (fErr) throw fErr;
@@ -571,7 +616,7 @@ export function useFecharContrato() {
       // motorista continua de posse da viatura até a recolha real acontecer)
       // ou quando o fecho é forçado como definitivo (fecharAgora — slot, que
       // não tem recolha física a capturar mas fecha por completo na mesma).
-      if (motoristaId && (recolha || fecharAgora)) {
+      if (motoristaId && (recolha || fecharAgora) && !manterMotoristaActivo) {
         const { error: errMotorista } = await supabase
           .from('motoristas_ativos')
           .update({ status_ativo: false })
@@ -587,63 +632,6 @@ export function useFecharContrato() {
       qc.invalidateQueries({ queryKey: ['motoristas'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
       toast(resolveFechoContratoToast(fechouAgora));
-    },
-    onError: (error: unknown) => {
-      const { title, description } = contratoErrorMessage(error);
-      toast({ title, description, variant: 'destructive' });
-    },
-  });
-}
-
-// ────────────────────────────────────────────────────────────
-// Marcar ENTREGA como já realizada, sem o fluxo de check (fotos/km/QR) —
-// atalho para contratos antigos/legado (ex.: migrados de outro sistema)
-// onde a informação de check-in nunca existiu. Só entrega: recolha/fecho
-// têm sempre de passar por "Fechar contrato", pelo fluxo QR ou por troca
-// de viatura — um clique aqui não pode encerrar um contrato sozinho (foi
-// exactamente isso que aconteceu por engano ao contrato #587, quando o
-// banner de recolha apareceu cedo demais).
-// ────────────────────────────────────────────────────────────
-
-export interface MarcarRealizacaoDiretaArgs {
-  contratoId: string;
-}
-
-export function useMarcarRealizacaoDireta() {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async ({ contratoId }: MarcarRealizacaoDiretaArgs): Promise<void> => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      // Muda estado_operacional — dispara trg_contrato_renting_cascata_realizacao,
-      // que marca o evento de calendário de entrega pendente como realizado,
-      // sem passar pelo fluxo de check (fotos/km/QR). Guard no estado de
-      // origem: só avança agendado→em_curso.
-      const { error } = await supabase
-        .from('contratos_renting')
-        .update({
-          estado_operacional: 'em_curso',
-          entrega_via_any_rent: true,
-          updated_by: user?.id ?? null,
-        })
-        .eq('id', contratoId)
-        .eq('estado_operacional', 'agendado');
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
-      invalidarOcupacaoViaturas(qc);
-      qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
-      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
-      qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
-      toast({
-        title: 'Entrega marcada como realizada',
-        description: 'Sem fotos/km — apenas o estado do contrato foi actualizado.',
-      });
     },
     onError: (error: unknown) => {
       const { title, description } = contratoErrorMessage(error);
@@ -773,7 +761,9 @@ export type ReverterFechoArgs = Pick<
   'id' | 'codigo' | 'regime' | 'matricula' | 'data_fim' | 'estacao_recolha_id' | 'reserva_id'
 >;
 
-/** devolvido OU cancelado → em_curso. A recolha volta a ficar pendente. */
+/** fechado OU cancelado → em_curso. A recolha volta a ficar pendente.
+ *  ('devolvido' é legado — nada o escreve desde 20260820150200, mas linhas
+ *  antigas ainda têm de poder ser revertidas.) */
 export function useReverterFecho() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -798,7 +788,7 @@ export function useReverterFecho() {
         .from('contratos_renting')
         .update({ estado_operacional: 'em_curso', updated_by: userId })
         .eq('id', contratoId)
-        .in('estado_operacional', ['devolvido', 'cancelado'])
+        .in('estado_operacional', ['fechado', 'devolvido', 'cancelado'])
         .select('id')
         .maybeSingle();
       if (error) throw error;
@@ -969,10 +959,20 @@ export function useCriarVersaoContrato() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (args: { contratoId: string; motivo: string }): Promise<string> => {
+    mutationFn: async (args: {
+      contratoId: string;
+      motivo: string;
+      /** Instante em que a troca acontece — é a fronteira temporal entre os
+       *  dois elos: fecha `data_fim` do antigo e abre `data_inicio` do novo.
+       *  Vem da data de recolha escolhida no FecharContratoDialog, para que a
+       *  linha temporal do histórico bata certo com a devolução real. Omitido
+       *  (ex.: chamadas antigas), a RPC assume `now()`. */
+      dataTroca?: string;
+    }): Promise<string> => {
       const { data, error } = await supabase.rpc('criar_versao_contrato_renting', {
         p_contrato_id: args.contratoId,
         p_motivo: args.motivo,
+        p_data_troca: args.dataTroca ?? new Date().toISOString(),
       });
       if (error) throw error;
       return data as string;
@@ -1090,7 +1090,65 @@ export function useContratoVersoes(contratoId: string | null | undefined) {
   });
 }
 
-/** Soft delete — marca deleted_at. Hard delete fica para admin via BD. */
+/**
+ * Cancelar NÃO é fechar. O contrato passa a 'cancelado', a cascata cancela a
+ * reserva e a viatura volta à frota. Disponível em qualquer altura — às vezes
+ * um contrato tem de cair já com a viatura na rua.
+ *
+ * O contrato CONTINUA visível: um cliente que desistiu é um facto de negócio,
+ * e apagá-lo tirava-o do histórico e dos relatórios. Enganos ("criei isto sem
+ * querer") são outra coisa e têm porta própria — useDeleteContratoRenting,
+ * restrito a admin. Mesma disponibilidade, permissão diferente.
+ *
+ * Só não se cancela uma versão já substituída: essa é história, e o mundo
+ * vivo pertence ao contrato sucessor.
+ */
+export function useCancelarContratoRenting() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (contratoId: string): Promise<void> => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const { data: updated, error } = await supabase
+        .from('contratos_renting')
+        .update({
+          estado_operacional: 'cancelado' as const,
+          updated_by: user?.id ?? null,
+        })
+        .eq('id', contratoId)
+        .is('substituido_em', null)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!updated) {
+        throw new Error('Esta versão do contrato já foi substituída — cancela a versão actual.');
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
+      qc.invalidateQueries({ queryKey: ['calendario-eventos'] });
+      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+      qc.invalidateQueries({ queryKey: ['calendario-evento-pendente'] });
+      toast({
+        title: 'Contrato cancelado',
+        description: 'A reserva foi cancelada e a viatura voltou a ficar disponível.',
+      });
+    },
+    onError: (error: unknown) => {
+      const description = error instanceof Error ? error.message : 'Erro inesperado';
+      toast({ title: 'Erro ao cancelar', description, variant: 'destructive' });
+    },
+  });
+}
+
+/** Soft delete — marca deleted_at. SÓ ADMIN (ver ContratoForm): é para
+ *  enganos, não para cancelamentos — esses têm useCancelarContratoRenting e
+ *  deixam o contrato visível. Hard delete fica para a BD. */
 export function useDeleteContratoRenting() {
   const qc = useQueryClient();
   const { toast } = useToast();

@@ -20,9 +20,15 @@ import type { Control } from 'react-hook-form';
 interface DadosPessoaisSectionProps {
   control: Control;
   gestores: { nome: string }[];
+  /** A lista falhou a carregar — distingue-se de "a org não tem gestores". */
+  erroGestores?: boolean;
 }
 
-export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSectionProps) {
+export function DadosPessoaisSection({
+  control,
+  gestores,
+  erroGestores = false,
+}: DadosPessoaisSectionProps) {
   const [gestorPopoverOpen, setGestorPopoverOpen] = useState(false);
 
   return (
@@ -59,11 +65,22 @@ export function DadosPessoaisSection({ control, gestores }: DadosPessoaisSection
                     </Button>
                   </FormControl>
                 </PopoverTrigger>
-                <PopoverContent className="w-[280px] p-0">
+                {/* z-[200] é obrigatório: este selector vive dentro do modal
+                    de motorista, e o Dialog (overlay e conteúdo) está em
+                    z-[100]. O PopoverContent traz z-50 por omissão, por isso
+                    sem isto ABRE — mas por baixo do véu escuro do modal, e do
+                    lado de quem usa parece que o clique não faz nada.
+                    Os outros selectores do mesmo modal (viatura, gestor no
+                    MotoristaFormDadosPessoais) já o tinham; este ficou de fora. */}
+                <PopoverContent className="w-[280px] p-0 z-[200]">
                   <Command>
                     <CommandInput placeholder="Procurar gestor..." />
                     <CommandList>
-                      <CommandEmpty>Nenhum gestor encontrado.</CommandEmpty>
+                      <CommandEmpty>
+                        {erroGestores
+                          ? 'Não foi possível carregar os gestores.'
+                          : 'Nenhum gestor encontrado.'}
+                      </CommandEmpty>
                       <CommandGroup>
                         {gestores.map((gestor) => (
                           <CommandItem

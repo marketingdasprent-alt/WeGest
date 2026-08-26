@@ -12,16 +12,11 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { NivelBateriaInput } from '@/components/viaturas/NivelBateriaInput';
 
 import type { MovimentoFormValues } from './movimentoForm.schema';
 import { COMBUSTIVEL_OPTIONS } from './movimentosUtils';
-import {
-  precisaCombustivel,
-  precisaEletrico,
-  precisaGpl,
-  ELETRICO_OPTS,
-  GPL_OPTS,
-} from '@/utils/combustivel';
+import { precisaCombustivel, precisaEletrico, precisaGpl, GPL_OPTS } from '@/utils/combustivel';
 
 const SENTINEL_NONE = '__none__';
 const SENTINEL_AUTO = '__auto__';
@@ -85,6 +80,43 @@ function CombustivelOitavosField({
 }
 
 /** Nível em texto (bateria %, GPL) — botões; guarda string. */
+/**
+ * Bateria: atalhos redondos + percentagem exacta. Separado do NivelTextoField
+ * porque esse é genérico e continua a servir o GPL, que não tem escala fina.
+ */
+function NivelBateriaField({
+  form,
+  name,
+  label,
+  icon,
+}: {
+  form: UseFormReturn<MovimentoFormValues>;
+  name: TextoFieldName;
+  label: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground font-semibold">
+            {icon}
+            {label}
+          </FormLabel>
+          <NivelBateriaInput
+            valor={(field.value as string | null) ?? ''}
+            onChange={(v) => field.onChange(v === '' ? null : v)}
+            compacto
+          />
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
 function NivelTextoField({
   form,
   name,
@@ -201,19 +233,17 @@ export function NivelEnergiaFields({ form, tipoCombustivel }: NivelEnergiaFields
       )}
       {mostraEletrico && (
         <div className="grid grid-cols-2 gap-3">
-          <NivelTextoField
+          <NivelBateriaField
             form={form}
             name="eletricidade_inicial"
             label="Bateria Inicial"
             icon={<Battery className="h-3.5 w-3.5 text-green-500" />}
-            opts={ELETRICO_OPTS}
           />
-          <NivelTextoField
+          <NivelBateriaField
             form={form}
             name="eletricidade_final"
             label="Bateria Final"
             icon={<Battery className="h-3.5 w-3.5 text-green-500" />}
-            opts={ELETRICO_OPTS}
           />
         </div>
       )}

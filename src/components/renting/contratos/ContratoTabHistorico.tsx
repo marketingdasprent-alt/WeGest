@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { ArrowRight, Gauge, History, Loader2 } from 'lucide-react';
+import { ArrowRight, Car, Euro, Gauge, History, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
@@ -18,6 +18,19 @@ const fmtData = (iso: string | null | undefined): string => {
   if (Number.isNaN(d.getTime())) return '—';
   return format(d, 'dd/MM/yyyy HH:mm', { locale: pt });
 };
+
+/** Só o dia — o período de uma viatura lê-se melhor sem horas. */
+const fmtDia = (iso: string | null | undefined): string | null => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return format(d, 'dd/MM/yyyy', { locale: pt });
+};
+
+const fmtEuros = (valor: number | null | undefined): string | null =>
+  valor == null
+    ? null
+    : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(valor);
 
 export const ContratoTabHistorico: React.FC<ContratoTabHistoricoProps> = ({
   contratoId,
@@ -51,6 +64,12 @@ export const ContratoTabHistorico: React.FC<ContratoTabHistoricoProps> = ({
             const isActual = v.substituido_em === null;
             const isCurrent = v.id === contratoId;
             const isRenovacao = (v.motivo_versao ?? '').startsWith('Renovação');
+            // Linha temporal por viatura: "de DD/MM a DD/MM teve a matrícula X,
+            // por V €". É esta a leitura que o histórico tem de dar — sem ela,
+            // uma cadeia de trocas é só uma lista de números de versão.
+            const de = fmtDia(v.data_inicio);
+            const ate = fmtDia(v.data_fim) ?? (isActual ? 'em curso' : '—');
+            const valor = fmtEuros(v.total_final ?? v.valor_total_manual);
             return (
               <li
                 key={v.id}
@@ -83,6 +102,21 @@ export const ContratoTabHistorico: React.FC<ContratoTabHistoricoProps> = ({
                         </span>
                       )}
                     </div>
+                    <p className="text-sm mt-1.5 flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1 font-mono font-semibold">
+                        <Car className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        {v.matricula ?? '—'}
+                      </span>
+                      <span className="text-muted-foreground">
+                        de {de ?? '—'} a {ate}
+                      </span>
+                      {valor && (
+                        <span className="inline-flex items-center gap-1 font-medium">
+                          <Euro className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          {valor}
+                        </span>
+                      )}
+                    </p>
                     {v.motivo_versao && (
                       <p className="text-sm text-muted-foreground mt-1">{v.motivo_versao}</p>
                     )}

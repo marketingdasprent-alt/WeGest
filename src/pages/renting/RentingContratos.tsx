@@ -42,6 +42,7 @@ import {
   CONTRATO_ESTADO_OP_LABELS,
   type ContratoRenting,
 } from '@/types/contratoRenting';
+import { matchesSearch } from '@/lib/utils';
 
 const FILTROS_INICIAIS: ContratosFiltrosState = {
   estacao: 'todas',
@@ -115,7 +116,6 @@ const RentingContratos = () => {
 
   const filtered = useMemo(() => {
     const searchRaw = search.trim();
-    const searchLower = searchRaw.toLowerCase();
     const matriculaNorm = normalizeMatricula(searchRaw);
     const dataInicioMin = filtros.dataInicio
       ? new Date(`${filtros.dataInicio}T00:00:00`).getTime()
@@ -131,7 +131,11 @@ const RentingContratos = () => {
         const matches =
           matchesCodigo(c.codigo, searchRaw) ||
           normalizeMatricula(c.matricula ?? '').includes(matriculaNorm) ||
-          (condutor?.nome.toLowerCase().includes(searchLower) ?? false) ||
+          // Nome por PALAVRAS soltas e sem acentos (matchesSearch, o mesmo do
+          // resto da app): com `.includes()` do texto seguido, "josé b" não
+          // encontrava "José Werley Carvalho Braga" — só encontrava quem
+          // escrevesse o nome do meio todo, ou soubesse o código/matrícula.
+          matchesSearch(condutor?.nome, searchRaw) ||
           (condutor?.nif.startsWith(searchRaw) ?? false) ||
           clienteNif.startsWith(searchRaw);
         if (!matches) return false;

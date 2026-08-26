@@ -5,6 +5,7 @@ import { DashboardLayout } from '@/components/DashboardLayout';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { RouteErrorBoundary } from '@/components/ErrorBoundary';
 import { usePageTracking } from '@/hooks/usePageTracking';
+import { tokenDoDominioTickets } from '@/lib/ticketsUrl';
 import { RECURSOS } from '@/utils/permissions';
 import { REALIZE_ORG_IDS } from '@/config/realize';
 import { Loader2 } from 'lucide-react';
@@ -28,6 +29,8 @@ const Formularios = lazy(() => import('@/pages/Formularios'));
 const FormularioPublico = lazy(() => import('@/pages/FormularioPublico'));
 const DanosPublicosPage = lazy(() => import('@/pages/DanosPublicosPage'));
 const QuadroLive = lazy(() => import('@/pages/QuadroLive'));
+const TicketsTI = lazy(() => import('@/pages/TicketsTI'));
+const TicketTIAutor = lazy(() => import('@/pages/TicketTIAutor'));
 const DasprentLeads = lazy(() => import('@/pages/DasprentLeads'));
 const DasprentFuncionarios = lazy(() => import('@/pages/DasprentFuncionarios'));
 const AdminInvites = lazy(() => import('@/pages/AdminInvites'));
@@ -116,7 +119,16 @@ const WebAppRoutes = () => {
         */}
         <RouteErrorBoundary>
           <Routes>
-            <Route path="/" element={<Landing />} />
+            {/* No domínio próprio de pedidos a raiz É o formulário — é o que
+                torna o link partilhável apenas `tickets.wegest.pt`. Em qualquer
+                outro domínio, e sem as variáveis definidas, continua a página
+                inicial de sempre. */}
+            <Route
+              path="/"
+              element={
+                tokenDoDominioTickets(window.location.hostname) ? <TicketsTI /> : <Landing />
+              }
+            />
             <Route path="/entrar" element={<Entrar />} />
             <Route path="/sobre" element={<Sobre />} />
             <Route path="/contactos" element={<Contactos />} />
@@ -130,6 +142,11 @@ const WebAppRoutes = () => {
             <Route path="/danos/:token" element={<DanosPublicosPage />} />
             {/* Quadro TV público — sem login, acesso por token */}
             <Route path="/quadro/:token" element={<QuadroLive />} />
+            {/* A rota do autor vem ANTES: /ti/:token capturaria /ti/ticket/xxx com
+                token="ticket", e quem clicasse no link do email cairia no
+                formulário de submissão em vez do próprio pedido. */}
+            <Route path="/ti/ticket/:acessoToken" element={<TicketTIAutor />} />
+            <Route path="/ti/:token" element={<TicketsTI />} />
             <Route path="/login" element={<LoginMotorista />} />
             <Route path="/equipa" element={<Login />} />
             <Route path="/selecionar-org" element={<SelecionarOrg />} />

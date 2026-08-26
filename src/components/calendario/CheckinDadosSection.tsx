@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { NivelBateriaInput } from '@/components/viaturas/NivelBateriaInput';
 import {
   AlertTriangle,
   Battery,
@@ -24,7 +25,6 @@ import {
   precisaCombustivel,
   precisaEletrico,
   precisaGpl,
-  ELETRICO_OPTS,
   GPL_OPTS,
   COMBUSTIVEL_NIVEL_OPTS as COMBUSTIVEL_OPTS,
 } from '@/utils/combustivel';
@@ -48,6 +48,29 @@ export interface CheckinDadosState {
 
 export function emptyCheckinDados(): CheckinDadosState {
   return { km: '', combustivel: '', nivelEletrico: '', nivelGpl: '', novosDanos: [] };
+}
+
+/**
+ * Repõe um rascunho vindo do IndexedDB em estado utilizável.
+ *
+ * Os `File` sobrevivem intactos (structured clone), mas os `preview` são
+ * object URLs da sessão anterior — a página que os criou já não existe e o
+ * browser revogou-os, por isso as miniaturas apareceriam partidas. Criam-se
+ * de novo a partir do ficheiro, que é o que interessa guardar.
+ */
+export function reidratarCheckinDados(dados: CheckinDadosState): CheckinDadosState {
+  return {
+    ...dados,
+    novosDanos: (dados.novosDanos ?? []).map((dano) => ({
+      ...dano,
+      files: (dano.files ?? [])
+        .filter((f) => f.file instanceof File)
+        .map((f) => ({
+          ...f,
+          preview: f.file.type.startsWith('image/') ? URL.createObjectURL(f.file) : null,
+        })),
+    })),
+  };
 }
 
 export function validateCheckinDados(
@@ -174,8 +197,13 @@ interface FolhaDanosParams {
 }
 
 export function gerarFolhaDanos(p: FolhaDanosParams) {
+  // Quem chama é que manda na paginação, tal como no
+  // generateDocumentFromTemplate: recebendo um PDF existente, escreve-se na
+  // página CORRENTE e não se cria nenhuma. Havia aqui um `doc.addPage()` que
+  // fazia o contrário — dois geradores com contratos opostos obrigavam cada
+  // chamador a adivinhar qual estava a usar, e era isso que produzia ora
+  // folhas em branco a mais ora documentos sobrepostos.
   const doc = p.existingPdf || new jsPDF({ unit: 'mm', format: 'a4' });
-  if (p.existingPdf) doc.addPage();
   const W = 210;
   let y = 20;
 
@@ -641,14 +669,17 @@ export const CheckinDadosSection: React.FC<CheckinDadosSectionProps> = ({
           />
         )}
         {mostraEletrico && (
-          <LevelSelector
-            label="Bateria Elétrica"
-            icon={<Battery className="h-3 w-3 text-green-500" />}
-            opts={ELETRICO_OPTS}
-            value={dados.nivelEletrico}
-            onSelect={(v) => set({ nivelEletrico: v })}
-            required
-          />
+          <div className="space-y-1.5">
+            <Label className="text-xs flex items-center gap-1">
+              <Battery className="h-3 w-3 text-green-500" />
+              Bateria Elétrica <span className="text-destructive">*</span>
+            </Label>
+            <NivelBateriaInput
+              valor={dados.nivelEletrico}
+              onChange={(v) => set({ nivelEletrico: v })}
+              compacto
+            />
+          </div>
         )}
       </div>
 

@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { Building2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { validarNIF } from '@/lib/pt-validators';
+import { validarEmail, validarNIF } from '@/lib/pt-validators';
 import { EmpresaImagemUpload } from './EmpresaImagemUpload';
 
 interface FormData {
@@ -20,6 +20,7 @@ interface FormData {
   morada: string;
   telefone: string;
   logo_url: string;
+  email_suporte: string;
 }
 
 const emptyForm = (): FormData => ({
@@ -29,6 +30,7 @@ const emptyForm = (): FormData => ({
   morada: '',
   telefone: '',
   logo_url: '',
+  email_suporte: '',
 });
 
 export const MinhaOrganizacaoTab: React.FC = () => {
@@ -43,9 +45,12 @@ export const MinhaOrganizacaoTab: React.FC = () => {
   const fetchOrg = useCallback(async () => {
     if (!orgId) return;
     setLoading(true);
-    const { data, error } = await supabase
+    // `email_suporte` é coluna nova e o types.ts é auto-gerado — enquanto não
+    // for regenerado, o cliente tipado não a conhece. Mesmo contorno que os
+    // hooks de TI já usam para as tabelas ti_*.
+    const { data, error } = await (supabase as any)
       .from('organizacoes')
-      .select('nome, codigo, nif, morada, telefone, logo_url')
+      .select('nome, codigo, nif, morada, telefone, logo_url, email_suporte')
       .eq('id', orgId)
       .single();
 
@@ -60,6 +65,7 @@ export const MinhaOrganizacaoTab: React.FC = () => {
         morada: data.morada ?? '',
         telefone: data.telefone ?? '',
         logo_url: data.logo_url ?? '',
+        email_suporte: data.email_suporte ?? '',
       });
     }
     setLoading(false);
@@ -85,10 +91,17 @@ export const MinhaOrganizacaoTab: React.FC = () => {
         return;
       }
     }
+    if (form.email_suporte.trim()) {
+      const res = validarEmail(form.email_suporte.trim());
+      if (!res.valid) {
+        toast.error(res.message || 'Email de suporte inválido');
+        return;
+      }
+    }
 
     setSaving(true);
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('organizacoes')
       .update({
         nome: form.nome.trim(),
@@ -97,6 +110,8 @@ export const MinhaOrganizacaoTab: React.FC = () => {
         morada: form.morada.trim() || null,
         telefone: form.telefone.trim() || null,
         logo_url: form.logo_url.trim() || null,
+        // Vazio grava NULL — é o que desliga o aviso de novos pedidos.
+        email_suporte: form.email_suporte.trim() || null,
       })
       .eq('id', orgId);
 
@@ -211,6 +226,29 @@ export const MinhaOrganizacaoTab: React.FC = () => {
             />
           ) : (
             <p className="text-sm">{form.telefone || '—'}</p>
+          )}
+        </div>
+
+        <Separator />
+
+        <div className="space-y-2">
+          <Label htmlFor="minha-org-email-suporte">Email de suporte</Label>
+          {podeEditar ? (
+            <>
+              <Input
+                id="minha-org-email-suporte"
+                type="email"
+                value={form.email_suporte}
+                onChange={set('email_suporte')}
+                placeholder="suporte@empresa.pt"
+              />
+              <p className="text-xs text-muted-foreground">
+                Endereço que recebe o aviso de cada novo pedido de informática. Em branco, não é
+                enviado aviso nenhum.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm">{form.email_suporte || '—'}</p>
           )}
         </div>
 

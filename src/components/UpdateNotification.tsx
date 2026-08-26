@@ -12,7 +12,13 @@ export function UpdateNotification() {
   if (!needRefresh) return null;
 
   return (
-    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-3.5 shadow-xl animate-in slide-in-from-bottom-4 duration-300">
+    // `pointer-events-auto` é obrigatório, não é decoração: enquanto um modal
+    // Radix está aberto, o Radix põe `pointer-events: none` no <body>. O
+    // z-[9999] punha este aviso VISÍVEL por cima do modal, mas os cliques
+    // continuavam a ser ignorados — via-se o botão "Atualizar" e não havia
+    // maneira de lhe carregar sem fechar primeiro o modal. O z-index resolve o
+    // empilhamento; só isto resolve o clique.
+    <div className="pointer-events-auto fixed bottom-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-3.5 shadow-xl animate-in slide-in-from-bottom-4 duration-300">
       <div className="flex flex-col leading-tight">
         <span className="text-sm font-semibold">Nova versão disponível</span>
         <span className="text-xs text-muted-foreground">

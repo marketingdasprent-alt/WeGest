@@ -1,3 +1,4 @@
+import { momentoFolhaHtml } from './momentoFolhaCor';
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,7 +12,12 @@ import type {
 } from './types';
 import { replaceDynamicFields, loadImage, htmlToText } from './parser';
 import { renderHtmlBlock, type RenderHtmlBlockCtx } from './render-html-block';
-import { renderAnexoDanos, type AnexoDanosCtx } from './render-anexo-danos';
+import {
+  renderAnexoDanos,
+  renderNumeroContrato,
+  renderPartes,
+  type AnexoDanosCtx,
+} from './render-anexo-danos';
 
 /**
  * Gera um documento PDF a partir de um template guardado na base de dados.
@@ -60,9 +66,29 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
       ...(combustivel_entrada != null ? { combustivel_entrada } : {}),
       ...(eletricidade_saida != null ? { eletricidade_saida } : {}),
       ...(eletricidade_entrada != null ? { eletricidade_entrada } : {}),
-      ...(momentoFolha != null ? { momento_folha: momentoFolha } : {}),
+      ...(momentoFolha != null ? { momento_folha: momentoFolhaHtml(momentoFolha) } : {}),
       ...(observacoesMomento != null ? { observacoes_momento: observacoesMomento } : {}),
     };
+
+    // O anexo de danos é resolvido ANTES de se desenhar seja o que for: traz o
+    // número do contrato (que vai para o canto superior direito e para o
+    // placeholder) e as partes (que pertencem ao cabeçalho, não ao anexo).
+    let efectivoAnexoDanos = params.anexoDanos;
+    if (templateData.tipo === 'anexo_danos' && params.viaturaId && !efectivoAnexoDanos) {
+      const matriculaAnexo = (inputDocumentData?.viatura_matricula as string | undefined) ?? '';
+      efectivoAnexoDanos = await fetchAnexoDanos(
+        params.viaturaId,
+        matriculaAnexo,
+        params.contratoId,
+        params.folhaDanosMomentoActual ?? true
+      );
+      if (!efectivoAnexoDanos) {
+        console.warn('Template anexo_danos: viatura sem danos activos ou erro ao buscar');
+      }
+    }
+    if (efectivoAnexoDanos?.numeroContrato != null) {
+      documentData.numero_contrato = String(efectivoAnexoDanos.numeroContrato);
+    }
 
     // Substituir placeholders no conteúdo HTML do template
     const conteudo = replaceDynamicFields(
@@ -73,9 +99,17 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
 
     // Verificar existência de {{secao_danos}} — se presente, o anexo é renderizado INLINE
     const hasDanosPlaceholder = conteudo.includes('{{secao_danos}}');
-    const [htmlPart1, htmlPart2] = hasDanosPlaceholder
+    const [preDanos, htmlPart2] = hasDanosPlaceholder
       ? conteudo.split(/\{\{secao_danos\}\}/)
       : [conteudo, ''];
+
+    // {{secao_partes}} — identificação de quem alugou. Fica onde o template o
+    // puser (a seguir à empresa emissora, por desenho), e não dentro do anexo
+    // de danos: pela leitura da folha, identificar as partes é cabeçalho.
+    const hasPartesPlaceholder = preDanos.includes('{{secao_partes}}');
+    const [htmlPart1, htmlPartEntre] = hasPartesPlaceholder
+      ? preDanos.split(/\{\{secao_partes\}\}/)
+      : [preDanos, ''];
 
     const existingPdf = params.existingPdf;
     const pdf = existingPdf || new jsPDF('p', 'mm', 'a4');
@@ -144,8 +178,31 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
       signatures: new Map(),
     };
 
-    // Renderizar parte 1 (antes de {{secao_danos}})
+    const danosCtx: AnexoDanosCtx = {
+      leftMargin,
+      rightMargin,
+      topMargin,
+      pageWidth,
+      pageHeight,
+      bottomMargin,
+      maxWidth,
+    };
+
+    // Número do contrato no canto superior direito, como no contrato de aluguer.
+    if (efectivoAnexoDanos?.numeroContrato != null) {
+      renderNumeroContrato(pdf, efectivoAnexoDanos.numeroContrato, danosCtx);
+    }
+
+    // Renderizar parte 1 (até {{secao_partes}}, ou até {{secao_danos}})
     yPos = await renderHtmlBlock(pdf, htmlPart1, yPos, htmlCtx);
+
+    // Identificação das partes + o que vier entre elas e o anexo de danos.
+    if (hasPartesPlaceholder) {
+      yPos = renderPartes(pdf, efectivoAnexoDanos?.partes ?? [], danosCtx, yPos + 2);
+      if (htmlPartEntre.trim()) {
+        yPos = await renderHtmlBlock(pdf, htmlPartEntre, yPos, htmlCtx);
+      }
+    }
 
     // Renderizar anexoFotos (check-in/check-out) em grelha 2×3
     if (params.anexoFotos?.length) {
@@ -199,16 +256,6 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
       }
     }
 
-    // Preparar anexo de danos (buscar da BD se necessário, mesclar com dados locais)
-    let efectivoAnexoDanos = params.anexoDanos;
-    if (templateData.tipo === 'anexo_danos' && params.viaturaId && !efectivoAnexoDanos) {
-      const matricula = (documentData?.viatura_matricula as string | undefined) ?? '';
-      efectivoAnexoDanos = await fetchAnexoDanos(params.viaturaId, matricula, params.contratoId);
-      if (!efectivoAnexoDanos) {
-        console.warn('Template anexo_danos: viatura sem danos activos ou erro ao buscar');
-      }
-    }
-
     // Mesclar fotos e danos locais (pré-visualização)
     if (efectivoAnexoDanos && params.fotosMomento?.length) {
       const fotosMomentoItems = params.fotosMomento.map((url) => ({
@@ -229,15 +276,6 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
 
     // Renderizar anexo de danos
     if (efectivoAnexoDanos) {
-      const danosCtx: AnexoDanosCtx = {
-        leftMargin,
-        rightMargin,
-        topMargin,
-        pageWidth,
-        pageHeight,
-        bottomMargin,
-        maxWidth,
-      };
       yPos = await renderAnexoDanos(pdf, efectivoAnexoDanos, danosCtx, hasDanosPlaceholder, yPos);
     }
 

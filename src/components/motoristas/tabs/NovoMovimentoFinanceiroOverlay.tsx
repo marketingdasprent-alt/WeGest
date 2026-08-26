@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { MovimentoDetalhesFields } from './MovimentoDetalhesFields';
 import { MovimentoRepeticaoFields } from './MovimentoRepeticaoFields';
+import { NotaDataMovimento } from './NotaDataMovimento';
 
 export interface MovimentoFinanceiro {
   id: string;
@@ -469,6 +470,7 @@ export function NovoMovimentoFinanceiroOverlay({
                   />
                 </div>
               </div>
+              <NotaDataMovimento />
             </div>
           )}
 

@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { MotoristaDanosCard } from './MotoristaDanosCard';
 
 interface Viatura {
   id: string;
@@ -502,6 +503,13 @@ export function MotoristaViaturaCard({ motoristaId }: MotoristaViaturaCardProps)
                 </Card>
               );
             })()}
+          </div>
+
+          {/* Os danos vivem dentro deste dialogo, e nao num segundo por cima:
+              e a mesma viatura, e o motorista quer um cartao so. Sem moldura
+              propria — o dialogo ja e a caixa. */}
+          <div className="mt-8 border-t border-border pt-8 md:mt-12 md:pt-12">
+            <MotoristaDanosCard motoristaId={motoristaId} semMoldura />
           </div>
         </div>
       </DialogContent>

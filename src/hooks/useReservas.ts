@@ -36,7 +36,7 @@ const SELECT_COLUMNS = `
   condutor_id, condutor_nome,
   emissor_id,
   gestor_id,
-  estado, regime, tarifa_id, slot_valor_semanal, valor_total,
+  estado, regime, tarifa_id, slot_valor_semanal, valor_total, valor_total_manual,
   observacoes, observacoes_internas,
   is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias,
   franquia_valor, caucao_valor, kms_incluidos, km_adicional_valor,

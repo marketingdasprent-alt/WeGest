@@ -22,7 +22,7 @@ import {
   normalizeNif,
   type FormValues,
 } from './motoristaDialog.schema';
-import { useGestoresTvde } from './useGestoresTvde';
+import { useGestoresTvdeNomes } from '@/hooks/useGestoresTvde';
 import { useMotoristaCartoesFrota } from './useMotoristaCartoesFrota';
 import { MotoristaFormDadosPessoais } from './MotoristaFormDadosPessoais';
 import { MotoristaFormCartoesIntegracoes } from './MotoristaFormCartoesIntegracoes';
@@ -72,7 +72,7 @@ export function MotoristaDialog({
   const [draftDisponivel, setDraftDisponivel] = useState<MotoristaDraft | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const orgId = useOrgId();
-  const gestores = useGestoresTvde(orgId);
+  const { gestores } = useGestoresTvdeNomes();
   const [gestorPopoverOpen, setGestorPopoverOpen] = useState(false);
   const { toast } = useToast();
   const { cartoesFrota, selectedCartao, setSelectedCartao, syncCartoes } = useMotoristaCartoesFrota(

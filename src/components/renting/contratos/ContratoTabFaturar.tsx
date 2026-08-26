@@ -629,14 +629,18 @@ export function ContratoTabFaturar({ contrato }: Props) {
       }
     : null;
 
-  // Motorista principal (TVDE) — dívida cedida na emissão (ver
-  // 20260730170000_cobranca_cessao_motorista_na_emissao.sql). NUNCA é o
-  // destinatário fiscal (esse fica sempre em clienteEntidade): é só quem
-  // fica a dever internamente, em cima da mesma fatura emitida ao titular.
+  // Motorista principal (TVDE) — passa a poder ser o destinatário fiscal: a
+  // factura sai em nome dele, com o NIF dele. Como `destinatario_id` tem FK
+  // para `clientes`, o id do motorista é trocado pelo da ficha de cliente
+  // dele na emissão (RPC garantir_cliente_do_motorista) — daí `tipo`.
+  // Substitui a cessão de dívida de 20260730170000: já não é preciso ceder
+  // nada quando a dívida nasce logo no motorista.
   const motoristaEntidade: EntidadeOption | null = principal?.motorista_id
     ? {
         id: principal.motorista_id,
         nome: motoristaPrincipalNome || 'Motorista principal',
+        tipo: 'motorista',
+        contratoCondutorId: principal.id,
       }
     : null;
 

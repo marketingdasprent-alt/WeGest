@@ -12,7 +12,7 @@ export function formatDate(iso: string): string {
 
 export function getEstadoBadgeColor(estado: string): string {
   const activeStates = ['pendente', 'confirmada', 'em_curso', 'agendado'];
-  const concludedStates = ['concluida', 'devolvido'];
+  const concludedStates = ['concluida', 'fechado', 'devolvido'];
   const cancelledStates = ['cancelada', 'cancelado', 'expirada', 'anulado'];
 
   if (activeStates.includes(estado)) return 'bg-blue-100 text-blue-800';
