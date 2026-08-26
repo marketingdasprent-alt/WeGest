@@ -2118,7 +2118,37 @@ Deno.serve(async (req) => {
         periodoFim: asTrimmedString(parsedBody.periodo_fim),
       });
 
-      return jsonResponse(csvResult, csvResult.success ? 200 : 500);
+      // Ligar os motoristas novos às fichas, tal como o uber-import-reports faz
+      // no fim da importação dele.
+      //
+      // Sem isto, tudo o que entrasse por aqui ficava com `motorista_id` a null:
+      // os resumos ainda apareciam certos no ecrã, mas só porque ContasResumoTab
+      // compara pelo primeiro+último nome quando não há ficha ligada. Uma gralha
+      // no nome — "Pinha" em vez de "Pinho" — e o dinheiro ia para outra pessoa.
+      // Em 08/2026 a Premium Ride tinha 9 motoristas nesta situação, presos a
+      // essa comparação por nome desde Julho.
+      //
+      // Falhar aqui não invalida a importação: os dados já estão gravados e o
+      // auto-map é reentrante (só olha para linhas com motorista_id a null).
+      let autoMap: unknown = null;
+      try {
+        const { data, error } = await supabase.functions.invoke("uber-auto-map-drivers", {
+          body: { integracao_id: csvIntegracaoId },
+        });
+        if (error) {
+          console.error("[uber-webhook] Auto-map falhou:", error.message);
+          autoMap = { error: error.message };
+        } else {
+          autoMap = data;
+          console.info(`[uber-webhook] Auto-map: ${(data as { message?: string })?.message ?? "ok"}`);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[uber-webhook] Auto-map exception:", msg);
+        autoMap = { error: msg };
+      }
+
+      return jsonResponse({ ...csvResult, auto_map: autoMap }, csvResult.success ? 200 : 500);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Falha ao processar CSV";
       console.error("[uber-webhook] CSV import error:", msg);

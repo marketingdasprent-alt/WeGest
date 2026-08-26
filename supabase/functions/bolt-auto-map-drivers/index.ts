@@ -286,6 +286,13 @@ Deno.serve(async (req) => {
               driver_phone: driver.phone,
               motorista_id: motoristaId,
               integracao_id: integracao_id,
+              // Explícito: sem isto a coluna cai no default get_current_org_id(),
+              // que numa edge function a correr com service role não resolve para
+              // nada. O trigger fn_mapeamento_mesma_org recusaria a linha por
+              // apontar para um motorista de org diferente (null vs orgId), e
+              // como este upsert é tratado como não-crítico, a fonte de verdade
+              // do sync deixava de ser mantida sem ninguém dar por isso.
+              org_id: orgId,
               auto_mapped: true,
             },
             { onConflict: "driver_uuid,integracao_id" }
