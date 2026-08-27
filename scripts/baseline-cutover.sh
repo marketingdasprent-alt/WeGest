@@ -109,6 +109,52 @@ grep -q 'CREATE TABLE' "$TMP_BASELINE" \
 --
 -- Gerado por scripts/baseline-cutover.sh com `supabase db dump`.
 --
+-- ── EXTENSÕES ───────────────────────────────────────────────────────────────
+-- `supabase db dump --schema public` traz só o schema `public`. As extensões
+-- vivem noutros schemas e NÃO vêm no dump — mas o `public` depende delas.
+--
+-- Descoberto a 2026-08-28, na primeira execução real deste script: a view
+-- `public.cron_edge_health` faz `LEFT JOIN net._http_response`, o schema `net`
+-- é criado pela extensão `pg_net`, e numa base acabada de nascer não existe.
+-- O reset abortava na instrução 1060 com
+-- `relation "net._http_response" does not exist`.
+--
+-- Por isso o baseline começa por recriar as extensões que produção tem, ANTES
+-- do dump. `IF NOT EXISTS` em todas: o stack local do Supabase já cria algumas
+-- (vault, pg_stat_statements) e recriá-las seria um erro.
+CABECALHO
+
+  cat <<'EXTENSOES'
+
+-- Schema onde o Supabase aloja as extensões. Já existe no stack local, mas uma
+-- base Postgres nua não o tem.
+create schema if not exists extensions;
+
+create extension if not exists "pg_net"             with schema extensions;
+create extension if not exists "pgcrypto"           with schema extensions;
+create extension if not exists "uuid-ossp"          with schema extensions;
+create extension if not exists "pg_stat_statements" with schema extensions;
+
+-- Estas três estão em `public` em produção, e o código conta com isso:
+-- `unaccent()` e `show_trgm()` são chamadas sem qualificar, e `btree_gist`
+-- suporta as constraints de exclusão que impedem sobreposição de atribuições
+-- de viatura a motorista.
+create extension if not exists "pg_trgm"    with schema public;
+create extension if not exists "unaccent"   with schema public;
+create extension if not exists "btree_gist" with schema public;
+
+-- pg_cron vive em pg_catalog e só pode ser criada na base indicada em
+-- cron.database_name (localmente, `postgres`). Se falhar num ambiente que não
+-- a suporte, o resto do baseline continua a ser válido — o que se perde são os
+-- trabalhos agendados, que de qualquer forma não vêm neste dump (ver a nota
+-- sobre o schema `cron` em docs/motor-automacao/reconstrucao-migracoes.md).
+create extension if not exists "pg_cron";
+
+EXTENSOES
+
+  cat <<'CABECALHO'
+-- ── O QUE ISTO SUBSTITUI ────────────────────────────────────────────────────
+--
 -- Este ficheiro SUBSTITUI a cadeia histórica de migrações como ponto de partida
 -- de qualquer base de dados nova. Os ficheiros anteriores estão em
 -- `supabase/migrations_archive/` — continuam no git para consulta e para
