@@ -9,8 +9,10 @@ import {
   useCreateContratoRenting,
   useFecharContrato,
   usePreencherDadosSaidaAnyRent,
+  useReverterFecho,
   resolveFechoContratoToast,
   type FecharContratoArgs,
+  type ReverterFechoArgs,
 } from './useContratosRenting';
 import type { ContratoRentingInsert } from '@/types/contratoRenting';
 
@@ -37,6 +39,7 @@ function chainable(result: SupabaseResult = { data: null, error: null }) {
   c.insert = vi.fn().mockReturnValue(c);
   c.update = vi.fn().mockReturnValue(c);
   c.eq = vi.fn().mockReturnValue(c);
+  c.in = vi.fn().mockReturnValue(c);
   c.is = vi.fn().mockReturnValue(c);
   c.order = vi.fn().mockReturnValue(c);
   c.limit = vi.fn().mockReturnValue(c);
@@ -546,6 +549,86 @@ describe('usePreencherDadosSaidaAnyRent', () => {
         description: expect.stringContaining('some constraint violated'),
         variant: 'destructive',
       })
+    );
+  });
+});
+
+describe('useReverterFecho', () => {
+  const contrato: ReverterFechoArgs = {
+    id: 'contrato-1',
+    codigo: 101,
+    regime: 'rent_a_car',
+    matricula: 'AA-00-BB',
+    data_fim: '2026-08-20',
+    estacao_recolha_id: null,
+    reserva_id: 'res-1',
+  } as ReverterFechoArgs;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /**
+   * REGRESSÃO (type-check:strict, 2026-08-26)
+   *
+   * `criado_por` em calendario_eventos é NOT NULL sem default. Esta mutation
+   * lia `user?.id ?? null` SEM a guarda que a mutation irmã (useFecharContrato)
+   * já tinha, e seguia em frente. Com a sessão expirada isso dava:
+   *
+   *   1. o contrato era reaberto para 'em_curso' (update passa, updated_by NULL
+   *      — perde-se o rasto de quem reverteu);
+   *   2. o insert do evento de recolha rebentava na constraint NOT NULL.
+   *
+   * São duas chamadas PostgREST separadas, sem transação: ficava um contrato
+   * reaberto SEM evento de recolha pendente — estado parcial, e a recolha
+   * desaparecia do calendário.
+   */
+  it('sem sessão activa falha ANTES de reabrir o contrato (não deixa estado parcial)', async () => {
+    const chains = setupSupabase();
+    (supabase.auth as unknown as { getUser: ReturnType<typeof vi.fn> }).getUser = vi
+      .fn()
+      .mockResolvedValue({ data: { user: null } });
+
+    const { result } = renderHook(() => useReverterFecho(), { wrapper: createWrapper() });
+
+    // Captura-se a rejeição directamente em vez de ler `result.current.error`:
+    // esse estado do React Query só aparece no render seguinte, e a leitura
+    // síncrona dava `null` mesmo com a mutation a rejeitar — mascarava o que o
+    // teste quer provar.
+    let erro: unknown;
+    await act(async () => {
+      erro = await result.current.mutateAsync(contrato).catch((e: unknown) => e);
+    });
+
+    expect(erro).toEqual(new Error('Sessão não encontrada'));
+    // Nenhuma tabela pode ter sido tocada — nem sequer aberta. É isso que
+    // garante que não fica estado parcial: sem a guarda, o contrato era
+    // reaberto e só depois o insert do evento rebentava.
+    // (`chains` só ganha entradas quando `supabase.from(t)` é chamado.)
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(chains['contratos_renting']).toBeUndefined();
+  });
+
+  it('com sessão activa grava quem reverteu em updated_by', async () => {
+    const chains = setupSupabase({
+      contratos_renting: { data: { id: 'contrato-1' }, error: null },
+    });
+    (supabase.auth as unknown as { getUser: ReturnType<typeof vi.fn> }).getUser = vi
+      .fn()
+      .mockResolvedValue({ data: { user: { id: 'user-9' } } });
+
+    const { result } = renderHook(() => useReverterFecho(), { wrapper: createWrapper() });
+
+    await act(async () => {
+      try {
+        await result.current.mutateAsync(contrato);
+      } catch {
+        /* o resto do fluxo não interessa a este teste */
+      }
+    });
+
+    expect(chains['contratos_renting'].update).toHaveBeenCalledWith(
+      expect.objectContaining({ estado_operacional: 'em_curso', updated_by: 'user-9' })
     );
   });
 });

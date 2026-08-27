@@ -17,6 +17,8 @@ async function countByStatus(
 export interface FailedJob {
   id: string;
   source_table: string;
+  /** Id da linha que falhou na tabela de origem — junta a falha ao run. */
+  source_id: string | null;
   job_type: string;
   attempts: number;
   last_error: string | null;
@@ -46,7 +48,7 @@ export function useFailedJobs() {
     queryFn: async (): Promise<FailedJob[]> => {
       const { data, error } = await supabase
         .from('failed_jobs')
-        .select('id, source_table, job_type, attempts, last_error, failed_at, resolved')
+        .select('id, source_table, source_id, job_type, attempts, last_error, failed_at, resolved')
         .eq('resolved', false)
         .order('failed_at', { ascending: false });
       if (error) throw error;

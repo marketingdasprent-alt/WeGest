@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, Loader2, ShieldCheck, Building2 } from 'lucide-react';
 import { getEmailRedirectUrl, getResetPasswordRedirectUrl } from '@/lib/native';
+import { traduzirErroAuth } from '@/lib/erroAuth';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 
 const ORG_KEY = 'wegest_last_org';
@@ -123,8 +124,10 @@ const Login = () => {
       console.error('Login error:', error);
       toast({
         title: 'Erro no login',
-        description:
-          error.message || 'Não foi possível iniciar sessão. Verifique as suas credenciais.',
+        description: traduzirErroAuth(
+          error,
+          'Não foi possível iniciar sessão. Verifique as suas credenciais.'
+        ),
         variant: 'destructive',
       });
     } finally {
@@ -162,7 +165,7 @@ const Login = () => {
       console.error('Password reset error:', error);
       toast({
         title: 'Erro ao enviar email',
-        description: error.message || 'Não foi possível enviar o email de recuperação.',
+        description: traduzirErroAuth(error, 'Não foi possível enviar o email de recuperação.'),
         variant: 'destructive',
       });
     } finally {
@@ -200,7 +203,7 @@ const Login = () => {
       console.error('Magic link error:', error);
       toast({
         title: 'Erro ao enviar link',
-        description: error.message || 'Não foi possível enviar o link de acesso.',
+        description: traduzirErroAuth(error, 'Não foi possível enviar o link de acesso.'),
         variant: 'destructive',
       });
     } finally {

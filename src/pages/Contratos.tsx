@@ -21,8 +21,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { ContratoStatusBadge } from '@/lib/statusBadges';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -461,16 +461,23 @@ export default function Contratos() {
         </div>
 
         {loading ? (
-          <div className="rounded-md border p-4 space-y-3">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4">
-                <Skeleton className="h-4 w-16" />
-                <Skeleton className="h-4 flex-1" />
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="hidden h-4 w-28 md:block" />
-                <Skeleton className="hidden h-4 w-20 lg:block" />
-              </div>
-            ))}
+          <div className="rounded-md border p-4">
+            {/*
+              As mesmas cinco colunas da tabela real, com as duas últimas a
+              aparecerem só a partir de md/lg — se o skeleton mostrasse cinco no
+              telemóvel e a tabela mostrasse três, a transição saltava à vista.
+            */}
+            <TableSkeleton
+              cabecalho={false}
+              linhas={8}
+              colunas={[
+                { largura: 'w-16' },
+                {},
+                { largura: 'w-24' },
+                { largura: 'w-28', desde: 'md' },
+                { largura: 'w-20', desde: 'lg' },
+              ]}
+            />
           </div>
         ) : filteredContratos.length === 0 ? (
           (() => {

@@ -291,22 +291,34 @@ describe('AutomacaoPage', () => {
     canEdit.mockReturnValue(true);
   });
 
-  it('mostra as tabs do painel e os cartões da Visão Geral', async () => {
+  it('a página abre no Editor visual e só tem duas vistas', async () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Visão Geral' })).toBeTruthy();
+      expect(screen.getByRole('tab', { name: 'Editor visual' })).toBeTruthy();
     });
-    expect(screen.getByRole('tab', { name: 'Atividade' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Fila' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Falhas' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Regras' })).toBeTruthy();
-    expect(screen.getByText('Success Rate')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Monitorização' })).toBeTruthy();
+    expect(screen.getAllByRole('tab')).toHaveLength(2);
+    // O Editor Visual é o que abre por omissão.
+    expect(screen.getByRole('tab', { name: 'Editor visual' })).toHaveAttribute(
+      'data-state',
+      'active'
+    );
+  });
+
+  it('a Monitorização mostra as métricas e o gráfico', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Monitorização' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Success Rate')).toBeTruthy();
+    });
     expect(screen.getByText('Utilização')).toBeTruthy();
   });
 
   it('mostra os cartões de Estado Geral e Saúde do Sistema', async () => {
     renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Monitorização' }));
 
     await waitFor(() => {
       expect(screen.getByText('Automation Runs')).toBeTruthy();
@@ -317,35 +329,49 @@ describe('AutomacaoPage', () => {
     expect(screen.getByText('APIs indisponíveis')).toBeTruthy();
   });
 
-  it('mostra a timeline de atividade e abre o drill-down de uma execução', async () => {
+  it('o histórico mostra a execução e abre o drill-down', async () => {
     renderPage();
     // Radix Tabs ativa a tab no mousedown, não no click.
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Atividade' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Monitorização' }));
 
     await waitFor(() => {
       expect(screen.getByText('Regra de Teste')).toBeTruthy();
     });
-    expect(screen.getByText(/3 notif\. · 1 email/)).toBeTruthy();
+    expect(screen.getByText(/3 notificação\(ões\), 1 email/)).toBeTruthy();
 
-    fireEvent.click(screen.getByText('Regra de Teste'));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Histórico' })[0]);
     await waitFor(() => {
       expect(screen.getByText('Histórico de execução')).toBeTruthy();
     });
   });
 
-  it('mostra a fila de processamento pendente', async () => {
+  it('o histórico junta a fila pendente na mesma tabela', async () => {
+    // Era a antiga tab "Fila": agora é o estado Pendente do histórico.
     renderPage();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Fila' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Monitorização' }));
 
     await waitFor(() => {
       expect(screen.getAllByText('automation_rule').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('Prioridade')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^Pendente/ }));
+    expect(screen.getAllByText('automation_rule').length).toBeGreaterThan(0);
+  });
+
+  it('os filtros de estado escondem o que não corresponde', async () => {
+    renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Monitorização' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra de Teste')).toBeTruthy();
+    });
+    // "Regra de Teste" é uma execução concluída; ao filtrar por Erro sai da tabela.
+    fireEvent.click(screen.getByRole('button', { name: /^Erro/ }));
+    expect(screen.queryByText('Regra de Teste')).toBeNull();
   });
 
   it('clicar em "Ignorar" chama ignorar_failed_job', async () => {
     renderPage();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Falhas' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Monitorização' }));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Ignorar/i })).toBeTruthy();
@@ -360,7 +386,7 @@ describe('AutomacaoPage', () => {
 
   it('clicar em "Ver detalhes" mostra o erro completo', async () => {
     renderPage();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Falhas' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Monitorização' }));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Ver detalhes/i })).toBeTruthy();
@@ -375,7 +401,7 @@ describe('AutomacaoPage', () => {
 
   it('clicar em "Tentar novamente" chama retry_failed_job e mostra um toast', async () => {
     renderPage();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Falhas' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Monitorização' }));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Tentar novamente/i })).toBeTruthy();
@@ -394,6 +420,7 @@ describe('AutomacaoPage', () => {
       error: null,
     });
     renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Monitorização' }));
 
     const botao = await screen.findByRole('button', { name: /Correr agora/i });
     fireEvent.click(botao);
@@ -417,6 +444,7 @@ describe('AutomacaoPage', () => {
       error: { message: 'Já correu há pouco — aguarda mais 04:32 antes de repetir.' },
     });
     renderPage();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Monitorização' }));
 
     const botao = await screen.findByRole('button', { name: /Correr agora/i });
     fireEvent.click(botao);

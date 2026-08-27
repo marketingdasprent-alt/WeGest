@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { CardListSkeleton } from '@/components/ui/table-skeleton';
 import { MotoristaStatusBadge } from '@/lib/statusBadges';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SectionCard } from '@/components/ui/section-card';
@@ -212,9 +213,8 @@ export default function MotoristaDetalhe() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-muted-foreground animate-pulse">Carregando detalhes do motorista...</p>
+      <div className="p-4">
+        <CardListSkeleton cartoes={3} />
       </div>
     );
   }

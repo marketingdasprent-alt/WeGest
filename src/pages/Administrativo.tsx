@@ -3,6 +3,7 @@ import { matchesSearch } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { FinanceiroStats } from '@/components/financeiro/FinanceiroStats';
 import { FinanceiroFilters } from '@/components/financeiro/FinanceiroFilters';
 import { RecibosTable } from '@/components/financeiro/RecibosTable';
@@ -127,8 +128,8 @@ export default function Administrativo() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="p-4">
+        <TableSkeleton colunas={5} linhas={6} />
       </div>
     );
   }

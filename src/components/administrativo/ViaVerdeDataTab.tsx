@@ -112,9 +112,17 @@ export const ViaVerdeDataTab: React.FC = () => {
   const fetchTransacoes = async () => {
     setLoading(true);
     try {
-      let query = (supabase as any)
+      // FK explícita: `via_verde_transacoes` tem DUAS chaves estrangeiras para
+      // `motoristas_ativos` (`motorista_id` e `imputado_motorista_id`), e com
+      // ambas o PostgREST não consegue escolher — responde PGRST201 ("more than
+      // one relationship was found") e a aba mostrava "Falha ao carregar dados
+      // Via Verde". A segunda FK foi acrescentada directamente em produção (não
+      // existe em nenhuma migração), por isso o embed ambíguo passou a falhar
+      // sem que nada no repositório mudasse. Aqui queremos o condutor da
+      // passagem (`motorista_id`), não a quem ela foi imputada.
+      let query = supabase
         .from('via_verde_transacoes')
-        .select(`*, motorista:motoristas_ativos (nome)`)
+        .select(`*, motorista:motoristas_ativos!via_verde_transacoes_motorista_id_fkey (nome)`)
         .order('transaction_date', { ascending: false });
 
       const weekStartUtc = `${format(weekStart, 'yyyy-MM-dd')}T00:00:00Z`;

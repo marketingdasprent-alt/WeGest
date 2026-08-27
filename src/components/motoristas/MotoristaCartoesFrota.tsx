@@ -1,6 +1,14 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import React, { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  useCartoesAssociados,
+  useCartoesDisponiveis,
+  useAssociarCartaoAoMotorista,
+  useDevolverCartaoDoMotorista,
+  useSincronizarFichaCartao,
+  type CartaoAssociado,
+} from '@/hooks/useCartoesFrota';
+import { errorMessage } from '@/utils/errorMessage';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -14,21 +22,8 @@ import { Loader2, Fuel, Zap, Plus, UserX, Check, AlertTriangle } from 'lucide-re
 
 type TipoCartao = 'bp' | 'repsol' | 'edp';
 
-interface CartaoAssoc {
-  id: string;
-  numero: string;
-  tipo: TipoCartao;
-  status: string;
-  limite: number | null;
-  org_id: string | null;
-}
-interface CartaoDisp {
-  id: string;
-  numero: string;
-  detentor: string | null;
-  limite: number | null;
-  org_id: string | null;
-}
+// As formas de CartaoAssociado/CartaoDisponivel e a escrita por chave calculada
+// (`cartao_${tipo}`) na ficha do motorista vivem agora em @/hooks/useCartoesFrota.
 
 interface Props {
   motorista: {
@@ -62,17 +57,19 @@ const fmtEur = (v: number | null) =>
   v == null
     ? '—'
     : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v);
-const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged }) => {
   const { toast } = useToast();
-  const [associados, setAssociados] = useState<CartaoAssoc[]>([]);
-  const [disponiveis, setDisponiveis] = useState<CartaoDisp[]>([]);
   const [tipo, setTipo] = useState<TipoCartao>('bp');
   const [selectedId, setSelectedId] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [loadingDisp, setLoadingDisp] = useState(false);
-  const [busy, setBusy] = useState(false);
+
+  const { data: associados = [], isLoading: loading } = useCartoesAssociados(motorista.id);
+  const { data: disponiveis = [], isLoading: loadingDisp } = useCartoesDisponiveis(tipo);
+
+  const associarCartao = useAssociarCartaoAoMotorista();
+  const devolverCartao = useDevolverCartaoDoMotorista();
+  const sincronizarCartao = useSincronizarFichaCartao();
+  const busy = associarCartao.isPending || devolverCartao.isPending || sincronizarCartao.isPending;
 
   const fichaDe = (t: TipoCartao) =>
     (t === 'bp'
@@ -81,158 +78,48 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
         ? motorista.cartao_repsol
         : motorista.cartao_edp) || '';
 
-  const carregarAssociados = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await (supabase as any)
-        .from('cartoes_frota')
-        .select('id, numero, tipo, status, limite, org_id')
-        .eq('motorista_id', motorista.id)
-        .order('tipo')
-        .order('numero');
-      if (error) throw error;
-      setAssociados((data || []) as CartaoAssoc[]);
-    } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
-  }, [motorista.id, toast]);
-
-  const carregarDisponiveis = useCallback(async () => {
-    setLoadingDisp(true);
-    setSelectedId('');
-    try {
-      const { data, error } = await (supabase as any)
-        .from('cartoes_frota')
-        .select('id, numero, detentor, limite, org_id')
-        .eq('tipo', tipo)
-        .eq('status', 'disponivel')
-        .is('motorista_id', null)
-        .order('numero');
-      if (error) throw error;
-      setDisponiveis((data || []) as CartaoDisp[]);
-    } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
-    } finally {
-      setLoadingDisp(false);
-    }
-  }, [tipo, toast]);
-
-  useEffect(() => {
-    carregarAssociados();
-  }, [carregarAssociados]);
-  useEffect(() => {
-    carregarDisponiveis();
-  }, [carregarDisponiveis]);
-
-  const refetchAll = async () => {
-    await Promise.all([carregarAssociados(), carregarDisponiveis()]);
-    onChanged?.();
-  };
-
   const associar = async () => {
     const cartao = disponiveis.find((c) => c.id === selectedId);
     if (!cartao) return;
-    setBusy(true);
     try {
-      const { error: e1 } = await (supabase as any)
-        .from('cartoes_frota')
-        .update({ motorista_id: motorista.id, status: 'em_uso', data_entrega: todayISO() })
-        .eq('id', cartao.id);
-      if (e1) throw e1;
-      // Atualizar a ficha do motorista (usado no match das transações importadas)
-      const { error: e2 } = await (supabase as any)
-        .from('motoristas_ativos')
-        .update({ [`cartao_${tipo}`]: cartao.numero })
-        .eq('id', motorista.id);
-      if (e2) throw e2;
-      // Histórico de atribuição: é isto que decide de quem é o combustível de
-      // cada dia. Sem esta linha, os movimentos deste cartão entram por
-      // atribuir. Falhar aqui não desfaz a associação — mas tem de se ver.
-      const { error: e3 } = await (supabase as any).from('cartao_atribuicoes').insert({
-        org_id: cartao.org_id,
-        cartao_id: cartao.id,
-        motorista_id: motorista.id,
-        de: todayISO(),
-        origem: 'associacao',
+      // Só o id: tipo, número e data são lidos do cartão no servidor.
+      await associarCartao.mutateAsync({ cartaoId: cartao.id, motoristaId: motorista.id });
+      toast({ title: `Cartão ${TIPO_INFO[tipo].label} ${cartao.numero} associado` });
+      setSelectedId('');
+      onChanged?.();
+    } catch (err: unknown) {
+      toast({
+        title: 'Erro ao associar',
+        description: errorMessage(err),
+        variant: 'destructive',
       });
-      if (e3) {
-        toast({
-          title: 'Cartão associado, mas sem registo de atribuição',
-          description: `O combustível deste cartão vai entrar por atribuir. ${e3.message}`,
-          variant: 'destructive',
-        });
-      } else {
-        toast({ title: `Cartão ${TIPO_INFO[tipo].label} ${cartao.numero} associado` });
-      }
-      await refetchAll();
-    } catch (err: any) {
-      toast({ title: 'Erro ao associar', description: err.message, variant: 'destructive' });
-    } finally {
-      setBusy(false);
     }
   };
 
-  const devolver = async (c: CartaoAssoc) => {
-    setBusy(true);
+  const devolver = async (c: CartaoAssociado) => {
     try {
-      const { error: e1 } = await (supabase as any)
-        .from('cartoes_frota')
-        .update({
-          motorista_id: null,
-          ultimo_motorista_id: motorista.id,
-          status: 'disponivel',
-          data_devolucao: todayISO(),
-        })
-        .eq('id', c.id);
-      if (e1) throw e1;
-      // Limpar a ficha se apontava para este cartão
-      if (fichaDe(c.tipo).trim() === c.numero.trim()) {
-        await (supabase as any)
-          .from('motoristas_ativos')
-          .update({ [`cartao_${c.tipo}`]: null })
-          .eq('id', motorista.id);
-      }
-      // Fecha o período no histórico. O que ele gastou até hoje continua dele
-      // — devolver um cartão não reescreve o passado.
-      const { error: e3 } = await (supabase as any)
-        .from('cartao_atribuicoes')
-        .update({ ate: todayISO() })
-        .eq('cartao_id', c.id)
-        .eq('motorista_id', motorista.id)
-        .is('ate', null);
-      if (e3) {
-        toast({
-          title: 'Cartão devolvido, mas o histórico não fechou',
-          description: `Enquanto o período ficar aberto, movimentos futuros deste cartão continuam a cair neste motorista. ${e3.message}`,
-          variant: 'destructive',
-        });
-      } else {
-        toast({ title: `Cartão ${c.numero} devolvido` });
-      }
-      await refetchAll();
-    } catch (err: any) {
-      toast({ title: 'Erro ao devolver', description: err.message, variant: 'destructive' });
-    } finally {
-      setBusy(false);
+      // A decisão de limpar a ficha (só se ela apontava para ESTE número)
+      // passou para a RPC — aqui era tomada com o que o componente tinha em
+      // memória, que pode estar desactualizado.
+      await devolverCartao.mutateAsync({ cartaoId: c.id, motoristaId: motorista.id });
+      toast({ title: `Cartão ${c.numero} devolvido` });
+      onChanged?.();
+    } catch (err: unknown) {
+      toast({
+        title: 'Erro ao devolver',
+        description: errorMessage(err),
+        variant: 'destructive',
+      });
     }
   };
 
-  const sincronizarFicha = async (c: CartaoAssoc) => {
-    setBusy(true);
+  const sincronizarFicha = async (c: CartaoAssociado) => {
     try {
-      const { error } = await (supabase as any)
-        .from('motoristas_ativos')
-        .update({ [`cartao_${c.tipo}`]: c.numero })
-        .eq('id', motorista.id);
-      if (error) throw error;
+      await sincronizarCartao.mutateAsync({ cartaoId: c.id, motoristaId: motorista.id });
       toast({ title: 'Ficha sincronizada' });
       onChanged?.();
-    } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
-    } finally {
-      setBusy(false);
+    } catch (err: unknown) {
+      toast({ title: 'Erro', description: errorMessage(err), variant: 'destructive' });
     }
   };
 

@@ -472,10 +472,7 @@ export const IntegracoesTab: React.FC = () => {
       const isVvConta = selectedDeleteCard.id.startsWith('vv-');
       if (isVvConta) {
         const contaId = selectedDeleteCard.id.slice(3);
-        const { error } = await (supabase as any)
-          .from('via_verde_contas')
-          .delete()
-          .eq('id', contaId);
+        const { error } = await supabase.from('via_verde_contas').delete().eq('id', contaId);
         if (error) throw error;
       } else {
         const { error } = await supabase

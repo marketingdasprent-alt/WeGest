@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Eye, EyeOff, Car } from 'lucide-react';
 import { getResetPasswordRedirectUrl } from '@/lib/native';
+import { traduzirErroAuth } from '@/lib/erroAuth';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 
 const LoginMotorista: React.FC = () => {
@@ -77,10 +78,7 @@ const LoginMotorista: React.FC = () => {
       console.error('Erro no login:', error);
       toast({
         title: 'Erro no login',
-        description:
-          error.message === 'Invalid login credentials'
-            ? 'Email ou palavra-passe incorretos.'
-            : error.message || 'Ocorreu um erro ao iniciar sessão.',
+        description: traduzirErroAuth(error, 'Ocorreu um erro ao iniciar sessão.'),
         variant: 'destructive',
       });
     } finally {
@@ -118,7 +116,7 @@ const LoginMotorista: React.FC = () => {
       console.error('Erro ao enviar email:', error);
       toast({
         title: 'Erro',
-        description: error.message || 'Ocorreu um erro ao enviar o email.',
+        description: traduzirErroAuth(error, 'Ocorreu um erro ao enviar o email.'),
         variant: 'destructive',
       });
     } finally {

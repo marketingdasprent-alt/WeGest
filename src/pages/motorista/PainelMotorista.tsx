@@ -91,7 +91,7 @@ const PainelMotorista: React.FC = () => {
       // de `motoristas_ativos` (org_id = get_current_org_id()) bloqueia então a
       // leitura do próprio registo e o painel cairia no formulário de
       // candidatura em branco. A RPC devolve a org do motorista ignorando a RLS.
-      const { data: orgMotorista } = await (supabase as any).rpc('get_minha_org_motorista');
+      const { data: orgMotorista } = await supabase.rpc('get_minha_org_motorista');
       if (orgMotorista) {
         const { data: orgAtiva } = await supabase
           .from('user_org_ativa')

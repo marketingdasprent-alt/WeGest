@@ -13,7 +13,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { CampaignTagsManager } from './CampaignTagsManager';
 import { useCampaignTags } from '@/hooks/useCampaignTags';
-import { supabase } from '@/integrations/supabase/client';
+import { useFormulariosAtivos } from '@/hooks/useFormularios';
 import { Save, X } from 'lucide-react';
 import { PhoneInput } from '@/components/ui/phone-input';
 
@@ -34,12 +34,6 @@ interface Lead {
   caucao_valor?: number | null;
 }
 
-interface Formulario {
-  id: string;
-  nome: string;
-  ativo: boolean;
-}
-
 interface EditLeadDialogProps {
   lead: Lead | null;
   isOpen: boolean;
@@ -54,7 +48,7 @@ export const EditLeadDialog: React.FC<EditLeadDialogProps> = ({
   onSave,
 }) => {
   const [formData, setFormData] = useState<Partial<Lead>>({});
-  const [formularios, setFormularios] = useState<Formulario[]>([]);
+  const { data: formularios = [] } = useFormulariosAtivos();
   const { availableTags } = useCampaignTags();
 
   useEffect(() => {
@@ -75,26 +69,6 @@ export const EditLeadDialog: React.FC<EditLeadDialogProps> = ({
       });
     }
   }, [lead]);
-
-  useEffect(() => {
-    fetchFormularios();
-  }, []);
-
-  const fetchFormularios = async () => {
-    try {
-      // Using any type to handle the current type issues
-      const { data, error } = await (supabase as any)
-        .from('formularios')
-        .select('id, nome, ativo')
-        .eq('ativo', true)
-        .order('nome');
-
-      if (error) throw error;
-      setFormularios(data || []);
-    } catch (error) {
-      console.error('Erro ao carregar formulários:', error);
-    }
-  };
 
   const handleSave = () => {
     if (lead) {

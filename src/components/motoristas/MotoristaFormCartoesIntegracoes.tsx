@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { FormValues } from './motoristaDialog.schema';
-import type { CartaoTipo, CartaoItem } from './useMotoristaCartoesFrota';
+import type { CartaoTipo, CartaoItem } from '@/hooks/useMotoristaCartoesFrota';
 
 interface MotoristaFormCartoesIntegracoesProps {
   form: UseFormReturn<FormValues>;

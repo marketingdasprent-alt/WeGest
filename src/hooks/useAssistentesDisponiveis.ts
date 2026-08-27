@@ -28,7 +28,7 @@ export function useAssistentesDisponiveis(enabled = true) {
     queryKey: ['assistentes-disponiveis'],
     enabled,
     queryFn: async (): Promise<AssistenteGrupo[]> => {
-      const { data, error } = await (supabase as any).rpc('get_assistentes_disponiveis');
+      const { data, error } = await supabase.rpc('get_assistentes_disponiveis');
       if (error) throw error;
 
       const rows = (data || []) as AssistenteRow[];

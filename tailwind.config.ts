@@ -64,6 +64,15 @@ export default {
           DEFAULT: 'hsl(var(--accent))',
           foreground: 'hsl(var(--accent-foreground))',
         },
+        canvas: 'hsl(var(--canvas-bg))',
+        panel: 'hsl(var(--panel-bg))',
+        node: {
+          DEFAULT: 'hsl(var(--node-bg))',
+          border: 'hsl(var(--node-border))',
+          selected: 'hsl(var(--node-border-selected))',
+        },
+        edge: 'hsl(var(--edge))',
+        'grid-dot': 'hsl(var(--grid-dot))',
         'brand-navy': {
           DEFAULT: 'hsl(var(--brand-navy))',
           foreground: 'hsl(var(--brand-navy-foreground))',

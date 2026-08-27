@@ -23,7 +23,7 @@ import {
   type FormValues,
 } from './motoristaDialog.schema';
 import { useGestoresTvdeNomes } from '@/hooks/useGestoresTvde';
-import { useMotoristaCartoesFrota } from './useMotoristaCartoesFrota';
+import { useMotoristaCartoesFrota } from '@/hooks/useMotoristaCartoesFrota';
 import { MotoristaFormDadosPessoais } from './MotoristaFormDadosPessoais';
 import { MotoristaFormCartoesIntegracoes } from './MotoristaFormCartoesIntegracoes';
 import { MotoristaFormDocumentos } from './MotoristaFormDocumentos';

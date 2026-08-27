@@ -21,6 +21,7 @@ import {
   type TicketAccessPanelRef,
 } from '@/components/assistencia/TicketAccessPanel';
 import { Button } from '@/components/ui/button';
+import { CardListSkeleton } from '@/components/ui/table-skeleton';
 import { statusConfig } from '@/lib/ticketsConfig';
 
 interface Viatura {
@@ -366,8 +367,8 @@ const TicketDetails = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="p-4">
+        <CardListSkeleton cartoes={3} />
       </div>
     );
   }
