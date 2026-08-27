@@ -35,30 +35,30 @@ insert into public.viaturas (id, org_id, matricula, marca, modelo) values
   ('00000000-0000-0000-0000-0000000f0a05', '00000000-0000-0000-0000-0000000f0000', 'CF-05-CF', 'Toyota', 'Corolla');
 
 insert into public.reservas (id, org_id, codigo, cliente_id, viatura_id, data_inicio, data_fim, estado) values
-  ('00000000-0000-0000-0000-0000000f0r01', '00000000-0000-0000-0000-0000000f0000', 900001, '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a01', now(), now() + interval '10 days', 'confirmada'),
-  ('00000000-0000-0000-0000-0000000f0r02', '00000000-0000-0000-0000-0000000f0000', 900002, '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a02', now(), now() + interval '10 days', 'em_curso'),
-  ('00000000-0000-0000-0000-0000000f0r03', '00000000-0000-0000-0000-0000000f0000', 900003, '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a03', now(), now() + interval '10 days', 'em_curso'),
-  ('00000000-0000-0000-0000-0000000f0r04', '00000000-0000-0000-0000-0000000f0000', 900004, '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a04', now(), now() + interval '10 days', 'em_curso'),
-  ('00000000-0000-0000-0000-0000000f0r05', '00000000-0000-0000-0000-0000000f0000', 900005, '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a05', now(), now() + interval '10 days', 'em_curso');
+  ('00000000-0000-0000-0000-0000000f0401', '00000000-0000-0000-0000-0000000f0000', 900001, '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a01', now(), now() + interval '10 days', 'confirmada'),
+  ('00000000-0000-0000-0000-0000000f0402', '00000000-0000-0000-0000-0000000f0000', 900002, '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a02', now(), now() + interval '10 days', 'em_curso'),
+  ('00000000-0000-0000-0000-0000000f0403', '00000000-0000-0000-0000-0000000f0000', 900003, '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a03', now(), now() + interval '10 days', 'em_curso'),
+  ('00000000-0000-0000-0000-0000000f0404', '00000000-0000-0000-0000-0000000f0000', 900004, '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a04', now(), now() + interval '10 days', 'em_curso'),
+  ('00000000-0000-0000-0000-0000000f0405', '00000000-0000-0000-0000-0000000f0000', 900005, '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a05', now(), now() + interval '10 days', 'em_curso');
 
 insert into public.contratos_renting
   (id, org_id, codigo, reserva_id, cliente_id, viatura_id, matricula, data_inicio, data_fim, estado_operacional, regime) values
-  ('00000000-0000-0000-0000-0000000f0e01', '00000000-0000-0000-0000-0000000f0000', 900001, '00000000-0000-0000-0000-0000000f0r01', '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a01', 'CF-01-CF', now(), now() + interval '10 days', 'agendado', 'rent_a_car'),
-  ('00000000-0000-0000-0000-0000000f0e02', '00000000-0000-0000-0000-0000000f0000', 900002, '00000000-0000-0000-0000-0000000f0r02', '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a02', 'CF-02-CF', now(), now() + interval '10 days', 'em_curso', 'rent_a_car'),
-  ('00000000-0000-0000-0000-0000000f0e03', '00000000-0000-0000-0000-0000000f0000', 900003, '00000000-0000-0000-0000-0000000f0r03', '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a03', 'CF-03-CF', now(), now() + interval '10 days', 'em_curso', 'rent_a_car'),
-  ('00000000-0000-0000-0000-0000000f0e04', '00000000-0000-0000-0000-0000000f0000', 900004, '00000000-0000-0000-0000-0000000f0r04', '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a04', 'CF-04-CF', now(), now() + interval '10 days', 'em_curso', 'rent_a_car'),
-  ('00000000-0000-0000-0000-0000000f0e05', '00000000-0000-0000-0000-0000000f0000', 900005, '00000000-0000-0000-0000-0000000f0r05', '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a05', 'CF-05-CF', now(), now() + interval '10 days', 'em_curso', 'rent_a_car');
+  ('00000000-0000-0000-0000-0000000f0e01', '00000000-0000-0000-0000-0000000f0000', 900001, '00000000-0000-0000-0000-0000000f0401', '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a01', 'CF-01-CF', now(), now() + interval '10 days', 'agendado', 'rent_a_car'),
+  ('00000000-0000-0000-0000-0000000f0e02', '00000000-0000-0000-0000-0000000f0000', 900002, '00000000-0000-0000-0000-0000000f0402', '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a02', 'CF-02-CF', now(), now() + interval '10 days', 'em_curso', 'rent_a_car'),
+  ('00000000-0000-0000-0000-0000000f0e03', '00000000-0000-0000-0000-0000000f0000', 900003, '00000000-0000-0000-0000-0000000f0403', '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a03', 'CF-03-CF', now(), now() + interval '10 days', 'em_curso', 'rent_a_car'),
+  ('00000000-0000-0000-0000-0000000f0e04', '00000000-0000-0000-0000-0000000f0000', 900004, '00000000-0000-0000-0000-0000000f0404', '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a04', 'CF-04-CF', now(), now() + interval '10 days', 'em_curso', 'rent_a_car'),
+  ('00000000-0000-0000-0000-0000000f0e05', '00000000-0000-0000-0000-0000000f0000', 900005, '00000000-0000-0000-0000-0000000f0405', '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0a05', 'CF-05-CF', now(), now() + interval '10 days', 'em_curso', 'rent_a_car');
 
 -- Eventos derivados nos contratos 2 (cancelado) e 3 (devolvido).
 insert into public.calendario_eventos (id, org_id, titulo, tipo, data_inicio, origem_tipo, origem_id) values
-  ('00000000-0000-0000-0000-0000000f0v02', '00000000-0000-0000-0000-0000000f0000', 'CF02CF', 'recolha', now(), 'contrato_renting', '00000000-0000-0000-0000-0000000f0e02'),
-  ('00000000-0000-0000-0000-0000000f0v03', '00000000-0000-0000-0000-0000000f0000', 'CF03CF', 'recolha', now(), 'contrato_renting', '00000000-0000-0000-0000-0000000f0e03'),
-  ('00000000-0000-0000-0000-0000000f0v05', '00000000-0000-0000-0000-0000000f0000', 'CF05CF', 'recolha', now(), 'contrato_renting', '00000000-0000-0000-0000-0000000f0e05');
+  ('00000000-0000-0000-0000-0000000f0802', '00000000-0000-0000-0000-0000000f0000', 'CF02CF', 'recolha', now(), 'contrato_renting', '00000000-0000-0000-0000-0000000f0e02'),
+  ('00000000-0000-0000-0000-0000000f0803', '00000000-0000-0000-0000-0000000f0000', 'CF03CF', 'recolha', now(), 'contrato_renting', '00000000-0000-0000-0000-0000000f0e03'),
+  ('00000000-0000-0000-0000-0000000f0805', '00000000-0000-0000-0000-0000000f0000', 'CF05CF', 'recolha', now(), 'contrato_renting', '00000000-0000-0000-0000-0000000f0e05');
 
 -- Entrega JÁ CONFIRMADA no contrato 2 — a viatura saiu mesmo. Cancelar não
 -- pode apagar isto (ver 20260820150100).
 insert into public.calendario_eventos (id, org_id, titulo, tipo, data_inicio, origem_tipo, origem_id, realizado_em) values
-  ('00000000-0000-0000-0000-0000000f0w02', '00000000-0000-0000-0000-0000000f0000', 'CF02CF', 'entrega', now() - interval '2 days', 'contrato_renting', '00000000-0000-0000-0000-0000000f0e02', now() - interval '2 days');
+  ('00000000-0000-0000-0000-0000000f0302', '00000000-0000-0000-0000-0000000f0000', 'CF02CF', 'entrega', now() - interval '2 days', 'contrato_renting', '00000000-0000-0000-0000-0000000f0e02', now() - interval '2 days');
 
 -- ------------------------------------------------------------
 -- 1) agendado → cancelado: a reserva é cancelada e a viatura fica livre.
@@ -68,7 +68,7 @@ update public.contratos_renting set estado_operacional = 'cancelado'
  where id = '00000000-0000-0000-0000-0000000f0e01';
 
 select is(
-  (select estado::text from public.reservas where id = '00000000-0000-0000-0000-0000000f0r01'),
+  (select estado::text from public.reservas where id = '00000000-0000-0000-0000-0000000f0401'),
   'cancelada',
   'agendado→cancelado cancela a reserva (liberta a viatura)'
 );
@@ -80,7 +80,7 @@ update public.contratos_renting set estado_operacional = 'cancelado'
  where id = '00000000-0000-0000-0000-0000000f0e02';
 
 select is(
-  (select estado::text from public.reservas where id = '00000000-0000-0000-0000-0000000f0r02'),
+  (select estado::text from public.reservas where id = '00000000-0000-0000-0000-0000000f0402'),
   'cancelada',
   'em_curso→cancelado cancela a reserva'
 );
@@ -110,7 +110,7 @@ update public.contratos_renting set estado_operacional = 'devolvido'
  where id = '00000000-0000-0000-0000-0000000f0e03';
 
 select is(
-  (select estado::text from public.reservas where id = '00000000-0000-0000-0000-0000000f0r03'),
+  (select estado::text from public.reservas where id = '00000000-0000-0000-0000-0000000f0403'),
   'concluida',
   'em_curso→devolvido conclui a reserva'
 );
@@ -135,7 +135,7 @@ update public.contratos_renting set estado_operacional = 'cancelado'
  where id = '00000000-0000-0000-0000-0000000f0e04';
 
 select is(
-  (select estado::text from public.reservas where id = '00000000-0000-0000-0000-0000000f0r04'),
+  (select estado::text from public.reservas where id = '00000000-0000-0000-0000-0000000f0404'),
   'em_curso',
   'versão substituída não mexe na reserva do sucessor'
 );
@@ -149,7 +149,7 @@ update public.contratos_renting set estado_operacional = 'fechado'
  where id = '00000000-0000-0000-0000-0000000f0e05';
 
 select is(
-  (select estado::text from public.reservas where id = '00000000-0000-0000-0000-0000000f0r05'),
+  (select estado::text from public.reservas where id = '00000000-0000-0000-0000-0000000f0405'),
   'concluida',
   'em_curso→fechado conclui a reserva (liberta a viatura)'
 );

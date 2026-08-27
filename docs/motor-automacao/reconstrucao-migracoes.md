@@ -229,6 +229,48 @@ bash scripts/pgtap-suite.sh "Motor" process_domain_events execute_automation_run
 Os testes de base de dados exigem Docker. Sem Docker não correm de todo — não
 há modo degradado.
 
+### 4.0 O estado em que os testes estavam (2026-08-28)
+
+Quando os pgTAP finalmente correram pela primeira vez, **os 10 do motor
+falharam todos**. Nenhuma das falhas era um bug do motor — eram os testes que
+tinham apodrecido por nunca terem sido executados. Três causas:
+
+| Causa | Alcance | O que era |
+|---|---|---|
+| **UUIDs não hexadecimais** | 136 distintas, 417 ocorrências, 22 ficheiros | Os testes usavam mnemónicas legíveis — `…000000rg0001` para «regra 1», `ru` para run, `cg` para cargo. `g`, `r`, `u` não existem em hexadecimal, por isso o ficheiro nem chegava a fazer parse: `invalid input syntax for type uuid` |
+| **`organizacoes.codigo` NOT NULL** | 3 ficheiros | Os testes inseriam organizações só com `id` e `nome`. A coluna passou a obrigatória depois de os testes serem escritos |
+| **`plan()` desactualizado** | 4 ficheiros | `plan(10)` num ficheiro com 7 asserções. O pgTAP falha com «Bad plan» mesmo que todas passem |
+
+Isto confirma, de forma que não deixa dúvidas, o diagnóstico da auditoria: os
+39 ficheiros pgTAP **existiam e nunca tinham corrido**. O
+`execute_automation_runs.test.sql`, apontado na auditoria como o teste que
+teria apanhado o erro `v_run`/`v_rule`, não conseguia sequer ser lido pelo
+Postgres.
+
+#### Como foram corrigidos
+
+As UUIDs foram convertidas por um mapeamento determinístico dos caracteres
+não-hex (`g→6`, `r→4`, `u→c`, …), com verificação automática de colisões — duas
+UUIDs distintas nunca podem passar a ser a mesma, e o script aborta se isso
+acontecesse. Aconteceu à primeira tentativa (`h→b` chocava com uma UUID já
+válida) e o mapeamento foi ajustado.
+
+O `seed_automacao_defaults.test.sql` foi **reescrito**, e não só corrigido. Ele
+afirmava que a função criava exactamente 5 regras; hoje cria 19 — não por bug,
+mas porque o motor ganhou 14 tipos de evento (produção confirma 19 regras com
+19 códigos distintos nas 5 organizações). Passou a verificar invariantes que
+não apodrecem — «não duplica», «o trigger semeia o mesmo que a chamada
+directa», «não há códigos repetidos», «nenhuma nasce desactivada» — em vez de
+números mágicos. A contagem exacta ficou num único sítio, com o motivo escrito
+ao lado.
+
+#### O que ainda não se sabe
+
+Corrigidas estas três causas, os testes **passam a correr**. Se passam é outra
+questão: nunca foram executados, portanto as asserções podem revelar mais
+podridão de teste — ou bugs reais do motor. As duas hipóteses são úteis e
+distinguem-se caso a caso.
+
 ### 4.1 Ficheiros pgTAP ainda por promover ao gate
 
 Existem 41 ficheiros em `supabase/tests/`. O gate corre 16. Os restantes 25 não

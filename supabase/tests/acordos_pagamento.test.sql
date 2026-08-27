@@ -1,6 +1,6 @@
 -- supabase/tests/acordos_pagamento.test.sql
 begin;
-select plan(46);
+select plan(43);  -- 2026-08-28: era 46 e o ficheiro tem 43 asserções
 
 -- ── META: RLS e isolamento multi-tenant ────────────────────────────────
 select has_table('public', 'acordos_pagamento', 'tabela acordos_pagamento existe');
