@@ -125,9 +125,121 @@ jobs:
           path: dist/
           retention-days: 7
 
-  # NOTA: o job de testes de RLS (pgTAP) foi movido para
-  # .github/workflows/rls-test.yml e corre APENAS a pedido (workflow_dispatch).
-  # A razão está escrita nesse ficheiro: a cadeia de migrações não reproduz hoje
-  # a base de dados de produção, por isso um schema construído a partir dela não
-  # é um alvo válido para estas asserções. Não faz parte do gate de CI enquanto
-  # isso não estiver resolvido.
+  # ══════════════════════════════════════════════════════════════════════════
+  # Reconstrução da base de dados + pgTAP
+  # ══════════════════════════════════════════════════════════════════════════
+  # Existe desde 2026-08-28. Substitui a nota que dizia que este gate não podia
+  # existir porque "a cadeia de migrações não reproduz a base de produção".
+  # As duas causas concretas disso foram identificadas e resolvidas:
+  #
+  #   1. 59 carimbos de versão duplicados entre ficheiros de migração, contra
+  #      uma PRIMARY KEY (version) em schema_migrations → o reset abortava.
+  #   2. ~280 migrações escritas contra uma base que já tinha o estado, e que
+  #      por isso não se aplicam de zero.
+  #
+  # Ambas deixam de existir com o cutover para baseline (scripts/baseline-cutover.sh):
+  # o ponto de partida passa a ser um retrato do schema real, e o histórico fica
+  # arquivado fora do caminho do CLI.
+  #
+  # Este job é um GATE a sério — sem continue-on-error e sem workflow_dispatch.
+  # Um job permanentemente amarelo que ninguém lê é o anti-padrão que a auditoria
+  # de 2026-07-29 apontou nos crons ("66% das invocações falham e 100% ficam
+  # registadas como sucesso"). Ou passa, ou trava o merge.
+  db-tests:
+    name: 🗄️ DB Rebuild + pgTAP
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Sem baseline, `supabase db start` falha com uma violação de chave
+      # primária opaca, no meio de 800 ficheiros. Esta verificação transforma
+      # isso numa mensagem que diz o que fazer.
+      - name: Verificar que o cutover para baseline foi feito
+        run: |
+          if [ ! -f supabase/migrations/00000000000000_baseline.sql ]; then
+            echo "::error::O baseline não existe — a base não é reconstruível a partir deste repositório."
+            echo ""
+            echo "Corre uma vez, numa máquina com Docker e com acesso à base:"
+            echo "  export SUPABASE_DB_URL='postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres'"
+            echo "  bash scripts/baseline-cutover.sh"
+            echo ""
+            echo "Porquê: supabase/migrations tem $(find supabase/migrations -name '*.sql' | wc -l) ficheiros"
+            echo "e $(find supabase/migrations -name '*.sql' | sed 's|.*/||; s|_.*||' | sort | uniq -d | wc -l) carimbos de versão duplicados."
+            echo "schema_migrations tem PRIMARY KEY (version) — o segundo ficheiro com o mesmo"
+            echo "carimbo aborta o reset."
+            echo ""
+            echo "Ver docs/motor-automacao/reconstrucao-migracoes.md"
+            exit 1
+          fi
+          echo "✓ baseline presente"
+
+      # Falha cedo e com uma mensagem legível se alguém reintroduzir um carimbo
+      # duplicado. Mais barato do que descobri-lo no meio do reset.
+      - name: Verificar carimbos de versão únicos
+        run: |
+          DUPS=$(find supabase/migrations -maxdepth 1 -name '*.sql' | sed 's|.*/||; s|_.*||' | sort | uniq -d)
+          if [ -n "$DUPS" ]; then
+            echo "::error::Carimbos de versão duplicados em supabase/migrations:"
+            echo "$DUPS"
+            echo "schema_migrations tem PRIMARY KEY (version): dois ficheiros com o mesmo"
+            echo "carimbo tornam a cadeia inaplicável. Renomeia um deles."
+            exit 1
+          fi
+          echo "✓ todos os carimbos são únicos"
+
+      # `db start` aplica o baseline e todas as migrações que vieram depois.
+      # É aqui que uma migração nova partida se revela.
+      - name: Reconstruir a base de dados do zero
+        run: supabase db start
+
+      # ── Gate 1: o motor de automação ──────────────────────────────────
+      # Estes são os testes que cobrem o comportamento do motor. Antes de
+      # 2026-08-28 existiam e nunca corriam — foi assim que um erro de
+      # v_run/v_rule em execute_automation_runs ficou latente no repositório
+      # durante 27 dias sem ninguém reparar.
+      - name: pgTAP — motor de automação
+        run: |
+          bash scripts/pgtap-suite.sh "Motor de automação" \
+            process_domain_events \
+            execute_automation_runs \
+            automation_queue \
+            automation_rules \
+            automation_runs_complete_duracao \
+            executar_jobs_automacao_manualmente \
+            seed_automacao_defaults \
+            automacao_saude_ignorar_failed_job \
+            automacao_timeline_views \
+            retry_failed_job
+
+      # ── Gate 2: notificações ──────────────────────────────────────────
+      - name: pgTAP — notificações
+        run: |
+          bash scripts/pgtap-suite.sh "Notificações" \
+            notifications \
+            notification_queue \
+            limite_diario_emails \
+            enviar_digests_diarios
+
+      # ── Gate 3: isolamento e exposição ────────────────────────────────
+      # Estes dois são estruturais: falham para QUALQUER tabela ou função nova
+      # que nasça sem isolamento de org ou executável pelo papel anónimo.
+      - name: pgTAP — segurança e multi-tenancy
+        run: |
+          bash scripts/pgtap-suite.sh "Segurança e multi-tenancy" \
+            rls_org_isolation \
+            rls_anon_exposure
+
+      - name: Parar a base de dados
+        if: always()
+        run: supabase stop --no-backup || true
+
+  # Os restantes ficheiros pgTAP de supabase/tests/ NÃO correm aqui ainda.
+  # Não por decisão de qualidade — por sequência: promovem-se um a um, à medida
+  # que passam, para que uma falha antiga não torne o gate ruído. A lista do que
+  # falta promover está em docs/motor-automacao/reconstrucao-migracoes.md.

@@ -1,51 +1,45 @@
-name: 🛡️ RLS (pgTAP)
+name: 🛡️ pgTAP completo (a pedido)
 
-# A PEDIDO, de propósito — não é um gate de CI. Leia o porquê antes de o ligar
-# ao `push`/`pull_request`.
+# ESTE JOB NÃO É O GATE.
 #
-# ESTADO: 2026-07-30. Este workflow correu uma vez e falhou, e não foi nas
-# asserções — falhou a RECONSTRUIR a base de dados:
+# O gate vive em `ci.yml`, job "🗄️ DB Rebuild + pgTAP", e corre em todos os
+# pushes e pull requests desde 2026-08-28. Cobre o motor de automação, as
+# notificações e os dois testes estruturais de segurança.
 #
-#   Applying migration 20250811122918_0a61e2ff-....sql...
-#   ERROR: column "formulario_id" does not exist (SQLSTATE 42703)
+# Este ficheiro serve outra coisa: correr a suite pgTAP INTEIRA — os 41
+# ficheiros de supabase/tests/ — para descobrir o que ainda não está pronto a
+# ser promovido para o gate. É deliberadamente `workflow_dispatch`, porque o
+# resultado esperado é vermelho enquanto houver ficheiros por arranjar, e um
+# gate que se espera vermelho não é um gate.
 #
-# Investigado: `leads_dasprent.formulario_id` EXISTE em produção (uuid) e
-# NENHUMA migração a cria — foi acrescentada fora do sistema de migrações. Essa
-# migração de 2025-08-11 é um backfill escrito contra a produção, que já tinha a
-# coluna. Ficou envolvida num guarda de existência (ver o comentário no próprio
-# ficheiro), o que evita o crash, mas não resolve o problema de fundo:
+# COMO USAR
+#   1. Corre este workflow à mão.
+#   2. Escolhe um ficheiro que falhe, percebe porquê, arranja.
+#   3. Promove-o para a lista do job db-tests em ci.yml.
+#   4. Repete.
 #
-#   **um schema construído a partir das migrações é estruturalmente diferente da
-#   produção**, por isso não é um alvo válido para asserções de segurança.
+# O objectivo é este ficheiro ficar sem razão de existir.
 #
-# Um teste que corre contra uma realidade que não existe dá falsos negativos —
-# que é pior do que não correr, porque parece cobertura. Daí ficar a pedido, e
-# não em `continue-on-error: true`: um job permanentemente amarelo e ignorado é
-# exactamente o anti-padrão que a auditoria de 29-07 apontou nos crons ("66% das
-# invocações falham e 100% ficam registadas como sucesso").
+# ── Histórico ────────────────────────────────────────────────────────────────
+# Até 2026-08-28 este ficheiro explicava que nenhum teste de base de dados podia
+# correr em CI, porque `supabase db start` não conseguia reconstruir a base a
+# partir das migrações. Estava certo. As duas causas eram:
 #
-# PARA O TORNAR UM GATE, por esta ordem:
-#   1. Fechar a divergência de schema. `supabase db reset` numa base limpa tem de
-#      produzir o mesmo schema que a produção. O caminho prático é comparar os
-#      dois e escrever uma migração de reconciliação com o que falta
-#      (a começar por leads_dasprent.formulario_id).
-#   2. Correr este workflow à mão até passar. Podem aparecer mais casos como o de
-#      2025-08-11; são ~660 migrações e esta foi a 4.ª.
-#   3. Só então mover o job de volta para ci.yml, em `push` e `pull_request`.
+#   · 59 carimbos de versão duplicados contra PRIMARY KEY (version) em
+#     schema_migrations;
+#   · ~280 migrações escritas contra uma base que já tinha o estado.
 #
-# Corre só os dois testes de segurança. Há ~35 ficheiros pgTAP em
-# supabase/tests/ e nenhum corria em CI; ligá-los todos de uma vez arriscava
-# vermelho por falhas pré-existentes não investigadas. Estes dois são o guarda
-# estrutural: falham para QUALQUER tabela ou função nova que nasça sem
-# isolamento de org, sem rls_deny_anon, ou executável pelo papel anónimo.
+# Ambas foram resolvidas pelo cutover para baseline
+# (scripts/baseline-cutover.sh). A nota antiga ficou obsoleta e foi substituída.
 
 on:
   workflow_dispatch:
 
 jobs:
-  rls-test:
-    name: 🛡️ RLS (pgTAP)
+  pgtap-completo:
+    name: 🛡️ pgTAP completo
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -54,12 +48,32 @@ jobs:
         with:
           version: latest
 
-      # `db start` já aplica as migrações — é aqui que falha hoje.
-      - name: Arrancar a base de dados local e aplicar as migrações
+      - name: Verificar que o cutover para baseline foi feito
+        run: |
+          if [ ! -f supabase/migrations/00000000000000_baseline.sql ]; then
+            echo "::error::Sem baseline não há reconstrução. Ver scripts/baseline-cutover.sh"
+            exit 1
+          fi
+
+      - name: Reconstruir a base de dados do zero
         run: supabase db start
 
-      - name: Isolamento anónimo e escalada de privilégios
-        run: supabase test db supabase/tests/rls_anon_exposure.test.sql
+      # Sem lista: corre tudo o que existe em supabase/tests/.
+      # `|| true` de propósito — o valor está no relatório, não no exit code.
+      - name: Correr todos os ficheiros pgTAP
+        run: |
+          echo "## Resultado por ficheiro" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Ficheiro | Resultado |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for f in supabase/tests/*.test.sql; do
+            if supabase test db "$f" >/dev/null 2>&1; then
+              echo "| \`$(basename "$f")\` | ✅ passa |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| \`$(basename "$f")\` | ❌ falha |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
-      - name: Isolamento entre organizações
-        run: supabase test db supabase/tests/rls_org_isolation.test.sql
+      - name: Parar a base de dados
+        if: always()
+        run: supabase stop --no-backup || true

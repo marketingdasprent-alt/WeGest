@@ -190,7 +190,20 @@ begin
       v_notif_count := 0;
       v_email_count := 0;
 
-      v_tipo_legado := case v_run.event_type
+      -- `v_rule`, não `v_run`: `automation_runs` NÃO tem coluna `event_type`
+      -- (só `automation_rules` a tem). Escrito como `v_run.event_type` neste
+      -- ficheiro por lapso ao reescrever a função para o isolamento por org.
+      --
+      -- Nunca chegou a produção assim: a função viva sempre teve `v_rule`, e os
+      -- logs mostram execuções bem sucedidas todos os dias entre 2026-07-30 e
+      -- hoje. Corrige-se o FICHEIRO — em vez de acrescentar uma migração nova —
+      -- porque isto não é uma mudança de comportamento: é alinhar o repositório
+      -- com o que foi realmente aplicado. Deixá-lo como estava faria
+      -- `supabase db reset` produzir um executor que rebenta com
+      -- "record v_run has no field event_type" em TODAS as execuções de
+      -- notificação, apanhado pelo `exception when others` do fim do laço e
+      -- despejado em silêncio na dead-letter.
+      v_tipo_legado := case v_rule.event_type
         when 'viatura.seguro_expirando' then 'viatura_seguro_expirando'
         when 'viatura.inspecao_expirando' then 'viatura_inspecao_expirando'
         when 'motorista.carta_expirando' then 'motorista_carta_expirando'
