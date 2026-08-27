@@ -57,7 +57,6 @@ const fmtEur = (v: number | null) =>
   v == null
     ? '—'
     : new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v);
-const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged }) => {
   const { toast } = useToast();
@@ -83,24 +82,9 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
     const cartao = disponiveis.find((c) => c.id === selectedId);
     if (!cartao) return;
     try {
-      const r = await associarCartao.mutateAsync({
-        cartaoId: cartao.id,
-        numero: cartao.numero,
-        tipo,
-        motoristaId: motorista.id,
-        orgId: cartao.org_id,
-        hoje: todayISO(),
-      });
-      // O histórico falhar não desfaz a associação — mas tem de se ver.
-      if (r.historicoFalhou) {
-        toast({
-          title: 'Cartão associado, mas sem registo de atribuição',
-          description: `O combustível deste cartão vai entrar por atribuir. ${r.historicoFalhou}`,
-          variant: 'destructive',
-        });
-      } else {
-        toast({ title: `Cartão ${TIPO_INFO[tipo].label} ${cartao.numero} associado` });
-      }
+      // Só o id: tipo, número e data são lidos do cartão no servidor.
+      await associarCartao.mutateAsync({ cartaoId: cartao.id, motoristaId: motorista.id });
+      toast({ title: `Cartão ${TIPO_INFO[tipo].label} ${cartao.numero} associado` });
       setSelectedId('');
       onChanged?.();
     } catch (err: unknown) {
@@ -114,23 +98,11 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
 
   const devolver = async (c: CartaoAssociado) => {
     try {
-      const r = await devolverCartao.mutateAsync({
-        cartaoId: c.id,
-        tipo: c.tipo,
-        motoristaId: motorista.id,
-        // Só limpar a ficha se ela apontava mesmo para este cartão.
-        limparFicha: fichaDe(c.tipo).trim() === c.numero.trim(),
-        hoje: todayISO(),
-      });
-      if (r.historicoFalhou) {
-        toast({
-          title: 'Cartão devolvido, mas o histórico não fechou',
-          description: `Movimentos futuros deste cartão continuam a cair neste motorista. ${r.historicoFalhou}`,
-          variant: 'destructive',
-        });
-      } else {
-        toast({ title: `Cartão ${c.numero} devolvido` });
-      }
+      // A decisão de limpar a ficha (só se ela apontava para ESTE número)
+      // passou para a RPC — aqui era tomada com o que o componente tinha em
+      // memória, que pode estar desactualizado.
+      await devolverCartao.mutateAsync({ cartaoId: c.id, motoristaId: motorista.id });
+      toast({ title: `Cartão ${c.numero} devolvido` });
       onChanged?.();
     } catch (err: unknown) {
       toast({
@@ -143,11 +115,7 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
 
   const sincronizarFicha = async (c: CartaoAssociado) => {
     try {
-      await sincronizarCartao.mutateAsync({
-        motoristaId: motorista.id,
-        tipo: c.tipo,
-        numero: c.numero,
-      });
+      await sincronizarCartao.mutateAsync({ cartaoId: c.id, motoristaId: motorista.id });
       toast({ title: 'Ficha sincronizada' });
       onChanged?.();
     } catch (err: unknown) {
