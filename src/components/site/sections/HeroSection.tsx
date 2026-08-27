@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { gsap, useGSAP } from '@/lib/motion/gsapConfig';
 import { ArrowDown } from 'lucide-react';
-import { useThemedLogo } from '@/hooks/useThemedLogo';
+import { aoClicarNaAncora } from '../navegacaoAncoras';
 import { AtencaoLedger } from '../AtencaoLedger';
 import { HERO } from '../content/landingContent';
 
@@ -24,7 +24,6 @@ interface HeroSectionProps {
  */
 export const HeroSection = ({ onCtaClick }: HeroSectionProps) => {
   const containerRef = useRef<HTMLElement>(null);
-  const logoSrc = useThemedLogo();
 
   useGSAP(
     () => {
@@ -50,10 +49,18 @@ export const HeroSection = ({ onCtaClick }: HeroSectionProps) => {
   return (
     <header
       ref={containerRef}
-      className="relative mx-auto w-full max-w-6xl px-6 pb-20 pt-16 lg:px-16 lg:pb-28 lg:pt-24"
+      // `min-h-[100svh]` porque o hero tem de ser dono do primeiro ecrã. Sem
+      // isto media só o que o conteúdo media (~670px), e num ecrã alto a
+      // secção seguinte entrava na primeira vista cortada a meio — além de
+      // fazer a barra condensar já dentro dessa secção.
+      //
+      // `svh` e não `vh`: no telemóvel, `vh` conta com a barra de endereço
+      // recolhida e empurra o CTA para fora do ecrã enquanto ela está aberta.
+      //
+      // O padding de topo dá folga ao cabeçalho fixo, que agora existe desde o
+      // primeiro pixel e já leva a marca — o logo deixou de viver aqui.
+      className="relative mx-auto flex min-h-[100svh] w-full max-w-6xl flex-col justify-center px-6 pb-24 pt-28 lg:px-16 lg:pb-28 lg:pt-32"
     >
-      <img src={logoSrc} alt="WeGest" className="mb-14 h-9 w-auto object-contain" />
-
       <div className="grid items-center gap-12 lg:grid-cols-12 lg:gap-16">
         <div className="lg:col-span-7">
           <p
@@ -87,9 +94,11 @@ export const HeroSection = ({ onCtaClick }: HeroSectionProps) => {
             </button>
 
             {/* Segundo CTA para o avaliador que quer ver antes de falar.
-                Ancora normal — linkável, e o botão "voltar" funciona. */}
+                Continua a ser âncora — linkável e copiável; o handler só troca
+                o salto instantâneo pelo mesmo scroll suave que o índice usa. */}
             <a
               href="#sistema"
+              onClick={(evento) => aoClicarNaAncora(evento, 'sistema')}
               className="group inline-flex items-center gap-2 rounded-md text-base font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {HERO.ctaSecundario}

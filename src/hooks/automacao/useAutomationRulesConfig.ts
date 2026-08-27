@@ -34,6 +34,11 @@ export interface AutomationRuleAcaoConfig {
 
 export interface AutomationRuleConfig {
   id: string;
+  nome: string;
+  event_type: string;
+  /** Array de { campo, operador, valor }. Em produção é um objecto vazio na
+   * maioria das regras — o motor só as avalia se forem array. */
+  condicoes: unknown;
   acao_config: AutomationRuleAcaoConfig;
   cooldown_minutos: number;
 }
@@ -46,7 +51,7 @@ export function useAutomationRuleConfig(ruleId: string | null) {
     queryFn: async (): Promise<AutomationRuleConfig> => {
       const { data, error } = await supabase
         .from('automation_rules')
-        .select('id, acao_config, cooldown_minutos')
+        .select('id, nome, event_type, condicoes, acao_config, cooldown_minutos')
         .eq('id', ruleId as string)
         .single();
       if (error) throw error;
@@ -87,6 +92,32 @@ export interface UtilizadorPorCargo {
   cargo_id: string;
 }
 
+/** Perfil como vem da base de dados: `nome` e `email` são nullable. */
+interface PerfilCru {
+  id: string;
+  nome: string | null;
+  email: string | null;
+}
+
+/**
+ * Cola o cargo a cada perfil e garante que `nome` é sempre uma string.
+ *
+ * O modal de configuração faz `iniciais(u.nome)`, que chama `nome.trim()` — um
+ * perfil sem nome deitava abaixo o modal inteiro, não só aquela linha. Cai para
+ * o email porque é o que identifica a pessoa a seguir ao nome.
+ */
+export function utilizadoresPorCargo(
+  perfis: PerfilCru[],
+  cargoPorUser: Record<string, string>
+): UtilizadorPorCargo[] {
+  return perfis.map((p) => ({
+    id: p.id,
+    nome: p.nome ?? p.email ?? 'Utilizador sem nome',
+    email: p.email ?? '',
+    cargo_id: cargoPorUser[p.id],
+  }));
+}
+
 /** Utilizadores pertencentes a um ou mais cargos — para o admin poder
  * escolher pessoas específicas dentro de um cargo, em vez do grupo
  * inteiro. Segue o mesmo padrão em 2 passos de UsersTab.tsx: cargo_id
@@ -110,13 +141,13 @@ export function useUtilizadoresPorCargo(cargoIds: string[]) {
         .in('id', userIds);
       if (pErr) throw pErr;
 
-      const cargoPorUser = Object.fromEntries(memberships.map((m) => [m.user_id, m.cargo_id]));
-      return (profiles ?? []).map((p) => ({
-        id: p.id,
-        nome: p.nome,
-        email: p.email,
-        cargo_id: cargoPorUser[p.id],
-      }));
+      // `cargo_id` é nullable na tabela; o `.in()` acima já exclui os nulos,
+      // mas o tipo não o sabe — e um Record com null lá dentro passava adiante.
+      const cargoPorUser: Record<string, string> = {};
+      for (const m of memberships) {
+        if (m.cargo_id) cargoPorUser[m.user_id] = m.cargo_id;
+      }
+      return utilizadoresPorCargo(profiles ?? [], cargoPorUser);
     },
     enabled: cargoIds.length > 0,
   });
@@ -129,15 +160,23 @@ export function useAtualizarConfigRegra() {
       id,
       acaoConfig,
       cooldownMinutos,
+      condicoes,
     }: {
       id: string;
       acaoConfig: AutomationRuleAcaoConfig;
       cooldownMinutos: number;
+      /** Só enviado por quem edita condições; omitir deixa-as intactas. */
+      condicoes?: { campo: string; operador: string; valor: string }[];
     }) => {
-      const { error } = await supabase
-        .from('automation_rules')
-        .update({ acao_config: acaoConfig as unknown as Json, cooldown_minutos: cooldownMinutos })
-        .eq('id', id);
+      const alteracao: { acao_config: Json; cooldown_minutos: number; condicoes?: Json } = {
+        acao_config: acaoConfig as unknown as Json,
+        cooldown_minutos: cooldownMinutos,
+      };
+      // Omitir e enviar [] são coisas diferentes: quem não edita condições não
+      // pode apagá-las sem saber.
+      if (condicoes) alteracao.condicoes = condicoes as unknown as Json;
+
+      const { error } = await supabase.from('automation_rules').update(alteracao).eq('id', id);
       if (error) throw error;
     },
     onSuccess: (_data, variables) => {

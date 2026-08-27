@@ -71,6 +71,31 @@ html[data-native-app='true'] .native-bottom {
     --brand-navy: 210 64% 30%;
     --brand-navy-foreground: 0 0% 100%;
 
+    /* Paleta do construtor de automações.
+       Um bloco por módulo/acção, para o canvas se ler de relance em vez de ser
+       uma parede de cartões iguais. Vive aqui, e não em classes soltas do
+       Tailwind, para virar com o tema como todo o resto. Saturação e
+       luminosidade escolhidas para contraste AA sobre --card claro. */
+    --fluxo-renting: 262 60% 45%;
+    --fluxo-motoristas: 199 89% 36%;
+    --fluxo-viaturas: 174 100% 25%;
+    --fluxo-financeiro: 142 60% 30%;
+    --fluxo-assistencia: 18 85% 42%;
+    --fluxo-notificacao: 330 65% 40%;
+    --fluxo-estado: 291 50% 40%;
+    --fluxo-condicao: 45 92% 30%;
+    /* Editor de automações — escada de elevação.
+       O canvas é a base, os painéis um degrau acima e os cartões dos nós o
+       degrau mais alto. Sem esta separação os nós não saltam do fundo, que
+       era o defeito do layout anterior. */
+    --canvas-bg: 0 0% 96.5%;
+    --panel-bg: 0 0% 100%;
+    --node-bg: 0 0% 100%;
+    --node-border: 0 0% 87%;
+    --node-border-selected: 174 100% 25%;
+    --edge: 0 0% 62%;
+    --grid-dot: 0 0% 83%;
+
     --radius: 0.5rem;
 
     --sidebar-background: 0 0% 98%;
@@ -145,6 +170,26 @@ html[data-native-app='true'] .native-bottom {
     /* Azul-marinho mais claro p/ contraste em fundo escuro */
     --brand-navy: 210 74% 64%;
     --brand-navy-foreground: 222 47% 8%;
+
+    /* Mesmos matizes da paleta do construtor, clareados: as versões do :root
+       são escuras de mais para se lerem sobre --card em tema escuro. */
+    --fluxo-renting: 262 85% 74%;
+    --fluxo-motoristas: 199 90% 60%;
+    --fluxo-viaturas: 174 100% 38%;
+    --fluxo-financeiro: 142 70% 50%;
+    --fluxo-assistencia: 18 95% 64%;
+    --fluxo-notificacao: 330 80% 70%;
+    --fluxo-estado: 291 70% 70%;
+    --fluxo-condicao: 45 92% 58%;
+    /* Mesma escada, invertida: no escuro o canvas é o mais fundo e os
+       cartões os mais claros. */
+    --canvas-bg: 222 47% 6%;
+    --panel-bg: 222 47% 10%;
+    --node-bg: 222 47% 14%;
+    --node-border: 222 47% 22%;
+    --node-border-selected: 174 100% 38.4%;
+    --edge: 215 16% 47%;
+    --grid-dot: 222 30% 26%;
 
     /* O --radius NÃO se redefine aqui de propósito. Havia 0,75rem neste bloco
        contra 0,5rem no :root, pelo que todos os cantos da aplicação mudavam de
