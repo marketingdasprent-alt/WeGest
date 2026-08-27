@@ -22,9 +22,9 @@ insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'automacao-queue-a'),
   ('00000000-0000-0000-0000-0000000b0000', 'Org B', 'automacao-queue-b');
 
-insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo) values
-  ('00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_a', 'Regra A', 'teste.evento', 'notificacao'),
-  ('00000000-0000-0000-0000-0000004c1e02', '00000000-0000-0000-0000-0000000b0000', 'teste.regra_b', 'Regra B', 'teste.evento', 'notificacao');
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_a', 'Regra A', 'teste.evento', 'notificacao', '{"template_codigo":"teste.template","titulo":"Titulo de Teste"}'::jsonb),
+  ('00000000-0000-0000-0000-0000004c1e02', '00000000-0000-0000-0000-0000000b0000', 'teste.regra_b', 'Regra B', 'teste.evento', 'notificacao', '{"template_codigo":"teste.template","titulo":"Titulo de Teste"}'::jsonb);
 
 -- Run principal: só 2 tentativas permitidas, para forçar o dead-letter cedo.
 insert into public.automation_runs (id, rule_id, org_id, job_type, max_attempts, entity_table, entity_id) values

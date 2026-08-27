@@ -104,20 +104,26 @@ select is(
   'run de webhook não cria notificações'
 );
 
--- Cenário C: acao_config sem template_codigo falha para dead-letter (max_attempts=1).
-insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
-  ('00000000-0000-0000-0000-000000460003', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_ma', 'Regra Mal Configurada', 'teste.evento3', 'notificacao', '{}'::jsonb);
-
-insert into public.automation_runs (id, rule_id, org_id, max_attempts) values
-  ('00000000-0000-0000-0000-0000004c0003', '00000000-0000-0000-0000-000000460003', '00000000-0000-0000-0000-0000000a0000', 1);
-
-select public.execute_automation_runs();
-
--- 9. Falha (template_codigo NULL viola NOT NULL) e, com max_attempts=1, vai logo para dead-letter.
-select is(
-  (select status from public.automation_runs where id = '00000000-0000-0000-0000-0000004c0003'),
-  'failed',
-  'acao_config sem template_codigo falha e vai para dead-letter'
+-- Cenário C: uma regra de notificação sem template_codigo já não chega a nascer.
+--
+-- Este cenário testava outra coisa: criava a regra com `acao_config` vazio e
+-- verificava que a EXECUÇÃO falhava para dead-letter. Deixou de ser possível —
+-- `fn_validar_acao_config` (migração 20260729120000, dois dias depois de este
+-- ficheiro ser escrito) rejeita a regra logo no INSERT.
+--
+-- A garantia melhorou e o teste acompanha: em vez de nascer uma regra que só
+-- se revela partida quando corre — e que entretanto ocupa a fila e gasta
+-- tentativas — a regra não nasce. Testar o comportamento antigo seria testar
+-- um caminho que o motor já não permite.
+--
+-- 23514 = check_violation, o ERRCODE que fn_validar_acao_config levanta.
+select throws_ok(
+  $$insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config)
+    values ('00000000-0000-0000-0000-000000460003', '00000000-0000-0000-0000-0000000a0000',
+            'teste.regra_ma', 'Regra Mal Configurada', 'teste.evento3', 'notificacao', '{}'::jsonb)$$,
+  '23514',
+  'acao_config inválido: template_codigo é obrigatório.',
+  'uma regra de notificação sem template_codigo é rejeitada no INSERT'
 );
 
 -- Cenário D: estratégia gestor_responsavel, entidade motorista — resolve diretamente.
@@ -132,7 +138,7 @@ insert into public.motoristas_ativos (id, org_id, nome, gestor_responsavel) valu
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-000000460004', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_gestor', 'Regra Gestor Responsável', 'teste.evento4', 'notificacao',
-   '{"template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c0004', '00000000-0000-0000-0000-000000460004', '00000000-0000-0000-0000-0000000a0000', 'motoristas_ativos', '00000000-0000-0000-0000-000000e00001');
@@ -162,7 +168,7 @@ insert into public.motorista_viaturas (id, motorista_id, viatura_id, data_inicio
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-000000460005', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_gestor_viatura', 'Regra Gestor Viatura', 'teste.evento5', 'notificacao',
-   '{"template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c0005', '00000000-0000-0000-0000-000000460005', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-000000870001');
@@ -182,7 +188,7 @@ insert into public.motoristas_ativos (id, org_id, nome, gestor_responsavel) valu
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-000000460006', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_gestor_fallback', 'Regra Fallback', 'teste.evento6', 'notificacao',
-   '{"template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c0006', '00000000-0000-0000-0000-000000460006', '00000000-0000-0000-0000-0000000a0000', 'motoristas_ativos', '00000000-0000-0000-0000-000000e00002');

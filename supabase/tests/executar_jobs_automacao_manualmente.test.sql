@@ -29,8 +29,25 @@ insert into public.user_org_ativa (user_id, org_id) values
 
 -- Viatura com seguro a expirar em 5 dias — prova de que o botão dispara
 -- mesmo o scan de documentos de viatura (a automação mais crítica pedida).
-insert into public.viaturas (id, org_id, matricula, marca, modelo, seguro_validade, is_vendida) values
-  ('00000000-0000-0000-0000-00000081e061', '00000000-0000-0000-0000-000000060000', 'GG-11-GG', 'Toyota', 'Corolla', current_date + 5, false);
+--
+-- A marca e o modelo entram por `marca_id`/`modelo_id`, e não como texto.
+-- O trigger BEFORE INSERT `trg_sync_viatura_marca_modelo` faz, sem condição
+-- nenhuma no INSERT:
+--     select nome into NEW.marca from viatura_marcas where id = NEW.marca_id;
+-- Sem `marca_id`, o SELECT não encontra linha, o INTO põe NULL, e o valor de
+-- texto que aqui se desse era deitado fora antes de chegar à tabela — que o
+-- recusa por ser NOT NULL. É o que fazia este teste falhar com
+-- `null value in column "marca"` apesar de o INSERT trazer 'Toyota'.
+insert into public.viatura_marcas (id, org_id, nome) values
+  ('00000000-0000-0000-0000-0000008a4c01', '00000000-0000-0000-0000-000000060000', 'Toyota');
+
+insert into public.viatura_modelos (id, org_id, marca_id, nome) values
+  ('00000000-0000-0000-0000-0000008e0d01', '00000000-0000-0000-0000-000000060000',
+   '00000000-0000-0000-0000-0000008a4c01', 'Corolla');
+
+insert into public.viaturas (id, org_id, matricula, marca_id, modelo_id, seguro_validade, is_vendida) values
+  ('00000000-0000-0000-0000-00000081e061', '00000000-0000-0000-0000-000000060000', 'GG-11-GG',
+   '00000000-0000-0000-0000-0000008a4c01', '00000000-0000-0000-0000-0000008e0d01', current_date + 5, false);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000060a02', true);
