@@ -157,31 +157,57 @@ jobs:
         with:
           version: latest
 
-      # Sem baseline, `supabase db start` falha com uma violação de chave
-      # primária opaca, no meio de 800 ficheiros. Esta verificação transforma
-      # isso numa mensagem que diz o que fazer.
+      # ── Estado de arranque ────────────────────────────────────────────
+      # Este gate depende de um baseline que é gerado por OUTRO workflow
+      # (🧱 Gerar baseline do schema), e esse só fica disponível depois de
+      # chegar ao ramo por omissão. Se este passo falhasse por o baseline não
+      # existir, o PR que traz o próprio workflow ficaria vermelho e nunca
+      # poderia entrar — um impasse.
+      #
+      # Por isso: sem baseline o job passa e DIZ que está inactivo; com
+      # baseline corre a sério e falha a sério. É um estado de arranque que se
+      # resolve numa única execução, não um job cronicamente amarelo — a
+      # diferença face ao anti-padrão dos crons de 2026-07-29 é que aqui o
+      # estado degradado é visível, nomeado, e tem um fim conhecido.
       - name: Verificar que o cutover para baseline foi feito
+        id: baseline
         run: |
-          if [ ! -f supabase/migrations/00000000000000_baseline.sql ]; then
-            echo "::error::O baseline não existe — a base não é reconstruível a partir deste repositório."
-            echo ""
-            echo "Corre uma vez, numa máquina com Docker e com acesso à base:"
-            echo "  export SUPABASE_DB_URL='postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres'"
-            echo "  bash scripts/baseline-cutover.sh"
-            echo ""
-            echo "Porquê: supabase/migrations tem $(find supabase/migrations -name '*.sql' | wc -l) ficheiros"
-            echo "e $(find supabase/migrations -name '*.sql' | sed 's|.*/||; s|_.*||' | sort | uniq -d | wc -l) carimbos de versão duplicados."
-            echo "schema_migrations tem PRIMARY KEY (version) — o segundo ficheiro com o mesmo"
-            echo "carimbo aborta o reset."
-            echo ""
-            echo "Ver docs/motor-automacao/reconstrucao-migracoes.md"
-            exit 1
+          if [ -f supabase/migrations/00000000000000_baseline.sql ]; then
+            echo "tem_baseline=true" >> "$GITHUB_OUTPUT"
+            echo "✓ baseline presente — o gate está activo"
+            exit 0
           fi
-          echo "✓ baseline presente"
+
+          echo "tem_baseline=false" >> "$GITHUB_OUTPUT"
+
+          N_FICH=$(find supabase/migrations -maxdepth 1 -name '*.sql' | wc -l | tr -d ' ')
+          N_DUP=$(find supabase/migrations -maxdepth 1 -name '*.sql' | sed 's|.*/||; s|_.*||' | sort | uniq -d | wc -l | tr -d ' ')
+
+          echo "::warning::Gate de base de dados INACTIVO — falta gerar o baseline."
+
+          {
+            echo "### ⚠️ Gate de base de dados inactivo"
+            echo ""
+            echo "Os testes de base de dados **não correram**: falta"
+            echo "\`supabase/migrations/00000000000000_baseline.sql\`."
+            echo ""
+            echo "Enquanto ele não existir, a base não é reconstruível a partir deste"
+            echo "repositório — são **$N_FICH ficheiros** de migração com **$N_DUP carimbos de versão"
+            echo "duplicados**, contra uma \`PRIMARY KEY (version)\` em \`schema_migrations\`."
+            echo ""
+            echo "**Para activar o gate**, depois deste PR entrar em \`main\`:"
+            echo ""
+            echo "1. *Settings → Secrets and variables → Actions* → criar \`SUPABASE_DB_URL\`"
+            echo "2. *Actions → 🧱 Gerar baseline do schema → Run workflow*"
+            echo "3. Fazer merge do ramo \`chore/baseline-schema\` que ele cria"
+            echo ""
+            echo "Ver \`docs/motor-automacao/reconstrucao-migracoes.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # Falha cedo e com uma mensagem legível se alguém reintroduzir um carimbo
       # duplicado. Mais barato do que descobri-lo no meio do reset.
       - name: Verificar carimbos de versão únicos
+        if: steps.baseline.outputs.tem_baseline == 'true'
         run: |
           DUPS=$(find supabase/migrations -maxdepth 1 -name '*.sql' | sed 's|.*/||; s|_.*||' | sort | uniq -d)
           if [ -n "$DUPS" ]; then
@@ -196,6 +222,7 @@ jobs:
       # `db start` aplica o baseline e todas as migrações que vieram depois.
       # É aqui que uma migração nova partida se revela.
       - name: Reconstruir a base de dados do zero
+        if: steps.baseline.outputs.tem_baseline == 'true'
         run: supabase db start
 
       # ── Gate 1: o motor de automação ──────────────────────────────────
@@ -204,6 +231,7 @@ jobs:
       # v_run/v_rule em execute_automation_runs ficou latente no repositório
       # durante 27 dias sem ninguém reparar.
       - name: pgTAP — motor de automação
+        if: steps.baseline.outputs.tem_baseline == 'true'
         run: |
           bash scripts/pgtap-suite.sh "Motor de automação" \
             process_domain_events \
@@ -219,6 +247,7 @@ jobs:
 
       # ── Gate 2: notificações ──────────────────────────────────────────
       - name: pgTAP — notificações
+        if: steps.baseline.outputs.tem_baseline == 'true'
         run: |
           bash scripts/pgtap-suite.sh "Notificações" \
             notifications \
@@ -230,13 +259,14 @@ jobs:
       # Estes dois são estruturais: falham para QUALQUER tabela ou função nova
       # que nasça sem isolamento de org ou executável pelo papel anónimo.
       - name: pgTAP — segurança e multi-tenancy
+        if: steps.baseline.outputs.tem_baseline == 'true'
         run: |
           bash scripts/pgtap-suite.sh "Segurança e multi-tenancy" \
             rls_org_isolation \
             rls_anon_exposure
 
       - name: Parar a base de dados
-        if: always()
+        if: always() && steps.baseline.outputs.tem_baseline == 'true'
         run: supabase stop --no-backup || true
 
   # Os restantes ficheiros pgTAP de supabase/tests/ NÃO correm aqui ainda.
