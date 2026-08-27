@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import type { MotoristaResumoProps, SlotPeriodo } from '../MotoristaResumoDialog';
 import { deriveAluguerSemTarifa } from './aluguerSemTarifa';
 import { buildSlotPeriodos } from './slotPeriodos';
+import { buildTvdeModeloPrecoMap, buildPrecoPorTarifaModelo } from './tvdeModeloPreco';
+import { formatCartoesFrota, type CartaoFrotaResumo } from './cartoesFrota';
 
 export interface UseMotoristaResumoDataReturn {
   loading: boolean;
@@ -117,9 +119,7 @@ export function useMotoristaResumoData(
             .maybeSingle(),
           supabase
             .from('motoristas_ativos')
-            .select(
-              'cartao_frota, cartao_bp, cartao_repsol, cartao_edp, email, telefone, iban, gestor_responsavel'
-            )
+            .select('email, telefone, iban, gestor_responsavel')
             .eq('id', resolvedMotoristaId)
             .maybeSingle(),
           supabase
@@ -154,6 +154,15 @@ export function useMotoristaResumoData(
             .select('viatura_id, tarifa_id, estado_operacional, data_inicio, created_at')
             .is('deleted_at', null)
             .not('viatura_id', 'is', null),
+          // Cartões de combustível: a MESMA fonte que a ficha do motorista
+          // usa. Ver cartoesFrota.ts — o resumo lia as colunas de texto
+          // motoristas_ativos.cartao_*, que a ficha já não mantém.
+          supabase
+            .from('cartoes_frota')
+            .select('numero, tipo')
+            .eq('motorista_id', resolvedMotoristaId)
+            .order('tipo')
+            .order('numero'),
         ]);
 
         const viaturaData = results[0].data;
@@ -177,16 +186,13 @@ export function useMotoristaResumoData(
           modelo_id: string;
           preco_semana: number;
         }>;
-        const tvdeModeloPrecoMap = new Map<string, number>(
-          tarifasModelo.map((r) => [r.modelo_id, Number(r.preco_semana)])
-        );
+        // Mesma construção que o ecrã de Contas/Resumo usa — os dois têm de
+        // dar o mesmo aluguer, e nenhum dos dois pode depender da ordem por
+        // que a base devolve as tarifas. Ver tvdeModeloPreco.ts.
+        const tvdeModeloPrecoMap = buildTvdeModeloPrecoMap(tarifasModelo);
         // `${tarifa_id}|${modelo_id}` → preço, para resolver a tarifa que o
         // contrato indica em vez de uma qualquer que esteja ativa.
-        const precoPorTarifaModelo = new Map<string, number>(
-          tarifasModelo
-            .filter((r) => r.tarifa_id)
-            .map((r) => [`${r.tarifa_id}|${r.modelo_id}`, Number(r.preco_semana)])
-        );
+        const precoPorTarifaModelo = buildPrecoPorTarifaModelo(tarifasModelo);
 
         // viatura_id → tarifa do contrato (em curso primeiro, senão o mais
         // recente). Mesma cascata da tabela de Contas/Resumo — os dois ecrãs
@@ -214,12 +220,10 @@ export function useMotoristaResumoData(
         // configuração, não por ser grátis).
         setAluguerSemTarifa(deriveAluguerSemTarifa(viaturasPeriodoData, tvdeModeloPrecoMap));
 
+        setCartaoFrota(formatCartoesFrota((results[6].data ?? []) as CartaoFrotaResumo[]));
+
         if (motoristaData) {
           const m = motoristaData as any;
-          const cards = [m.cartao_bp, m.cartao_repsol, m.cartao_edp, m.cartao_frota]
-            .filter((c: any) => !!c)
-            .join(' / ');
-          setCartaoFrota(cards || 'N/A');
           setMotoristaEmail(m.email);
           setMotoristaTelefone(m.telefone);
           setMotoristaIban(m.iban);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type jsPDF from 'jspdf';
-import { Download, FileText, Loader2, Mail, Printer } from 'lucide-react';
+import { Download, FileText, Loader2, Mail, PenLine, Printer } from 'lucide-react';
 
 import {
   Dialog,
@@ -27,6 +27,11 @@ import { useDocumentTemplates, useFolhasDanosDaOrg } from '@/hooks/useDocumentTe
 import { useContactosDocumento } from '@/hooks/useContactosDocumento';
 
 import { generateContratoPdf, type CondutorPrincipal } from '@/utils/generateContratoPdf';
+import type { ContratoAnexo } from '@/utils/generateContratoPdf';
+import { EnviarParaAssinaturaDialog } from './EnviarParaAssinaturaDialog';
+import { useEnviarParaAssinatura } from '@/hooks/useEnviarParaAssinatura';
+import { candidatosDoContrato } from '@/lib/assinaturas';
+import { useAuth } from '@/contexts/AuthContext';
 import type { EmpresaConfig } from '@/config/empresas';
 import type { ContratoRenting, ContratoCondutor } from '@/types/contratoRenting';
 import type { ClienteComDocumentos } from '@/types/cliente';
@@ -131,6 +136,11 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
   const [anexosParaEnviar, setAnexosParaEnviar] = useState<Array<{ pdf: jsPDF; filename: string }>>(
     []
   );
+
+  const [assinaturaOpen, setAssinaturaOpen] = useState(false);
+  const [anexosParaAssinar, setAnexosParaAssinar] = useState<ContratoAnexo[]>([]);
+  const enviarParaAssinatura = useEnviarParaAssinatura();
+  const { user } = useAuth();
 
   // Chave estável de um condutor (cliente_id em rent-a-car, motorista_id em
   // TVDE/slot) — usada para seleccionar para quem gerar os documentos.
@@ -332,6 +342,59 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
     }
   };
 
+  /**
+   * Gera os documentos e abre a escolha de quem assina.
+   *
+   * Reaproveita o caminho do email — `separados: true` dá um PDF por documento,
+   * e cada um leva consigo os dados que o produziram, que é o que permite
+   * congelar a fotografia no envio.
+   */
+  const prepararAssinatura = async () => {
+    const empresa = empresas.find((e) => e.id === empresaId) ?? null;
+    const templateIds = templateIdsEscolhidos();
+
+    if (templateIds.length === 0) {
+      toast({ title: 'Selecione pelo menos um documento', variant: 'destructive' });
+      return;
+    }
+    if (!cidadeAssinatura.trim()) {
+      toast({ title: 'Indique a cidade de assinatura', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setGerando(true);
+      const resultado = await generateContratoPdf({
+        contrato,
+        condutorPrincipal: condutorPrincipalAtual(),
+        clientes,
+        motoristas,
+        viatura,
+        empresa,
+        action: 'email',
+        templateIds,
+        cidadeAssinatura,
+        separados: true,
+      });
+
+      if (!resultado || !('anexos' in resultado) || resultado.anexos.length === 0) {
+        throw new Error('Não foi possível gerar os documentos.');
+      }
+
+      persistirCidadeVigente(cidadeAssinatura);
+      setAnexosParaAssinar(resultado.anexos);
+      setAssinaturaOpen(true);
+    } catch (err) {
+      toast({
+        title: 'Erro ao preparar a assinatura',
+        description: err instanceof Error ? err.message : 'Erro inesperado',
+        variant: 'destructive',
+      });
+    } finally {
+      setGerando(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -428,7 +491,7 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
           </p>
         </div>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={gerando}>
             Cancelar
           </Button>
@@ -453,6 +516,19 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
           >
             {gerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
             Email
+          </Button>
+          <Button
+            variant="outline"
+            onClick={prepararAssinatura}
+            disabled={gerando || loading || count === 0}
+            className="gap-2"
+          >
+            {gerando ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <PenLine className="h-4 w-4" />
+            )}
+            Assinatura
           </Button>
           <Button
             onClick={() => gerar('print')}
@@ -481,6 +557,34 @@ export const ContratoDocumentosDialog: React.FC<Props> = ({
         emissorNome={empresaSelecionada?.nomeCompleto || empresaSelecionada?.nome}
         emissorLogoUrl={empresaSelecionada?.logoUrl ?? null}
         detalhes={detalhesEmail}
+      />
+
+      <EnviarParaAssinaturaDialog
+        open={assinaturaOpen}
+        onOpenChange={setAssinaturaOpen}
+        candidatos={candidatosDoContrato({ condutores, clientes, motoristas })}
+        onEnviar={async (escolhidos) => {
+          const { falharam } = await enviarParaAssinatura.mutateAsync({
+            anexos: anexosParaAssinar,
+            signatarios: escolhidos,
+            orgId: contrato.org_id,
+            contratoId: contrato.id,
+            criadoPor: user?.id ?? null,
+          });
+
+          // "Enviado", nunca "entregue": não há como saber se o email chegou.
+          toast({
+            title:
+              falharam.length > 0
+                ? 'Pedidos criados, mas alguns emails falharam'
+                : 'Pedidos de assinatura enviados',
+            description:
+              falharam.length > 0
+                ? `Não foi possível enviar a: ${falharam.join(', ')}. Os pedidos ficaram criados — pode reenviar.`
+                : undefined,
+            variant: falharam.length > 0 ? 'destructive' : undefined,
+          });
+        }}
       />
     </Dialog>
   );

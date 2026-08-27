@@ -83,14 +83,24 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
     const cartao = disponiveis.find((c) => c.id === selectedId);
     if (!cartao) return;
     try {
-      await associarCartao.mutateAsync({
+      const r = await associarCartao.mutateAsync({
         cartaoId: cartao.id,
         numero: cartao.numero,
         tipo,
         motoristaId: motorista.id,
+        orgId: cartao.org_id,
         hoje: todayISO(),
       });
-      toast({ title: `Cartão ${TIPO_INFO[tipo].label} ${cartao.numero} associado` });
+      // O histórico falhar não desfaz a associação — mas tem de se ver.
+      if (r.historicoFalhou) {
+        toast({
+          title: 'Cartão associado, mas sem registo de atribuição',
+          description: `O combustível deste cartão vai entrar por atribuir. ${r.historicoFalhou}`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: `Cartão ${TIPO_INFO[tipo].label} ${cartao.numero} associado` });
+      }
       setSelectedId('');
       onChanged?.();
     } catch (err: unknown) {
@@ -104,7 +114,7 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
 
   const devolver = async (c: CartaoAssociado) => {
     try {
-      await devolverCartao.mutateAsync({
+      const r = await devolverCartao.mutateAsync({
         cartaoId: c.id,
         tipo: c.tipo,
         motoristaId: motorista.id,
@@ -112,7 +122,15 @@ export const MotoristaCartoesFrota: React.FC<Props> = ({ motorista, onChanged })
         limparFicha: fichaDe(c.tipo).trim() === c.numero.trim(),
         hoje: todayISO(),
       });
-      toast({ title: `Cartão ${c.numero} devolvido` });
+      if (r.historicoFalhou) {
+        toast({
+          title: 'Cartão devolvido, mas o histórico não fechou',
+          description: `Movimentos futuros deste cartão continuam a cair neste motorista. ${r.historicoFalhou}`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: `Cartão ${c.numero} devolvido` });
+      }
       onChanged?.();
     } catch (err: unknown) {
       toast({

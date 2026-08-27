@@ -45,19 +45,28 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
   } = params;
 
   try {
-    // Buscar template da base de dados
-    const { data: templateDataRaw, error: templateError } = await supabase
-      .from('document_templates')
-      .select('*')
-      .eq('id', templateId)
-      .single();
+    // O template pode chegar já resolvido — é o caso da regeneração a partir de
+    // uma fotografia congelada. Aí não se vai à base de dados de propósito: uma
+    // edição posterior do template mudaria um documento que já foi enviado para
+    // assinar, e a pessoa assinaria coisa diferente da que recebeu.
+    let templateData: DocumentTemplate;
 
-    if (templateError || !templateDataRaw) {
-      console.error('Erro ao carregar template:', templateError);
-      throw new Error('Template não encontrado');
+    if (params.templateOverride) {
+      templateData = params.templateOverride;
+    } else {
+      const { data: templateDataRaw, error: templateError } = await supabase
+        .from('document_templates')
+        .select('*')
+        .eq('id', templateId)
+        .single();
+
+      if (templateError || !templateDataRaw) {
+        console.error('Erro ao carregar template:', templateError);
+        throw new Error('Template não encontrado');
+      }
+
+      templateData = templateDataRaw as unknown as DocumentTemplate;
     }
-
-    const templateData = templateDataRaw as unknown as DocumentTemplate;
     const documentData: Record<string, any> = {
       ...inputDocumentData,
       ...(km_saida != null ? { km_saida } : {}),

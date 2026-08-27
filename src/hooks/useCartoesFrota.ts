@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
  * com `useState` + `useEffect` + um `refetchAll()` chamado à mão.
  *
  * NOTA SOBRE ATOMICIDADE (comportamento preservado, não corrigido aqui)
- * Associar e devolver escrevem em DUAS tabelas — `cartoes_frota` e a coluna
+ * Associar e devolver escrevem em TRÊS tabelas — `cartoes_frota` e a coluna
  * `cartao_<tipo>` da ficha em `motoristas_ativos` (que serve o match das
  * transações importadas). São duas chamadas PostgREST, sem transação: se a
  * segunda falhar, o cartão fica atribuído e a ficha não. Fechar isto a sério
@@ -16,6 +16,27 @@ import { supabase } from '@/integrations/supabase/client';
  * está fora do âmbito desta extracção, que não muda comportamento. O que se
  * garante já é que a primeira falha aborta antes da segunda escrita.
  */
+
+/**
+ * Tabela fora dos tipos gerados. Estreitar aqui evita espalhar `any` pelas
+ * chamadas e mantém o resto do ficheiro tipado.
+ */
+type SupabaseSemTipos = {
+  from: (t: string) => {
+    insert: (v: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+    update: (v: Record<string, unknown>) => {
+      eq: (
+        c: string,
+        v: string
+      ) => {
+        eq: (
+          c: string,
+          v: string
+        ) => { is: (c: string, v: null) => Promise<{ error: { message: string } | null }> };
+      };
+    };
+  };
+};
 
 export type TipoCartao = 'bp' | 'repsol' | 'edp';
 
@@ -25,6 +46,8 @@ export interface CartaoAssociado {
   tipo: TipoCartao;
   status: string;
   limite: number | null;
+  /** Necessário para escrever o histórico de atribuição na org certa. */
+  org_id: string | null;
 }
 
 export interface CartaoDisponivel {
@@ -32,6 +55,8 @@ export interface CartaoDisponivel {
   numero: string;
   detentor: string | null;
   limite: number | null;
+  /** Necessário para escrever o histórico de atribuição na org certa. */
+  org_id: string | null;
 }
 
 export const cartoesAssociadosKey = (motoristaId: string) =>
@@ -49,7 +74,7 @@ export function useCartoesAssociados(motoristaId: string) {
     queryFn: async (): Promise<CartaoAssociado[]> => {
       const { data, error } = await supabase
         .from('cartoes_frota')
-        .select('id, numero, tipo, status, limite')
+        .select('id, numero, tipo, status, limite, org_id')
         .eq('motorista_id', motoristaId)
         .order('tipo')
         .order('numero');
@@ -67,7 +92,7 @@ export function useCartoesDisponiveis(tipo: TipoCartao | undefined) {
     queryFn: async (): Promise<CartaoDisponivel[]> => {
       const { data, error } = await supabase
         .from('cartoes_frota')
-        .select('id, numero, detentor, limite')
+        .select('id, numero, detentor, limite, org_id')
         .eq('tipo', tipo as TipoCartao)
         .eq('status', 'disponivel')
         .is('motorista_id', null)
@@ -93,8 +118,20 @@ export interface AssociarCartaoArgs {
   numero: string;
   tipo: TipoCartao;
   motoristaId: string;
+  orgId: string | null;
   /** Data de entrega (ISO, só dia) — injectada para o teste ser determinista. */
   hoje: string;
+}
+
+/**
+ * O histórico é a única escrita que NÃO aborta a operação.
+ *
+ * É deliberado, e vem do comportamento original: sem o período registado o
+ * combustível deste cartão entra por atribuir, mas desfazer a associação por
+ * causa disso seria pior. Quem chama recebe o erro para o poder mostrar.
+ */
+export interface ResultadoAssociar {
+  historicoFalhou?: string;
 }
 
 export function useAssociarCartaoAoMotorista() {
@@ -106,7 +143,8 @@ export function useAssociarCartaoAoMotorista() {
       tipo,
       motoristaId,
       hoje,
-    }: AssociarCartaoArgs): Promise<void> => {
+      orgId,
+    }: AssociarCartaoArgs): Promise<ResultadoAssociar> => {
       const { error: e1 } = await supabase
         .from('cartoes_frota')
         .update({ motorista_id: motoristaId, status: 'em_uso', data_entrega: hoje })
@@ -119,9 +157,28 @@ export function useAssociarCartaoAoMotorista() {
         .update({ [colunaFicha(tipo)]: numero } as never)
         .eq('id', motoristaId);
       if (e2) throw e2;
+
+      // Histórico de atribuição: é isto que decide de quem é o combustível de
+      // cada dia.
+      // `cartao_atribuicoes` ainda não está em types.ts (ficheiro gerado, não se
+      // edita à mão) — o cast é o mesmo que o código original usava.
+      const { error: e3 } = await (supabase as unknown as SupabaseSemTipos)
+        .from('cartao_atribuicoes')
+        .insert({
+          org_id: orgId,
+          cartao_id: cartaoId,
+          motorista_id: motoristaId,
+          de: hoje,
+          origem: 'associacao',
+        });
+      return e3 ? { historicoFalhou: e3.message } : {};
     },
     onSuccess: (_r, { motoristaId }) => invalidar(motoristaId),
   });
+}
+
+export interface ResultadoDevolver {
+  historicoFalhou?: string;
 }
 
 export interface DevolverCartaoArgs {
@@ -142,7 +199,7 @@ export function useDevolverCartaoDoMotorista() {
       motoristaId,
       limparFicha,
       hoje,
-    }: DevolverCartaoArgs): Promise<void> => {
+    }: DevolverCartaoArgs): Promise<ResultadoDevolver> => {
       const { error: e1 } = await supabase
         .from('cartoes_frota')
         .update({
@@ -161,6 +218,16 @@ export function useDevolverCartaoDoMotorista() {
           .eq('id', motoristaId);
         if (e2) throw e2;
       }
+
+      // Fecha o período no histórico. O que ele gastou até hoje continua dele
+      // — devolver um cartão não reescreve o passado.
+      const { error: e3 } = await (supabase as unknown as SupabaseSemTipos)
+        .from('cartao_atribuicoes')
+        .update({ ate: hoje })
+        .eq('cartao_id', cartaoId)
+        .eq('motorista_id', motoristaId)
+        .is('ate', null);
+      return e3 ? { historicoFalhou: e3.message } : {};
     },
     onSuccess: (_r, { motoristaId }) => invalidar(motoristaId),
   });

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { stripAcc, parseNumber, findField, findNumericField } from '../_shared/repsol/campos.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,12 +15,6 @@ const jsonError = (error: string, status: number) =>
 function sanitizeCard(card: string): string {
   return (card || '').replace(/\D/g, '');
 }
-
-const stripAcc = (s: string) =>
-  (s || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
 
 function parseRepsolDate(raw: string, time: string = ''): string | null {
   if (!raw) return null;
@@ -212,44 +207,6 @@ function parseCsv(text: string): Record<string, string>[] {
   return rows;
 }
 
-function findField(row: Record<string, string>, candidates: string[]): string {
-  for (const c of candidates) {
-    const cNorm = stripAcc(c);
-    const key = Object.keys(row).find((k) => stripAcc(k).includes(cNorm));
-    if (key && row[key]) return row[key];
-  }
-  return '';
-}
-
-function parseNumber(val: string): number | null {
-  if (!val) return null;
-  let s = (val || '').replace(/[^\d.,-]/g, '').trim();
-  if (!s) return null;
-  if (s.includes(',') && s.includes('.')) {
-    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
-      s = s.replace(/\./g, '').replace(',', '.'); // 1.234,56 → 1234.56
-    } else {
-      s = s.replace(/,/g, ''); // 1,234.56 → 1234.56
-    }
-  } else if (s.includes(',')) {
-    const afterComma = s.substring(s.lastIndexOf(',') + 1);
-    if (afterComma.length <= 2) {
-      s = s.replace(',', '.'); // 15,96 → 15.96
-    } else {
-      s = s.replace(/,/g, ''); // 1,596 → 1596
-    }
-  } else if (s.includes('.')) {
-    const parts = s.split('.');
-    const afterLastDot = parts[parts.length - 1];
-    if (parts.length > 2 || afterLastDot.length === 3) {
-      s = s.replace(/\./g, ''); // 1.596 → 1596
-    }
-    // else: 15.96 → keep as is (dot is decimal separator)
-  }
-  const n = parseFloat(s);
-  return isNaN(n) ? null : n;
-}
-
 function normalizeName(name: string): string {
   return (name || '')
     .toLowerCase()
@@ -394,16 +351,18 @@ Deno.serve(async (req) => {
         'date',
       ]);
       const timeStr = findField(row, ['hor_oper', 'hora operacao', 'hor', 'hora', 'time']);
-      const amountStr = findField(row, [
+      // 'importe' antes de 'imp_total': o valor da operação manda sobre o valor
+      // facturado, que vem a zero enquanto a factura não sai.
+      const amountStr = findNumericField(row, [
+        'importe',
         'imp_total',
         'imp',
         'montante',
-        'importe',
         'valor',
         'total',
         'amount',
       ]);
-      const qtyStr = findField(row, [
+      const qtyStr = findNumericField(row, [
         'num_litro',
         'litro',
         'litros',

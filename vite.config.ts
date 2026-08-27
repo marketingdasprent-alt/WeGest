@@ -91,6 +91,8 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Alias vindo do main: o codigo de resumo das edge functions usa-o.
+      '@shared': path.resolve(__dirname, './supabase/functions/_shared/resumo'),
     },
   },
   build: {

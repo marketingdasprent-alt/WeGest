@@ -9,6 +9,8 @@ const h = vi.hoisted(() => ({
   resposta: { data: null as unknown, error: null as unknown },
   escritas: [] as Escrita[],
   erroEscrita: null as unknown,
+  /** Falhar só uma tabela — o histórico falha sozinho e não aborta o resto. */
+  erroPorTabela: {} as Record<string, unknown>,
 }));
 
 vi.mock('@/integrations/supabase/client', () => ({
@@ -16,14 +18,31 @@ vi.mock('@/integrations/supabase/client', () => ({
     from: vi.fn((tabela: string) => {
       const b: Record<string, unknown> = {};
       let payloadUpdate: unknown;
+      let id: unknown;
+      let registada = false;
+      const erro = () => h.erroPorTabela[tabela] ?? h.erroEscrita;
       b.select = vi.fn(() => b);
       b.is = vi.fn(() => b);
       b.eq = vi.fn((_c: string, valor: unknown) => {
-        if (payloadUpdate !== undefined) {
-          h.escritas.push({ tabela, payload: payloadUpdate, id: valor });
-          return Promise.resolve({ data: null, error: h.erroEscrita });
-        }
+        // O primeiro eq de um update é o alvo; os seguintes são filtros.
+        if (payloadUpdate !== undefined && id === undefined) id = valor;
         return b;
+      });
+      // O update só se resolve quando é esperado — assim suporta cadeias de
+      // vários eq/is, como a que fecha o período no histórico.
+      (b as unknown as { then: unknown }).then = (
+        resolve: (v: unknown) => void,
+        reject?: (r: unknown) => void
+      ) => {
+        if (payloadUpdate !== undefined && !registada) {
+          registada = true;
+          h.escritas.push({ tabela, payload: payloadUpdate, id });
+        }
+        return Promise.resolve({ data: null, error: erro() }).then(resolve, reject);
+      };
+      b.insert = vi.fn((p: unknown) => {
+        h.escritas.push({ tabela, payload: p, id: null });
+        return Promise.resolve({ data: null, error: erro() });
       });
       b.order = vi.fn(() => {
         const o: Record<string, unknown> = {
@@ -63,6 +82,7 @@ beforeEach(() => {
   h.resposta = { data: null, error: null };
   h.escritas = [];
   h.erroEscrita = null;
+  h.erroPorTabela = {};
 });
 
 describe('leitura de cartões de frota', () => {
@@ -88,6 +108,7 @@ describe('associar cartão a motorista', () => {
         numero: '123',
         tipo: 'bp',
         motoristaId: 'm1',
+        orgId: 'org-1',
         hoje: '2026-08-26',
       });
     });
@@ -99,7 +120,40 @@ describe('associar cartão a motorista', () => {
         id: 'c1',
       },
       { tabela: 'motoristas_ativos', payload: { cartao_bp: '123' }, id: 'm1' },
+      {
+        tabela: 'cartao_atribuicoes',
+        payload: {
+          org_id: 'org-1',
+          cartao_id: 'c1',
+          motorista_id: 'm1',
+          de: '2026-08-26',
+          origem: 'associacao',
+        },
+        id: null,
+      },
     ]);
+  });
+
+  it('histórico falhado não desfaz a associação — devolve o erro a quem chama', async () => {
+    // Sem o período registado o combustível deste cartão entra por atribuir,
+    // mas recusar a associação por causa disso seria pior.
+    h.erroPorTabela = { cartao_atribuicoes: { message: 'rls' } };
+    const { result } = renderHook(() => useAssociarCartaoAoMotorista(), { wrapper });
+
+    let r: { historicoFalhou?: string } | undefined;
+    await act(async () => {
+      r = await result.current.mutateAsync({
+        cartaoId: 'c1',
+        numero: '123',
+        tipo: 'bp',
+        motoristaId: 'm1',
+        orgId: 'org-1',
+        hoje: '2026-08-26',
+      });
+    });
+
+    expect(r).toEqual({ historicoFalhou: 'rls' });
+    expect(h.escritas).toHaveLength(3);
   });
 
   it('falha na primeira escrita não tenta a segunda', async () => {
@@ -111,7 +165,14 @@ describe('associar cartão a motorista', () => {
     let erro: unknown;
     await act(async () => {
       erro = await result.current
-        .mutateAsync({ cartaoId: 'c1', numero: '123', tipo: 'bp', motoristaId: 'm1', hoje: 'x' })
+        .mutateAsync({
+          cartaoId: 'c1',
+          numero: '123',
+          tipo: 'bp',
+          motoristaId: 'm1',
+          orgId: 'org-1',
+          hoje: 'x',
+        })
         .catch((e: unknown) => e);
     });
 
@@ -143,6 +204,11 @@ describe('devolver cartão', () => {
           status: 'disponivel',
           data_devolucao: '2026-08-26',
         },
+        id: 'c1',
+      },
+      {
+        tabela: 'cartao_atribuicoes',
+        payload: { ate: '2026-08-26' },
         id: 'c1',
       },
     ]);
