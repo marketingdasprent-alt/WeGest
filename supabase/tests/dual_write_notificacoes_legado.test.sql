@@ -18,7 +18,7 @@ insert into public.user_org_ativa (user_id, org_id) values
 -- Cenário A: event_type conhecido (viatura.seguro_expirando) gera notificacoes.tipo mapeado.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-0000004600b1', '00000000-0000-0000-0000-0000000b0000', 'teste.seguro', 'Seguro Teste', 'viatura.seguro_expirando', 'notificacao',
-   '{"template_codigo":"teste.notif","destinatarios_recurso":"motoristas_gestao","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_recurso":"motoristas_gestao","enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c00b1', '00000000-0000-0000-0000-0000004600b1', '00000000-0000-0000-0000-0000000b0000', 'viaturas', '00000000-0000-0000-0000-000000ent00b1');
@@ -49,7 +49,7 @@ select is(
 -- Cenário B: event_type desconhecido não gera notificacoes (whitelist), mas não falha.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-0000004600b2', '00000000-0000-0000-0000-0000000b0000', 'teste.desconhecido', 'Evento Desconhecido', 'teste.evento_desconhecido', 'notificacao',
-   '{"template_codigo":"teste.notif","destinatarios_recurso":"motoristas_gestao","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_recurso":"motoristas_gestao","enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id) values
   ('00000000-0000-0000-0000-0000004c00b2', '00000000-0000-0000-0000-0000004600b2', '00000000-0000-0000-0000-0000000b0000');
@@ -71,7 +71,7 @@ select is(
 -- Cenário C: cobranca.gerada (I1/I2, só aviso interno — sem emitir/enviar fatura).
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-0000004600b3', '00000000-0000-0000-0000-0000000b0000', 'teste.cobranca', 'Cobrança Teste', 'cobranca.gerada', 'notificacao',
-   '{"template_codigo":"cobranca.gerada","destinatarios_recurso":"renting_contratos","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"cobranca.gerada","destinatarios_recurso":"renting_contratos","enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c00b3', '00000000-0000-0000-0000-0000004600b3', '00000000-0000-0000-0000-0000000b0000', 'contrato_cobrancas', '00000000-0000-0000-0000-000000ent00b3');
@@ -96,9 +96,9 @@ select is(
 -- sino real, até este fix).
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-0000004600b4', '00000000-0000-0000-0000-0000000b0000', 'teste.utilizador', 'Utilizador Teste', 'utilizador.criado', 'notificacao',
-   '{"template_codigo":"utilizador.criado","destinatarios_recurso":"admin_utilizadores","enviar_email":false}'::jsonb),
+   '{"titulo":"Titulo de Teste","template_codigo":"utilizador.criado","destinatarios_recurso":"admin_utilizadores","enviar_email":false}'::jsonb),
   ('00000000-0000-0000-0000-0000004600b5', '00000000-0000-0000-0000-0000000b0000', 'teste.renovacao', 'Renovação Teste', 'contrato_renting.renovacao_proxima', 'notificacao',
-   '{"template_codigo":"contrato_renting.renovacao_proxima","destinatarios_recurso":"renting_contratos","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"contrato_renting.renovacao_proxima","destinatarios_recurso":"renting_contratos","enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c00b4', '00000000-0000-0000-0000-0000004600b4', '00000000-0000-0000-0000-0000000b0000', 'profiles', '00000000-0000-0000-0000-000000b0001'),

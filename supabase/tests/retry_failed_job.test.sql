@@ -28,8 +28,8 @@ insert into public.user_organizacoes (user_id, org_id, is_admin) values
   ('00000000-0000-0000-0000-0000000a0001', '00000000-0000-0000-0000-0000000a0000', true),
   ('00000000-0000-0000-0000-0000000a0002', '00000000-0000-0000-0000-0000000a0000', false);
 
-insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo) values
-  ('00000000-0000-0000-0000-000000460001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra', 'Regra', 'teste.evento', 'notificacao');
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-000000460001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra', 'Regra', 'teste.evento', 'notificacao', '{"template_codigo":"teste.template","titulo":"Titulo de Teste"}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, status, attempt, max_attempts, error_message) values
   ('00000000-0000-0000-0000-0000004c0001', '00000000-0000-0000-0000-000000460001', '00000000-0000-0000-0000-0000000a0000', 'failed', 3, 3, 'erro final');
@@ -117,8 +117,8 @@ select throws_ok(
 reset role;
 
 -- Cenário: proteção cross-org.
-insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo) values
-  ('00000000-0000-0000-0000-000000460002', '00000000-0000-0000-0000-0000000b0000', 'teste.regra_b', 'Regra B', 'teste.evento', 'notificacao');
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-000000460002', '00000000-0000-0000-0000-0000000b0000', 'teste.regra_b', 'Regra B', 'teste.evento', 'notificacao', '{"template_codigo":"teste.template","titulo":"Titulo de Teste"}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, status, attempt, max_attempts) values
   ('00000000-0000-0000-0000-0000004c0003', '00000000-0000-0000-0000-000000460002', '00000000-0000-0000-0000-0000000b0000', 'failed', 1, 1);

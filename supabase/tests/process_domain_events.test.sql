@@ -17,8 +17,8 @@ insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'automacao-rule-engine-a');
 
 -- Cenário A: regra sem condições — qualquer evento do tipo certo casa.
-insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo) values
-  ('00000000-0000-0000-0000-00000046a001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_simples', 'Regra Simples', 'teste.evento.a', 'notificacao');
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-00000046a001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_simples', 'Regra Simples', 'teste.evento.a', 'notificacao', '{"template_codigo":"teste.template","titulo":"Titulo de Teste"}'::jsonb);
 
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by) values
   ('00000000-0000-0000-0000-000000e81e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.a', 'viaturas', '00000000-0000-0000-0000-000000ent0010', 'manual');

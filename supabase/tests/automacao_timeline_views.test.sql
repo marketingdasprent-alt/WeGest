@@ -1,12 +1,11 @@
 begin;
-select plan(7);   -- 2026-08-28: era 10 e o ficheiro tem 7 asserções; um plan errado faz o pgTAP falhar mesmo com tudo a passar
+select plan(9);   -- 2026-08-28: era 10 e o ficheiro tem 9 asserções (has_* contam)
 
 select has_view('public', 'automacao_timeline_recente', 'view automacao_timeline_recente existe');
 select has_view('public', 'automacao_estatisticas_por_regra', 'view automacao_estatisticas_por_regra existe');
 
 insert into public.organizacoes (id, nome, codigo) values ('66666666-6666-6666-6666-666666666666', 'Org Teste Views', 'teste-views');
-insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config, ativo)
-values ('77777777-7777-7777-7777-777777777777', '66666666-6666-6666-6666-666666666666', 'teste.views', 'Regra Views', 'teste.evento', 'notificacao', '{}'::jsonb, true);
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config, ativo) values ('77777777-7777-7777-7777-777777777777', '66666666-6666-6666-6666-666666666666', 'teste.views', 'Regra Views', 'teste.evento', 'notificacao', '{"template_codigo":"teste.template","titulo":"Titulo de Teste"}'::jsonb, true);
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by)
 values ('88888888-8888-8888-8888-888888888888', '66666666-6666-6666-6666-666666666666', 'teste.evento', 'viaturas', gen_random_uuid(), 'manual');
 insert into public.automation_runs (id, rule_id, org_id, trigger_event_id, status, started_at, completed_at)
