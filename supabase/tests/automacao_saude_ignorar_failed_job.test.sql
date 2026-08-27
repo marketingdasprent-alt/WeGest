@@ -1,10 +1,10 @@
 begin;
-select plan(7);
+select plan(4);   -- 2026-08-28: era 7 e o ficheiro tem 4 asserções (ver nota acima)
 
 select has_view('public', 'automacao_saude_canais', 'view automacao_saude_canais existe');
 select has_function('public', 'ignorar_failed_job', array['uuid'], 'ignorar_failed_job existe');
 
-insert into public.organizacoes (id, nome) values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Org Teste Saúde');
+insert into public.organizacoes (id, nome, codigo) values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Org Teste Saúde', 'teste-saude');
 insert into public.notifications (id, org_id, destinatario_user_id, template_codigo, titulo)
 values ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', gen_random_uuid(), 'teste', 'Teste');
 insert into public.notification_queue (id, notification_id, org_id, canal, destinatario, template_codigo, status, created_at)

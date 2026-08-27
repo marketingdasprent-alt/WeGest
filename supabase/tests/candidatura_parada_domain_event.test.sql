@@ -25,64 +25,64 @@ begin;
 select plan(6);
 
 insert into public.organizacoes (id, nome, codigo) values
-  ('00000000-0000-0000-0000-000000hh0000', 'Org Candidatura Parada', 'candidatura-parada-h');
+  ('00000000-0000-0000-0000-000000330000', 'Org Candidatura Parada', 'candidatura-parada-h');
 
 insert into auth.users (id, email) values
-  ('00000000-0000-0000-0000-000000hh0001', 'admin@candidatura-parada.pt'),
-  ('00000000-0000-0000-0000-000000hh0002', 'candidato-a@candidatura-parada.pt'),
-  ('00000000-0000-0000-0000-000000hh0003', 'candidato-b@candidatura-parada.pt'),
-  ('00000000-0000-0000-0000-000000hh0004', 'candidato-c@candidatura-parada.pt'),
-  ('00000000-0000-0000-0000-000000hh0005', 'candidato-d@candidatura-parada.pt');
+  ('00000000-0000-0000-0000-000000330001', 'admin@candidatura-parada.pt'),
+  ('00000000-0000-0000-0000-000000330002', 'candidato-a@candidatura-parada.pt'),
+  ('00000000-0000-0000-0000-000000330003', 'candidato-b@candidatura-parada.pt'),
+  ('00000000-0000-0000-0000-000000330004', 'candidato-c@candidatura-parada.pt'),
+  ('00000000-0000-0000-0000-000000330005', 'candidato-d@candidatura-parada.pt');
 
 insert into public.user_organizacoes (user_id, org_id, is_admin) values
-  ('00000000-0000-0000-0000-000000hh0001', '00000000-0000-0000-0000-000000hh0000', true);
+  ('00000000-0000-0000-0000-000000330001', '00000000-0000-0000-0000-000000330000', true);
 
 -- Candidatura A: submetida há 4 dias — deve disparar.
 insert into public.motorista_candidaturas (id, user_id, nome, email, status, data_submissao, org_id)
 values (
-  '00000000-0000-0000-0000-000000hh0010', '00000000-0000-0000-0000-000000hh0002',
+  '00000000-0000-0000-0000-000000330010', '00000000-0000-0000-0000-000000330002',
   'Candidato Parado', 'candidato-a@candidatura-parada.pt', 'submetido', now() - interval '4 days',
-  '00000000-0000-0000-0000-000000hh0000'
+  '00000000-0000-0000-0000-000000330000'
 );
 
 -- Candidatura B: submetida há 1 dia — NÃO deve disparar ainda.
 insert into public.motorista_candidaturas (id, user_id, nome, email, status, data_submissao, org_id)
 values (
-  '00000000-0000-0000-0000-000000hh0011', '00000000-0000-0000-0000-000000hh0003',
+  '00000000-0000-0000-0000-000000330011', '00000000-0000-0000-0000-000000330003',
   'Candidato Recente', 'candidato-b@candidatura-parada.pt', 'submetido', now() - interval '1 day',
-  '00000000-0000-0000-0000-000000hh0000'
+  '00000000-0000-0000-0000-000000330000'
 );
 
 -- Candidatura C: rascunho há 18 dias. É a forma exacta do caso real da
 -- PREMIUM RIDE a 31/07 — candidato começou, nunca submeteu, ninguém soube.
 insert into public.motorista_candidaturas (id, user_id, nome, email, status, created_at, org_id)
 values (
-  '00000000-0000-0000-0000-000000hh0012', '00000000-0000-0000-0000-000000hh0004',
+  '00000000-0000-0000-0000-000000330012', '00000000-0000-0000-0000-000000330004',
   'Candidato Rascunho Velho', 'candidato-c@candidatura-parada.pt', 'rascunho', now() - interval '18 days',
-  '00000000-0000-0000-0000-000000hh0000'
+  '00000000-0000-0000-0000-000000330000'
 );
 
 -- Candidatura D: rascunho há 2 dias — alguém a preencher com calma.
 -- NÃO deve disparar: o prazo do rascunho é 7 dias, não 3.
 insert into public.motorista_candidaturas (id, user_id, nome, email, status, created_at, org_id)
 values (
-  '00000000-0000-0000-0000-000000hh0013', '00000000-0000-0000-0000-000000hh0005',
+  '00000000-0000-0000-0000-000000330013', '00000000-0000-0000-0000-000000330005',
   'Candidato A Preencher', 'candidato-d@candidatura-parada.pt', 'rascunho', now() - interval '2 days',
-  '00000000-0000-0000-0000-000000hh0000'
+  '00000000-0000-0000-0000-000000330000'
 );
 
 select public.emit_candidaturas_paradas_events();
 
 -- 1. Candidatura parada há 4 dias publica o domain_event.
 select is(
-  (select count(*)::int from public.domain_events where entity_id = '00000000-0000-0000-0000-000000hh0010' and event_type = 'motorista.candidatura_parada'),
+  (select count(*)::int from public.domain_events where entity_id = '00000000-0000-0000-0000-000000330010' and event_type = 'motorista.candidatura_parada'),
   1,
   'candidatura parada há 4 dias publica motorista.candidatura_parada'
 );
 
 -- 2. Candidatura recente (1 dia) NÃO publica nada ainda.
 select is(
-  (select count(*)::int from public.domain_events where entity_id = '00000000-0000-0000-0000-000000hh0011' and event_type = 'motorista.candidatura_parada'),
+  (select count(*)::int from public.domain_events where entity_id = '00000000-0000-0000-0000-000000330011' and event_type = 'motorista.candidatura_parada'),
   0,
   'candidatura submetida há só 1 dia ainda não dispara o alerta'
 );
@@ -91,14 +91,14 @@ select is(
 --    antes de 31/07/2026 o alerta ignorava 'rascunho' por completo, e as
 --    4 candidaturas realmente perdidas nunca geraram um único aviso.
 select is(
-  (select count(*)::int from public.domain_events where entity_id = '00000000-0000-0000-0000-000000hh0012' and event_type = 'motorista.candidatura_parada'),
+  (select count(*)::int from public.domain_events where entity_id = '00000000-0000-0000-0000-000000330012' and event_type = 'motorista.candidatura_parada'),
   1,
   'rascunho abandonado há 18 dias publica motorista.candidatura_parada'
 );
 
 -- 4. Rascunho há 2 dias não dispara — prazo do rascunho é 7 dias.
 select is(
-  (select count(*)::int from public.domain_events where entity_id = '00000000-0000-0000-0000-000000hh0013' and event_type = 'motorista.candidatura_parada'),
+  (select count(*)::int from public.domain_events where entity_id = '00000000-0000-0000-0000-000000330013' and event_type = 'motorista.candidatura_parada'),
   0,
   'rascunho com 2 dias ainda não dispara (alguém a preencher com calma)'
 );
@@ -106,7 +106,7 @@ select is(
 -- 5. O payload distingue as duas situações, porque pedem acções
 --    diferentes: telefonar ao candidato, ou decidir a candidatura.
 select is(
-  (select payload->>'situacao' from public.domain_events where entity_id = '00000000-0000-0000-0000-000000hh0012' and event_type = 'motorista.candidatura_parada'),
+  (select payload->>'situacao' from public.domain_events where entity_id = '00000000-0000-0000-0000-000000330012' and event_type = 'motorista.candidatura_parada'),
   'começou a candidatura e nunca a submeteu',
   'o rascunho abandonado diz ao gestor que o candidato não terminou'
 );
@@ -116,7 +116,7 @@ select public.execute_automation_runs();
 
 -- 6. O pipeline completo chega a notificar o admin — nos dois casos.
 select is(
-  (select count(*)::int from public.notifications where destinatario_user_id = '00000000-0000-0000-0000-000000hh0001' and template_codigo = 'motorista.candidatura_parada'),
+  (select count(*)::int from public.notifications where destinatario_user_id = '00000000-0000-0000-0000-000000330001' and template_codigo = 'motorista.candidatura_parada'),
   2,
   'o admin recebe as notificações da candidatura submetida e do rascunho abandonado'
 );

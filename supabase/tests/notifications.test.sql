@@ -32,9 +32,9 @@ insert into public.user_organizacoes (user_id, org_id, is_admin) values
   ('00000000-0000-0000-0000-0000000b0001', '00000000-0000-0000-0000-0000000b0000', false);
 
 insert into public.notifications (id, org_id, destinatario_user_id, template_codigo, titulo) values
-  ('00000000-0000-0000-0000-000000n1e001', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a0001', 'teste.notif', 'Notificação 1'),
-  ('00000000-0000-0000-0000-000000n2e001', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a0002', 'teste.notif', 'Notificação 2'),
-  ('00000000-0000-0000-0000-000000n3e001', '00000000-0000-0000-0000-0000000b0000', '00000000-0000-0000-0000-0000000b0001', 'teste.notif', 'Notificação 3');
+  ('00000000-0000-0000-0000-000000f1e001', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a0001', 'teste.notif', 'Notificação 1'),
+  ('00000000-0000-0000-0000-000000f2e001', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a0002', 'teste.notif', 'Notificação 2'),
+  ('00000000-0000-0000-0000-000000f3e001', '00000000-0000-0000-0000-0000000b0000', '00000000-0000-0000-0000-0000000b0001', 'teste.notif', 'Notificação 3');
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000a0001', true);
@@ -50,17 +50,17 @@ select is(
 -- 2. ...e é especificamente a n1.
 select is(
   (select id from public.notifications limit 1),
-  '00000000-0000-0000-0000-000000n1e001'::uuid,
+  '00000000-0000-0000-0000-000000f1e001'::uuid,
   'a notificação visível ao user A1 é a n1'
 );
 
 -- 3. User A1 não consegue marcar como lida a notificação de outra pessoa (n2).
-update public.notifications set lida = true where id = '00000000-0000-0000-0000-000000n2e001';
+update public.notifications set lida = true where id = '00000000-0000-0000-0000-000000f2e001';
 
 reset role;
 
 select is(
-  (select lida from public.notifications where id = '00000000-0000-0000-0000-000000n2e001'),
+  (select lida from public.notifications where id = '00000000-0000-0000-0000-000000f2e001'),
   false,
   'user A1 não consegue marcar como lida a notificação do user A2'
 );
@@ -77,10 +77,10 @@ select is(
 );
 
 -- 5. User A2 consegue marcar a própria notificação como lida.
-update public.notifications set lida = true where id = '00000000-0000-0000-0000-000000n2e001';
+update public.notifications set lida = true where id = '00000000-0000-0000-0000-000000f2e001';
 
 select is(
-  (select lida from public.notifications where id = '00000000-0000-0000-0000-000000n2e001'),
+  (select lida from public.notifications where id = '00000000-0000-0000-0000-000000f2e001'),
   true,
   'user A2 consegue marcar a sua própria notificação como lida'
 );
@@ -93,7 +93,7 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000
 
 -- 6. Não vê a notificação da Org B (isolamento entre orgs).
 select is(
-  (select count(*)::int from public.notifications where id = '00000000-0000-0000-0000-000000n3e001'),
+  (select count(*)::int from public.notifications where id = '00000000-0000-0000-0000-000000f3e001'),
   0,
   'user A1 não vê a notificação da Org B'
 );

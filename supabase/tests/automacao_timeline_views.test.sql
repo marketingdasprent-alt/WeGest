@@ -1,10 +1,10 @@
 begin;
-select plan(10);
+select plan(7);   -- 2026-08-28: era 10 e o ficheiro tem 7 asserções; um plan errado faz o pgTAP falhar mesmo com tudo a passar
 
 select has_view('public', 'automacao_timeline_recente', 'view automacao_timeline_recente existe');
 select has_view('public', 'automacao_estatisticas_por_regra', 'view automacao_estatisticas_por_regra existe');
 
-insert into public.organizacoes (id, nome) values ('66666666-6666-6666-6666-666666666666', 'Org Teste Views');
+insert into public.organizacoes (id, nome, codigo) values ('66666666-6666-6666-6666-666666666666', 'Org Teste Views', 'teste-views');
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config, ativo)
 values ('77777777-7777-7777-7777-777777777777', '66666666-6666-6666-6666-666666666666', 'teste.views', 'Regra Views', 'teste.evento', 'notificacao', '{}'::jsonb, true);
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by)

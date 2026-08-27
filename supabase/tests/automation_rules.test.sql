@@ -31,12 +31,12 @@ insert into public.user_organizacoes (user_id, org_id, is_admin) values
   ('00000000-0000-0000-0000-0000000b0001', '00000000-0000-0000-0000-0000000b0000', false);
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo) values
-  ('00000000-0000-0000-0000-000000ru1e01', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_a', 'Regra A', 'teste.evento', 'notificacao'),
-  ('00000000-0000-0000-0000-000000ru1e02', '00000000-0000-0000-0000-0000000b0000', 'teste.regra_b', 'Regra B', 'teste.evento', 'notificacao');
+  ('00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_a', 'Regra A', 'teste.evento', 'notificacao'),
+  ('00000000-0000-0000-0000-0000004c1e02', '00000000-0000-0000-0000-0000000b0000', 'teste.regra_b', 'Regra B', 'teste.evento', 'notificacao');
 
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by) values
-  ('00000000-0000-0000-0000-000000ev1e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento', 'viaturas', '00000000-0000-0000-0000-000000000001', 'manual'),
-  ('00000000-0000-0000-0000-000000ev1e02', '00000000-0000-0000-0000-0000000b0000', 'teste.evento', 'viaturas', '00000000-0000-0000-0000-000000000002', 'manual');
+  ('00000000-0000-0000-0000-000000e81e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento', 'viaturas', '00000000-0000-0000-0000-000000000001', 'manual'),
+  ('00000000-0000-0000-0000-000000e81e02', '00000000-0000-0000-0000-0000000b0000', 'teste.evento', 'viaturas', '00000000-0000-0000-0000-000000000002', 'manual');
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000a0001', true);
