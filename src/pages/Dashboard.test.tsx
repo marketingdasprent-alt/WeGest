@@ -35,6 +35,17 @@ vi.mock('@/components/ui/theme-toggle', () => ({
   ThemeToggle: () => null,
 }));
 
+// A homepage lê permissões para decidir se mostra o aviso de pedidos de
+// informática. O hook real precisa do PermissionsProvider; aqui só interessa a
+// resposta, e o mock deixa cada teste escolher quem está a olhar.
+const mockIsAdmin = { valor: true };
+vi.mock('@/hooks/usePermissions', () => ({
+  usePermissions: () => ({
+    isAdmin: mockIsAdmin.valor,
+    canEdit: () => mockIsAdmin.valor,
+  }),
+}));
+
 // Supabase mock: chainable + thenable. Cada método retorna o próprio proxy
 // (para encadear .select().eq().neq()...) e o proxy é thenable (resolve com
 // { data: null, error: null, count: 0 }).
@@ -66,11 +77,19 @@ vi.mock('@/integrations/supabase/client', () => {
   }
   proxy.then = (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
     Promise.resolve(result).then(resolve, reject);
+  // O aviso de pedidos de informática subscreve um canal de tempo real. Sem
+  // isto, `supabase.channel` era undefined e a homepage inteira rebentava por
+  // causa de um badge.
+  const canal: Record<string, unknown> = {};
+  canal.on = () => canal;
+  canal.subscribe = () => canal;
   return {
     supabase: {
       from: vi.fn(() => proxy),
       rpc: vi.fn(() => proxy),
       auth: { getSession: vi.fn() },
+      channel: vi.fn(() => canal),
+      removeChannel: vi.fn(),
     },
   };
 });
@@ -193,6 +212,7 @@ function mockCobrancaEmAberto() {
 describe('Homepage — KPIs, estado da frota, atenção, atividade, check-in/check-out', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockIsAdmin.valor = true;
     // Restaura o comportamento por-defeito de `from` — alguns testes
     // sobrepõem-no com mockContratosExpirados()/mockCobrancaEmAberto().
     vi.mocked(supabase.from).mockImplementation((() =>
@@ -443,5 +463,62 @@ describe('Homepage — KPIs, estado da frota, atenção, atividade, check-in/che
       expect(screen.queryByRole('button', { name: /Este Mês/i })).toBeNull();
     });
     expect(screen.getByRole('button', { name: /Trimestre/i })).toBeTruthy();
+  });
+});
+
+/** Faz a contagem de pedidos de informática por resolver devolver `n`. */
+function mockTicketsPorResolver(n: number) {
+  const ticketsProxy = makeGenericProxy({ data: null, error: null, count: n });
+  const generico = makeGenericProxy();
+  vi.mocked(supabase.from).mockImplementation(((tabela: string) =>
+    tabela === 'ti_tickets' ? ticketsProxy : generico) as unknown as typeof supabase.from);
+}
+
+describe('Aviso de pedidos de informática', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsAdmin.valor = true;
+    vi.mocked(supabase.from).mockImplementation((() =>
+      makeGenericProxy()) as unknown as typeof supabase.from);
+  });
+
+  it('mostra quantos pedidos estão por resolver', async () => {
+    mockVariant('executivo');
+    mockTicketsPorResolver(3);
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('3 pedidos de informática por resolver')).toBeTruthy();
+    });
+  });
+
+  // Zero não é para mostrar: um aviso permanente a dizer "0" deixa de ser um
+  // aviso e passa a ser ruído no cabeçalho.
+  it('não mostra nada quando não há pedidos por resolver', async () => {
+    mockVariant('executivo');
+    mockTicketsPorResolver(0);
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Pedidos de informática' })).toBeTruthy();
+    });
+    expect(screen.queryByLabelText(/pedidos de informática por resolver/)).toBeNull();
+  });
+
+  // Quem não pode abrir a lista não deve receber o aviso: seria avisá-lo de
+  // algo que não consegue ir ver.
+  it('não conta pedidos a quem não os pode gerir', async () => {
+    mockVariant('operacional');
+    mockIsAdmin.valor = false;
+    mockTicketsPorResolver(5);
+
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Início' })).toBeTruthy();
+    });
+    expect(screen.queryByLabelText(/pedidos de informática por resolver/)).toBeNull();
   });
 });
