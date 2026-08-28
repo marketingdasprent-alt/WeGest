@@ -11,7 +11,7 @@
 -- ============================================================
 
 begin;
-select plan(16);
+select plan(17);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'exec-runs-a');
@@ -145,6 +145,17 @@ insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id
 
 select public.execute_automation_runs();
 
+-- 10a. Antes de contar notificações, confirmar que o run CONCLUIU. Sem isto,
+--      um run que rebentou aparece como «0 notificações» — um sintoma que não
+--      distingue «não notificou ninguém» de «nem chegou a tentar». Concatenar
+--      o error_message põe o motivo real na saída do pgTAP quando falha.
+select is(
+  (select status || coalesce(' :: ' || error_message, '')
+     from public.automation_runs where id = '00000000-0000-0000-0000-0000004c0004'),
+  'completed',
+  'o run da estratégia gestor_responsavel conclui sem erro'
+);
+
 -- 10. Só o gestor responsável é notificado (não o admin, não quem tem o recurso).
 select is(
   (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0004'),
@@ -160,8 +171,20 @@ select is(
 );
 
 -- Cenário E: estratégia gestor_responsavel, entidade viatura — resolve via o motorista atualmente atribuído.
-insert into public.viaturas (id, org_id, matricula, marca, modelo) values
-  ('00000000-0000-0000-0000-000000870001', '00000000-0000-0000-0000-0000000a0000', 'GT-00-ER', 'Toyota', 'Corolla');
+--
+-- marca/modelo entram por id: o trigger `trg_sync_viatura_marca_modelo` apaga
+-- os campos de texto no INSERT quando não há `marca_id`. Ver a nota mais
+-- detalhada em executar_jobs_automacao_manualmente.test.sql.
+insert into public.viatura_marcas (id, org_id, nome) values
+  ('00000000-0000-0000-0000-0000008a4c02', '00000000-0000-0000-0000-0000000a0000', 'Toyota');
+
+insert into public.viatura_modelos (id, org_id, marca_id, nome) values
+  ('00000000-0000-0000-0000-0000008e0d02', '00000000-0000-0000-0000-0000000a0000',
+   '00000000-0000-0000-0000-0000008a4c02', 'Corolla');
+
+insert into public.viaturas (id, org_id, matricula, marca_id, modelo_id) values
+  ('00000000-0000-0000-0000-000000870001', '00000000-0000-0000-0000-0000000a0000', 'GT-00-ER',
+   '00000000-0000-0000-0000-0000008a4c02', '00000000-0000-0000-0000-0000008e0d02');
 
 insert into public.motorista_viaturas (id, motorista_id, viatura_id, data_inicio, status) values
   ('00000000-0000-0000-0000-000000e80001', '00000000-0000-0000-0000-000000e00001', '00000000-0000-0000-0000-000000870001', current_date, 'ativo');

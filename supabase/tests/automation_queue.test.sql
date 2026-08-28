@@ -126,10 +126,26 @@ insert into public.automation_runs (id, rule_id, org_id, status, started_at) val
 
 select public.automation_runs_claim(10);
 
+-- ATENÇÃO — a semântica mudou, e a mudança foi deliberada.
+--
+-- Este teste afirmava `failed`. Era verdade quando o sweep fazia um UPDATE
+-- directo a `status = 'failed'`. A migração 20260729100000 mudou-o para chamar
+-- `automation_runs_fail()`, para que uma execução presa passasse a aparecer em
+-- `automation_logs` e na dead-letter como qualquer outra falha — antes ficava
+-- invisível no separador «Falhas».
+--
+-- Efeito colateral: `automation_runs_fail()` só marca `failed` quando as
+-- tentativas se esgotam. Este run tem attempt=0 e max_attempts=3, portanto é
+-- REPOSTO A `pending` com backoff — vai ser tentado outra vez.
+--
+-- É melhor para falhas transitórias (um worker que morreu) e pior para efeitos
+-- já produzidos: um run que criou notificações e morreu antes de concluir
+-- volta a criá-las. Está registado como risco na auditoria (cenário C) e é um
+-- dos motivos para a idempotência por passo da Fase 2.
 select is(
   (select status from public.automation_runs where id = '00000000-0000-0000-0000-0000004c3e01'),
-  'failed',
-  'claim() varre e falha runs presos em running há mais de 15 minutos'
+  'pending',
+  'claim() varre um run preso há mais de 15 min e volta a agendá-lo (não o mata à primeira)'
 );
 
 -- 12/13. Caminho feliz: claim() + complete() marca completed e regista em automation_logs.

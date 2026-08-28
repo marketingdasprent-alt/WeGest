@@ -107,6 +107,17 @@ select is(
   'passado o intervalo do rate limit, o botão volta a funcionar'
 );
 
+-- `reset role` ANTES de ler o lock. `automacao_execucao_manual_lock` tem RLS
+-- ligada e só uma policy RESTRICTIVE de negação a `anon` — nenhuma permissiva.
+-- Com RLS activa e zero policies permissivas, o papel `authenticated` não vê
+-- linha nenhuma, e a subconsulta devolvia NULL. Não era `executado_por` a estar
+-- vazio: era a linha inteira a ser invisível.
+--
+-- A tabela é escrita só por `executar_jobs_automacao_manualmente()`, que é
+-- SECURITY DEFINER — não ter policy permissiva é o desenho certo, não um
+-- esquecimento. Quem tem de a ler neste teste é o superutilizador.
+reset role;
+
 -- 6. E o lock regista quem correu por último.
 select is(
   (select executado_por from public.automacao_execucao_manual_lock),

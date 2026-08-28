@@ -46,8 +46,8 @@ select is(
 );
 
 -- Cenário B: regra com condição — só o payload certo casa.
-insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, condicoes) values
-  ('00000000-0000-0000-0000-00000046b001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_condicao', 'Regra Condição', 'teste.evento.b', 'notificacao', '[{"campo":"estado","operador":"=","valor":"critico"}]'::jsonb);
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, condicoes, acao_config) values
+  ('00000000-0000-0000-0000-00000046b001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_condicao', 'Regra Condição', 'teste.evento.b', 'notificacao', '[{"campo":"estado","operador":"=","valor":"critico"}]'::jsonb, '{"template_codigo":"teste.template","titulo":"Titulo de Teste"}'::jsonb);
 
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, payload, emitted_by) values
   ('00000000-0000-0000-0000-000000e82e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.b', 'viaturas', '00000000-0000-0000-0000-00000ef70020', '{"estado":"critico"}'::jsonb, 'manual'),
