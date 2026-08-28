@@ -264,6 +264,34 @@ directa», «não há códigos repetidos», «nenhuma nasce desactivada» — em
 números mágicos. A contagem exacta ficou num único sítio, com o motivo escrito
 ao lado.
 
+#### O que as rondas seguintes revelaram
+
+Ressuscitar os testes descascou o sistema por camadas — primeiro o *parse*,
+depois as *constraints*, depois os *triggers*, e por fim o *comportamento*.
+Três achados que não eram podridão de teste e ficam registados:
+
+**1. Não se insere uma viatura dando `marca` como texto.** O trigger
+`trg_sync_viatura_marca_modelo` faz, sem condição nenhuma no INSERT,
+`select nome into NEW.marca from viatura_marcas where id = NEW.marca_id`. Sem
+`marca_id`, o `SELECT` não encontra linha, o `INTO` põe NULL, e o valor que o
+chamador deu é deitado fora antes de chegar à tabela — que o recusa por ser
+NOT NULL. Qualquer caminho de código que insira viaturas tem de passar por
+`marca_id`/`modelo_id`.
+
+**2. Uma execução presa é RE-AGENDADA, não morta.** O sweep de
+`automation_runs_claim` marcava `failed` directamente; a migração
+`20260729100000` passou-o a chamar `automation_runs_fail()` para que a falha
+aparecesse nos logs e na dead-letter. Efeito colateral: essa função só marca
+`failed` quando as tentativas se esgotam, pelo que um run preso volta a
+`pending` com backoff. É melhor para falhas transitórias e **pior para efeitos
+já produzidos** — um run que criou notificações e morreu antes de concluir
+volta a criá-las. É o cenário C da auditoria, agora confirmado por teste.
+
+**3. `automacao_execucao_manual_lock` é invisível a `authenticated`.** Tem RLS
+ligada e apenas uma policy RESTRICTIVE de negação — nenhuma permissiva. É o
+desenho certo (só a função SECURITY DEFINER lhe escreve), mas significa que
+qualquer leitura feita com o papel da aplicação devolve vazio, não erro.
+
 #### O que ainda não se sabe
 
 Corrigidas estas três causas, os testes **passam a correr**. Se passam é outra
