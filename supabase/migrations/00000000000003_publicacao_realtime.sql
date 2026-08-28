@@ -92,3 +92,44 @@ begin
 
   raise notice 'realtime: % tabelas acrescentadas à publicação', adicionadas;
 end $$;
+
+-- ── Pós-condição ────────────────────────────────────────────────────────────
+--
+-- O bloco acima podia não fazer nada e ninguém dar por isso: se o `alter` não
+-- pegasse (falta de posse da publicação, nome diferente no stack local, uma
+-- variante `for all tables`), o resultado seria um NOTICE animador e uma
+-- publicação vazia. Foi exactamente essa a dúvida na primeira tentativa.
+--
+-- Isto transforma o silêncio em erro. Se a publicação não ficar como se
+-- pretende, a migração falha aqui, com a lista do que falta — e o rebuild pára
+-- em vez de produzir uma base que parece boa e tem o Realtime morto.
+do $$
+declare
+  em_falta text;
+begin
+  select string_agg(t, ', ' order by t)
+  into em_falta
+  from unnest(array[
+    'calendario_eventos','email_comandos','email_mensagens','email_pastas',
+    'email_rascunhos','lead_status_history','leads_dasprent','notificacoes',
+    'notifications','ti_tickets'
+  ]) as t
+  where exists (
+      select 1 from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+      where c.relname = t and c.relkind = 'r'
+    )
+    and not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    );
+
+  if em_falta is not null then
+    raise exception
+      'realtime: tabelas que existem mas não ficaram na publicação supabase_realtime: %', em_falta
+      using hint = 'Confirmar posse da publicação e se o stack local a cria com outro nome.';
+  end if;
+
+  raise notice 'realtime: publicação verificada — % tabelas',
+    (select count(*) from pg_publication_tables where pubname = 'supabase_realtime');
+end $$;
