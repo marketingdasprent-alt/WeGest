@@ -42,16 +42,27 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000a0001', true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000a0001","role":"authenticated"}', true);
 
+-- Estas duas asserções contavam regras: «o user A vê exactamente 1». Deixou de
+-- ser verdade e não por regressão — criar uma organização passou a semear
+-- automaticamente as regras por omissão (trigger em `organizacoes`), pelo que
+-- a Org A tem as 19 semeadas mais a 1 deste teste.
+--
+-- Contar era a forma frágil de perguntar o que interessa. O que este teste
+-- existe para garantir é ISOLAMENTO: nada da Org B chega ao user A. Passou a
+-- ser essa a pergunta, e a resposta não muda quando o seed crescer.
 select is(
-  (select count(*)::int from public.automation_rules),
-  1,
-  'user A (admin da Org A) só vê a regra da sua própria org'
+  (select count(*)::int from public.automation_rules
+     where org_id = '00000000-0000-0000-0000-0000000b0000'),
+  0,
+  'user A (admin da Org A) não vê nenhuma regra da Org B'
 );
 
 select is(
-  (select codigo from public.automation_rules limit 1),
-  'teste.regra_a',
-  'a regra visível ao user A é especificamente a da Org A'
+  (select count(*)::int from public.automation_rules
+     where codigo = 'teste.regra_a'
+       and org_id = '00000000-0000-0000-0000-0000000a0000'),
+  1,
+  'a regra da própria org é visível ao user A'
 );
 
 select is(

@@ -21,7 +21,7 @@ insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_
    '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_recurso":"motoristas_gestao","enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-0000004c00b1', '00000000-0000-0000-0000-0000004600b1', '00000000-0000-0000-0000-0000000b0000', 'viaturas', '00000000-0000-0000-0000-000000ent00b1');
+  ('00000000-0000-0000-0000-0000004c00b1', '00000000-0000-0000-0000-0000004600b1', '00000000-0000-0000-0000-0000000b0000', 'viaturas', '00000000-0000-0000-0000-00000ef700b1');
 
 select public.execute_automation_runs();
 
@@ -42,7 +42,7 @@ select is(
 -- reportado pelo utilizador: "Ver candidatura" num aviso de seguro).
 select is(
   (select link from public.notificacoes where destinatario_id = '00000000-0000-0000-0000-0000000b0001' and tipo = 'viatura_seguro_expirando'),
-  '/viaturas/00000000-0000-0000-0000-000000ent00b1',
+  '/viaturas/00000000-0000-0000-0000-00000ef700b1',
   'viatura.seguro_expirando preenche link para a viatura concreta'
 );
 
@@ -74,7 +74,7 @@ insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_
    '{"titulo":"Titulo de Teste","template_codigo":"cobranca.gerada","destinatarios_recurso":"renting_contratos","enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-0000004c00b3', '00000000-0000-0000-0000-0000004600b3', '00000000-0000-0000-0000-0000000b0000', 'contrato_cobrancas', '00000000-0000-0000-0000-000000ent00b3');
+  ('00000000-0000-0000-0000-0000004c00b3', '00000000-0000-0000-0000-0000004600b3', '00000000-0000-0000-0000-0000000b0000', 'contrato_cobrancas', '00000000-0000-0000-0000-00000ef700b3');
 
 select public.execute_automation_runs();
 
@@ -101,8 +101,8 @@ insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_
    '{"titulo":"Titulo de Teste","template_codigo":"contrato_renting.renovacao_proxima","destinatarios_recurso":"renting_contratos","enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-0000004c00b4', '00000000-0000-0000-0000-0000004600b4', '00000000-0000-0000-0000-0000000b0000', 'profiles', '00000000-0000-0000-0000-000000b0001'),
-  ('00000000-0000-0000-0000-0000004c00b5', '00000000-0000-0000-0000-0000004600b5', '00000000-0000-0000-0000-0000000b0000', 'contratos_renting', '00000000-0000-0000-0000-000000ent00b5');
+  ('00000000-0000-0000-0000-0000004c00b4', '00000000-0000-0000-0000-0000004600b4', '00000000-0000-0000-0000-0000000b0000', 'profiles', '00000000-0000-0000-0000-0000000b0001'),
+  ('00000000-0000-0000-0000-0000004c00b5', '00000000-0000-0000-0000-0000004600b5', '00000000-0000-0000-0000-0000000b0000', 'contratos_renting', '00000000-0000-0000-0000-00000ef700b5');
 
 select public.execute_automation_runs();
 
@@ -114,7 +114,7 @@ select is(
 
 select is(
   (select tipo || ' -> ' || link from public.notificacoes where destinatario_id = '00000000-0000-0000-0000-0000000b0001' and tipo = 'contrato_renting_renovacao_proxima'),
-  'contrato_renting_renovacao_proxima -> /renting/contratos/00000000-0000-0000-0000-000000ent00b5',
+  'contrato_renting_renovacao_proxima -> /renting/contratos/00000000-0000-0000-0000-00000ef700b5',
   'contrato_renting.renovacao_proxima escreve em notificacoes com link para o contrato concreto'
 );
 

@@ -180,6 +180,11 @@ mkdir -p "$ARQUIVO"
 N_MOVIDOS=0
 
 while IFS= read -r f; do
+  # Tudo o que comece por 00000000000 é ficheiro de ARRANQUE, não histórico:
+  # o baseline e os dados de catálogo (00000000000001_dados_catalogo.sql).
+  # Arquivá-los deixaria a base nova sem catálogo de permissões — que foi
+  # exactamente o que os pgTAP apanharam a 2026-08-28.
+  case "${f##*/}" in 00000000000*) continue ;; esac
   [ "$f" = "$BASELINE" ] && continue
   if git -C "$RAIZ" ls-files --error-unmatch "$f" >/dev/null 2>&1; then
     git -C "$RAIZ" mv "$f" "$ARQUIVO/" 2>/dev/null || mv "$f" "$ARQUIVO/"
