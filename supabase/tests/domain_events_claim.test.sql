@@ -20,7 +20,7 @@
 -- ============================================================
 
 begin;
-select plan(10);
+select plan(11);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000e0000', 'Org Barramento', 'barramento-a');
@@ -132,11 +132,34 @@ select public.process_domain_events(10);
 
 drop trigger trg_veneno_teste on public.automation_runs;
 
--- 7. O envenenado não concluiu...
-select isnt(
+-- 7. A falha fica registada — e o evento conclui.
+--
+-- ATÉ AO MVP DAS ACÇÕES INTERNAS esta asserção era o inverso: o evento NÃO
+-- podia ficar `completed`, porque uma excepção em qualquer regra abortava o
+-- processamento inteiro do evento.
+--
+-- O MVP introduziu sub-transacção por REGRA, e isso muda de propósito o que é
+-- correcto aqui: o veneno deste ficheiro dispara no insert de `automation_runs`,
+-- ou seja é uma falha DE UMA REGRA. Sob o desenho novo ela não pode levar o
+-- evento nem as outras regras — foi exactamente isso que se pediu.
+--
+-- O que a asserção protegia continua protegido, e é por isso que muda em vez
+-- de desaparecer: uma falha não passa em silêncio. Deixa de se manifestar como
+-- «o evento não concluiu» e passa a manifestar-se como uma linha
+-- `regra_falhou` com o erro. É a mesma exigência, no sítio onde o desenho novo
+-- a coloca.
+select ok(
+  (select detalhe->>'erro' from public.automation_logs
+    where evento = 'regra_falhou'
+      and detalhe->>'event_id' = '00000000-0000-0000-0000-0000000e0011')
+    like '%veneno de teste%',
+  'a falha da regra fica registada com o erro, em vez de derrubar o evento'
+);
+
+select is(
   (select status from public.domain_events where id = '00000000-0000-0000-0000-0000000e0011'),
   'completed',
-  'o evento envenenado não é dado como concluído'
+  'e o evento conclui — a falha é da regra, não dele'
 );
 
 -- 8. ...e os que vinham a seguir no MESMO lote passaram à mesma.
