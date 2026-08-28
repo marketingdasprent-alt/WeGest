@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { CheckCircle2, Clock, Download, PenLine } from 'lucide-react';
+import { CheckCircle2, Clock, Download, FileText, PenLine } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getDocumentoAssinadoUrl, type AssinaturaPedido } from '@/hooks/useAssinaturaPedidos';
+import { getDocumentoUrl, type AssinaturaPedido } from '@/hooks/useAssinaturaPedidos';
 
 export interface AssinaturasPedidosListProps {
   pedidos: AssinaturaPedido[];
@@ -35,7 +35,7 @@ function data(iso: string): string {
  */
 export function AssinaturasPedidosList({
   pedidos,
-  obterUrl = getDocumentoAssinadoUrl,
+  obterUrl = getDocumentoUrl,
   abrirUrl = (url) => window.open(url, '_blank', 'noopener'),
   agora = new Date(),
 }: AssinaturasPedidosListProps) {
@@ -45,11 +45,12 @@ export function AssinaturasPedidosList({
   // uma secção vazia.
   if (pedidos.length === 0) return null;
 
-  const abrir = async (pedido: AssinaturaPedido) => {
-    if (!pedido.documento_assinado_path) return;
-    setAAbrir(pedido.id);
+  /** `chave` distingue os dois botões do mesmo pedido no estado de "a abrir". */
+  const abrir = async (chave: string, path: string | null) => {
+    if (!path) return;
+    setAAbrir(chave);
     try {
-      const url = await obterUrl(pedido.documento_assinado_path);
+      const url = await obterUrl(path);
       if (url) abrirUrl(url);
     } finally {
       setAAbrir(null);
@@ -110,13 +111,28 @@ export function AssinaturasPedidosList({
                 <Badge variant="secondary">Por assinar</Badge>
               )}
 
+              {/* O original está sempre disponível, assinado ou não: é o que
+                  foi enviado, e serve para conferir e para imprimir. */}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1"
+                disabled={aAbrir === `${pedido.id}:original`}
+                onClick={() => void abrir(`${pedido.id}:original`, pedido.documento_path)}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Original
+              </Button>
+
               {assinado && pedido.documento_assinado_path && (
                 <Button
                   size="sm"
                   variant="ghost"
                   className="gap-1"
-                  disabled={aAbrir === pedido.id}
-                  onClick={() => void abrir(pedido)}
+                  disabled={aAbrir === `${pedido.id}:assinado`}
+                  onClick={() =>
+                    void abrir(`${pedido.id}:assinado`, pedido.documento_assinado_path)
+                  }
                 >
                   <Download className="h-3.5 w-3.5" />
                   Documento assinado

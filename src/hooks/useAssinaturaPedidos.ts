@@ -12,6 +12,9 @@ export interface AssinaturaPedido {
   created_at: string;
   expires_at: string;
   assinado_em: string | null;
+  /** PDF ORIGINAL, tal como foi enviado para assinar. Existe sempre. */
+  documento_path: string;
+  /** PDF com a assinatura dentro. Só existe depois de assinado. */
   documento_assinado_path: string | null;
   /**
    * O pedido foi feito sobre uma linha de contrato anterior a esta.
@@ -63,7 +66,7 @@ export function useAssinaturaPedidos(contratoId: string | null | undefined) {
       const { data, error } = await supabase
         .from('documento_assinatura_pedidos')
         .select(
-          'id, contrato_id, papel, signatario_nome, signatario_email, documento_nome, created_at, expires_at, assinado_em, documento_assinado_path'
+          'id, contrato_id, papel, signatario_nome, signatario_email, documento_nome, created_at, expires_at, assinado_em, documento_path, documento_assinado_path'
         )
         .in('contrato_id', ids)
         .order('created_at', { ascending: false });
@@ -78,13 +81,13 @@ export function useAssinaturaPedidos(contratoId: string | null | undefined) {
 }
 
 /**
- * Link temporário para descarregar um documento assinado.
+ * Link temporário para abrir um documento do pedido — o original ou o assinado.
  *
  * O bucket é privado: sem link assinado não há como lá chegar, e é assim que
- * deve ser — um documento assinado não pode ficar acessível a quem descubra o
- * endereço.
+ * deve ser — um documento destes não pode ficar acessível a quem descubra o
+ * endereço. Abre num separador, e é daí que se imprime ou se guarda em PDF.
  */
-export async function getDocumentoAssinadoUrl(path: string): Promise<string | null> {
+export async function getDocumentoUrl(path: string): Promise<string | null> {
   const { data, error } = await supabase.storage.from('documentos').createSignedUrl(path, 3600);
   if (error) throw error;
   return data?.signedUrl ?? null;

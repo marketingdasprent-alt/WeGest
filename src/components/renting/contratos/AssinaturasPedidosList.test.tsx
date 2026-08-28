@@ -22,6 +22,7 @@ const porAssinar: AssinaturaPedido = {
   created_at: '2026-08-25T09:00:00Z',
   expires_at: '2026-09-24T09:00:00Z',
   assinado_em: null,
+  documento_path: 'assinaturas/2026-08-25/documento.pdf',
   documento_assinado_path: null,
   de_versao_anterior: false,
 };
@@ -122,6 +123,7 @@ describe('AssinaturasPedidosList — pedidos de versões anteriores', () => {
     created_at: '2026-08-28T14:31:00Z',
     expires_at: '2026-09-27T14:31:00Z',
     assinado_em: '2026-08-28T14:32:00Z',
+    documento_path: 'assinaturas/2026-08-28/documento.pdf',
     documento_assinado_path: 'contratos/841/documento-assinado.pdf',
     de_versao_anterior: true,
   };
@@ -151,5 +153,54 @@ describe('AssinaturasPedidosList — pedidos de versões anteriores', () => {
     render(<AssinaturasPedidosList pedidos={[{ ...assinadoAntes, de_versao_anterior: false }]} />);
 
     expect(screen.queryByText('Versão anterior do contrato')).toBeNull();
+  });
+});
+
+/**
+ * Ver o original e o assinado lado a lado. Ambos sao PDF e abrem num separador,
+ * que e de onde se imprime ou se guarda.
+ */
+describe('AssinaturasPedidosList — original e assinado', () => {
+  it('deixa abrir o original mesmo antes de estar assinado', async () => {
+    const obterUrl = vi.fn().mockResolvedValue('https://exemplo/original.pdf');
+    const abrirUrl = vi.fn();
+    render(
+      <AssinaturasPedidosList pedidos={[porAssinar]} obterUrl={obterUrl} abrirUrl={abrirUrl} />
+    );
+
+    screen.getByRole('button', { name: /Original/ }).click();
+
+    await vi.waitFor(() => expect(abrirUrl).toHaveBeenCalledWith('https://exemplo/original.pdf'));
+    expect(obterUrl).toHaveBeenCalledWith('assinaturas/2026-08-25/documento.pdf');
+  });
+
+  it('num pedido assinado oferece os dois documentos', () => {
+    const assinado: AssinaturaPedido = {
+      ...porAssinar,
+      id: 'p-assinado',
+      assinado_em: '2026-08-26T10:00:00Z',
+      documento_assinado_path: 'assinaturas/2026-08-25/documento-assinado.pdf',
+    };
+    render(<AssinaturasPedidosList pedidos={[assinado]} />);
+
+    expect(screen.getByRole('button', { name: /Original/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Documento assinado/ })).toBeTruthy();
+  });
+
+  it('abre o assinado, e nao o original, no botao do assinado', async () => {
+    const obterUrl = vi.fn().mockResolvedValue('https://exemplo/assinado.pdf');
+    const abrirUrl = vi.fn();
+    const assinado: AssinaturaPedido = {
+      ...porAssinar,
+      id: 'p-assinado',
+      assinado_em: '2026-08-26T10:00:00Z',
+      documento_assinado_path: 'assinaturas/2026-08-25/documento-assinado.pdf',
+    };
+    render(<AssinaturasPedidosList pedidos={[assinado]} obterUrl={obterUrl} abrirUrl={abrirUrl} />);
+
+    screen.getByRole('button', { name: /Documento assinado/ }).click();
+
+    await vi.waitFor(() => expect(abrirUrl).toHaveBeenCalled());
+    expect(obterUrl).toHaveBeenCalledWith('assinaturas/2026-08-25/documento-assinado.pdf');
   });
 });
