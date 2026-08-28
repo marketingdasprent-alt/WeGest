@@ -318,6 +318,41 @@ acrescentar à lista em `ci.yml`.
 | D-4 | 59 carimbos duplicados continuam nos ficheiros históricos. Deixam de importar assim que forem arquivados, mas até lá bloqueiam o reset. | Resolve-se com D-1 |
 | D-5 | `apify_credenciais_partilhadas` não tem seed: os tokens reais foram inseridos directamente na base e não estão no git. Um ambiente novo precisa de os inserir à mão. | Por desenho — são segredos |
 | D-6 | O ramo `feat/automacoes-canvas-fluxo` está 26 commits à frente de `main` e nunca foi integrado. Outros três ramos locais estão 10–23 commits à frente. | **Aberto** |
+| D-7 | `20260827151938_ti_tickets_numero_global` foi aplicada a produção **durante** este trabalho e não existe em nenhum objecto git. É a mesma classe de problema que a Fase 0 veio resolver, a acontecer outra vez. | **Aberto** — recuperar o ficheiro ou documentar o conteúdo |
+| D-8 | O baseline não traz os privilégios: `pg_dump --schema public` emite os GRANTs existentes mas **não** o `ALTER DEFAULT PRIVILEGES` nem os `REVOKE`. Uma base reconstruída nasce com `anon` a poder tudo (194 relações legíveis, 564 com escrita, 208 funções `SECURITY DEFINER` executáveis), enquanto produção está limpa (0/2/24). | **Aberto** — falta um ficheiro de arranque que reponha `20260730084227` camada 1 |
+
+### 5.1 Achado de segurança em produção (corrigido a 2026-08-28)
+
+O teste `rls_org_isolation.test.sql`, ao correr em CI pela primeira vez,
+encontrou **31 tabelas com coluna `org_id` sem a política `rls_org_isolation`**.
+Não era artefacto do rebuild: produção tinha-as na mesma. Nasceram depois da
+migração de hardening `20260730084227`, que criou as políticas num bloco `DO` e
+nunca mais foi re-executada.
+
+Na maioria não havia fuga — a política permissiva já filtrava por organização.
+Em **três** não filtrava em lado nenhum:
+
+| Tabela | Política permissiva de SELECT | Efeito |
+|---|---|---|
+| `cartao_atribuicoes` | `is_current_user_admin() OR has_permission(…,'administrativo_cartoes')` | Quem tivesse a permissão na org A lia as atribuições de cartão de **todas** as organizações |
+| `motorista_plataforma_identidades` | `is_current_user_admin() OR has_permission(…,'motoristas')` | Idem, para o mapeamento motorista ↔ plataforma |
+| `refecho_pendente` | `is_current_user_admin() OR can_view_financeiro()` | Idem, para refechos financeiros pendentes |
+
+O padrão é o mesmo nas três: a permissiva verifica **quem é o utilizador** e
+nunca **de quem é a linha**.
+
+Corrigido por `20260828084250`, que aplicou `rls_org_isolation` a 27 tabelas.
+Verificado antes de aplicar: **0 linhas com `org_id` NULL** em todas elas — uma
+política `org_id = get_current_org_id()` esconderia linhas com NULL em silêncio.
+
+Três exclusões deliberadas:
+
+- **`user_organizacoes` e `user_org_ativa`** — são o arranque do inquilino. O
+  `TenantContext` lê-as directamente para listar as organizações do utilizador
+  e saber qual está activa. Filtrá-las pela organização activa é circular, e o
+  selector de organizações passaria a mostrar uma só.
+- **`profiles`** — 34 call sites, incluindo registo e conta pessoal, onde o
+  utilizador pode ainda não ter organização. Merece migração própria.
 
 ---
 
