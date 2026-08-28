@@ -7,12 +7,17 @@
 -- segura, previsível e repetível — e não consegue ser levado a fazer mais do
 -- que aquilo que o catálogo permite.
 --
--- ── O QUE O `linhas` PROVA ──────────────────────────────────────────────────
+-- ── O QUE O `alterado` PROVA ────────────────────────────────────────────────
 --
--- Cada handler devolve quantas linhas actualizou, e isso fica em
+-- Cada handler devolve se alterou mesmo alguma coisa, e isso fica em
 -- `automation_logs.detalhe`. É por aí que se prova a idempotência: não basta
--- «o valor final está certo» — no retry tem de ser ZERO linhas, que é o que
--- garante que nenhum trigger da tabela chegou a correr.
+-- «o valor final está certo» — no retry tem de vir `alterado=false`, que é o
+-- que garante que nenhum trigger da tabela chegou a correr.
+--
+-- Um booleano e não uma contagem de linhas, de propósito: zero linhas era
+-- ambíguo entre «já estava certo» e «o alvo não existe nesta organização», e a
+-- segunda hipótese não pode passar por sucesso. O handler verifica a
+-- existência antes, e levanta.
 --
 -- ── PORQUE event_types INVENTADOS ───────────────────────────────────────────
 --
@@ -21,7 +26,7 @@
 -- ============================================================
 
 begin;
-select plan(18);
+select plan(21);
 
 -- ── Cenário ─────────────────────────────────────────────────
 insert into public.organizacoes (id, nome, codigo) values
@@ -119,10 +124,10 @@ select is(
 );
 
 select is(
-  (select detalhe->>'linhas' from public.automation_logs
+  (select detalhe->>'alterado' from public.automation_logs
     where run_id = '00000000-0000-0000-0000-00000c4a1101' and evento = 'executada'),
-  '1',
-  'a primeira execução actualiza uma linha'
+  'true',
+  'a primeira execução altera mesmo o campo'
 );
 
 -- Retry: o mesmo run devolvido a pending, como o varrimento de presos faz.
@@ -135,9 +140,9 @@ select public.execute_automation_runs();
 select is(
   (select count(*)::int from public.automation_logs
     where run_id = '00000000-0000-0000-0000-00000c4a1101' and evento = 'executada'
-      and detalhe->>'linhas' = '0'),
+      and detalhe->>'alterado' = 'false'),
   1,
-  'o retry actualiza ZERO linhas — nenhum trigger da tabela chega a correr'
+  'o retry conclui com alterado=false — nenhum trigger da tabela chega a correr'
 );
 
 -- ════════════════════════════════════════════════════════════
@@ -225,21 +230,70 @@ select throws_ok(
 reset role;
 
 -- ════════════════════════════════════════════════════════════
--- Cross-tenant: o guarda está no próprio handler
+-- Cross-tenant: recusa, não silêncio
 -- ════════════════════════════════════════════════════════════
-select is(
-  (select public.fn_accao_viatura_atualizar_campo(
-            '00000000-0000-0000-0000-00000000a100',          -- org A
-            '00000000-0000-0000-0000-0000087b1101',          -- viatura da org B
-            '{"campo":"observacoes","valor":"invadido"}'::jsonb) ->> 'linhas'),
-  '0',
-  'o handler não escreve numa entidade de outra organização, mesmo com o UUID certo'
+-- Zero linhas não é resposta: significaria «o valor já estava certo» tanto
+-- como «a entidade não é desta organização». O handler verifica a existência
+-- antes de escrever, e levanta.
+select throws_ok(
+  $$select public.fn_accao_viatura_atualizar_campo(
+      '00000000-0000-0000-0000-00000000a100',          -- org A
+      '00000000-0000-0000-0000-0000087b1101',          -- viatura da org B
+      '{"campo":"observacoes","valor":"invadido"}'::jsonb)$$,
+  'P0001', null,
+  'o handler RECUSA uma entidade de outra organização, mesmo com o UUID certo'
 );
 
 select is(
   (select observacoes from public.viaturas where id = '00000000-0000-0000-0000-0000087b1101'),
   null,
   'e a entidade da org B fica intacta'
+);
+
+-- ════════════════════════════════════════════════════════════
+-- A acção tem de bater certo com a entidade do run
+-- ════════════════════════════════════════════════════════════
+-- Um entity_id é um UUID e mais nada. Sem esta verificação, uma regra de
+-- motorista com uma acção de viatura passava o id do motorista ao handler de
+-- viaturas.
+--
+-- Na escrita é recusado quando o catálogo conhece o event_type:
+select throws_ok(
+  $$insert into public.automation_rules (org_id, codigo, nome, event_type, acao_tipo, acao_config)
+    values ('00000000-0000-0000-0000-00000000a100', 'teste.mvp_troca', 'X',
+            'motorista.ficha_incompleta', 'automacao_interna',
+            '{"accao":"viatura.atualizar_campo","campo":"observacoes","valor":"x"}'::jsonb)$$,
+  '23514', null,
+  'uma acção de viatura num evento de motorista é recusada na escrita'
+);
+
+-- E em runtime, para os event_types que o catálogo não conhece — plantada com
+-- o validador desligado, que é o único caminho por onde chegaria.
+alter table public.automation_rules disable trigger trg_validar_acao_config;
+
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-0000004a1106', '00000000-0000-0000-0000-00000000a100',
+   'teste.mvp_troca_rt', 'MVP Troca', 'teste.mvp_troca_rt', 'automacao_interna',
+   '{"accao":"viatura.atualizar_campo","campo":"observacoes","valor":"nao devia acontecer"}'::jsonb);
+
+alter table public.automation_rules enable trigger trg_validar_acao_config;
+
+insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
+  ('00000000-0000-0000-0000-00000c4a1106', '00000000-0000-0000-0000-0000004a1106',
+   '00000000-0000-0000-0000-00000000a100', 'motoristas_ativos', '00000000-0000-0000-0000-0000000e1101');
+
+select public.execute_automation_runs();
+
+select isnt(
+  (select status from public.automation_runs where id = '00000000-0000-0000-0000-00000c4a1106'),
+  'completed',
+  'um run de motorista com acção de viatura NÃO é dado como concluído'
+);
+
+select is(
+  (select observacoes from public.viaturas where id = '00000000-0000-0000-0000-0000087a1101'),
+  'Seguro a expirar',
+  'e nenhuma viatura é alterada — o valor anterior mantém-se'
 );
 
 -- ════════════════════════════════════════════════════════════

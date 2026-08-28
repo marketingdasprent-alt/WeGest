@@ -45,12 +45,22 @@
 -- futuros. Hoje estão bem escritos; o próximo pode não estar. Com o guarda, um
 -- retry actualiza zero linhas e nenhum trigger chega a correr.
 --
--- ── TENANCY NO PRÓPRIO HANDLER ──────────────────────────────────────────────
+-- ── O ALVO TEM DE SER O CERTO, E ISSO SÃO DUAS COISAS ───────────────────────
 --
--- Cada handler filtra por `org_id` além do `id`, mesmo sabendo que o run já é
--- da organização certa. É defesa em profundidade: se um dia um caminho novo
--- criar um run com o `entity_id` errado, o handler não escreve na entidade de
--- outra organização — falha em silêncio com zero linhas, que é o correcto.
+-- Um `entity_id` é um UUID e mais nada: nem diz de que tabela veio, nem de que
+-- organização. Ambas as coisas são verificadas antes de escrever.
+--
+--   A TABELA   cada acção declara no catálogo a `entidade` sobre que opera, e
+--              o dispatcher confronta-a com a `entity_table` do run. Uma regra
+--              de motorista com uma acção de viatura não passa daqui.
+--
+--   A ORGANIZAÇÃO cada handler confirma que a entidade existe na org do run
+--              ANTES de actualizar. Sem isso, um alvo inexistente devolvia
+--              zero linhas — indistinguível de «o valor já estava certo» — e
+--              ficava registado como execução bem sucedida.
+--
+-- Daí o resultado dizer `alterado` e não quantas linhas mexeram: um booleano
+-- que só tem um significado, porque o caso «não existe» já levantou.
 -- ============================================================================
 
 -- ── 1. O log tem de saber dizer "regra_falhou" ──────────────────────────────
@@ -150,23 +160,26 @@ as $$
   select jsonb_build_object(
     'eventos', jsonb_build_object(
       'assistencia_ticket.aberto_demasiado_tempo', jsonb_build_object(
-        'label',  'Ticket aberto há demasiado tempo',
-        'modulo', 'Assistência',
+        'label',    'Ticket aberto há demasiado tempo',
+        'modulo',   'Assistência',
+        'entidade', 'assistencia_tickets',
         'campos', jsonb_build_array(
           jsonb_build_object('id','prioridade','label','Prioridade','tipo','string'),
           jsonb_build_object('id','status',    'label','Estado',    'tipo','string')
         )
       ),
       'motorista.ficha_incompleta', jsonb_build_object(
-        'label',  'Ficha de motorista incompleta',
-        'modulo', 'Motoristas',
+        'label',    'Ficha de motorista incompleta',
+        'modulo',   'Motoristas',
+        'entidade', 'motoristas_ativos',
         'campos', jsonb_build_array(
           jsonb_build_object('id','nome','label','Nome','tipo','string')
         )
       ),
       'viatura.seguro_expirando', jsonb_build_object(
-        'label',  'Seguro da viatura a expirar',
-        'modulo', 'Viaturas',
+        'label',    'Seguro da viatura a expirar',
+        'modulo',   'Viaturas',
+        'entidade', 'viaturas',
         'campos', jsonb_build_array(
           jsonb_build_object('id','matricula','label','Matrícula','tipo','string')
         )
@@ -174,21 +187,24 @@ as $$
     ),
     'accoes', jsonb_build_object(
       'motorista.atualizar_campo', jsonb_build_object(
-        'label',   'Preencher um campo do motorista',
-        'modulo',  'Motoristas',
-        'recurso', 'motoristas_editar',
+        'label',    'Preencher um campo do motorista',
+        'modulo',   'Motoristas',
+        'entidade', 'motoristas_ativos',
+        'recurso',  'motoristas_editar',
         'campos_permitidos', jsonb_build_array('observacoes')
       ),
       'viatura.atualizar_campo', jsonb_build_object(
-        'label',   'Preencher um campo da viatura',
-        'modulo',  'Viaturas',
-        'recurso', 'viaturas_editar',
+        'label',    'Preencher um campo da viatura',
+        'modulo',   'Viaturas',
+        'entidade', 'viaturas',
+        'recurso',  'viaturas_editar',
         'campos_permitidos', jsonb_build_array('observacoes')
       ),
       'ticket.alterar_estado', jsonb_build_object(
-        'label',   'Alterar o estado do ticket',
-        'modulo',  'Assistência',
-        'recurso', 'tickets_gerir',
+        'label',    'Alterar o estado do ticket',
+        'modulo',   'Assistência',
+        'entidade', 'assistencia_tickets',
+        'recurso',  'tickets_gerir',
         'valores', jsonb_build_array('pendente','aberto','em_andamento','aguardando','resolvido','fechado')
       )
     )
@@ -210,6 +226,19 @@ grant execute on function public.automation_catalogo() to authenticated, service
 -- A allowlist é verificada aqui além de o ser na escrita. Redundante por
 -- desenho: o validador impede a configuração má de ser gravada, o handler
 -- impede-a de ser executada se alguma vez lá chegar por outro caminho.
+--
+-- ── ZERO LINHAS NÃO É UMA RESPOSTA ──────────────────────────────────────────
+--
+-- Com o guarda `is distinct from`, um update que não altera nada devolve zero
+-- linhas — e isso pode significar duas coisas opostas:
+--
+--   a entidade existe e o valor já era o desejado   → sucesso idempotente
+--   a entidade não existe naquela organização       → alvo errado
+--
+-- Contar linhas confunde as duas, e a segunda ficaria registada como execução
+-- bem sucedida. Por isso a existência é verificada ANTES, e o resultado passa a
+-- dizer `alterado` em vez de quantas linhas mexeram: um booleano que só tem um
+-- significado.
 
 create or replace function public.fn_accao_motorista_atualizar_campo(
   p_org_id uuid, p_entity_id uuid, p_config jsonb)
@@ -228,6 +257,11 @@ begin
       using errcode = 'check_violation';
   end if;
 
+  perform 1 from public.motoristas_ativos where id = p_entity_id and org_id = p_org_id;
+  if not found then
+    raise exception 'motorista % não existe na organização %', p_entity_id, p_org_id;
+  end if;
+
   -- Sem SQL dinâmico: com um campo na allowlist, a coluna é literal. Quando
   -- houver um segundo, isto passa a `case`, não a `execute`.
   update public.motoristas_ativos
@@ -237,7 +271,7 @@ begin
      and observacoes is distinct from v_valor;
 
   get diagnostics v_linhas = row_count;
-  return jsonb_build_object('accao', 'motorista.atualizar_campo', 'campo', v_campo, 'linhas', v_linhas);
+  return jsonb_build_object('accao', 'motorista.atualizar_campo', 'campo', v_campo, 'alterado', v_linhas > 0);
 end;
 $$;
 
@@ -258,6 +292,11 @@ begin
       using errcode = 'check_violation';
   end if;
 
+  perform 1 from public.viaturas where id = p_entity_id and org_id = p_org_id;
+  if not found then
+    raise exception 'viatura % não existe na organização %', p_entity_id, p_org_id;
+  end if;
+
   update public.viaturas
      set observacoes = v_valor
    where id = p_entity_id
@@ -265,7 +304,7 @@ begin
      and observacoes is distinct from v_valor;
 
   get diagnostics v_linhas = row_count;
-  return jsonb_build_object('accao', 'viatura.atualizar_campo', 'campo', v_campo, 'linhas', v_linhas);
+  return jsonb_build_object('accao', 'viatura.atualizar_campo', 'campo', v_campo, 'alterado', v_linhas > 0);
 end;
 $$;
 
@@ -287,6 +326,11 @@ begin
       using errcode = 'check_violation';
   end if;
 
+  perform 1 from public.assistencia_tickets where id = p_entity_id and org_id = p_org_id;
+  if not found then
+    raise exception 'ticket % não existe na organização %', p_entity_id, p_org_id;
+  end if;
+
   update public.assistencia_tickets
      set status = v_valor
    where id = p_entity_id
@@ -294,25 +338,50 @@ begin
      and status is distinct from v_valor;
 
   get diagnostics v_linhas = row_count;
-  return jsonb_build_object('accao', 'ticket.alterar_estado', 'valor', v_valor, 'linhas', v_linhas);
+  return jsonb_build_object('accao', 'ticket.alterar_estado', 'valor', v_valor, 'alterado', v_linhas > 0);
 end;
 $$;
 
 -- ── 5. Despacho ─────────────────────────────────────────────────────────────
+--
 -- `case` exaustivo com `else` que levanta. Uma acção fora do conjunto não
 -- corre — e nem chega aqui, porque o validador já a recusou na escrita.
+--
+-- ── A ENTIDADE TEM DE BATER CERTO ───────────────────────────────────────────
+--
+-- Um `entity_id` é um UUID e mais nada: nada nele diz de que tabela veio. Sem
+-- esta verificação, uma regra de motorista com a acção `viatura.atualizar_campo`
+-- passaria o id do motorista ao handler de viaturas, que simplesmente não
+-- encontraria nada — e antes da correcção do `alterado` isso teria sido
+-- registado como sucesso.
+--
+-- Cada acção declara no catálogo a `entidade` sobre que sabe operar, e o run
+-- traz a `entity_table` de onde o evento veio. Se não coincidirem, não se
+-- adivinha: levanta.
 create or replace function public.fn_executar_accao_interna(
-  p_org_id uuid, p_entity_id uuid, p_config jsonb)
+  p_org_id uuid, p_entity_table text, p_entity_id uuid, p_config jsonb)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_accao text := p_config->>'accao';
+  v_accao    text := p_config->>'accao';
+  v_entidade text := public.automation_catalogo() -> 'accoes' -> v_accao ->> 'entidade';
 begin
   if p_entity_id is null then
     raise exception 'acção interna sem entidade sobre que agir';
+  end if;
+
+  if v_entidade is null then
+    raise exception 'acção interna "%" desconhecida', coalesce(v_accao, '(nula)')
+      using errcode = 'check_violation';
+  end if;
+
+  if p_entity_table is distinct from v_entidade then
+    raise exception 'a acção "%" opera sobre % — o run é de %',
+      v_accao, v_entidade, coalesce(p_entity_table, '(nada)')
+      using errcode = 'check_violation';
   end if;
 
   case v_accao
@@ -332,11 +401,11 @@ $$;
 revoke all on function public.fn_accao_motorista_atualizar_campo(uuid, uuid, jsonb) from public, anon, authenticated;
 revoke all on function public.fn_accao_viatura_atualizar_campo(uuid, uuid, jsonb)   from public, anon, authenticated;
 revoke all on function public.fn_accao_ticket_alterar_estado(uuid, uuid, jsonb)     from public, anon, authenticated;
-revoke all on function public.fn_executar_accao_interna(uuid, uuid, jsonb)          from public, anon, authenticated;
+revoke all on function public.fn_executar_accao_interna(uuid, text, uuid, jsonb)          from public, anon, authenticated;
 grant execute on function public.fn_accao_motorista_atualizar_campo(uuid, uuid, jsonb) to service_role;
 grant execute on function public.fn_accao_viatura_atualizar_campo(uuid, uuid, jsonb)   to service_role;
 grant execute on function public.fn_accao_ticket_alterar_estado(uuid, uuid, jsonb)     to service_role;
-grant execute on function public.fn_executar_accao_interna(uuid, uuid, jsonb)          to service_role;
+grant execute on function public.fn_executar_accao_interna(uuid, text, uuid, jsonb)          to service_role;
 
 -- ── 6. Validação na escrita ─────────────────────────────────────────────────
 --
@@ -363,6 +432,7 @@ declare
   v_accao text;
   v_def jsonb;
   v_campo text;
+  v_evento_entidade text;
 begin
   -- ── Automações internas ───────────────────────────────────────────────
   if new.acao_tipo = 'automacao_interna' then
@@ -372,6 +442,7 @@ begin
 
     v_accao := new.acao_config->>'accao';
     v_def   := public.automation_catalogo() -> 'accoes' -> v_accao;
+    v_evento_entidade := public.automation_catalogo() -> 'eventos' -> new.event_type ->> 'entidade';
 
     if v_def is null then
       raise exception 'acao_config inválido: acção interna "%" não existe no catálogo.', coalesce(v_accao, '(nula)')
@@ -395,6 +466,17 @@ begin
     -- Conjunto fechado de valores, quando a acção o tem.
     if v_def ? 'valores' and not (v_def->'valores' @> to_jsonb(new.acao_config->>'valor')) then
       raise exception 'acao_config inválido: valor "%" não é aceite por "%".', new.acao_config->>'valor', v_accao
+        using ERRCODE = 'check_violation', HINT = 'Validação acao_config (automation_rules)';
+    end if;
+
+    -- A acção tem de operar sobre a entidade que o evento traz. Só é
+    -- verificável quando o catálogo conhece o event_type — para os outros, o
+    -- dispatcher volta a verificar em runtime e falha fechado. Apanhar aqui é
+    -- melhor: dá o erro a quem está a configurar, não a meio da noite num cron.
+    if v_evento_entidade is not null
+       and v_def->>'entidade' is distinct from v_evento_entidade then
+      raise exception 'acao_config inválido: a acção "%" opera sobre %, mas o evento "%" é de %.',
+        v_accao, v_def->>'entidade', new.event_type, v_evento_entidade
         using ERRCODE = 'check_violation', HINT = 'Validação acao_config (automation_rules)';
     end if;
 
@@ -473,7 +555,7 @@ declare
   v_src  text;
   v_novo text;
   v_proc constant text := E'      if v_rule.acao_tipo <> ''notificacao'' then\n        perform public.automation_runs_complete(v_run.id);\n        continue;\n      end if;';
-  v_sub  constant text := E'      if v_rule.acao_tipo = ''automacao_interna'' then\n        perform public.automation_runs_complete(\n          v_run.id,\n          public.fn_executar_accao_interna(v_run.org_id, v_run.entity_id, v_rule.acao_config));\n        continue;\n      end if;\n\n      if v_rule.acao_tipo <> ''notificacao'' then\n        perform public.automation_runs_complete(v_run.id);\n        continue;\n      end if;';
+  v_sub  constant text := E'      if v_rule.acao_tipo = ''automacao_interna'' then\n        perform public.automation_runs_complete(\n          v_run.id,\n          public.fn_executar_accao_interna(v_run.org_id, v_run.entity_table, v_run.entity_id, v_rule.acao_config));\n        continue;\n      end if;\n\n      if v_rule.acao_tipo <> ''notificacao'' then\n        perform public.automation_runs_complete(v_run.id);\n        continue;\n      end if;';
 begin
   select pg_get_functiondef(p.oid) into v_src
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
