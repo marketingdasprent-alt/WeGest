@@ -282,24 +282,32 @@ select is(
 
 -- T6: reagendamento manual a partir da dead-letter.
 --
--- O id do failed_job resolve-se ANTES de trocar de papel. Depois de
--- `set local role authenticated` a RLS aplica-se às leituras deste ficheiro, e
--- uma subconsulta sobre `failed_jobs` podia devolver zero linhas — o teste
--- falharia com «failed_job não encontrado» e pareceria um problema de
--- permissões em vez do que é: uma subconsulta filtrada. Tabelas temporárias
--- não têm RLS.
-create temp table f3_job_reagendar as
-select fj.id
-  from public.failed_jobs fj
-  join public.automation_runs r on r.id = fj.source_id
- where fj.source_table = 'automation_runs'
-   and r.trigger_event_id = '00000000-0000-0000-0000-00000e0f3004';
+-- O id do failed_job resolve-se ANTES de trocar de papel, e viaja numa
+-- definição de configuração em vez de numa tabela.
+--
+-- A primeira tentativa lia-o de uma subconsulta depois do `set local role
+-- authenticated`, e a RLS podia esvaziá-la — o teste falharia com «failed_job
+-- não encontrado», que parece um problema de permissões e não é. A segunda
+-- usou uma tabela temporária, que de facto não tem RLS, mas pertence ao
+-- superutilizador: `authenticated` não tem SELECT nela e o CI respondeu
+-- «permission denied for table f3_job_reagendar».
+--
+-- Uma definição de configuração não tem nem RLS nem dono. `set_config(...,
+-- true)` é local à transacção, e esta acaba em `rollback`.
+select set_config(
+  'f3.job_id',
+  (select fj.id::text
+     from public.failed_jobs fj
+     join public.automation_runs r on r.id = fj.source_id
+    where fj.source_table = 'automation_runs'
+      and r.trigger_event_id = '00000000-0000-0000-0000-00000e0f3004'),
+  true);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000f3001', true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000f3001","role":"authenticated"}', true);
 
-select public.retry_failed_job((select id from f3_job_reagendar));
+select public.retry_failed_job(current_setting('f3.job_id')::uuid);
 
 reset role;
 
