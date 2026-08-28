@@ -29,8 +29,7 @@ export function useModules() {
   const query = useQuery<ModulesQueryResult>({
     queryKey: ['organizacao_modulos'],
     queryFn: async () => {
-      // Tabela ainda não está nos tipos auto-gerados (migração nova); cast até regenerar.
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('organizacao_modulos')
         .select('*')
         .eq('ativo', true);

@@ -28,7 +28,7 @@ export function useMotoristaCartoesFrota(open: boolean, motoristaId: string | un
     if (!open) return;
     const loadCartoes = async () => {
       try {
-        const { data } = await (supabase as any)
+        const { data } = await supabase
           .from('cartoes_frota')
           .select('id, numero, tipo, motorista_id')
           .eq('ativo', true)
@@ -59,14 +59,14 @@ export function useMotoristaCartoesFrota(open: boolean, motoristaId: string | un
     try {
       for (const tipo of TIPOS) {
         const cartaoId = selectedCartao[tipo];
-        await (supabase as any)
+        await supabase
           .from('cartoes_frota')
           .update({ motorista_id: null })
           .eq('tipo', tipo)
           .eq('motorista_id', novoMotoristaId)
           .neq('id', cartaoId || '00000000-0000-0000-0000-000000000000');
         if (cartaoId) {
-          await (supabase as any)
+          await supabase
             .from('cartoes_frota')
             .update({ motorista_id: novoMotoristaId })
             .eq('id', cartaoId);

@@ -1,0 +1,130 @@
+name: 🧱 Gerar baseline do schema
+
+# Corre o cutover para baseline SEM precisar de Docker na máquina de ninguém.
+# O runner do GitHub Actions já tem Docker e o Supabase CLI instala-se aqui.
+#
+# ── COMO USAR (uma vez) ──────────────────────────────────────────────────────
+#
+#   1. Settings → Secrets and variables → Actions → New repository secret
+#        Nome:  SUPABASE_DB_URL
+#        Valor: postgresql://postgres:<password>@db.hkqzzxgeedsmjnhyquke.supabase.co:5432/postgres
+#
+#      A password está em Supabase Dashboard → Project Settings → Database.
+#
+#   2. Actions → 🧱 Gerar baseline do schema → Run workflow
+#
+#   3. O workflow cria o ramo `chore/baseline-schema` e abre-o para PR.
+#      Revê e faz merge.
+#
+#   4. A partir daí o job 🗄️ DB Rebuild + pgTAP do ci.yml passa a ter uma base
+#      reconstruível e corre em todos os PRs.
+#
+# ── O QUE FAZ ────────────────────────────────────────────────────────────────
+#
+#   · `supabase db dump` sobre produção (só schema, nunca dados)
+#   · arquiva os ficheiros históricos em supabase/migrations_archive/
+#   · reconstrói uma base do zero a partir do resultado, para o VERIFICAR
+#   · só empurra o ramo se a reconstrução funcionar
+#
+# Nada é escrito em produção. O dump é uma leitura.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Escreve "baseline" para confirmar'
+        required: true
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  baseline:
+    name: 🧱 Baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Confirmação
+        run: |
+          if [ "${{ inputs.confirmar }}" != "baseline" ]; then
+            echo "::error::Escreve exactamente 'baseline' no campo de confirmação."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Verificar o segredo
+        run: |
+          if [ -z "${{ secrets.SUPABASE_DB_URL }}" ]; then
+            echo "::error::O segredo SUPABASE_DB_URL não está definido. Ver o cabeçalho deste ficheiro."
+            exit 1
+          fi
+          echo "✓ segredo presente"
+
+      - name: Estado antes
+        run: |
+          echo "ficheiros de migração: $(find supabase/migrations -maxdepth 1 -name '*.sql' | wc -l)"
+          echo "carimbos duplicados:   $(find supabase/migrations -maxdepth 1 -name '*.sql' | sed 's|.*/||; s|_.*||' | sort | uniq -d | wc -l)"
+
+      # O script faz o dump, valida-o, arquiva o histórico e corre `db reset`
+      # para verificar. Se o dump vier suspeito, aborta antes de arquivar.
+      - name: Cutover
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash scripts/baseline-cutover.sh
+
+      - name: Correr o pgTAP do motor contra a base reconstruída
+        run: |
+          bash scripts/pgtap-suite.sh "Motor de automação" \
+            process_domain_events \
+            execute_automation_runs \
+            automation_queue \
+            automation_rules \
+            automation_runs_complete_duracao \
+            executar_jobs_automacao_manualmente \
+            seed_automacao_defaults \
+            automacao_saude_ignorar_failed_job \
+            automacao_timeline_views \
+            retry_failed_job
+
+      - name: Correr o pgTAP de segurança
+        run: |
+          bash scripts/pgtap-suite.sh "Segurança e multi-tenancy" \
+            rls_org_isolation \
+            rls_anon_exposure
+
+      # Só chega aqui se o dump foi válido, o reset funcionou e os testes
+      # passaram. Empurrar antes disso seria empurrar um baseline por verificar.
+      - name: Empurrar o ramo do baseline
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b chore/baseline-schema
+          git add -A supabase/migrations supabase/migrations_archive
+          # Vários -m em vez de uma string multi-linha: dentro de um bloco YAML
+          # as continuações a coluna 0 fechavam o bloco, e um heredoc indentado
+          # deixava espaços à cabeça de cada linha da mensagem.
+          git commit \
+            -m "chore(db): baseline do schema e arquivo do histórico" \
+            -m "Gerado por .github/workflows/db-baseline.yml com supabase db dump." \
+            -m "Substitui a cadeia histórica como ponto de partida. As duas causas de a base não ser reconstruível deixam de existir: 59 carimbos de versão duplicados contra PRIMARY KEY (version), e ~280 migrações escritas contra uma base que já tinha o estado." \
+            -m "Verificado neste mesmo job: a base reconstrói do zero e o pgTAP do motor passa." \
+            -m "Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+          # Na primeira execução o ramo remoto não existe e `--force-with-lease`
+          # não tem lease contra que comparar. Nas seguintes existe, e aí a
+          # lease é que impede esmagar trabalho de outra pessoa.
+          git push -u origin chore/baseline-schema \
+            || git push --force-with-lease -u origin chore/baseline-schema
+          echo "### Ramo criado" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`chore/baseline-schema\` — abre um PR a partir dele." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Parar a base de dados
+        if: always()
+        run: supabase stop --no-backup || true

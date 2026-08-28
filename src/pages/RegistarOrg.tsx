@@ -59,7 +59,7 @@ const RegistarOrg = () => {
       // RPC e não a tabela: o `anon` já não tem SELECT em organizacoes, para
       // que os códigos deixem de ser enumeráveis. Devolve só um boolean, e
       // conta também os códigos de organizações inactivas como ocupados.
-      const { data, error } = await (supabase as any).rpc('org_codigo_disponivel', {
+      const { data, error } = await supabase.rpc('org_codigo_disponivel', {
         p_codigo: sanitized,
       });
 

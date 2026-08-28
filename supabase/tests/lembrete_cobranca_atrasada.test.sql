@@ -27,33 +27,33 @@ insert into public.clientes (id, org_id, nome, email) values
   ('00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-0000000f0000', 'Devedor Teste', 'devedor@cobranca-atrasada-f.pt');
 
 insert into public.viaturas (id, org_id, matricula, marca, modelo) values
-  ('00000000-0000-0000-0000-000000v1e0f1', '00000000-0000-0000-0000-0000000f0000', 'FF-11-FF', 'Toyota', 'Corolla');
+  ('00000000-0000-0000-0000-00000081e0f1', '00000000-0000-0000-0000-0000000f0000', 'FF-11-FF', 'Toyota', 'Corolla');
 
 insert into public.contratos_renting (id, org_id, cliente_id, viatura_id, matricula, data_inicio, data_fim, estado_operacional, regime, is_longa_duracao) values
-  ('00000000-0000-0000-0000-000000ct1e0f', '00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-000000v1e0f1', 'FF-11-FF', now() - interval '90 days', now() + interval '90 days', 'em_curso', 'rent_a_car', false);
+  ('00000000-0000-0000-0000-000000c71e0f', '00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-0000000f0c01', '00000000-0000-0000-0000-00000081e0f1', 'FF-11-FF', now() - interval '90 days', now() + interval '90 days', 'em_curso', 'rent_a_car', false);
 
 -- Cob 1: emitida há 45 dias, por pagar, sem recibo/NC — deve avisar.
 insert into public.contrato_cobrancas (id, org_id, contrato_id, periodo_de, periodo_ate, destinatario_id, destinatario_papel, destinatario_nome, valor_sem_iva, estado, emitida_em) values
-  ('00000000-0000-0000-0000-000000cb1e01', '00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-000000ct1e0f', current_date - 45, current_date - 39, '00000000-0000-0000-0000-0000000f0c01', 'cliente', 'Devedor Teste', 100.00, 'emitida', now() - interval '45 days');
+  ('00000000-0000-0000-0000-000000cb1e01', '00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-000000c71e0f', current_date - 45, current_date - 39, '00000000-0000-0000-0000-0000000f0c01', 'cliente', 'Devedor Teste', 100.00, 'emitida', now() - interval '45 days');
 
 -- Cob 2: emitida há 45 dias, mas já totalmente paga — NÃO deve avisar.
 insert into public.contrato_cobrancas (id, org_id, contrato_id, periodo_de, periodo_ate, destinatario_id, destinatario_papel, destinatario_nome, valor_sem_iva, estado, emitida_em) values
-  ('00000000-0000-0000-0000-000000cb2e02', '00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-000000ct1e0f', current_date - 45, current_date - 39, '00000000-0000-0000-0000-0000000f0c01', 'cliente', 'Devedor Teste', 100.00, 'emitida', now() - interval '45 days');
+  ('00000000-0000-0000-0000-000000cb2e02', '00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-000000c71e0f', current_date - 45, current_date - 39, '00000000-0000-0000-0000-0000000f0c01', 'cliente', 'Devedor Teste', 100.00, 'emitida', now() - interval '45 days');
 
 insert into public.recibos (org_id, referencia, valor, estado) values
   ('00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-000000cb2e02', 123.00, 'ativo');
 
 -- Cob 3: emitida há só 20 dias — ainda não passou o prazo — NÃO deve avisar.
 insert into public.contrato_cobrancas (id, org_id, contrato_id, periodo_de, periodo_ate, destinatario_id, destinatario_papel, destinatario_nome, valor_sem_iva, estado, emitida_em) values
-  ('00000000-0000-0000-0000-000000cb3e03', '00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-000000ct1e0f', current_date - 20, current_date - 14, '00000000-0000-0000-0000-0000000f0c01', 'cliente', 'Devedor Teste', 100.00, 'emitida', now() - interval '20 days');
+  ('00000000-0000-0000-0000-000000cb3e03', '00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-000000c71e0f', current_date - 20, current_date - 14, '00000000-0000-0000-0000-0000000f0c01', 'cliente', 'Devedor Teste', 100.00, 'emitida', now() - interval '20 days');
 
 -- Cob 4: emitida há 45 dias mas já com o aviso anteriormente enviado — NÃO repete.
 insert into public.contrato_cobrancas (id, org_id, contrato_id, periodo_de, periodo_ate, destinatario_id, destinatario_papel, destinatario_nome, valor_sem_iva, estado, emitida_em, lembrete_atraso_enviado_em) values
-  ('00000000-0000-0000-0000-000000cb4e04', '00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-000000ct1e0f', current_date - 45, current_date - 39, '00000000-0000-0000-0000-0000000f0c01', 'cliente', 'Devedor Teste', 100.00, 'emitida', now() - interval '45 days', now() - interval '10 days');
+  ('00000000-0000-0000-0000-000000cb4e04', '00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-000000c71e0f', current_date - 45, current_date - 39, '00000000-0000-0000-0000-0000000f0c01', 'cliente', 'Devedor Teste', 100.00, 'emitida', now() - interval '45 days', now() - interval '10 days');
 
 -- Cob 5: emitida há 45 dias, creditada por nota de crédito que zera o saldo — NÃO deve avisar.
 insert into public.contrato_cobrancas (id, org_id, contrato_id, periodo_de, periodo_ate, destinatario_id, destinatario_papel, destinatario_nome, valor_sem_iva, estado, emitida_em) values
-  ('00000000-0000-0000-0000-000000cb5e05', '00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-000000ct1e0f', current_date - 45, current_date - 39, '00000000-0000-0000-0000-0000000f0c01', 'cliente', 'Devedor Teste', 100.00, 'emitida', now() - interval '45 days');
+  ('00000000-0000-0000-0000-000000cb5e05', '00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-000000c71e0f', current_date - 45, current_date - 39, '00000000-0000-0000-0000-0000000f0c01', 'cliente', 'Devedor Teste', 100.00, 'emitida', now() - interval '45 days');
 
 insert into public.notas_credito (org_id, cobranca_id, entidade_id, valor, motivo, estado) values
   ('00000000-0000-0000-0000-0000000f0000', '00000000-0000-0000-0000-000000cb5e05', '00000000-0000-0000-0000-0000000f0c01', 123.00, 'Anulação de teste', 'ativo');

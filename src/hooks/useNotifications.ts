@@ -1,69 +1,28 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import type { Tables } from '@/integrations/supabase/types';
 
-type Notificacao = Tables<'notificacoes'>;
+/**
+ * Marcar uma notificação como resolvida.
+ *
+ * Este ficheiro exportava também `useNotifications`, um segundo caminho de
+ * leitura paginada de `notificacoes`. Foi removido a 31/07/2026 por não ter um
+ * único consumidor: a leitura viva é o `useNotificacoesHistorico` (infinite
+ * query), usado pelo NotificationBell e pela NotificacoesPage. Dois caminhos de
+ * leitura sobre a mesma tabela, com só um a ser exercitado, é como uma
+ * correcção entra num e não no outro.
+ */
 
+/**
+ * NÃO ESTREITAR esta chave.
+ *
+ * O hook vivo regista-se em `['notificacoes', 'infinite', { … }]`. O
+ * `invalidateQueries` abaixo só o alcança porque o React Query faz
+ * correspondência por prefixo — passar isto para algo como
+ * `['notificacoes', 'mutation']` deixaria de invalidar a lista, e o sino
+ * continuaria a mostrar a notificação já resolvida sem nenhum erro visível.
+ */
 const QUERY_KEY_BASE = ['notificacoes'] as const;
-
-// ────────────────────────────────────────────────────────────
-// Interface de opções para listagem
-// ────────────────────────────────────────────────────────────
-
-export interface UseNotificationsOptions {
-  /** Apenas notificações não resolvidas (padrão: true) */
-  apenasNaoResolvidas?: boolean;
-  /** Página actual (1-based, padrão: 1) */
-  page?: number;
-  /** Itens por página (padrão: 20, máx: 100) */
-  limit?: number;
-  /** Se false, a query não é executada */
-  enabled?: boolean;
-}
-
-// ────────────────────────────────────────────────────────────
-// Hook de leitura — lista paginada de notificações
-// ────────────────────────────────────────────────────────────
-
-export function useNotifications(options: UseNotificationsOptions = {}) {
-  const { apenasNaoResolvidas = true, page = 1, limit = 20, enabled = true } = options;
-
-  const clampedLimit = Math.min(limit, 100);
-  const from = (page - 1) * clampedLimit;
-  const to = from + clampedLimit - 1;
-
-  return useQuery({
-    queryKey: [...QUERY_KEY_BASE, { apenasNaoResolvidas, page, limit: clampedLimit }],
-    queryFn: async () => {
-      let q = supabase
-        .from('notificacoes')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
-      if (apenasNaoResolvidas) {
-        q = q.eq('resolvida', false);
-      }
-
-      const { data, error, count } = await q;
-      if (error) throw error;
-
-      return {
-        data: (data ?? []) as Notificacao[],
-        total: count ?? 0,
-        totalPages: Math.ceil((count ?? 0) / clampedLimit),
-        page,
-      };
-    },
-    enabled,
-    staleTime: 30_000,
-  });
-}
-
-// ────────────────────────────────────────────────────────────
-// Mutation: marcar notificação como resolvida (via RPC)
-// ────────────────────────────────────────────────────────────
 
 export function useMarkNotificationRead() {
   const qc = useQueryClient();
@@ -89,9 +48,3 @@ export function useMarkNotificationRead() {
     },
   });
 }
-
-// ────────────────────────────────────────────────────────────
-// Re-export do tipo para conveniência
-// ────────────────────────────────────────────────────────────
-
-export type { Notificacao };

@@ -1,21 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Radio, Link2Off } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { SearchableSelect, type SearchableSelectItem } from '@/components/ui/searchable-select';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
-
-interface DispositivoObe {
-  id: string;
-  nr_equipamento: string;
-  contrato: string | null;
-  ativo: boolean;
-  notas: string | null;
-}
+import {
+  useViaturaObeDispositivos,
+  useAssociarDispositivoObe,
+  useRemoverDispositivoObe,
+} from '@/hooks/useViaturaObe';
+import { errorMessage } from '@/utils/errorMessage';
 
 interface ViaturaObeDispositivoSectionProps {
   viaturaId: string;
@@ -28,42 +25,15 @@ export function ViaturaObeDispositivoSection({
 }: ViaturaObeDispositivoSectionProps) {
   const { canEdit } = usePermissions();
   const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
-  const [loading, setLoading] = useState(true);
-  const [atual, setAtual] = useState<DispositivoObe | null>(null);
-  const [disponiveis, setDisponiveis] = useState<DispositivoObe[]>([]);
   const [selecionado, setSelecionado] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
-  const carregar = async () => {
-    setLoading(true);
-    try {
-      const [{ data: assoc, error: e1 }, { data: livres, error: e2 }] = await Promise.all([
-        (supabase as any)
-          .from('dispositivos_obe')
-          .select('id, nr_equipamento, contrato, ativo, notas')
-          .eq('viatura_id', viaturaId)
-          .maybeSingle(),
-        (supabase as any)
-          .from('dispositivos_obe')
-          .select('id, nr_equipamento, contrato, ativo, notas')
-          .is('viatura_id', null)
-          .order('nr_equipamento'),
-      ]);
-      if (e1) throw e1;
-      if (e2) throw e2;
-      setAtual(assoc || null);
-      setDisponiveis(livres || []);
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao carregar dispositivo OBE');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, isLoading: loading, error } = useViaturaObeDispositivos(viaturaId);
+  const atual = data?.atual ?? null;
+  const disponiveis = useMemo(() => data?.disponiveis ?? [], [data]);
 
-  useEffect(() => {
-    carregar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viaturaId]);
+  const associar = useAssociarDispositivoObe();
+  const remover = useRemoverDispositivoObe();
+  const saving = associar.isPending || remover.isPending;
 
   const items: SearchableSelectItem[] = useMemo(
     () =>
@@ -82,21 +52,13 @@ export function ViaturaObeDispositivoSection({
 
   const handleAssociar = async () => {
     if (!selecionado) return;
-    setSaving(true);
     try {
-      const { error } = await (supabase as any)
-        .from('dispositivos_obe')
-        .update({ viatura_id: viaturaId })
-        .eq('id', selecionado);
-      if (error) throw error;
+      await associar.mutateAsync({ dispositivoId: selecionado, viaturaId });
       toast.success('Dispositivo OBE associado com sucesso!');
       setSelecionado(null);
-      carregar();
       onChanged?.();
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao associar dispositivo');
-    } finally {
-      setSaving(false);
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Erro ao associar dispositivo'));
     }
   };
 
@@ -108,20 +70,12 @@ export function ViaturaObeDispositivoSection({
       )
     )
       return;
-    setSaving(true);
     try {
-      const { error } = await (supabase as any)
-        .from('dispositivos_obe')
-        .update({ viatura_id: null })
-        .eq('id', atual.id);
-      if (error) throw error;
+      await remover.mutateAsync({ dispositivoId: atual.id, viaturaId });
       toast.success('Associação removida.');
-      carregar();
       onChanged?.();
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao remover associação');
-    } finally {
-      setSaving(false);
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Erro ao remover associação'));
     }
   };
 
@@ -130,6 +84,20 @@ export function ViaturaObeDispositivoSection({
       <Card>
         <CardContent className="py-10 flex items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // §10: o erro tem estado próprio. Antes era um toast disparado dentro do
+  // `catch` do carregamento — desaparecia em segundos e a secção ficava a
+  // dizer "sem dispositivo associado", que é uma afirmação diferente de
+  // "não foi possível ler".
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center text-sm text-destructive">
+          {errorMessage(error, 'Erro ao carregar dispositivo OBE')}
         </CardContent>
       </Card>
     );

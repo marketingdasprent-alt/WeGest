@@ -56,14 +56,19 @@ const FormularioPublico = () => {
       // formularios nem em formulario_campanhas. A função exige o id (sem
       // enumeração), só devolve formulários com ativo = true, e traz as tags
       // de campanha na mesma resposta.
-      const { data, error } = await (supabase as any).rpc('formulario_publico_por_id', {
+      const { data, error } = await supabase.rpc('formulario_publico_por_id', {
         p_id: id,
       });
 
       if (error) throw error;
       if (!data) throw new Error('Formulário não encontrado ou inativo');
 
-      const { campanhas: campanhasData, ...formularioData } = data;
+      // A RPC devolve jsonb → `Json` nos tipos gerados. O nome e os argumentos
+      // ficam verificados; só a forma do payload é que tem de ser afirmada.
+      const { campanhas: campanhasData, ...formularioData } = data as unknown as Record<
+        string,
+        unknown
+      > & { campanhas?: string[] };
 
       setFormulario(formularioData);
       setCampanhas(campanhasData ?? []);

@@ -21,6 +21,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { CardListSkeleton } from '@/components/ui/table-skeleton';
 import { NaOficinaSection } from '@/components/assistencia/NaOficinaSection';
 import {
   Select,
@@ -73,6 +75,22 @@ const Assistencia = () => {
   const [atribuidoFilter, setAtribuidoFilter] = useState<string>(
     sessionStorage.getItem('assistencia_atribuidoFilter') || 'todos'
   );
+
+  // Distinguir 'não há nada' de 'os filtros não deixam ver nada': cada caso
+  // pede uma acção diferente de quem está a olhar.
+  const temFiltrosAtivos =
+    searchTerm !== '' ||
+    statusFilter !== 'pendentes' ||
+    prioridadeFilter !== 'todos' ||
+    categoriaFilter !== 'todos' ||
+    criadorFilter !== 'todos';
+  const limparFiltros = () => {
+    setSearchTerm('');
+    setStatusFilter('pendentes');
+    setPrioridadeFilter('todos');
+    setCategoriaFilter('todos');
+    setCriadorFilter('todos');
+  };
 
   // Persist filters to sessionStorage
   useEffect(() => {
@@ -286,8 +304,8 @@ const Assistencia = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="p-4">
+        <CardListSkeleton cartoes={4} />
       </div>
     );
   }
@@ -450,18 +468,25 @@ const Assistencia = () => {
       {/* Tickets List */}
       {filteredTickets.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center">
-            <Wrench className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Nenhum ticket encontrado</h3>
-            <p className="text-muted-foreground">
-              {searchTerm ||
-              statusFilter !== 'pendentes' ||
-              prioridadeFilter !== 'todos' ||
-              categoriaFilter !== 'todos' ||
-              criadorFilter !== 'todos'
-                ? 'Tente ajustar os filtros de pesquisa.'
-                : 'Não existem tickets pendentes de resolução.'}
-            </p>
+          <CardContent className="py-2">
+            {temFiltrosAtivos ? (
+              <EmptyState
+                icon={Wrench}
+                title="Nenhum ticket com estes filtros"
+                description="Nenhum dos tickets corresponde à pesquisa. Limpe os filtros para ver todos."
+                action={
+                  <Button variant="outline" onClick={limparFiltros}>
+                    Limpar filtros
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={Wrench}
+                title="Nada pendente de resolução"
+                description="Não há tickets à espera. Quando entrar um pedido novo, aparece aqui."
+              />
+            )}
           </CardContent>
         </Card>
       ) : (

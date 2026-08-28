@@ -274,10 +274,10 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
         // RPC única que devolve para cada integração: ultima_data + periodo coberto.
         // Substitui N+1 queries por uma só (1 round-trip).
         // Cast porque types.ts ainda não foi regenerado após nova RPC.
-        const { data, error } = await (supabase as any).rpc(
-          'get_ultima_importacao_por_integracao',
-          { p_plataforma: plataforma, p_ids: ids }
-        );
+        const { data, error } = await supabase.rpc('get_ultima_importacao_por_integracao', {
+          p_plataforma: plataforma,
+          p_ids: ids,
+        });
         if (error) throw error;
         (data as any[] | null)?.forEach((row) => {
           if (!row.integracao_id) return;

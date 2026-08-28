@@ -22,18 +22,18 @@ insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'automacao-queue-a'),
   ('00000000-0000-0000-0000-0000000b0000', 'Org B', 'automacao-queue-b');
 
-insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo) values
-  ('00000000-0000-0000-0000-000000ru1e01', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_a', 'Regra A', 'teste.evento', 'notificacao'),
-  ('00000000-0000-0000-0000-000000ru1e02', '00000000-0000-0000-0000-0000000b0000', 'teste.regra_b', 'Regra B', 'teste.evento', 'notificacao');
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_a', 'Regra A', 'teste.evento', 'notificacao', '{"template_codigo":"teste.template","titulo":"Titulo de Teste"}'::jsonb),
+  ('00000000-0000-0000-0000-0000004c1e02', '00000000-0000-0000-0000-0000000b0000', 'teste.regra_b', 'Regra B', 'teste.evento', 'notificacao', '{"template_codigo":"teste.template","titulo":"Titulo de Teste"}'::jsonb);
 
 -- Run principal: só 2 tentativas permitidas, para forçar o dead-letter cedo.
 insert into public.automation_runs (id, rule_id, org_id, job_type, max_attempts, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-000000ru2e01', '00000000-0000-0000-0000-000000ru1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 2, 'viaturas', '00000000-0000-0000-0000-000000ent0001');
+  ('00000000-0000-0000-0000-0000004c2e01', '00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 2, 'viaturas', '00000000-0000-0000-0000-00000ef70001');
 
 -- 1. O índice único parcial impede um segundo run ativo para a mesma regra+entidade.
 select throws_ok(
   $$ insert into public.automation_runs (rule_id, org_id, job_type, entity_table, entity_id)
-     values ('00000000-0000-0000-0000-000000ru1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 'viaturas', '00000000-0000-0000-0000-000000ent0001') $$,
+     values ('00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 'viaturas', '00000000-0000-0000-0000-00000ef70001') $$,
   '23505',
   null,
   'não é possível ter dois automation_runs ativos para a mesma regra na mesma entidade'
@@ -42,15 +42,15 @@ select throws_ok(
 -- 1b. Mas uma entidade DIFERENTE para a mesma regra não entra em conflito
 -- (a correção: a unicidade é por regra+entidade, não por regra+org).
 insert into public.automation_runs (id, rule_id, org_id, job_type, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-000000ru5e01', '00000000-0000-0000-0000-000000ru1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 'viaturas', '00000000-0000-0000-0000-000000ent0002');
+  ('00000000-0000-0000-0000-0000004c5e01', '00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 'viaturas', '00000000-0000-0000-0000-00000ef70002');
 
 select is(
-  (select count(*)::int from public.automation_runs where id = '00000000-0000-0000-0000-000000ru5e01'),
+  (select count(*)::int from public.automation_runs where id = '00000000-0000-0000-0000-0000004c5e01'),
   1,
   'uma entidade diferente para a mesma regra não entra em conflito com o índice único'
 );
 
-delete from public.automation_runs where id = '00000000-0000-0000-0000-000000ru5e01';
+delete from public.automation_runs where id = '00000000-0000-0000-0000-0000004c5e01';
 
 -- 2. claim() devolve o run pendente.
 select is(
@@ -61,14 +61,14 @@ select is(
 
 -- 3. claim() marca o run como running.
 select is(
-  (select status from public.automation_runs where id = '00000000-0000-0000-0000-000000ru2e01'),
+  (select status from public.automation_runs where id = '00000000-0000-0000-0000-0000004c2e01'),
   'running',
   'claim() marca o run como running'
 );
 
 -- 4. claim() incrementa attempt.
 select is(
-  (select attempt from public.automation_runs where id = '00000000-0000-0000-0000-000000ru2e01'),
+  (select attempt::int from public.automation_runs where id = '00000000-0000-0000-0000-0000004c2e01'),
   1,
   'claim() incrementa attempt para 1'
 );
@@ -81,73 +81,89 @@ select is(
 );
 
 -- 6. Falha com tentativas restantes (attempt=1 < max_attempts=2): volta a pending.
-select public.automation_runs_fail('00000000-0000-0000-0000-000000ru2e01', 'erro de teste 1');
+select public.automation_runs_fail('00000000-0000-0000-0000-0000004c2e01', 'erro de teste 1');
 
 select is(
-  (select status from public.automation_runs where id = '00000000-0000-0000-0000-000000ru2e01'),
+  (select status from public.automation_runs where id = '00000000-0000-0000-0000-0000004c2e01'),
   'pending',
   'falha com tentativas restantes volta a pending'
 );
 
 -- 7. ...com o próximo attempt agendado no futuro (backoff).
 select ok(
-  (select next_attempt_at > now() from public.automation_runs where id = '00000000-0000-0000-0000-000000ru2e01'),
+  (select next_attempt_at > now() from public.automation_runs where id = '00000000-0000-0000-0000-0000004c2e01'),
   'falha com tentativas restantes agenda o próximo attempt no futuro (backoff)'
 );
 
 -- 8. Forçar disponibilidade e esgotar max_attempts=2 na segunda falha.
-update public.automation_runs set next_attempt_at = now() where id = '00000000-0000-0000-0000-000000ru2e01';
+update public.automation_runs set next_attempt_at = now() where id = '00000000-0000-0000-0000-0000004c2e01';
 select public.automation_runs_claim(10);
-select public.automation_runs_fail('00000000-0000-0000-0000-000000ru2e01', 'erro de teste 2');
+select public.automation_runs_fail('00000000-0000-0000-0000-0000004c2e01', 'erro de teste 2');
 
 select is(
-  (select status from public.automation_runs where id = '00000000-0000-0000-0000-000000ru2e01'),
+  (select status from public.automation_runs where id = '00000000-0000-0000-0000-0000004c2e01'),
   'failed',
   'segunda falha esgota max_attempts e fica failed (terminal, dead-letter)'
 );
 
 -- 9. Dead-letter grava uma linha em failed_jobs.
 select is(
-  (select count(*)::int from public.failed_jobs where source_id = '00000000-0000-0000-0000-000000ru2e01'),
+  (select count(*)::int from public.failed_jobs where source_id = '00000000-0000-0000-0000-0000004c2e01'),
   1,
   'esgotar as tentativas grava uma linha em failed_jobs'
 );
 
 -- 10. Cada chamada a automation_runs_fail() regista uma linha em automation_logs.
 select is(
-  (select count(*)::int from public.automation_logs where run_id = '00000000-0000-0000-0000-000000ru2e01' and evento = 'falhou'),
+  (select count(*)::int from public.automation_logs where run_id = '00000000-0000-0000-0000-0000004c2e01' and evento = 'falhou'),
   2,
   'cada chamada a automation_runs_fail() regista uma linha em automation_logs'
 );
 
 -- 11. Sweep: run preso em "running" há mais de 15 minutos é marcado failed.
 insert into public.automation_runs (id, rule_id, org_id, status, started_at) values
-  ('00000000-0000-0000-0000-000000ru3e01', '00000000-0000-0000-0000-000000ru1e02', '00000000-0000-0000-0000-0000000b0000', 'running', now() - interval '20 minutes');
+  ('00000000-0000-0000-0000-0000004c3e01', '00000000-0000-0000-0000-0000004c1e02', '00000000-0000-0000-0000-0000000b0000', 'running', now() - interval '20 minutes');
 
 select public.automation_runs_claim(10);
 
+-- ATENÇÃO — a semântica mudou, e a mudança foi deliberada.
+--
+-- Este teste afirmava `failed`. Era verdade quando o sweep fazia um UPDATE
+-- directo a `status = 'failed'`. A migração 20260729100000 mudou-o para chamar
+-- `automation_runs_fail()`, para que uma execução presa passasse a aparecer em
+-- `automation_logs` e na dead-letter como qualquer outra falha — antes ficava
+-- invisível no separador «Falhas».
+--
+-- Efeito colateral: `automation_runs_fail()` só marca `failed` quando as
+-- tentativas se esgotam. Este run tem attempt=0 e max_attempts=3, portanto é
+-- REPOSTO A `pending` com backoff — vai ser tentado outra vez.
+--
+-- É melhor para falhas transitórias (um worker que morreu) e pior para efeitos
+-- já produzidos: um run que criou notificações e morreu antes de concluir
+-- volta a criá-las. Está registado como risco na auditoria (cenário C) e é um
+-- dos motivos para a idempotência por passo da Fase 2.
 select is(
-  (select status from public.automation_runs where id = '00000000-0000-0000-0000-000000ru3e01'),
-  'failed',
-  'claim() varre e falha runs presos em running há mais de 15 minutos'
+  (select status from public.automation_runs where id = '00000000-0000-0000-0000-0000004c3e01'),
+  'pending',
+  'claim() varre um run preso há mais de 15 min e volta a agendá-lo (não o mata à primeira)'
 );
 
 -- 12/13. Caminho feliz: claim() + complete() marca completed e regista em automation_logs.
 -- (Válido agora: ru2e01 já está 'failed', portanto já não ocupa o índice único de ru1e01/Org A.)
 insert into public.automation_runs (id, rule_id, org_id) values
-  ('00000000-0000-0000-0000-000000ru4e01', '00000000-0000-0000-0000-000000ru1e01', '00000000-0000-0000-0000-0000000a0000');
+  ('00000000-0000-0000-0000-0000004c4e01', '00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000');
 
 select public.automation_runs_claim(10);
-select public.automation_runs_complete('00000000-0000-0000-0000-000000ru4e01');
+select public.automation_runs_complete('00000000-0000-0000-0000-0000004c4e01');
 
 select is(
-  (select status from public.automation_runs where id = '00000000-0000-0000-0000-000000ru4e01'),
+  (select status from public.automation_runs where id = '00000000-0000-0000-0000-0000004c4e01'),
   'completed',
   'complete() marca o run como completed'
 );
 
 select is(
-  (select count(*)::int from public.automation_logs where run_id = '00000000-0000-0000-0000-000000ru4e01' and evento = 'executada'),
+  (select count(*)::int from public.automation_logs where run_id = '00000000-0000-0000-0000-0000004c4e01' and evento = 'executada'),
   1,
   'complete() regista uma linha executada em automation_logs'
 );

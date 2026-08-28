@@ -783,6 +783,15 @@ export function useReverterFecho() {
         data: { user },
       } = await supabase.auth.getUser();
       const userId = user?.id ?? null;
+      // Mesma guarda de useFecharContrato, e pela mesma razão: `criado_por` do
+      // evento de recolha (mais abaixo) é NOT NULL sem default. Sem isto, com a
+      // sessão expirada o contrato era reaberto para 'em_curso' e SÓ DEPOIS o
+      // insert do evento rebentava na constraint — duas chamadas PostgREST
+      // separadas, sem transação, logo ficava um contrato reaberto sem recolha
+      // pendente e a recolha desaparecia do calendário. Falhar aqui não deixa
+      // estado nenhum por trás; e `updated_by` deixa de gravar NULL, que
+      // apagava o rasto de quem reverteu.
+      if (!userId) throw new Error('Sessão não encontrada');
 
       const { data: updated, error } = await supabase
         .from('contratos_renting')

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNotificacoesContext } from '@/contexts/NotificacoesContext';
 import { armNotificationSound } from '@/lib/notificationSound';
@@ -13,64 +13,72 @@ import { AlertTriangle, Bell, ChevronRight, Eye, EyeOff, List, X } from 'lucide-
 // resumidos num único cartão em vez de empilhados.
 const MAX_CARTOES = 3;
 
-// "Ocultar" vivia só em useState — qualquer F5 (muito comum: gente refresca
-// a página várias vezes por dia) esvaziava o Set e os avisos já fechados
-// reapareciam todos de repente, dando a sensação de que "ocultar não pega".
-// sessionStorage resolve exactamente isto: sobrevive a um refresh da mesma
-// aba, e continua a esvaziar-se ao fechar o browser — o "por sessão" que o
-// comentário original já prometia, mas que o useState sozinho não cumpria.
-const OCULTADAS_STORAGE_KEY = 'wegest:notificacoes-ocultadas';
+/**
+ * Quanto tempo um aviso normal fica no canto antes de sair sozinho.
+ *
+ * Longo o suficiente para se ler um título e uma linha de mensagem sem
+ * pressa, curto o suficiente para não se acumular com o aviso seguinte.
+ * Os urgentes não usam isto: ver `ehUrgente` abaixo.
+ */
+const AUTO_DISPENSA_MS = 10_000;
 
-function lerOcultadasGuardadas(): Set<string> {
-  try {
-    const raw = sessionStorage.getItem(OCULTADAS_STORAGE_KEY);
-    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
-  } catch {
-    // Modo privado restritivo ou sessionStorage indisponível — degrada para
-    // o comportamento anterior (só em memória) em vez de rebentar o popup.
-    return new Set();
-  }
-}
-
-function gravarOcultadas(ids: Set<string>): void {
-  try {
-    sessionStorage.setItem(OCULTADAS_STORAGE_KEY, JSON.stringify([...ids]));
-  } catch {
-    /* idem — falhar a gravar não pode impedir o ocultar de funcionar nesta aba */
-  }
-}
-
+/**
+ * Avisos do que ACABOU de acontecer — não do que está por resolver.
+ *
+ * ANTES: este componente mostrava `notificacoes`, a lista inteira de
+ * não-resolvidas. Isso fazia dele um espelho permanente do backlog:
+ *
+ *  - entrar no sistema ou dar F5 enchia o canto outra vez;
+ *  - o "Ocultar" vivia em sessionStorage, logo era por ABA e por sessão de
+ *    browser — abrir um segundo separador trazia tudo de volta;
+ *  - o agrupamento cria uma linha nova por (tipo, dia), por isso o mesmo
+ *    seguro por tratar gerava um cartão novo todos os dias, com id novo, que
+ *    o "ocultar" de ontem não apanhava.
+ *
+ * O resultado prático era o utilizador a fechar os mesmos avisos várias vezes
+ * por dia — e a aprender a fechá-los sem ler, que é o oposto do objectivo de
+ * um alerta.
+ *
+ * AGORA: o canto mostra `chegadas` (o que entrou depois de a app arrancar),
+ * cada aviso aparece uma vez, e o backlog vive onde se pode trabalhar sobre
+ * ele — o sino e /notificacoes. Sem persistência nenhuma: não é precisa,
+ * porque a lista nunca se repõe a partir do backlog.
+ */
 export const NotificacoesPopup = () => {
   const navigate = useNavigate();
 
-  const { notificacoes, enabled } = useNotificacoesContext();
+  const { chegadas, dispensarChegada, enabled } = useNotificacoesContext();
 
-  // Ocultar é só visual (por sessão) — ao contrário de "Resolver", nunca
-  // marca a notificação como tratada. Antes disto o botão "Fechar" chamava
-  // resolver() diretamente: um clique para tirar o cartão da frente dos
-  // olhos apagava o aviso também da lista "Não resolvidas" e do histórico,
-  // sem qualquer confirmação de que o problema real (carta a expirar, IUC
-  // por pagar...) tinha sido tratado.
-  const [ocultados, setOcultados] = useState<Set<string>>(() => lerOcultadasGuardadas());
-  const ocultar = (id: string) =>
-    setOcultados((atual) => {
-      const novo = new Set(atual).add(id);
-      gravarOcultadas(novo);
-      return novo;
-    });
+  // Um temporizador por aviso, agendado UMA vez. Guardado em ref e não
+  // limpo no cleanup do efeito de propósito: `chegadas` muda a cada aviso
+  // novo, e limpar aí cancelaria a contagem dos que já estavam no ecrã —
+  // ficariam presos até o utilizador os fechar à mão.
+  const temporizadores = useRef<Map<string, number>>(new Map());
 
-  // Ocultar de uma vez tudo o que está à vista. Um backlog (dezenas de
-  // vistorias/licenças a expirar de uma assentada) obrigava a fechar aviso a
-  // aviso para se poder trabalhar. Só afeta os que já subiram: os que
-  // chegarem a seguir voltam a aparecer, porque continuam por resolver e
-  // fechar não é uma decisão permanente.
-  const ocultarTodas = (ids: string[]) =>
-    setOcultados((atual) => {
-      const novo = new Set(atual);
-      ids.forEach((id) => novo.add(id));
-      gravarOcultadas(novo);
-      return novo;
-    });
+  useEffect(() => {
+    for (const n of chegadas) {
+      // Um escalonamento exige uma decisão humana: não pode evaporar-se
+      // enquanto o supervisor está a olhar para outro lado.
+      if (n.severidade === 'urgente') continue;
+      if (temporizadores.current.has(n.id)) continue;
+
+      const id = window.setTimeout(() => {
+        temporizadores.current.delete(n.id);
+        dispensarChegada(n.id);
+      }, AUTO_DISPENSA_MS);
+      temporizadores.current.set(n.id, id);
+    }
+  }, [chegadas, dispensarChegada]);
+
+  // Só na desmontagem: sem isto, um timeout pendente dispararia sobre um
+  // componente que já não existe.
+  useEffect(() => {
+    const pendentes = temporizadores.current;
+    return () => {
+      pendentes.forEach((id) => window.clearTimeout(id));
+      pendentes.clear();
+    };
+  }, []);
 
   // Desbloqueia o áudio no primeiro gesto do utilizador (autoplay policy),
   // para que o aviso urgente ao supervisor toque mesmo sem clique imediato.
@@ -79,12 +87,10 @@ export const NotificacoesPopup = () => {
   }, [enabled]);
 
   if (!enabled) return null;
-
-  const visiveis = notificacoes.filter((n) => !ocultados.has(n.id));
-  if (visiveis.length === 0) return null;
+  if (chegadas.length === 0) return null;
 
   // Urgentes primeiro (nunca resumidos), o resto mantém a ordem de chegada.
-  const ordenadas = [...visiveis].sort(
+  const ordenadas = [...chegadas].sort(
     (a, b) => Number(b.severidade === 'urgente') - Number(a.severidade === 'urgente')
   );
   const cartoes = ordenadas.slice(0, MAX_CARTOES);
@@ -142,12 +148,20 @@ export const NotificacoesPopup = () => {
                     size="sm"
                     variant={urgente ? 'destructive' : 'default'}
                     className="h-8"
-                    onClick={() => navigate(notificacaoLink(n))}
+                    onClick={() => {
+                      dispensarChegada(n.id);
+                      navigate(notificacaoLink(n));
+                    }}
                   >
                     <Eye className="mr-1.5 h-3.5 w-3.5" />
                     {notificacaoLabel(n)}
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-8" onClick={() => ocultar(n.id)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8"
+                    onClick={() => dispensarChegada(n.id)}
+                  >
                     <EyeOff className="mr-1.5 h-3.5 w-3.5" />
                     Ocultar
                   </Button>
@@ -158,7 +172,7 @@ export const NotificacoesPopup = () => {
                 type="button"
                 aria-label="Ocultar aviso (continua por resolver)"
                 title="Ocultar — o aviso continua por resolver, só sai daqui"
-                onClick={() => ocultar(n.id)}
+                onClick={() => dispensarChegada(n.id)}
                 className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
               >
                 <X className="h-4 w-4" />
@@ -179,7 +193,7 @@ export const NotificacoesPopup = () => {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-foreground">
-              +{restantes.length} {restantes.length === 1 ? 'aviso' : 'avisos'} por resolver
+              +{restantes.length} {restantes.length === 1 ? 'aviso novo' : 'avisos novos'}
             </p>
             <p className="text-xs text-muted-foreground">Ver a lista completa</p>
           </div>
@@ -196,17 +210,17 @@ export const NotificacoesPopup = () => {
         {/* Só com mais do que um aviso à vista: para um único cartão o X e o
             "Ocultar" já chegam, e um terceiro botão para o mesmo efeito só
             confundia. */}
-        {visiveis.length > 1 && (
+        {chegadas.length > 1 && (
           <>
             <Button
               variant="ghost"
               size="sm"
               className="h-8 rounded-full px-3 text-xs text-foreground"
               title="Fecha os avisos que estão à vista — continuam todos por resolver"
-              onClick={() => ocultarTodas(ordenadas.map((n) => n.id))}
+              onClick={() => ordenadas.forEach((n) => dispensarChegada(n.id))}
             >
               <EyeOff className="mr-1.5 h-3.5 w-3.5" />
-              Ocultar todas ({visiveis.length})
+              Ocultar todas ({chegadas.length})
             </Button>
             <span aria-hidden="true" className="h-4 w-px shrink-0 bg-border" />
           </>
