@@ -227,7 +227,17 @@ select throws_ok(
   'quem gere automações mas não pode editar motoristas não configura essa acção'
 );
 
+-- `reset role` repõe o PAPEL, mas as claims são definições de configuração
+-- locais à transacção e ficam onde estavam. `auth.uid()` continuaria a devolver
+-- o utilizador sem permissões, e a validação da acção aplicá-la-ia a todas as
+-- escritas seguintes — foi assim que o `update` do cenário do snapshot, mais
+-- abaixo, rebentou com «sem permissão tickets_gerir».
+--
+-- `auth.uid()` faz `nullif(..., '')` sobre as duas definições, portanto limpar
+-- ambas devolve NULL e restaura o contexto de sistema.
 reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
 
 -- ════════════════════════════════════════════════════════════
 -- Cross-tenant: recusa, não silêncio
