@@ -6,8 +6,28 @@
 -- Cobre o Automation Executor: para acao_tipo='notificacao', resolve
 -- destinatários por cargo direto (admin OU cargo escolhido na regra),
 -- cria uma notifications por destinatário, enfileira email quando
--- enviar_email=true, e falha para dead-letter quando o acao_config
--- está mal configurado. Outros acao_tipo só concluem, sem ação.
+-- enviar_email=true, e rejeita acao_config mal configurado. Outros
+-- acao_tipo só concluem, sem ação.
+--
+-- ⚠️ TODAS as regras deste ficheiro têm `enviar_email: true`, DE PROPÓSITO.
+--
+-- Desde 20260826142309 existe o trigger `trg_notifications_so_quando_ha_email`,
+-- que CANCELA o insert em `notifications` quando a regra tem
+-- `enviar_email = false`. A razão está medida na própria migração: 71.012 das
+-- 71.200 linhas (99,7%) vinham de regras sem email e ninguém as lia — o que o
+-- utilizador vê é `notificacoes`, escrita em paralelo, não `notifications`.
+--
+-- Consequência para este ficheiro: com `enviar_email: false`, uma regra resolve
+-- os destinatários correctamente, o run conclui sem erro, e mesmo assim não
+-- fica linha nenhuma em `notifications`. As asserções que contam destinatários
+-- passariam a dar 0 sem que nada estivesse partido — foi exactamente o que
+-- aconteceu a 2026-08-28, e custou uma ronda inteira a diagnosticar porque
+-- «0 notificações» não distingue «não resolveu ninguém» de «resolveu e a
+-- linha foi cancelada».
+--
+-- Estes testes existem para verificar a RESOLUÇÃO DE DESTINATÁRIOS. Para isso
+-- a linha tem de sobreviver, logo `enviar_email: true`. Quem quiser testar o
+-- cancelamento em si deve escrever um teste próprio para o trigger.
 -- ============================================================
 
 begin;
@@ -138,7 +158,7 @@ insert into public.motoristas_ativos (id, org_id, nome, gestor_responsavel) valu
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-000000460004', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_gestor', 'Regra Gestor Responsável', 'teste.evento4', 'notificacao',
-   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":true}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c0004', '00000000-0000-0000-0000-000000460004', '00000000-0000-0000-0000-0000000a0000', 'motoristas_ativos', '00000000-0000-0000-0000-000000e00001');
@@ -191,7 +211,7 @@ insert into public.motorista_viaturas (id, motorista_id, viatura_id, data_inicio
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-000000460005', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_gestor_viatura', 'Regra Gestor Viatura', 'teste.evento5', 'notificacao',
-   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":true}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c0005', '00000000-0000-0000-0000-000000460005', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-000000870001');
@@ -211,7 +231,7 @@ insert into public.motoristas_ativos (id, org_id, nome, gestor_responsavel) valu
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-000000460006', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_gestor_fallback', 'Regra Fallback', 'teste.evento6', 'notificacao',
-   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":true}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c0006', '00000000-0000-0000-0000-000000460006', '00000000-0000-0000-0000-0000000a0000', 'motoristas_ativos', '00000000-0000-0000-0000-000000e00002');
@@ -242,7 +262,7 @@ insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) value
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-000000460007', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_individual', 'Regra Individual', 'teste.evento7', 'notificacao',
-   jsonb_build_object('titulo', 'Titulo de Teste', 'template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000c60001'), 'destinatarios_modo', 'individual', 'destinatarios_user_ids', jsonb_build_array('00000000-0000-0000-0000-0000000a0002'), 'enviar_email', false));
+   jsonb_build_object('titulo', 'Titulo de Teste', 'template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000c60001'), 'destinatarios_modo', 'individual', 'destinatarios_user_ids', jsonb_build_array('00000000-0000-0000-0000-0000000a0002'), 'enviar_email', true));
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c0007', '00000000-0000-0000-0000-000000460007', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-00000ef70007');
