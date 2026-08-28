@@ -235,6 +235,7 @@ jobs:
         run: |
           bash scripts/pgtap-suite.sh "Motor de automação" \
             process_domain_events \
+            domain_events_claim \
             execute_automation_runs \
             automation_queue \
             automation_rules \
