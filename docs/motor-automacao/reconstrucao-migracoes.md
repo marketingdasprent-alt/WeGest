@@ -181,6 +181,15 @@ verificou, e manda usar o workflow.
 
 ### 3.1.1 O que o baseline **não** contém
 
+> **O padrão, em quatro casos.** `supabase db dump --schema public` exporta o
+> **schema**, não a **base de dados**. Tudo o que vive ao nível da base — ou
+> noutro schema — fica de fora, e descobre-se um de cada vez, sempre da mesma
+> maneira: um teste falha contra a base reconstruída enquanto produção está bem.
+>
+> Já apanhámos quatro: **extensões**, **dados de catálogo**, **privilégios** e
+> **publicações**. Se aparecer um quinto, é quase certo que seja outro objecto
+> fora do schema — roles, event triggers, `ALTER DATABASE`, `pg_cron`.
+
 `supabase db dump --schema public` traz apenas o schema `public`. Fica de fora:
 
 | O que fica de fora | Consequência | Tratamento |
@@ -188,6 +197,7 @@ verificou, e manda usar o workflow.
 | **Extensões** (`pg_net`, `pg_trgm`, `unaccent`, `btree_gist`, `pgcrypto`, `uuid-ossp`, `pg_cron`) | O `public` depende delas. Sem `pg_net` não existe `net._http_response` e a view `cron_edge_health` não se cria. | **Resolvido** — o script escreve `create extension if not exists …` no topo do baseline, antes do dump |
 | **Trabalhos agendados** (schema `cron`, 37 jobs) | Uma base reconstruída tem a estrutura toda mas nenhum job a correr | **Aceite.** Para testes é o que se quer — crons a disparar num ambiente de teste seriam um problema, não uma funcionalidade. Para recuperação de desastre é um gap real: os jobs teriam de ser recriados a partir de `cron.job` de produção |
 | **Schemas `auth`, `storage`, `realtime`, `vault`** | — | Criados pelo próprio stack local do Supabase |
+| **Publicações** (`supabase_realtime`, 10 tabelas) | Falha **silenciosa**: as subscrições ligam-se, ficam à espera, e não chega evento. O sino de notificações, o calendário e o quadro de leads deixam de actualizar sem dar erro nenhum | **Resolvido** — `00000000000003_publicacao_realtime.sql` |
 | **Dados** | O baseline é só estrutura | Por desenho. Não é backup nem o substitui |
 
 #### A primeira execução real (2026-08-28)
