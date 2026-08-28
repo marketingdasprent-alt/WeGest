@@ -153,6 +153,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ── Que código está mesmo a ser testado ───────────────────────────
+      # Duas execuções seguidas deste gate reportaram erros em linhas que já
+      # tinham sido corrigidas. Eram re-execuções do MESMO commit: o botão
+      # "Re-run jobs" repete o SHA original, não vai buscar o topo do ramo.
+      # Só o "Run workflow" (workflow_dispatch) ou um push novo o fazem.
+      #
+      # Diagnosticar isso custou duas rondas porque a saída do gate não diz de
+      # que código veio. Passa a dizer — no log e no painel — para que qualquer
+      # saída colada se identifique sozinha.
+      - name: Commit em teste
+        run: |
+          ASSUNTO=$(git log -1 --format='%s')
+          {
+            echo "### 🔖 Commit em teste"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| SHA | \`${{ github.sha }}\` |"
+            echo "| Assunto | $ASSUNTO |"
+            echo "| Ref | \`${{ github.ref_name }}\` |"
+            echo "| Evento | \`${{ github.event_name }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "═══ Commit em teste ═══"
+          echo "SHA:     ${{ github.sha }}"
+          echo "Assunto: $ASSUNTO"
+          echo "Ref:     ${{ github.ref_name }}   Evento: ${{ github.event_name }}"
+
       - uses: supabase/setup-cli@v1
         with:
           version: latest
