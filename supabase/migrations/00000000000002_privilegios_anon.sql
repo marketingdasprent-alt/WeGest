@@ -72,28 +72,84 @@ grant execute on function public.marcar_convite_usado(text)  to anon;
 -- `authenticated` e `service_role` não são tocados por este ficheiro: o
 -- `revoke` acima é só para `anon`, e os grants deles vêm do baseline.
 
+-- ── Fechar o caminho por `PUBLIC` nas funções SECURITY DEFINER ─────────────
+--
+-- `revoke ... from anon` acima NÃO chega, e é a armadilha clássica: quando se
+-- cria uma função, o Postgres concede `EXECUTE` a `PUBLIC` por omissão, e
+-- `anon` herda de `PUBLIC`. Revogar a `anon` não corta a herança — o
+-- privilégio continua a chegar pelo outro caminho.
+--
+-- Medido: depois do `revoke ... from anon`, ainda havia 17 funções
+-- SECURITY DEFINER da aplicação executáveis pelo anónimo. Todas por `PUBLIC`.
+--
+-- SECURITY DEFINER corre como o dono e ignora a RLS por completo: nenhuma
+-- política a trava. É a superfície que mais importa fechar.
+--
+-- Só revoga. NÃO reconcede a `authenticated`/`service_role`: os grants
+-- explícitos desses vêm do baseline (o pg_dump escreve-os), e reconceder em
+-- bloco abriria funções que são deliberadamente só para o service_role — como
+-- `process_domain_events` ou `automation_runs_claim`.
+--
+-- Restrito ao dono `postgres` (funções da aplicação). As das extensões
+-- pertencem a `supabase_admin`, não são SECURITY DEFINER, computam sobre os
+-- argumentos sem tocar em dados, e o `postgres` não pode revogar grants feitos
+-- por outro dono.
+do $$
+declare
+  r record;
+  allowlist text[] := array[
+    'formulario_publico_por_id',
+    'validar_convite_token',
+    'marcar_convite_usado',
+    'get_current_org_id',
+    'is_current_user_admin',
+    'org_por_codigo',
+    'org_codigo_disponivel'
+  ];
+  fechadas int := 0;
+begin
+  for r in
+    select p.oid::regprocedure as assinatura
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+    where p.prokind = 'f'
+      and p.prosecdef
+      and pg_get_userbyid(p.proowner) = 'postgres'
+      and p.proname <> all (allowlist)
+    order by 1
+  loop
+    execute format('revoke all on function %s from public, anon', r.assinatura);
+    fechadas := fechadas + 1;
+  end loop;
+  raise notice 'EXECUTE revogado a public/anon em % funções SECURITY DEFINER', fechadas;
+end $$;
+
 -- ── Extensões instaladas em `public` ────────────────────────────────────────
 -- pg_trgm, unaccent e btree_gist vivem em `public` neste projecto, e o
 -- `revoke all on all functions` acima também lhes tirou o EXECUTE a `anon`.
 -- É o desejado: nenhum fluxo anónimo faz pesquisa por semelhança. Se algum dia
 -- fizer, reconceder explicitamente aqui, com o fluxo nomeado.
 
--- ── NOTA SOBRE A DIVERGÊNCIA COM PRODUÇÃO ───────────────────────────────────
+-- ── PORQUE REVOGAR AQUI NÃO PARTE NADA ──────────────────────────────────────
 --
--- Produção tem, a 2026-08-28, SEIS funções SECURITY DEFINER executáveis por
--- `anon` que não constam da lista acima:
+-- Verificado em produção a 2026-08-28, função a função: as 17 têm todas uma
+-- ACL desta forma —
 --
---   cobranca_ceder_a_motorista(uuid, uuid)
---   cobranca_reverter_cessao_motorista(uuid)
---   criar_versao_contrato_renting(uuid, text, timestamptz)
---   motorista_extrato_periodo(uuid, date, date)
---   recalcular_movimentos_do_cartao(uuid)
---   seed_automacao_danos_assistencia(uuid)
+--   =X/postgres  postgres=X/postgres  authenticated=X/postgres  service_role=X/postgres
 --
--- Nenhuma serve um fluxo anónimo. Este ficheiro NÃO as concede, portanto uma
--- base reconstruída fica mais fechada do que produção — deliberadamente: o
--- ficheiro descreve a postura pretendida, e a diferença é a medida da deriva.
+-- O `=X/postgres` (concessionário vazio) é o grant a PUBLIC, e é por aí que o
+-- anónimo entra. Os outros dois são grants EXPLÍCITOS, que o `revoke ... from
+-- public, anon` não toca e que o baseline já traz (o pg_dump escreve a ACL
+-- inteira). Depois deste bloco, `authenticated` e `service_role` continuam a
+-- poder chamá-las exactamente como antes.
 --
--- Revogá-las em produção é uma alteração de comportamento a uma base viva e
--- precisa de decisão explícita. Está registada em
--- docs/motor-automacao/reconstrucao-migracoes.md como achado por resolver.
+-- Era o risco a confirmar antes de escrever isto: se o EXECUTE só chegasse por
+-- PUBLIC, revogar PUBLIC tirava-o também a quem tem sessão, e partia o portal
+-- do motorista (`motorista_extrato_periodo`, `motorista_meus_acordos_ativos`).
+-- Não é o caso.
+--
+-- Das 17, oito são funções de trigger (`fn_*`, `tg_*`, `set_ti_ticket_numero`,
+-- `marcar_refecho_por_atribuicao`): revogar-lhes o EXECUTE não afecta o
+-- disparo do trigger, que não passa por verificação de privilégio. As outras
+-- nove são chamáveis, e seis delas escrevem ou lêem dados de negócio sem que
+-- exista fluxo anónimo que as justifique.
