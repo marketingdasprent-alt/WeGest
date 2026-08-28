@@ -37,11 +37,23 @@ insert into public.user_org_ativa (user_id, org_id) values
   ('00000000-0000-0000-0000-00000000a102', '00000000-0000-0000-0000-00000000a100');
 
 insert into public.cargos (id, nome, org_id) values
-  ('00000000-0000-0000-0000-0000000c1100', 'Sem Permissoes', '00000000-0000-0000-0000-00000000a100');
+  ('00000000-0000-0000-0000-0000000c1100', 'Gere Automacoes', '00000000-0000-0000-0000-00000000a100');
 
 insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
   ('00000000-0000-0000-0000-00000000a101', '00000000-0000-0000-0000-00000000a100', true,  null),
   ('00000000-0000-0000-0000-00000000a102', '00000000-0000-0000-0000-00000000a100', false, '00000000-0000-0000-0000-0000000c1100');
+
+-- Este cargo pode gerir automações e mais nada. É o cenário que interessa
+-- testar, e o único que chega ao validador: a RLS de `automation_rules` exige
+-- `can_edit(user, 'automacoes')` para escrever QUALQUER regra, portanto um
+-- utilizador sem permissão nenhuma era bloqueado antes — com 42501, não com o
+-- 23514 da validação da acção.
+--
+-- O que se prova aqui é a fronteira certa: poder configurar automações não é
+-- poder automatizar tudo.
+insert into public.cargo_permissoes (cargo_id, recurso_id, org_id, tem_acesso, pode_editar)
+select '00000000-0000-0000-0000-0000000c1100', r.id, '00000000-0000-0000-0000-00000000a100', true, true
+from public.recursos r where r.nome = 'automacoes';
 
 insert into public.viatura_marcas (id, org_id, nome) values
   ('00000000-0000-0000-0000-00008a4a1100', '00000000-0000-0000-0000-00000000a100', 'Seat');
@@ -54,8 +66,21 @@ insert into public.viaturas (id, org_id, matricula, marca_id, modelo_id) values
    '00000000-0000-0000-0000-00008a4a1100', '00000000-0000-0000-0000-00008e4a1100');
 
 -- A viatura da org B existe só para o teste de cross-tenant.
-insert into public.viaturas (id, org_id, matricula, marca, modelo) values
-  ('00000000-0000-0000-0000-0000087b1101', '00000000-0000-0000-0000-00000000b100', 'MV-99-PB', 'Seat', 'Leon');
+--
+-- marca/modelo entram por id, e é obrigatório: `fn_sync_viatura_marca_modelo`
+-- corre em TODO o INSERT e faz `select nome into NEW.marca ... where id =
+-- NEW.marca_id`. Com `marca_id` nulo o select não encontra nada, `marca` fica
+-- NULL, e a coluna é NOT NULL. Passar o texto directamente não funciona — é
+-- apagado antes de chegar à tabela.
+insert into public.viatura_marcas (id, org_id, nome) values
+  ('00000000-0000-0000-0000-00008a4b1100', '00000000-0000-0000-0000-00000000b100', 'Seat');
+insert into public.viatura_modelos (id, org_id, marca_id, nome) values
+  ('00000000-0000-0000-0000-00008e4b1100', '00000000-0000-0000-0000-00000000b100',
+   '00000000-0000-0000-0000-00008a4b1100', 'Leon');
+
+insert into public.viaturas (id, org_id, matricula, marca_id, modelo_id) values
+  ('00000000-0000-0000-0000-0000087b1101', '00000000-0000-0000-0000-00000000b100', 'MV-99-PB',
+   '00000000-0000-0000-0000-00008a4b1100', '00000000-0000-0000-0000-00008e4b1100');
 
 insert into public.motoristas_ativos (id, org_id, nome, observacoes) values
   ('00000000-0000-0000-0000-0000000e1101', '00000000-0000-0000-0000-00000000a100', 'Motorista MVP', null);
@@ -182,7 +207,9 @@ select throws_ok(
 );
 
 -- ── Permissão ───────────────────────────────────────────────
--- O utilizador tem cargo, mas o cargo não tem `motoristas_editar`.
+-- O cargo tem `automacoes` — logo passa a RLS de `automation_rules` e chega ao
+-- validador — mas não tem `motoristas_editar`, que é o recurso que a acção
+-- declara. É aí que é recusado.
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000a102', true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000a102","role":"authenticated"}', true);
@@ -192,7 +219,7 @@ select throws_ok(
     values ('00000000-0000-0000-0000-00000000a100', 'teste.mvp_sem_perm', 'X', 'teste.x', 'automacao_interna',
             '{"accao":"motorista.atualizar_campo","campo":"observacoes","valor":"x"}'::jsonb)$$,
   '23514', null,
-  'quem não tem o recurso da acção não a consegue configurar'
+  'quem gere automações mas não pode editar motoristas não configura essa acção'
 );
 
 reset role;
