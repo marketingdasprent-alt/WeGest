@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { semCodigo } from '@/types/codigoPorOrg';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import type {
   ContratoRenting,
   ContratoEstadoOperacional,
@@ -928,6 +929,24 @@ export type ReverterParaReservaArgs = Pick<ContratoRenting, 'id' | 'reserva_id'>
  *  só o estado_operacional. Só faz sentido antes de a viatura ser entregue
  *  (agendado): depois disso já não é "só uma reserva outra vez" — é para
  *  isso que existem "Reverter abertura"/"Reverter fecho". */
+/**
+ * O que se escreve na reserva ao reverter um contrato.
+ *
+ * Além do estado, devolve-lhe a empresa emissora e a tarifa que o contrato
+ * tinha: é a fotografia mais recente e fiável desses dois valores, e sem isto
+ * uma reserva que os tivesse perdido pelo caminho voltava vazia. Nunca apaga o
+ * que a reserva já tem — um contrato sem emissora não pode limpar a da reserva.
+ */
+export function patchReservaAoReverter(contrato: {
+  emissor_id?: string | null;
+  tarifa_id?: string | null;
+}): TablesUpdate<'reservas'> {
+  const patch: TablesUpdate<'reservas'> = { estado: 'confirmada' };
+  if (contrato.emissor_id) patch.emissor_id = contrato.emissor_id;
+  if (contrato.tarifa_id) patch.tarifa_id = contrato.tarifa_id;
+  return patch;
+}
+
 export function useReverterParaReserva() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -942,17 +961,18 @@ export function useReverterParaReserva() {
         .eq('id', contratoId)
         .eq('estado_operacional', 'agendado')
         .is('deleted_at', null)
-        .select('id')
+        .select('id, emissor_id, tarifa_id')
         .maybeSingle();
       if (error) throw error;
       if (!updated) return;
 
       // Devolve a reserva ao estado que tinha antes de virar contrato — o
       // mesmo valor que contrato_renting_cascata_estado usa para "cancelado
-      // vindo de agendado" (cliente continua com reserva válida).
+      // vindo de agendado" (cliente continua com reserva válida) — e com ela a
+      // emissora e a tarifa que o contrato levava.
       const { error: errReserva } = await supabase
         .from('reservas')
-        .update({ estado: 'confirmada' })
+        .update(patchReservaAoReverter(updated))
         .eq('id', reserva_id);
       if (errReserva) throw errReserva;
 
