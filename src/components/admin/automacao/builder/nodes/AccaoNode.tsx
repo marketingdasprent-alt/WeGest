@@ -8,7 +8,10 @@ import { useAccoesDoNo } from './useAccoesDoNo';
 import { BlocoBase } from './BlocoBase';
 
 export interface DadosAccaoBuilder extends Record<string, unknown> {
+  /** Para notificações é 'notificacao'; para acções internas é o id do catálogo. */
   accao: string;
+  /** 'notificacao' | 'automacao_interna'. */
+  acaoTipo?: string;
   rotulo: string;
   cooldownMinutos: number;
   cargoIds?: string[];
@@ -26,6 +29,13 @@ export type AccaoNodeType = AutomationNode & { data: DadosAccaoBuilder };
 
 /** Só no tooltip: a contagem de destinatários saiu do cartão. */
 function detalhe(data: DadosAccaoBuilder): string {
+  if (data.acaoTipo === 'automacao_interna') {
+    if (!data.accao) return 'Sem acção escolhida';
+    // O campo só existe nas acções que escrevem num campo; as de conjunto
+    // fechado têm só o valor.
+    const alvo = data.campo ? `${data.campo} → ` : '';
+    return `${alvo}${data.valor || '?'}`;
+  }
   if (data.accao === 'notificacao') {
     const n = data.cargoIds?.length ?? 0;
     const grupos = n === 1 ? '1 grupo' : `${n} grupos`;
@@ -52,13 +62,15 @@ function rodape(data: DadosAccaoBuilder): string | undefined {
 }
 
 function faltaConfigurar(data: DadosAccaoBuilder): boolean {
+  // Numa acção interna o `campo` só existe nas que escrevem num campo; exigi-lo
+  // sempre marcava como incompleta uma acção de conjunto fechado já correcta.
+  if (data.acaoTipo === 'automacao_interna') return !data.accao || !data.valor;
   if (data.accao === 'notificacao') return (data.cargoIds?.length ?? 0) === 0;
-  if (data.accao === 'alterar_estado') return !data.campo || !data.valor;
   return false;
 }
 
 function AccaoNodeBase({ id, data, selected }: NodeProps<DadosAccaoBuilder>) {
-  const visual = visualDoBloco('accao', { accao: data.accao });
+  const visual = visualDoBloco('accao', { accao: data.accao, acaoTipo: data.acaoTipo });
   const { remover } = useAccoesDoNo(id);
 
   return (

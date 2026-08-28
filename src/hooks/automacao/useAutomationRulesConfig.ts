@@ -32,6 +32,26 @@ export interface AutomationRuleAcaoConfig {
   enviar_email_digest?: boolean;
 }
 
+/**
+ * A configuração de uma acção interna, exactamente como o motor a espera.
+ *
+ * `accao` é o id do catálogo; `campo` só existe nas acções que escrevem num
+ * campo. Os nomes são os do servidor — traduzi-los aqui só criava um formato
+ * que mais ninguém entende.
+ */
+export interface AcaoInternaConfig {
+  accao: string;
+  campo?: string;
+  valor: string;
+}
+
+/** Uma condição com o valor já no tipo que o catálogo declarou. */
+export interface CondicaoTipada {
+  campo: string;
+  operador: string;
+  valor: string | number | boolean;
+}
+
 export interface AutomationRuleConfig {
   id: string;
   nome: string;
@@ -39,6 +59,9 @@ export interface AutomationRuleConfig {
   /** Array de { campo, operador, valor }. Em produção é um objecto vazio na
    * maioria das regras — o motor só as avalia se forem array. */
   condicoes: unknown;
+  /** 'notificacao' | 'automacao_interna' | 'webhook'. Sem isto o editor não
+   * sabe reconstruir uma automação interna ao abri-la. */
+  acao_tipo: string;
   acao_config: AutomationRuleAcaoConfig;
   cooldown_minutos: number;
 }
@@ -51,7 +74,7 @@ export function useAutomationRuleConfig(ruleId: string | null) {
     queryFn: async (): Promise<AutomationRuleConfig> => {
       const { data, error } = await supabase
         .from('automation_rules')
-        .select('id, nome, event_type, condicoes, acao_config, cooldown_minutos')
+        .select('id, nome, event_type, condicoes, acao_tipo, acao_config, cooldown_minutos')
         .eq('id', ruleId as string)
         .single();
       if (error) throw error;
@@ -158,20 +181,32 @@ export function useAtualizarConfigRegra() {
   return useMutation({
     mutationFn: async ({
       id,
+      acaoTipo,
       acaoConfig,
       cooldownMinutos,
       condicoes,
     }: {
       id: string;
-      acaoConfig: AutomationRuleAcaoConfig;
+      /** Omitir mantém o tipo actual — é o caso das regras de notificação. */
+      acaoTipo?: string;
+      acaoConfig: AutomationRuleAcaoConfig | AcaoInternaConfig;
       cooldownMinutos: number;
-      /** Só enviado por quem edita condições; omitir deixa-as intactas. */
-      condicoes?: { campo: string; operador: string; valor: string }[];
+      /** Só enviado por quem edita condições; omitir deixa-as intactas.
+       * `valor` é o valor JSON já tipado — número fica número, boolean fica
+       * boolean. Converter para texto aqui reintroduzia o bug que a tipagem
+       * do catálogo existe para fechar. */
+      condicoes?: CondicaoTipada[];
     }) => {
-      const alteracao: { acao_config: Json; cooldown_minutos: number; condicoes?: Json } = {
+      const alteracao: {
+        acao_config: Json;
+        cooldown_minutos: number;
+        condicoes?: Json;
+        acao_tipo?: string;
+      } = {
         acao_config: acaoConfig as unknown as Json,
         cooldown_minutos: cooldownMinutos,
       };
+      if (acaoTipo) alteracao.acao_tipo = acaoTipo;
       // Omitir e enviar [] são coisas diferentes: quem não edita condições não
       // pode apagá-las sem saber.
       if (condicoes) alteracao.condicoes = condicoes as unknown as Json;
