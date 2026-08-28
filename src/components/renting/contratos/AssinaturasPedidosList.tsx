@@ -71,7 +71,11 @@ export function AssinaturasPedidosList({
           return (
             <div
               key={pedido.id}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border p-3 text-sm"
+              className={
+                pedido.de_versao_anterior
+                  ? 'flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-dashed bg-muted/30 p-3 text-sm'
+                  : 'flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border p-3 text-sm'
+              }
             >
               <span className="font-medium">{pedido.signatario_nome}</span>
               <span className="text-muted-foreground">({ROTULO_PAPEL[pedido.papel]})</span>
@@ -82,6 +86,15 @@ export function AssinaturasPedidosList({
               <span className="whitespace-nowrap text-xs text-muted-foreground">
                 Enviado a {data(pedido.created_at)}
               </span>
+
+              {/* Assinado sobre uma versão anterior deste contrato. Fica à
+                  vista, mas assinalado: o que a pessoa assinou foi o contrato
+                  como ele era nessa altura, não necessariamente este. */}
+              {pedido.de_versao_anterior && (
+                <Badge variant="outline" className="border-dashed">
+                  Versão anterior do contrato
+                </Badge>
+              )}
 
               {assinado ? (
                 <Badge variant="outline" className="gap-1 border-emerald-500/40">

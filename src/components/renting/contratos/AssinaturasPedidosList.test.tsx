@@ -23,6 +23,7 @@ const porAssinar: AssinaturaPedido = {
   expires_at: '2026-09-24T09:00:00Z',
   assinado_em: null,
   documento_assinado_path: null,
+  de_versao_anterior: false,
 };
 
 describe('AssinaturasPedidosList', () => {
@@ -101,5 +102,54 @@ describe('AssinaturasPedidosList', () => {
 
     await vi.waitFor(() => expect(abrir).toHaveBeenCalledWith('caminho/doc.pdf'));
     await vi.waitFor(() => expect(janela).toHaveBeenCalledWith('https://exemplo.pt/assinado.pdf'));
+  });
+});
+
+/**
+ * Reverter um contrato para reserva e voltar a criá-lo faz nascer uma LINHA
+ * nova, com o mesmo número. Os pedidos ficam agarrados à linha onde foram
+ * feitos — e sem estes testes um documento já assinado desaparecia do ecrã.
+ * Aconteceu ao contrato 841 da matrícula 00-62-VF: quatro linhas, assinaturas
+ * em três delas, e a aba só mostrava a da linha viva, por assinar.
+ */
+describe('AssinaturasPedidosList — pedidos de versões anteriores', () => {
+  const assinadoAntes: AssinaturaPedido = {
+    id: 'p-antigo',
+    papel: 'cliente',
+    signatario_nome: 'Dinis Silva',
+    signatario_email: 'dinis@exemplo.pt',
+    documento_nome: 'Contrato de Aluguer 841',
+    created_at: '2026-08-28T14:31:00Z',
+    expires_at: '2026-09-27T14:31:00Z',
+    assinado_em: '2026-08-28T14:32:00Z',
+    documento_assinado_path: 'contratos/841/documento-assinado.pdf',
+    de_versao_anterior: true,
+  };
+
+  it('mostra um pedido assinado numa versão anterior, em vez de o esconder', () => {
+    render(<AssinaturasPedidosList pedidos={[assinadoAntes]} />);
+
+    expect(screen.getByText('Contrato de Aluguer 841')).toBeTruthy();
+    expect(screen.getByText(/Assinado a/)).toBeTruthy();
+  });
+
+  it('assinala-o como sendo de uma versão anterior', () => {
+    render(<AssinaturasPedidosList pedidos={[assinadoAntes]} />);
+
+    expect(screen.getByText('Versão anterior do contrato')).toBeTruthy();
+  });
+
+  // Continua a poder descarregar-se: o documento existe e é prova do que foi
+  // assinado, mesmo que o contrato tenha sido refeito depois.
+  it('deixa descarregar o documento assinado da versão anterior', () => {
+    render(<AssinaturasPedidosList pedidos={[assinadoAntes]} />);
+
+    expect(screen.getByRole('button', { name: /Documento assinado/ })).toBeTruthy();
+  });
+
+  it('não marca como versão anterior um pedido do contrato actual', () => {
+    render(<AssinaturasPedidosList pedidos={[{ ...assinadoAntes, de_versao_anterior: false }]} />);
+
+    expect(screen.queryByText('Versão anterior do contrato')).toBeNull();
   });
 });

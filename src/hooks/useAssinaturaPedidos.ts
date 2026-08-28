@@ -13,6 +13,21 @@ export interface AssinaturaPedido {
   expires_at: string;
   assinado_em: string | null;
   documento_assinado_path: string | null;
+  /**
+   * O pedido foi feito sobre uma linha de contrato anterior a esta.
+   *
+   * Reverter um contrato para reserva e voltar a criá-lo faz nascer uma LINHA
+   * nova, com o mesmo número. Os pedidos ficam agarrados à linha onde foram
+   * criados, e sem isto um documento já assinado desaparecia do ecrã — foi o
+   * que aconteceu ao contrato 841 da matrícula 00-62-VF, que tem quatro linhas
+   * e as assinaturas espalhadas por três delas.
+   *
+   * Não são promovidos a documentos do contrato actual de propósito: foram
+   * assinados sobre o que o contrato dizia nessa altura, e se as datas ou o
+   * preço mudaram entretanto, apresentá-los como actuais seria mentir sobre o
+   * que a pessoa assinou.
+   */
+  de_versao_anterior: boolean;
 }
 
 /**
@@ -27,16 +42,37 @@ export function useAssinaturaPedidos(contratoId: string | null | undefined) {
     enabled: !!contratoId,
     staleTime: 30_000,
     queryFn: async (): Promise<AssinaturaPedido[]> => {
+      // Todas as linhas de contrato nascidas da mesma reserva contam: são o
+      // mesmo negócio, refeito. Se a leitura da reserva falhar, fica-se pelo
+      // contrato actual — vale mais mostrar menos do que rebentar a aba.
+      let ids: string[] = [contratoId as string];
+      const { data: atual } = await supabase
+        .from('contratos_renting')
+        .select('reserva_id')
+        .eq('id', contratoId as string)
+        .maybeSingle();
+
+      if (atual?.reserva_id) {
+        const { data: irmas } = await supabase
+          .from('contratos_renting')
+          .select('id')
+          .eq('reserva_id', atual.reserva_id);
+        if (irmas?.length) ids = irmas.map((c) => c.id as string);
+      }
+
       const { data, error } = await supabase
         .from('documento_assinatura_pedidos')
         .select(
-          'id, papel, signatario_nome, signatario_email, documento_nome, created_at, expires_at, assinado_em, documento_assinado_path'
+          'id, contrato_id, papel, signatario_nome, signatario_email, documento_nome, created_at, expires_at, assinado_em, documento_assinado_path'
         )
-        .eq('contrato_id', contratoId as string)
+        .in('contrato_id', ids)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return (data ?? []) as AssinaturaPedido[];
+      return (data ?? []).map((p) => ({
+        ...(p as unknown as AssinaturaPedido),
+        de_versao_anterior: (p as { contrato_id: string }).contrato_id !== contratoId,
+      }));
     },
   });
 }
