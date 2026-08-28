@@ -18,13 +18,29 @@
 -- Os runs nascem pelo caminho real: `domain_events` → `process_domain_events`.
 -- Criar runs à mão saltaria precisamente o sítio onde o snapshot é feito.
 --
+-- ── PORQUE UM event_type INVENTADO E NÃO UM REAL ────────────────────────────
+--
+-- Criar uma organização dispara `trg_organizacoes_seed_automacao`, que semeia
+-- o conjunto de regras por omissão — incluindo uma para
+-- `viatura.seguro_expirando`. Com um event_type real, cada evento casaria com
+-- DUAS regras (a semeada e a deste ficheiro), nasceriam dois runs para o mesmo
+-- `trigger_event_id`, e as asserções rebentariam com «more than one row
+-- returned by a subquery». Foi exactamente o que aconteceu na primeira
+-- passagem pelo CI.
+--
+-- Com `teste.f3_snapshot` só a regra deste ficheiro casa. Efeito secundário:
+-- `v_tipo_legado` fica NULL, portanto não há escrita em `notificacoes` nem
+-- supressão por aviso em aberto. Nenhuma asserção depende disso — todas olham
+-- para `notifications`, `automation_runs` e a vista.
+--
 -- ── PORQUE VIATURAS DIFERENTES EM CADA CENÁRIO ──────────────────────────────
 --
--- `process_domain_events` suprime um evento quando já existe uma notificação
--- em aberto com o mesmo tipo e link (`ignorada_aviso_em_aberto`). Como o link
--- vem da entidade, reutilizar a mesma viatura faria o segundo cenário não
--- criar run nenhum — e o teste passaria a medir a supressão em vez do
--- snapshot. Cada cenário tem a sua viatura.
+-- `idx_automation_runs_one_active_per_rule_entity` é único em
+-- (rule_id, entity_table, entity_id) enquanto o run está pendente ou a correr.
+-- Os cenários T7 e T8 têm dois runs pendentes ao mesmo tempo: com a mesma
+-- viatura, o segundo insert violaria o índice e seria engolido pelo
+-- `exception when unique_violation` do casamento — o teste mediria o índice em
+-- vez do snapshot.
 --
 -- ── PORQUE O ADMIN RECEBE SEMPRE ────────────────────────────────────────────
 --
@@ -82,7 +98,7 @@ from (values
 -- Regra na versão 1: template `v1.template`, destinatários do Cargo Um.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-00004600f301', '00000000-0000-0000-0000-0000000f3000',
-   'teste.f3', 'Regra F3', 'viatura.seguro_expirando', 'notificacao',
+   'teste.f3', 'Regra F3', 'teste.f3_snapshot', 'notificacao',
    jsonb_build_object(
      'titulo', 'Seguro a expirar',
      'template_codigo', 'v1.template',
@@ -95,7 +111,7 @@ insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_
 -- ════════════════════════════════════════════════════════════
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by, occurred_at) values
   ('00000000-0000-0000-0000-00000e0f3001', '00000000-0000-0000-0000-0000000f3000',
-   'viatura.seguro_expirando', 'viaturas', '00000000-0000-0000-0000-0000870f3001', 'manual', now() - interval '5 minutes');
+   'teste.f3_snapshot', 'viaturas', '00000000-0000-0000-0000-0000870f3001', 'manual', now() - interval '5 minutes');
 
 select public.process_domain_events();
 
@@ -181,7 +197,7 @@ select is(
 -- ════════════════════════════════════════════════════════════
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by, occurred_at) values
   ('00000000-0000-0000-0000-00000e0f3002', '00000000-0000-0000-0000-0000000f3000',
-   'viatura.seguro_expirando', 'viaturas', '00000000-0000-0000-0000-0000870f3002', 'manual', now() - interval '4 minutes');
+   'teste.f3_snapshot', 'viaturas', '00000000-0000-0000-0000-0000870f3002', 'manual', now() - interval '4 minutes');
 
 select public.process_domain_events();
 
@@ -218,9 +234,9 @@ select is(
 -- esgotar tentativas e cair na dead-letter. Só depois a regra passa a v3.
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by, occurred_at) values
   ('00000000-0000-0000-0000-00000e0f3003', '00000000-0000-0000-0000-0000000f3000',
-   'viatura.seguro_expirando', 'viaturas', '00000000-0000-0000-0000-0000870f3003', 'manual', now() - interval '3 minutes'),
+   'teste.f3_snapshot', 'viaturas', '00000000-0000-0000-0000-0000870f3003', 'manual', now() - interval '3 minutes'),
   ('00000000-0000-0000-0000-00000e0f3004', '00000000-0000-0000-0000-0000000f3000',
-   'viatura.seguro_expirando', 'viaturas', '00000000-0000-0000-0000-0000870f3004', 'manual', now() - interval '3 minutes');
+   'teste.f3_snapshot', 'viaturas', '00000000-0000-0000-0000-0000870f3004', 'manual', now() - interval '3 minutes');
 
 select public.process_domain_events();
 
@@ -397,9 +413,9 @@ select is(
 -- regra é desligada.
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by, occurred_at) values
   ('00000000-0000-0000-0000-00000e0f3005', '00000000-0000-0000-0000-0000000f3000',
-   'viatura.seguro_expirando', 'viaturas', '00000000-0000-0000-0000-0000870f3006', 'manual', now() - interval '2 minutes'),
+   'teste.f3_snapshot', 'viaturas', '00000000-0000-0000-0000-0000870f3006', 'manual', now() - interval '2 minutes'),
   ('00000000-0000-0000-0000-00000e0f3006', '00000000-0000-0000-0000-0000000f3000',
-   'viatura.seguro_expirando', 'viaturas', '00000000-0000-0000-0000-0000870f3007', 'manual', now() - interval '2 minutes');
+   'teste.f3_snapshot', 'viaturas', '00000000-0000-0000-0000-0000870f3007', 'manual', now() - interval '2 minutes');
 
 select public.process_domain_events();
 
@@ -415,7 +431,7 @@ update public.automation_rules set ativo = false
 -- Evento novo com a regra desligada: não deve nascer run nenhum.
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by, occurred_at) values
   ('00000000-0000-0000-0000-00000e0f3007', '00000000-0000-0000-0000-0000000f3000',
-   'viatura.seguro_expirando', 'viaturas', '00000000-0000-0000-0000-0000870f3008', 'manual', now() - interval '1 minute');
+   'teste.f3_snapshot', 'viaturas', '00000000-0000-0000-0000-0000870f3008', 'manual', now() - interval '1 minute');
 
 select public.process_domain_events();
 

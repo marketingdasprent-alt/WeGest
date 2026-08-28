@@ -345,13 +345,17 @@ select is(
 -- `severidade = 'urgente'` é o que impede o agrupamento de as fundir e assim
 -- esconder o que se quer medir: aqui interessa saber que o ÍNDICE as deixa
 -- passar, não o trigger.
+--
+-- `escalonamento` não é um nome à escolha: `notificacoes_tipo_check` é uma
+-- lista fechada de 25 valores e um tipo inventado rebenta o insert. É também o
+-- caso certo — um escalonamento é precisamente um alerta que não vem do motor.
 insert into public.notificacoes (org_id, tipo, titulo, severidade, destinatario_id) values
-  ('00000000-0000-0000-0000-0000000d0000', 'teste_sem_run', 'Alerta directo 1', 'urgente', '00000000-0000-0000-0000-0000000d0002'),
-  ('00000000-0000-0000-0000-0000000d0000', 'teste_sem_run', 'Alerta directo 2', 'urgente', '00000000-0000-0000-0000-0000000d0002');
+  ('00000000-0000-0000-0000-0000000d0000', 'escalonamento', 'Alerta directo 1', 'urgente', '00000000-0000-0000-0000-0000000d0002'),
+  ('00000000-0000-0000-0000-0000000d0000', 'escalonamento', 'Alerta directo 2', 'urgente', '00000000-0000-0000-0000-0000000d0002');
 
 select is(
   (select count(*)::int from public.notificacoes
-    where tipo = 'teste_sem_run' and rule_run_id is null),
+    where tipo = 'escalonamento' and rule_run_id is null),
   2,
   'notificacoes sem rule_run_id não são afectadas pelo índice parcial'
 );
