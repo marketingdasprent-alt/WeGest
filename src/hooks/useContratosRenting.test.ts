@@ -7,6 +7,7 @@ import React from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   useCreateContratoRenting,
+  useCriarVersaoContrato,
   useFecharContrato,
   usePreencherDadosSaidaAnyRent,
   useReverterFecho,
@@ -629,6 +630,82 @@ describe('useReverterFecho', () => {
 
     expect(chains['contratos_renting'].update).toHaveBeenCalledWith(
       expect.objectContaining({ estado_operacional: 'em_curso', updated_by: 'user-9' })
+    );
+  });
+});
+
+// ─── useCriarVersaoContrato: a causa real não pode ficar escondida ───
+
+/**
+ * Uma troca de viatura falhava com o toast "Erro inesperado" e mais nada. A
+ * causa real vinha do Postgres — o contrato #577 tinha `data_fim` já no
+ * passado, e a RPC montava o sucessor com `data_inicio` = data da troca e
+ * `data_fim` = a data antiga, o que inverte o `periodo` (coluna gerada
+ * `tstzrange(data_inicio, data_fim, '[)')`) e rebenta com
+ * "range lower bound must be less than or equal to range upper bound".
+ *
+ * Essa mensagem nunca chegou ao ecrã: o hook usava `error instanceof Error`,
+ * e um PostgrestError é um objecto plain. Mesma armadilha que o fix de 10/07
+ * já tinha arrumado em useCreateContratoRenting — este hook ficou de fora.
+ */
+describe('useCriarVersaoContrato', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('mostra a mensagem real do Postgres quando a RPC falha (não "Erro inesperado")', async () => {
+    // Shape real de um erro do Supabase: plain object, NÃO instanceof Error.
+    const rangeError = {
+      message: 'range lower bound must be less than or equal to range upper bound',
+      code: '22000',
+      details: null,
+      hint: null,
+    };
+    setupSupabase();
+    (supabase as unknown as { rpc: ReturnType<typeof vi.fn> }).rpc = vi
+      .fn()
+      .mockResolvedValue({ data: null, error: rangeError });
+
+    const { result } = renderHook(() => useCriarVersaoContrato(), { wrapper: createWrapper() });
+
+    await act(async () => {
+      await result.current
+        .mutateAsync({ contratoId: 'c-577', motivo: 'Manutenção' })
+        .catch(() => undefined);
+    });
+
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining('range lower bound'),
+        variant: 'destructive',
+      })
+    );
+    const call = toastMock.mock.calls[0][0] as { description: string };
+    expect(call.description).not.toMatch(/erro inesperado/i);
+  });
+
+  it('reconhece um conflito de disponibilidade em vez de despejar o texto cru', async () => {
+    setupSupabase();
+    (supabase as unknown as { rpc: ReturnType<typeof vi.fn> }).rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        message: 'conflicting key value violates exclusion constraint "contratos_no_overbooking"',
+        code: '23P01',
+        details: null,
+        hint: null,
+      },
+    });
+
+    const { result } = renderHook(() => useCriarVersaoContrato(), { wrapper: createWrapper() });
+
+    await act(async () => {
+      await result.current
+        .mutateAsync({ contratoId: 'c-577', motivo: 'Manutenção' })
+        .catch(() => undefined);
+    });
+
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Conflito de disponibilidade', variant: 'destructive' })
     );
   });
 });
