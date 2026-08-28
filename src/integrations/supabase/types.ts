@@ -13854,6 +13854,7 @@ export type Database = {
               p_contrato_id: string
               p_data_troca: string
               p_motivo: string
+              p_viatura_id?: string | null
             }
             Returns: string
           }

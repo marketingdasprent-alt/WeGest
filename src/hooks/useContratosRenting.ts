@@ -977,11 +977,19 @@ export function useCriarVersaoContrato() {
        *  linha temporal do histórico bata certo com a devolução real. Omitido
        *  (ex.: chamadas antigas), a RPC assume `now()`. */
       dataTroca?: string;
+      /** Viatura NOVA da troca. Tem de ir já na RPC: o sucessor nasce
+       *  'agendado', que é um dos estados vigiados por
+       *  contratos_no_overbooking, e se nascesse com a viatura antiga estaria
+       *  a reocupar exactamente a viatura que a troca liberta — colidindo com
+       *  quem entretanto a alugou. Omitida, a RPC clona a viatura actual
+       *  (versionar sem trocar de viatura). */
+      viaturaId?: string | null;
     }): Promise<string> => {
       const { data, error } = await supabase.rpc('criar_versao_contrato_renting', {
         p_contrato_id: args.contratoId,
         p_motivo: args.motivo,
         p_data_troca: args.dataTroca ?? new Date().toISOString(),
+        p_viatura_id: args.viaturaId ?? null,
       });
       if (error) throw error;
       return data as string;
@@ -995,8 +1003,18 @@ export function useCriarVersaoContrato() {
       });
     },
     onError: (error: unknown) => {
-      const description = error instanceof Error ? error.message : 'Erro inesperado';
-      toast({ title: 'Erro ao criar versão', description, variant: 'destructive' });
+      // A RPC devolve um PostgrestError — objecto plain, NÃO instanceof Error.
+      // Com `error instanceof Error` a causa real morria atrás de "Erro
+      // inesperado" e o gestor ficava sem saber o que corrigir: foi assim que
+      // uma troca bloqueada por `data_fim` no passado passou dias sem
+      // diagnóstico. Mesma armadilha que o fix de 10/07 arrumou em
+      // useCreateContratoRenting; este hook tinha ficado de fora.
+      const { title, description } = contratoErrorMessage(error);
+      toast({
+        title: title === 'Erro' ? 'Erro ao criar versão' : title,
+        description,
+        variant: 'destructive',
+      });
     },
   });
 }
