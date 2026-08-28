@@ -12,6 +12,8 @@ export interface AssinaturaPedido {
   created_at: string;
   expires_at: string;
   assinado_em: string | null;
+  /** Quantas vezes foi assinado por este link. O link não expira e aceita repetir. */
+  assinaturas_total: number;
   /** PDF ORIGINAL, tal como foi enviado para assinar. Existe sempre. */
   documento_path: string;
   /** PDF com a assinatura dentro. Só existe depois de assinado. */
@@ -66,7 +68,7 @@ export function useAssinaturaPedidos(contratoId: string | null | undefined) {
       const { data, error } = await supabase
         .from('documento_assinatura_pedidos')
         .select(
-          'id, contrato_id, papel, signatario_nome, signatario_email, documento_nome, created_at, expires_at, assinado_em, documento_path, documento_assinado_path'
+          'id, contrato_id, papel, signatario_nome, signatario_email, documento_nome, created_at, expires_at, assinado_em, assinaturas_total, documento_path, documento_assinado_path'
         )
         .in('contrato_id', ids)
         .order('created_at', { ascending: false });
@@ -74,7 +76,7 @@ export function useAssinaturaPedidos(contratoId: string | null | undefined) {
       if (error) throw error;
       return (data ?? []).map((p) => ({
         ...(p as unknown as AssinaturaPedido),
-        de_versao_anterior: (p as { contrato_id: string }).contrato_id !== contratoId,
+        de_versao_anterior: (p as unknown as { contrato_id: string }).contrato_id !== contratoId,
       }));
     },
   });

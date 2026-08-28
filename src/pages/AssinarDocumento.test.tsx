@@ -142,34 +142,68 @@ describe('AssinarDocumento', () => {
     expect(screen.getByRole('button', { name: /^assinar/i })).toBeDisabled();
   });
 
-  it('diz que o prazo terminou e a quem pedir outro link', async () => {
+  // O link deixou de ter prazo. Um pedido antigo abre na mesma e deixa assinar —
+  // antes obrigava a gerar um pedido novo so para corrigir um traco mal dado.
+  it('um pedido antigo continua a deixar assinar, sem ecra de prazo terminado', async () => {
     const carregar = vi.fn().mockResolvedValue({
-      estado: 'expirado',
+      estado: 'valido',
       documentoNome: 'Contrato de Aluguer',
-      expirouEm: '2026-08-01T12:00:00Z',
+      papel: 'cliente',
+      signatarioNome: 'Ana Reis',
+      snapshot: snapshotDeTeste,
+      assinadoEm: null,
+      urlAssinado: null,
+      assinaturasTotal: 0,
     });
 
     renderPagina({ carregar, submeter: vi.fn() });
 
-    expect(await screen.findByText(/prazo para assinar terminou/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^assinar/i })).not.toBeInTheDocument();
+    expect(await screen.findByText('Contrato de Aluguer')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^assinar/i })).toBeInTheDocument();
+    expect(screen.queryByText(/prazo/i)).not.toBeInTheDocument();
   });
 
-  it('quando já foi assinado, mostra a data e deixa descarregar', async () => {
+  it('quem ja assinou ve a data, o que assinou, e pode assinar de novo', async () => {
     const carregar = vi.fn().mockResolvedValue({
       estado: 'assinado',
       documentoNome: 'Contrato de Aluguer',
+      papel: 'cliente',
+      signatarioNome: 'Ana Reis',
+      snapshot: snapshotDeTeste,
       assinadoEm: '2026-08-20T10:00:00Z',
       urlAssinado: 'https://exemplo.pt/assinado.pdf',
+      assinaturasTotal: 1,
     });
 
     renderPagina({ carregar, submeter: vi.fn() });
 
-    expect(await screen.findByText(/assinado a 20\/08\/2026/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /descarregar/i })).toHaveAttribute(
+    // O texto e a data ficam em nos diferentes (a data vem de interpolacao),
+    // por isso procura-se a frase e confirma-se a data no mesmo paragrafo.
+    const aviso = await screen.findByText(/assinou este documento/i);
+    expect(aviso.textContent).toMatch(/20\/08\/2026/);
+    expect(screen.getByRole('link', { name: /ver o que assinou/i })).toHaveAttribute(
       'href',
       'https://exemplo.pt/assinado.pdf'
     );
+    // O essencial: continua a poder assinar.
+    expect(screen.getByRole('button', { name: /^assinar/i })).toBeInTheDocument();
+  });
+
+  it('diz quantas assinaturas ja houve quando foi assinado mais do que uma vez', async () => {
+    const carregar = vi.fn().mockResolvedValue({
+      estado: 'assinado',
+      documentoNome: 'Contrato de Aluguer',
+      papel: 'cliente',
+      signatarioNome: 'Ana Reis',
+      snapshot: snapshotDeTeste,
+      assinadoEm: '2026-08-20T10:00:00Z',
+      urlAssinado: null,
+      assinaturasTotal: 3,
+    });
+
+    renderPagina({ carregar, submeter: vi.fn() });
+
+    expect(await screen.findByText(/3 assinaturas/i)).toBeInTheDocument();
   });
 
   it('avisa quando o link não existe', async () => {

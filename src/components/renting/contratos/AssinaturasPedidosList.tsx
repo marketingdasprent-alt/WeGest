@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, Clock, Download, FileText, PenLine } from 'lucide-react';
+import { CheckCircle2, Download, FileText, PenLine } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,8 +10,6 @@ export interface AssinaturasPedidosListProps {
   /** Injectáveis para testar sem rede. */
   obterUrl?: (path: string) => Promise<string | null>;
   abrirUrl?: (url: string) => void;
-  /** Só para testes: fixa o "agora" que decide se um prazo já passou. */
-  agora?: Date;
 }
 
 const ROTULO_PAPEL: Record<AssinaturaPedido['papel'], string> = {
@@ -37,7 +35,6 @@ export function AssinaturasPedidosList({
   pedidos,
   obterUrl = getDocumentoUrl,
   abrirUrl = (url) => window.open(url, '_blank', 'noopener'),
-  agora = new Date(),
 }: AssinaturasPedidosListProps) {
   const [aAbrir, setAAbrir] = useState<string | null>(null);
 
@@ -67,7 +64,6 @@ export function AssinaturasPedidosList({
       <div className="space-y-2">
         {pedidos.map((pedido) => {
           const assinado = !!pedido.assinado_em;
-          const expirou = !assinado && new Date(pedido.expires_at) <= agora;
 
           return (
             <div
@@ -97,15 +93,14 @@ export function AssinaturasPedidosList({
                 </Badge>
               )}
 
+              {/* Sem "prazo terminado": o link não expira e aceita assinar de
+                  novo. Quando houve mais do que uma, vale a última — e diz-se
+                  quantas foram, senão o número de cima parecia contradizer-se. */}
               {assinado ? (
                 <Badge variant="outline" className="gap-1 border-emerald-500/40">
                   <CheckCircle2 className="h-3 w-3 text-emerald-600" />
                   Assinado a {data(pedido.assinado_em as string)}
-                </Badge>
-              ) : expirou ? (
-                <Badge variant="outline" className="gap-1 border-amber-500/40">
-                  <Clock className="h-3 w-3 text-amber-600" />
-                  Prazo terminado
+                  {pedido.assinaturas_total > 1 && ` · ${pedido.assinaturas_total}.ª assinatura`}
                 </Badge>
               ) : (
                 <Badge variant="secondary">Por assinar</Badge>

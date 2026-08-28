@@ -22,6 +22,7 @@ const porAssinar: AssinaturaPedido = {
   created_at: '2026-08-25T09:00:00Z',
   expires_at: '2026-09-24T09:00:00Z',
   assinado_em: null,
+  assinaturas_total: 0,
   documento_path: 'assinaturas/2026-08-25/documento.pdf',
   documento_assinado_path: null,
   de_versao_anterior: false,
@@ -53,15 +54,33 @@ describe('AssinaturasPedidosList', () => {
     expect(screen.getByRole('button', { name: /documento assinado/i })).toBeInTheDocument();
   });
 
-  it('assinala um pedido cujo prazo passou sem assinatura', () => {
+  // O link deixou de ter prazo: um pedido antigo por assinar continua a dizer
+  // "por assinar", e nao "prazo terminado", porque continua mesmo a poder ser
+  // assinado.
+  it('um pedido antigo por assinar continua por assinar, sem falar em prazos', () => {
+    render(
+      <AssinaturasPedidosList pedidos={[{ ...porAssinar, created_at: '2025-01-01T09:00:00Z' }]} />
+    );
+
+    expect(screen.getByText(/por assinar/i)).toBeInTheDocument();
+    expect(screen.queryByText(/prazo/i)).toBeNull();
+  });
+
+  it('diz quantas assinaturas houve quando foi assinado mais do que uma vez', () => {
     render(
       <AssinaturasPedidosList
-        pedidos={[{ ...porAssinar, expires_at: '2026-08-01T09:00:00Z' }]}
-        agora={new Date('2026-08-25T12:00:00Z')}
+        pedidos={[
+          {
+            ...porAssinar,
+            assinado_em: '2026-08-26T10:00:00Z',
+            assinaturas_total: 3,
+            documento_assinado_path: 'x/documento-assinado.pdf',
+          },
+        ]}
       />
     );
 
-    expect(screen.getByText(/prazo terminado/i)).toBeInTheDocument();
+    expect(screen.getByText(/3\.ª assinatura/)).toBeInTheDocument();
   });
 
   it('não ocupa o ecrã quando não há pedidos', () => {
@@ -123,6 +142,7 @@ describe('AssinaturasPedidosList — pedidos de versões anteriores', () => {
     created_at: '2026-08-28T14:31:00Z',
     expires_at: '2026-09-27T14:31:00Z',
     assinado_em: '2026-08-28T14:32:00Z',
+    assinaturas_total: 1,
     documento_path: 'assinaturas/2026-08-28/documento.pdf',
     documento_assinado_path: 'contratos/841/documento-assinado.pdf',
     de_versao_anterior: true,
