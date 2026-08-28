@@ -1081,7 +1081,17 @@ export function useContratoForm(): UseContratoFormReturn {
         .map((a) => `${a.label}: ${a.valorAntes} → ${a.valorDepois}`)
         .join('; ');
     criarVersaoMutation.mutate(
-      { contratoId: contrato.id, motivo: motivoFinal, dataTroca: dataTrocaIso },
+      {
+        contratoId: contrato.id,
+        motivo: motivoFinal,
+        dataTroca: dataTrocaIso,
+        // A viatura nova vai já na criação da versão. Deixá-la para o update
+        // seguinte fazia o sucessor nascer com a viatura ANTIGA em estado
+        // 'agendado' — a reocupar a viatura que a troca acabou de libertar, e
+        // a colidir com contratos_no_overbooking se entretanto alguém a tinha
+        // alugado. Era esse o segundo erro do #577.
+        viaturaId: novaVersaoCtx.valores.viatura_id,
+      },
       {
         onSuccess: (novaId) => {
           const values = novaVersaoCtx.valores;
