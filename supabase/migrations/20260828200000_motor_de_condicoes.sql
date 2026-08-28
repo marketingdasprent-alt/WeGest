@@ -343,6 +343,34 @@ create trigger trg_validar_condicoes
   before insert or update on public.automation_rules
   for each row execute function public.fn_validar_condicoes();
 
+-- ── 8b. O log tem de saber dizer "condicao_invalida" ────────────────────────
+--
+-- `automation_logs.evento` é uma lista fechada de cinco valores. Sem esta
+-- entrada, o insert do passo seguinte levanta `check_violation` — e essa
+-- excepção sobe pelo laço das regras até ao `exception when others` do evento,
+-- que o manda para `pending`.
+--
+-- Resultado sem isto, medido pelo próprio teste desta fase: a regra partida
+-- consumia uma tentativa do EVENTO, a regra válida do mesmo evento perdia o
+-- seu run na reversão, e não ficava registo nenhum. Ou seja, a configuração
+-- inválida tornava-se exactamente o poison event que esta fase existe para
+-- impedir — pela mão do código que a devia impedir.
+--
+-- Fica aqui, e não junto ao resto da observabilidade, porque não é cosmética:
+-- é uma pré-condição do passo 9.
+alter table public.automation_logs drop constraint if exists automation_logs_evento_check;
+
+alter table public.automation_logs
+  add constraint automation_logs_evento_check
+  check (evento in (
+    'executada',
+    'falhou',
+    'ignorada_cooldown',
+    'condicao_nao_satisfeita',
+    'ignorada_aviso_em_aberto',
+    'condicao_invalida'
+  ));
+
 -- ── 9. O casamento passa a usar o motor ─────────────────────────────────────
 --
 -- Duas substituições em `process_domain_events`. A primeira troca as variáveis
