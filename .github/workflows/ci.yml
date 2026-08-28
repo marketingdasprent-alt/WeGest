@@ -268,6 +268,7 @@ jobs:
             idempotencia_efeitos \
             snapshot_da_regra \
             motor_de_condicoes \
+            accoes_internas \
             automation_queue \
             automation_rules \
             automation_runs_complete_duracao \
@@ -296,6 +297,18 @@ jobs:
           bash scripts/pgtap-suite.sh "Segurança e multi-tenancy" \
             rls_org_isolation \
             rls_anon_exposure
+
+      # ── Gate 4: concorrência a sério ──────────────────────────────────
+      # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de
+      # `begin ... rollback`, e uma segunda ligação não vê fixtures por
+      # confirmar. Dois workers a competir exigem dados commitados e dois
+      # processos — ver o cabeçalho do script.
+      #
+      # Fecha a lacuna que as Fases 1 a 4 deixaram marcada como INFERIDO: o
+      # `for update skip locked` estava certo por leitura, nunca por observação.
+      - name: Concorrência — dois workers
+        if: steps.baseline.outputs.tem_baseline == 'true'
+        run: bash scripts/teste-concorrencia.sh
 
       - name: Parar a base de dados
         if: always() && steps.baseline.outputs.tem_baseline == 'true'
