@@ -319,7 +319,36 @@ acrescentar à lista em `ci.yml`.
 | D-5 | `apify_credenciais_partilhadas` não tem seed: os tokens reais foram inseridos directamente na base e não estão no git. Um ambiente novo precisa de os inserir à mão. | Por desenho — são segredos |
 | D-6 | O ramo `feat/automacoes-canvas-fluxo` está 26 commits à frente de `main` e nunca foi integrado. Outros três ramos locais estão 10–23 commits à frente. | **Aberto** |
 | D-7 | `20260827151938_ti_tickets_numero_global` foi aplicada a produção **durante** este trabalho e não existe em nenhum objecto git. É a mesma classe de problema que a Fase 0 veio resolver, a acontecer outra vez. | **Aberto** — recuperar o ficheiro ou documentar o conteúdo |
-| D-8 | O baseline não traz os privilégios: `pg_dump --schema public` emite os GRANTs existentes mas **não** o `ALTER DEFAULT PRIVILEGES` nem os `REVOKE`. Uma base reconstruída nasce com `anon` a poder tudo (194 relações legíveis, 564 com escrita, 208 funções `SECURITY DEFINER` executáveis), enquanto produção está limpa (0/2/24). | **Aberto** — falta um ficheiro de arranque que reponha `20260730084227` camada 1 |
+| D-8 | O baseline não traz os privilégios: `pg_dump --schema public` emite os GRANTs existentes mas **não** o `ALTER DEFAULT PRIVILEGES` nem os `REVOKE`. Uma base reconstruída nascia com `anon` a poder tudo (194 relações legíveis, 564 com escrita, 208 funções executáveis) enquanto produção está limpa (0/2/24). | **Resolvido** — `00000000000002_privilegios_anon.sql` |
+| D-9 | **Seis funções `SECURITY DEFINER` executáveis por `anon` em produção** sem servirem fluxo anónimo nenhum. Ver 5.2. | **Aberto** — precisa de decisão |
+
+### 5.2 Funções `SECURITY DEFINER` abertas ao papel anónimo
+
+Produção tem 24 funções `SECURITY DEFINER` com `EXECUTE` para `anon`. Nove são
+funções de trigger (inertes — chamá-las directamente dá erro). Das quinze
+restantes, nove correspondem a fluxos sem sessão legítimos: login e registo por
+código de organização, formulário público, aceitação de convite, e
+`get_current_org_id()`/`is_current_user_admin()`, que devolvem nulo/falso para o
+anónimo.
+
+**Seis não têm justificação:**
+
+| Função | O que faz |
+|---|---|
+| `cobranca_ceder_a_motorista(uuid, uuid)` | Cede uma cobrança a um motorista — **escrita** |
+| `cobranca_reverter_cessao_motorista(uuid)` | Reverte essa cessão — **escrita** |
+| `criar_versao_contrato_renting(uuid, text, timestamptz)` | Cria uma versão de contrato — **escrita** |
+| `motorista_extrato_periodo(uuid, date, date)` | Devolve o extracto financeiro de um motorista — **leitura** |
+| `recalcular_movimentos_do_cartao(uuid)` | Recalcula movimentos de um cartão — **escrita** |
+| `seed_automacao_danos_assistencia(uuid)` | Semeia regras de automação numa organização — **escrita** |
+
+Sendo `SECURITY DEFINER`, correm como *owner* e ignoram RLS. Quem souber um
+UUID pode invocá-las sem sessão nenhuma.
+
+O ficheiro de arranque `00000000000002_privilegios_anon.sql` **não** as concede,
+pelo que uma base reconstruída já nasce sem elas. Fechá-las em produção é uma
+alteração a uma base viva e precisa de decisão — a verificar antes: se algum
+fluxo do portal do motorista as chama antes de haver sessão.
 
 ### 5.1 Achado de segurança em produção (corrigido a 2026-08-28)
 
