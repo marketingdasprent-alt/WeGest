@@ -238,6 +238,7 @@ jobs:
             domain_events_claim \
             execute_automation_runs \
             idempotencia_efeitos \
+            snapshot_da_regra \
             automation_queue \
             automation_rules \
             automation_runs_complete_duracao \
