@@ -60,7 +60,7 @@
 -- ============================================================
 
 begin;
-select plan(24);
+select plan(28);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000d0000', 'Org Idempotencia', 'idem-a');
@@ -210,6 +210,69 @@ select is(
     where rule_run_id = '00000000-0000-0000-0000-00000c4d0001'),
   2,
   'o retry NÃO repete o item em itens'
+);
+
+-- ════════════════════════════════════════════════════════════
+-- T2b — FALHA PARCIAL: o retry completa o que faltou
+-- ════════════════════════════════════════════════════════════
+-- Este é o teste que justifica `do update` em vez de `do nothing` no insert de
+-- `notifications`. Sem ele, a decisão mais carregada da migração estaria
+-- assente só num comentário.
+--
+--   1.ª tentativa:  notifications ✓   notificacoes ✓   queue ✗ (morreu aqui)
+--   retry:          notifications —   notificacoes —   queue DEVE acontecer
+--
+-- Com `do nothing`, o `returning id into v_notification_id` devolvia NULL no
+-- retry. O insert na fila do ramo do motorista está guardado por
+-- `v_notification_id is not null`, e no laço geral a fila usa esse mesmo id
+-- como chave estrangeira — em qualquer dos casos a linha em falta nunca mais
+-- nascia. A fila ficava permanentemente incompleta e ninguém dava por isso.
+--
+-- Apaga-se a linha de fila de UM destinatário para simular a morte a meio. A do
+-- outro fica, e tem de continuar única — o retry não pode reparar um lado e
+-- duplicar o outro.
+delete from public.notification_queue q
+ using public.notifications n
+ where n.id = q.notification_id
+   and n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
+   and q.destinatario = 'admin@idem.pt';
+
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+    where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'),
+  1,
+  'pré-condição: a fila ficou com um destinatário por enviar'
+);
+
+update public.automation_runs
+   set status = 'pending', started_at = null, next_attempt_at = now()
+ where id = '00000000-0000-0000-0000-00000c4d0001';
+
+select public.execute_automation_runs();
+
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+    where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
+      and q.destinatario = 'admin@idem.pt'),
+  1,
+  'falha parcial: o retry recupera o notification_id e cria a linha de fila em falta'
+);
+
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+    where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'),
+  2,
+  'falha parcial: o destinatário que já tinha fila não ganha uma segunda linha'
+);
+
+select is(
+  (select count(*)::int from public.notifications
+    where rule_run_id = '00000000-0000-0000-0000-00000c4d0001'),
+  2,
+  'falha parcial: reparar a fila não cria notifications novas'
 );
 
 -- ════════════════════════════════════════════════════════════
