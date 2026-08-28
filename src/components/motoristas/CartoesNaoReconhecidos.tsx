@@ -107,7 +107,7 @@ export const CartoesNaoReconhecidos: React.FC<Props> = ({ open, onOpenChange, on
     const chave = `${cartao.plataforma}-${cartao.card_number}`;
     setAssociando(chave);
     try {
-      const { error } = await (supabase as any).rpc('associar_cartao_combustivel', {
+      const { error } = await supabase.rpc('associar_cartao_combustivel', {
         p_plataforma: cartao.plataforma,
         p_card: cartao.card_number,
         p_motorista: motoristaId,

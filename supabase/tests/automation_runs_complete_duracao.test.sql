@@ -5,9 +5,8 @@ select has_function('public', 'automation_runs_complete', array['uuid', 'jsonb']
 select has_function('public', 'automation_runs_fail', array['uuid', 'text'], 'automation_runs_fail existe');
 
 -- Fixture: org, regra, run em execução há 2 segundos.
-insert into public.organizacoes (id, nome) values ('11111111-1111-1111-1111-111111111111', 'Org Teste Duração');
-insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config)
-values ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'teste.duracao', 'Regra Teste', 'teste.evento', 'notificacao', '{}'::jsonb);
+insert into public.organizacoes (id, nome, codigo) values ('11111111-1111-1111-1111-111111111111', 'Org Teste Duração', 'teste-duracao');
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'teste.duracao', 'Regra Teste', 'teste.evento', 'notificacao', '{"template_codigo":"teste.template","titulo":"Titulo de Teste"}'::jsonb);
 insert into public.automation_runs (id, rule_id, org_id, status, started_at)
 values ('33333333-3333-3333-3333-333333333333', '22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'running', now() - interval '2 seconds');
 

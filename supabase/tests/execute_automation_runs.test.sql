@@ -6,12 +6,32 @@
 -- Cobre o Automation Executor: para acao_tipo='notificacao', resolve
 -- destinatários por cargo direto (admin OU cargo escolhido na regra),
 -- cria uma notifications por destinatário, enfileira email quando
--- enviar_email=true, e falha para dead-letter quando o acao_config
--- está mal configurado. Outros acao_tipo só concluem, sem ação.
+-- enviar_email=true, e rejeita acao_config mal configurado. Outros
+-- acao_tipo só concluem, sem ação.
+--
+-- ⚠️ TODAS as regras deste ficheiro têm `enviar_email: true`, DE PROPÓSITO.
+--
+-- Desde 20260826142309 existe o trigger `trg_notifications_so_quando_ha_email`,
+-- que CANCELA o insert em `notifications` quando a regra tem
+-- `enviar_email = false`. A razão está medida na própria migração: 71.012 das
+-- 71.200 linhas (99,7%) vinham de regras sem email e ninguém as lia — o que o
+-- utilizador vê é `notificacoes`, escrita em paralelo, não `notifications`.
+--
+-- Consequência para este ficheiro: com `enviar_email: false`, uma regra resolve
+-- os destinatários correctamente, o run conclui sem erro, e mesmo assim não
+-- fica linha nenhuma em `notifications`. As asserções que contam destinatários
+-- passariam a dar 0 sem que nada estivesse partido — foi exactamente o que
+-- aconteceu a 2026-08-28, e custou uma ronda inteira a diagnosticar porque
+-- «0 notificações» não distingue «não resolveu ninguém» de «resolveu e a
+-- linha foi cancelada».
+--
+-- Estes testes existem para verificar a RESOLUÇÃO DE DESTINATÁRIOS. Para isso
+-- a linha tem de sobreviver, logo `enviar_email: true`. Quem quiser testar o
+-- cancelamento em si deve escrever um teste próprio para o trigger.
 -- ============================================================
 
 begin;
-select plan(16);
+select plan(17);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'exec-runs-a');
@@ -22,26 +42,26 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000a0003', 'sem-permissao@exec-runs.pt');
 
 insert into public.cargos (id, nome, org_id) values
-  ('00000000-0000-0000-0000-000000cg0001', 'Cargo Permitido', '00000000-0000-0000-0000-0000000a0000'),
-  ('00000000-0000-0000-0000-000000cg0002', 'Cargo Sem Permissao', '00000000-0000-0000-0000-0000000a0000');
+  ('00000000-0000-0000-0000-000000c60001', 'Cargo Permitido', '00000000-0000-0000-0000-0000000a0000'),
+  ('00000000-0000-0000-0000-000000c60002', 'Cargo Sem Permissao', '00000000-0000-0000-0000-0000000a0000');
 
 insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
   ('00000000-0000-0000-0000-0000000a0001', '00000000-0000-0000-0000-0000000a0000', true, null),
-  ('00000000-0000-0000-0000-0000000a0002', '00000000-0000-0000-0000-0000000a0000', false, '00000000-0000-0000-0000-000000cg0001'),
-  ('00000000-0000-0000-0000-0000000a0003', '00000000-0000-0000-0000-0000000a0000', false, '00000000-0000-0000-0000-000000cg0002');
+  ('00000000-0000-0000-0000-0000000a0002', '00000000-0000-0000-0000-0000000a0000', false, '00000000-0000-0000-0000-000000c60001'),
+  ('00000000-0000-0000-0000-0000000a0003', '00000000-0000-0000-0000-0000000a0000', false, '00000000-0000-0000-0000-000000c60002');
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
-  ('00000000-0000-0000-0000-000000rg0001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_notif', 'Regra de Notificação', 'teste.evento', 'notificacao',
-   jsonb_build_object('template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000cg0001'), 'enviar_email', true));
+  ('00000000-0000-0000-0000-000000460001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_notif', 'Regra de Notificação', 'teste.evento', 'notificacao',
+   jsonb_build_object('titulo', 'Titulo de Teste', 'template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000c60001'), 'enviar_email', true));
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-000000ru0001', '00000000-0000-0000-0000-000000rg0001', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-000000ent0001');
+  ('00000000-0000-0000-0000-0000004c0001', '00000000-0000-0000-0000-000000460001', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-00000ef70001');
 
 select public.execute_automation_runs();
 
 -- 1. O run fica completed.
 select is(
-  (select status from public.automation_runs where id = '00000000-0000-0000-0000-000000ru0001'),
+  (select status from public.automation_runs where id = '00000000-0000-0000-0000-0000004c0001'),
   'completed',
   'run de acao_tipo=notificacao é concluído com sucesso'
 );
@@ -69,7 +89,7 @@ select is(
 
 -- 5. As notificações ficam ligadas ao run que as gerou.
 select is(
-  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru0001'),
+  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0001'),
   2,
   'as notificações ficam com rastreabilidade até ao automation_run'
 );
@@ -83,41 +103,47 @@ select is(
 
 -- Cenário B: acao_tipo diferente de notificacao só conclui, sem ação.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo) values
-  ('00000000-0000-0000-0000-000000rg0002', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_webhook', 'Regra Webhook', 'teste.evento2', 'webhook');
+  ('00000000-0000-0000-0000-000000460002', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_webhook', 'Regra Webhook', 'teste.evento2', 'webhook');
 
 insert into public.automation_runs (id, rule_id, org_id) values
-  ('00000000-0000-0000-0000-000000ru0002', '00000000-0000-0000-0000-000000rg0002', '00000000-0000-0000-0000-0000000a0000');
+  ('00000000-0000-0000-0000-0000004c0002', '00000000-0000-0000-0000-000000460002', '00000000-0000-0000-0000-0000000a0000');
 
 select public.execute_automation_runs();
 
 -- 7. O run de webhook também fica completed (sem ação real, por agora).
 select is(
-  (select status from public.automation_runs where id = '00000000-0000-0000-0000-000000ru0002'),
+  (select status from public.automation_runs where id = '00000000-0000-0000-0000-0000004c0002'),
   'completed',
   'run de acao_tipo diferente de notificacao é concluído sem criar notificações'
 );
 
 -- 8. ...e não gerou nenhuma notificação.
 select is(
-  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru0002'),
+  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0002'),
   0,
   'run de webhook não cria notificações'
 );
 
--- Cenário C: acao_config sem template_codigo falha para dead-letter (max_attempts=1).
-insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
-  ('00000000-0000-0000-0000-000000rg0003', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_ma', 'Regra Mal Configurada', 'teste.evento3', 'notificacao', '{}'::jsonb);
-
-insert into public.automation_runs (id, rule_id, org_id, max_attempts) values
-  ('00000000-0000-0000-0000-000000ru0003', '00000000-0000-0000-0000-000000rg0003', '00000000-0000-0000-0000-0000000a0000', 1);
-
-select public.execute_automation_runs();
-
--- 9. Falha (template_codigo NULL viola NOT NULL) e, com max_attempts=1, vai logo para dead-letter.
-select is(
-  (select status from public.automation_runs where id = '00000000-0000-0000-0000-000000ru0003'),
-  'failed',
-  'acao_config sem template_codigo falha e vai para dead-letter'
+-- Cenário C: uma regra de notificação sem template_codigo já não chega a nascer.
+--
+-- Este cenário testava outra coisa: criava a regra com `acao_config` vazio e
+-- verificava que a EXECUÇÃO falhava para dead-letter. Deixou de ser possível —
+-- `fn_validar_acao_config` (migração 20260729120000, dois dias depois de este
+-- ficheiro ser escrito) rejeita a regra logo no INSERT.
+--
+-- A garantia melhorou e o teste acompanha: em vez de nascer uma regra que só
+-- se revela partida quando corre — e que entretanto ocupa a fila e gasta
+-- tentativas — a regra não nasce. Testar o comportamento antigo seria testar
+-- um caminho que o motor já não permite.
+--
+-- 23514 = check_violation, o ERRCODE que fn_validar_acao_config levanta.
+select throws_ok(
+  $$insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config)
+    values ('00000000-0000-0000-0000-000000460003', '00000000-0000-0000-0000-0000000a0000',
+            'teste.regra_ma', 'Regra Mal Configurada', 'teste.evento3', 'notificacao', '{}'::jsonb)$$,
+  '23514',
+  'acao_config inválido: template_codigo é obrigatório.',
+  'uma regra de notificação sem template_codigo é rejeitada no INSERT'
 );
 
 -- Cenário D: estratégia gestor_responsavel, entidade motorista — resolve diretamente.
@@ -128,77 +154,100 @@ insert into public.profiles (id, org_id, nome, email, tipo_utilizador) values
   ('00000000-0000-0000-0000-0000000a0004', '00000000-0000-0000-0000-0000000a0000', 'Gestor Testador', 'gestor.testador@exec-runs.pt', 'colaborador');
 
 insert into public.motoristas_ativos (id, org_id, nome, gestor_responsavel) values
-  ('00000000-0000-0000-0000-000000mo0001', '00000000-0000-0000-0000-0000000a0000', 'Motorista Teste D', 'gestor testador');
+  ('00000000-0000-0000-0000-000000e00001', '00000000-0000-0000-0000-0000000a0000', 'Motorista Teste D', 'gestor testador');
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
-  ('00000000-0000-0000-0000-000000rg0004', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_gestor', 'Regra Gestor Responsável', 'teste.evento4', 'notificacao',
-   '{"template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":false}'::jsonb);
+  ('00000000-0000-0000-0000-000000460004', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_gestor', 'Regra Gestor Responsável', 'teste.evento4', 'notificacao',
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":true}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-000000ru0004', '00000000-0000-0000-0000-000000rg0004', '00000000-0000-0000-0000-0000000a0000', 'motoristas_ativos', '00000000-0000-0000-0000-000000mo0001');
+  ('00000000-0000-0000-0000-0000004c0004', '00000000-0000-0000-0000-000000460004', '00000000-0000-0000-0000-0000000a0000', 'motoristas_ativos', '00000000-0000-0000-0000-000000e00001');
 
 select public.execute_automation_runs();
 
+-- 10a. Antes de contar notificações, confirmar que o run CONCLUIU. Sem isto,
+--      um run que rebentou aparece como «0 notificações» — um sintoma que não
+--      distingue «não notificou ninguém» de «nem chegou a tentar». Concatenar
+--      o error_message põe o motivo real na saída do pgTAP quando falha.
+select is(
+  (select status || coalesce(' :: ' || error_message, '')
+     from public.automation_runs where id = '00000000-0000-0000-0000-0000004c0004'),
+  'completed',
+  'o run da estratégia gestor_responsavel conclui sem erro'
+);
+
 -- 10. Só o gestor responsável é notificado (não o admin, não quem tem o recurso).
 select is(
-  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru0004'),
+  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0004'),
   1,
   'estratégia gestor_responsavel notifica só 1 pessoa (o gestor), não todos os admins/permitidos'
 );
 
 -- 11. ...e é especificamente o gestor, resolvido por nome (case-insensitive, com espaços).
 select is(
-  (select destinatario_user_id from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru0004'),
+  (select destinatario_user_id from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0004'),
   '00000000-0000-0000-0000-0000000a0004'::uuid,
   'o destinatário é especificamente o gestor responsável (resolvido por nome, case-insensitive)'
 );
 
 -- Cenário E: estratégia gestor_responsavel, entidade viatura — resolve via o motorista atualmente atribuído.
-insert into public.viaturas (id, org_id, matricula, marca, modelo) values
-  ('00000000-0000-0000-0000-000000vt0001', '00000000-0000-0000-0000-0000000a0000', 'GT-00-ER', 'Toyota', 'Corolla');
+--
+-- marca/modelo entram por id: o trigger `trg_sync_viatura_marca_modelo` apaga
+-- os campos de texto no INSERT quando não há `marca_id`. Ver a nota mais
+-- detalhada em executar_jobs_automacao_manualmente.test.sql.
+insert into public.viatura_marcas (id, org_id, nome) values
+  ('00000000-0000-0000-0000-0000008a4c02', '00000000-0000-0000-0000-0000000a0000', 'Toyota');
+
+insert into public.viatura_modelos (id, org_id, marca_id, nome) values
+  ('00000000-0000-0000-0000-0000008e0d02', '00000000-0000-0000-0000-0000000a0000',
+   '00000000-0000-0000-0000-0000008a4c02', 'Corolla');
+
+insert into public.viaturas (id, org_id, matricula, marca_id, modelo_id) values
+  ('00000000-0000-0000-0000-000000870001', '00000000-0000-0000-0000-0000000a0000', 'GT-00-ER',
+   '00000000-0000-0000-0000-0000008a4c02', '00000000-0000-0000-0000-0000008e0d02');
 
 insert into public.motorista_viaturas (id, motorista_id, viatura_id, data_inicio, status) values
-  ('00000000-0000-0000-0000-000000mv0001', '00000000-0000-0000-0000-000000mo0001', '00000000-0000-0000-0000-000000vt0001', current_date, 'ativo');
+  ('00000000-0000-0000-0000-000000e80001', '00000000-0000-0000-0000-000000e00001', '00000000-0000-0000-0000-000000870001', current_date, 'ativo');
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
-  ('00000000-0000-0000-0000-000000rg0005', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_gestor_viatura', 'Regra Gestor Viatura', 'teste.evento5', 'notificacao',
-   '{"template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":false}'::jsonb);
+  ('00000000-0000-0000-0000-000000460005', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_gestor_viatura', 'Regra Gestor Viatura', 'teste.evento5', 'notificacao',
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":true}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-000000ru0005', '00000000-0000-0000-0000-000000rg0005', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-000000vt0001');
+  ('00000000-0000-0000-0000-0000004c0005', '00000000-0000-0000-0000-000000460005', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-000000870001');
 
 select public.execute_automation_runs();
 
 -- 12. Para uma viatura, o gestor é resolvido via o motorista atualmente atribuído (motorista_viaturas ativo).
 select is(
-  (select destinatario_user_id from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru0005'),
+  (select destinatario_user_id from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0005'),
   '00000000-0000-0000-0000-0000000a0004'::uuid,
   'para entidade viatura, o gestor responsável é resolvido via o motorista atualmente atribuído'
 );
 
 -- Cenário F: sem gestor_responsavel definido — cai para o fallback (só admins).
 insert into public.motoristas_ativos (id, org_id, nome, gestor_responsavel) values
-  ('00000000-0000-0000-0000-000000mo0002', '00000000-0000-0000-0000-0000000a0000', 'Motorista Sem Gestor', null);
+  ('00000000-0000-0000-0000-000000e00002', '00000000-0000-0000-0000-0000000a0000', 'Motorista Sem Gestor', null);
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
-  ('00000000-0000-0000-0000-000000rg0006', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_gestor_fallback', 'Regra Fallback', 'teste.evento6', 'notificacao',
-   '{"template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":false}'::jsonb);
+  ('00000000-0000-0000-0000-000000460006', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_gestor_fallback', 'Regra Fallback', 'teste.evento6', 'notificacao',
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"gestor_responsavel","enviar_email":true}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-000000ru0006', '00000000-0000-0000-0000-000000rg0006', '00000000-0000-0000-0000-0000000a0000', 'motoristas_ativos', '00000000-0000-0000-0000-000000mo0002');
+  ('00000000-0000-0000-0000-0000004c0006', '00000000-0000-0000-0000-000000460006', '00000000-0000-0000-0000-0000000a0000', 'motoristas_ativos', '00000000-0000-0000-0000-000000e00002');
 
 select public.execute_automation_runs();
 
 -- 13. Sem gestor_responsavel resolvido, cai para o fallback e avisa o admin.
 select is(
-  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru0006' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0001'),
+  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0006' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0001'),
   1,
   'sem gestor_responsavel resolvido, cai para o fallback e avisa o admin da org'
 );
 
 -- 14. ...e o fallback NÃO inclui quem só tem o recurso RBAC (só admins, não é a estratégia recurso).
 select is(
-  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru0006' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0002'),
+  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0006' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0002'),
   0,
   'o fallback de gestor_responsavel não inclui quem só tem o recurso RBAC'
 );
@@ -209,27 +258,27 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000a0005', 'outro-do-cargo@exec-runs.pt');
 
 insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
-  ('00000000-0000-0000-0000-0000000a0005', '00000000-0000-0000-0000-0000000a0000', false, '00000000-0000-0000-0000-000000cg0001');
+  ('00000000-0000-0000-0000-0000000a0005', '00000000-0000-0000-0000-0000000a0000', false, '00000000-0000-0000-0000-000000c60001');
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
-  ('00000000-0000-0000-0000-000000rg0007', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_individual', 'Regra Individual', 'teste.evento7', 'notificacao',
-   jsonb_build_object('template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000cg0001'), 'destinatarios_modo', 'individual', 'destinatarios_user_ids', jsonb_build_array('00000000-0000-0000-0000-0000000a0002'), 'enviar_email', false));
+  ('00000000-0000-0000-0000-000000460007', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_individual', 'Regra Individual', 'teste.evento7', 'notificacao',
+   jsonb_build_object('titulo', 'Titulo de Teste', 'template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000c60001'), 'destinatarios_modo', 'individual', 'destinatarios_user_ids', jsonb_build_array('00000000-0000-0000-0000-0000000a0002'), 'enviar_email', true));
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-000000ru0007', '00000000-0000-0000-0000-000000rg0007', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-000000ent0007');
+  ('00000000-0000-0000-0000-0000004c0007', '00000000-0000-0000-0000-000000460007', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-00000ef70007');
 
 select public.execute_automation_runs();
 
 -- 15. Modo individual: a pessoa escolhida em destinatarios_user_ids recebe.
 select is(
-  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru0007' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0002'),
+  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0007' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0002'),
   1,
   'modo individual: a pessoa escolhida em destinatarios_user_ids recebe'
 );
 
 -- 16. Modo individual: outra pessoa do MESMO cargo, não escolhida, não recebe.
 select is(
-  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-000000ru0007' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0005'),
+  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0007' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0005'),
   0,
   'modo individual: outra pessoa do mesmo cargo, não escolhida individualmente, não recebe'
 );

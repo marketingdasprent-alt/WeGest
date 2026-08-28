@@ -75,6 +75,10 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
     setLoading(true);
     try {
       // 1) Regista o contrato de prestação (devolve o código gerado).
+      // `codigo` é NOT NULL sem default, por isso os tipos gerados marcam-no
+      // obrigatório — mas quem o preenche é o trigger BEFORE INSERT
+      // `trg_contrato_prestacao_codigo_por_org` (numeração por organização),
+      // que o gerador não consegue ver. Verificado em produção a 31/07/2026.
       const { data: inserted, error } = await (supabase as any)
         .from('contratos_prestacao')
         .insert({

@@ -1,18 +1,18 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
-import path from "path";
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+import path from 'path';
 
-import { VitePWA } from "vite-plugin-pwa";
+import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
-    host: "::",
+    host: '::',
     port: 8080,
   },
   plugins: [
     react(),
-    
+
     VitePWA({
       registerType: 'prompt',
       devOptions: {
@@ -33,26 +33,26 @@ export default defineConfig(({ mode }) => ({
           {
             src: '/Icon_Favicon.png',
             sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: '/Icon_Favicon.png',
-            sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
           },
           {
             src: '/Icon_Favicon.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'maskable'
+          },
+          {
+            src: '/Icon_Favicon.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
           },
           {
             src: '/Icon_Favicon.png',
             sizes: '180x180',
             type: 'image/png',
-            purpose: 'apple touch icon'
-          }
-        ]
+            purpose: 'apple touch icon',
+          },
+        ],
       },
       workbox: {
         skipWaiting: false,
@@ -69,9 +69,9 @@ export default defineConfig(({ mode }) => ({
               cacheName: 'supabase-cache',
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 60 * 60
-              }
-            }
+                maxAgeSeconds: 60 * 60,
+              },
+            },
           },
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
@@ -80,18 +80,19 @@ export default defineConfig(({ mode }) => ({
               cacheName: 'images-cache',
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 * 30
-              }
-            }
-          }
-        ]
-      }
-    })
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+            },
+          },
+        ],
+      },
+    }),
   ].filter(Boolean),
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@shared": path.resolve(__dirname, "./supabase/functions/_shared/resumo"),
+      '@': path.resolve(__dirname, './src'),
+      // Alias vindo do main: o codigo de resumo das edge functions usa-o.
+      '@shared': path.resolve(__dirname, './supabase/functions/_shared/resumo'),
     },
   },
   build: {
@@ -109,6 +110,9 @@ export default defineConfig(({ mode }) => ({
           'vendor-charts': ['recharts'],
           'vendor-motion': ['framer-motion'],
           'vendor-tiptap': ['@tiptap/react', '@tiptap/starter-kit'],
+          // Só a aba de Automações o usa. Em chunk próprio, quem nunca lá vai
+          // não o descarrega.
+          'vendor-flow': ['@realflow/react'],
         },
       },
     },

@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  useCartoesFrotaLista,
+  useMotoristasParaCartoes,
+  useGuardarCartaoFrota,
+  useEliminarCartaoFrota,
+  useImportarCartoesFrota,
+} from '@/hooks/useCartoesFrota';
+import { errorMessage } from '@/utils/errorMessage';
 import { useToast } from '@/hooks/use-toast';
 import { usePagination } from '@/hooks/usePagination';
 import {
@@ -31,9 +39,11 @@ export function CartoesFlotaTab() {
   const { toast } = useToast();
   const { canEdit } = usePermissions();
   const podeGerir = canEdit(RECURSOS.ADMINISTRATIVO_CARTOES);
-  const [cartoes, setCartoes] = useState<CartaoFrota[]>([]);
-  const [motoristas, setMotoristas] = useState<MotoristaOption[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: cartoes = [], isLoading: loading } = useCartoesFrotaLista<CartaoFrota>();
+  const { data: motoristas = [] } = useMotoristasParaCartoes() as { data?: MotoristaOption[] };
+  const guardarCartao = useGuardarCartaoFrota();
+  const eliminarCartao = useEliminarCartaoFrota();
+  const importarCartoes = useImportarCartoesFrota();
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<'todos' | 'bp' | 'repsol' | 'edp'>('todos');
   const [sortField, setSortField] = useState<string>('numero');
@@ -66,49 +76,20 @@ export function CartoesFlotaTab() {
   const [importing, setImporting] = useState(false);
 
   useEffect(() => {
-    carregar();
-    carregarMotoristas();
     carregarConsumo();
   }, []);
 
-  const carregar = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await (supabase as any)
-        .from('cartoes_frota')
-        .select(
-          '*, motorista:motorista_id(nome), ultimo_motorista:ultimo_motorista_id(nome), cliente:cliente_id(nome)'
-        )
-        .order('tipo')
-        .order('numero');
-      if (error) throw error;
-      setCartoes(data || []);
-    } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const carregarMotoristas = async () => {
-    try {
-      const { data, error } = await (supabase as any)
-        .from('motoristas_ativos')
-        .select('id, nome')
-        .order('nome');
-      if (error) throw error;
-      setMotoristas(data || []);
-    } catch {
-      /* silencioso — o dropdown fica vazio mas o resto funciona */
-    }
-  };
+  // A lista de cartões e o dropdown de motoristas vivem em
+  // @/hooks/useCartoesFrota. `CartaoFrota` é escrito à mão e diverge da forma
+  // que a BD devolve com as relações embebidas — daí o parâmetro de tipo em
+  // useCartoesFrotaLista<CartaoFrota>(), que mantém a asserção num sítio só.
 
   const carregarConsumo = async () => {
     try {
       const now = new Date();
       const desde = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const ate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
-      const { data, error } = await (supabase as any).rpc('get_cartoes_consumo', {
+      const { data, error } = await supabase.rpc('get_cartoes_consumo', {
         p_desde: desde,
         p_ate: ate,
       });
@@ -296,15 +277,11 @@ export function CartoesFlotaTab() {
         // `ativo` mantido em sincronia com o ciclo de vida (usado no export/impressão).
         ativo: status === 'disponivel' || status === 'em_uso',
       };
-      const { error } = editing
-        ? await (supabase as any).from('cartoes_frota').update(payload).eq('id', editing.id)
-        : await (supabase as any).from('cartoes_frota').insert(payload);
-      if (error) throw error;
+      await guardarCartao.mutateAsync({ cartaoId: editing?.id, payload });
       toast({ title: editing ? 'Cartão atualizado' : 'Cartão criado' });
       setDialogOpen(false);
-      carregar();
-    } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+    } catch (err: unknown) {
+      toast({ title: 'Erro', description: errorMessage(err), variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -312,14 +289,11 @@ export function CartoesFlotaTab() {
 
   const handleDelete = async () => {
     if (!deleteTarget || !podeGerir) return;
-    const { error } = await (supabase as any)
-      .from('cartoes_frota')
-      .delete()
-      .eq('id', deleteTarget.id);
-    if (error) toast({ title: 'Erro', description: error.message, variant: 'destructive' });
-    else {
+    try {
+      await eliminarCartao.mutateAsync(deleteTarget.id);
       toast({ title: 'Cartão eliminado' });
-      carregar();
+    } catch (err: unknown) {
+      toast({ title: 'Erro', description: errorMessage(err), variant: 'destructive' });
     }
     setDeleteTarget(null);
   };
@@ -330,7 +304,7 @@ export function CartoesFlotaTab() {
     setHistorico([]);
     setLoadingHistory(true);
     try {
-      const { data, error } = await (supabase as any).rpc('get_cartao_historico_consumo', {
+      const { data, error } = await supabase.rpc('get_cartao_historico_consumo', {
         p_tipo: c.tipo,
         p_numero: c.numero,
       });
@@ -385,7 +359,7 @@ export function CartoesFlotaTab() {
     if (valid.length === 0) return;
     setImporting(true);
     try {
-      const { data: orgId } = await (supabase as any).rpc('get_current_org_id');
+      const { data: orgId } = await supabase.rpc('get_current_org_id');
       const payload = valid.map((r) => ({
         org_id: orgId,
         numero: r.numero,
@@ -398,15 +372,15 @@ export function CartoesFlotaTab() {
         notas: r.notas || null,
         devolucao: r.devolucao || null,
       }));
-      const { error } = await (supabase as any)
-        .from('cartoes_frota')
-        .upsert(payload, { onConflict: 'org_id,tipo,numero', ignoreDuplicates: false });
-      if (error) throw error;
+      await importarCartoes.mutateAsync(payload);
       toast({ title: `${valid.length} cartão(ões) importado(s)/atualizado(s) com sucesso` });
       setImportOpen(false);
-      carregar();
-    } catch (err: any) {
-      toast({ title: 'Erro na importação', description: err.message, variant: 'destructive' });
+    } catch (err: unknown) {
+      toast({
+        title: 'Erro na importação',
+        description: errorMessage(err),
+        variant: 'destructive',
+      });
     } finally {
       setImporting(false);
     }

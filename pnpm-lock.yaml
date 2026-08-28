@@ -128,6 +128,9 @@ importers:
       '@radix-ui/react-use-controllable-state':
         specifier: ^1.2.4
         version: 1.2.4(@types/react@18.3.28)(react@18.3.1)
+      '@realflow/react':
+        specifier: ^0.2.1
+        version: 0.2.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@supabase/supabase-js':
         specifier: ^2.49.9
         version: 2.105.4
@@ -2248,6 +2251,15 @@ packages:
     resolution: {integrity: sha512-sLo8cu9JyFNfuuF1C+8NJ4DHE/PEFaXGd4enkcxi/OJjGG8+sOQrdjNQ4i+cVh/2c+ah1mEMwsYjc3z0+/MqSg==}
     engines: {node: '>=20.19.4'}
     hasBin: true
+
+  '@realflow/core@0.2.1':
+    resolution: {integrity: sha512-4kkOoi7fdqqMjrMmz0TqSVWY77ukPtu8fo0uzu6N56Z1gdhJr9nNFTPTuFed6Xy8lnCPJ44pZb/2/lYz4WfC0A==}
+
+  '@realflow/react@0.2.1':
+    resolution: {integrity: sha512-pH1tQH39KSw/9LBsYP+7qvLSrabsTNriTgyZa0L/H8Y8UNlRCMtzhefCbri7nzaX65wb52pka6xsisXDs8fF9g==}
+    peerDependencies:
+      react: '>=18'
+      react-dom: '>=18'
 
   '@remix-run/router@1.23.2':
     resolution: {integrity: sha512-Ic6m2U/rMjTkhERIa/0ZtXJP17QUi2CbWE7cqx4J58M8aA3QTfW+2UlQ4psvTX9IO1RfNVhK3pcpdjej7L+t2w==}
@@ -8004,6 +8016,14 @@ snapshots:
       - supports-color
       - typescript
       - utf-8-validate
+
+  '@realflow/core@0.2.1': {}
+
+  '@realflow/react@0.2.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      '@realflow/core': 0.2.1
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
 
   '@remix-run/router@1.23.2': {}
 

@@ -85,18 +85,18 @@ select is(
 -- 8/9. emit_expiry_events() passa a incluir o nome do motorista no payload
 -- (sem isto, nem a notificação interna nem o email dizem QUEM está a expirar).
 insert into public.motoristas_ativos (id, org_id, nome, carta_validade, licenca_tvde_validade, status_ativo) values
-  ('00000000-0000-0000-0000-000000m1e0c1', '00000000-0000-0000-0000-0000000c0000', 'Motorista Email Teste', current_date + 7, current_date + 2, true);
+  ('00000000-0000-0000-0000-000000e1e0c1', '00000000-0000-0000-0000-0000000c0000', 'Motorista Email Teste', current_date + 7, current_date + 2, true);
 
 select public.emit_expiry_events();
 
 select is(
-  (select payload->>'nome' from public.domain_events where entity_id = '00000000-0000-0000-0000-000000m1e0c1' and event_type = 'motorista.carta_expirando'),
+  (select payload->>'nome' from public.domain_events where entity_id = '00000000-0000-0000-0000-000000e1e0c1' and event_type = 'motorista.carta_expirando'),
   'Motorista Email Teste',
   'motorista.carta_expirando passa a incluir o nome do motorista no payload'
 );
 
 select is(
-  (select payload->>'nome' from public.domain_events where entity_id = '00000000-0000-0000-0000-000000m1e0c1' and event_type = 'motorista.licenca_tvde_expirando'),
+  (select payload->>'nome' from public.domain_events where entity_id = '00000000-0000-0000-0000-000000e1e0c1' and event_type = 'motorista.licenca_tvde_expirando'),
   'Motorista Email Teste',
   'motorista.licenca_tvde_expirando passa a incluir o nome do motorista no payload'
 );
@@ -116,7 +116,7 @@ insert into public.user_organizacoes (user_id, org_id, is_admin) values
   ('00000000-0000-0000-0000-0000000c0002', '00000000-0000-0000-0000-0000000c0001', true);
 
 insert into public.viaturas (id, org_id, matricula, marca, modelo, seguro_validade, is_vendida) values
-  ('00000000-0000-0000-0000-000000v1e0c1', '00000000-0000-0000-0000-0000000c0001', 'EE-11-EE', 'Toyota', 'Corolla', current_date + 10, false);
+  ('00000000-0000-0000-0000-00000081e0c1', '00000000-0000-0000-0000-0000000c0001', 'EE-11-EE', 'Toyota', 'Corolla', current_date + 10, false);
 
 select public.emit_expiry_events();
 select public.process_domain_events();

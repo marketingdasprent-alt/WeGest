@@ -15,30 +15,30 @@ begin;
 select plan(7);
 
 insert into public.organizacoes (id, nome, codigo) values
-  ('00000000-0000-0000-0000-0000000h0000', 'Org Digest', 'digest-h');
+  ('00000000-0000-0000-0000-000000030000', 'Org Digest', 'digest-h');
 
 insert into auth.users (id, email) values
-  ('00000000-0000-0000-0000-0000000h0a01', 'gestor@digest-h.pt');
+  ('00000000-0000-0000-0000-000000030a01', 'gestor@digest-h.pt');
 
 insert into public.user_organizacoes (user_id, org_id, is_admin) values
-  ('00000000-0000-0000-0000-0000000h0a01', '00000000-0000-0000-0000-0000000h0000', true);
+  ('00000000-0000-0000-0000-000000030a01', '00000000-0000-0000-0000-000000030000', true);
 
 -- Regra em modo digest — enviar_email=true MAS enviar_email_digest=true
 -- também: execute_automation_runs não deve enfileirar email nenhum.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
-  ('00000000-0000-0000-0000-000000rgh001', '00000000-0000-0000-0000-0000000h0000', 'teste.digest', 'Regra Digest Teste', 'teste.digest_evento', 'notificacao',
+  ('00000000-0000-0000-0000-000000463001', '00000000-0000-0000-0000-000000030000', 'teste.digest', 'Regra Digest Teste', 'teste.digest_evento', 'notificacao',
    '{"template_codigo":"teste.digest_evento","destinatarios_recurso":"renting_contratos","enviar_email":true,"enviar_email_digest":true,"titulo":"Contrato a renovar"}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-000000ruh001', '00000000-0000-0000-0000-000000rgh001', '00000000-0000-0000-0000-0000000h0000', 'contratos_renting', '00000000-0000-0000-0000-000000enh001'),
-  ('00000000-0000-0000-0000-000000ruh002', '00000000-0000-0000-0000-000000rgh001', '00000000-0000-0000-0000-0000000h0000', 'contratos_renting', '00000000-0000-0000-0000-000000enh002'),
-  ('00000000-0000-0000-0000-000000ruh003', '00000000-0000-0000-0000-000000rgh001', '00000000-0000-0000-0000-0000000h0000', 'contratos_renting', '00000000-0000-0000-0000-000000enh003');
+  ('00000000-0000-0000-0000-0000004c3001', '00000000-0000-0000-0000-000000463001', '00000000-0000-0000-0000-000000030000', 'contratos_renting', '00000000-0000-0000-0000-000000ef3001'),
+  ('00000000-0000-0000-0000-0000004c3002', '00000000-0000-0000-0000-000000463001', '00000000-0000-0000-0000-000000030000', 'contratos_renting', '00000000-0000-0000-0000-000000ef3002'),
+  ('00000000-0000-0000-0000-0000004c3003', '00000000-0000-0000-0000-000000463001', '00000000-0000-0000-0000-000000030000', 'contratos_renting', '00000000-0000-0000-0000-000000ef3003');
 
 select public.execute_automation_runs();
 
 -- 1. As 3 notificações internas foram criadas normalmente (bell continua a funcionar).
 select is(
-  (select count(*)::int from public.notifications where destinatario_user_id = '00000000-0000-0000-0000-0000000h0a01' and template_codigo = 'teste.digest_evento'),
+  (select count(*)::int from public.notifications where destinatario_user_id = '00000000-0000-0000-0000-000000030a01' and template_codigo = 'teste.digest_evento'),
   3,
   'as notificações internas continuam a ser criadas normalmente em modo digest'
 );
@@ -68,7 +68,7 @@ select is(
 
 -- 5. As 3 notificações originais ficam marcadas como já incluídas no digest.
 select is(
-  (select count(*)::int from public.notifications where destinatario_user_id = '00000000-0000-0000-0000-0000000h0a01' and template_codigo = 'teste.digest_evento' and digest_enviado_em is not null),
+  (select count(*)::int from public.notifications where destinatario_user_id = '00000000-0000-0000-0000-000000030a01' and template_codigo = 'teste.digest_evento' and digest_enviado_em is not null),
   3,
   'as notificações originais ficam marcadas como já incluídas num digest'
 );
@@ -84,7 +84,7 @@ select is(
 
 -- 7. Existe o template de email do digest.
 select is(
-  (select count(*)::int from public.notification_templates where codigo = 'digest.resumo_diario' and canal = 'email' and org_id = '00000000-0000-0000-0000-0000000h0000'),
+  (select count(*)::int from public.notification_templates where codigo = 'digest.resumo_diario' and canal = 'email' and org_id = '00000000-0000-0000-0000-000000030000'),
   1,
   'seed_automacao_defaults() cria o template de email do digest'
 );

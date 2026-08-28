@@ -12,6 +12,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -523,14 +525,13 @@ export default function AssistenciaNova() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex justify-center py-10">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
+              <TableSkeleton colunas={4} linhas={6} />
             ) : filteredViaturas.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground">
-                <Car className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                Nenhuma viatura encontrada.
-              </div>
+              <EmptyState
+                icon={Car}
+                title="Nenhuma viatura encontrada"
+                description="Nenhuma das viaturas da frota corresponde à pesquisa. Verifique a matrícula ou limpe o campo para ver todas."
+              />
             ) : (
               <div className="border rounded-md overflow-hidden">
                 <Table>

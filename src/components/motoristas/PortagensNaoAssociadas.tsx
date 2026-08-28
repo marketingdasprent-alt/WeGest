@@ -65,7 +65,7 @@ export const PortagensNaoAssociadas: React.FC<Props> = ({ open, onOpenChange, on
     try {
       const [{ data: crm }, { data: portagens, error }] = await Promise.all([
         supabase.from('motoristas_ativos').select('id, nome').order('nome'),
-        (supabase as any)
+        supabase
           .from('via_verde_transacoes')
           .select('matricula, viatura_id, amount, transaction_date')
           .is('motorista_id', null)
@@ -128,7 +128,7 @@ export const PortagensNaoAssociadas: React.FC<Props> = ({ open, onOpenChange, on
         if (mvError) throw mvError;
       }
 
-      const { error: txError } = await (supabase as any)
+      const { error: txError } = await supabase
         .from('via_verde_transacoes')
         .update({ motorista_id: motoristaId })
         .eq('matricula', viatura.matricula)

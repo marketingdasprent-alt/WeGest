@@ -54,6 +54,8 @@ import { useViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { EmptyState } from '@/components/ui/empty-state';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 
@@ -148,6 +150,30 @@ export default function Viaturas() {
   const [sortDirRaw, setSortDir] = filtroNoUrl('dir', 'asc');
   const sortDir = sortDirRaw as 'asc' | 'desc';
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
+
+  // Distinguir "não há nada" de "os filtros não deixam ver nada" — cada caso
+  // pede uma acção diferente de quem está a olhar para a lista vazia.
+  const temFiltrosAtivos =
+    searchTerm !== '' ||
+    statusFilter !== 'all' ||
+    categoriaFilter !== 'all' ||
+    combustivelFilter !== 'all' ||
+    tipoFilter !== 'all';
+
+  // Uma só escrita ao endereço em vez de cinco chamadas encadeadas: assim o
+  // "voltar" do browser desfaz a limpeza de uma vez, e não filtro a filtro.
+  // A ordenação não é filtro e fica onde está.
+  const limparFiltros = () =>
+    setSearchParams(
+      (anterior) => {
+        const proximo = new URLSearchParams(anterior);
+        for (const chave of ['search', 'status', 'categoria', 'combustivel', 'tipo']) {
+          proximo.delete(chave);
+        }
+        return proximo;
+      },
+      { replace: true }
+    );
 
   // Dialog states
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -629,19 +655,26 @@ export default function Viaturas() {
 
       {/* Table / Cards */}
       {loading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-muted-foreground">A carregar viaturas...</p>
-        </div>
+        <TableSkeleton colunas={6} />
       ) : filteredViaturas.length === 0 ? (
-        <div className="text-center py-12">
-          <Car className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-          <p className="text-muted-foreground">
-            {searchTerm || statusFilter !== 'all' || categoriaFilter !== 'all'
-              ? 'Nenhuma viatura encontrada com os filtros aplicados.'
-              : 'Ainda não existem viaturas registadas.'}
-          </p>
-        </div>
+        temFiltrosAtivos ? (
+          <EmptyState
+            icon={Car}
+            title="Nenhuma viatura com estes filtros"
+            description="Nenhuma das viaturas registadas corresponde à pesquisa. Limpe os filtros para ver todas."
+            action={
+              <Button variant="outline" onClick={limparFiltros}>
+                Limpar filtros
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={Car}
+            title="Ainda não há viaturas"
+            description="Adicione a primeira viatura para começar a atribuir motoristas e a acompanhar custos."
+          />
+        )
       ) : isMobile ? (
         // Mobile: Cards
         <div className="space-y-3">

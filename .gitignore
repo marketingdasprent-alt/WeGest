@@ -54,3 +54,8 @@ docs/**/*.md
 # Artefactos do fluxo de trabalho com agentes (relatorios, briefs, ledger).
 # Sao rascunho interno, nunca produto.
 .superpowers/
+
+# Documentação do motor de automação — versionada de propósito.
+# A regra `docs/**/*.md` acima deixaria de fora documentação que é referenciada
+# por migrações e pelo próprio CI (mensagens de erro do job db-tests).
+!docs/motor-automacao/**

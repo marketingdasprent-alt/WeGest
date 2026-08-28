@@ -64,7 +64,7 @@ const Register = () => {
       if (token) {
         // RPC devolve só a linha do token pedido (não usado, não expirado) —
         // convites já não tem SELECT aberto a anon.
-        const { data: convites, error } = await (supabase as any).rpc('validar_convite_token', {
+        const { data: convites, error } = await supabase.rpc('validar_convite_token', {
           p_token: token,
         });
 
@@ -145,7 +145,7 @@ const Register = () => {
 
       // Marcar convite como usado se tem token
       if (token) {
-        await (supabase as any).rpc('marcar_convite_usado', { p_token: token });
+        await supabase.rpc('marcar_convite_usado', { p_token: token });
       }
 
       toast({
