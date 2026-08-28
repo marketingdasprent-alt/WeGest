@@ -58,7 +58,7 @@ select is(
 
 -- 3. ...com o attempt reposto a 0.
 select is(
-  (select attempt from public.automation_runs where id = '00000000-0000-0000-0000-0000004c0001'),
+  (select attempt::int from public.automation_runs where id = '00000000-0000-0000-0000-0000004c0001'),
   0,
   'retry_failed_job() repõe o attempt a 0'
 );

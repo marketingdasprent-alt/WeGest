@@ -32,10 +32,10 @@ insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) value
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-000000460001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_notif', 'Regra de Notificação', 'teste.evento', 'notificacao',
-   jsonb_build_object('template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000c60001'), 'enviar_email', true));
+   jsonb_build_object('titulo', 'Titulo de Teste', 'template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000c60001'), 'enviar_email', true));
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-0000004c0001', '00000000-0000-0000-0000-000000460001', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-000000ent0001');
+  ('00000000-0000-0000-0000-0000004c0001', '00000000-0000-0000-0000-000000460001', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-00000ef70001');
 
 select public.execute_automation_runs();
 
@@ -219,10 +219,10 @@ insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) value
 
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-000000460007', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_individual', 'Regra Individual', 'teste.evento7', 'notificacao',
-   jsonb_build_object('template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000c60001'), 'destinatarios_modo', 'individual', 'destinatarios_user_ids', jsonb_build_array('00000000-0000-0000-0000-0000000a0002'), 'enviar_email', false));
+   jsonb_build_object('titulo', 'Titulo de Teste', 'template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000c60001'), 'destinatarios_modo', 'individual', 'destinatarios_user_ids', jsonb_build_array('00000000-0000-0000-0000-0000000a0002'), 'enviar_email', false));
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-0000004c0007', '00000000-0000-0000-0000-000000460007', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-000000ent0007');
+  ('00000000-0000-0000-0000-0000004c0007', '00000000-0000-0000-0000-000000460007', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-00000ef70007');
 
 select public.execute_automation_runs();
 

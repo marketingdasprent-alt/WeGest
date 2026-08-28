@@ -21,7 +21,7 @@ insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_
   ('00000000-0000-0000-0000-00000046a001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_simples', 'Regra Simples', 'teste.evento.a', 'notificacao', '{"template_codigo":"teste.template","titulo":"Titulo de Teste"}'::jsonb);
 
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by) values
-  ('00000000-0000-0000-0000-000000e81e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.a', 'viaturas', '00000000-0000-0000-0000-000000ent0010', 'manual');
+  ('00000000-0000-0000-0000-000000e81e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.a', 'viaturas', '00000000-0000-0000-0000-00000ef70010', 'manual');
 
 select public.process_domain_events();
 
@@ -41,7 +41,7 @@ select is(
 -- 3. O run herda entity_table/entity_id do evento.
 select is(
   (select entity_id from public.automation_runs where trigger_event_id = '00000000-0000-0000-0000-000000e81e01'),
-  '00000000-0000-0000-0000-000000ent0010'::uuid,
+  '00000000-0000-0000-0000-00000ef70010'::uuid,
   'o automation_run herda entity_id do domain_event que o originou'
 );
 
@@ -50,8 +50,8 @@ insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_
   ('00000000-0000-0000-0000-00000046b001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_condicao', 'Regra Condição', 'teste.evento.b', 'notificacao', '[{"campo":"estado","operador":"=","valor":"critico"}]'::jsonb);
 
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, payload, emitted_by) values
-  ('00000000-0000-0000-0000-000000e82e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.b', 'viaturas', '00000000-0000-0000-0000-000000ent0020', '{"estado":"critico"}'::jsonb, 'manual'),
-  ('00000000-0000-0000-0000-000000e83e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.b', 'viaturas', '00000000-0000-0000-0000-000000ent0021', '{"estado":"normal"}'::jsonb, 'manual');
+  ('00000000-0000-0000-0000-000000e82e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.b', 'viaturas', '00000000-0000-0000-0000-00000ef70020', '{"estado":"critico"}'::jsonb, 'manual'),
+  ('00000000-0000-0000-0000-000000e83e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.b', 'viaturas', '00000000-0000-0000-0000-00000ef70021', '{"estado":"normal"}'::jsonb, 'manual');
 
 select public.process_domain_events();
 
@@ -87,18 +87,18 @@ insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_
   ('00000000-0000-0000-0000-00000046c001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_cooldown', 'Regra Cooldown', 'teste.evento.c', 'notificacao', 60);
 
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by) values
-  ('00000000-0000-0000-0000-000000e84e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.c', 'viaturas', '00000000-0000-0000-0000-000000ent0030', 'manual');
+  ('00000000-0000-0000-0000-000000e84e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.c', 'viaturas', '00000000-0000-0000-0000-00000ef70030', 'manual');
 
 select public.process_domain_events();
 
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by) values
-  ('00000000-0000-0000-0000-000000e85e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.c', 'viaturas', '00000000-0000-0000-0000-000000ent0030', 'manual');
+  ('00000000-0000-0000-0000-000000e85e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.c', 'viaturas', '00000000-0000-0000-0000-00000ef70030', 'manual');
 
 select public.process_domain_events();
 
 -- 8. Só existe um automation_run para esta regra+entidade (o segundo foi suprimido).
 select is(
-  (select count(*)::int from public.automation_runs where rule_id = '00000000-0000-0000-0000-00000046c001' and entity_id = '00000000-0000-0000-0000-000000ent0030'),
+  (select count(*)::int from public.automation_runs where rule_id = '00000000-0000-0000-0000-00000046c001' and entity_id = '00000000-0000-0000-0000-00000ef70030'),
   1,
   'cooldown ativo impede um segundo run para a mesma regra+entidade dentro da janela'
 );
@@ -120,16 +120,16 @@ select ok(
 -- mão, fora do Rule Engine) — process_domain_events() não deve rebentar
 -- nem duplicar, só engolir a colisão e seguir em frente.
 insert into public.automation_runs (rule_id, org_id, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-00000046a001', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-000000ent0040');
+  ('00000000-0000-0000-0000-00000046a001', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-00000ef70040');
 
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by) values
-  ('00000000-0000-0000-0000-000000e86e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.a', 'viaturas', '00000000-0000-0000-0000-000000ent0040', 'manual');
+  ('00000000-0000-0000-0000-000000e86e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.a', 'viaturas', '00000000-0000-0000-0000-00000ef70040', 'manual');
 
 select public.process_domain_events();
 
 -- 11. Continua a existir só um run ativo para esta regra+entidade (sem duplicar).
 select is(
-  (select count(*)::int from public.automation_runs where rule_id = '00000000-0000-0000-0000-00000046a001' and entity_id = '00000000-0000-0000-0000-000000ent0040'),
+  (select count(*)::int from public.automation_runs where rule_id = '00000000-0000-0000-0000-00000046a001' and entity_id = '00000000-0000-0000-0000-00000ef70040'),
   1,
   'uma colisão com um run já ativo não duplica — engole o unique_violation'
 );

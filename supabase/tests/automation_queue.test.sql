@@ -28,12 +28,12 @@ insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_
 
 -- Run principal: só 2 tentativas permitidas, para forçar o dead-letter cedo.
 insert into public.automation_runs (id, rule_id, org_id, job_type, max_attempts, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-0000004c2e01', '00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 2, 'viaturas', '00000000-0000-0000-0000-000000ent0001');
+  ('00000000-0000-0000-0000-0000004c2e01', '00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 2, 'viaturas', '00000000-0000-0000-0000-00000ef70001');
 
 -- 1. O índice único parcial impede um segundo run ativo para a mesma regra+entidade.
 select throws_ok(
   $$ insert into public.automation_runs (rule_id, org_id, job_type, entity_table, entity_id)
-     values ('00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 'viaturas', '00000000-0000-0000-0000-000000ent0001') $$,
+     values ('00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 'viaturas', '00000000-0000-0000-0000-00000ef70001') $$,
   '23505',
   null,
   'não é possível ter dois automation_runs ativos para a mesma regra na mesma entidade'
@@ -42,7 +42,7 @@ select throws_ok(
 -- 1b. Mas uma entidade DIFERENTE para a mesma regra não entra em conflito
 -- (a correção: a unicidade é por regra+entidade, não por regra+org).
 insert into public.automation_runs (id, rule_id, org_id, job_type, entity_table, entity_id) values
-  ('00000000-0000-0000-0000-0000004c5e01', '00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 'viaturas', '00000000-0000-0000-0000-000000ent0002');
+  ('00000000-0000-0000-0000-0000004c5e01', '00000000-0000-0000-0000-0000004c1e01', '00000000-0000-0000-0000-0000000a0000', 'automation_rule', 'viaturas', '00000000-0000-0000-0000-00000ef70002');
 
 select is(
   (select count(*)::int from public.automation_runs where id = '00000000-0000-0000-0000-0000004c5e01'),
@@ -68,7 +68,7 @@ select is(
 
 -- 4. claim() incrementa attempt.
 select is(
-  (select attempt from public.automation_runs where id = '00000000-0000-0000-0000-0000004c2e01'),
+  (select attempt::int from public.automation_runs where id = '00000000-0000-0000-0000-0000004c2e01'),
   1,
   'claim() incrementa attempt para 1'
 );
