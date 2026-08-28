@@ -1,6 +1,7 @@
 # Reconstrução da base de dados e reconciliação de migrações
 
-> Estado: **Fase 0 concluída no repositório, por verificar em ambiente com Docker.**
+> Estado: **Fase 0 concluída e verificada.** O cutover correu, a base reconstrói
+> do zero, e 12 ficheiros pgTAP passam em CI contra ela.
 > Última actualização: 2026-08-28.
 
 Este documento descreve o comportamento **real**, não o desejado. Onde alguma
@@ -74,6 +75,9 @@ não existe em nenhum objecto git. Os ficheiros dizem-no no cabeçalho.
 Depois disto, as 15 migrações de 26–27 de Agosto que produção tem estão todas
 representadas no repositório com o carimbo certo.
 
+> Apareceram mais **quatro** órfãs depois desta fase, encontradas pelo detector
+> de deriva. Essas foram recuperadas do SQL original — ver 6.4.
+
 ### 2.3 Descoberta durante a reconstrução: excepção ao isolamento
 
 Ao reconstruir `ti_tickets_suporte_plataforma` encontrou-se uma alteração ao
@@ -128,8 +132,19 @@ tabela de quais passam, para se promoverem um a um.
 
 ### 3.1 Uma vez: o cutover para baseline
 
-Ainda **não foi feito**. **Não precisas de Docker** — corre num runner do
-GitHub Actions, que já o tem.
+**Feito a 2026-08-28.** O resultado está no ramo `chore/baseline-schema`:
+
+```
+supabase/migrations/           3 ficheiros   (baseline + catálogo + privilégios)
+supabase/migrations_archive/   806 ficheiros
+baseline                       33 257 linhas
+```
+
+O workflow só empurrou o ramo depois de reconstruir a base do zero e passar o
+pgTAP do motor e o de segurança. O procedimento abaixo fica para quando for
+preciso **regenerar** o baseline, depois de outra divergência grande.
+
+**Não precisas de Docker** — corre num runner do GitHub Actions, que já o tem.
 
 **Passo 1.** *Settings → Secrets and variables → Actions → New repository secret*
 
@@ -318,9 +333,9 @@ acrescentar à lista em `ci.yml`.
 | D-4 | 59 carimbos duplicados continuam nos ficheiros históricos. Deixam de importar assim que forem arquivados, mas até lá bloqueiam o reset. | Resolve-se com D-1 |
 | D-5 | `apify_credenciais_partilhadas` não tem seed: os tokens reais foram inseridos directamente na base e não estão no git. Um ambiente novo precisa de os inserir à mão. | Por desenho — são segredos |
 | D-6 | O ramo `feat/automacoes-canvas-fluxo` está 26 commits à frente de `main` e nunca foi integrado. Outros três ramos locais estão 10–23 commits à frente. | **Aberto** |
-| D-7 | `20260827151938_ti_tickets_numero_global` foi aplicada a produção **durante** este trabalho e não existe em nenhum objecto git. É a mesma classe de problema que a Fase 0 veio resolver, a acontecer outra vez. | **Aberto** — recuperar o ficheiro ou documentar o conteúdo |
+| D-7 | Quatro migrações aplicadas a produção sem ficheiro no git, entre 20 e 28 de Agosto. É a mesma classe de problema que a Fase 0 veio resolver, a acontecer outra vez. | **Resolvido** — recuperadas de `statements`, e detector automático em 6.1 |
 | D-8 | O baseline não traz os privilégios: `pg_dump --schema public` emite os GRANTs existentes mas **não** o `ALTER DEFAULT PRIVILEGES` nem os `REVOKE`. Uma base reconstruída nascia com `anon` a poder tudo (194 relações legíveis, 564 com escrita, 208 funções executáveis) enquanto produção está limpa (0/2/24). | **Resolvido** — `00000000000002_privilegios_anon.sql` |
-| D-9 | **Seis funções `SECURITY DEFINER` executáveis por `anon` em produção** sem servirem fluxo anónimo nenhum. Ver 5.2. | **Aberto** — precisa de decisão |
+| D-9 | **17 funções `SECURITY DEFINER` executáveis por `anon` em produção** sem servirem fluxo anónimo nenhum. Ver 5.2. | **Resolvido** — `20260828092547` |
 
 ### 5.2 Funções `SECURITY DEFINER` abertas ao papel anónimo
 
@@ -385,7 +400,69 @@ Três exclusões deliberadas:
 
 ---
 
-## 6. Regras para migrações novas
+## 6. Deriva: SQL aplicado sem passar pelo repositório
+
+### 6.1 O detector
+
+O gate de CI reconstrói a base a partir do repositório — mas isso só verifica o
+que o repositório **tem**. Não vê o que a base **ganhou por fora**. Era essa a
+lacuna que deixava a Fase 0 desfazer-se sozinha.
+
+O workflow **`🔍 Deriva de migrações`** fecha-a. Corre em `push` para `main`,
+duas vezes por dia por agenda, e à mão. Compara os nomes registados em
+`supabase_migrations.schema_migrations` com os ficheiros do repositório
+(activos **e** arquivados) e falha se produção tiver alguma sem ficheiro.
+
+Não corre em `pull_request`, de propósito: precisa do segredo
+`SUPABASE_DB_URL`, e um PR pode alterar o script que o consome. Correr código de
+PR com credenciais de produção trocaria um problema por outro pior.
+
+```bash
+# localmente, se tiveres psql e a ligação
+SUPABASE_DB_URL='postgresql://…' node scripts/verificar-migracoes.mjs
+```
+
+### 6.2 Porque compara por nome e não por versão
+
+O carimbo de versão que produção regista **não tem relação** com o nome do
+ficheiro quando a migração é aplicada pelo painel do Supabase ou por
+`apply_migration` — é gerado no momento. Comparar por versão dava 119 falsos
+positivos. Esta decisão é do autor original do script e mantém-se.
+
+### 6.3 Recuperar uma migração órfã
+
+`schema_migrations` guarda o SQL aplicado na coluna `statements`. A recuperação
+é **fiel** — é o original, não uma reconstrução:
+
+```sql
+select array_to_string(statements, E';\n\n')
+  from supabase_migrations.schema_migrations
+ where name = '<nome>';
+```
+
+Guardar em `supabase/migrations/<version>_<nome>.sql` com a **mesma versão** que
+produção registou, e commitar.
+
+### 6.4 O que foi recuperado a 2026-08-28
+
+Quatro migrações aplicadas entre 20 e 28 de Agosto sem ficheiro no git. Nenhuma
+era trivial:
+
+| Versão | Nome | O que fazia |
+|---|---|---|
+| `20260824093459` | `teste_permissao_ddl_noop` | Apesar do nome, cria `org_sistema()` — de que `vigiar_cron_edge()` depende |
+| `20260824094547` | `vigia_cron_edge_so_falha_sustentada` | 107 linhas de lógica de alerta de cron |
+| `20260824154335` | `bolt_csv_sem_metricas_atividade_mensagens` | Trava ganhos Bolt fantasma (incidente de ~1 844 €) |
+| `20260827151938` | `ti_tickets_numero_global` | Numeração global dos tickets e índice único |
+
+A última obrigou a **corrigir uma reconstrução**: a numeração global tinha sido
+atribuída por engano a `20260827113930_ti_tickets_suporte_plataforma`, porque ao
+introspeccionar o schema as duas já estavam aplicadas e não havia como
+distingui-las. Com o SQL original à vista, foi movida para o ficheiro certo.
+
+---
+
+## 7. Regras para migrações novas
 
 1. **Um carimbo, um ficheiro.** O gate verifica-o e falha se for violado.
 2. **Nunca escrever contra o estado de produção.** Se a migração assume que uma
@@ -403,7 +480,7 @@ Três exclusões deliberadas:
 
 ---
 
-## 7. O que esta fase **não** fez
+## 8. O que esta fase **não** fez
 
 A Fase 0 é reconciliação. O motor em si continua com os problemas que a
 auditoria identificou, e nenhum foi tocado:

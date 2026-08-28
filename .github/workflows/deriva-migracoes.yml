@@ -1,0 +1,99 @@
+name: 🔍 Deriva de migrações
+
+# Detecta SQL aplicado à base de dados sem passar pelo repositório.
+#
+# ── PORQUE ISTO EXISTE ───────────────────────────────────────────────────────
+#
+# É o problema de fundo que a Fase 0 veio resolver, e que se repetiu ENQUANTO a
+# resolvíamos. Em 8 dias (20–28 Agosto de 2026) apareceram quatro migrações
+# aplicadas a produção sem ficheiro no git:
+#
+#   teste_permissao_ddl_noop                    (cria org_sistema(), de que
+#                                                vigiar_cron_edge() depende)
+#   vigia_cron_edge_so_falha_sustentada         (107 linhas de lógica de alerta)
+#   bolt_csv_sem_metricas_atividade_mensagens   (trava ganhos fantasma)
+#   ti_tickets_numero_global                    (numeração e índice único)
+#
+# Nenhuma era trivial. Todas se perdiam no dia em que fosse preciso recriar a
+# base — e a deriva é silenciosa: só se descobre no pior momento possível.
+#
+# O gate de CI reconstrói a base a partir do repositório, mas isso só apanha o
+# que o repositório TEM. Não vê o que a base ganhou por fora. É essa a lacuna
+# que este workflow fecha.
+#
+# ── PORQUE NÃO CORRE EM PULL REQUEST ─────────────────────────────────────────
+#
+# Precisa do segredo `SUPABASE_DB_URL`. Um PR pode alterar o script que o
+# consome, e correr código de PR com credenciais de produção troca um problema
+# por outro pior. Corre só onde o código já foi revisto: `push` para main, por
+# agenda, e à mão.
+#
+# A leitura é `select name from schema_migrations` — só leitura, nada é escrito.
+#
+# ── QUANDO FALHAR ────────────────────────────────────────────────────────────
+#
+# O output diz o nome de cada migração em falta e como recuperar o SQL exacto a
+# partir de `schema_migrations.statements`. A recuperação é fiel: é o SQL que
+# foi mesmo aplicado, não uma reconstrução.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # 08:00 e 20:00 UTC. Duas vezes por dia chega: a deriva não é uma corrida,
+    # é uma coisa que se descobre semanas depois. O que interessa é descobri-la
+    # em horas em vez de meses.
+    - cron: '0 8,20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deriva:
+    name: 🔍 Deriva de migrações
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verificar o segredo
+        run: |
+          if [ -z "${{ secrets.SUPABASE_DB_URL }}" ]; then
+            echo "::error::O segredo SUPABASE_DB_URL não está definido."
+            echo "Settings → Secrets and variables → Actions → SUPABASE_DB_URL"
+            echo "Usa o Session pooler (porta 5432) — ver docs/motor-automacao/reconstrucao-migracoes.md"
+            exit 1
+          fi
+
+      # O runner do ubuntu-latest já traz o cliente do Postgres; garantir a
+      # versão evita surpresas com o pooler.
+      - name: Garantir o psql
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          fi
+          psql --version
+
+      - name: Comparar produção com o repositório
+        id: verificar
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set +e
+          SAIDA=$(node scripts/verificar-migracoes.mjs 2>&1)
+          CODIGO=$?
+          echo "$SAIDA"
+          {
+            echo "### Deriva de migrações"
+            echo ""
+            echo '```'
+            echo "$SAIDA"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $CODIGO
