@@ -38,7 +38,7 @@ export function usePortagensNaoAssociadasCount() {
   return useQuery({
     queryKey: ['portagens-nao-associadas-count'],
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('via_verde_transacoes')
         .select('matricula')
         .is('motorista_id', null)

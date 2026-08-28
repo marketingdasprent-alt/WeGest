@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { CardListSkeleton } from '@/components/ui/table-skeleton';
 import {
   Select,
   SelectContent,
@@ -199,8 +201,8 @@ const MeusTickets = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="p-4">
+        <CardListSkeleton cartoes={4} />
       </div>
     );
   }
@@ -287,18 +289,37 @@ const MeusTickets = () => {
         {/* Tickets List */}
         {filteredTickets.length === 0 ? (
           <Card>
-            <CardContent className="py-12 text-center">
-              <Wrench className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">Nenhum ticket encontrado</h3>
-              <p className="text-muted-foreground mb-4">
-                {searchTerm || statusFilter !== 'todos'
-                  ? 'Tente ajustar os filtros de pesquisa.'
-                  : 'Ainda não submeteu nenhum pedido de assistência.'}
-              </p>
-              <Button onClick={() => setNovoTicketOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Criar Primeiro Ticket
-              </Button>
+            <CardContent className="py-2">
+              {searchTerm || statusFilter !== 'todos' ? (
+                <EmptyState
+                  icon={Wrench}
+                  title="Nenhum ticket com estes filtros"
+                  description="Nenhum dos seus pedidos corresponde à pesquisa. Limpe os filtros para ver todos."
+                  action={
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSearchTerm('');
+                        setStatusFilter('todos');
+                      }}
+                    >
+                      Limpar filtros
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  icon={Wrench}
+                  title="Ainda não pediu assistência"
+                  description="Quando abrir um pedido, ele aparece aqui com o estado actualizado até estar resolvido."
+                  action={
+                    <Button onClick={() => setNovoTicketOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Criar primeiro pedido
+                    </Button>
+                  }
+                />
+              )}
             </CardContent>
           </Card>
         ) : (

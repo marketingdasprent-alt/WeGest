@@ -247,7 +247,7 @@ export function MotoristaFormDadosPessoais({
                   type="email"
                   placeholder="email@exemplo.com"
                   {...field}
-                  onBlur={(e) => {
+                  onBlur={() => {
                     field.onBlur();
                     void verificarMatchLead();
                   }}

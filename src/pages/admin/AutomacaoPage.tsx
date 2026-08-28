@@ -2,51 +2,66 @@ import { useState } from 'react';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Bot } from 'lucide-react';
-import { VisaoGeralTab } from '@/components/admin/automacao/VisaoGeralTab';
-import { AtividadeTab } from '@/components/admin/automacao/AtividadeTab';
-import { FilaTab } from '@/components/admin/automacao/FilaTab';
-import { FalhasTab } from '@/components/admin/automacao/FalhasTab';
 import { RegrasTab } from '@/components/admin/automacao/RegrasTab';
-import { CorrerAgoraButton } from '@/components/admin/automacao/CorrerAgoraButton';
+import { MonitorizacaoView } from '@/components/admin/automacao/monitorizacao/MonitorizacaoView';
+import { EditorAutomacaoProvider } from '@/components/admin/automacao/builder/EditorAutomacaoProvider';
+import { BarraAccoes } from '@/components/admin/automacao/builder/BarraAccoes';
 
-export default function AutomacaoPage() {
-  const [tab, setTab] = useState('visao-geral');
+/**
+ * Duas vistas, uma barra.
+ *
+ * As acções do editor vivem na MESMA linha das tabs — antes havia três
+ * cabeçalhos empilhados (título da página, tabs, e um terceiro "Construtor de
+ * automações") que comiam a altura útil toda. O terceiro desapareceu: a tab já
+ * diz em que contexto se está.
+ *
+ * "Correr agora" saiu daqui. Não dispara a automação aberta: chama
+ * `executar_jobs_automacao_manualmente`, que corre TODOS os scans e o motor de
+ * regras inteiro, com rate limit de 5 minutos no servidor. É uma acção de
+ * operação, não de edição — passou para Monitorização.
+ */
+function Conteudo() {
+  const [tab, setTab] = useState('editor');
 
   return (
-    <div className="space-y-6">
+    // `min-h-0` em toda a cadeia: sem isto o filho de altura calculada estica o
+    // pai e aparece a barra de scroll da página por cima da do canvas.
+    <div className="flex h-full min-h-0 flex-col gap-4">
       <StickyPageHeader
         title="Automação"
         description="Estado, saúde e controlo do motor de automações do WeGest."
         icon={Bot}
-      >
-        <CorrerAgoraButton />
-      </StickyPageHeader>
+      />
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
-          <TabsTrigger value="atividade">Atividade</TabsTrigger>
-          <TabsTrigger value="fila">Fila</TabsTrigger>
-          <TabsTrigger value="falhas">Falhas</TabsTrigger>
-          <TabsTrigger value="regras">Regras</TabsTrigger>
-        </TabsList>
+      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <TabsList>
+            <TabsTrigger value="editor">Editor visual</TabsTrigger>
+            <TabsTrigger value="monitorizacao">Monitorização</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="visao-geral">
-          <VisaoGeralTab />
-        </TabsContent>
-        <TabsContent value="atividade">
-          <AtividadeTab />
-        </TabsContent>
-        <TabsContent value="fila">
-          <FilaTab />
-        </TabsContent>
-        <TabsContent value="falhas">
-          <FalhasTab />
-        </TabsContent>
-        <TabsContent value="regras">
+          {tab === 'editor' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <BarraAccoes />
+            </div>
+          )}
+        </div>
+
+        <TabsContent value="editor" className="mt-0 min-h-0 flex-1">
           <RegrasTab />
+        </TabsContent>
+        <TabsContent value="monitorizacao" className="mt-0 min-h-0 flex-1 overflow-y-auto">
+          <MonitorizacaoView />
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function AutomacaoPage() {
+  return (
+    <EditorAutomacaoProvider>
+      <Conteudo />
+    </EditorAutomacaoProvider>
   );
 }

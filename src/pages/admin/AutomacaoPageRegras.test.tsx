@@ -1,9 +1,9 @@
 // Continuação de AutomacaoPage.test.tsx — separado em ficheiro próprio
 // para ficar abaixo do limite de linhas do ESLint (max-lines). Cobre a
-// tab "Regras" e o ConfigurarRegraSheet; o mock setup é replicado (não
+// tab "Regras" e o modal de configuração; o mock setup é replicado (não
 // importado) porque vi.mock() só funciona corretamente por ficheiro.
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
@@ -137,6 +137,9 @@ vi.mock('@/integrations/supabase/client', () => ({
           return chainable({
             data: {
               id: 'rule-1',
+              nome: 'Regra Estatística Teste',
+              event_type: 'viatura.seguro_expirando',
+              condicoes: [],
               acao_config: {
                 template_codigo: 'teste',
                 titulo: 'Regra Estatística Teste',
@@ -230,6 +233,37 @@ function renderPage() {
   );
 }
 
+/**
+ * O "Editor visual" abre na LISTA de automações — o canvas só aparece ao
+ * escolher uma. Não é preciso navegar para lá chegar.
+ */
+function irParaTabelaDeRegras() {
+  // Já é a vista por omissão; a função fica para o teste se ler como intenção.
+}
+
+/**
+ * Clicar numa linha abre a automação no construtor; clicar no bloco de
+ * notificação abre o painel de propriedades à direita, que é onde toda a
+ * configuração de destinatários vive desde que a Sheet foi absorvida.
+ */
+async function abrirPainelDaAccao(nome: string): Promise<HTMLElement> {
+  irParaTabelaDeRegras();
+  await waitFor(() => expect(screen.getByText(nome)).toBeTruthy());
+  fireEvent.click(screen.getByText(nome));
+  // "Enviar notificação" existe no canvas E na paleta. O que interessa é o
+  // do canvas: procura-se pelo wrapper que o React Flow põe à volta do nó.
+  // O canvas só tem nós depois de a config da regra chegar. Com a suite toda
+  // a correr, o 1s por omissão do waitFor é curto e o teste falhava a meio.
+  await waitFor(() => expect(document.querySelectorAll('.rf-node').length).toBeGreaterThan(0), {
+    timeout: 5000,
+  });
+  const noAccao = [...document.querySelectorAll('.rf-node')].find((n) =>
+    n.textContent?.includes('Enviar notificação')
+  );
+  fireEvent.click(noAccao as Element);
+  return screen.findByRole('complementary', { name: /Propriedades do passo/i });
+}
+
 describe('AutomacaoPage — Regras e permissões', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -240,7 +274,7 @@ describe('AutomacaoPage — Regras e permissões', () => {
 
   it('mostra estatísticas por regra e permite ligar/desligar', async () => {
     renderPage();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+    irParaTabelaDeRegras();
 
     await waitFor(() => {
       expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
@@ -258,7 +292,7 @@ describe('AutomacaoPage — Regras e permissões', () => {
 
   it('filtra as regras por módulo (derivado do event_type)', async () => {
     renderPage();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+    irParaTabelaDeRegras();
 
     await waitFor(() => {
       expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
@@ -273,96 +307,52 @@ describe('AutomacaoPage — Regras e permissões', () => {
     expect(screen.getByText('Nova cobrança gerada')).toBeTruthy();
   });
 
-  it('abre o editor "Configurar" pré-preenchido e guarda a nova configuração', async () => {
+  it('o painel abre pré-preenchido com os grupos já configurados', async () => {
     renderPage();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+    const painel = await abrirPainelDaAccao('Regra Estatística Teste');
+
+    // Gestores (cargo-1) vem do acao_config mockado: aparece como chip com o
+    // seu botão de remover, não na lista dos que ainda se podem juntar.
+    // Três queries encadeadas até o chip ter nome: config da regra -> fluxo
+    // -> cargos. O 1s por omissão do findBy é curto de mais com a suite toda
+    // a correr, e o teste falhava de forma intermitente.
+    expect(
+      await within(painel).findByRole('button', { name: 'Remover Gestores' }, { timeout: 5000 })
+    ).toBeTruthy();
+    expect(within(painel).getByRole('button', { name: '+ Financeiro' })).toBeTruthy();
+  });
+
+  it('juntar um grupo e guardar escreve os cargo_ids', async () => {
+    renderPage();
+    const painel = await abrirPainelDaAccao('Regra Estatística Teste');
+
+    fireEvent.click(await within(painel).findByRole('button', { name: '+ Financeiro' }));
+    // O Guardar do painel, não o da barra: aplica ao canvas e grava a regra.
+    fireEvent.click(within(painel).getByRole('button', { name: /^Guardar$/ }));
 
     await waitFor(() => {
-      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
-    });
-
-    const botoesConfigurar = screen.getAllByRole('button', { name: /Configurar/i });
-    fireEvent.click(botoesConfigurar[0]);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Configurar: Regra Estatística Teste/)).toBeTruthy();
-    });
-
-    fireEvent.click(await screen.findByRole('button', { name: /Guardar/i }));
-
-    await waitFor(() => {
-      expect(mockToastFn).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Configuração guardada' })
-      );
+      expect(capturedUpdatePayload?.acao_config).toMatchObject({
+        destinatarios_cargo_ids: expect.arrayContaining(['cargo-1', 'cargo-2']),
+      });
     });
   });
 
-  it('mostra os cargos como botões e grava os cargo_ids escolhidos ao guardar', async () => {
+  it('escolher pessoas específicas grava destinatarios_modo e user_ids', async () => {
     renderPage();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+    const painel = await abrirPainelDaAccao('Regra Estatística Teste');
+
+    // Só aparece depois de os cargos resolverem e haver um grupo escolhido.
+    fireEvent.click(
+      await within(painel).findByRole('switch', { name: /Escolher pessoas específicas/i })
+    );
+    fireEvent.click(await within(painel).findByRole('button', { name: /Ana Gestora/ }));
+    fireEvent.click(within(painel).getByRole('button', { name: /^Guardar$/ }));
 
     await waitFor(() => {
-      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
-    });
-
-    fireEvent.click(screen.getAllByRole('button', { name: /Configurar/i })[0]);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Configurar: Regra Estatística Teste/)).toBeTruthy();
-    });
-
-    // Gestores (cargo-1) já vem selecionado pelo acao_config mockado.
-    expect(await screen.findByRole('button', { name: 'Gestores', pressed: true })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Financeiro', pressed: false })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Financeiro', pressed: false }));
-    fireEvent.click(await screen.findByRole('button', { name: /Guardar/i }));
-
-    await waitFor(() => {
-      expect(mockToastFn).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Configuração guardada' })
-      );
-    });
-
-    expect(capturedUpdatePayload?.acao_config).toMatchObject({
-      destinatarios_estrategia: 'cargo',
-      destinatarios_cargo_ids: expect.arrayContaining(['cargo-1', 'cargo-2']),
-    });
-  });
-
-  it('liga "Escolher pessoas específicas" e grava destinatarios_modo/user_ids', async () => {
-    renderPage();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
-    });
-
-    fireEvent.click(screen.getAllByRole('button', { name: /Configurar/i })[0]);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Configurar: Regra Estatística Teste/)).toBeTruthy();
-    });
-
-    await screen.findByRole('button', { name: 'Gestores', pressed: true });
-
-    // "Escolher pessoas específicas" é o 1.º switch (o 2.º é "Enviar também por email").
-    fireEvent.click(screen.getAllByRole('switch')[0]);
-
-    expect(await screen.findByRole('button', { name: /Ana Gestora/, pressed: false })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Ana Gestora/, pressed: false }));
-
-    fireEvent.click(await screen.findByRole('button', { name: /Guardar/i }));
-
-    await waitFor(() => {
-      expect(mockToastFn).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Configuração guardada' })
-      );
-    });
-
-    expect(capturedUpdatePayload?.acao_config).toMatchObject({
-      destinatarios_modo: 'individual',
-      destinatarios_user_ids: ['user-1'],
+      expect(capturedUpdatePayload?.acao_config).toMatchObject({
+        destinatarios_modo: 'individual',
+        destinatarios_user_ids: ['user-1'],
+      });
     });
   });
 
@@ -372,18 +362,20 @@ describe('AutomacaoPage — Regras e permissões', () => {
 
     // O botão "Correr agora" nem chega a renderizar para quem só tem acesso de leitura.
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: 'Visão Geral' })).toBeTruthy();
+      expect(screen.getByRole('tab', { name: 'Editor visual' })).toBeTruthy();
     });
     expect(screen.queryByRole('button', { name: /Correr agora/i })).toBeNull();
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regras' }));
+    irParaTabelaDeRegras();
     await waitFor(() => {
       for (const s of screen.getAllByRole('switch')) expect(s).toBeDisabled();
     });
-    for (const b of screen.getAllByRole('button', { name: /Configurar/i }))
-      expect(b).toBeDisabled();
+    // A coluna de acções desapareceu — quem não pode gerir não mexe nos
+    // switches, e o construtor não lhe deixa gravar.
+    expect(screen.queryByRole('button', { name: /^Configurar$/ })).toBeNull();
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Falhas' }));
+    // As acções de resolução vivem agora no histórico consolidado.
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Monitorização' }));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Tentar novamente/i })).toBeDisabled();
     });

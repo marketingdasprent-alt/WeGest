@@ -5,55 +5,36 @@ import { Button } from '@/components/ui/button';
 import { ProgressIndicator } from '@/components/ui/progress-indicator';
 import { DynamicFormRenderer } from '@/components/formularios/DynamicFormRenderer';
 import { FormField } from '@/components/formularios/DynamicFieldEditor';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { initPixel } from '@/lib/pixel';
+import { useFormularioPorNome } from '@/hooks/useFormularios';
+import { useSubmeterLeadLanding } from '@/hooks/useLeadsLanding';
+
+/** O formulário desta landing é identificado pelo nome — não há id à mão. */
+const NOME_FORMULARIO = 'Formulário TVDE Distância Arrojada';
 
 export const RentCarLanding = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [showForm, setShowForm] = useState(false);
-  const [formulario, setFormulario] = useState<any>(null);
-  const [formFields, setFormFields] = useState<FormField[]>([]);
-  const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false); // Ref para bloqueio síncrono
   const { toast } = useToast();
   const navigate = useNavigate();
   const fieldsPerStep = 2; // Número de campos por step
 
+  const { data: formulario, isLoading: loading } = useFormularioPorNome(NOME_FORMULARIO);
+  const submeterLead = useSubmeterLeadLanding();
+
+  // `campos` é uma coluna jsonb → `Json` nos tipos gerados; a forma do array
+  // de campos tem de ser afirmada aqui.
+  const formFields = (formulario?.campos ?? []) as unknown as FormField[];
+
   useEffect(() => {
     // Landing pública → carrega FB Pixel + dispara PageView.
     initPixel();
-    fetchFormulario();
   }, []);
-  const fetchFormulario = async () => {
-    try {
-      setLoading(true);
-
-      // Using any type to handle the current type issues
-      const { data: formulario, error } = await (supabase as any)
-        .from('formularios')
-        .select('*')
-        .eq('nome', 'Formulário TVDE Distância Arrojada')
-        .eq('ativo', true)
-        .maybeSingle();
-      if (error) {
-        console.error('Erro ao buscar formulário:', error);
-        return;
-      }
-      if (formulario) {
-        setFormulario(formulario);
-        const campos = formulario.campos || [];
-        setFormFields(campos);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar formulário:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
   const handleInputChange = (fieldId: string, value: any) => {
     setFormData((prev) => ({
       ...prev,
@@ -146,17 +127,8 @@ export const RentCarLanding = () => {
     try {
       setIsSubmitting(true);
 
-      // Buscar campanhas associadas ao formulário
-      let campanhas: string[] = [];
-      if (formulario?.id) {
-        const { data: campanhasData } = await (supabase as any)
-          .from('formulario_campanhas')
-          .select('campanha_tag')
-          .eq('formulario_id', formulario.id);
-        campanhas = campanhasData?.map((c) => c.campanha_tag) || [];
-      }
-
-      // Preparar dados do lead com valores padrão
+      // Preparar dados do lead com valores padrão. As campanhas do formulário
+      // e a regra da formação TVDE são aplicadas dentro de useSubmeterLeadLanding.
       const leadData = {
         nome: 'Nome não fornecido',
         email: 'email@naoidentificado.com',
@@ -166,7 +138,6 @@ export const RentCarLanding = () => {
         observacoes: '',
         status: 'novo',
         formulario_id: formulario?.id,
-        campaign_tags: campanhas,
         tem_formacao_tvde: null as boolean | null,
       };
 
@@ -253,32 +224,17 @@ export const RentCarLanding = () => {
       });
 
       // Se não tem licença, mover lead para campanha de Formação TVDE automaticamente
-      if (leadData.tem_formacao_tvde === false) {
-        const campanhasArray = Array.isArray(leadData.campaign_tags) ? leadData.campaign_tags : [];
-        const campanhasFiltradas = campanhasArray.filter((tag) => tag !== 'TVDE GERAL');
-        if (!campanhasFiltradas.includes('Formação TVDE')) {
-          leadData.campaign_tags = [...campanhasFiltradas, 'Formação TVDE'];
-        } else {
-          leadData.campaign_tags = campanhasFiltradas;
-        }
-      }
+      // Campanhas do formulário, regra da formação TVDE e deduplicação (mesmo
+      // email nos últimos 5 minutos) vivem agora em useSubmeterLeadLanding.
+      const { duplicado } = await submeterLead.mutateAsync({
+        formularioId: formulario?.id,
+        lead: leadData,
+      });
 
-      // Verificar duplicidade antes de inserir (mesmo email nos últimos 5 minutos)
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      const { data: existingLead } = await (supabase as any)
-        .from('leads_dasprent')
-        .select('id')
-        .eq('email', leadData.email)
-        .gte('created_at', fiveMinutesAgo)
-        .maybeSingle();
-
-      if (existingLead) {
+      if (duplicado) {
         navigate('/obrigado');
         return;
       }
-
-      const { error } = await (supabase as any).from('leads_dasprent').insert(leadData);
-      if (error) throw error;
 
       // Track form submission success
       if (typeof window !== 'undefined') {

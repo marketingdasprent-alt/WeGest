@@ -17,13 +17,13 @@ insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'cobranca-evento-a');
 
 insert into public.clientes (id, nome, org_id) values
-  ('00000000-0000-0000-0000-000000cl0001', 'Cliente Teste', '00000000-0000-0000-0000-0000000a0000');
+  ('00000000-0000-0000-0000-000000c10001', 'Cliente Teste', '00000000-0000-0000-0000-0000000a0000');
 
 insert into public.reservas (id, org_id, data_inicio) values
-  ('00000000-0000-0000-0000-000000rs0001', '00000000-0000-0000-0000-0000000a0000', now());
+  ('00000000-0000-0000-0000-000000450001', '00000000-0000-0000-0000-0000000a0000', now());
 
 insert into public.contrato_cobrancas (id, reserva_id, periodo_de, periodo_ate, destinatario_id, destinatario_papel, destinatario_nome, valor_sem_iva) values
-  ('00000000-0000-0000-0000-000000cb0001', '00000000-0000-0000-0000-000000rs0001', current_date, current_date + 7, '00000000-0000-0000-0000-000000cl0001', 'cliente', 'Cliente Teste', 100.00);
+  ('00000000-0000-0000-0000-000000cb0001', '00000000-0000-0000-0000-000000450001', current_date, current_date + 7, '00000000-0000-0000-0000-000000c10001', 'cliente', 'Cliente Teste', 100.00);
 
 -- 1. Um evento cobranca.gerada é publicado.
 select is(

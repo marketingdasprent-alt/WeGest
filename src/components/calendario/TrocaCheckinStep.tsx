@@ -227,14 +227,14 @@ export const TrocaCheckinStep: React.FC<{
       // 2. Fechar associação antiga (RPC — evita falha silenciosa para quem
       // só tem 'calendario_recolhas' e não 'motoristas_gestao')
       // Cast porque types.ts ainda não foi regenerado após nova RPC.
-      await (supabase as any).rpc('fn_checkin_fechar_motorista_viatura', {
+      await supabase.rpc('fn_checkin_fechar_motorista_viatura', {
         p_motorista_id: motoristaId || null,
         p_viatura_id: viaturaAtual.id,
         p_data_fim: data,
       });
 
       // 3. Criar nova associação
-      await (supabase as any).rpc('fn_checkin_abrir_motorista_viatura', {
+      await supabase.rpc('fn_checkin_abrir_motorista_viatura', {
         p_motorista_id: motoristaId,
         p_viatura_id: novaViatura.id,
         p_data_inicio: data,

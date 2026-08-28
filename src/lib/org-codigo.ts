@@ -24,10 +24,13 @@ export async function resolveOrgByCodigo(codigo: string): Promise<ResolvedOrg | 
   const normalized = normalizeCodigo(codigo ?? '');
   if (!normalized) return null;
 
-  const { data, error } = await (supabase as any).rpc('org_por_codigo', {
+  const { data, error } = await supabase.rpc('org_por_codigo', {
     p_codigo: normalized,
   });
 
   if (error || !data) return null;
-  return { id: data.id, nome: data.nome };
+  // A RPC devolve jsonb → `Json` nos tipos gerados. O nome e os argumentos ficam
+  // verificados pelo compilador; só a forma do payload é que tem de ser afirmada.
+  const org = data as unknown as ResolvedOrg;
+  return { id: org.id, nome: org.nome };
 }

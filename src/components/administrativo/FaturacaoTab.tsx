@@ -532,7 +532,7 @@ export function FaturacaoContent() {
         if (!cancelled) setInvoiceByCobranca(new Map());
         return;
       }
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('invoices')
         .select('*')
         .in('cobranca_id', ids)
