@@ -344,6 +344,21 @@ export function useCreateContratoRenting() {
   });
 }
 
+/**
+ * Texto do aviso de gravação. Diz o valor que FICOU gravado, não o que estava no
+ * ecrã — é a diferença entre "guardei" e "guardei isto".
+ */
+export function descricaoGuardado(valorGuardado: number | null | undefined): string {
+  if (valorGuardado == null) {
+    return 'As alterações foram guardadas.';
+  }
+  const valor = valorGuardado.toLocaleString('pt-PT', {
+    style: 'currency',
+    currency: 'EUR',
+  });
+  return `As alterações foram guardadas. Total: ${valor}.`;
+}
+
 export function useUpdateContratoRenting() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -362,11 +377,23 @@ export function useUpdateContratoRenting() {
       if (error) throw error;
       return data as unknown as ContratoRenting;
     },
-    onSuccess: () => {
+    onSuccess: (guardado) => {
+      // A linha que o servidor acabou de escrever entra JÁ na cache do detalhe.
+      // Antes deitava-se fora e mandava-se buscar tudo outra vez: entre gravar e
+      // o refetch chegar havia uma janela em que o formulário se re-hidratava
+      // pela cópia anterior. Semear o que a base de dados devolveu fecha essa
+      // janela — o que aparece depois de gravar é, literalmente, o que ficou
+      // gravado. A invalidação continua a seguir, para as listas.
+      qc.setQueryData([...QUERY_KEY_BASE, 'detail', guardado.id], guardado);
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
       invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['contrato-historico'] });
-      toast({ title: 'Contrato actualizado', description: 'As alterações foram guardadas.' });
+      // O total guardado vai no aviso de propósito: torna visível, no momento,
+      // aquilo que até aqui só se descobria reabrindo o contrato.
+      toast({
+        title: 'Contrato actualizado',
+        description: descricaoGuardado(guardado.valor_total_manual),
+      });
     },
     onError: (error: unknown) => {
       const { title, description } = contratoErrorMessage(error);
