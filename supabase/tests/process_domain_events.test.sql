@@ -83,8 +83,8 @@ select ok(
 );
 
 -- Cenário C: cooldown — segundo evento da mesma entidade dentro da janela não repete.
-insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, cooldown_minutos) values
-  ('00000000-0000-0000-0000-00000046c001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_cooldown', 'Regra Cooldown', 'teste.evento.c', 'notificacao', 60);
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, cooldown_minutos, acao_config) values
+  ('00000000-0000-0000-0000-00000046c001', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_cooldown', 'Regra Cooldown', 'teste.evento.c', 'notificacao', 60, '{"template_codigo":"teste.template","titulo":"Titulo de Teste"}'::jsonb);
 
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by) values
   ('00000000-0000-0000-0000-000000e84e01', '00000000-0000-0000-0000-0000000a0000', 'teste.evento.c', 'viaturas', '00000000-0000-0000-0000-00000ef70030', 'manual');
