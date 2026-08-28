@@ -8,118 +8,75 @@
 --     elsif operador = '!=' then ...
 --     end if;                         -- sem ELSE
 --
--- Um operador que não seja um destes dois não entra em ramo nenhum,
--- `v_matches` fica no `true` com que foi inicializado, e a condição passa
--- SEMPRE. Um filtro que parece funcionar e não filtra nada.
+-- Um operador fora destes dois não entra em ramo nenhum, `v_matches` fica no
+-- `true` inicial, e a condição passa SEMPRE. Um filtro que parece funcionar e
+-- não filtra nada.
 --
--- ── CENSO DE PRODUÇÃO, ANTES DE DECIDIR SEJA O QUE FOR ──────────────────────
+-- ── CENSO DE PRODUÇÃO, ANTES DE DECIDIR ─────────────────────────────────────
 --
---   95 regras, 5 organizações, todas activas, 19 event_types
---   condicoes: 95× objecto vazio `{}` — ZERO arrays, zero objectos não
---              vazios, zero nulos, zero escalares
+--   95 regras, 5 organizações, todas activas
+--   condicoes: 95× objecto vazio `{}` — zero arrays, zero escalares
 --   automation_logs: 0 ocorrências de `condicao_nao_satisfeita` em 17 325
 --
--- A segunda linha é a mais importante das duas: **nenhuma condição foi alguma
--- vez avaliada em produção**. O bug é latente, não activo, e não há um único
--- dado a migrar. Isso dá liberdade total para fixar a semântica correcta em
--- vez de a contorcer à volta de dados existentes — e obriga a usá-la bem,
--- porque não haverá segunda oportunidade tão barata.
+-- A última linha é a que decide: **nenhuma condição foi alguma vez avaliada em
+-- produção**. O bug é latente, não activo, e não há um único dado a migrar —
+-- o que dá liberdade para fixar a semântica certa em vez de a contorcer à
+-- volta de dados existentes.
 --
--- 58 das 95 regras já foram editadas pela UI, portanto o caminho de escrita
--- funciona; só nunca ninguém lá pôs uma condição.
---
--- ── UM SÓ AVALIADOR, CONFIRMADO ─────────────────────────────────────────────
---
--- `process_domain_events` é a única função em toda a base que lê `condicoes`.
--- Do lado do frontend, `catalogo.ts` já limita o seletor a `=` e `!=` com um
--- comentário que descreve exactamente este bug. Não há semânticas paralelas a
--- reconciliar — há uma a endurecer.
+-- `process_domain_events` é a única função da base que lê `condicoes`, e o
+-- frontend só edita e serializa. Não há semânticas paralelas a reconciliar.
 --
 -- ── FORMATO CANÓNICO ────────────────────────────────────────────────────────
 --
---   condicoes := array de objectos, cada um com EXACTAMENTE três chaves:
+--   array de objectos com EXACTAMENTE três chaves:
+--   { "campo": <string não vazia>, "operador": "=" | "!=", "valor": <escalar ou null> }
 --
---     { "campo": <string não vazia>, "operador": "=" | "!=", "valor": <escalar ou null> }
---
--- `valor` é jsonb, e o seu tipo JSON É o tipo. Foi considerado um campo `tipo`
--- separado, como o plano sugeria: seria redundante e, pior, poderia
--- contradizer o valor. Uma fonte de verdade só.
---
--- Chaves desconhecidas são RECUSADAS em vez de ignoradas. Se amanhã alguém
--- acrescentar `"tipo"` ou `"case_sensitive"` ao editor sem tocar no motor, a
--- escrita falha em vez de a opção ser silenciosamente deitada fora.
+-- `valor` é jsonb e o seu tipo JSON É o tipo — um campo `tipo` separado seria
+-- redundante e poderia contradizê-lo. Chaves desconhecidas são RECUSADAS, não
+-- ignoradas: se alguém acrescentar `"case_sensitive"` ao editor sem tocar no
+-- motor, a escrita falha em vez de a opção ser deitada fora em silêncio.
 --
 -- ── A REGRA DA COMPARABILIDADE ──────────────────────────────────────────────
 --
--- Dois valores JSON são comparáveis quando têm o MESMO `jsonb_typeof`. Se não
--- forem, nenhum operador é satisfeito.
+-- Dois valores comparam-se quando têm o MESMO `jsonb_typeof`. Se não, nenhum
+-- operador é satisfeito. É esta regra — e não uma lista de casos especiais —
+-- que fecha o bug do campo ausente:
 --
--- É esta regra, e não uma lista de casos especiais, que fecha o bug do campo
--- ausente que o plano marcou como obrigatório:
+--     campo ausente → `payload -> campo` é NULL de SQL → incomparável
+--                   → `=` false E `!=` false
 --
---     campo ausente  →  `payload -> campo` é NULL de SQL
---                    →  incomparável com o que quer que seja
---                    →  `=` false E `!=` false
+-- Antes, `!=` sobre um campo inexistente dava TRUE: comparava NULL com um
+-- texto e concluía «são diferentes». Uma regra para «só quando o estado não é
+-- rascunho» disparava em todos os eventos que nem têm estado.
 --
--- Antes, `!=` sobre um campo inexistente dava TRUE — comparava NULL com um
--- texto e concluía «são diferentes». Uma regra escrita para «só quando o
--- estado não é rascunho» disparava em todos os eventos que nem têm estado.
+-- Verificado no Postgres, não presumido:
 --
--- Verificado no próprio Postgres, não presumido:
---
---     '10'::jsonb   = '10.0'::jsonb   → true    números comparam-se como números
---     '1.5'::jsonb  = '1.50'::jsonb   → true
---     '10'::jsonb   = '"10"'::jsonb   → false   sem coerção mágica
---     'true'::jsonb = '"true"'::jsonb → false   a string "false" não é false
---     '"A"'::jsonb  = '"a"'::jsonb    → false   strings continuam sensíveis a maiúsculas
---     'null'::jsonb = 'null'::jsonb   → true    null explícito compara com null explícito
---
--- `null` explícito e campo ausente ficam distinguíveis, como o plano exige: o
--- primeiro tem `jsonb_typeof` = 'null', o segundo não existe.
+--     '10' = '10.0'     → true    números comparam como números
+--     '10' = '"10"'     → false   sem coerção mágica
+--     'true' = '"true"' → false   a string "false" não é false
+--     '"A"' = '"a"'     → false   sensível a maiúsculas, como antes
+--     'null' = 'null'   → true    e distinto de campo ausente
 --
 -- ── PORQUE SÓ `=` E `!=` ────────────────────────────────────────────────────
 --
--- `>`, `>=`, `<`, `<=`, `contains`, `in`, `is_null` foram avaliados e ficam de
--- fora. Não por dificuldade — a regra da comparabilidade dá-os quase de graça —
--- mas porque:
---
---   · não existe uma única condição em produção, portanto não há necessidade
---     demonstrada de nenhum deles;
---   · o editor só sabe emitir strings e só oferece estes dois, logo os
---     numéricos seriam inalcançáveis pela UI e só existiriam para escrita
---     directa na API;
---   · `is_null` obrigava a decidir se «ausente» conta como nulo — uma decisão
---     de produto que ninguém precisou de tomar ainda.
---
--- O registry é fechado e aditivo: acrescentar um operador é uma entrada em
--- `fn_operadores_suportados()` e um ramo no `case`. A lista é explícita
--- precisamente para que crescer seja uma decisão e não um acidente.
+-- `>`, `>=`, `<`, `<=`, `contains`, `in` e `is_null` foram avaliados e ficam
+-- de fora: não há uma única condição em produção; o editor só sabe emitir
+-- strings e só oferece estes dois, logo os numéricos seriam inalcançáveis pela
+-- UI; e `is_null` obrigava a decidir se «ausente» conta como nulo — decisão de
+-- produto que ninguém precisou de tomar. Acrescentar um é uma entrada no array
+-- `v_operadores` e um ramo no `case`.
 --
 -- ── FALHA FECHADA, EM DOIS SÍTIOS ───────────────────────────────────────────
 --
---   ESCRITA    configuração inválida é recusada pelo trigger, com a razão.
---   RUNTIME    se mesmo assim chegar uma, a REGRA é saltada e registada; o
---              evento segue e conclui.
+--   ESCRITA   configuração inválida é recusada pelo trigger, com a razão.
+--   RUNTIME   se mesmo assim chegar uma, a REGRA é saltada e registada; o
+--             evento segue e conclui.
 --
--- A segunda metade é o que impede uma regra mal configurada de se tornar um
--- poison event: `fn_avaliar_condicoes` nunca levanta excepção, devolve false.
--- Uma automação partida numa organização não pode gastar as tentativas de um
--- evento nem parar as outras regras que casam com ele.
+-- A segunda metade é o que impede uma regra partida de se tornar poison event:
+-- `fn_avaliar_condicoes` nunca levanta excepção, devolve false.
 -- ============================================================================
 
--- ── 1. O registry, explícito ────────────────────────────────────────────────
-create or replace function public.fn_operadores_suportados()
-returns text[]
-language sql
-immutable
-as $$
-  select array['=', '!=']::text[];
-$$;
-
-comment on function public.fn_operadores_suportados() is
-  'Lista fechada de operadores de condição. Qualquer outro é configuração inválida — nunca um match. Acrescentar aqui obriga a acrescentar o ramo em fn_avaliar_condicao.';
-
--- ── 2. Validação: uma condição de cada vez ──────────────────────────────────
+-- ── 1. Validação: uma condição de cada vez ──────────────────────────────────
 -- Devolve NULL quando é válida, ou a razão em texto quando não é. Texto e não
 -- boolean porque a mesma resposta serve para recusar a escrita com uma
 -- mensagem útil e para registar o motivo no log de execução.
@@ -129,7 +86,12 @@ language plpgsql
 immutable
 as $$
 declare
-  v_chaves text[];
+  -- O registry. Lista fechada: qualquer outro operador é configuração
+  -- inválida, nunca um match. Acrescentar aqui obriga a acrescentar o ramo
+  -- correspondente em `fn_avaliar_condicao` — e o `else` de lá garante que
+  -- esquecer-se disso falha fechado em vez de passar.
+  v_operadores constant text[] := array['=', '!='];
+  v_chaves     text[];
 begin
   if p_condicao is null or jsonb_typeof(p_condicao) <> 'object' then
     return 'cada condição tem de ser um objecto';
@@ -151,9 +113,9 @@ begin
     return 'operador tem de ser uma string';
   end if;
 
-  if not (p_condicao->>'operador' = any (public.fn_operadores_suportados())) then
+  if not (p_condicao->>'operador' = any (v_operadores)) then
     return 'operador "' || (p_condicao->>'operador') || '" não é suportado (suportados: '
-           || array_to_string(public.fn_operadores_suportados(), ', ') || ')';
+           || array_to_string(v_operadores, ', ') || ')';
   end if;
 
   -- Objectos e arrays ficam de fora enquanto não houver operador que saiba o
@@ -167,7 +129,7 @@ begin
 end;
 $$;
 
--- ── 3. Validação: a lista inteira ───────────────────────────────────────────
+-- ── 2. Validação: a lista inteira ───────────────────────────────────────────
 create or replace function public.fn_condicoes_invalidas(p_condicoes jsonb)
 returns text
 language plpgsql
@@ -199,7 +161,7 @@ begin
 end;
 $$;
 
--- ── 4. Avaliação de uma condição ────────────────────────────────────────────
+-- ── 3. Avaliação de uma condição ────────────────────────────────────────────
 -- NUNCA levanta excepção. É esta propriedade que impede uma regra partida de
 -- se tornar um poison event.
 create or replace function public.fn_avaliar_condicao(p_condicao jsonb, p_payload jsonb)
@@ -243,7 +205,7 @@ begin
 end;
 $$;
 
--- ── 5. Avaliação da lista — conjunção ───────────────────────────────────────
+-- ── 4. Avaliação da lista — conjunção ───────────────────────────────────────
 -- Todas verdadeiras. Sem OR, sem grupos, sem aninhamento: isso pertence ao
 -- Workflow Engine e não a esta fase.
 create or replace function public.fn_avaliar_condicoes(p_condicoes jsonb, p_payload jsonb)
@@ -274,7 +236,7 @@ $$;
 comment on function public.fn_avaliar_condicoes(jsonb, jsonb) is
   'Avalia as condições de uma regra contra o payload do evento. Conjunção. Nunca levanta excepção: configuração inválida devolve false, para que uma regra partida não consuma as tentativas do evento.';
 
--- ── 6. Normalizar a representação de "sem condições" ────────────────────────
+-- ── 5. Normalizar a representação de "sem condições" ────────────────────────
 --
 -- As 95 regras têm `{}`. Que isso significa «sem condições» não é suposição:
 -- é o default da coluna, o motor só alguma vez avaliou arrays, e o log
@@ -293,7 +255,7 @@ update public.automation_rules
 alter table public.automation_rules
   alter column condicoes set default '[]'::jsonb;
 
--- ── 7. O invariante estrutural, no banco ────────────────────────────────────
+-- ── 6. O invariante estrutural, no banco ────────────────────────────────────
 -- A UI não é fronteira de segurança. O CHECK apanha a forma; o trigger a
 -- seguir apanha o conteúdo.
 do $$
@@ -309,7 +271,7 @@ begin
   end if;
 end $$;
 
--- ── 8. Validação na escrita ─────────────────────────────────────────────────
+-- ── 7. Validação na escrita ─────────────────────────────────────────────────
 -- Mesmo idioma de `fn_validar_acao_config`, que já guarda a outra metade da
 -- configuração desta tabela: trigger, `ERRCODE = 'check_violation'`, e um
 -- HINT que diz de onde veio a recusa.
@@ -343,21 +305,17 @@ create trigger trg_validar_condicoes
   before insert or update on public.automation_rules
   for each row execute function public.fn_validar_condicoes();
 
--- ── 8b. O log tem de saber dizer "condicao_invalida" ────────────────────────
+-- ── 8. O log tem de saber dizer "condicao_invalida" ────────────────────────
 --
 -- `automation_logs.evento` é uma lista fechada de cinco valores. Sem esta
--- entrada, o insert do passo seguinte levanta `check_violation` — e essa
--- excepção sobe pelo laço das regras até ao `exception when others` do evento,
--- que o manda para `pending`.
+-- entrada, o insert do passo seguinte levanta `check_violation`, e essa
+-- excepção sobe pelo laço das regras até ao `exception when others` do evento.
 --
--- Resultado sem isto, medido pelo próprio teste desta fase: a regra partida
+-- Medido pelo teste desta fase antes de estar corrigido: a regra partida
 -- consumia uma tentativa do EVENTO, a regra válida do mesmo evento perdia o
--- seu run na reversão, e não ficava registo nenhum. Ou seja, a configuração
--- inválida tornava-se exactamente o poison event que esta fase existe para
--- impedir — pela mão do código que a devia impedir.
---
--- Fica aqui, e não junto ao resto da observabilidade, porque não é cosmética:
--- é uma pré-condição do passo 9.
+-- seu run na reversão, e não ficava registo nenhum. A configuração inválida
+-- tornava-se o poison event que esta fase existe para impedir — pela mão do
+-- código que a devia impedir. É pré-condição do passo 9, não observabilidade.
 alter table public.automation_logs drop constraint if exists automation_logs_evento_check;
 
 alter table public.automation_logs
@@ -373,20 +331,16 @@ alter table public.automation_logs
 
 -- ── 9. O casamento passa a usar o motor ─────────────────────────────────────
 --
--- Duas substituições em `process_domain_events`. A primeira troca as variáveis
--- do avaliador embutido pela que guarda o motivo da invalidez; a segunda troca
--- o avaliador inteiro por duas chamadas.
+-- Duas substituições em `process_domain_events`: a primeira troca as variáveis
+-- do avaliador embutido pela que guarda o motivo da invalidez, a segunda troca
+-- o avaliador por duas chamadas.
 --
--- A separação entre as duas chamadas é o ponto: um operador válido que não
--- casa e uma configuração partida deixam de ser o mesmo acontecimento no log.
--- «Porque é que a regra não disparou» passa a ter duas respostas distintas —
--- `condicao_nao_satisfeita` e `condicao_invalida` — e a segunda traz o motivo.
+-- Serem DUAS é o ponto: um operador válido que não casa e uma configuração
+-- partida deixam de ser o mesmo acontecimento no log. «Porque é que a regra
+-- não disparou» passa a ter duas respostas, e a segunda traz o motivo.
 --
--- O `continue` salta a REGRA, não o evento. As outras regras que casam com o
--- mesmo evento continuam a ser avaliadas e o evento conclui.
---
--- O detalhe do log leva o motivo e o id do evento, nunca o payload: o payload
--- transporta matrículas, nomes de clientes e NIFs.
+-- O `continue` salta a REGRA, não o evento. O detalhe do log leva o motivo e o
+-- id do evento, nunca o payload — que transporta matrículas, nomes e NIFs.
 do $$
 declare
   v_src   text;
@@ -450,14 +404,12 @@ grant execute on function public.process_domain_events(integer) to service_role;
 -- `authenticated` precisa delas: o trigger de validação é SECURITY INVOKER e
 -- corre com o papel de quem grava a regra, que é o administrador autenticado
 -- no editor.
-revoke all on function public.fn_operadores_suportados()              from public, anon;
 revoke all on function public.fn_condicao_invalida(jsonb)             from public, anon;
 revoke all on function public.fn_condicoes_invalidas(jsonb)           from public, anon;
 revoke all on function public.fn_avaliar_condicao(jsonb, jsonb)       from public, anon;
 revoke all on function public.fn_avaliar_condicoes(jsonb, jsonb)      from public, anon;
 revoke all on function public.fn_validar_condicoes()                  from public, anon, authenticated;
 
-grant execute on function public.fn_operadores_suportados()           to authenticated, service_role;
 grant execute on function public.fn_condicao_invalida(jsonb)          to authenticated, service_role;
 grant execute on function public.fn_condicoes_invalidas(jsonb)        to authenticated, service_role;
 grant execute on function public.fn_avaliar_condicao(jsonb, jsonb)    to authenticated, service_role;

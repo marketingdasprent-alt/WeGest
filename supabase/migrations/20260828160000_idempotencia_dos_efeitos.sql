@@ -7,52 +7,38 @@
 --   run reclamado → efeitos persistidos → worker morre antes de concluir
 --   → sweep devolve o run a pending → retry volta a persistir os efeitos
 --
--- Confirmado pelo teste `automation_queue.test.sql`, que documenta que um run
--- preso há mais de 15 minutos volta a `pending` em vez de morrer: bom para
--- falhas transitórias, e é precisamente o que repete efeitos já produzidos.
+-- Os três efeitos: `notifications` (pai do pipeline de email), `notificacoes`
+-- (o que o utilizador vê, dual-write legado) e `notification_queue`.
 --
--- ── OS TRÊS EFEITOS ─────────────────────────────────────────────────────────
+-- ── ESTADO DE PRODUÇÃO, ANTES DE CRIAR QUALQUER CONSTRAINT ──────────────────
 --
---   notifications       registo-pai do pipeline de email
---   notificacoes        o que o UTILIZADOR vê (dual-write legado)
---   notification_queue  a fila de envio
+--   notifications       67 075 linhas   0 conflitos (rule_run_id, destinatario_user_id)
+--   notification_queue   2 467 linhas   0 conflitos (notification_id, canal, destinatario)
+--   notificacoes        sem a coluna → nasce NULL, sem conflito possível
 --
--- ── ESTADO DE PRODUÇÃO, VERIFICADO ANTES DE CRIAR QUALQUER CONSTRAINT ───────
---
---   notifications       67 075 linhas   0 conflitos por (rule_run_id, destinatario_user_id)
---   notification_queue   2 467 linhas   0 conflitos por (notification_id, canal, destinatario)
---   notificacoes        coluna rule_run_id inexistente → nasce NULL, sem conflito possível
---
--- Nenhum dado é apagado nem alterado. As notificações históricas ficam com
+-- Nada é apagado nem alterado. As notificações históricas ficam com
 -- `rule_run_id` a NULL e o índice parcial ignora-as — não se inventa a
 -- posteriori a que run pertenceram.
 --
--- ── PORQUE O ÍNDICE E NÃO UM `SELECT ... IF NOT EXISTS` ─────────────────────
+-- ── O ÍNDICE, E NÃO UM `SELECT ... IF NOT EXISTS` ───────────────────────────
 --
---   worker A → SELECT (não existe)
---   worker B → SELECT (não existe)
---   worker A → INSERT
---   worker B → INSERT          ← dois efeitos
---
--- A garantia tem de estar no banco. O `on conflict` no executor serve para o
--- retry ser silencioso; quem impede mesmo a duplicação sob concorrência é o
+-- Dois workers fazem o SELECT, ambos não encontram nada, ambos inserem. A
+-- garantia tem de estar no banco: o `on conflict` do executor serve para o
+-- retry ser silencioso, mas quem impede a duplicação sob concorrência é o
 -- índice único.
 --
--- ── PORQUE `DO UPDATE` E NÃO `DO NOTHING` EM notifications ──────────────────
+-- ── `DO UPDATE` E NÃO `DO NOTHING` EM notifications ─────────────────────────
 --
--- Este é o ponto menos óbvio, e vem de um requisito de falha PARCIAL:
+-- O ponto menos óbvio, e vem da falha PARCIAL:
 --
 --   1.ª tentativa:  notifications ✓   notificacoes ✓   queue ✗ (morreu aqui)
 --   retry:          notifications —   notificacoes —   queue DEVE acontecer
 --
 -- Com `do nothing`, o `returning id into v_notification_id` devolveria NULL no
--- retry, e o insert na fila — que só corre quando há notificação deste run —
--- seria saltado. A fila ficaria para sempre sem a linha em falta.
---
--- `do update set rule_run_id = notifications.rule_run_id` é um no-op que
--- escreve a coluna com o valor que já tinha, apenas para o `returning`
--- devolver o id da linha existente. O retry recupera a identidade e completa o
--- que faltava.
+-- retry e o insert na fila — que só corre quando há notificação deste run —
+-- seria saltado. A fila ficaria para sempre incompleta. O `do update` escreve
+-- a coluna com o valor que já tinha, só para o `returning` devolver o id
+-- existente.
 -- ============================================================================
 
 -- ── 1. notificacoes ganha a identidade do run ───────────────────────────────
@@ -280,52 +266,30 @@ grant execute on function public.execute_automation_runs(integer) to service_rol
 
 -- ── 5. O emitter que duplica dentro da própria instrução ────────────────────
 --
--- Encontrado na segunda varredura, a de `select ... where not exists` seguido
--- de `insert` — o padrão que a Fase 2 existe para desconfiar.
+-- Encontrado na varredura de `select ... where not exists` seguido de
+-- `insert`. Os oito emitters usam a mesma forma; sete estão bem, porque o
+-- `select` devolve no máximo uma linha por entidade.
 --
--- Os oito emitters usam todos a mesma forma:
+-- `emit_reservas_sem_checkin_events` faz `join calendario_eventos`. Um
+-- contrato com DOIS eventos por realizar — uma recolha e uma devolução, que é
+-- a combinação normal — produz DUAS linhas para o mesmo `cr.id`, e o
+-- `not exists` não as vê uma à outra: é avaliado contra a tabela como estava
+-- antes da instrução. Uma instrução, dois eventos idênticos.
 --
---     insert into domain_events ... select ... where not exists (
---       select 1 from domain_events e where e.entity_id = ... and e.processed_at is null)
+-- PROVA: 36 grupos duplicados em 17 313 eventos, todos
+-- `contrato_renting.sem_checkin`, todos `emitted_by = 'cron'`, todos com
+-- intervalo de 00:00:00 — a mesma instrução, não dois ciclos sobrepostos.
+-- Nenhum por processar, portanto não há nada a limpar.
 --
--- Sete estão bem: o `select` devolve no máximo uma linha por entidade, e o
--- `not exists` só tem de a comparar com o que já lá está.
+-- Porque não se vê nas notificações ainda: o segundo run colide com
+-- `idx_automation_runs_one_active_per_rule_entity` e é engolido. Mas esse
+-- índice é PARCIAL (`pending`/`running`): se os dois eventos caírem em lotes
+-- diferentes e o primeiro run já tiver concluído, o segundo nasce e notifica.
+-- Com outro `rule_run_id`, portanto os índices da secção 2 não o apanham — a
+-- idempotência desta migração é por EXECUÇÃO, e aqui são mesmo duas.
 --
--- `emit_reservas_sem_checkin_events` é o oitavo, e faz
--- `join public.calendario_eventos ce`. Um contrato com DOIS eventos por
--- realizar — uma recolha e uma devolução, que é a combinação normal — produz
--- DUAS linhas para o mesmo `cr.id`. O `not exists` não as vê uma à outra: é
--- avaliado contra a tabela tal como estava antes da instrução, portanto ambas
--- passam. Uma instrução, dois eventos idênticos.
---
--- ── PROVA, NÃO SUSPEITA ─────────────────────────────────────────────────────
---
--- Em 17 313 eventos de produção há 36 grupos duplicados. TODOS são
--- `contrato_renting.sem_checkin`, todos com `emitted_by = 'cron'`, e todos com
--- intervalo de 00:00:00 entre as duas linhas — o mesmo instante ao microssegundo,
--- ou seja a mesma instrução, não dois ciclos sobrepostos. Entre 2026-07-29 e
--- 2026-08-28. Nenhum outro `event_type` aparece.
---
--- Nenhum está por processar (`processed_at is null` → 0 grupos), por isso não
--- há nada a limpar e nada é apagado aqui.
---
--- ── PORQUE ISTO NÃO SE VÊ NAS NOTIFICAÇÕES (AINDA) ──────────────────────────
---
--- O segundo evento cria um segundo `automation_runs`, que colide com
--- `idx_automation_runs_one_active_per_rule_entity` e é engolido pelo
--- `exception when unique_violation` de `process_domain_events`. Só que esse
--- índice é PARCIAL — `where status in ('pending','running')`. Se os dois
--- eventos caírem em lotes diferentes (`limit p_max`) e o primeiro run já tiver
--- concluído, o segundo nasce e notifica outra vez. Com um `rule_run_id`
--- diferente, portanto os índices da secção 2 não o apanham: a idempotência
--- desta migração é por EXECUÇÃO, e aqui as execuções são mesmo duas.
---
--- ── A CORREÇÃO ──────────────────────────────────────────────────────────────
---
--- O `join` só existe para filtrar, nunca para trazer colunas — nenhum `ce.*`
--- aparece no `select`. Passa a `exists`, que exprime a mesma condição sem
--- multiplicar linhas. O conjunto de contratos escolhidos é exactamente o
--- mesmo; o que muda é quantas vezes cada um aparece.
+-- A CORREÇÃO: o `join` só filtra, nunca traz colunas. Passa a `exists`, que
+-- exprime a mesma condição sem multiplicar linhas.
 create or replace function public.emit_reservas_sem_checkin_events()
 returns void
 language plpgsql

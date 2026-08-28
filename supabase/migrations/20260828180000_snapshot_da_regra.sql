@@ -8,92 +8,58 @@
 --   → worker reclama o run → o executor lê `automation_rules` AGORA
 --   → executa a definição NOVA
 --
--- Um run agendado muda de significado retroactivamente. Concretamente: uma
--- regra com `template_codigo = 'viatura.seguro_expirando'` e destinatário
--- «cargo Frota» gera um run às 09:00; às 09:03 o administrador troca o
--- destinatário para «cargo Direcção»; às 09:05 o cron executa o run e o email
--- vai para a Direcção. Ninguém pediu isso, e não há registo de que aconteceu.
+-- Concreto: uma regra com destinatário «cargo Frota» gera um run às 09:00; às
+-- 09:03 o administrador troca para «cargo Direcção»; às 09:05 o cron executa e
+-- o email vai para a Direcção. Ninguém pediu isso, e não fica registo.
 --
--- ── AUDITORIA: QUE CAMPOS SÃO A DEFINIÇÃO EXECUTÁVEL ────────────────────────
+-- ── QUE CAMPOS SÃO A DEFINIÇÃO EXECUTÁVEL ───────────────────────────────────
 --
--- Contagem de leituras no corpo vivo das duas funções do motor:
+-- Contado no corpo vivo, não presumido:
 --
---   process_domain_events (momento do CASAMENTO, cria o run)
---     ativo, org_id, event_type   selecção das regras candidatas
---     condicoes                   2 leituras
---     cooldown_minutos            2 leituras
---     id, org_id                  9 leituras (logs + insert do run)
+--   execute_automation_runs   acao_config (14), nome (4, fallback do titulo),
+--                             acao_tipo (1, porta da execução), event_type (1)
+--   process_domain_events     condicoes, cooldown_minutos, ativo, org_id,
+--                             event_type — só no casamento
 --
---   execute_automation_runs (momento da EXECUÇÃO)
---     acao_config                14 leituras
---     nome                        4 leituras (fallback do `titulo`)
---     acao_tipo                   1 leitura  (porta: <> 'notificacao' → só conclui)
---     event_type                  1 leitura  (deriva `v_tipo_legado`)
+-- Fora, por terem ZERO leituras no motor: codigo, descricao, criado_por,
+-- created_at e `prioridade` (o run tem a sua própria `priority`).
 --
--- Ficam DE FORA por não terem efeito nenhum na execução:
---   codigo, descricao, criado_por, created_at   — administrativos
---   prioridade                                  — 0 leituras no motor; o run
---                                                 tem a sua própria `priority`
+-- `condicoes` e `cooldown_minutos` entram na mesma, para auditoria — sem eles
+-- não se responde «que condições foram avaliadas para nascer este run». Não
+-- são lidos por ninguém em execução.
 --
--- `condicoes` e `cooldown_minutos` são consumidos APENAS no casamento, nunca
--- pelo executor. Entram no snapshot mesmo assim, para auditoria: sem eles não
--- se consegue responder «que condições foram avaliadas para nascer este run».
--- Não são lidos por ninguém em execução — a Fase 4 é que mexe no avaliador.
+-- ── SNAPSHOT JSONB NO RUN, NÃO TABELA DE VERSÕES ────────────────────────────
 --
--- ── DECISÃO: SNAPSHOT JSONB NO RUN, NÃO TABELA DE VERSÕES ───────────────────
---
--- Avaliadas as duas hipóteses do plano. Escolhido o snapshot, por quatro
--- razões concretas — nenhuma delas estética:
---
---   1. RETRY SAI DE GRAÇA. `automation_runs_fail` e `retry_failed_job` ambos
---      devolvem a MESMA linha de `automation_runs` a `pending`. Com a
---      definição na linha, o retry mantém-na sem uma única linha de código
---      extra. Com um ponteiro para uma versão, era preciso provar que ninguém
---      o volta a resolver — uma garantia por vigilância em vez de por
---      construção.
+--   1. O RETRY SAI DE GRAÇA. `automation_runs_fail` e `retry_failed_job`
+--      devolvem a MESMA linha a `pending`. Com a definição na linha, o retry
+--      mantém-na por construção; com um ponteiro, seria por vigilância.
 --
 --   2. A→B É ADITIVO, B→A É IMPOSSÍVEL. O `definition_hash` agrupa runs pela
---      mesma definição. Quando o workflow engine trouxer
---      `automation_rule_versions`, essa tabela DERIVA-SE de um `group by
---      definition_hash` sobre os runs já existentes. Ao contrário: criar hoje
---      a tabela de versões obrigava a inventar versões para os 7 782 runs
---      históricos, que ninguém conhece.
+--      mesma definição, portanto `automation_rule_versions` deriva-se um dia
+--      de um `group by`. Ao contrário obrigava a inventar versões para 7 782
+--      runs históricos.
 --
---   3. A MIGRAÇÃO É HONESTA POR CONSTRUÇÃO. Produção tem 7 778 `completed` e
---      4 `failed` — ZERO `pending`, ZERO `running`. Não há um único run activo
---      a precisar de snapshot fabricado.
+--   3. Produção tem 7 778 `completed`, 4 `failed` e zero activos — não há um
+--      único run a precisar de snapshot fabricado.
 --
---   4. UMA TABELA NOVA CUSTA MAIS DO QUE PARECE: políticas RLS próprias, um
---      caminho de publicação no editor, e uma decisão sobre estado
---      rascunho/publicado. Tudo isso está explicitamente fora do âmbito desta
---      fase.
+--   4. Uma tabela nova traz RLS própria, caminho de publicação no editor e
+--      decisão sobre rascunho/publicado — tudo fora do âmbito desta fase.
 --
--- Fica adiado de propósito: reutilização de versões entre runs, histórico
--- navegável de versões na UI, e draft/published. Nada disso é bloqueado por
--- esta escolha — o hash é a ponte.
+-- ── FORMATO ─────────────────────────────────────────────────────────────────
 --
--- ── FORMATO ────────────────────────────────────────────────────────────────
+--   { "schema_version": 1, "materializado_em": ..., "definition_hash": ...,
+--     "regra": { id, org_id, nome, event_type, acao_tipo, acao_config,
+--                condicoes, cooldown_minutos, ativo } }
 --
---   {
---     "schema_version": 1,
---     "materializado_em": "2026-08-28T09:00:00Z",
---     "definition_hash": "<md5 da definição canónica>",
---     "regra": { id, org_id, nome, event_type, acao_tipo,
---                acao_config, condicoes, cooldown_minutos, ativo }
---   }
+-- As chaves de `regra` são os nomes das colunas de `automation_rules`. Não é
+-- cosmética: é o que permite ao executor fazer `jsonb_populate_record` e
+-- manter as suas 20 leituras `v_rule.*` intactas, em vez de reescrever 277
+-- linhas.
 --
--- As chaves de `regra` são EXACTAMENTE os nomes das colunas de
--- `automation_rules`. Não é cosmética: é o que permite ao executor fazer
--- `jsonb_populate_record` e manter as suas 20 leituras `v_rule.*` intactas,
--- em vez de reescrever 277 linhas.
---
--- O hash cobre só `regra`, não o carimbo — dois runs da mesma versão da regra
--- têm o mesmo hash. A canonicalização é a do próprio `jsonb`, que ordena as
--- chaves e desduplica; `acao_config` e `condicoes` entram como jsonb, não como
--- texto, por isso herdam essa ordenação.
---
--- Não entra no snapshot nada do editor: posição, zoom, selecção, handles. O
--- canvas não é a fonte da verdade do executor.
+-- O hash cobre só `regra`, não o carimbo, portanto dois runs da mesma versão
+-- partilham-no. A canonicalização é a do próprio `jsonb`, que ordena chaves.
+-- Não entra nada do editor — posição, zoom, selecção. O canvas não é a fonte
+-- da verdade do executor.
 -- ============================================================================
 
 -- ── 1. A coluna ─────────────────────────────────────────────────────────────
@@ -140,17 +106,10 @@ $$;
 comment on function public.automation_rule_snapshot(public.automation_rules) is
   'Definição executável canónica de uma regra, com hash determinístico. Só os campos que o motor lê: codigo, descricao, prioridade e criado_por ficam de fora por não terem efeito na execução.';
 
-revoke all on function public.automation_rule_snapshot(public.automation_rules) from public, anon;
+-- Só o service_role. Os três chamadores — o casamento, o trigger e o
+-- reagendamento manual — são todos SECURITY DEFINER e correm como o dono.
+revoke all on function public.automation_rule_snapshot(public.automation_rules) from public, anon, authenticated;
 grant execute on function public.automation_rule_snapshot(public.automation_rules) to service_role;
-
--- `authenticated` também executa, e é preciso: a vista `automation_runs_definicao`
--- é `security_invoker`, portanto chama esta função com os privilégios de quem
--- consulta. Sem este grant a vista falhava com permissão negada.
---
--- Não abre nada: a função é uma transformação pura do seu argumento, e para lhe
--- passar uma regra é preciso primeiro conseguir lê-la — o que a RLS de
--- `automation_rules` já decide. `anon` continua de fora.
-grant execute on function public.automation_rule_snapshot(public.automation_rules) to authenticated;
 
 -- ── 3. O invariante, no banco ───────────────────────────────────────────────
 -- Isolamento multi-org é a invariante mais cara de perder deste sistema, e as
@@ -178,23 +137,25 @@ begin
   end if;
 end $$;
 
--- ── 3b. O congelamento é um invariante da tabela, não uma disciplina ────────
+-- ── 3b. Duas garantias diferentes, não a mesma duas vezes ───────────────────
 --
--- `process_domain_events` congela a definição explicitamente, e continua a
--- fazê-lo: usa o registo EXACTO que casou, que é estritamente mais correcto do
--- que qualquer releitura. Mas seria um erro deixar a garantia dependente de um
--- só chamador.
+-- Há dois sítios a escrever `rule_snapshot`, e vale a pena dizer porquê, senão
+-- parece redundância:
 --
--- Este trigger é a rede: qualquer run que nasça sem definição — de um caminho
--- futuro, de um teste, de uma correcção manual — recebe a definição da regra no
--- instante em que nasce, que é exactamente o que esta fase define como certo.
--- Só actua quando `rule_snapshot` vem a NULL, portanto nunca sobrepõe o que o
--- casamento congelou.
+--   O CASAMENTO congela usando o registo EXACTO que casou, no mesmo INSERT.
+--   Isso fecha uma janela que mais nada fecha: em READ COMMITTED cada
+--   instrução tem o seu snapshot, portanto uma releitura da regra — mesmo
+--   milissegundos depois — pode já ver uma edição commitada entretanto. Seria
+--   casar na v1 e executar a v2, que é precisamente o que esta fase existe
+--   para impedir.
 --
--- Efeito lateral desejado: os ficheiros pgTAP das fases anteriores criam runs
--- à mão e continuam a passar sem serem tocados. Alterar dezassete asserções
--- para acomodar esta fase seria adaptar o teste ao código — e perder-se-ia a
--- prova de que a Fase 2 continua verde.
+--   ESTE TRIGGER garante outra coisa: que não existe run sem definição, venha
+--   ele de onde vier. Só actua quando `rule_snapshot` vem a NULL, por isso
+--   nunca sobrepõe o que o casamento congelou.
+--
+-- Sem o trigger, um caminho futuro que crie um run sem snapshot produz um run
+-- que o executor recusa — em voz alta, mas recusa. Sem a chamada explícita,
+-- perde-se a exactidão. Tirar qualquer um deles perde alguma coisa.
 --
 -- Se a regra for de outra organização, o `where` não encontra nada, o snapshot
 -- fica a NULL e o executor recusa o run. Falha fechada, não aberta.
@@ -335,31 +296,24 @@ grant execute on function public.process_domain_events(integer) to service_role;
 
 -- ── 7. O executor deixa de ler a regra viva ─────────────────────────────────
 --
--- Esta é a substituição que define a fase. O bloco antigo era:
+-- A substituição que define a fase. O bloco antigo era a ÚNICA leitura de
+-- `automation_rules` no executor, e era ela que fazia o run mudar de
+-- significado:
 --
 --     select * into v_rule from public.automation_rules
 --      where id = v_run.rule_id and org_id = v_run.org_id;
---     if not found then ... fail ... end if;
 --
--- É a ÚNICA leitura de `automation_rules` no executor, e é ela que fazia o run
--- mudar de significado. Passa a `jsonb_populate_record` sobre o snapshot.
---
--- Porquê `jsonb_populate_record` e não vinte substituições: `v_rule` já está
--- declarado `public.automation_rules`, e as chaves do snapshot são os nomes
--- das colunas. Enchendo o registo, as 20 leituras `v_rule.acao_config`,
--- `v_rule.nome`, `v_rule.acao_tipo` e `v_rule.event_type` funcionam sem
--- tocar numa única delas. Uma substituição em vez de vinte é uma superfície de
--- erro vinte vezes menor — e a migração 20260826142309 já explicou, com
--- exemplos, o que custa mexer nesta função a mais do que o necessário.
+-- Passa a `jsonb_populate_record` sobre o snapshot. Como `v_rule` já está
+-- declarado `public.automation_rules` e as chaves do snapshot são os nomes das
+-- colunas, encher o registo mantém as 20 leituras `v_rule.*` a jusante
+-- intactas — uma substituição em vez de vinte, numa função que a migração
+-- 20260826142309 já documentou ser perigosa de mexer.
 --
 -- O guarda de organização não desaparece: sai do `where` e passa a asserção
--- sobre a definição congelada. Um run só corre com uma definição da sua org.
+-- sobre a definição congelada.
 --
--- Um run sem snapshot é recusado em voz alta em vez de cair para a regra viva.
--- Cair para a regra viva seria reintroduzir exactamente o problema que esta
--- fase fecha, e em silêncio. Em produção nenhum run activo está nessa
--- situação — o passo 4 tratou disso — e o passo 8 trata do único caminho que
--- consegue reanimar um run terminal.
+-- Um run sem snapshot é recusado em voz alta em vez de cair para a regra viva
+-- — cair seria reintroduzir o problema, e em silêncio.
 do $$
 declare
   v_src  text;
@@ -475,23 +429,20 @@ $function$;
 
 -- ── 9. Os dois leitores da regra viva em tempo de EFEITO ────────────────────
 --
--- A auditoria encontrou mais duas funções que decidem o destino de um run já
--- criado lendo a regra VIVA. Não estavam no executor, e por isso não apareciam
--- na descrição do problema — mas fazem exactamente a mesma coisa.
+-- Mais duas funções decidem o destino de um run já criado lendo a regra VIVA.
+-- Não estão no executor, e por isso não apareciam na descrição do problema:
 --
---   fn_notifications_so_quando_ha_email
---     trigger BEFORE INSERT que CANCELA a notificação quando a regra tem
---     `enviar_email = false`. Lê run → regra viva. Desligar o email numa regra
---     apagava as notificações de runs que já tinham nascido com ele ligado.
+--   fn_notifications_so_quando_ha_email  trigger BEFORE INSERT que CANCELA a
+--     notificação quando a regra tem `enviar_email = false`. Desligar o email
+--     apagava notificações de runs nascidos com ele ligado.
+--   enviar_digests_diarios               junta notificações → run → regra viva
+--     para saber se vão a digest.
 --
---   enviar_digests_diarios
---     junta notificações → run → regra viva para saber se vão a digest.
---
--- Ambas passam a preferir o snapshot. Ambas MANTÊM o recurso à regra viva
--- quando não há snapshot, e isso não é descuido: há 65 075 notificações de
--- runs terminais com `digest_enviado_em is null`, todas sem snapshot possível.
--- Tirar-lhes o recurso à regra viva mudava o comportamento de 65 mil linhas
--- para responder a um problema que elas não têm — já correram.
+-- Ambas passam a preferir o snapshot e ambas MANTÊM o recurso à regra viva
+-- quando não há: há 65 075 notificações de runs terminais com
+-- `digest_enviado_em is null`, todas sem snapshot possível. Tirar-lhes esse
+-- recurso mudava o comportamento de 65 mil linhas para responder a um problema
+-- que elas não têm — já correram.
 create or replace function public.fn_notifications_so_quando_ha_email()
 returns trigger
 language plpgsql
@@ -596,39 +547,3 @@ begin
 end;
 $function$;
 
--- ── 10. Observabilidade ─────────────────────────────────────────────────────
--- Para responder, sobre qualquer run: que regra, que versão, que configuração,
--- e quando foi materializada. Sem expor o payload do evento, que pode conter
--- dados do cliente.
-create or replace view public.automation_runs_definicao as
-select
-  r.id                                            as run_id,
-  r.org_id,
-  r.status,
-  r.created_at,
-  r.rule_id,
-  r.rule_snapshot->'regra'->>'nome'               as regra_nome,
-  r.rule_snapshot->'regra'->>'event_type'         as event_type,
-  r.rule_snapshot->'regra'->>'acao_tipo'          as acao_tipo,
-  r.rule_snapshot->>'definition_hash'             as definition_hash,
-  (r.rule_snapshot->>'materializado_em')::timestamptz as definicao_materializada_em,
-  (r.rule_snapshot->>'schema_version')::int       as snapshot_schema_version,
-  r.rule_snapshot->>'origem'                      as definicao_origem,
-  (r.rule_snapshot is null)                       as sem_definicao_congelada,
-  -- Verdadeiro quando a regra foi editada depois de este run nascer. É a
-  -- pergunta que motivou a fase inteira, agora respondível por SELECT.
-  (ar.id is not null
-     and r.rule_snapshot is not null
-     and public.automation_rule_snapshot(ar)->>'definition_hash'
-         is distinct from r.rule_snapshot->>'definition_hash') as regra_mudou_desde_o_run
-from public.automation_runs r
-left join public.automation_rules ar on ar.id = r.rule_id;
-
-comment on view public.automation_runs_definicao is
-  'Que definição cada run executou, e se a regra mudou desde então. Não expõe o payload do evento.';
-
--- A vista herda a RLS de `automation_runs` por ser security_invoker.
-alter view public.automation_runs_definicao set (security_invoker = on);
-
-revoke all on public.automation_runs_definicao from public, anon;
-grant select on public.automation_runs_definicao to authenticated, service_role;

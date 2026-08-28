@@ -31,7 +31,7 @@
 -- Com `teste.f3_snapshot` só a regra deste ficheiro casa. Efeito secundário:
 -- `v_tipo_legado` fica NULL, portanto não há escrita em `notificacoes` nem
 -- supressão por aviso em aberto. Nenhuma asserção depende disso — todas olham
--- para `notifications`, `automation_runs` e a vista.
+-- para `notifications` e `automation_runs`.
 --
 -- ── PORQUE VIATURAS DIFERENTES EM CADA CENÁRIO ──────────────────────────────
 --
@@ -50,7 +50,7 @@
 -- ============================================================
 
 begin;
-select plan(27);
+select plan(26);
 
 -- ── Cenário base ────────────────────────────────────────────
 insert into public.organizacoes (id, nome, codigo) values
@@ -353,14 +353,6 @@ select is(
       and r2.trigger_event_id = '00000000-0000-0000-0000-00000e0f3002'),
   false,
   'runs de versões diferentes têm definition_hash diferente'
-);
-
--- Observabilidade: a pergunta que motivou a fase, respondível por SELECT.
-select is(
-  (select regra_mudou_desde_o_run from public.automation_runs_definicao
-    where run_id = (select id from public.automation_runs where trigger_event_id = '00000000-0000-0000-0000-00000e0f3001')),
-  true,
-  'a vista diz que a regra mudou desde o run da v1'
 );
 
 -- ════════════════════════════════════════════════════════════

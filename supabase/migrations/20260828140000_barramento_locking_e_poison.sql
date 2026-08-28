@@ -2,65 +2,39 @@
 -- Barramento de eventos: locking concorrente e eventos envenenados
 -- ============================================================================
 --
--- Fase 1 do hardening do motor. Fecha os dois problemas mais graves que a
--- auditoria de 2026-08-27 identificou no barramento, ambos confirmados na
--- definição viva de `process_domain_events()`.
+-- DOIS PROBLEMAS, ambos confirmados na definição viva de
+-- `process_domain_events()`:
 --
--- ── PROBLEMA 1: sem locking ─────────────────────────────────────────────────
+--   1. O laço lia `where processed_at is null ... limit p_max` sem
+--      `for update skip locked`. `pg_cron` não serializa execuções do mesmo
+--      job, portanto dois ciclos sobrepostos processavam o mesmo lote.
 --
---     for v_event in
---       select * from public.domain_events
---       where processed_at is null
---       order by occurred_at asc
---       limit p_max
+--   2. A função não tinha bloco `exception`. Qualquer erro abortava a
+--      transacção toda: nenhum dos 50 eventos ficava marcado e, como a
+--      selecção é `order by occurred_at limit 50`, o ciclo seguinte escolhia
+--      o mesmo lote. Um evento envenenado bloqueava o barramento para sempre,
+--      sem alarme.
 --
--- Não há `for update skip locked`. Dois ciclos sobrepostos — e `pg_cron` NÃO
--- serializa execuções do mesmo job — lêem o mesmo lote e processam-no os dois.
--- O índice único de `automation_runs` absorve a duplicação enquanto o run está
--- pendente, mas não depois de concluído, e nada impede logs duplicados em
--- `automation_logs`.
+-- ── `processed_at` PASSA A SER TERMINAL, NÃO "COM SUCESSO" ──────────────────
 --
--- ── PROBLEMA 2: um evento mau leva o lote inteiro ───────────────────────────
+-- A decisão menos óbvia daqui. SETE emitters deduplicam com
+-- `processed_at is null`. Um evento morto na dead-letter com `processed_at` a
+-- NULL continuaria a parecer pendente, e esses emitters nunca mais emitiriam
+-- nada para aquela entidade — trocar um bloqueio visível por um silêncio.
 --
--- A função não tem bloco `exception`. Só o insert de `automation_runs` tem, e
--- apenas para `unique_violation`. Qualquer outro erro aborta a transação toda:
--- nenhum dos 50 eventos fica marcado, e como a selecção é
--- `order by occurred_at asc limit 50`, o ciclo seguinte escolhe exactamente o
--- mesmo lote. Um evento envenenado bloqueia o barramento para sempre, sem
--- alarme nenhum.
---
--- ── PORQUE `processed_at` PASSA A SER "TERMINAL" E NÃO "COM SUCESSO" ────────
---
--- Esta é a decisão menos óbvia deste ficheiro, e vem de um facto do sistema:
--- SETE emitters deduplicam com `processed_at is null` — emit_expiry_events,
--- emit_candidaturas_paradas_events, emit_contrato_renting_renovacao_events,
--- emit_faturas_nao_enviadas_events, emit_motoristas_ficha_incompleta_events,
--- emit_reservas_sem_checkin_events e emit_tickets_atrasados_events.
---
--- Se um evento morresse na dead-letter com `processed_at` a NULL, esses
--- emitters continuariam a vê-lo como pendente e **nunca mais emitiriam um
--- evento para aquela entidade**. O evento envenenado deixaria de bloquear o
--- lote para passar a calar a entidade em silêncio — trocar um problema por um
--- pior.
---
--- Por isso `processed_at` é carimbado nos DOIS estados terminais. O que
--- distingue sucesso de morte é a coluna `status` nova. Enquanto o evento ainda
--- vai ser tentado outra vez (pending com backoff), `processed_at` fica NULL e a
--- deduplicação continua a suprimir — que é o correcto: o evento ainda está
--- vivo.
+-- Por isso carimba-se nos dois estados terminais, e é o `status` novo que
+-- distingue sucesso de morte. Enquanto o evento ainda vai ser tentado
+-- (`pending` com backoff) fica NULL, que é o correcto: ainda está vivo.
 --
 -- Efeito lateral aceite: `useAutomationQueueOps.ts` conta processados por
--- `processed_at !== null` e passa a incluir os que morreram. É defensável — o
--- barramento acabou mesmo de os tratar — e as falhas têm o seu próprio sítio,
--- o separador "Falhas" alimentado por `failed_jobs`.
+-- `processed_at !== null` e passa a incluir os mortos. As falhas têm o seu
+-- próprio separador, alimentado por `failed_jobs`.
 --
--- ── O QUE ESTE FICHEIRO NÃO MUDA ────────────────────────────────────────────
+-- ── O QUE NÃO MUDA ──────────────────────────────────────────────────────────
 --
--- A lógica de casamento de regras, condições, supressão por aviso em aberto e
--- cooldown é copiada tal e qual da função viva. Este ficheiro muda COMO os
--- eventos são reclamados e o que acontece quando um falha — não o que o motor
--- decide. Reescrever as duas coisas ao mesmo tempo tornaria impossível saber
--- qual delas partiu alguma coisa.
+-- Casamento de regras, condições, supressão e cooldown são copiados tal e
+-- qual. Este ficheiro muda COMO os eventos são reclamados e o que acontece
+-- quando um falha — não o que o motor decide.
 -- ============================================================================
 
 -- ── Estado por evento ───────────────────────────────────────────────────────

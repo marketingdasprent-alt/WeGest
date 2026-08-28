@@ -45,10 +45,17 @@ select plan(23);
 -- ════════════════════════════════════════════════════════════
 -- O registry é fechado
 -- ════════════════════════════════════════════════════════════
+-- O efeito da lista fechada, não a lista. Se um operador for acrescentado ao
+-- registry sem o ramo correspondente no avaliador, isto continua verde e a
+-- tabela de verdade é que acusa — o que é a ordem certa: primeiro sabe-se que
+-- só estes dois são aceites, depois que fazem o que dizem.
 select is(
-  public.fn_operadores_suportados(),
-  array['=', '!=']::text[],
-  'o registry de operadores é exactamente { =, != }'
+  (select string_agg(op, ',' order by op)
+     from (values ('='), ('!='), ('>'), ('<'), ('like'), ('in'), ('==')) t(op)
+    where public.fn_condicao_invalida(
+            jsonb_build_object('campo', 'x', 'operador', op, 'valor', 'y')) is null),
+  '!=,=',
+  'de sete operadores plausíveis, só = e != são aceites'
 );
 
 -- ════════════════════════════════════════════════════════════
