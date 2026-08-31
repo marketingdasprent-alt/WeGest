@@ -56,6 +56,14 @@ const CATALOGO: AutomationCatalogo = {
       recurso: 'tickets_gerir',
       valores: ['pendente', 'aberto', 'em_andamento', 'aguardando', 'resolvido', 'fechado'],
     },
+    // Descritiva, não uma acção interna: entidade null, sem campos_permitidos
+    // nem valores. Migration 20260901120000.
+    'notificacao.email': {
+      label: 'Enviar email',
+      modulo: 'Notificações',
+      entidade: null,
+      recurso: 'automacoes',
+    },
   },
 };
 
@@ -116,7 +124,22 @@ describe('accoesParaEvento', () => {
   it('evento desconhecido devolve tudo em vez de nada', () => {
     // Filtrar por informação que não existe esconderia acções válidas. A
     // autoridade final continua a ser o validador do servidor.
-    expect(accoesParaEvento(CATALOGO, 'viatura.iuc_a_pagar')).toHaveLength(3);
+    expect(accoesParaEvento(CATALOGO, 'viatura.iuc_a_pagar')).toHaveLength(4);
+  });
+
+  it('uma acção com entidade null nunca aparece para um evento concreto', () => {
+    // `notificacao.email` não opera sobre uma entidade do domínio — não é
+    // uma acção interna, e não deve competir com elas nessa lista, mesmo
+    // quando o "devolve tudo" do evento desconhecido a incluiria.
+    const eventos = [
+      'viatura.seguro_expirando',
+      'motorista.ficha_incompleta',
+      'assistencia_ticket.aberto_demasiado_tempo',
+    ];
+    for (const evento of eventos) {
+      const ids = accoesParaEvento(CATALOGO, evento).map(([id]) => id);
+      expect(ids).not.toContain('notificacao.email');
+    }
   });
 
   it('sem catálogo carregado não há acções — fail closed', () => {

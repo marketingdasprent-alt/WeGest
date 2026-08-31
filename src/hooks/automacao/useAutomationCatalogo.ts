@@ -33,9 +33,21 @@ export interface EventoCatalogo {
 export interface AccaoCatalogo {
   label: string;
   modulo: string;
-  /** Tabela sobre que a acção opera. O motor recusa se não bater com a do run. */
-  entidade: string;
-  /** Recurso do RBAC que o utilizador precisa para configurar esta acção. */
+  /**
+   * Tabela sobre que a acção opera. O motor recusa se não bater com a do run
+   * — mas só para automações INTERNAS. A acção de email não opera sobre uma
+   * entidade do domínio (dirige-se a pessoas, não a registos) e vem com
+   * `entidade: null`; `accoesParaEvento` já trata isso como "não aparece na
+   * lista de acções internas", que é o comportamento certo.
+   */
+  entidade: string | null;
+  /**
+   * Recurso do RBAC associado à acção. Só é EXIGIDO pelo validador do
+   * servidor nas automações internas (`can_edit(user, recurso)`); para
+   * notificação e email é apenas descritivo — quem escreve qualquer
+   * `automation_rules` já passa pela RLS de `can_edit(user, 'automacoes')`,
+   * independentemente do tipo de acção.
+   */
   recurso: string;
   /** Presente nas acções que escrevem num campo. */
   campos_permitidos?: string[];
