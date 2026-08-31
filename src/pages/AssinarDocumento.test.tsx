@@ -163,47 +163,39 @@ describe('AssinarDocumento', () => {
     expect(screen.queryByText(/prazo/i)).not.toBeInTheDocument();
   });
 
-  it('quem ja assinou ve a data, o que assinou, e pode assinar de novo', async () => {
+  // O link e de UMA utilizacao: depois de assinado, aquele link acabou. Quem
+  // assinou continua a poder descarregar o que assinou, e para assinar outra vez
+  // e preciso um pedido novo, enviado de dentro.
+  it('um link ja usado mostra a prova e nao deixa assinar outra vez', async () => {
     const carregar = vi.fn().mockResolvedValue({
       estado: 'assinado',
       documentoNome: 'Contrato de Aluguer',
-      papel: 'cliente',
-      signatarioNome: 'Ana Reis',
-      snapshot: snapshotDeTeste,
       assinadoEm: '2026-08-20T10:00:00Z',
       urlAssinado: 'https://exemplo.pt/assinado.pdf',
-      assinaturasTotal: 1,
     });
 
     renderPagina({ carregar, submeter: vi.fn() });
 
-    // O texto e a data ficam em nos diferentes (a data vem de interpolacao),
-    // por isso procura-se a frase e confirma-se a data no mesmo paragrafo.
-    const aviso = await screen.findByText(/assinou este documento/i);
-    expect(aviso.textContent).toMatch(/20\/08\/2026/);
-    expect(screen.getByRole('link', { name: /ver o que assinou/i })).toHaveAttribute(
+    expect(await screen.findByText(/assinado a 20\/08\/2026/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /descarregar/i })).toHaveAttribute(
       'href',
       'https://exemplo.pt/assinado.pdf'
     );
-    // O essencial: continua a poder assinar.
-    expect(screen.getByRole('button', { name: /^assinar/i })).toBeInTheDocument();
+    // O essencial deste modelo: nao ha onde assinar.
+    expect(screen.queryByRole('button', { name: /^assinar/i })).not.toBeInTheDocument();
   });
 
-  it('diz quantas assinaturas ja houve quando foi assinado mais do que uma vez', async () => {
+  it('diz a quem ja assinou que precisa de um pedido novo', async () => {
     const carregar = vi.fn().mockResolvedValue({
       estado: 'assinado',
       documentoNome: 'Contrato de Aluguer',
-      papel: 'cliente',
-      signatarioNome: 'Ana Reis',
-      snapshot: snapshotDeTeste,
       assinadoEm: '2026-08-20T10:00:00Z',
       urlAssinado: null,
-      assinaturasTotal: 3,
     });
 
     renderPagina({ carregar, submeter: vi.fn() });
 
-    expect(await screen.findByText(/3 assinaturas/i)).toBeInTheDocument();
+    expect(await screen.findByText(/peça um novo pedido/i)).toBeInTheDocument();
   });
 
   it('avisa quando o link não existe', async () => {

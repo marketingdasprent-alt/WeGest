@@ -26,9 +26,8 @@ function json(body: unknown, status = 200): Response {
 /**
  * Cópia da regra testada em src/lib/assinaturas.ts.
  *
- * O link NÃO expira e aceita assinaturas repetidas: `assinado` é informação
- * sobre a última, não uma porta fechada. Quem abre o link volta sempre a poder
- * assinar, e vale a última.
+ * O link NÃO expira, mas é de UMA utilização: o tempo não o fecha, a assinatura
+ * fecha. Para assinar outra vez, quem trata do contrato envia um pedido novo.
  */
 function estadoDoToken(pedido: { assinado_em: string | null }): 'valido' | 'assinado' {
   return pedido.assinado_em ? 'assinado' : 'valido';
@@ -49,7 +48,7 @@ serve(async (req) => {
     const { data: pedido, error } = await supabase
       .from('documento_assinatura_pedidos')
       .select(
-        'id, papel, signatario_nome, documento_nome, snapshot_path, assinado_em, documento_assinado_path, assinaturas_total'
+        'id, papel, signatario_nome, documento_nome, snapshot_path, assinado_em, documento_assinado_path'
       )
       .eq('id', token)
       .maybeSingle();
@@ -61,18 +60,28 @@ serve(async (req) => {
 
     const estado = estadoDoToken(pedido);
 
-    // Quem ja assinou tem direito a rever o que assinou — mas a fotografia vai
-    // sempre, porque tambem pode voltar a assinar.
-    let urlAssinado: string | null = null;
-    if (pedido.documento_assinado_path) {
-      const { data } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(pedido.documento_assinado_path, SEGUNDOS_LINK_ASSINADO);
-      urlAssinado = data?.signedUrl ?? null;
+    // Link já usado: devolve a prova e NÃO devolve a fotografia. Sem fotografia
+    // não há como desenhar o documento outra vez, que é o que torna o link
+    // realmente de uma utilização e não apenas de uma por convenção.
+    if (estado === 'assinado') {
+      let urlAssinado: string | null = null;
+      if (pedido.documento_assinado_path) {
+        const { data } = await supabase.storage
+          .from(BUCKET)
+          .createSignedUrl(pedido.documento_assinado_path, SEGUNDOS_LINK_ASSINADO);
+        urlAssinado = data?.signedUrl ?? null;
+      }
+
+      return json({
+        estado,
+        documentoNome: pedido.documento_nome,
+        assinadoEm: pedido.assinado_em,
+        urlAssinado,
+      });
     }
 
-    // Válido: vai a fotografia, que é o que permite desenhar o documento outra
-    // vez no browser de quem assina.
+    // Por assinar: vai a fotografia, que é o que permite desenhar o documento
+    // outra vez no browser de quem assina.
     const { data: ficheiro, error: erroSnap } = await supabase.storage
       .from(BUCKET)
       .download(pedido.snapshot_path);
@@ -88,9 +97,6 @@ serve(async (req) => {
       papel: pedido.papel,
       signatarioNome: pedido.signatario_nome,
       snapshot: JSON.parse(await ficheiro.text()),
-      assinadoEm: pedido.assinado_em,
-      urlAssinado,
-      assinaturasTotal: pedido.assinaturas_total ?? 0,
     });
   } catch (erro) {
     console.error('Erro assinatura-por-token:', erro);

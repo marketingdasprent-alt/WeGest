@@ -57,16 +57,22 @@ serve(async (req) => {
     const { data: pedido, error } = await supabase
       .from('documento_assinatura_pedidos')
       .select(
-        'id, org_id, signatario_nome, signatario_email, documento_nome, assinado_em, assinaturas_total, created_by'
+        'id, org_id, signatario_nome, signatario_email, documento_nome, assinado_em, created_by'
       )
       .eq('id', token)
       .maybeSingle();
 
     if (error || !pedido) return json({ error: 'Pedido não encontrado.' }, 404);
 
-    // Nao ha nada a recusar: o link nao expira e assinar de novo e permitido.
-    // Vale sempre a ultima assinatura, e os ficheiros sao substituidos (o
-    // upload ja usa upsert), por isso nao ficam copias soltas por tras.
+    // O link é de UMA utilização. Não há prazo a verificar — o tempo não o
+    // fecha — mas uma assinatura fecha-o. Para assinar outra vez, quem trata
+    // do contrato envia um pedido novo, com link novo.
+    if (pedido.assinado_em) {
+      return json(
+        { error: 'Este link já foi usado. Peça um novo pedido de assinatura.', estado: 'assinado' },
+        409
+      );
+    }
 
     // 1. Guardar. Só depois de os dois ficheiros estarem no sítio é que se
     //    marca o pedido como assinado.
@@ -98,25 +104,16 @@ serve(async (req) => {
         assinado_em: assinadoEm.toISOString(),
         assinatura_path: assinaturaPath,
         documento_assinado_path: documentoPath,
-        // Conta quantas vezes foi assinado. `assinado_em` guarda a ultima; este
-        // numero e o que permite dizer no ecra "3 assinaturas, a ultima a ...".
-        assinaturas_total: (pedido.assinaturas_total ?? 0) + 1,
         assinado_ip:
           req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
           req.headers.get('cf-connecting-ip'),
         assinado_user_agent: req.headers.get('user-agent'),
       })
-      .eq('id', pedido.id);
-    // Já não há `.is('assinado_em', null)` aqui. Essa guarda existia para a
-    // segunda submissão não sobrepor a primeira — e agora sobrepor é
-    // exactamente o que se quer: vale a última assinatura. Mantida, a segunda
-    // assinatura não gravava linha nenhuma e a função devolvia sucesso na
-    // mesma, o pior dos dois mundos.
-    //
-    // O que se perde: em dois envios ao mesmo tempo (duplo clique), ambos leem
-    // o mesmo `assinaturas_total` e o contador pode ficar uma unidade abaixo.
-    // O documento e a data ficam correctos de qualquer forma, que é o que
-    // prova a assinatura.
+      .eq('id', pedido.id)
+      // Compare-and-swap: duas submissões ao mesmo tempo (duplo clique, retry)
+      // e só uma escreve. A outra não encontra linha por assinar e a guarda
+      // acima já lhe respondeu — a prova da primeira nunca é sobreposta.
+      .is('assinado_em', null);
 
     if (erroUpdate) throw new Error(`Falha ao registar a assinatura: ${erroUpdate.message}`);
 

@@ -93,18 +93,31 @@ export function AssinaturasPedidosList({
                 </Badge>
               )}
 
-              {/* Sem "prazo terminado": o link não expira e aceita assinar de
-                  novo. Quando houve mais do que uma, vale a última — e diz-se
-                  quantas foram, senão o número de cima parecia contradizer-se. */}
+              {/* Sem "prazo terminado": o link não expira. O que o fecha é ser
+                  usado — e por isso um pedido antigo por assinar continua
+                  simplesmente por assinar. */}
               {assinado ? (
-                <Badge variant="outline" className="gap-1 border-emerald-500/40">
-                  <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                <Badge
+                  variant="outline"
+                  className={pedido.substituida ? 'gap-1' : 'gap-1 border-emerald-500/40'}
+                >
+                  <CheckCircle2
+                    className={
+                      pedido.substituida
+                        ? 'h-3 w-3 text-muted-foreground'
+                        : 'h-3 w-3 text-emerald-600'
+                    }
+                  />
                   Assinado a {data(pedido.assinado_em as string)}
-                  {pedido.assinaturas_total > 1 && ` · ${pedido.assinaturas_total}.ª assinatura`}
                 </Badge>
               ) : (
                 <Badge variant="secondary">Por assinar</Badge>
               )}
+
+              {/* Houve uma assinatura mais recente do mesmo documento, por um
+                  pedido posterior. Esta continua a poder ver-se, mas já não é a
+                  que vale. */}
+              {pedido.substituida && <Badge variant="outline">Substituída</Badge>}
 
               {/* O original está sempre disponível, assinado ou não: é o que
                   foi enviado, e serve para conferir e para imprimir. */}

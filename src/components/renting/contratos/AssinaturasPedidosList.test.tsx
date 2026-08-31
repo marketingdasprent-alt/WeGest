@@ -22,7 +22,7 @@ const porAssinar: AssinaturaPedido = {
   created_at: '2026-08-25T09:00:00Z',
   expires_at: '2026-09-24T09:00:00Z',
   assinado_em: null,
-  assinaturas_total: 0,
+  substituida: false,
   documento_path: 'assinaturas/2026-08-25/documento.pdf',
   documento_assinado_path: null,
   de_versao_anterior: false,
@@ -66,21 +66,40 @@ describe('AssinaturasPedidosList', () => {
     expect(screen.queryByText(/prazo/i)).toBeNull();
   });
 
-  it('diz quantas assinaturas houve quando foi assinado mais do que uma vez', () => {
+  it('marca como substituida a assinatura que um pedido posterior tornou antiga', () => {
     render(
       <AssinaturasPedidosList
         pedidos={[
           {
             ...porAssinar,
+            id: 'antiga',
             assinado_em: '2026-08-26T10:00:00Z',
-            assinaturas_total: 3,
+            substituida: true,
             documento_assinado_path: 'x/documento-assinado.pdf',
           },
         ]}
       />
     );
 
-    expect(screen.getByText(/3\.ª assinatura/)).toBeInTheDocument();
+    expect(screen.getByText('Substituída')).toBeInTheDocument();
+  });
+
+  it('a assinatura que vale nao aparece marcada', () => {
+    render(
+      <AssinaturasPedidosList
+        pedidos={[
+          {
+            ...porAssinar,
+            id: 'actual',
+            assinado_em: '2026-08-27T10:00:00Z',
+            substituida: false,
+            documento_assinado_path: 'x/documento-assinado.pdf',
+          },
+        ]}
+      />
+    );
+
+    expect(screen.queryByText('Substituída')).toBeNull();
   });
 
   it('não ocupa o ecrã quando não há pedidos', () => {
@@ -142,7 +161,7 @@ describe('AssinaturasPedidosList — pedidos de versões anteriores', () => {
     created_at: '2026-08-28T14:31:00Z',
     expires_at: '2026-09-27T14:31:00Z',
     assinado_em: '2026-08-28T14:32:00Z',
-    assinaturas_total: 1,
+    substituida: false,
     documento_path: 'assinaturas/2026-08-28/documento.pdf',
     documento_assinado_path: 'contratos/841/documento-assinado.pdf',
     de_versao_anterior: true,

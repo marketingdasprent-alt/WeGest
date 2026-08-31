@@ -99,7 +99,7 @@ export function AssinarDocumento({
   }, []);
 
   const aoAssinar = useCallback(async () => {
-    if (!pedido || !assinatura) return;
+    if (!pedido || pedido.estado !== 'valido' || !assinatura) return;
 
     setAEnviar(true);
     setErroSubmeter(null);
@@ -158,16 +158,28 @@ export function AssinarDocumento({
     );
   }
 
-  // Acabou de assinar agora: ecrã de confirmação. Não há caminho de "expirado"
-  // — o link não tem prazo.
-  if (concluido) {
+  // Não há caminho de "expirado": o link não tem prazo. Há caminho de "já
+  // assinado", porque o link é de uma só utilização.
+  if (pedido.estado === 'assinado' || concluido) {
+    const assinadoEm = pedido.estado === 'assinado' ? pedido.assinadoEm : new Date().toISOString();
+    const url = pedido.estado === 'assinado' ? pedido.urlAssinado : null;
+
     return (
       <Moldura>
         <Estado
           icone={<CheckCircle2 className="h-10 w-10 text-emerald-600" />}
-          titulo={`Assinado a ${dataLegivel(new Date().toISOString())}`}
-          texto="O documento assinado foi enviado para o seu email. Guarde essa cópia. Se precisar de corrigir, pode voltar a abrir este link e assinar de novo."
+          titulo={`Assinado a ${dataLegivel(assinadoEm)}`}
+          texto="O documento assinado foi enviado para o seu email. Guarde essa cópia. Este link já foi usado — se for preciso assinar de novo, peça um novo pedido a quem lhe enviou o documento."
         />
+        {url && (
+          <div className="mt-4 flex justify-center">
+            <Button asChild variant="outline">
+              <a href={url} target="_blank" rel="noreferrer">
+                Descarregar o documento assinado
+              </a>
+            </Button>
+          </div>
+        )}
       </Moldura>
     );
   }
@@ -184,28 +196,6 @@ export function AssinarDocumento({
             {pedido.signatarioNome}, o documento segue em anexo no email que recebeu. Assine abaixo
             para o devolver assinado.
           </p>
-
-          {/* Já assinou antes: diz-lho e deixa-o assinar de novo. Vale a
-              última — é para isso que o link não expira. */}
-          {pedido.estado === 'assinado' && pedido.assinadoEm && (
-            <div className="mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm">
-              <p className="flex items-center gap-2 font-medium">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                Já assinou este documento a {dataLegivel(pedido.assinadoEm)}
-                {pedido.assinaturasTotal > 1 && ` (${pedido.assinaturasTotal} assinaturas)`}
-              </p>
-              <p className="mt-1 text-muted-foreground">
-                Pode assinar de novo se precisar de corrigir — fica a valer a última.
-              </p>
-              {pedido.urlAssinado && (
-                <Button asChild variant="outline" size="sm" className="mt-2">
-                  <a href={pedido.urlAssinado} target="_blank" rel="noreferrer">
-                    Ver o que assinou
-                  </a>
-                </Button>
-              )}
-            </div>
-          )}
         </CardHeader>
 
         <CardContent className="space-y-4">

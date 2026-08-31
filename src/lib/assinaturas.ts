@@ -73,18 +73,18 @@ export function agruparPorPessoa(lista: Signatario[]): string[] {
 export type EstadoToken = 'valido' | 'assinado';
 
 /**
- * O link NÃO expira, e aceita assinaturas repetidas.
+ * O link NÃO expira, mas é de UMA utilização.
  *
- * `assinado` diz apenas que já existe uma assinatura — não fecha nada. Quem
- * abre o link volta sempre a poder assinar, e vale a última: é para isso que
- * serve reenviar o mesmo link quando o documento tem de ser assinado outra vez.
+ * Duas coisas separadas, e a distinção é o desenho todo: o tempo não fecha o
+ * link — um pedido de há três meses continua a poder ser assinado — mas a
+ * assinatura fecha-o. Depois de assinado, aquele link acabou.
  *
- * O prazo (`expires_at`) deixou de ser aplicado. A coluna fica como registo de
- * quando o pedido foi feito, mas nenhuma decisão depende dela — antes, um link
- * caducado obrigava a criar um pedido novo só para corrigir um traço mal dado.
+ * Repetir faz-se do outro lado: quem trata do contrato envia um pedido NOVO,
+ * que gera um link novo, também sem prazo e também de uma só utilização. Quando
+ * esse for assinado, é essa a assinatura que vale — a anterior fica história.
  *
- * O que isto significa, dito por extenso: quem tiver o link pode voltar a
- * assinar mais tarde, e essa assinatura substitui a anterior.
+ * Assim, um link que corra mundo não dá a ninguém o poder de reassinar o
+ * documento mais tarde; para haver assinatura nova tem de partir de dentro.
  */
 export function estadoDoToken(pedido: { assinado_em: string | null }): EstadoToken {
   return pedido.assinado_em ? 'assinado' : 'valido';

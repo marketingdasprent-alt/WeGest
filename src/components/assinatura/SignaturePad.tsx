@@ -129,6 +129,12 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
       } catch {
         /* pointer já libertado */
       }
+      // Segundo aviso, e é este que interessa ao valor. O do `pointerDown`
+      // serve para o botão ligar logo, mas quem o recebe fotografa o canvas
+      // nesse instante — quando só lá está o ponto inicial. Sem este, o que
+      // era submetido ia sempre um traço atrasado: desenhava-se, e só o traço
+      // SEGUINTE é que capturava o anterior.
+      onChange?.(false);
     };
 
     const doClear = () => {

@@ -11,29 +11,29 @@ import type { PapelSignatario } from '@/lib/assinaturas';
  * corre para gente sem sessão e não pode ter acesso a tabela nenhuma.
  */
 
-/**
- * O link não expira e aceita assinaturas repetidas, por isso a resposta é
- * sempre a mesma forma: a fotografia para desenhar o documento, mais o registo
- * da última assinatura quando já houve alguma.
- *
- * `estado` distingue "nunca assinado" de "já assinado", mas nenhum dos dois
- * fecha a porta — vale sempre a última assinatura.
- */
-export interface PedidoParaAssinar {
-  estado: 'valido' | 'assinado';
+/** Link por usar: vai a fotografia, que é o que permite desenhar o documento. */
+export interface PedidoValido {
+  estado: 'valido';
   documentoNome: string;
   papel: PapelSignatario;
   signatarioNome: string;
   snapshot: DocumentoSnapshot;
-  /** Última assinatura, se já houve alguma. */
-  assinadoEm: string | null;
-  /** Link para o PDF da última assinatura, quando existe. */
-  urlAssinado: string | null;
-  /** Quantas vezes já foi assinado por este link. */
-  assinaturasTotal: number;
 }
 
-export type RespostaPedido = PedidoParaAssinar;
+/**
+ * Link já usado. Não traz fotografia: aquele link acabou.
+ *
+ * Quem assinou continua a poder descarregar o que assinou — é dele. Para haver
+ * assinatura nova, quem trata do contrato envia um pedido novo, com link novo.
+ */
+export interface PedidoAssinado {
+  estado: 'assinado';
+  documentoNome: string;
+  assinadoEm: string;
+  urlAssinado: string | null;
+}
+
+export type RespostaPedido = PedidoValido | PedidoAssinado;
 
 export async function carregarPedido(token: string): Promise<RespostaPedido> {
   const { data, error } = await supabase.functions.invoke('assinatura-por-token', {
