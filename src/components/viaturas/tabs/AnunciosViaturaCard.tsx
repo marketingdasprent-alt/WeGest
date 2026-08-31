@@ -67,7 +67,7 @@ export function AnunciosViaturaCard({ viaturaId }: AnunciosViaturaCardProps) {
   };
 
   return (
-    <div className="md:col-span-3 mt-2 space-y-3">
+    <div className="flex-1 space-y-3">
       <div className="flex max-w-md items-center justify-between rounded-lg border bg-muted/30 p-4">
         <div>
           <p className="font-medium">Elegível para anúncios</p>

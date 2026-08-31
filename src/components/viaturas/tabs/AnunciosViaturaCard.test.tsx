@@ -190,9 +190,11 @@ describe('AnunciosViaturaCard', () => {
             }
             return {
               eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockImplementation(() =>
-                  Promise.resolve({ data: atribuido ? linhaDaViatura : null, error: null })
-                ),
+                maybeSingle: vi
+                  .fn()
+                  .mockImplementation(() =>
+                    Promise.resolve({ data: atribuido ? linhaDaViatura : null, error: null })
+                  ),
               }),
             };
           }),
