@@ -14,7 +14,15 @@ html[data-native-app='true'] .native-bottom {
 @layer base {
   :root {
     /* Tema Rota Líquida (Teal) como padrão */
-    --background: 0 0% 100%;
+
+    /* ESCADA DE SUPERFÍCIE (claro)
+       O fundo da página é um off-white ligeiramente frio e o --card é branco
+       puro: o cartão sobressai do fundo por si, sem precisar de sombra nem de
+       uma borda forte. Antes ambos eram 100% e a borda fazia o trabalho todo
+       sozinha — daí parecer marcada de mais.
+       NOTA sobre os rácios de contraste anotados abaixo: são medidos contra
+       BRANCO, que continua a ser o --card, onde vive quase todo o texto. */
+    --background: 210 20% 98%;
     --foreground: 0 0% 3.9%;
 
     --card: 0 0% 100%;
@@ -33,8 +41,11 @@ html[data-native-app='true'] .native-bottom {
     --secondary: 174 20% 96.1%;
     --secondary-foreground: 174 100% 15%;
 
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
+    /* Neutros com o mesmo matiz frio do fundo — cinzentos puros ao lado de um
+       fundo levemente azulado leem-se como amarelados. A luminosidade é a
+       mesma de antes, logo o contraste mantém-se (4,8:1 sobre --background). */
+    --muted: 210 20% 95.5%;
+    --muted-foreground: 215 16% 45%;
 
     --accent: 174 100% 25%;
     --accent-foreground: 0 0% 100%;
@@ -57,11 +68,17 @@ html[data-native-app='true'] .native-bottom {
        3,35:1 — nenhum dos dois passava. */
     --warning: 38 92% 32%;
     --warning-foreground: 0 0% 100%;
-    --success: 142 76% 30%;
+    /* 29% e não 30%: com o fundo da página a descer para 98%, o verde a 30%
+       media 4,42:1 contra ele — passava sobre o cartão branco mas já não sobre
+       o fundo. A 29% dá 4,68:1 nos dois. */
+    --success: 142 76% 29%;
     --success-foreground: 0 0% 100%;
 
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
+    /* A borda deixa de ser o único separador (ver a escada de superfície
+       acima), por isso pode recuar. O --input separa-se dela: um campo de
+       formulário precisa de se ler como caixa, um divisor não. */
+    --border: 214 20% 91.5%;
+    --input: 214 20% 87%;
     /* O anel de foco tem de ter 3:1 contra o que está ao lado (WCAG 1.4.11).
        A 38,4% sobre branco dava 2,21:1 — o indicador de foco do teclado era
        quase invisível. A 25% dá 4,87:1. */
@@ -84,6 +101,15 @@ html[data-native-app='true'] .native-bottom {
     --fluxo-notificacao: 330 65% 40%;
     --fluxo-estado: 291 50% 40%;
     --fluxo-condicao: 45 92% 30%;
+    /* Os três módulos que faltavam quando a lista passou a ter cor. As matizes
+       saem dos maiores intervalos vazios da paleta acima (45→142 e 199→262):
+       dois módulos com cores parecidas seriam indistinguíveis, que é o
+       problema que isto existe para resolver.
+       `outros` é cinzento de propósito — é onde cai o que o produto ainda não
+       nomeou, e não deve competir por atenção com um módulo a sério. */
+    --fluxo-seguranca: 225 70% 45%;
+    --fluxo-utilizadores: 95 55% 30%;
+    --fluxo-outros: 220 9% 46%;
     /* Editor de automações — escada de elevação.
        O canvas é a base, os painéis um degrau acima e os cartões dos nós o
        degrau mais alto. Sem esta separação os nós não saltam do fundo, que
@@ -98,13 +124,13 @@ html[data-native-app='true'] .native-bottom {
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
+    --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 0 0% 3.9%;
     --sidebar-primary: 174 100% 25%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 174 20% 96.1%;
     --sidebar-accent-foreground: 174 100% 15%;
-    --sidebar-border: 0 0% 89.8%;
+    --sidebar-border: 214 20% 91.5%;
     --sidebar-ring: 174 100% 25%;
   }
 
@@ -181,6 +207,11 @@ html[data-native-app='true'] .native-bottom {
     --fluxo-notificacao: 330 80% 70%;
     --fluxo-estado: 291 70% 70%;
     --fluxo-condicao: 45 92% 58%;
+    /* As mesmas três, subidas em luminosidade como as outras oito: no escuro
+       a cor tem de vir do lado claro da escala para se ler sobre --card. */
+    --fluxo-seguranca: 225 85% 72%;
+    --fluxo-utilizadores: 95 60% 55%;
+    --fluxo-outros: 220 10% 65%;
     /* Mesma escada, invertida: no escuro o canvas é o mais fundo e os
        cartões os mais claros. */
     --canvas-bg: 222 47% 6%;

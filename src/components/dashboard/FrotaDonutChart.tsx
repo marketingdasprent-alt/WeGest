@@ -14,9 +14,12 @@ export interface FrotaDonutData {
   inativos: number;
 }
 
+// O azul passa a vir do token da marca (era #60a5fa): é o mesmo azul das
+// "Alugadas" na faixa de KPIs e da série "Alugados" no gráfico — um só azul
+// para "viatura em uso" em toda a homepage, e com contraste nos dois temas.
 const CORES = {
   disponiveis: 'hsl(var(--success))',
-  ocupados: '#60a5fa',
+  ocupados: 'hsl(var(--brand-navy))',
   inativos: 'hsl(var(--muted-foreground))',
 };
 
@@ -55,10 +58,12 @@ export default function FrotaDonutChart({ disponiveis, ocupados, inativos }: Fro
     if (!active || !payload?.length) return null;
     const p = payload[0];
     return (
-      <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-lg text-xs">
-        <span style={{ color: p.payload.color }} className="font-semibold">
-          {p.payload.value} {p.payload.name.toLowerCase()}
+      <div className="flex items-center gap-1.5 rounded-lg border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
+        <span className="h-1.5 w-1.5 rounded-full" style={{ background: p.payload.color }} />
+        <span className="font-semibold tabular-nums text-popover-foreground">
+          {p.payload.value}
         </span>
+        <span className="text-muted-foreground">{p.payload.name.toLowerCase()}</span>
       </div>
     );
   };
@@ -95,7 +100,7 @@ export default function FrotaDonutChart({ disponiveis, ocupados, inativos }: Fro
           <span className="text-[10px] text-muted-foreground mt-0.5">viaturas</span>
         </div>
       </div>
-      <div className="flex flex-col gap-1.5 mt-3">
+      <div className="mt-3 flex flex-col gap-1.5">
         {data.map((d) => (
           <div key={d.name} className="flex items-center justify-between text-xs">
             <span className="flex items-center gap-1.5 text-muted-foreground">

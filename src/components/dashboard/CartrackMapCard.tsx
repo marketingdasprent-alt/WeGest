@@ -9,7 +9,9 @@ import { format, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { MapPin, Loader2, Gauge, Clock, Power, RefreshCw, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -73,29 +75,44 @@ function VehicleListItem({
   active: boolean;
 }) {
   const positionable = hasValidPosition(v);
+  // O estado seleccionado era `bg-muted` — exactamente o mesmo do hover, pelo
+  // que não havia forma de ver qual a viatura activa depois de tirar o rato de
+  // cima. Passa a barra de cor + fundo da marca, que o hover nunca usa.
   return (
     <button
       type="button"
       onClick={positionable ? onClick : undefined}
       disabled={!positionable}
-      className={`w-full text-left px-3 py-2 border-b border-border/60 transition-colors ${
-        positionable ? 'hover:bg-muted cursor-pointer' : 'opacity-50 cursor-default'
-      } ${active ? 'bg-muted' : ''}`}
+      aria-current={active ? 'true' : undefined}
+      className={cn(
+        'w-full border-l-2 px-3 py-2 text-left transition-colors duration-150',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+        positionable ? 'cursor-pointer' : 'cursor-default opacity-50',
+        active
+          ? 'border-primary bg-primary/10'
+          : cn('border-transparent', positionable && 'hover:bg-muted/60')
+      )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold truncate">
+        <span
+          className={cn(
+            'truncate font-mono text-xs font-semibold tabular-nums',
+            active && 'text-primary'
+          )}
+        >
           {v.registration || v.descricao || v.cartrack_vehicle_id}
         </span>
         {v.ignition != null && (
           <span
-            className={`h-2 w-2 rounded-full shrink-0 ${
-              v.ignition ? 'bg-emerald-500' : 'bg-muted-foreground/40'
-            }`}
+            className={cn(
+              'h-1.5 w-1.5 shrink-0 rounded-full',
+              v.ignition ? 'bg-success' : 'bg-muted-foreground/40'
+            )}
             title={v.ignition ? 'Ignição ligada' : 'Ignição desligada'}
           />
         )}
       </div>
-      <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+      <div className="mt-0.5 flex items-center gap-1.5 text-[11px] tabular-nums text-muted-foreground">
         {v.odometer != null && <span>{Math.round(v.odometer).toLocaleString('pt-PT')} km</span>}
         {v.speed != null && v.speed > 0 && <span>· {Math.round(v.speed)} km/h</span>}
       </div>
@@ -238,26 +255,41 @@ export const CartrackMapCard: React.FC = () => {
     }
   };
 
+  // O contador de posições sobe para junto do título: é uma leitura sobre os
+  // dados do cartão, não um controlo — estava perdido no fim da fila de botões.
   const header = (
-    <div className="flex items-center justify-between p-4 pb-2 gap-2">
-      <div className="flex items-center gap-2">
-        <MapPin className="h-4 w-4 text-primary" />
+    <div className="flex items-center justify-between gap-2 px-4 py-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <MapPin className="h-4 w-4 shrink-0 text-primary" />
         <h3 className="text-sm font-semibold">Car Track</h3>
+        {vehicles && vehicles.length > 0 && (
+          <span className="truncate text-xs tabular-nums text-muted-foreground">
+            {totalPositioned}/{vehicles.length} localizadas
+          </span>
+        )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1">
         <Button
-          variant={live ? 'default' : 'outline'}
+          variant="outline"
           size="sm"
-          className="h-7 gap-1.5 px-2"
+          className={cn(
+            'h-7 gap-1.5 px-2 text-xs font-medium',
+            live &&
+              'border-success/40 bg-success/10 text-success hover:bg-success/15 hover:text-success'
+          )}
           onClick={() => setLive((s) => !s)}
+          aria-pressed={live}
           title={
             live ? 'Desligar tempo real' : `Seguir em tempo real (${INTERVALO_LIVE_SEGUNDOS}s)`
           }
         >
           <span
-            className={`h-2 w-2 rounded-full ${live ? 'bg-white animate-pulse' : 'bg-emerald-500'}`}
+            className={cn(
+              'h-1.5 w-1.5 rounded-full',
+              live ? 'animate-pulse bg-success' : 'bg-muted-foreground/50'
+            )}
           />
-          <span className="text-xs">Ao vivo</span>
+          Ao vivo
         </Button>
         <Button
           variant="ghost"
@@ -273,11 +305,6 @@ export const CartrackMapCard: React.FC = () => {
             <RefreshCw className="h-4 w-4" />
           )}
         </Button>
-        {vehicles && vehicles.length > 0 && (
-          <span className="text-xs text-muted-foreground whitespace-nowrap">
-            {totalPositioned}/{vehicles.length} localizadas
-          </span>
-        )}
       </div>
     </div>
   );
@@ -285,51 +312,54 @@ export const CartrackMapCard: React.FC = () => {
   // Loading inicial
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <Card className="overflow-hidden rounded-xl shadow-none">
         {header}
-        <div className="flex items-center justify-center h-[300px]">
+        <div className="flex h-[300px] items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      </div>
+      </Card>
     );
   }
 
   // Erro
   if (error) {
     return (
-      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <Card className="overflow-hidden rounded-xl shadow-none">
         {header}
-        <div className="flex flex-col items-center justify-center gap-2 text-center h-[300px] p-4">
+        <div className="flex h-[300px] flex-col items-center justify-center gap-2 p-4 text-center">
           <MapPin className="h-8 w-8 text-muted-foreground/40" />
-          <p className="text-xs text-muted-foreground max-w-[260px]">
+          <p className="max-w-[260px] text-xs text-muted-foreground">
             Não foi possível carregar as posições Cartrack.
           </p>
         </div>
-      </div>
+      </Card>
     );
   }
 
   // Sem viaturas de todo
   if (!vehicles || vehicles.length === 0) {
     return (
-      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      <Card className="overflow-hidden rounded-xl shadow-none">
         {header}
-        <div className="flex flex-col items-center justify-center gap-2 text-center h-[300px] p-4">
+        <div className="flex h-[300px] flex-col items-center justify-center gap-2 p-4 text-center">
           <MapPin className="h-8 w-8 text-muted-foreground/40" />
           <p className="text-sm font-semibold">Sem posições ainda</p>
-          <p className="text-xs text-muted-foreground max-w-[280px]">
+          <p className="max-w-[280px] text-xs text-muted-foreground">
             Clica em <RefreshCw className="inline h-3 w-3" /> para sincronizar a localização das
             viaturas.
           </p>
         </div>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+    <Card className="overflow-hidden rounded-xl shadow-none">
       {header}
-      <div className="flex flex-col sm:flex-row h-[320px]">
+      {/* O recorte tem de estar TAMBÉM aqui e não só no <Card>: os tiles do
+          Leaflet são filhos com transform, e o border-radius do cartão sozinho
+          não os corta — o mapa comia os cantos de baixo e a borda com eles. */}
+      <div className="flex h-[288px] flex-col overflow-hidden rounded-b-xl border-t border-border/60 sm:flex-row">
         {/* Mapa — `isolate` cria um stacking context próprio para os z-index altos
             do Leaflet não passarem à frente dos toasts/modais da app. */}
         <div className="flex-1 relative min-h-[200px] isolate">
@@ -394,21 +424,25 @@ export const CartrackMapCard: React.FC = () => {
         </div>
 
         {/* Lista lateral com pesquisa */}
-        <div className="w-full sm:w-52 shrink-0 border-t sm:border-t-0 sm:border-l border-border flex flex-col">
-          <div className="p-2 border-b border-border">
+        <div className="flex w-full shrink-0 flex-col border-t border-border sm:w-52 sm:border-l sm:border-t-0">
+          {/* Campo sem caixa própria: dentro de uma coluna já delimitada, a
+              borda do input era um segundo contorno a competir com o do
+              cartão. O fundo `muted` chega para o marcar como editável. */}
+          <div className="border-b border-border p-2">
             <div className="relative">
               <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Pesquisar matrícula…"
-                className="h-8 pl-7 text-xs"
+                aria-label="Pesquisar matrícula"
+                className="h-8 border-0 bg-muted/60 pl-7 text-xs"
               />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="custom-scrollbar flex-1 divide-y divide-border/50 overflow-y-auto">
             {filtered.length === 0 ? (
-              <p className="p-3 text-xs text-muted-foreground text-center">Sem resultados.</p>
+              <p className="p-3 text-center text-xs text-muted-foreground">Sem resultados.</p>
             ) : (
               filtered.map((v) => (
                 <VehicleListItem
@@ -425,6 +459,6 @@ export const CartrackMapCard: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+    </Card>
   );
 };
