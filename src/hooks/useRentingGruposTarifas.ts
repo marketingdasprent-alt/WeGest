@@ -213,3 +213,39 @@ export function calcularFaturacaoRenting(
     semanalCondutor: null,
   };
 }
+
+/**
+ * O preço a gravar quando o utilizador ESCOLHE uma tarifa diferente no
+ * formulário do contrato.
+ *
+ * Antes disto, trocar a tarifa não mexia em nada: `valor_total_manual` manda
+ * sobre `calcularBaseAluguerRenting` e sobre o próprio preview deste cartão
+ * (que mostra `valor_total_manual ?? faturacao.valor`) — com um manual
+ * gravado, nem o preview reagia à tarifa nova. Em 206 dos 236 contratos vivos
+ * há um `valor_total_manual` gravado, portanto isto não era um caso raro.
+ *
+ * `null` = não tocar em `valor_total_manual` (regime slot, tarifa limpa, ou
+ * a combinação tarifa+modelo não tem preço — não se inventa um valor).
+ * Caso contrário, o número a gravar.
+ */
+export function resolverValorTotalManualAoMudarTarifa(
+  regime: string,
+  isLongaDuracao: boolean,
+  dias: number | null,
+  tarifaNova: Pick<RentingTarifaMin, 'preco_dia' | 'preco_semana' | 'preco_mes'> | null,
+  precoModeloSemana: number | null,
+  precoModeloDia: number | null,
+  precoModeloMes: number | null
+): number | null {
+  if (regime === 'slot' || !tarifaNova) return null;
+  const fat = calcularFaturacaoRenting(
+    regime,
+    isLongaDuracao,
+    dias,
+    tarifaNova,
+    precoModeloSemana,
+    precoModeloDia,
+    precoModeloMes
+  );
+  return fat?.valor ?? null;
+}
