@@ -42,6 +42,7 @@ import { ClienteAnexosTab } from '@/components/renting/ClienteAnexosTab';
 import { ClienteContaCorrenteTab } from '@/components/renting/ClienteContaCorrenteTab';
 import { ClienteReservasContratosTab } from '@/components/renting/ClienteReservasContratosTab';
 import { RequiredMark } from '@/components/renting/ValidatedTextField';
+import { SeccaoAnuncios } from '@/components/renting/SeccaoAnuncios';
 import {
   DocTipoChangeWatcher,
   SeccaoCarta,
@@ -335,6 +336,7 @@ const RentingClienteForm = () => {
                     {tipoCliente !== 'condutor' && <SeccaoMorada control={control} />}
                     {tipoCliente !== 'condutor' && <SeccaoDocumento control={control} />}
                     {!isEmpresa && <SeccaoCarta control={control} />}
+                    {isEmpresa && cliente?.id && <SeccaoAnuncios clienteId={cliente.id} />}
                     <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                       <RequiredMark /> Campos obrigatórios.
                     </p>
