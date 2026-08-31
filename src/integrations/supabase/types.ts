@@ -13596,6 +13596,7 @@ export type Database = {
         Args: { p_cartao_id: string; p_motorista_id: string }
         Returns: undefined
       }
+      automation_catalogo: { Args: Record<PropertyKey, never>; Returns: Json }
       automation_runs_claim: {
         Args: { p_max?: number }
         Returns: {

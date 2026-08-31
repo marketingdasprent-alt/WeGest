@@ -127,15 +127,19 @@ export const CATALOGO: TemplateDeNo[] = [
     },
   },
   {
-    chave: 'alterar-estado',
+    chave: 'accao-interna',
     tipo: 'accao',
-    rotulo: 'Alterar estado',
-    descricao: 'Muda o estado da entidade que disparou o fluxo',
+    rotulo: 'Executar acção',
+    descricao: 'Altera um campo ou estado na entidade que disparou o fluxo',
     Icone: ToggleRight,
     cor: '--fluxo-estado',
     dados: {
-      accao: 'alterar_estado',
-      rotulo: 'Alterar estado',
+      // `accao` vazio até o utilizador escolher no painel: as acções
+      // disponíveis vêm de `automation_catalogo()`, e escrever aqui um id
+      // fixo era duplicar o catálogo do servidor.
+      accao: '',
+      acaoTipo: 'automacao_interna',
+      rotulo: 'Executar acção',
       campo: '',
       valor: '',
       cooldownMinutos: COOLDOWN_PADRAO_MINUTOS,
@@ -196,12 +200,18 @@ const VISUAL_RECURSO: VisualDoBloco = { Icone: Zap, cor: '--fluxo-viaturas' };
  */
 export function visualDoBloco(
   tipo: TipoDeNo,
-  dados: { modulo?: string; accao?: string }
+  dados: { modulo?: string; accao?: string; acaoTipo?: string }
 ): VisualDoBloco {
   const template = CATALOGO.find((t) => {
     if (t.tipo !== tipo) return false;
     if (tipo === 'trigger') return (t.dados as { modulo?: string }).modulo === dados.modulo;
-    if (tipo === 'accao') return (t.dados as { accao?: string }).accao === dados.accao;
+    if (tipo === 'accao') {
+      // Uma acção interna não casa por `accao`: o id vem de
+      // `automation_catalogo()` e a paleta tem uma entrada só, com `accao`
+      // vazio. Sem este ramo, cada acção interna caía no visual genérico.
+      if (dados.acaoTipo === 'automacao_interna') return t.chave === 'accao-interna';
+      return (t.dados as { accao?: string }).accao === dados.accao;
+    }
     return true;
   });
 

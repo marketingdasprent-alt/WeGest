@@ -85,8 +85,18 @@ select is(
 );
 
 -- 9/10. Caminho feliz: outro item, claim() + complete() marca sent.
+--
+-- Com a sua própria notificação. Reutilizava a de cima, o que colide com
+-- `idx_notification_queue_idem` (Fase 2, único em notification_id + canal +
+-- destinatário) — e não correspondia a nada real: os quatro produtores da fila
+-- criam sempre uma `notifications` nova por linha enfileirada, e o retry de um
+-- item é feito na própria linha (`attempt`, `next_attempt_at`), nunca por uma
+-- linha nova.
+insert into public.notifications (id, org_id, destinatario_user_id, template_codigo, titulo) values
+  ('00000000-0000-0000-0000-000000f1e002', '00000000-0000-0000-0000-0000000a0000', '00000000-0000-0000-0000-0000000a0001', 'teste.notif', 'Segunda Notificação de Teste');
+
 insert into public.notification_queue (id, notification_id, org_id, canal, destinatario, template_codigo) values
-  ('00000000-0000-0000-0000-00000092e001', '00000000-0000-0000-0000-000000f1e001', '00000000-0000-0000-0000-0000000a0000', 'email', 'a1@notif-queue.pt', 'teste.notif');
+  ('00000000-0000-0000-0000-00000092e001', '00000000-0000-0000-0000-000000f1e002', '00000000-0000-0000-0000-0000000a0000', 'email', 'a1@notif-queue.pt', 'teste.notif');
 
 select public.notification_queue_claim('email', 10);
 select public.notification_queue_complete('00000000-0000-0000-0000-00000092e001');

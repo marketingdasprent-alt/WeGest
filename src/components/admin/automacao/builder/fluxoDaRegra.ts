@@ -14,7 +14,8 @@ import { moduloDoEventType } from './catalogo';
 export interface CondicaoGravada {
   campo: string;
   operador: string;
-  valor: string;
+  /** O valor JSON tal como está gravado — texto, número ou boolean. */
+  valor: string | number | boolean;
 }
 
 /** A última execução falhada, quando existe. */
@@ -35,6 +36,11 @@ export interface RegraParaEditar {
   modo: 'grupo' | 'individual';
   userIds: string[];
   condicoes: CondicaoGravada[];
+  /** 'notificacao' | 'automacao_interna'. Decide o que o nó da acção mostra. */
+  acaoTipo: string;
+  /** A `acao_config` crua, levada inteira para o nó — o painel lê dela o que
+   * precisa. Levar só os campos que hoje se mostram apagava o resto ao gravar. */
+  acaoConfig: Record<string, unknown>;
   /** Estado da regra e do que já correu — vem das estatísticas, não da config. */
   ativo: boolean;
   ultimaExecucao: string | null;
@@ -109,8 +115,19 @@ export function fluxoDaRegra(regra: RegraParaEditar): { nodes: Node[]; edges: Ed
     type: 'accao',
     position: { x: passo * PASSO_X, y: 0 },
     data: {
-      accao: 'notificacao',
-      rotulo: 'Enviar notificação',
+      // `accao` continua a ser o discriminante que o nó e o painel usam. Para
+      // uma automação interna passa a ser o id da acção do catálogo, que é
+      // exactamente o que fica gravado em `acao_config.accao`.
+      accao:
+        regra.acaoTipo === 'automacao_interna'
+          ? ((regra.acaoConfig.accao as string) ?? '')
+          : 'notificacao',
+      acaoTipo: regra.acaoTipo,
+      rotulo: regra.acaoTipo === 'automacao_interna' ? 'Executar acção' : 'Enviar notificação',
+      // Config da acção interna, reconstruída ao abrir. Sem isto, editar uma
+      // automação interna existente perdia o campo e o valor.
+      campo: (regra.acaoConfig.campo as string) ?? '',
+      valor: (regra.acaoConfig.valor as string) ?? '',
       cargoIds: regra.cargoIds,
       enviarEmail: regra.enviarEmail,
       modo: regra.modo,

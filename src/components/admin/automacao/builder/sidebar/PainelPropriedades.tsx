@@ -115,6 +115,10 @@ export function PainelPropriedades({
           onCorpo={setCorpo}
           regrasQueUsam={template?.regrasQueUsam ?? 0}
           assuntoDoTemplate={template?.assunto ?? ''}
+          // O evento é da REGRA, não deste passo: é ele que decide que campos
+          // podem ser condição e que acções fazem sentido. Ler do nó do
+          // gatilho obrigaria o painel a conhecer o canvas inteiro.
+          eventType={config?.event_type}
         />
       </div>
 
