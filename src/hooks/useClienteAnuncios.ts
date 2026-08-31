@@ -151,6 +151,7 @@ export function useApagarAnuncio() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CHAVE_LISTA });
+      qc.invalidateQueries({ queryKey: ['anuncios-por-atribuir'] });
     },
   });
 }
