@@ -10,6 +10,9 @@ function renderComQueryClient(ui: React.ReactElement) {
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
 }
 
+// jsdom não implementa scrollIntoView; o Select (Radix) chama-o ao abrir.
+Element.prototype.scrollIntoView = vi.fn();
+
 describe('AnunciosViaturaCard', () => {
   beforeEach(() => vi.clearAllMocks());
 
