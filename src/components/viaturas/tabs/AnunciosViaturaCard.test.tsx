@@ -79,4 +79,58 @@ describe('AnunciosViaturaCard', () => {
       ).toBeInTheDocument()
     );
   });
+
+  it('com anúncio já atribuído, mostra a faixa em vez do seletor', async () => {
+    (supabase.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
+      if (tabela === 'viaturas') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { elegivel_anuncios: true }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (tabela === 'cliente_anuncios') {
+        return {
+          select: vi.fn().mockImplementation((cols: string) => {
+            if (cols.includes('clientes!inner')) {
+              return {
+                is: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    order: vi.fn().mockResolvedValue({ data: [], error: null }),
+                  }),
+                }),
+              };
+            }
+            return {
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    id: 'a1',
+                    cliente_id: 'c1',
+                    viatura_id: 'v1',
+                    preco: 50,
+                    data_inicio: '2026-09-01',
+                    data_fim: '2026-09-30',
+                    created_at: '2026-08-31T10:00:00Z',
+                    clientes: { nome: 'Empresa X' },
+                  },
+                  error: null,
+                }),
+              }),
+            };
+          }),
+        };
+      }
+      throw new Error(`tabela inesperada: ${tabela}`);
+    });
+
+    renderComQueryClient(<AnunciosViaturaCard viaturaId="v1" />);
+
+    await waitFor(() => expect(screen.getByText('Empresa X')).toBeInTheDocument());
+    expect(screen.getByText('€50,00')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Desatribuir' })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
 });

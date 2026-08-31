@@ -11,6 +11,8 @@ function renderComQueryClient(ui: React.ReactElement) {
 }
 
 function mockElegivel(elegivel: boolean) {
+  const eqUpdate = vi.fn().mockResolvedValue({ error: null });
+  const update = vi.fn().mockReturnValue({ eq: eqUpdate });
   (supabase.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
     if (tabela === 'clientes') {
       return {
@@ -21,7 +23,7 @@ function mockElegivel(elegivel: boolean) {
               .mockResolvedValue({ data: { elegivel_anuncios: elegivel }, error: null }),
           }),
         }),
-        update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        update,
       };
     }
     if (tabela === 'cliente_anuncios') {
@@ -35,6 +37,7 @@ function mockElegivel(elegivel: boolean) {
     }
     throw new Error(`tabela inesperada: ${tabela}`);
   });
+  return { update, eqUpdate };
 }
 
 describe('SeccaoAnuncios', () => {
@@ -57,17 +60,15 @@ describe('SeccaoAnuncios', () => {
   });
 
   it('ligar o toggle chama a mutação de elegibilidade', async () => {
-    mockElegivel(false);
+    const { update, eqUpdate } = mockElegivel(false);
     renderComQueryClient(<SeccaoAnuncios clienteId="c1" />);
 
     await waitFor(() => expect(screen.getByRole('switch')).not.toBeChecked());
     fireEvent.click(screen.getByRole('switch'));
 
     await waitFor(() => {
-      const chamadaUpdate = (supabase.from as ReturnType<typeof vi.fn>).mock.results.find(
-        (r) => r.value.update
-      );
-      expect(chamadaUpdate).toBeTruthy();
+      expect(update).toHaveBeenCalledWith({ elegivel_anuncios: true });
+      expect(eqUpdate).toHaveBeenCalledWith('id', 'c1');
     });
   });
 
@@ -114,7 +115,7 @@ describe('SeccaoAnuncios', () => {
 
     renderComQueryClient(<SeccaoAnuncios clienteId="c1" />);
 
-    await waitFor(() => expect(screen.getByText('50.00 €')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('€50,00')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
 
     const campoPreco = screen.getByLabelText('Preço (€)') as HTMLInputElement;
@@ -122,5 +123,52 @@ describe('SeccaoAnuncios', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
     await waitFor(() => expect(updateEq).toHaveBeenCalledWith('id', 'a1'));
+  });
+
+  // Com o toggle ligado, os anúncios já atribuídos a uma viatura não
+  // desaparecem — só a secção é que estava escondida. E enquanto atribuídos,
+  // "Apagar" fica indisponível até desatribuir.
+  it('com o toggle ligado, mostra os anúncios já atribuídos e esconde o Apagar', async () => {
+    (supabase.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
+      if (tabela === 'clientes') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { elegivel_anuncios: true }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (tabela === 'cliente_anuncios') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: 'a1',
+                    cliente_id: 'c1',
+                    viatura_id: 'v1',
+                    preco: 50,
+                    data_inicio: '2026-09-01',
+                    data_fim: '2026-09-30',
+                    created_at: '2026-08-31T10:00:00Z',
+                    viaturas: { matricula: 'AA-11-BB' },
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`tabela inesperada: ${tabela}`);
+    });
+
+    renderComQueryClient(<SeccaoAnuncios clienteId="c1" />);
+
+    await waitFor(() => expect(screen.getByText('AA-11-BB')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Desatribuir' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Apagar' })).toBeNull();
   });
 });
