@@ -6,6 +6,7 @@ import { deriveAluguerSemTarifa } from './aluguerSemTarifa';
 import { buildSlotPeriodos } from './slotPeriodos';
 import { buildTvdeModeloPrecoMap, buildPrecoPorTarifaModelo } from './tvdeModeloPreco';
 import { formatCartoesFrota, type CartaoFrotaResumo } from './cartoesFrota';
+import { agregarMovimentos } from '@shared/movimentosMotorista';
 
 export interface UseMotoristaResumoDataReturn {
   loading: boolean;
@@ -251,25 +252,17 @@ export function useMotoristaResumoData(
         }
 
         if (financeiroData) {
-          let recExtras = 0;
-          const totals = financeiroData.reduce(
-            (acc, curr) => {
-              if (curr.categoria === 'reparacao' || curr.categoria === 'renda_viatura') return acc;
-              const val = Number(curr.valor) || 0;
-              if (curr.tipo === 'credito') {
-                if (curr.categoria === 'caucao') return acc;
-                recExtras += val;
-                return acc;
-              }
-              if (curr.categoria === 'caucao') acc.caucao += val;
-              else if (curr.categoria === 'seguros') acc.seguros += val;
-              else acc.outros += val;
-              return acc;
-            },
-            { caucao: 0, seguros: 0, outros: 0 }
-          );
-          setExtraCosts(totals);
-          setOutrasReceitas(recExtras);
+          // A mesma função que o fecho e a lista de Contas/Resumo usam. Cada
+          // um destes três tinha a sua versão da regra, e discordavam: um
+          // crédito de renda_viatura era receita para o fecho e lixo para
+          // este ecrã. Ver movimentosMotorista.ts.
+          const mov = agregarMovimentos(financeiroData);
+          setExtraCosts({
+            caucao: mov.caucao,
+            seguros: mov.seguros,
+            outros: mov.outros,
+          });
+          setOutrasReceitas(mov.receitaOutras);
         }
       }
     } catch (error) {
