@@ -21,6 +21,7 @@ import {
   type RentingGrupo,
   type Estacao,
 } from './viaturaTabDados.types';
+import { AnunciosViaturaCard } from './AnunciosViaturaCard';
 
 interface ViaturaFormVeiculoProps {
   form: UseFormReturn<ViaturaFormData>;
@@ -52,6 +53,7 @@ interface ViaturaFormVeiculoProps {
     preco_mes: number | null;
   }>;
   estacoes: Estacao[];
+  viaturaId: string | null;
 }
 
 export function ViaturaFormVeiculo({
@@ -67,6 +69,7 @@ export function ViaturaFormVeiculo({
   tarifasTvdeModelo,
   tarifasRacModelo,
   estacoes,
+  viaturaId,
 }: ViaturaFormVeiculoProps) {
   // is_slot deriva do TIPO: ao escolher o tipo "SLOT", is_slot é ligado
   // automaticamente. Antes o toggle estava escondido atrás de `elegivel_tvde`,
@@ -498,6 +501,7 @@ export function ViaturaFormVeiculo({
           />
         </div>
       </div>
+      <AnunciosViaturaCard viaturaId={viaturaId} />
     </div>
   );
 }
