@@ -112,9 +112,7 @@ export function SeccaoAnuncios({ clienteId }: SeccaoAnunciosProps) {
       <Card className="flex max-w-md items-center justify-between p-4">
         <div>
           <p className="font-medium">Elegível para anúncios</p>
-          <Badge variant={elegivel ? 'default' : 'secondary'}>
-            {elegivel ? 'Sim' : 'Não'}
-          </Badge>
+          <Badge variant={elegivel ? 'default' : 'secondary'}>{elegivel ? 'Sim' : 'Não'}</Badge>
         </div>
         <Switch
           checked={elegivel}
@@ -125,7 +123,12 @@ export function SeccaoAnuncios({ clienteId }: SeccaoAnunciosProps) {
 
       {elegivel && (
         <div className="space-y-3">
-          <Button type="button" size="sm" variant="outline" onClick={() => setAAdicionar((v) => !v)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setAAdicionar((v) => !v)}
+          >
             Adicionar anúncio
           </Button>
 
@@ -160,7 +163,12 @@ export function SeccaoAnuncios({ clienteId }: SeccaoAnunciosProps) {
                   />
                 </div>
               </div>
-              <Button type="button" size="sm" disabled={criarAnuncio.isPending} onClick={submeterNovo}>
+              <Button
+                type="button"
+                size="sm"
+                disabled={criarAnuncio.isPending}
+                onClick={submeterNovo}
+              >
                 Guardar anúncio
               </Button>
             </Card>
@@ -211,58 +219,63 @@ export function SeccaoAnuncios({ clienteId }: SeccaoAnunciosProps) {
                   >
                     Guardar
                   </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setEditandoId(null)}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setEditandoId(null)}
+                  >
                     Cancelar
                   </Button>
                 </div>
               </Card>
             ) : (
-            <Card key={a.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
-              <span className="font-medium">{a.preco.toFixed(2)} €</span>
-              <span className="text-muted-foreground">
-                {formatarDataPt(a.data_inicio)} a {formatarDataPt(a.data_fim)}
-              </span>
-              <Button type="button" size="sm" variant="ghost" onClick={() => iniciarEdicao(a)}>
-                Editar
-              </Button>
-              {a.viatura_matricula ? (
-                <>
-                  <Badge variant="outline">{a.viatura_matricula}</Badge>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={desatribuir.isPending}
-                    onClick={() =>
-                      desatribuir.mutate(
-                        { anuncioId: a.id },
-                        { onError: () => toast.error('Não foi possível desatribuir.') }
-                      )
-                    }
-                  >
-                    Desatribuir
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <span className="text-muted-foreground">Sem viatura atribuída</span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={apagarAnuncio.isPending}
-                    onClick={() =>
-                      apagarAnuncio.mutate(
-                        { anuncioId: a.id },
-                        { onError: (e) => toast.error(e.message) }
-                      )
-                    }
-                  >
-                    Apagar
-                  </Button>
-                </>
-              )}
-            </Card>
+              <Card key={a.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
+                <span className="font-medium">{a.preco.toFixed(2)} €</span>
+                <span className="text-muted-foreground">
+                  {formatarDataPt(a.data_inicio)} a {formatarDataPt(a.data_fim)}
+                </span>
+                <Button type="button" size="sm" variant="ghost" onClick={() => iniciarEdicao(a)}>
+                  Editar
+                </Button>
+                {a.viatura_matricula ? (
+                  <>
+                    <Badge variant="outline">{a.viatura_matricula}</Badge>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={desatribuir.isPending}
+                      onClick={() =>
+                        desatribuir.mutate(
+                          { anuncioId: a.id },
+                          { onError: () => toast.error('Não foi possível desatribuir.') }
+                        )
+                      }
+                    >
+                      Desatribuir
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-muted-foreground">Sem viatura atribuída</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={apagarAnuncio.isPending}
+                      onClick={() =>
+                        apagarAnuncio.mutate(
+                          { anuncioId: a.id },
+                          { onError: (e) => toast.error(e.message) }
+                        )
+                      }
+                    >
+                      Apagar
+                    </Button>
+                  </>
+                )}
+              </Card>
             )
           )}
         </div>

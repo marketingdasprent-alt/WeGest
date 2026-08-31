@@ -48,7 +48,9 @@ export function useAnuncioDaViatura(viaturaId: string | null) {
     queryFn: async (): Promise<(ClienteAnuncio & { cliente_nome: string }) | null> => {
       const { data, error } = await supabase
         .from('cliente_anuncios')
-        .select('id, cliente_id, viatura_id, preco, data_inicio, data_fim, created_at, clientes(nome)')
+        .select(
+          'id, cliente_id, viatura_id, preco, data_inicio, data_fim, created_at, clientes(nome)'
+        )
         .eq('viatura_id', viaturaId as string)
         .maybeSingle();
       if (error) throw error;

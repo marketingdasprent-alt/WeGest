@@ -74,7 +74,9 @@ describe('AnunciosViaturaCard', () => {
     fireEvent.click(screen.getByRole('combobox'));
 
     await waitFor(() =>
-      expect(screen.getByText(/Empresa X — 50,00 € — 01\/09\/2026 a 30\/09\/2026/)).toBeInTheDocument()
+      expect(
+        screen.getByText(/Empresa X — 50,00 € — 01\/09\/2026 a 30\/09\/2026/)
+      ).toBeInTheDocument()
     );
   });
 });

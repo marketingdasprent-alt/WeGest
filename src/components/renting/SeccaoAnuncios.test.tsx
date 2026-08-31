@@ -16,7 +16,9 @@ function mockElegivel(elegivel: boolean) {
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: { elegivel_anuncios: elegivel }, error: null }),
+            single: vi
+              .fn()
+              .mockResolvedValue({ data: { elegivel_anuncios: elegivel }, error: null }),
           }),
         }),
         update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),

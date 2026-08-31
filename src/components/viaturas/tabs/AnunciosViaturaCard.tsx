@@ -50,10 +50,7 @@ export function AnunciosViaturaCard({ viaturaId }: AnunciosViaturaCardProps) {
   };
 
   const escolherAnuncio = (anuncioId: string) => {
-    atribuir.mutate(
-      { anuncioId, viaturaId },
-      { onError: (e) => toast.error(e.message) }
-    );
+    atribuir.mutate({ anuncioId, viaturaId }, { onError: (e) => toast.error(e.message) });
   };
 
   return (
@@ -61,9 +58,7 @@ export function AnunciosViaturaCard({ viaturaId }: AnunciosViaturaCardProps) {
       <div className="flex max-w-md items-center justify-between rounded-lg border bg-muted/30 p-4">
         <div>
           <p className="font-medium">Elegível para anúncios</p>
-          <Badge variant={elegivel ? 'default' : 'secondary'}>
-            {elegivel ? 'Sim' : 'Não'}
-          </Badge>
+          <Badge variant={elegivel ? 'default' : 'secondary'}>{elegivel ? 'Sim' : 'Não'}</Badge>
         </div>
         <Switch
           checked={elegivel}

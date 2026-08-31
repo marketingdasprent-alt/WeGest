@@ -164,8 +164,8 @@ describe('useAtribuirAnuncio', () => {
 
     const { result } = renderHook(() => useAtribuirAnuncio(), { wrapper: createWrapper() });
 
-    await expect(
-      result.current.mutateAsync({ anuncioId: 'a1', viaturaId: 'v1' })
-    ).rejects.toThrow('Este anúncio já foi atribuído a outra viatura.');
+    await expect(result.current.mutateAsync({ anuncioId: 'a1', viaturaId: 'v1' })).rejects.toThrow(
+      'Este anúncio já foi atribuído a outra viatura.'
+    );
   });
 });
