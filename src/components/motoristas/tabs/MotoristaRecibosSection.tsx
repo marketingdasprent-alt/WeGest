@@ -251,21 +251,17 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         return;
       }
 
-      // 1. Fetch ALL associated Uber IDs for this driver
-      const { data: associatedUberDrivers } = await supabase
-        .from('uber_drivers')
-        .select('uber_driver_id')
-        .eq('motorista_id', motoristaId);
-
-      const associatedUberIds = (associatedUberDrivers || []).map((d) => d.uber_driver_id);
-
-      // 2. Uber Data (Official Transactions for ALL associated IDs)
+      // Uber: motorista_id já vem resolvido na própria linha do resumo
+      // semanal pelo gatilho de atribuição por plataforma (ver
+      // motorista_plataforma_identidades) — a mesma fonte que o fecho usa.
+      // Ir por uber_drivers.motorista_id (indirecção antiga) ficava para
+      // trás sempre que a identidade mudava de dono — caso real: Paulo
+      // André Antunes Badalo, transferido para a PREMIUM RIDE, aparecia
+      // aqui com 0 € de Uber apesar de ter 483,93 € já resolvidos.
       const { data: uberTrans } = await supabase
-        // O resumo semanal, não as transacções em bruto — a mesma fonte que o
-        // ecrã de Contas e o painel do motorista usam. Ver 20260814170000.
         .from('uber_resumos_semanais')
         .select('ganhos_brutos')
-        .in('uber_driver_id', associatedUberIds)
+        .eq('motorista_id', motoristaId)
         .lte('periodo_inicio', weekEndStr)
         .gte('periodo_fim', weekStartStr);
 
@@ -356,7 +352,6 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       let finReparacoes = 0;
       let finCaucao = 0;
       let finSeguros = 0;
-      let finRendaViatura = 0;
       let finOutros = 0;
 
       (finData || []).forEach((mov: any) => {
@@ -368,7 +363,13 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
           if (mov.categoria === 'reparacao') finReparacoes += val;
           else if (mov.categoria === 'caucao') finCaucao += val;
           else if (mov.categoria === 'seguros') finSeguros += val;
-          else if (mov.categoria === 'renda_viatura') finRendaViatura += val;
+          // Um débito de renda_viatura já está representado no aluguer do
+          // contrato (fixedRent, acima) — somá-lo aqui duplicava sempre que
+          // havia contrato, e inventava dívida a partir do nada quando não
+          // havia (caso real: Paulo André Antunes Badalo, sem viatura
+          // atribuída, com 225 € "de aluguer" vindos só deste débito
+          // avulso). Mesma regra de movimentosMotorista.ts.
+          else if (mov.categoria === 'renda_viatura') return;
           else finOutros += val;
         }
       });
@@ -386,7 +387,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         ? faturadoPlataformas
         : faturadoPlataformas / 1.06;
 
-      const totalAluguer = fixedRent + finRendaViatura;
+      const totalAluguer = fixedRent;
       const totalOutrosCustos = finOutros + extraCostsTotal;
       const receitaTotalFinal = receitaLiquidaPlataformas + extraCredits;
       const custosTotal =
