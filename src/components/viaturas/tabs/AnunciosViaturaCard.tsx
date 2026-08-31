@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +22,7 @@ import {
   useViaturaElegivelAnuncios,
 } from '@/hooks/useAnunciosViatura';
 import { formatarDataPt, formatarRotuloAnuncio } from '@/types/anuncio';
+import { formatCurrency } from '@/utils/formatters';
 
 interface AnunciosViaturaCardProps {
   /** Nulo enquanto a viatura ainda não foi gravada — sem id não há o que ligar. */
@@ -39,6 +41,7 @@ export function AnunciosViaturaCard({ viaturaId }: AnunciosViaturaCardProps) {
   const { data: porAtribuir = [] } = useAnunciosPorAtribuir();
   const atribuir = useAtribuirAnuncio();
   const desatribuir = useDesatribuirAnuncio();
+  const [valorEscolhido, setValorEscolhido] = useState('');
 
   if (!viaturaId) return null;
 
@@ -50,7 +53,16 @@ export function AnunciosViaturaCard({ viaturaId }: AnunciosViaturaCardProps) {
   };
 
   const escolherAnuncio = (anuncioId: string) => {
-    atribuir.mutate({ anuncioId, viaturaId }, { onError: (e) => toast.error(e.message) });
+    setValorEscolhido(anuncioId);
+    atribuir.mutate(
+      { anuncioId, viaturaId },
+      {
+        onError: (e) => {
+          toast.error(e.message);
+          setValorEscolhido('');
+        },
+      }
+    );
   };
 
   return (
@@ -72,7 +84,7 @@ export function AnunciosViaturaCard({ viaturaId }: AnunciosViaturaCardProps) {
           {anuncioAtual ? (
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <span className="font-medium">{anuncioAtual.cliente_nome}</span>
-              <span>{anuncioAtual.preco.toFixed(2)} €</span>
+              <span>{formatCurrency(anuncioAtual.preco)}</span>
               <span className="text-muted-foreground">
                 {formatarDataPt(anuncioAtual.data_inicio)} a {formatarDataPt(anuncioAtual.data_fim)}
               </span>
@@ -92,7 +104,11 @@ export function AnunciosViaturaCard({ viaturaId }: AnunciosViaturaCardProps) {
               </Button>
             </div>
           ) : (
-            <Select onValueChange={escolherAnuncio} disabled={atribuir.isPending}>
+            <Select
+              value={valorEscolhido}
+              onValueChange={escolherAnuncio}
+              disabled={atribuir.isPending}
+            >
               <SelectTrigger>
                 <SelectValue
                   placeholder={

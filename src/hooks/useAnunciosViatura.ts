@@ -120,5 +120,8 @@ export function useAtribuirAnuncio() {
       qc.invalidateQueries({ queryKey: [...CHAVE_DA_VIATURA, vars.viaturaId] });
       qc.invalidateQueries({ queryKey: ['cliente-anuncios'] });
     },
+    onError: () => {
+      qc.invalidateQueries({ queryKey: CHAVE_POR_ATRIBUIR });
+    },
   });
 }

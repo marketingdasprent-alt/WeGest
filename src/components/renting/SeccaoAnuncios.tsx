@@ -18,6 +18,7 @@ import {
   useDesatribuirAnuncio,
 } from '@/hooks/useClienteAnuncios';
 import { formatarDataPt } from '@/types/anuncio';
+import { formatCurrency } from '@/utils/formatters';
 
 interface SeccaoAnunciosProps {
   clienteId: string;
@@ -57,7 +58,13 @@ export function SeccaoAnuncios({ clienteId }: SeccaoAnunciosProps) {
 
   const guardarEdicao = async (anuncioId: string) => {
     const preco = Number(edicao.preco.replace(',', '.'));
-    if (!Number.isFinite(preco) || preco < 0 || !edicao.dataInicio || !edicao.dataFim) {
+    if (
+      !edicao.preco.trim() ||
+      !Number.isFinite(preco) ||
+      preco < 0 ||
+      !edicao.dataInicio ||
+      !edicao.dataFim
+    ) {
       toast.error('Preenche o preço e as duas datas.');
       return;
     }
@@ -84,7 +91,13 @@ export function SeccaoAnuncios({ clienteId }: SeccaoAnunciosProps) {
 
   const submeterNovo = async () => {
     const preco = Number(novo.preco.replace(',', '.'));
-    if (!Number.isFinite(preco) || preco < 0 || !novo.dataInicio || !novo.dataFim) {
+    if (
+      !novo.preco.trim() ||
+      !Number.isFinite(preco) ||
+      preco < 0 ||
+      !novo.dataInicio ||
+      !novo.dataFim
+    ) {
       toast.error('Preenche o preço e as duas datas.');
       return;
     }
@@ -231,7 +244,7 @@ export function SeccaoAnuncios({ clienteId }: SeccaoAnunciosProps) {
               </Card>
             ) : (
               <Card key={a.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
-                <span className="font-medium">{a.preco.toFixed(2)} €</span>
+                <span className="font-medium">{formatCurrency(a.preco)}</span>
                 <span className="text-muted-foreground">
                   {formatarDataPt(a.data_inicio)} a {formatarDataPt(a.data_fim)}
                 </span>
