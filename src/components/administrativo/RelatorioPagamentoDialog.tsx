@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
+import { colunaDoMovimento, type ColunaFinanceira } from './relatorioPagamentoCategorias';
 
 interface ResumoBase {
   motorista_id?: string;
@@ -54,31 +55,6 @@ interface LinhaRelatorio {
   ajudaCusto: number;
   outrasDevolucoes: number;
 }
-
-type ColunaFinanceira =
-  | 'rnvat'
-  | 'seguros'
-  | 'acordos'
-  | 'caucao'
-  | 'negativoAnterior'
-  | 'devCaucao'
-  | 'bonificacao'
-  | 'ajudaCusto'
-  | 'outrasDevolucoes';
-
-// Categorias de motorista_financeiro que alimentam colunas deste relatório
-// (somadas por valor absoluto, independentemente de crédito/débito).
-const CAT_MAP: Record<string, ColunaFinanceira> = {
-  rnvat: 'rnvat',
-  seguros: 'seguros',
-  acordo: 'acordos',
-  caucao: 'caucao',
-  negativo_anterior: 'negativoAnterior',
-  dev_caucao: 'devCaucao',
-  bonus: 'bonificacao',
-  ajuda_custo: 'ajudaCusto',
-  outras_devolucoes: 'outrasDevolucoes',
-};
 
 const fmtEur = (v: number) =>
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v || 0);
@@ -230,7 +206,7 @@ export function RelatorioPagamentoDialog({
           supabase.from('motoristas_ativos').select('id, iban').in('id', ids),
           supabase
             .from('motorista_financeiro')
-            .select('motorista_id, valor, categoria')
+            .select('motorista_id, valor, categoria, tipo')
             .gte('data_movimento', weekStartStr)
             .lte('data_movimento', weekEndStr)
             .eq('status', 'pendente')
@@ -247,8 +223,11 @@ export function RelatorioPagamentoDialog({
 
         const fin: Record<string, Partial<Record<ColunaFinanceira, number>>> = {};
         (financeiroResult.data || []).forEach((m: any) => {
-          const col = m.categoria ? CAT_MAP[m.categoria] : undefined;
-          if (!col || !m.motorista_id) return;
+          if (!m.motorista_id) return;
+          // Ver relatorioPagamentoCategorias.ts: uma categoria desconhecida
+          // (ex: 'outro') desaparecia do relatório em silêncio.
+          const col = colunaDoMovimento(m.categoria, m.tipo);
+          if (!col) return;
           const val = Math.abs(Number(m.valor) || 0);
           if (!fin[m.motorista_id]) fin[m.motorista_id] = {};
           fin[m.motorista_id][col] = (fin[m.motorista_id][col] || 0) + val;
