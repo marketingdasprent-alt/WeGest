@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { calcularBaseAluguerRenting, calcularFaturacaoRenting } from './useRentingGruposTarifas';
+import {
+  calcularBaseAluguerRenting,
+  calcularFaturacaoRenting,
+  resolverValorTotalManualAoMudarTarifa,
+} from './useRentingGruposTarifas';
 
 describe('calcularBaseAluguerRenting', () => {
   it('usa o valor semanal para contratos TVDE quando há preço por modelo', () => {
@@ -232,5 +236,106 @@ describe('calcularFaturacaoRenting', () => {
       preco_mes: null,
     });
     expect(semPreco).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// resolverValorTotalManualAoMudarTarifa — mudar a tarifa no formulário do
+// contrato tinha de recalcular o preço, e não recalculava: valor_total_manual
+// manda sobre calcularBaseAluguerRenting e sobre o preview deste cartão
+// (que mostra valor_total_manual ?? faturacao.valor), por isso trocar a
+// tarifa com um manual já gravado não mudava NADA — nem o número guardado,
+// nem o que aparecia no ecrã. Em 206 dos 236 contratos vivos há um
+// valor_total_manual gravado.
+// ─────────────────────────────────────────────────────────────────────────
+describe('resolverValorTotalManualAoMudarTarifa', () => {
+  it('TVDE: o novo preço semanal do modelo passa a ser o valor a gravar', () => {
+    const novo = resolverValorTotalManualAoMudarTarifa(
+      'tvde',
+      false,
+      7,
+      { preco_dia: null, preco_semana: 300, preco_mes: null },
+      300, // precoModeloSemana da tarifa nova
+      null,
+      null
+    );
+    expect(novo).toBe(300);
+  });
+
+  // O caso concreto encontrado na auditoria: contrato #375 (BP-25-AD) tinha
+  // valor_total_manual = 300 gravado; a tarifa no ecrã foi trocada para uma
+  // de 275/semana. Sem esta correção o contrato continuava a cobrar 300.
+  it('reescreve um valor_total_manual antigo pelo preço da tarifa nova, mesmo que existisse um manual', () => {
+    const novo = resolverValorTotalManualAoMudarTarifa(
+      'tvde',
+      false,
+      7,
+      { preco_dia: null, preco_semana: 275, preco_mes: null },
+      275,
+      null,
+      null
+    );
+    expect(novo).toBe(275);
+  });
+
+  it('rent-a-car diário: recalcula dias × preço/dia da tarifa nova', () => {
+    const novo = resolverValorTotalManualAoMudarTarifa(
+      'rent_a_car',
+      false,
+      5,
+      { preco_dia: 40, preco_semana: null, preco_mes: null },
+      null,
+      40,
+      null
+    );
+    expect(novo).toBe(200);
+  });
+
+  it('rent-a-car longa duração: usa o preço/mês da tarifa nova', () => {
+    const novo = resolverValorTotalManualAoMudarTarifa(
+      'rent_a_car',
+      true,
+      30,
+      { preco_dia: null, preco_semana: null, preco_mes: 650 },
+      null,
+      null,
+      650
+    );
+    expect(novo).toBe(650);
+  });
+
+  it('regime slot: nunca toca no valor — o slot não é calculado por tarifa', () => {
+    const novo = resolverValorTotalManualAoMudarTarifa(
+      'slot',
+      false,
+      7,
+      { preco_dia: null, preco_semana: 300, preco_mes: null },
+      300,
+      null,
+      null
+    );
+    expect(novo).toBeNull();
+  });
+
+  it('tarifa limpa (null): não inventa um preço, o manual existente fica como está', () => {
+    const novo = resolverValorTotalManualAoMudarTarifa('tvde', false, 7, null, null, null, null);
+    expect(novo).toBeNull();
+  });
+
+  // O modelo da viatura não tem preço definido nesta tarifa nova — é o caso
+  // que o alerta "Modelo sem preço nesta tarifa" assinala no ecrã. Não se
+  // inventa um valor; o utilizador tem de escolher outra tarifa ou definir o
+  // preço do modelo primeiro.
+  it('tarifa sem preço para o modelo: não sobrescreve o valor existente', () => {
+    const novo = resolverValorTotalManualAoMudarTarifa(
+      'tvde',
+      false,
+      7,
+      { preco_dia: null, preco_semana: null, preco_mes: null },
+      null,
+      null,
+      null
+    );
+    expect(novo).toBeNull();
   });
 });
