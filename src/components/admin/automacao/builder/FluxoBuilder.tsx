@@ -12,13 +12,13 @@ import { LayoutGrid, Plus, Redo2, Undo2, Workflow } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ExecucaoDrillDownSheet } from '../ExecucaoDrillDownSheet';
 import { IdentidadeDoFluxo } from './IdentidadeDoFluxo';
-import { criarNoDoTemplate, type TemplateDeNo } from './catalogo';
+import { criarNoDoTemplate, templatePorChave, type TemplateDeNo } from './catalogo';
 import { useCoresDoCanvas } from './coresDoCanvas';
 import type { AutomationEdge } from './dominio/tipos';
 import { useEditorAutomacao } from './editorAutomacao.contexto';
 import { edgeTypes } from './edges';
 import { arrumarFluxo } from './arrumarFluxo';
-import { inserirEntre, inserirNaPonta } from './inserirPasso';
+import { inserirEntre, inserirSolto } from './inserirPasso';
 import { nodeTypesBuilder } from './nodes';
 import { PainelBlocos } from './PainelBlocos';
 import { PainelPropriedades } from './sidebar/PainelPropriedades';
@@ -62,7 +62,7 @@ function Construtor() {
     setVista,
   } = useEditorAutomacao();
   const cores = useCoresDoCanvas();
-  const { fitView } = useRealFlow();
+  const { fitView, screenToFlow } = useRealFlow();
 
   /**
    * O `fitView` da prop só corre na montagem — e nessa altura o canvas ainda
@@ -127,16 +127,35 @@ function Construtor() {
   const escolherBloco = useCallback(
     (template: TemplateDeNo) => {
       sequencia.current += 1;
-      const novo = criarNoDoTemplate(template, { x: 0, y: 0 }, sequencia.current);
       const alvo = arestaAlvo.current;
 
-      // Nós e arestas na mesma passagem: separá-las deixava o React Flow
-      // renderizar um instante com uma aresta a apontar a um nó inexistente.
-      const resultado = alvo
-        ? inserirEntre(nodes, edges, alvo, novo)
-        : inserirNaPonta(nodes, edges, novo);
-      setNodes(resultado.nodes);
-      setEdges(resultado.edges);
+      if (alvo) {
+        // Nós e arestas na mesma passagem: separá-las deixava o React Flow
+        // renderizar um instante com uma aresta a apontar a um nó inexistente.
+        const novo = criarNoDoTemplate(template, { x: 0, y: 0 }, sequencia.current);
+        const resultado = inserirEntre(nodes, edges, alvo, novo);
+        setNodes(resultado.nodes);
+        setEdges(resultado.edges);
+      } else {
+        // Sem aresta-alvo (clicou "Passo" na barra de topo): larga o bloco
+        // solto, ao lado do nó mais à direita — o utilizador liga à mão.
+        // Com várias acções possíveis por gatilho, "ligar ao último" deixou
+        // de ter um único significado correcto.
+        const posicao =
+          nodes.length === 0
+            ? { x: 0, y: 0 }
+            : nodes.reduce(
+                (maisAFrente, n) => (n.position.x > maisAFrente.x ? n.position : maisAFrente),
+                nodes[0].position
+              );
+        const resultado = inserirSolto(
+          nodes,
+          { x: posicao.x + 320, y: posicao.y },
+          template,
+          sequencia.current
+        );
+        setNodes(resultado.nodes);
+      }
       setPainelAberto(false);
     },
     [nodes, edges, setNodes, setEdges]
@@ -172,7 +191,25 @@ function Construtor() {
     | undefined;
 
   return (
-    <div className="relative h-full min-h-0 overflow-hidden rounded-xl border border-border bg-canvas">
+    <div
+      className="relative h-full min-h-0 overflow-hidden rounded-xl border border-border bg-canvas"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('application/x-wegest-bloco')) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }}
+      onDrop={(e) => {
+        const chave = e.dataTransfer.getData('application/x-wegest-bloco');
+        if (!chave) return;
+        e.preventDefault();
+        const template = templatePorChave(chave);
+        if (!template) return;
+        sequencia.current += 1;
+        const posicao = screenToFlow({ x: e.clientX, y: e.clientY });
+        const resultado = inserirSolto(nodes, posicao, template, sequencia.current);
+        setNodes(resultado.nodes);
+      }}
+    >
       <RealFlow
         nodes={nodes}
         edges={arestasComAccao}
