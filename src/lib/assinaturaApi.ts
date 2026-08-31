@@ -11,21 +11,21 @@ import type { PapelSignatario } from '@/lib/assinaturas';
  * corre para gente sem sessão e não pode ter acesso a tabela nenhuma.
  */
 
+/** Link por usar: vai a fotografia, que é o que permite desenhar o documento. */
 export interface PedidoValido {
   estado: 'valido';
   documentoNome: string;
   papel: PapelSignatario;
   signatarioNome: string;
-  expiraEm: string;
   snapshot: DocumentoSnapshot;
 }
 
-export interface PedidoExpirado {
-  estado: 'expirado';
-  documentoNome: string;
-  expirouEm: string;
-}
-
+/**
+ * Link já usado. Não traz fotografia: aquele link acabou.
+ *
+ * Quem assinou continua a poder descarregar o que assinou — é dele. Para haver
+ * assinatura nova, quem trata do contrato envia um pedido novo, com link novo.
+ */
 export interface PedidoAssinado {
   estado: 'assinado';
   documentoNome: string;
@@ -33,7 +33,7 @@ export interface PedidoAssinado {
   urlAssinado: string | null;
 }
 
-export type RespostaPedido = PedidoValido | PedidoExpirado | PedidoAssinado;
+export type RespostaPedido = PedidoValido | PedidoAssinado;
 
 export async function carregarPedido(token: string): Promise<RespostaPedido> {
   const { data, error } = await supabase.functions.invoke('assinatura-por-token', {

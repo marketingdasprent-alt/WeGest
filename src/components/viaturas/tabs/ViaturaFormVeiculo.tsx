@@ -24,6 +24,8 @@ import {
 
 interface ViaturaFormVeiculoProps {
   form: UseFormReturn<ViaturaFormData>;
+  /** Só nas viaturas novas: marca o Tipo com * e tira a opção "sem tipo". */
+  tipoObrigatorio?: boolean;
   watchedMarcaId: string;
   marcas: ViaturaMarca[];
   modelos: ViaturaModelo[];
@@ -54,6 +56,7 @@ interface ViaturaFormVeiculoProps {
 
 export function ViaturaFormVeiculo({
   form,
+  tipoObrigatorio = false,
   watchedMarcaId,
   marcas,
   modelos,
@@ -211,7 +214,9 @@ export function ViaturaFormVeiculo({
           name="tipo_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Tipo</FormLabel>
+              <FormLabel>
+                Tipo {tipoObrigatorio && <span className="text-destructive">*</span>}
+              </FormLabel>
               <Select
                 key={`tipo-${viaturasTipos.some((t) => t.id === field.value)}`}
                 value={field.value || ''}
@@ -223,7 +228,9 @@ export function ViaturaFormVeiculo({
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="none">— Sem tipo —</SelectItem>
+                  {/* Sendo obrigatório, oferecer "sem tipo" seria oferecer a
+                      única escolha que não passa na validação. */}
+                  {!tipoObrigatorio && <SelectItem value="none">— Sem tipo —</SelectItem>}
                   {viaturasTipos.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
                       {t.nome}

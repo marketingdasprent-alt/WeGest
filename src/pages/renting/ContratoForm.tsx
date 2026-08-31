@@ -359,7 +359,13 @@ const ContratoForm = () => {
                   <TabsList className="w-full justify-start overflow-x-auto">
                     <TabsTrigger value="geral">Geral</TabsTrigger>
                     {isEdit && contrato && <TabsTrigger value="coberturas">Coberturas</TabsTrigger>}
-                    {isEdit && contrato && <TabsTrigger value="extras">Extras</TabsTrigger>}
+                    {/* Extras aparece TAMBEM ao criar: o contrato nasce com os
+                        extras da reserva ja pre-preenchidos (ver useContratoForm)
+                        e sem esta aba eles ficavam invisiveis ate gravar — quem
+                        pusesse Via Verde na reserva nao tinha onde o confirmar
+                        nem onde o tirar. Sao gravados logo a seguir a criacao,
+                        pelo syncRelacoes, portanto nao ha nada a esperar. */}
+                    <TabsTrigger value="extras">Extras</TabsTrigger>
                     {isEdit && contrato && <TabsTrigger value="taxas">Taxas</TabsTrigger>}
                     {isEdit && contrato && <TabsTrigger value="faturar">Faturar</TabsTrigger>}
                     <TabsTrigger value="danos">Danos</TabsTrigger>
@@ -391,11 +397,9 @@ const ContratoForm = () => {
                     </TabsContent>
                   )}
 
-                  {isEdit && contrato && (
-                    <TabsContent value="extras" className="mt-4">
-                      <ContratoTabExtras form={form} extras={extrasCatalogo} />
-                    </TabsContent>
-                  )}
+                  <TabsContent value="extras" className="mt-4">
+                    <ContratoTabExtras form={form} extras={extrasCatalogo} />
+                  </TabsContent>
 
                   {isEdit && contrato && (
                     <TabsContent value="taxas" className="mt-4">

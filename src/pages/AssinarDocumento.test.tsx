@@ -142,20 +142,31 @@ describe('AssinarDocumento', () => {
     expect(screen.getByRole('button', { name: /^assinar/i })).toBeDisabled();
   });
 
-  it('diz que o prazo terminou e a quem pedir outro link', async () => {
+  // O link deixou de ter prazo. Um pedido antigo abre na mesma e deixa assinar —
+  // antes obrigava a gerar um pedido novo so para corrigir um traco mal dado.
+  it('um pedido antigo continua a deixar assinar, sem ecra de prazo terminado', async () => {
     const carregar = vi.fn().mockResolvedValue({
-      estado: 'expirado',
+      estado: 'valido',
       documentoNome: 'Contrato de Aluguer',
-      expirouEm: '2026-08-01T12:00:00Z',
+      papel: 'cliente',
+      signatarioNome: 'Ana Reis',
+      snapshot: snapshotDeTeste,
+      assinadoEm: null,
+      urlAssinado: null,
+      assinaturasTotal: 0,
     });
 
     renderPagina({ carregar, submeter: vi.fn() });
 
-    expect(await screen.findByText(/prazo para assinar terminou/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^assinar/i })).not.toBeInTheDocument();
+    expect(await screen.findByText('Contrato de Aluguer')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^assinar/i })).toBeInTheDocument();
+    expect(screen.queryByText(/prazo/i)).not.toBeInTheDocument();
   });
 
-  it('quando já foi assinado, mostra a data e deixa descarregar', async () => {
+  // O link e de UMA utilizacao: depois de assinado, aquele link acabou. Quem
+  // assinou continua a poder descarregar o que assinou, e para assinar outra vez
+  // e preciso um pedido novo, enviado de dentro.
+  it('um link ja usado mostra a prova e nao deixa assinar outra vez', async () => {
     const carregar = vi.fn().mockResolvedValue({
       estado: 'assinado',
       documentoNome: 'Contrato de Aluguer',
@@ -170,6 +181,21 @@ describe('AssinarDocumento', () => {
       'href',
       'https://exemplo.pt/assinado.pdf'
     );
+    // O essencial deste modelo: nao ha onde assinar.
+    expect(screen.queryByRole('button', { name: /^assinar/i })).not.toBeInTheDocument();
+  });
+
+  it('diz a quem ja assinou que precisa de um pedido novo', async () => {
+    const carregar = vi.fn().mockResolvedValue({
+      estado: 'assinado',
+      documentoNome: 'Contrato de Aluguer',
+      assinadoEm: '2026-08-20T10:00:00Z',
+      urlAssinado: null,
+    });
+
+    renderPagina({ carregar, submeter: vi.fn() });
+
+    expect(await screen.findByText(/peça um novo pedido/i)).toBeInTheDocument();
   });
 
   it('avisa quando o link não existe', async () => {

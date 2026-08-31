@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, Clock, FileText, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle2, FileText, Loader2, XCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -158,18 +158,8 @@ export function AssinarDocumento({
     );
   }
 
-  if (pedido.estado === 'expirado') {
-    return (
-      <Moldura>
-        <Estado
-          icone={<Clock className="h-10 w-10 text-amber-600" />}
-          titulo="O prazo para assinar terminou"
-          texto={`Este link expirou a ${dataLegivel(pedido.expirouEm)}. Peça um novo link a quem lhe enviou o documento — leva um minuto a gerar.`}
-        />
-      </Moldura>
-    );
-  }
-
+  // Não há caminho de "expirado": o link não tem prazo. Há caminho de "já
+  // assinado", porque o link é de uma só utilização.
   if (pedido.estado === 'assinado' || concluido) {
     const assinadoEm = pedido.estado === 'assinado' ? pedido.assinadoEm : new Date().toISOString();
     const url = pedido.estado === 'assinado' ? pedido.urlAssinado : null;
@@ -179,7 +169,7 @@ export function AssinarDocumento({
         <Estado
           icone={<CheckCircle2 className="h-10 w-10 text-emerald-600" />}
           titulo={`Assinado a ${dataLegivel(assinadoEm)}`}
-          texto="O documento assinado foi enviado para o seu email. Guarde essa cópia."
+          texto="O documento assinado foi enviado para o seu email. Guarde essa cópia. Este link já foi usado — se for preciso assinar de novo, peça um novo pedido a quem lhe enviou o documento."
         />
         {url && (
           <div className="mt-4 flex justify-center">

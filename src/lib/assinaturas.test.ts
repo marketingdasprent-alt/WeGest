@@ -93,36 +93,25 @@ describe('agruparPorPessoa', () => {
 });
 
 describe('estadoDoToken', () => {
-  const AGORA = new Date('2026-08-25T12:00:00Z');
-
-  it('é válido dentro do prazo e por assinar', () => {
-    expect(estadoDoToken({ expires_at: '2026-09-24T12:00:00Z', assinado_em: null }, AGORA)).toBe(
-      'valido'
-    );
+  it('por assinar e valido', () => {
+    expect(estadoDoToken({ assinado_em: null })).toBe('valido');
   });
 
-  it('é expirado depois do prazo', () => {
-    expect(estadoDoToken({ expires_at: '2026-08-24T12:00:00Z', assinado_em: null }, AGORA)).toBe(
-      'expirado'
-    );
+  it('ja assinado diz assinado', () => {
+    expect(estadoDoToken({ assinado_em: '2026-08-23T09:00:00Z' })).toBe('assinado');
   });
 
-  it('assinado ganha ao prazo, mesmo já expirado', () => {
-    // Quem assinou tem de conseguir voltar a abrir o link e descarregar o
-    // documento assinado, mesmo passado o prazo. Dizer-lhe "expirou" seria
-    // esconder-lhe um documento que é dele.
-    expect(
-      estadoDoToken(
-        { expires_at: '2026-08-24T12:00:00Z', assinado_em: '2026-08-23T09:00:00Z' },
-        AGORA
-      )
-    ).toBe('assinado');
+  // O prazo deixou de contar. Antes, um link caducado obrigava a criar um pedido
+  // novo so para corrigir um traco mal dado; e quem ja tinha assinado nao
+  // conseguia voltar a assinar sem ajuda de dentro.
+  it('nao ha estado expirado: um pedido antigo continua a poder ser assinado', () => {
+    expect(estadoDoToken({ assinado_em: null })).toBe('valido');
   });
 
-  it('expira no instante exacto do prazo', () => {
-    expect(estadoDoToken({ expires_at: '2026-08-25T12:00:00Z', assinado_em: null }, AGORA)).toBe(
-      'expirado'
-    );
+  // "assinado" e informacao, nao e uma porta fechada: quem abre o link pode
+  // sempre voltar a assinar, e vale a ultima assinatura.
+  it('assinado nao impede assinar de novo — e so o registo da ultima', () => {
+    expect(estadoDoToken({ assinado_em: '2020-01-01T00:00:00Z' })).toBe('assinado');
   });
 });
 

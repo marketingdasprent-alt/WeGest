@@ -24,15 +24,13 @@ function json(body: unknown, status = 200): Response {
 }
 
 /**
- * Cópia da regra testada em src/lib/assinaturas.ts. Assinado ganha ao prazo:
- * quem assinou tem de poder voltar ao link para descarregar o documento.
+ * Cópia da regra testada em src/lib/assinaturas.ts.
+ *
+ * O link NÃO expira, mas é de UMA utilização: o tempo não o fecha, a assinatura
+ * fecha. Para assinar outra vez, quem trata do contrato envia um pedido novo.
  */
-function estadoDoToken(
-  pedido: { expires_at: string; assinado_em: string | null },
-  agora: Date
-): 'valido' | 'expirado' | 'assinado' {
-  if (pedido.assinado_em) return 'assinado';
-  return new Date(pedido.expires_at) <= agora ? 'expirado' : 'valido';
+function estadoDoToken(pedido: { assinado_em: string | null }): 'valido' | 'assinado' {
+  return pedido.assinado_em ? 'assinado' : 'valido';
 }
 
 serve(async (req) => {
@@ -50,7 +48,7 @@ serve(async (req) => {
     const { data: pedido, error } = await supabase
       .from('documento_assinatura_pedidos')
       .select(
-        'id, papel, signatario_nome, documento_nome, snapshot_path, expires_at, assinado_em, documento_assinado_path'
+        'id, papel, signatario_nome, documento_nome, snapshot_path, assinado_em, documento_assinado_path'
       )
       .eq('id', token)
       .maybeSingle();
@@ -60,16 +58,11 @@ serve(async (req) => {
     // de nada a quem adivinha identificadores.
     if (error || !pedido) return json({ error: 'Pedido não encontrado.' }, 404);
 
-    const estado = estadoDoToken(pedido, new Date());
+    const estado = estadoDoToken(pedido);
 
-    if (estado === 'expirado') {
-      return json({
-        estado,
-        documentoNome: pedido.documento_nome,
-        expirouEm: pedido.expires_at,
-      });
-    }
-
+    // Link já usado: devolve a prova e NÃO devolve a fotografia. Sem fotografia
+    // não há como desenhar o documento outra vez, que é o que torna o link
+    // realmente de uma utilização e não apenas de uma por convenção.
     if (estado === 'assinado') {
       let urlAssinado: string | null = null;
       if (pedido.documento_assinado_path) {
@@ -87,8 +80,8 @@ serve(async (req) => {
       });
     }
 
-    // Válido: vai a fotografia, que é o que permite desenhar o documento outra
-    // vez no browser de quem assina.
+    // Por assinar: vai a fotografia, que é o que permite desenhar o documento
+    // outra vez no browser de quem assina.
     const { data: ficheiro, error: erroSnap } = await supabase.storage
       .from(BUCKET)
       .download(pedido.snapshot_path);
@@ -103,7 +96,6 @@ serve(async (req) => {
       documentoNome: pedido.documento_nome,
       papel: pedido.papel,
       signatarioNome: pedido.signatario_nome,
-      expiraEm: pedido.expires_at,
       snapshot: JSON.parse(await ficheiro.text()),
     });
   } catch (erro) {

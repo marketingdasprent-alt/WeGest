@@ -36,7 +36,20 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const drawing = useRef(false);
     const last = useRef<{ x: number; y: number } | null>(null);
+    // `empty` serve o desenho do ecrã (a indicação "Desenhe aqui"); `emptyRef` é
+    // a verdade que o `toDataURL`/`isEmpty` consultam.
+    //
+    // Têm de ser duas coisas porque o aviso `onChange` sai no mesmo instante em
+    // que o traço começa, e quem o recebe vai logo buscar o valor. O estado do
+    // React só muda no render seguinte — a ler dali, a primeira assinatura
+    // devolvia sempre `null` e obrigava a desenhar duas vezes para "pegar".
     const [empty, setEmpty] = useState(true);
+    const emptyRef = useRef(true);
+
+    const marcarVazio = (vazio: boolean) => {
+      emptyRef.current = vazio;
+      setEmpty(vazio);
+    };
 
     // Bounding box do traço (em coords do canvas) para recortar no export.
     const bounds = useRef({ minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
@@ -86,7 +99,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
       ctx.moveTo(p.x, p.y);
       ctx.lineTo(p.x + 0.1, p.y + 0.1);
       ctx.stroke();
-      if (empty) setEmpty(false);
+      marcarVazio(false);
       // Cada novo traço marca alteração — mesmo por cima de uma assinatura já
       // carregada (senão o botão Guardar nunca reativava ao redesenhar).
       onChange?.(false);
@@ -116,6 +129,12 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
       } catch {
         /* pointer já libertado */
       }
+      // Segundo aviso, e é este que interessa ao valor. O do `pointerDown`
+      // serve para o botão ligar logo, mas quem o recebe fotografa o canvas
+      // nesse instante — quando só lá está o ponto inicial. Sem este, o que
+      // era submetido ia sempre um traço atrasado: desenhava-se, e só o traço
+      // SEGUINTE é que capturava o anterior.
+      onChange?.(false);
     };
 
     const doClear = () => {
@@ -123,7 +142,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
       if (!ctx || !canvasRef.current) return;
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
       resetBounds();
-      setEmpty(true);
+      marcarVazio(true);
       onChange?.(true);
     };
 
@@ -134,7 +153,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
       ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
       resetBounds();
       if (!value) {
-        setEmpty(true);
+        marcarVazio(true);
         return;
       }
       const img = new Image();
@@ -147,17 +166,17 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(
         ctx.drawImage(img, dx, dy, w, h);
         // Registar bounds aproximados para permitir re-exportar o valor carregado.
         bounds.current = { minX: dx, minY: dy, maxX: dx + w, maxY: dy + h };
-        setEmpty(false);
+        marcarVazio(false);
       };
       img.src = value;
     }, [value]);
 
     useImperativeHandle(ref, () => ({
       clear: doClear,
-      isEmpty: () => empty,
+      isEmpty: () => emptyRef.current,
       toDataURL: () => {
         const canvas = canvasRef.current;
-        if (!canvas || empty) return null;
+        if (!canvas || emptyRef.current) return null;
         const b = bounds.current;
         if (!isFinite(b.minX)) return canvas.toDataURL('image/png');
         // Recorta à área desenhada com uma margem, para o PDF não levar espaço morto.

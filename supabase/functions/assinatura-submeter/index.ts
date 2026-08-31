@@ -38,15 +38,6 @@ function base64ParaBytes(base64: string): Uint8Array {
   return bytes;
 }
 
-/** Cópia da regra testada em src/lib/assinaturas.ts. */
-function estadoDoToken(
-  pedido: { expires_at: string; assinado_em: string | null },
-  agora: Date
-): 'valido' | 'expirado' | 'assinado' {
-  if (pedido.assinado_em) return 'assinado';
-  return new Date(pedido.expires_at) <= agora ? 'expirado' : 'valido';
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -66,23 +57,19 @@ serve(async (req) => {
     const { data: pedido, error } = await supabase
       .from('documento_assinatura_pedidos')
       .select(
-        'id, org_id, signatario_nome, signatario_email, documento_nome, expires_at, assinado_em, created_by'
+        'id, org_id, signatario_nome, signatario_email, documento_nome, assinado_em, created_by'
       )
       .eq('id', token)
       .maybeSingle();
 
     if (error || !pedido) return json({ error: 'Pedido não encontrado.' }, 404);
 
-    const estado = estadoDoToken(pedido, new Date());
-    if (estado !== 'valido') {
+    // O link é de UMA utilização. Não há prazo a verificar — o tempo não o
+    // fecha — mas uma assinatura fecha-o. Para assinar outra vez, quem trata
+    // do contrato envia um pedido novo, com link novo.
+    if (pedido.assinado_em) {
       return json(
-        {
-          error:
-            estado === 'assinado'
-              ? 'Este documento já foi assinado.'
-              : 'O prazo para assinar este documento terminou.',
-          estado,
-        },
+        { error: 'Este link já foi usado. Peça um novo pedido de assinatura.', estado: 'assinado' },
         409
       );
     }
@@ -123,8 +110,9 @@ serve(async (req) => {
         assinado_user_agent: req.headers.get('user-agent'),
       })
       .eq('id', pedido.id)
-      // Guarda contra duas submissões ao mesmo tempo: a segunda não encontra
-      // linha por assinar e não sobrepõe a prova da primeira.
+      // Compare-and-swap: duas submissões ao mesmo tempo (duplo clique, retry)
+      // e só uma escreve. A outra não encontra linha por assinar e a guarda
+      // acima já lhe respondeu — a prova da primeira nunca é sobreposta.
       .is('assinado_em', null);
 
     if (erroUpdate) throw new Error(`Falha ao registar a assinatura: ${erroUpdate.message}`);

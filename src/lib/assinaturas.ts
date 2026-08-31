@@ -70,22 +70,24 @@ export function agruparPorPessoa(lista: Signatario[]): string[] {
 }
 
 /** Em que pé está um pedido de assinatura, do ponto de vista de quem abre o link. */
-export type EstadoToken = 'valido' | 'expirado' | 'assinado';
+export type EstadoToken = 'valido' | 'assinado';
 
 /**
- * O link morre de duas maneiras: quando o prazo passa e quando é assinado.
+ * O link NÃO expira, mas é de UMA utilização.
  *
- * A ordem importa e não é arbitrária. Já assinado ganha sempre ao prazo: quem
- * assinou tem de poder voltar a abrir o link e descarregar o documento
- * assinado, mesmo semanas depois. Mostrar-lhe "o link expirou" seria esconder-
- * lhe um documento que é dele — e gera um telefonema que não devia existir.
+ * Duas coisas separadas, e a distinção é o desenho todo: o tempo não fecha o
+ * link — um pedido de há três meses continua a poder ser assinado — mas a
+ * assinatura fecha-o. Depois de assinado, aquele link acabou.
+ *
+ * Repetir faz-se do outro lado: quem trata do contrato envia um pedido NOVO,
+ * que gera um link novo, também sem prazo e também de uma só utilização. Quando
+ * esse for assinado, é essa a assinatura que vale — a anterior fica história.
+ *
+ * Assim, um link que corra mundo não dá a ninguém o poder de reassinar o
+ * documento mais tarde; para haver assinatura nova tem de partir de dentro.
  */
-export function estadoDoToken(
-  pedido: { expires_at: string; assinado_em: string | null },
-  agora: Date
-): EstadoToken {
-  if (pedido.assinado_em) return 'assinado';
-  return new Date(pedido.expires_at) <= agora ? 'expirado' : 'valido';
+export function estadoDoToken(pedido: { assinado_em: string | null }): EstadoToken {
+  return pedido.assinado_em ? 'assinado' : 'valido';
 }
 
 /** O mínimo que se precisa de saber de um condutor do contrato. */

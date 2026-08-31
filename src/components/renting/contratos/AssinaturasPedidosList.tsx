@@ -1,17 +1,15 @@
 import { useState } from 'react';
-import { CheckCircle2, Clock, Download, PenLine } from 'lucide-react';
+import { CheckCircle2, Download, FileText, PenLine } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { getDocumentoAssinadoUrl, type AssinaturaPedido } from '@/hooks/useAssinaturaPedidos';
+import { getDocumentoUrl, type AssinaturaPedido } from '@/hooks/useAssinaturaPedidos';
 
 export interface AssinaturasPedidosListProps {
   pedidos: AssinaturaPedido[];
   /** Injectáveis para testar sem rede. */
   obterUrl?: (path: string) => Promise<string | null>;
   abrirUrl?: (url: string) => void;
-  /** Só para testes: fixa o "agora" que decide se um prazo já passou. */
-  agora?: Date;
 }
 
 const ROTULO_PAPEL: Record<AssinaturaPedido['papel'], string> = {
@@ -35,9 +33,8 @@ function data(iso: string): string {
  */
 export function AssinaturasPedidosList({
   pedidos,
-  obterUrl = getDocumentoAssinadoUrl,
+  obterUrl = getDocumentoUrl,
   abrirUrl = (url) => window.open(url, '_blank', 'noopener'),
-  agora = new Date(),
 }: AssinaturasPedidosListProps) {
   const [aAbrir, setAAbrir] = useState<string | null>(null);
 
@@ -45,11 +42,12 @@ export function AssinaturasPedidosList({
   // uma secção vazia.
   if (pedidos.length === 0) return null;
 
-  const abrir = async (pedido: AssinaturaPedido) => {
-    if (!pedido.documento_assinado_path) return;
-    setAAbrir(pedido.id);
+  /** `chave` distingue os dois botões do mesmo pedido no estado de "a abrir". */
+  const abrir = async (chave: string, path: string | null) => {
+    if (!path) return;
+    setAAbrir(chave);
     try {
-      const url = await obterUrl(pedido.documento_assinado_path);
+      const url = await obterUrl(path);
       if (url) abrirUrl(url);
     } finally {
       setAAbrir(null);
@@ -66,12 +64,15 @@ export function AssinaturasPedidosList({
       <div className="space-y-2">
         {pedidos.map((pedido) => {
           const assinado = !!pedido.assinado_em;
-          const expirou = !assinado && new Date(pedido.expires_at) <= agora;
 
           return (
             <div
               key={pedido.id}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border p-3 text-sm"
+              className={
+                pedido.de_versao_anterior
+                  ? 'flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-dashed bg-muted/30 p-3 text-sm'
+                  : 'flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border p-3 text-sm'
+              }
             >
               <span className="font-medium">{pedido.signatario_nome}</span>
               <span className="text-muted-foreground">({ROTULO_PAPEL[pedido.papel]})</span>
@@ -83,27 +84,63 @@ export function AssinaturasPedidosList({
                 Enviado a {data(pedido.created_at)}
               </span>
 
-              {assinado ? (
-                <Badge variant="outline" className="gap-1 border-emerald-500/40">
-                  <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                  Assinado a {data(pedido.assinado_em as string)}
+              {/* Assinado sobre uma versão anterior deste contrato. Fica à
+                  vista, mas assinalado: o que a pessoa assinou foi o contrato
+                  como ele era nessa altura, não necessariamente este. */}
+              {pedido.de_versao_anterior && (
+                <Badge variant="outline" className="border-dashed">
+                  Versão anterior do contrato
                 </Badge>
-              ) : expirou ? (
-                <Badge variant="outline" className="gap-1 border-amber-500/40">
-                  <Clock className="h-3 w-3 text-amber-600" />
-                  Prazo terminado
+              )}
+
+              {/* Sem "prazo terminado": o link não expira. O que o fecha é ser
+                  usado — e por isso um pedido antigo por assinar continua
+                  simplesmente por assinar. */}
+              {assinado ? (
+                <Badge
+                  variant="outline"
+                  className={pedido.substituida ? 'gap-1' : 'gap-1 border-emerald-500/40'}
+                >
+                  <CheckCircle2
+                    className={
+                      pedido.substituida
+                        ? 'h-3 w-3 text-muted-foreground'
+                        : 'h-3 w-3 text-emerald-600'
+                    }
+                  />
+                  Assinado a {data(pedido.assinado_em as string)}
                 </Badge>
               ) : (
                 <Badge variant="secondary">Por assinar</Badge>
               )}
+
+              {/* Houve uma assinatura mais recente do mesmo documento, por um
+                  pedido posterior. Esta continua a poder ver-se, mas já não é a
+                  que vale. */}
+              {pedido.substituida && <Badge variant="outline">Substituída</Badge>}
+
+              {/* O original está sempre disponível, assinado ou não: é o que
+                  foi enviado, e serve para conferir e para imprimir. */}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1"
+                disabled={aAbrir === `${pedido.id}:original`}
+                onClick={() => void abrir(`${pedido.id}:original`, pedido.documento_path)}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Original
+              </Button>
 
               {assinado && pedido.documento_assinado_path && (
                 <Button
                   size="sm"
                   variant="ghost"
                   className="gap-1"
-                  disabled={aAbrir === pedido.id}
-                  onClick={() => void abrir(pedido)}
+                  disabled={aAbrir === `${pedido.id}:assinado`}
+                  onClick={() =>
+                    void abrir(`${pedido.id}:assinado`, pedido.documento_assinado_path)
+                  }
                 >
                   <Download className="h-3.5 w-3.5" />
                   Documento assinado

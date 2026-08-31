@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { proximoEstado } from './tiTicketEstados';
+import { ESTADOS_POR_RESOLVER, proximoEstado } from './tiTicketEstados';
 
 describe('proximoEstado', () => {
   it('uma sugestão leva de aberto a com_sugestao', () => {
@@ -68,5 +68,24 @@ describe('proximoEstado', () => {
     expect(proximoEstado('com_sugestao', 'reabrir')).toBeNull();
     expect(proximoEstado('nao_resolvido', 'reabrir')).toBeNull();
     expect(proximoEstado('presencial', 'reabrir')).toBeNull();
+  });
+});
+
+// A bolinha do dashboard conta "o que ainda não está resolvido". A lista sai
+// daqui, e não de um array escrito à mão noutro ficheiro: um estado novo na
+// máquina de estados passa a contar sozinho, em vez de ficar invisível até
+// alguém se lembrar de o acrescentar em dois sítios.
+describe('ESTADOS_POR_RESOLVER', () => {
+  it('inclui todos os estados menos resolvido', () => {
+    expect([...ESTADOS_POR_RESOLVER].sort()).toEqual([
+      'aberto',
+      'com_sugestao',
+      'nao_resolvido',
+      'presencial',
+    ]);
+  });
+
+  it('não conta o que já está resolvido', () => {
+    expect(ESTADOS_POR_RESOLVER).not.toContain('resolvido');
   });
 });

@@ -22,7 +22,10 @@ const porAssinar: AssinaturaPedido = {
   created_at: '2026-08-25T09:00:00Z',
   expires_at: '2026-09-24T09:00:00Z',
   assinado_em: null,
+  substituida: false,
+  documento_path: 'assinaturas/2026-08-25/documento.pdf',
   documento_assinado_path: null,
+  de_versao_anterior: false,
 };
 
 describe('AssinaturasPedidosList', () => {
@@ -51,15 +54,52 @@ describe('AssinaturasPedidosList', () => {
     expect(screen.getByRole('button', { name: /documento assinado/i })).toBeInTheDocument();
   });
 
-  it('assinala um pedido cujo prazo passou sem assinatura', () => {
+  // O link deixou de ter prazo: um pedido antigo por assinar continua a dizer
+  // "por assinar", e nao "prazo terminado", porque continua mesmo a poder ser
+  // assinado.
+  it('um pedido antigo por assinar continua por assinar, sem falar em prazos', () => {
+    render(
+      <AssinaturasPedidosList pedidos={[{ ...porAssinar, created_at: '2025-01-01T09:00:00Z' }]} />
+    );
+
+    expect(screen.getByText(/por assinar/i)).toBeInTheDocument();
+    expect(screen.queryByText(/prazo/i)).toBeNull();
+  });
+
+  it('marca como substituida a assinatura que um pedido posterior tornou antiga', () => {
     render(
       <AssinaturasPedidosList
-        pedidos={[{ ...porAssinar, expires_at: '2026-08-01T09:00:00Z' }]}
-        agora={new Date('2026-08-25T12:00:00Z')}
+        pedidos={[
+          {
+            ...porAssinar,
+            id: 'antiga',
+            assinado_em: '2026-08-26T10:00:00Z',
+            substituida: true,
+            documento_assinado_path: 'x/documento-assinado.pdf',
+          },
+        ]}
       />
     );
 
-    expect(screen.getByText(/prazo terminado/i)).toBeInTheDocument();
+    expect(screen.getByText('Substituída')).toBeInTheDocument();
+  });
+
+  it('a assinatura que vale nao aparece marcada', () => {
+    render(
+      <AssinaturasPedidosList
+        pedidos={[
+          {
+            ...porAssinar,
+            id: 'actual',
+            assinado_em: '2026-08-27T10:00:00Z',
+            substituida: false,
+            documento_assinado_path: 'x/documento-assinado.pdf',
+          },
+        ]}
+      />
+    );
+
+    expect(screen.queryByText('Substituída')).toBeNull();
   });
 
   it('não ocupa o ecrã quando não há pedidos', () => {
@@ -101,5 +141,105 @@ describe('AssinaturasPedidosList', () => {
 
     await vi.waitFor(() => expect(abrir).toHaveBeenCalledWith('caminho/doc.pdf'));
     await vi.waitFor(() => expect(janela).toHaveBeenCalledWith('https://exemplo.pt/assinado.pdf'));
+  });
+});
+
+/**
+ * Reverter um contrato para reserva e voltar a criá-lo faz nascer uma LINHA
+ * nova, com o mesmo número. Os pedidos ficam agarrados à linha onde foram
+ * feitos — e sem estes testes um documento já assinado desaparecia do ecrã.
+ * Aconteceu ao contrato 841 da matrícula 00-62-VF: quatro linhas, assinaturas
+ * em três delas, e a aba só mostrava a da linha viva, por assinar.
+ */
+describe('AssinaturasPedidosList — pedidos de versões anteriores', () => {
+  const assinadoAntes: AssinaturaPedido = {
+    id: 'p-antigo',
+    papel: 'cliente',
+    signatario_nome: 'Dinis Silva',
+    signatario_email: 'dinis@exemplo.pt',
+    documento_nome: 'Contrato de Aluguer 841',
+    created_at: '2026-08-28T14:31:00Z',
+    expires_at: '2026-09-27T14:31:00Z',
+    assinado_em: '2026-08-28T14:32:00Z',
+    substituida: false,
+    documento_path: 'assinaturas/2026-08-28/documento.pdf',
+    documento_assinado_path: 'contratos/841/documento-assinado.pdf',
+    de_versao_anterior: true,
+  };
+
+  it('mostra um pedido assinado numa versão anterior, em vez de o esconder', () => {
+    render(<AssinaturasPedidosList pedidos={[assinadoAntes]} />);
+
+    expect(screen.getByText('Contrato de Aluguer 841')).toBeTruthy();
+    expect(screen.getByText(/Assinado a/)).toBeTruthy();
+  });
+
+  it('assinala-o como sendo de uma versão anterior', () => {
+    render(<AssinaturasPedidosList pedidos={[assinadoAntes]} />);
+
+    expect(screen.getByText('Versão anterior do contrato')).toBeTruthy();
+  });
+
+  // Continua a poder descarregar-se: o documento existe e é prova do que foi
+  // assinado, mesmo que o contrato tenha sido refeito depois.
+  it('deixa descarregar o documento assinado da versão anterior', () => {
+    render(<AssinaturasPedidosList pedidos={[assinadoAntes]} />);
+
+    expect(screen.getByRole('button', { name: /Documento assinado/ })).toBeTruthy();
+  });
+
+  it('não marca como versão anterior um pedido do contrato actual', () => {
+    render(<AssinaturasPedidosList pedidos={[{ ...assinadoAntes, de_versao_anterior: false }]} />);
+
+    expect(screen.queryByText('Versão anterior do contrato')).toBeNull();
+  });
+});
+
+/**
+ * Ver o original e o assinado lado a lado. Ambos sao PDF e abrem num separador,
+ * que e de onde se imprime ou se guarda.
+ */
+describe('AssinaturasPedidosList — original e assinado', () => {
+  it('deixa abrir o original mesmo antes de estar assinado', async () => {
+    const obterUrl = vi.fn().mockResolvedValue('https://exemplo/original.pdf');
+    const abrirUrl = vi.fn();
+    render(
+      <AssinaturasPedidosList pedidos={[porAssinar]} obterUrl={obterUrl} abrirUrl={abrirUrl} />
+    );
+
+    screen.getByRole('button', { name: /Original/ }).click();
+
+    await vi.waitFor(() => expect(abrirUrl).toHaveBeenCalledWith('https://exemplo/original.pdf'));
+    expect(obterUrl).toHaveBeenCalledWith('assinaturas/2026-08-25/documento.pdf');
+  });
+
+  it('num pedido assinado oferece os dois documentos', () => {
+    const assinado: AssinaturaPedido = {
+      ...porAssinar,
+      id: 'p-assinado',
+      assinado_em: '2026-08-26T10:00:00Z',
+      documento_assinado_path: 'assinaturas/2026-08-25/documento-assinado.pdf',
+    };
+    render(<AssinaturasPedidosList pedidos={[assinado]} />);
+
+    expect(screen.getByRole('button', { name: /Original/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Documento assinado/ })).toBeTruthy();
+  });
+
+  it('abre o assinado, e nao o original, no botao do assinado', async () => {
+    const obterUrl = vi.fn().mockResolvedValue('https://exemplo/assinado.pdf');
+    const abrirUrl = vi.fn();
+    const assinado: AssinaturaPedido = {
+      ...porAssinar,
+      id: 'p-assinado',
+      assinado_em: '2026-08-26T10:00:00Z',
+      documento_assinado_path: 'assinaturas/2026-08-25/documento-assinado.pdf',
+    };
+    render(<AssinaturasPedidosList pedidos={[assinado]} obterUrl={obterUrl} abrirUrl={abrirUrl} />);
+
+    screen.getByRole('button', { name: /Documento assinado/ }).click();
+
+    await vi.waitFor(() => expect(abrirUrl).toHaveBeenCalled());
+    expect(obterUrl).toHaveBeenCalledWith('assinaturas/2026-08-25/documento-assinado.pdf');
   });
 });

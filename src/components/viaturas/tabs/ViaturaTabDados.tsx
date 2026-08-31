@@ -31,6 +31,8 @@ import {
 } from '@/hooks/useViaturaCatalogos';
 import {
   viaturaSchema,
+  viaturaSchemaNova,
+  resumoErrosViatura,
   DOCUMENTOS_VIATURA,
   type ViaturaFormData,
   type Viatura,
@@ -78,7 +80,9 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   const [batchUploading, setBatchUploading] = useState(false);
 
   const form = useForm<ViaturaFormData>({
-    resolver: zodResolver(viaturaSchema),
+    // Viatura nova exige o tipo; a já existente não, para não bloquear as
+    // 105 que estão em produção sem ele.
+    resolver: zodResolver(isNew ? viaturaSchemaNova : viaturaSchema),
     defaultValues: {
       matricula: '',
       marca: '',
@@ -247,13 +251,8 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   // o utilizador carregava em Guardar e "não acontecia nada". Mostra os campos
   // em falta num toast.
   const onInvalid = (errors: FieldErrors<ViaturaFormData>) => {
-    const msgs = Object.values(errors)
-      .map((e) => (e && typeof e.message === 'string' ? e.message : null))
-      .filter((m): m is string => !!m);
-    const unicas = Array.from(new Set(msgs)).slice(0, 5);
-    toast.error(
-      unicas.length ? unicas.join(' · ') : 'Verifica os campos obrigatórios assinalados a vermelho.'
-    );
+    const resumo = resumoErrosViatura(errors);
+    toast.error(resumo || 'Verifica os campos obrigatórios assinalados a vermelho.');
   };
 
   const handleUploadDocument = async (tipoDoc: string, file: File) => {
@@ -464,6 +463,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
 
               <ViaturaFormVeiculo
                 form={form}
+                tipoObrigatorio={isNew}
                 watchedMarcaId={watchedMarcaId}
                 marcas={marcas}
                 modelos={modelos}

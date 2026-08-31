@@ -41,6 +41,23 @@ import { presetToCronExpression } from '@/lib/cronPresets';
 import { cn } from '@/lib/utils';
 import { FATURACAO_PROVIDER_OPTIONS } from '@/lib/faturacaoProviders';
 
+// A conta Apify é do WeGest, não de cada org — o token/actor_id de cada
+// plataforma são partilhados por todas as empresas (ver migration
+// apify_credenciais_partilhadas). Usado como fallback quando a org ainda não
+// tem nenhuma integração desta plataforma para herdar o token, e como fonte
+// preferida do actor_id (os `*_DEFAULTS` hardcoded ficam desatualizados
+// sempre que alguém corrige um actor_id só na BD).
+async function fetchApifyCredenciaisPartilhadas(
+  robotTargetPlatform: string
+): Promise<{ apify_actor_id: string; apify_api_token: string } | null> {
+  const { data, error } = await supabase.functions.invoke<{
+    apify_actor_id: string;
+    apify_api_token: string;
+  }>('apify-credenciais-partilhadas', { body: { robot_target_platform: robotTargetPlatform } });
+  if (error || !data) return null;
+  return data;
+}
+
 interface IntegracaoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -387,13 +404,16 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
           throw new Error(boltCred.motivo ?? 'Teste a ligação antes de criar a integração.');
         }
 
-        const { data: comToken } = await supabase
-          .from('plataformas_configuracao')
-          .select('apify_api_token')
-          .in('plataforma', ['robot', 'via_verde'])
-          .eq('robot_target_platform', 'bolt')
-          .not('apify_api_token', 'is', null)
-          .limit(1);
+        const [{ data: comToken }, apifyPartilhadoBolt] = await Promise.all([
+          supabase
+            .from('plataformas_configuracao')
+            .select('apify_api_token')
+            .in('plataforma', ['robot', 'via_verde'])
+            .eq('robot_target_platform', 'bolt')
+            .not('apify_api_token', 'is', null)
+            .limit(1),
+          fetchApifyCredenciaisPartilhadas('bolt'),
+        ]);
 
         const { error: boltError } = await supabase.from('plataformas_configuracao').insert(
           payloadCriacaoBolt({
@@ -402,7 +422,10 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
             clientSecret: boltCred.clientSecret,
             companyId: boltCred.companyId,
             companyName: boltCred.companyName,
-            apifyApiToken: (comToken?.[0] as any)?.apify_api_token ?? null,
+            apifyApiToken:
+              (comToken?.[0] as any)?.apify_api_token ??
+              apifyPartilhadoBolt?.apify_api_token ??
+              null,
           }) as any
         );
         if (boltError) throw boltError;
@@ -426,30 +449,37 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
       // constante no código, que acabaria no bundle público de wegest.pt.
       // Via Verde procura em plataforma='via_verde' e as restantes em
       // plataforma='robot'; ambas gravam o robot_target_platform.
-      const { data: existingIntegrations, error: tokenLookupError } = await supabase
-        .from('plataformas_configuracao')
-        .select('apify_api_token')
-        .in('plataforma', ['robot', 'via_verde'])
-        // Sem este filtro, uma integração Via Verde nova podia herdar o
-        // token PARTILHADO do Uber/Bolt/BP/Repsol/EDP em vez do seu próprio
-        // token dedicado — plataforma='robot' sozinho não distingue entre
-        // plataformas, robot_target_platform sim.
-        .eq('robot_target_platform', defaults.robot_target_platform)
-        .not('apify_api_token', 'is', null)
-        .limit(1);
+      const [{ data: existingIntegrations, error: tokenLookupError }, apifyPartilhado] =
+        await Promise.all([
+          supabase
+            .from('plataformas_configuracao')
+            .select('apify_api_token')
+            .in('plataforma', ['robot', 'via_verde'])
+            // Sem este filtro, uma integração Via Verde nova podia herdar o
+            // token PARTILHADO do Uber/Bolt/BP/Repsol/EDP em vez do seu próprio
+            // token dedicado — plataforma='robot' sozinho não distingue entre
+            // plataformas, robot_target_platform sim.
+            .eq('robot_target_platform', defaults.robot_target_platform)
+            .not('apify_api_token', 'is', null)
+            .limit(1),
+          // A conta Apify é do WeGest, não da org — se esta org ainda não tem
+          // nenhuma integração desta plataforma, usa-se a credencial
+          // partilhada (mesma para todas as empresas) em vez de bloquear a
+          // criação com "Não há nenhum token Apify configurado".
+          fetchApifyCredenciaisPartilhadas(defaults.robot_target_platform),
+        ]);
 
       if (tokenLookupError) throw tokenLookupError;
 
       const apifyApiToken: string | null =
-        (existingIntegrations?.[0] as any)?.apify_api_token || null;
+        (existingIntegrations?.[0] as any)?.apify_api_token ||
+        apifyPartilhado?.apify_api_token ||
+        null;
 
-      // Antes havia aqui um fallback silencioso para um token em hardcode. Sem
-      // token a integração era criada na mesma e só falhava mais tarde, no
-      // primeiro robot-execute, com um 401 do Apify difícil de diagnosticar.
       if (!apifyApiToken) {
         throw new Error(
           `Não há nenhum token Apify configurado para ${selectedPlatform?.name ?? defaults.robot_target_platform}. ` +
-            'Abra uma integração existente desta plataforma e preencha o token Apify, ou peça-o ao administrador, antes de criar esta.'
+            'Peça o token ao administrador antes de criar esta integração.'
         );
       }
 
@@ -457,7 +487,10 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
         nome: formData.nome,
         plataforma: isViaVerde ? 'via_verde' : 'robot',
         ativo: true,
-        apify_actor_id: defaults.apify_actor_id,
+        // A credencial partilhada é a fonte validada/atual do actor_id; os
+        // valores por-omissão do frontend só servem de último recurso se a
+        // função partilhada falhar (ex.: offline).
+        apify_actor_id: apifyPartilhado?.apify_actor_id ?? defaults.apify_actor_id,
         apify_api_token: apifyApiToken,
         auth_mode: (defaults as any).auth_mode || 'password',
         robot_target_platform: defaults.robot_target_platform,

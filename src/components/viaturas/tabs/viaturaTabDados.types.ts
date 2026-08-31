@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FieldErrors } from 'react-hook-form';
 
 export const viaturaSchema = z.object({
   matricula: z
@@ -31,7 +32,60 @@ export const viaturaSchema = z.object({
   proxima_manutencao_km: z.string().optional(),
 });
 
+/**
+ * Viatura NOVA: o tipo passa a ser obrigatório.
+ *
+ * Só na criação, de propósito. Das 449 viaturas em produção, 105 não têm tipo;
+ * exigi-lo também na edição impedia de gravar qualquer correcção nessas — até
+ * os quilómetros — enquanto ninguém lhes escolhesse um tipo. O que se quer é
+ * não deixar entrar viaturas novas sem ele, não bloquear o histórico.
+ */
+export const viaturaSchemaNova = viaturaSchema.extend({
+  tipo_id: z.string().min(1, 'Tipo é obrigatório'),
+});
+
 export type ViaturaFormData = z.infer<typeof viaturaSchema>;
+
+/** Nome legível de cada campo, para quando o erro não traz mensagem própria. */
+const ROTULOS: Record<string, string> = {
+  matricula: 'Matrícula',
+  marca_id: 'Marca',
+  modelo_id: 'Modelo',
+  combustivel_id: 'Combustível',
+  tipo_id: 'Tipo',
+  grupo_id: 'Grupo',
+  estacao_id: 'Estação',
+  ano: 'Ano',
+  cor: 'Cor',
+  km_atual: 'Quilómetros',
+  numero_motor: 'Número de motor',
+  numero_chassis: 'Número de chassis',
+  data_matricula: 'Data da matrícula',
+  extintor_numero: 'Número do extintor',
+  extintor_validade: 'Validade do extintor',
+  proxima_manutencao_data: 'Data da próxima manutenção',
+  proxima_manutencao_km: 'Quilómetros da próxima manutenção',
+  observacoes: 'Observações',
+};
+
+/**
+ * Texto do aviso quando a gravação falha na validação.
+ *
+ * Nomeia SEMPRE o campo. Antes, um erro sem mensagem caía num "verifica os
+ * campos obrigatórios" que não dizia qual era — e num formulário com três
+ * separadores isso deixa a pessoa à procura.
+ */
+export function resumoErrosViatura(errors: FieldErrors<ViaturaFormData>): string {
+  const partes = Object.entries(errors)
+    .map(([campo, erro]) => {
+      const mensagem = erro && typeof erro.message === 'string' ? erro.message : '';
+      if (mensagem) return mensagem;
+      return `${ROTULOS[campo] ?? campo}: preenchimento inválido`;
+    })
+    .filter(Boolean);
+
+  return Array.from(new Set(partes)).slice(0, 5).join(' · ');
+}
 
 export interface Viatura {
   id: string;
