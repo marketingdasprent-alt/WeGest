@@ -35,8 +35,16 @@ import { TODOS_OS_MODULOS } from '../rotulos';
  */
 export function semChavesDeEmailAntigo(
   config: AutomationRuleAcaoConfig
-): Omit<AutomationRuleAcaoConfig, 'enviar_email' | 'enviar_email_digest'> {
-  const { enviar_email: _enviarEmail, enviar_email_digest: _enviarEmailDigest, ...resto } = config;
+): Omit<
+  AutomationRuleAcaoConfig,
+  'enviar_email' | 'enviar_email_digest' | 'destinatarios_emails_livres'
+> {
+  const {
+    enviar_email: _enviarEmail,
+    enviar_email_digest: _enviarEmailDigest,
+    destinatarios_emails_livres: _emailsLivres,
+    ...resto
+  } = config;
   return resto;
 }
 
@@ -227,6 +235,11 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
                 // Sheet separada a escrevê-las por trás.
                 destinatarios_modo: extraida.modo,
                 destinatarios_user_ids: extraida.userIds,
+                // Só entra quando a acção É de email — extraida.emailsLivres
+                // é null nos outros tipos precisamente para isto nunca correr.
+                ...(extraida.emailsLivres !== null
+                  ? { destinatarios_emails_livres: extraida.emailsLivres }
+                  : {}),
               },
           cooldownMinutos: extraida.cooldownMinutos,
           condicoes: extraida.condicoes,

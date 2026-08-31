@@ -19,6 +19,9 @@ export interface ConfigDoFluxo {
   cargoIds: string[];
   modo: 'grupo' | 'individual';
   userIds: string[];
+  /** Só para 'email' — null nos outros tipos, para nunca gravar a chave numa
+   * notificação (o validador do servidor recusa-a mesmo vazia). */
+  emailsLivres: string[] | null;
   cooldownMinutos: number;
   condicoes: CondicaoGravada[];
 }
@@ -43,6 +46,7 @@ export function configDoFluxo(nodes: Node[]): ConfigDoFluxo | null {
     cargoIds?: string[];
     modo?: 'grupo' | 'individual';
     userIds?: string[];
+    emailsLivres?: string[];
     cooldownMinutos?: number;
   };
 
@@ -92,6 +96,7 @@ export function configDoFluxo(nodes: Node[]): ConfigDoFluxo | null {
     cargoIds: dados.cargoIds ?? [],
     modo,
     userIds,
+    emailsLivres: email ? (dados.emailsLivres ?? []) : null,
     cooldownMinutos: dados.cooldownMinutos ?? COOLDOWN_PADRAO_MINUTOS,
     condicoes,
   };

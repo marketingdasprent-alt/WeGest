@@ -137,6 +137,7 @@ export function fluxoDaRegra(regra: RegraParaEditar): { nodes: Node[]; edges: Ed
       cargoIds: regra.cargoIds,
       modo: regra.modo,
       userIds: regra.userIds,
+      emailsLivres: (regra.acaoConfig.destinatarios_emails_livres as string[] | undefined) ?? [],
       cooldownMinutos: regra.cooldownMinutos,
       ativo: regra.ativo,
       estado: estadoDaAccao(regra),

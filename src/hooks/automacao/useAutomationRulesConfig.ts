@@ -30,6 +30,8 @@ export interface AutomationRuleAcaoConfig {
    * logo — evita repetir o incidente de 1 email por item quando um
    * backlog grande é processado de uma vez. */
   enviar_email_digest?: boolean;
+  /** Endereços fora da WeGest — só válido numa acção de email (Fase 2). */
+  destinatarios_emails_livres?: string[];
 }
 
 /**

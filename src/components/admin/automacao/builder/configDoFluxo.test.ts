@@ -140,4 +140,26 @@ describe('configDoFluxo', () => {
     // O email nunca teve a flag — não sobra rasto dela no resultado.
     expect(config).not.toHaveProperty('enviarEmail');
   });
+
+  it('uma acção de email devolve os endereços livres', () => {
+    const config = configDoFluxo([
+      accao({ accao: 'email', acaoTipo: 'email', emailsLivres: ['a@b.pt', 'c@d.pt'] }),
+    ]);
+
+    expect(config?.emailsLivres).toEqual(['a@b.pt', 'c@d.pt']);
+  });
+
+  it('uma acção de notificação nunca devolve emailsLivres — nem vazio', () => {
+    // null, não []: escrever [] gravava a chave na acao_config, e o validador
+    // recusa destinatarios_emails_livres numa notificação mesmo vazia.
+    const config = configDoFluxo([accao()]);
+
+    expect(config?.emailsLivres).toBeNull();
+  });
+
+  it('uma acção de email sem nenhum endereço livre devolve array vazio, não null', () => {
+    const config = configDoFluxo([accao({ accao: 'email', acaoTipo: 'email' })]);
+
+    expect(config?.emailsLivres).toEqual([]);
+  });
 });

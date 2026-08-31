@@ -164,6 +164,27 @@ describe('fluxoDaRegra', () => {
     });
   });
 
+  it('hidrata os endereços livres para o nó de acção', () => {
+    const { nodes } = fluxoDaRegra(
+      regra({
+        acaoTipo: 'email',
+        acaoConfig: {
+          template_codigo: 'x',
+          titulo: 'x',
+          destinatarios_emails_livres: ['a@b.pt'],
+        },
+      })
+    );
+
+    expect(nodes[1].data).toMatchObject({ emailsLivres: ['a@b.pt'] });
+  });
+
+  it('uma regra de email sem endereços livres hidrata um array vazio, não undefined', () => {
+    const { nodes } = fluxoDaRegra(regra({ acaoTipo: 'email', acaoConfig: {} }));
+
+    expect(nodes[1].data).toMatchObject({ emailsLivres: [] });
+  });
+
   it('traz o modo e as pessoas escolhidas à mão', () => {
     // Sem isto, abrir a automação no editor e voltar a gravar apagava quem
     // tinha sido escolhido individualmente dentro de um cargo.
