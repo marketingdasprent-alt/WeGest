@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -21,12 +22,33 @@ import {
 } from '@/hooks/useCheckinCheckoutHistorico';
 import { CheckinCheckoutDetailDialog } from './CheckinCheckoutDetailDialog';
 
-const PREVIEW_SIZE = 3;
+// 4 e não 3: com a linha achatada (sem caixa por registo) cabem quatro
+// sessões na mesma altura que as três antigas ocupavam.
+const PREVIEW_SIZE = 4;
 
 function ThumbnailImage({ media }: { media: SessionMedia }) {
   const src = useMediaSignedUrl(media);
-  if (!src) return <Skeleton className="w-full h-full rounded-md" />;
-  return <img src={src} className="w-full h-full object-cover" alt="" />;
+  if (!src) return <Skeleton className="h-full w-full rounded-md" />;
+  return <img src={src} className="h-full w-full object-cover" alt="" />;
+}
+
+/** Etiqueta do tipo de operação. Cores por token (marca/sucesso) em vez de
+ *  blue-50/green-50 fixos, que no tema escuro precisavam de um segundo par de
+ *  classes para cada estado. */
+function TipoBadge({ tipo }: { tipo: 'checkin' | 'checkout' }) {
+  const entrada = tipo === 'checkin';
+  const Icon = entrada ? LogIn : LogOut;
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold',
+        entrada ? 'bg-brand-navy/10 text-brand-navy' : 'bg-success/10 text-success'
+      )}
+    >
+      <Icon className="h-2.5 w-2.5" />
+      {entrada ? 'Check-in' : 'Check-out'}
+    </span>
+  );
 }
 
 function SessionRow({
@@ -54,60 +76,48 @@ function SessionRow({
     }
   })();
 
+  // Ordem de leitura: o que aconteceu (tipo) + a quem (condutor) na primeira
+  // linha; o que identifica a operação (matrícula, momento) na segunda; os
+  // metadados (fotos) à direita, fora do caminho. Era um <div onClick> — passa
+  // a <button> para ter teclado e foco, como as restantes linhas da homepage.
   return (
-    <div
-      className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-muted/30 hover:bg-muted transition-colors cursor-pointer"
+    <button
+      type="button"
       onClick={onClick}
+      className="flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left transition-colors duration-150 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
-      {/* Thumbnail */}
-      <div className="w-12 h-12 rounded-md overflow-hidden shrink-0 border bg-muted">
+      <span className="h-11 w-11 shrink-0 overflow-hidden rounded-md border border-border bg-muted">
         {session.thumbnail ? (
           <ThumbnailImage media={session.thumbnail} />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <ImageOff className="h-5 w-5 text-muted-foreground/40" />
-          </div>
+          <span className="flex h-full w-full items-center justify-center">
+            <ImageOff className="h-4 w-4 text-muted-foreground/40" />
+          </span>
         )}
-      </div>
+      </span>
 
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1 mb-0.5 flex-wrap">
-          {hasCheckin && (
-            <Badge
-              variant="outline"
-              className="text-[10px] px-1.5 py-0 border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20"
-            >
-              <LogIn className="h-2.5 w-2.5 mr-0.5" /> Check-in
-            </Badge>
-          )}
-          {hasCheckout && (
-            <Badge
-              variant="outline"
-              className="text-[10px] px-1.5 py-0 border-green-400 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20"
-            >
-              <LogOut className="h-2.5 w-2.5 mr-0.5" /> Check-out
-            </Badge>
-          )}
-          {viatura && (
-            <span className="font-mono text-xs text-muted-foreground truncate">
-              {viatura.matricula}
-            </span>
-          )}
-        </div>
-        <p className="text-sm font-medium truncate leading-tight">
-          {nomeCondutor ?? (
-            <span className="text-muted-foreground italic">Condutor desconhecido</span>
-          )}
-        </p>
-        <p className="text-xs text-muted-foreground">{dataFormatada}</p>
-      </div>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          {hasCheckin && <TipoBadge tipo="checkin" />}
+          {hasCheckout && <TipoBadge tipo="checkout" />}
+          <span className="truncate text-[13px] font-medium leading-tight">
+            {nomeCondutor ?? (
+              <span className="italic text-muted-foreground">Condutor desconhecido</span>
+            )}
+          </span>
+        </span>
+        <span className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          {viatura && <span className="font-mono tabular-nums">{viatura.matricula}</span>}
+          {viatura && <span aria-hidden="true">·</span>}
+          <span className="truncate">{dataFormatada}</span>
+        </span>
+      </span>
 
-      {/* Contagem de fotos */}
-      <Badge variant="outline" className="shrink-0 text-[10px]">
-        {totalFotos} foto{totalFotos !== 1 ? 's' : ''}
-      </Badge>
-    </div>
+      <span className="flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-muted-foreground">
+        <Camera className="h-3 w-3" />
+        {totalFotos}
+      </span>
+    </button>
   );
 }
 
@@ -130,53 +140,52 @@ export const CheckinCheckoutHistoricoCard: React.FC<Props> = ({ enabled }) => {
 
   return (
     <>
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Camera className="h-5 w-5 text-primary" />
+      <Card className="rounded-xl shadow-none">
+        <CardHeader className="px-4 py-3">
+          <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+            <Camera className="h-4 w-4 text-primary" />
             Histórico Check-in / Check-out
             {!isLoading && sessions.length > 0 && (
-              <Badge variant="secondary" className="ml-auto text-xs font-normal">
+              <span className="ml-auto text-xs font-normal tabular-nums text-muted-foreground">
                 {sessions.length} {sessions.length !== 1 ? 'sessões' : 'sessão'}
-              </Badge>
+              </span>
             )}
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-0">
+        <CardContent className="p-0">
           {isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 p-2.5">
-                  <Skeleton className="w-12 h-12 rounded-md shrink-0" />
+            <div className="divide-y divide-border/60">
+              {Array.from({ length: PREVIEW_SIZE }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                  <Skeleton className="h-11 w-11 shrink-0 rounded-md" />
                   <div className="flex-1 space-y-1.5">
-                    <Skeleton className="h-3 w-24" />
-                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-3.5 w-40" />
                     <Skeleton className="h-3 w-28" />
                   </div>
                 </div>
               ))}
             </div>
           ) : sessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
-              <Camera className="h-10 w-10 text-muted-foreground/30" />
+            <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+              <Camera className="h-8 w-8 text-muted-foreground/30" />
               <p className="text-sm text-muted-foreground">
                 Ainda não há check-ins ou check-outs com fotografias.
               </p>
             </div>
           ) : (
             <>
-              <div className="space-y-2">
+              <div className="divide-y divide-border/60">
                 {previewSessions.map((s) => (
                   <SessionRow key={s.key} session={s} onClick={() => openDetail(s)} />
                 ))}
               </div>
 
               {hasMore && (
-                <div className="pt-3 text-center">
+                <div className="border-t border-border/60 px-4 py-1.5 text-center">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-xs text-muted-foreground"
+                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
                     onClick={() => setListOpen(true)}
                   >
                     Mostrar todos ({sessions.length})
@@ -203,7 +212,7 @@ export const CheckinCheckoutHistoricoCard: React.FC<Props> = ({ enabled }) => {
               Todos os check-ins e check-outs com fotografias. Clica para ver o detalhe.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 overflow-y-auto max-h-[65vh] pr-1 -mr-1">
+          <div className="custom-scrollbar -mx-4 max-h-[65vh] divide-y divide-border/60 overflow-y-auto">
             {sessions.map((s) => (
               <SessionRow key={s.key} session={s} onClick={() => openDetail(s)} />
             ))}
