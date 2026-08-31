@@ -95,11 +95,6 @@ export const SiteFooter = () => {
                 Entrar no sistema
               </Link>
             </li>
-            <li>
-              <Link to="/eliminar-conta" className={classeLink}>
-                Eliminar conta
-              </Link>
-            </li>
           </ul>
         </div>
       </div>
