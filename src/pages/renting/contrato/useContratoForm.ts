@@ -43,6 +43,7 @@ import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useMotoristas } from '@/hooks/useMotoristas';
 import { useReserva } from '@/hooks/useReservas';
 import { useReservaCondutores } from '@/hooks/useReservaCondutores';
+import { useReservaExtras } from '@/hooks/useReservaExtras';
 import { useViaturas } from '@/hooks/useViaturas';
 import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
 
@@ -85,6 +86,10 @@ const FIELD_TAB_MAP: Partial<Record<keyof ContratoFormValues, string>> = {
   extras: 'extras',
   taxas: 'taxas',
 };
+
+/** Campos do formulário que são listas (useFieldArray) — ver o porquê no efeito
+ *  de hidratação: só se tocam com `form.reset`, e reset faz piscar. */
+const LISTAS_DO_FORM = new Set(['condutores', 'coberturas', 'extras', 'taxas']);
 
 const TAB_LABELS: Record<string, string> = {
   geral: 'Geral',
@@ -226,6 +231,9 @@ export function useContratoForm(): UseContratoFormReturn {
   const { data: reservaDoContrato } = useReserva(isEdit ? (contrato?.reserva_id ?? null) : null);
   const reservaAssociada = reservaFromQuery ?? reservaDoContrato;
   const { data: condutoresDaReserva } = useReservaCondutores(!isEdit ? reservaIdFromQuery : null);
+  // Os extras da reserva entram no contrato pré-preenchidos e editáveis. Só na
+  // criação: em edição mandam os extras já gravados no contrato.
+  const { data: extrasDaReserva } = useReservaExtras(!isEdit ? reservaIdFromQuery : null);
   const viaturaLocked = !isEdit && !!reservaIdActiva;
 
   // ── Mutations ──────────────────────────────────────────────────
@@ -334,7 +342,11 @@ export function useContratoForm(): UseContratoFormReturn {
   // `viaturas`/`grupos` são `= []` por omissão, ou seja, referência nova a cada
   // render enquanto a query não resolve; sem esta guarda, reset → render →
   // reset, em ciclo). Nulo = ainda não houve hidratação nenhuma.
-  const hidratadoDeRef = useRef<{ fonte: unknown; condutores: unknown } | null>(null);
+  const hidratadoDeRef = useRef<{
+    fonte: unknown;
+    condutores: unknown;
+    extras: unknown;
+  } | null>(null);
 
   const form = useForm<ContratoFormValues>({
     resolver: zodResolver(contratoFormSchema),
@@ -365,22 +377,36 @@ export function useContratoForm(): UseContratoFormReturn {
   //
   // `keepDirtyValues: true` é o que substitui a guarda antiga (e faz melhor o
   // trabalho dela): os campos que o utilizador tocou ficam, os outros
-  // acompanham o servidor. O primeiro reset é integral, para o arranque não
-  // mudar de comportamento.
+  // acompanham o servidor.
+  //
+  // Vale TAMBÉM para a primeira hidratação, e é preciso que valha. A primeira
+  // chega tarde de propósito: o efeito desiste e volta a tentar enquanto os
+  // condutores da reserva ou a lista de grupos não chegarem, e nessa espera o
+  // formulário já está no ecrã a ser preenchido. Um reset integral nesse
+  // momento apaga o preço que a pessoa acabou de escrever e põe lá o
+  // `valor_total` da reserva — era a queixa "guardo um preço e ele não fica".
+  // Como o formulário arranca dos DEFAULT_CONTRATO_VALUES sem nada sujo,
+  // preservar aqui os campos sujos só pode preservar o que foi mesmo escrito.
   useEffect(() => {
     // Instantâneo do servidor desta corrida. Em edição manda o contrato; a
     // criar, a reserva de origem mais os seus condutores (que chegam numa query
     // à parte e entram neste mesmo reset).
     const fonte = isEdit ? contrato : reservaFromQuery;
     const condutoresFonte = isEdit ? null : condutoresDaReserva;
+    const extrasFonte = isEdit ? null : extrasDaReserva;
     const jaHidratado = hidratadoDeRef.current;
-    if (jaHidratado && jaHidratado.fonte === fonte && jaHidratado.condutores === condutoresFonte) {
+    if (
+      jaHidratado &&
+      jaHidratado.fonte === fonte &&
+      jaHidratado.condutores === condutoresFonte &&
+      jaHidratado.extras === extrasFonte
+    ) {
       return;
     }
-    const opcoesReset = jaHidratado ? { keepDirtyValues: true } : undefined;
+    const opcoesReset = { keepDirtyValues: true } as const;
 
     if (isEdit && contrato) {
-      hidratadoDeRef.current = { fonte, condutores: condutoresFonte };
+      hidratadoDeRef.current = { fonte, condutores: condutoresFonte, extras: extrasFonte };
       form.reset(
         {
           cliente_id: contrato.cliente_id,
@@ -447,6 +473,12 @@ export function useContratoForm(): UseContratoFormReturn {
         return;
       }
       if (condutoresDaReserva === undefined) return;
+      // Os extras NÃO têm um `return` a esperar por eles, ao contrário dos
+      // condutores. Se a query deles falhasse ou nunca resolvesse, esperar
+      // deixava o formulário inteiro em branco por causa de uma lista
+      // acessória. Não é preciso: eles entram na guarda de hidratação, por
+      // isso quando chegarem o efeito volta a correr e semeia-os — e o
+      // `keepDirtyValues` impede que essa segunda passagem mexa no resto.
       // Fallback do grupo (reserva antiga/sem `grupo` gravado) — resolve a
       // partir da viatura. Se a viatura já carregou e tem grupo_id mas a
       // lista `grupos` ainda não chegou, NÃO marca como hidratado: tenta de
@@ -464,68 +496,104 @@ export function useContratoForm(): UseContratoFormReturn {
       // Fallback do emissor (mesma lógica de aplicarDadosViatura): se a
       // reserva não trouxe emissor, usa o da viatura em vez de deixar vazio.
       const emissorResolvido = reservaFromQuery.emissor_id ?? viaturaReserva?.emissor_id ?? '';
-      hidratadoDeRef.current = { fonte, condutores: condutoresFonte };
-      form.reset(
-        {
-          ...DEFAULT_CONTRATO_VALUES,
-          reserva_id: reservaFromQuery.id,
-          cliente_id: reservaFromQuery.cliente_id ?? '',
-          emissor_id: emissorResolvido,
-          gestor_id: reservaFromQuery.gestor_id ?? null,
-          viatura_id: reservaFromQuery.viatura_id ?? '',
-          matricula: reservaFromQuery.matricula ?? '',
-          grupo: grupoResolvido,
-          estacao_entrega_id: reservaFromQuery.estacao_entrega_id,
-          estacao_recolha_id: reservaFromQuery.estacao_recolha_id,
-          data_inicio: isoToLocalInput(reservaFromQuery.data_inicio),
-          data_fim:
-            reservaFromQuery.regime === 'tvde' ? '' : isoToLocalInput(reservaFromQuery.data_fim),
-          origem: 'sistema',
-          regime: reservaFromQuery.regime,
-          tarifa_id: (reservaFromQuery as any).tarifa_id ?? null,
-          // O override manual manda sobre o valor efectivo. Em teoria são o
-          // mesmo número (`valor_total` é definido como "o manual quando
-          // existe"), mas as reservas gravadas enquanto o formulário passava o
-          // campo errado ao cálculo da base ficaram com um `valor_total`
-          // desactualizado e um `valor_total_manual` correcto. Ler primeiro o
-          // manual faz essas converterem-se com o preço certo, sem ninguém ter
-          // de lhes tocar.
-          valor_total_manual: reservaFromQuery.valor_total_manual ?? reservaFromQuery.valor_total,
-          is_longa_duracao: reservaFromQuery.is_longa_duracao ?? false,
-          renovacao_opcao: reservaFromQuery.renovacao_opcao ?? null,
-          renovacao_intervalo_dias: reservaFromQuery.renovacao_intervalo_dias,
-          franquia_valor: reservaFromQuery.franquia_valor,
-          caucao_valor: reservaFromQuery.caucao_valor,
-          kms_incluidos: reservaFromQuery.kms_incluidos,
-          km_adicional_valor: reservaFromQuery.km_adicional_valor,
-          observacoes: reservaFromQuery.observacoes ?? '',
-          observacoes_internas: reservaFromQuery.observacoes_internas ?? '',
-          // O IVA nunca vem da reserva: é derivado do regime + definições da
-          // organização por um efeito à parte, que só volta a correr quando o
-          // regime muda. Repetir o valor actual impede que uma re-hidratação o
-          // devolva ao 23 % de DEFAULT_CONTRATO_VALUES sem ninguém o recalcular.
-          taxa_iva: form.getValues('taxa_iva'),
-          // Coberturas/extras/taxas não têm origem na reserva (nem efeito que
-          // as volte a encher aqui): preserva-se o que o utilizador já montou.
-          coberturas: form.getValues('coberturas'),
-          extras: form.getValues('extras'),
-          taxas: form.getValues('taxas'),
-          condutores: condutoresDaReserva
-            .filter((c) => c.cliente_id || c.motorista_id)
-            .map((c) => ({
-              cliente_id: c.cliente_id,
-              motorista_id: c.motorista_id,
-              is_principal: c.is_principal,
-            })),
-        },
-        opcoesReset
-      );
+      const listasMudaram =
+        !jaHidratado ||
+        jaHidratado.condutores !== condutoresFonte ||
+        jaHidratado.extras !== extrasFonte;
+      hidratadoDeRef.current = { fonte, condutores: condutoresFonte, extras: extrasFonte };
+      const valores = {
+        ...DEFAULT_CONTRATO_VALUES,
+        reserva_id: reservaFromQuery.id,
+        cliente_id: reservaFromQuery.cliente_id ?? '',
+        emissor_id: emissorResolvido,
+        gestor_id: reservaFromQuery.gestor_id ?? null,
+        viatura_id: reservaFromQuery.viatura_id ?? '',
+        matricula: reservaFromQuery.matricula ?? '',
+        grupo: grupoResolvido,
+        estacao_entrega_id: reservaFromQuery.estacao_entrega_id,
+        estacao_recolha_id: reservaFromQuery.estacao_recolha_id,
+        data_inicio: isoToLocalInput(reservaFromQuery.data_inicio),
+        data_fim:
+          reservaFromQuery.regime === 'tvde' ? '' : isoToLocalInput(reservaFromQuery.data_fim),
+        origem: 'sistema',
+        regime: reservaFromQuery.regime,
+        tarifa_id: (reservaFromQuery as any).tarifa_id ?? null,
+        // O override manual manda sobre o valor efectivo. Em teoria são o
+        // mesmo número (`valor_total` é definido como "o manual quando
+        // existe"), mas as reservas gravadas enquanto o formulário passava o
+        // campo errado ao cálculo da base ficaram com um `valor_total`
+        // desactualizado e um `valor_total_manual` correcto. Ler primeiro o
+        // manual faz essas converterem-se com o preço certo, sem ninguém ter
+        // de lhes tocar.
+        valor_total_manual: reservaFromQuery.valor_total_manual ?? reservaFromQuery.valor_total,
+        is_longa_duracao: reservaFromQuery.is_longa_duracao ?? false,
+        renovacao_opcao: reservaFromQuery.renovacao_opcao ?? null,
+        renovacao_intervalo_dias: reservaFromQuery.renovacao_intervalo_dias,
+        franquia_valor: reservaFromQuery.franquia_valor,
+        caucao_valor: reservaFromQuery.caucao_valor,
+        kms_incluidos: reservaFromQuery.kms_incluidos,
+        km_adicional_valor: reservaFromQuery.km_adicional_valor,
+        observacoes: reservaFromQuery.observacoes ?? '',
+        observacoes_internas: reservaFromQuery.observacoes_internas ?? '',
+        // O IVA nunca vem da reserva: é derivado do regime + definições da
+        // organização por um efeito à parte, que só volta a correr quando o
+        // regime muda. Repetir o valor actual impede que uma re-hidratação o
+        // devolva ao 23 % de DEFAULT_CONTRATO_VALUES sem ninguém o recalcular.
+        taxa_iva: form.getValues('taxa_iva'),
+        // Coberturas e taxas não têm origem na reserva (nem efeito que as
+        // volte a encher aqui): preserva-se o que o utilizador já montou.
+        coberturas: form.getValues('coberturas'),
+        // Os extras TÊM origem na reserva: quem pôs "Via Verde" na reserva
+        // não o quer escrever outra vez no contrato. Vêm pré-preenchidos e
+        // ficam editáveis — o `keepDirtyValues` do reset garante que uma
+        // segunda passagem não desfaz o que a pessoa entretanto mexeu, nem
+        // ressuscita um extra que ela tenha apagado.
+        extras: (extrasDaReserva ?? []).map((e) => ({
+          extra_id: e.extra_id,
+          extra_nome: e.extra_nome,
+          preco_unidade: e.preco_unidade,
+          tipo_calculo: e.tipo_calculo,
+          quantidade: e.quantidade,
+        })),
+        taxas: form.getValues('taxas'),
+        condutores: condutoresDaReserva
+          .filter((c) => c.cliente_id || c.motorista_id)
+          .map((c) => ({
+            cliente_id: c.cliente_id,
+            motorista_id: c.motorista_id,
+            is_principal: c.is_principal,
+          })),
+      } satisfies ContratoFormValues;
+
+      // Um `form.reset` re-inicializa TODAS as instâncias de useFieldArray — é
+      // isso que as mantém em sincronia, e é também o que dá ids novos às
+      // linhas e faz o React desmontá-las e voltar a montá-las. Quando o que
+      // mudou foi só um campo simples (o refetch da reserva a trazer o preço
+      // gravado), arrastar as listas atrás disso fazia-as piscar: era o "os
+      // extras saem e voltam".
+      //
+      // Por isso: reset integral só quando as listas de origem mudaram mesmo.
+      // Caso contrário actualizam-se os campos simples um a um, saltando os que
+      // a pessoa tocou — o mesmo efeito que `keepDirtyValues` teria.
+      if (listasMudaram) {
+        form.reset(valores, opcoesReset);
+      } else {
+        const sujos = form.formState.dirtyFields as Record<string, unknown>;
+        for (const [campo, valor] of Object.entries(valores)) {
+          if (LISTAS_DO_FORM.has(campo)) continue;
+          if (sujos[campo]) continue;
+          form.setValue(campo as keyof ContratoFormValues, valor as never, {
+            shouldDirty: false,
+          });
+        }
+      }
     }
   }, [
     isEdit,
     contrato,
     reservaFromQuery,
     condutoresDaReserva,
+    extrasDaReserva,
     viaturas,
     grupos,
     navigate,

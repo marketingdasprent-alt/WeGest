@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { semCodigo } from '@/types/codigoPorOrg';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import type {
   ContratoRenting,
   ContratoEstadoOperacional,
@@ -344,6 +345,21 @@ export function useCreateContratoRenting() {
   });
 }
 
+/**
+ * Texto do aviso de gravação. Diz o valor que FICOU gravado, não o que estava no
+ * ecrã — é a diferença entre "guardei" e "guardei isto".
+ */
+export function descricaoGuardado(valorGuardado: number | null | undefined): string {
+  if (valorGuardado == null) {
+    return 'As alterações foram guardadas.';
+  }
+  const valor = valorGuardado.toLocaleString('pt-PT', {
+    style: 'currency',
+    currency: 'EUR',
+  });
+  return `As alterações foram guardadas. Total: ${valor}.`;
+}
+
 export function useUpdateContratoRenting() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -362,11 +378,23 @@ export function useUpdateContratoRenting() {
       if (error) throw error;
       return data as unknown as ContratoRenting;
     },
-    onSuccess: () => {
+    onSuccess: (guardado) => {
+      // A linha que o servidor acabou de escrever entra JÁ na cache do detalhe.
+      // Antes deitava-se fora e mandava-se buscar tudo outra vez: entre gravar e
+      // o refetch chegar havia uma janela em que o formulário se re-hidratava
+      // pela cópia anterior. Semear o que a base de dados devolveu fecha essa
+      // janela — o que aparece depois de gravar é, literalmente, o que ficou
+      // gravado. A invalidação continua a seguir, para as listas.
+      qc.setQueryData([...QUERY_KEY_BASE, 'detail', guardado.id], guardado);
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
       invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['contrato-historico'] });
-      toast({ title: 'Contrato actualizado', description: 'As alterações foram guardadas.' });
+      // O total guardado vai no aviso de propósito: torna visível, no momento,
+      // aquilo que até aqui só se descobria reabrindo o contrato.
+      toast({
+        title: 'Contrato actualizado',
+        description: descricaoGuardado(guardado.valor_total_manual),
+      });
     },
     onError: (error: unknown) => {
       const { title, description } = contratoErrorMessage(error);
@@ -901,6 +929,24 @@ export type ReverterParaReservaArgs = Pick<ContratoRenting, 'id' | 'reserva_id'>
  *  só o estado_operacional. Só faz sentido antes de a viatura ser entregue
  *  (agendado): depois disso já não é "só uma reserva outra vez" — é para
  *  isso que existem "Reverter abertura"/"Reverter fecho". */
+/**
+ * O que se escreve na reserva ao reverter um contrato.
+ *
+ * Além do estado, devolve-lhe a empresa emissora e a tarifa que o contrato
+ * tinha: é a fotografia mais recente e fiável desses dois valores, e sem isto
+ * uma reserva que os tivesse perdido pelo caminho voltava vazia. Nunca apaga o
+ * que a reserva já tem — um contrato sem emissora não pode limpar a da reserva.
+ */
+export function patchReservaAoReverter(contrato: {
+  emissor_id?: string | null;
+  tarifa_id?: string | null;
+}): TablesUpdate<'reservas'> {
+  const patch: TablesUpdate<'reservas'> = { estado: 'confirmada' };
+  if (contrato.emissor_id) patch.emissor_id = contrato.emissor_id;
+  if (contrato.tarifa_id) patch.tarifa_id = contrato.tarifa_id;
+  return patch;
+}
+
 export function useReverterParaReserva() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -915,17 +961,18 @@ export function useReverterParaReserva() {
         .eq('id', contratoId)
         .eq('estado_operacional', 'agendado')
         .is('deleted_at', null)
-        .select('id')
+        .select('id, emissor_id, tarifa_id')
         .maybeSingle();
       if (error) throw error;
       if (!updated) return;
 
       // Devolve a reserva ao estado que tinha antes de virar contrato — o
       // mesmo valor que contrato_renting_cascata_estado usa para "cancelado
-      // vindo de agendado" (cliente continua com reserva válida).
+      // vindo de agendado" (cliente continua com reserva válida) — e com ela a
+      // emissora e a tarifa que o contrato levava.
       const { error: errReserva } = await supabase
         .from('reservas')
-        .update({ estado: 'confirmada' })
+        .update(patchReservaAoReverter(updated))
         .eq('id', reserva_id);
       if (errReserva) throw errReserva;
 
