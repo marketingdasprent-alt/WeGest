@@ -11,8 +11,6 @@ export interface AssinaturaPedidoInput {
   documentoNome: string;
   /** Link para assinar: https://wegest.pt/assinar/<token> */
   ctaUrl: string;
-  /** Até quando o link funciona, já formatado para leitura. */
-  validoAte: string;
   emissorNome?: string;
   emissorLogoUrl?: string | null;
 }
@@ -21,12 +19,12 @@ export function assinaturaPedidoTemplate(input: AssinaturaPedidoInput): {
   subject: string;
   html: string;
 } {
-  const { destinatarioNome, documentoNome, ctaUrl, validoAte, emissorNome, emissorLogoUrl } = input;
+  const { destinatarioNome, documentoNome, ctaUrl, emissorNome, emissorLogoUrl } = input;
 
   const corpo = `
       <p style="margin:0 0 8px">O documento segue em anexo para leitura.</p>
       <p style="margin:0 0 8px">Para assinar, abra o link abaixo e desenhe a sua assinatura no ecrã. Pode fazê-lo no telemóvel.</p>
-      <p style="margin:0">O link é pessoal e funciona uma única vez, até <strong>${validoAte}</strong>.</p>
+      <p style="margin:0">O link é pessoal e funciona <strong>uma única vez</strong>. Não tem prazo: pode assiná-lo quando lhe der jeito.</p>
     `;
 
   const html = notificacaoTemplate({

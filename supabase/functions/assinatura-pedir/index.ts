@@ -136,7 +136,6 @@ serve(async (req) => {
 
     // 3. Os emails. A partir daqui nada desfaz o que já está criado.
     const emailService = new EmailService(supabase);
-    const validoAte = expiresAt.toLocaleDateString('pt-PT');
     const falharam: string[] = [];
 
     for (const pedido of pedidos ?? []) {
@@ -146,7 +145,6 @@ serve(async (req) => {
           destinatarioNome: pedido.signatario_nome,
           documentoNome,
           ctaUrl: `https://wegest.pt/assinar/${pedido.id}`,
-          validoAte,
           pdfBase64,
           filename: `${documentoNome}.pdf`,
         });
