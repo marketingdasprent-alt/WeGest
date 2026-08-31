@@ -37,7 +37,12 @@ function normalizar(texto: string): string {
 export function agruparBlocos(
   templates: TemplateDeNo[],
   pesquisa: string,
-  modulo?: string
+  modulo?: string,
+  /** Uma regra é uma corrente com UMA acção (ver BarraDoNo.tsx). Com uma já
+   * no fluxo, oferecer outra dava uma acção que `configDoFluxo` ignora ao
+   * gravar — silenciosamente, sem erro. Quem quer também enviar por outro
+   * canal cria uma automação nova para o mesmo evento. */
+  temAccao = false
 ): GrupoDeBlocos[] {
   const termo = normalizar(pesquisa);
 
@@ -49,10 +54,12 @@ export function agruparBlocos(
   const doModulo = (t: TemplateDeNo) =>
     !modulo || t.tipo !== 'trigger' || (t.dados as { modulo?: string }).modulo === modulo;
 
-  return CATEGORIAS.map(({ nome, tipo }) => ({
-    categoria: nome,
-    itens: templates.filter((t) => t.tipo === tipo && corresponde(t) && doModulo(t)),
-  })).filter((g) => g.itens.length > 0);
+  return CATEGORIAS.filter(({ tipo }) => tipo !== 'accao' || !temAccao)
+    .map(({ nome, tipo }) => ({
+      categoria: nome,
+      itens: templates.filter((t) => t.tipo === tipo && corresponde(t) && doModulo(t)),
+    }))
+    .filter((g) => g.itens.length > 0);
 }
 
 /** A lista por ordem visual — é o índice que as setas movem. */

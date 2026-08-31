@@ -68,6 +68,15 @@ describe('agruparBlocos', () => {
    * espera. Isto liga os dois vocabulários: o que o filtro guarda é o que a
    * paleta reconhece.
    */
+  it('temAccao esconde a categoria Ações, sem afectar gatilhos e condições', () => {
+    // Uma regra é uma corrente com UMA acção só (ver BarraDoNo.tsx). Com uma
+    // já no fluxo, oferecer outra dava uma que `configDoFluxo` recusa gravar.
+    const grupos = agruparBlocos(CATALOGO, '', undefined, true);
+
+    expect(grupos.map((g) => g.categoria)).toEqual(['Gatilhos', 'Fluxo']);
+    expect(grupos.find((g) => g.categoria === 'Ações')).toBeUndefined();
+  });
+
   it('toda a chave de MODULOS com gatilho na paleta encontra esse gatilho', () => {
     const comGatilho = MODULOS.filter((m) =>
       CATALOGO.some(

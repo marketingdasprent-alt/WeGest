@@ -27,8 +27,13 @@ export interface ConfigDoFluxo {
 const COOLDOWN_PADRAO_MINUTOS = 1440;
 
 export function configDoFluxo(nodes: Node[]): ConfigDoFluxo | null {
-  const accao = nodes.find((n) => n.type === 'accao');
-  if (!accao) return null;
+  const accoes = nodes.filter((n) => n.type === 'accao');
+  // Uma regra é UMA corrente com UMA acção (ver BarraDoNo.tsx). O painel de
+  // blocos já não oferece uma segunda depois da primeira, mas isto é o que
+  // decide o que se grava — falha fechado aqui também, em vez de escolher a
+  // primeira e apagar a outra em silêncio.
+  if (accoes.length !== 1) return null;
+  const [accao] = accoes;
 
   const dados = accao.data as {
     accao?: string;

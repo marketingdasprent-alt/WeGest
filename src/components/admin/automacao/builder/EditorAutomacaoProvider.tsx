@@ -192,7 +192,7 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
       if (!extraida) {
         toast({
           title: 'Nada para guardar',
-          description: 'O fluxo precisa de um bloco "Enviar notificação".',
+          description: 'O fluxo precisa de exactamente uma acção — notificação, email ou interna.',
           variant: 'destructive',
         });
         return;

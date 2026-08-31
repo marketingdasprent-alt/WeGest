@@ -120,6 +120,15 @@ describe('configDoFluxo', () => {
     expect(config).toBeNull();
   });
 
+  it('duas acções no mesmo fluxo falha fechado, em vez de escolher a primeira', () => {
+    // O painel de blocos já não oferece uma segunda acção depois da primeira
+    // (ver painelBlocos.pesquisa.ts), mas isto é quem decide o que se grava —
+    // se alguma coisa chegar aqui com duas, não pode escolher uma em silêncio.
+    const config = configDoFluxo([accao({}, 400), accao({}, 720)]);
+
+    expect(config).toBeNull();
+  });
+
   it('uma acção de email produz acaoTipo email com os mesmos destinatários', () => {
     // Notificação e email escolhem pessoas da mesma forma — só o tipo muda.
     const config = configDoFluxo([

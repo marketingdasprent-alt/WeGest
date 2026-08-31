@@ -291,6 +291,7 @@ function Construtor() {
             onFechar={() => setPainelAberto(false)}
             onEscolher={escolherBloco}
             moduloFiltro={moduloFiltro === TODOS_OS_MODULOS ? undefined : moduloFiltro}
+            temAccao={nodes.some((n) => n.type === 'accao')}
           />
         ) : (
           seleccionado && (

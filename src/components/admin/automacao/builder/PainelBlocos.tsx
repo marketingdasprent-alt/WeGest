@@ -22,11 +22,14 @@ export function PainelBlocos({
   onFechar,
   onEscolher,
   moduloFiltro,
+  temAccao = false,
 }: {
   onFechar: () => void;
   onEscolher: (template: TemplateDeNo) => void;
   /** Restringe os gatilhos ao módulo escolhido. */
   moduloFiltro?: string;
+  /** Já existe uma acção no fluxo — esconde a categoria "Ações". */
+  temAccao?: boolean;
 }) {
   const [pesquisa, setPesquisa] = useState('');
   const [indice, setIndice] = useState(0);
@@ -34,8 +37,8 @@ export function PainelBlocos({
   const listaRef = useRef<HTMLDivElement>(null);
 
   const grupos = useMemo(
-    () => agruparBlocos(CATALOGO, pesquisa, moduloFiltro),
-    [pesquisa, moduloFiltro]
+    () => agruparBlocos(CATALOGO, pesquisa, moduloFiltro, temAccao),
+    [pesquisa, moduloFiltro, temAccao]
   );
   const plano = useMemo(() => achatar(grupos), [grupos]);
 
@@ -115,6 +118,16 @@ export function PainelBlocos({
       </div>
 
       <div ref={listaRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+        {temAccao && (
+          // Explica a ausência da categoria "Ações": sem isto parece que o
+          // painel perdeu blocos, não que a regra é deliberadamente uma
+          // corrente com uma acção só.
+          <p className="rounded-lg border border-border bg-card p-2.5 text-[11px] leading-snug text-muted-foreground">
+            Esta automação já tem uma acção. Para também notificar ou enviar email por outro canal,
+            cria uma nova automação para o mesmo evento.
+          </p>
+        )}
+
         {plano.length === 0 && (
           <p className="text-sm text-muted-foreground">Nenhum bloco corresponde à pesquisa.</p>
         )}
