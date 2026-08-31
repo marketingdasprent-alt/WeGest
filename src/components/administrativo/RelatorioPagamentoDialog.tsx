@@ -56,7 +56,6 @@ interface LinhaRelatorio {
   outrasDevolucoes: number;
 }
 
-
 const fmtEur = (v: number) =>
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v || 0);
 
