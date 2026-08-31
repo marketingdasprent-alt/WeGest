@@ -9,7 +9,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { useEditorAutomacao } from './builder/editorAutomacao.contexto';
 import { RegrasTabela } from './RegrasTabela';
-import { moduloDoEvento, TODOS_OS_MODULOS } from './rotulos';
+import { agruparPorModulo } from './agrupamento';
+import { chaveDoEvento, TODOS_OS_MODULOS } from './rotulos';
 
 /**
  * O conteúdo da tab "Editor visual": a lista de automações ou o canvas.
@@ -51,10 +52,17 @@ export function RegrasTab() {
     );
   }
 
+  // O filtro guarda a CHAVE do módulo ('viatura'), não o nome legível. Guardava
+  // o nome, e o painel de blocos do construtor — que recebe o mesmo valor —
+  // compara-o com a chave: nunca coincidiam, e filtrar por módulo deixava a
+  // paleta do canvas sem um único gatilho.
   const regrasFiltradas =
     moduloFiltro === TODOS_OS_MODULOS
       ? regras
-      : regras.filter((r) => moduloDoEvento(r.event_type) === moduloFiltro);
+      : regras.filter((r) => chaveDoEvento(r.event_type) === moduloFiltro);
+
+  // Com um módulo escolhido sobra um grupo, e a tabela não desenha cabeçalhos.
+  const grupos = agruparPorModulo(regrasFiltradas);
 
   return (
     // Só esta vista tem scroll próprio: é uma lista. O canvas não scrolla.
@@ -67,7 +75,7 @@ export function RegrasTab() {
         <p className="p-4 text-sm text-muted-foreground">Nenhuma regra neste módulo.</p>
       ) : (
         <RegrasTabela
-          regras={regrasFiltradas}
+          grupos={grupos}
           podeGerir={podeGerir}
           toggleOcupado={toggleRule.isPending}
           onToggle={handleToggle}

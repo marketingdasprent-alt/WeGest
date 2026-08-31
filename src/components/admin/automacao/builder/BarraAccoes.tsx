@@ -1,18 +1,12 @@
 import { Plus, Save, Table2, Workflow } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Button } from '@/components/ui/button';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { useAutomacaoEstatisticasPorRegra } from '@/hooks/useAutomationQueue';
-import { moduloDoEvento, TODOS_OS_MODULOS } from '../rotulos';
+import { contagemPorModulo } from '../agrupamento';
+import { ChipsDeModulo } from '../ChipsDeModulo';
 import { useEditorAutomacao, type VistaDoEditor } from './editorAutomacao.contexto';
 
 /**
@@ -41,7 +35,9 @@ export function BarraAccoes() {
   } = useEditorAutomacao();
   // A mesma query da tabela — o React Query devolve a cache, não pede outra vez.
   const { data: regras = [] } = useAutomacaoEstatisticasPorRegra();
-  const modulos = Array.from(new Set(regras.map((r) => moduloDoEvento(r.event_type)))).sort();
+  // Já vem pela ordem das secções — chips e lista não podem discordar sobre
+  // qual é o primeiro módulo.
+  const contagens = contagemPorModulo(regras);
   const { canEdit } = usePermissions();
   const podeGerir = canEdit(RECURSOS.AUTOMACOES);
 
@@ -49,21 +45,15 @@ export function BarraAccoes() {
 
   return (
     <>
-      {/* O filtro só faz sentido sobre a lista; no canvas não há o que filtrar. */}
-      {vista === 'tabela' && modulos.length > 1 && (
-        <Select value={moduloFiltro} onValueChange={setModuloFiltro}>
-          <SelectTrigger className="h-8 w-44">
-            <SelectValue placeholder="Módulo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={TODOS_OS_MODULOS}>Todos os módulos</SelectItem>
-            {modulos.map((m) => (
-              <SelectItem key={m} value={m}>
-                {m}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* O filtro só faz sentido sobre a lista; no canvas não há o que filtrar.
+          Com um módulo só, os chips não decidem nada e ocupavam espaço. */}
+      {vista === 'tabela' && contagens.length > 1 && (
+        <ChipsDeModulo
+          contagens={contagens}
+          valor={moduloFiltro}
+          onEscolher={setModuloFiltro}
+          total={regras.length}
+        />
       )}
 
       {/* Sem esta porta de entrada, abrir o construtor pela lista mostrava a

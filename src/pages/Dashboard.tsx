@@ -20,8 +20,10 @@ import {
   LayoutDashboard,
   LifeBuoy,
   CalendarRange,
+  ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import type { DateRange as DayPickerRange } from 'react-day-picker';
@@ -91,7 +93,13 @@ interface CategoriaAlerta {
   icon: typeof FileText;
   cor: CorAlerta;
   titulo: string;
+  /** Linha principal: o caso mais grave da categoria, sempre accionável. */
   descricao: string;
+  /** Segunda linha, discreta — quantos mais casos existem além do mostrado.
+   *  `null` quando a categoria só tem um caso. */
+  detalhe: string | null;
+  /** Nº de casos da categoria. Aparece como contador à direita do título. */
+  contagem: number;
   href: string;
 }
 
@@ -580,29 +588,47 @@ const Dashboard = () => {
       const linha = contratosExpirados.includes(pior)
         ? `${codigo} expirou há ${Math.abs(pior._diffDays)} dia${Math.abs(pior._diffDays) !== 1 ? 's' : ''}`
         : `${codigo} renova em ${format(pior._renovacao, 'dd MMM', { locale: pt })}`;
+      const outros = totalContratos - 1;
       categorias.push({
         id: 'contratos',
         icon: FileText,
         cor: contratosExpirados.length > 0 ? 'destructive' : 'warning',
         titulo: 'Contratos',
-        descricao: totalContratos > 1 ? `${linha} e mais ${totalContratos - 1}` : linha,
+        descricao: linha,
+        detalhe:
+          outros > 0
+            ? `+${outros} outro${outros !== 1 ? 's' : ''} contrato${outros !== 1 ? 's' : ''}`
+            : null,
+        contagem: totalContratos,
         href: totalContratos === 1 ? `/renting/contratos/${pior.id}` : '/renting/contratos',
       });
     }
 
     if (extintoresAPrazo.length > 0) {
+      // A lista vem ordenada por validade ascendente, logo [0] é o pior caso —
+      // e é dele que fala a linha principal. O agregado desce para a segunda
+      // linha: uma matrícula dá para agir, um número sozinho não dá.
+      const pior = extintoresAPrazo[0];
+      const validadePior = new Date(pior.extintor_validade);
+      const piorExpirado = validadePior.getTime() < Date.now();
       const algumExpirado = extintoresAPrazo.some(
         (e) => new Date(e.extintor_validade).getTime() < Date.now()
       );
+      const outros = extintoresAPrazo.length - 1;
       categorias.push({
         id: 'seguranca',
         icon: ShieldAlert,
         cor: algumExpirado ? 'destructive' : 'warning',
         titulo: 'Segurança',
-        descricao: `${extintoresAPrazo.length} extintor${extintoresAPrazo.length !== 1 ? 'es' : ''} ${
-          algumExpirado ? 'expirado(s)' : 'a expirar esta semana'
-        }`,
-        href: extintoresAPrazo.length === 1 ? `/viaturas/${extintoresAPrazo[0].id}` : '/viaturas',
+        descricao: piorExpirado
+          ? `${pior.matricula} — extintor expirado`
+          : `${pior.matricula} — extintor expira ${format(validadePior, 'dd MMM', { locale: pt })}`,
+        detalhe:
+          outros > 0
+            ? `+${outros} outra${outros !== 1 ? 's' : ''} viatura${outros !== 1 ? 's' : ''}`
+            : null,
+        contagem: extintoresAPrazo.length,
+        href: extintoresAPrazo.length === 1 ? `/viaturas/${pior.id}` : '/viaturas',
       });
     }
 
@@ -610,12 +636,20 @@ const Dashboard = () => {
       const emAberto = contasAReceber!.emAberto;
       const total = emAberto.reduce((s, c) => s + c.saldo, 0);
       const algumCritico = emAberto.some((c) => c.diasEmAberto > 60);
+      // `emAberto` vem ordenado por dias em aberto (desc) — [0] é a mais antiga.
+      const pior = emAberto[0];
+      const outras = emAberto.length - 1;
       categorias.push({
         id: 'cobrancas',
         icon: Wallet,
         cor: algumCritico ? 'destructive' : 'warning',
         titulo: 'Cobranças',
-        descricao: `${formatCurrency(total)} há mais de 30 dias`,
+        descricao: `${pior.destinatarioNome} · ${formatCurrency(pior.saldo)} há ${pior.diasEmAberto} dias`,
+        detalhe:
+          outras > 0
+            ? `+${outras} outra${outras !== 1 ? 's' : ''} · ${formatCurrency(total)} em aberto`
+            : null,
+        contagem: emAberto.length,
         href: '/administrativo/faturacao',
       });
     }
@@ -627,11 +661,17 @@ const Dashboard = () => {
         cor: 'warning',
         titulo: 'Motoristas',
         descricao: `${candidaturasPendentes} candidatura${candidaturasPendentes !== 1 ? 's' : ''} aguarda${candidaturasPendentes !== 1 ? 'm' : ''} aprovação`,
+        detalhe: null,
+        contagem: candidaturasPendentes,
         href: '/motoristas/candidaturas',
       });
     }
 
-    return categorias;
+    // O que já falhou (destructive) antes do que ainda está a prazo (warning).
+    // Antes a ordem era a de construção — o tipo de alerta —, o que punha um
+    // contrato a renovar daqui a 50 dias acima de faturas críticas.
+    // `sort` é estável, por isso dentro do mesmo nível a ordem por tipo mantém-se.
+    return categorias.sort((a, b) => (a.cor === b.cor ? 0 : a.cor === 'destructive' ? -1 : 1));
   }, [
     contratosExpirados,
     contratosAPrazo,
@@ -644,8 +684,10 @@ const Dashboard = () => {
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4">
-      <StickyPageHeader title="Início" icon={LayoutDashboard}>
+    <div className="space-y-3">
+      {/* O cabeçalho aperta-se aqui (e só aqui): a homepage é a única
+          página desenhada para caber num ecrã sem scroll. */}
+      <StickyPageHeader title="Início" icon={LayoutDashboard} className="lg:pb-4 lg:mb-4">
         <Button
           variant="ghost"
           size="icon"
@@ -686,10 +728,18 @@ const Dashboard = () => {
         <DashboardSkeleton />
       ) : (
         <>
-          <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-5">
+          <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-4">
             {/* ── Coluna esquerda: KPIs finos + gráfico protagonista ────── */}
-            <div>
-              <div className="flex flex-wrap border-b border-border pb-1 mb-3">
+            <div className="space-y-4">
+              {/* Faixa de KPIs: divisores hairline, sem caixa por indicador.
+                  Têm de se ler como UMA secção da página e não como cinco
+                  cartões soltos.
+                  Grelha e não flex-wrap: em flex-wrap, a 1280px (onde a coluna
+                  esquerda encolhe para ~580px) o quinto KPI caía para uma
+                  segunda linha e a faixa partia-se ao meio. A grelha fixa as
+                  colunas por breakpoint e os divisores só existem no lg+, onde
+                  há garantidamente uma única linha. */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 border-b border-border">
                 <KpiItem
                   icon={CircleCheck}
                   cor="success"
@@ -698,19 +748,20 @@ const Dashboard = () => {
                   onClick={() => navigate('/viaturas?status=disponivel')}
                   index={0}
                 >
-                  <p className="text-[11px] text-muted-foreground mt-1.5">
-                    de <b className="text-foreground font-semibold">{fleet.total}</b> viaturas
-                  </p>
+                  <span className="text-[11px] text-muted-foreground">
+                    de <b className="font-semibold text-foreground tabular-nums">{fleet.total}</b>{' '}
+                    viaturas
+                  </span>
                 </KpiItem>
                 <KpiItem
                   icon={Car}
-                  cor="blue"
+                  cor="navy"
                   label="Alugadas"
                   valor={alugadasAnim}
                   onClick={() => navigate('/viaturas?status=alugadas')}
                   index={1}
                 >
-                  <KpiSparkline values={sparkAlugadas} corClass="bg-blue-400" />
+                  <KpiSparkline values={sparkAlugadas} corClass="bg-brand-navy" />
                 </KpiItem>
                 <KpiItem
                   icon={CalendarClock}
@@ -720,51 +771,63 @@ const Dashboard = () => {
                   onClick={() => navigate('/viaturas?status=em_reserva')}
                   index={2}
                 >
-                  <p className="text-[11px] text-muted-foreground mt-1.5">
-                    <b className="text-foreground font-semibold">{reservadasPct}%</b> da frota
-                  </p>
+                  <span className="text-[11px] text-muted-foreground">
+                    <b className="font-semibold text-foreground tabular-nums">{reservadasPct}%</b>{' '}
+                    da frota
+                  </span>
                 </KpiItem>
                 <KpiItem
                   icon={Wrench}
-                  cor="orange"
+                  cor="warning"
                   label="Em Oficina"
                   valor={oficinaAnim}
                   onClick={() => navigate('/viaturas?status=manutencao')}
                   index={3}
                 >
-                  <p className="text-[11px] text-muted-foreground mt-1.5">
-                    <b className="text-foreground font-semibold">{oficinaPct}%</b> da frota
-                  </p>
+                  <span className="text-[11px] text-muted-foreground">
+                    <b className="font-semibold text-foreground tabular-nums">{oficinaPct}%</b> da
+                    frota
+                  </span>
                 </KpiItem>
                 <KpiItem
                   icon={TrendingUp}
-                  cor="blue"
+                  cor="navy"
                   label="Ocupação"
                   valor={`${ocupacaoAnim}%`}
                   onClick={() => navigate('/viaturas?status=em_uso')}
                   index={4}
                 >
-                  <KpiBar pct={ocupacaoPct} corClass="bg-blue-400" />
+                  <KpiBar pct={ocupacaoPct} corClass="bg-brand-navy" />
                 </KpiItem>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-4">
-                <div className="rounded-2xl border border-border bg-card p-4">
-                  <div className="flex items-start justify-between gap-4 mb-1">
-                    <div>
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_15rem] gap-4">
+                <Card className="rounded-xl shadow-none p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
                       <h2 className="text-sm font-semibold">Atividade</h2>
-                      <div className="flex flex-wrap gap-2 mt-2">
+                      {/* Legenda e totais na mesma linha. Antes havia estes
+                          rótulos aqui E um Legend do recharts por cima do
+                          gráfico, com os mesmos três nomes — a legenda estava
+                          desenhada duas vezes. */}
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
                         {isExecutivo && (
-                          <LegendChip corClass="bg-primary">
-                            Receita <b>{formatCurrency(receitaContratadaPeriodo)}</b>
-                          </LegendChip>
+                          <ChartMetric
+                            corClass="bg-primary"
+                            label="Receita"
+                            valor={formatCurrency(receitaContratadaPeriodo)}
+                          />
                         )}
-                        <LegendChip corClass="bg-blue-400">
-                          Alugados <b>{totalAlugadosPeriodo}</b>
-                        </LegendChip>
-                        <LegendChip corClass="bg-success">
-                          Devolvidos <b>{totalDevolvidosPeriodo}</b>
-                        </LegendChip>
+                        <ChartMetric
+                          corClass="bg-brand-navy"
+                          label="Alugados"
+                          valor={totalAlugadosPeriodo}
+                        />
+                        <ChartMetric
+                          corClass="bg-success"
+                          label="Devolvidos"
+                          valor={totalDevolvidosPeriodo}
+                        />
                       </div>
                     </div>
                     {/* Único controlo do gráfico: o período. Vive no card, e
@@ -775,9 +838,9 @@ const Dashboard = () => {
                       <PopoverTrigger asChild>
                         <button
                           type="button"
-                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
+                          <CalendarRange className="h-3.5 w-3.5" />
                           {periodoLabel}
                         </button>
                       </PopoverTrigger>
@@ -789,7 +852,7 @@ const Dashboard = () => {
                               type="button"
                               onClick={() => handlePreset(p)}
                               className={cn(
-                                'rounded-md px-3 py-1.5 text-left text-sm transition-colors',
+                                'rounded-md px-3 py-1.5 text-left text-sm transition-colors duration-150',
                                 preset === p
                                   ? 'bg-primary/10 font-semibold text-primary'
                                   : 'hover:bg-muted'
@@ -816,9 +879,12 @@ const Dashboard = () => {
                       anterior, só esbatido — trocá-lo por um skeleton fazia a
                       altura do card saltar a cada escolha. */}
                   <div
-                    className={cn('transition-opacity duration-200', atualizando && 'opacity-40')}
+                    className={cn(
+                      'mt-3 transition-opacity duration-200',
+                      atualizando && 'opacity-40'
+                    )}
                   >
-                    <Suspense fallback={<Skeleton className="h-[190px] w-full mt-3" />}>
+                    <Suspense fallback={<Skeleton className="h-[190px] w-full" />}>
                       <ReceitaChart
                         data={pontosGrafico}
                         formatCurrency={formatCurrency}
@@ -827,10 +893,10 @@ const Dashboard = () => {
                       />
                     </Suspense>
                   </div>
-                </div>
+                </Card>
 
-                <div className="rounded-2xl border border-border bg-card p-4">
-                  <h2 className="text-sm font-semibold mb-1">Estado da Frota</h2>
+                <Card className="rounded-xl shadow-none p-4">
+                  <h2 className="text-sm font-semibold">Estado da Frota</h2>
                   <Suspense fallback={<Skeleton className="h-[168px] w-full mt-3" />}>
                     <FrotaDonutChart
                       disponiveis={frotaDonut.disponiveis}
@@ -838,19 +904,22 @@ const Dashboard = () => {
                       inativos={frotaDonut.inativos}
                     />
                   </Suspense>
-                </div>
+                </Card>
               </div>
             </div>
 
-            {/* ── Coluna direita: "Precisa de atenção" ocupa toda a altura,
-                em vez de dividir espaço com outras secções. ─────────────── */}
-            <div className="rounded-2xl border border-border bg-card p-4 h-full">
-              <h2 className="text-[12.5px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                Precisa de atenção
-              </h2>
+            {/* ── Coluna direita: "Precisa de atenção" ───────────────────── */}
+            {/* O cartão acompanha a altura da coluna esquerda (é o que a
+                grelha faz por omissão) e as linhas crescem para ocupar o que
+                sobra, até um tecto. Sem isto ficava ou um cartão a meia altura
+                a flutuar, ou um cartão inteiro com dois terços vazios em baixo:
+                o espaço distribui-se pelas linhas em vez de se juntar todo no
+                fim. */}
+            <Card className="flex flex-col rounded-xl shadow-none p-4">
+              <h2 className="text-sm font-semibold">Precisa de atenção</h2>
               {categoriasAlerta.length === 0 ? (
-                <div className="flex items-center gap-3 rounded-xl border border-success/25 bg-success/5 px-4 py-3.5">
-                  <CircleCheck className="h-5 w-5 text-success shrink-0" />
+                <div className="my-auto flex items-center gap-3 rounded-lg border border-success/25 bg-success/5 px-3 py-3">
+                  <CircleCheck className="h-5 w-5 shrink-0 text-success" />
                   <div>
                     <p className="text-sm font-semibold text-success">Tudo em ordem</p>
                     <p className="text-xs text-muted-foreground">
@@ -859,7 +928,7 @@ const Dashboard = () => {
                   </div>
                 </div>
               ) : (
-                <div>
+                <div className="-mx-2 mt-1 flex flex-1 flex-col justify-center divide-y divide-border/60">
                   {categoriasAlerta.map((categoria, i) => (
                     <AlertaCategoriaRow
                       key={categoria.id}
@@ -870,11 +939,11 @@ const Dashboard = () => {
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
           </div>
 
           {/* ── Histórico de check-in/check-out + mapa Car Track (posições reais). ─ */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <CheckinCheckoutHistoricoCard enabled />
             <CartrackMapCard />
           </div>
@@ -884,30 +953,21 @@ const Dashboard = () => {
   );
 };
 
-// ── KPI strip — sem caixa em repouso; o chrome (fundo, sombra, risca de
-// cor) só aparece no hover, para parecer atalho e não display estático. ────
+// ── Faixa de KPIs — sem caixa por indicador: em repouso o único chrome é o
+// divisor hairline à esquerda; o fundo e a risca de cor só aparecem no hover,
+// para o item parecer atalho e não display estático. ─────────────────────────
 
-const KPI_CORES: Record<string, { icon: string; iconBgHover: string; underline: string }> = {
-  success: {
-    icon: 'text-success',
-    iconBgHover: 'group-hover:bg-success/15',
-    underline: 'bg-success',
-  },
-  blue: {
-    icon: 'text-blue-400',
-    iconBgHover: 'group-hover:bg-blue-500/15',
-    underline: 'bg-blue-400',
-  },
+const KPI_CORES: Record<string, { icon: string; underline: string }> = {
+  success: { icon: 'text-success', underline: 'bg-success' },
+  // Azul da marca por token, e não blue-400: a 400 do Tailwind é clara de mais
+  // para se ler sobre o cartão branco do tema claro.
+  navy: { icon: 'text-brand-navy', underline: 'bg-brand-navy' },
   violet: {
-    icon: 'text-violet-400',
-    iconBgHover: 'group-hover:bg-violet-500/15',
-    underline: 'bg-violet-400',
+    icon: 'text-violet-600 dark:text-violet-400',
+    underline: 'bg-violet-600 dark:bg-violet-400',
   },
-  orange: {
-    icon: 'text-orange-400',
-    iconBgHover: 'group-hover:bg-orange-500/15',
-    underline: 'bg-orange-400',
-  },
+  // Oficina é um estado de aviso — vale o token semântico, não um laranja solto.
+  warning: { icon: 'text-warning', underline: 'bg-warning' },
 };
 
 function KpiItem({
@@ -933,27 +993,32 @@ function KpiItem({
       type="button"
       onClick={onClick}
       style={{ animationDelay: `${index * 50}ms` }}
-      className="group relative flex-1 min-w-[135px] text-left px-4 pt-2.5 pb-3 rounded-xl cursor-pointer animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards transition-all hover:bg-background hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10 dark:hover:shadow-black/30"
+      className={cn(
+        'group relative cursor-pointer rounded-lg px-3 py-3 text-left xl:px-4',
+        'lg:border-l lg:border-border/70 lg:first:border-l-0',
+        'animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards',
+        'transition-colors duration-150 hover:bg-muted/60',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+      )}
     >
-      <span className="flex items-center gap-1.5 mb-1.5">
-        <span
-          className={cn(
-            'flex h-5 w-5 items-center justify-center rounded-md transition-colors',
-            c.icon,
-            c.iconBgHover
-          )}
-        >
-          <Icon className="h-3 w-3" />
+      <span className="flex items-center gap-1.5">
+        <Icon className={cn('h-3.5 w-3.5 shrink-0', c.icon)} />
+        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
         </span>
-        <span className="text-[11px] font-semibold text-muted-foreground">{label}</span>
       </span>
-      <span className="block text-[26px] font-bold tabular-nums leading-none tracking-tight">
+      <span className="mt-2 block text-[26px] font-semibold leading-none tracking-tight tabular-nums">
         {valor}
       </span>
-      {children}
+      {/* Altura fixa no slot secundário: sem ela, os KPIs com sparkline, com
+          barra e com texto ficavam com linhas de base diferentes e a faixa
+          lia-se desalinhada. */}
+      <span className="mt-2 flex h-4 items-center overflow-hidden whitespace-nowrap">
+        {children}
+      </span>
       <span
         className={cn(
-          'absolute left-4 right-4 bottom-1.5 h-[2px] rounded-full opacity-0 scale-x-[0.4] origin-left transition-all duration-200 group-hover:opacity-100 group-hover:scale-x-100',
+          'absolute inset-x-3 bottom-0 h-[2px] rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-100 xl:inset-x-4',
           c.underline
         )}
       />
@@ -963,7 +1028,7 @@ function KpiItem({
 
 function KpiBar({ pct, corClass }: { pct: number; corClass: string }) {
   return (
-    <span className="block h-[3px] w-full rounded-full bg-foreground/[0.07] overflow-hidden mt-2">
+    <span className="block h-[3px] w-full overflow-hidden rounded-full bg-foreground/[0.07]">
       <span
         className={cn(
           'block h-full rounded-full transition-[width] duration-700 ease-out',
@@ -978,7 +1043,7 @@ function KpiBar({ pct, corClass }: { pct: number; corClass: string }) {
 function KpiSparkline({ values, corClass }: { values: number[]; corClass: string }) {
   const max = Math.max(1, ...values);
   return (
-    <span className="flex items-end gap-[2px] h-4 mt-2">
+    <span className="flex h-4 items-end gap-[2px]">
       {values.map((v, i) => (
         <span
           key={i}
@@ -994,17 +1059,28 @@ function KpiSparkline({ values, corClass }: { values: number[]; corClass: string
   );
 }
 
-function LegendChip({ corClass, children }: { corClass: string; children: React.ReactNode }) {
+/** Legenda + total de uma série do gráfico, numa só linha — ver o comentário
+ *  no card "Atividade" sobre a legenda que estava duplicada. */
+function ChartMetric({
+  corClass,
+  label,
+  valor,
+}: {
+  corClass: string;
+  label: string;
+  valor: string | number;
+}) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/30 px-2.5 py-1 text-xs text-muted-foreground">
-      <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', corClass)} />
-      {children}
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', corClass)} />
+      <span>{label}</span>
+      <b className="font-semibold tabular-nums text-foreground">{valor}</b>
     </span>
   );
 }
 
-// ── Precisa de atenção — linha inteira clicável, sem botão nem caixa
-// tintada em repouso; o hover é o único chrome. ─────────────────────────────
+// ── Precisa de atenção — linha inteira clicável, sem botão nem caixa tintada
+// em repouso; o hover e o chevron são o único chrome. ───────────────────────
 
 const CORES_ALERTA: Record<CorAlerta, { texto: string; fundo: string }> = {
   destructive: { texto: 'text-destructive', fundo: 'bg-destructive/10' },
@@ -1027,23 +1103,44 @@ function AlertaCategoriaRow({
       type="button"
       onClick={onClick}
       style={{ animationDelay: `${80 + index * 60}ms` }}
-      className="w-full flex items-start gap-3 py-2.5 px-2 -mx-2 rounded-lg text-left cursor-pointer animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards transition-colors hover:bg-muted/40"
+      className={cn(
+        'group flex w-full flex-1 cursor-pointer items-center gap-3 rounded-md px-2 py-2.5 text-left',
+        // Tecto: com uma só categoria activa, uma linha esticada a 350px
+        // deixava de se ler como linha.
+        'max-h-28',
+        'animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards',
+        'transition-colors duration-150 hover:bg-muted/60',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+      )}
     >
       <span
         className={cn(
-          'flex h-8 w-8 items-center justify-center rounded-lg shrink-0',
+          'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
           c.fundo,
           c.texto
         )}
       >
         <Icon className="h-4 w-4" />
       </span>
-      <span className="min-w-0">
-        <span className={cn('block text-[11px] font-bold uppercase tracking-wide', c.texto)}>
-          {categoria.titulo}
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className={cn('text-[11px] font-bold uppercase tracking-wide', c.texto)}>
+            {categoria.titulo}
+          </span>
+          {categoria.contagem > 1 && (
+            <span className="rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+              {categoria.contagem}
+            </span>
+          )}
         </span>
-        <span className="block text-[13px] font-medium mt-0.5">{categoria.descricao}</span>
+        <span className="mt-0.5 block truncate text-[13px] font-medium">{categoria.descricao}</span>
+        {categoria.detalhe && (
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+            {categoria.detalhe}
+          </span>
+        )}
       </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
     </button>
   );
 }
