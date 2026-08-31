@@ -122,6 +122,37 @@ Deno.serve(async (req) => {
       );
     }
 
+    // O período NÃO pode ficar a null. Sem ele, o drain não o envia ao robô,
+    // o robô usa a janela que o portal da Via Verde mostrar por omissão, e
+    // essa janela fica sempre para trás: a 26/08, com crons de hora a hora
+    // desde o dia 24, os dados estavam parados a 21/08 — três dias de
+    // portagens de toda a frota fora de todos os fechos.
+    //
+    // Passa a pedir-se da ÚLTIMA PASSAGEM CONHECIDA até hoje, com margem
+    // para trás. A margem existe porque a Via Verde publica passagens com
+    // atraso: sem ela, um dia que só aparecesse depois de já termos avançado
+    // ficaria perdido para sempre. Reimportar não duplica — o via-verde-import
+    // faz upsert em (integracao_id, transaction_id).
+    const DIAS_DE_MARGEM = 5;
+    const DIAS_SEM_HISTORICO = 30;
+    const hojeISO = new Date().toISOString().slice(0, 10);
+
+    const periodoDe = async (integracaoId: string): Promise<string> => {
+      const { data } = await supabase
+        .from('via_verde_transacoes')
+        .select('transaction_date')
+        .eq('integracao_id', integracaoId)
+        .order('transaction_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const base = data?.transaction_date
+        ? new Date(data.transaction_date as string)
+        : new Date(Date.now() - DIAS_SEM_HISTORICO * 86_400_000);
+      base.setDate(base.getDate() - (data?.transaction_date ? DIAS_DE_MARGEM : 0));
+      return base.toISOString().slice(0, 10);
+    };
+
     // Enfileira cada integração devida — 23505 (violação do índice único
     // parcial de via_verde_sync_queue) significa "já está pendente/em
     // execução", tratado como sucesso silencioso, não erro.
@@ -131,6 +162,8 @@ Deno.serve(async (req) => {
           integracao_id: int.id,
           org_id: int.org_id,
           status: 'pending',
+          periodo_inicio: await periodoDe(int.id),
+          periodo_fim: hojeISO,
         });
         if (insertError && insertError.code !== '23505') {
           return {
