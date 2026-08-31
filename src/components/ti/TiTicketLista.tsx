@@ -1,8 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
@@ -15,6 +23,7 @@ import {
   useTiTickets,
 } from '@/hooks/useTiTickets';
 import type { EstadoTicket } from '@/lib/tiTicketEstados';
+import { resumoContinuacao } from '@/lib/tiTicketContinuacao';
 
 /** Rótulo e tom de cada estado. Um só sítio, para o mesmo estado não ter dois nomes. */
 const ESTADOS: Record<
@@ -28,6 +37,8 @@ const ESTADOS: Record<
   resolvido: { rotulo: 'Resolvido', variante: 'secondary' },
 };
 
+const TODAS = '__todas__';
+
 export function TiTicketLista() {
   const { data = [], isLoading, error } = useTiTickets();
   const criarSugestao = useCriarSugestao();
@@ -40,6 +51,21 @@ export function TiTicketLista() {
   const [texto, setTexto] = useState('');
   const [novoAberto, setNovoAberto] = useState(false);
   const [novaDescricao, setNovaDescricao] = useState('');
+  const [empresa, setEmpresa] = useState(TODAS);
+
+  // Quem faz suporte à plataforma vê os pedidos de todas as empresas; toda a
+  // gente vê só os da sua. O filtro sai da própria lista em vez de uma query às
+  // organizações — assim aparece exactamente com as empresas que estão ali, e
+  // não com as que a pessoa não pode ver.
+  const empresas = useMemo(
+    () =>
+      Array.from(new Set(data.map((t) => t.organizacao?.nome).filter(Boolean) as string[])).sort(),
+    [data]
+  );
+  const visiveis = useMemo(
+    () => (empresa === TODAS ? data : data.filter((t) => t.organizacao?.nome === empresa)),
+    [data, empresa]
+  );
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
   if (error) {
@@ -83,11 +109,30 @@ export function TiTicketLista() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Pedidos actuais ({data.length})</h2>
-        <Button size="sm" variant="outline" onClick={() => setNovoAberto((v) => !v)}>
-          Novo pedido
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Pedidos actuais ({visiveis.length})</h2>
+        <div className="flex items-center gap-2">
+          {/* Só faz sentido filtrar por empresa quando há mais do que uma na
+              lista — para quem vê só a sua, seria um controlo com uma opção. */}
+          {empresas.length > 1 && (
+            <Select value={empresa} onValueChange={setEmpresa}>
+              <SelectTrigger className="h-9 w-48 bg-background">
+                <SelectValue placeholder="Todas as empresas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={TODAS}>Todas as empresas</SelectItem>
+                {empresas.map((nome) => (
+                  <SelectItem key={nome} value={nome}>
+                    {nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button size="sm" variant="outline" onClick={() => setNovoAberto((v) => !v)}>
+            Novo pedido
+          </Button>
+        </div>
       </div>
 
       {novoAberto && (
@@ -124,32 +169,90 @@ export function TiTicketLista() {
         </Card>
       )}
 
-      {data.length === 0 && <p className="text-sm text-muted-foreground">Ainda não há pedidos.</p>}
+      {visiveis.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          {data.length === 0 ? 'Ainda não há pedidos.' : 'Nenhum pedido desta empresa.'}
+        </p>
+      )}
 
-      {data.map((t) => {
+      {visiveis.map((t) => {
         const estado = ESTADOS[t.status] ?? { rotulo: t.status, variante: 'default' as const };
+        // As sugestões já vêm ordenadas do hook, por isso o índice é o número
+        // da tentativa.
+        const continuacao = resumoContinuacao(t.sugestoes);
         return (
           <Card key={t.id} className="space-y-3 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold">#{t.numero}</span>
                 <span className="text-sm text-muted-foreground">{t.autor_nome}</span>
+                {/* De que empresa veio. O número do pedido é por organização,
+                    portanto sem isto havia dois "#1" na mesma lista. */}
+                {empresas.length > 1 && t.organizacao?.nome && (
+                  <Badge variant="secondary">{t.organizacao.nome}</Badge>
+                )}
               </div>
-              <Badge variant={estado.variante}>{estado.rotulo}</Badge>
+              <div className="flex items-center gap-2">
+                {/* Quem abre a lista tem de ver logo que este pedido já levou
+                    uma tentativa. Sem isto, uma segunda passagem parece um
+                    pedido novo e repete-se a sugestão que já falhou. */}
+                {continuacao.ehContinuacao && t.status !== 'resolvido' && (
+                  <Badge variant="outline">
+                    Continuação — {continuacao.proximaTentativa}.ª tentativa
+                  </Badge>
+                )}
+                <Badge variant={estado.variante}>{estado.rotulo}</Badge>
+              </div>
             </div>
 
             <p className="whitespace-pre-wrap text-sm">{t.descricao}</p>
 
-            {t.sugestoes.map((s) => (
+            {/* Quem tratou disto. É a primeira pergunta quando um pedido volta
+                a abrir, e sem isto a resposta estava só na cabeça de alguém. */}
+            {t.status === 'resolvido' && (
+              <p className="text-xs text-muted-foreground">
+                {t.resolvido_por_nome ? (
+                  <>
+                    Resolvido por <b className="text-foreground">{t.resolvido_por_nome}</b>
+                    {t.resolvido_em && ` a ${format(new Date(t.resolvido_em), 'dd/MM/yyyy')}`}
+                  </>
+                ) : (
+                  // Pedidos fechados antes de existir a coluna. Dizer que não se
+                  // sabe é melhor do que ficar calado: calado, quem olha fica a
+                  // pensar que o ecrã não está a mostrar o que devia.
+                  'Fechado antes de se passar a registar quem resolve — não há registo de quem foi.'
+                )}
+              </p>
+            )}
+
+            {t.sugestoes.map((s, i) => (
               <div key={s.id} className="rounded-md border border-border p-2 text-sm">
-                <p className="whitespace-pre-wrap">{s.texto}</p>
+                <p className="text-xs font-semibold text-muted-foreground">
+                  Tentativa {i + 1}
+                  {s.criado_por_nome && ` · por ${s.criado_por_nome}`}
+                </p>
+                <p className="mt-1 whitespace-pre-wrap">{s.texto}</p>
                 <p className="mt-1 text-xs">
-                  {s.util === true && <span className="text-emerald-600">Ajudou</span>}
-                  {s.util === false && <span className="text-destructive">Não ajudou</span>}
+                  {s.util === true && <span className="text-emerald-600">Resolveu</span>}
+                  {s.util === false && <span className="text-destructive">Não resolveu</span>}
                   {s.util === null && (
                     <span className="text-muted-foreground">Sem resposta ainda</span>
                   )}
                 </p>
+                {/* O que o autor escreveu ao recusar. Distinguir "não explicou"
+                    de "explicou" evita ficar à espera de um texto que nunca
+                    houve. */}
+                {s.util === false && (
+                  <p
+                    className={
+                      s.resposta_texto
+                        ? 'mt-2 whitespace-pre-wrap rounded-md bg-muted p-2 text-xs'
+                        : 'mt-2 text-xs italic text-muted-foreground'
+                    }
+                  >
+                    {s.resposta_texto ?? 'Não explicou porquê.'}
+                  </p>
+                )}
               </div>
             ))}
 
@@ -157,7 +260,9 @@ export function TiTicketLista() {
               {t.status !== 'resolvido' ? (
                 <>
                   <Button size="sm" variant="outline" onClick={() => setASugerir(t.id)}>
-                    Sugerir resolução
+                    {continuacao.ehContinuacao
+                      ? `Nova sugestão (tentativa ${continuacao.proximaTentativa})`
+                      : 'Sugerir resolução'}
                   </Button>
                   <Button
                     size="sm"

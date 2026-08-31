@@ -37,3 +37,15 @@ const TRANSICOES: Record<EstadoTicket, Partial<Record<EventoTicket, EstadoTicket
 export function proximoEstado(actual: EstadoTicket, evento: EventoTicket): EstadoTicket | null {
   return TRANSICOES[actual]?.[evento] ?? null;
 }
+
+/**
+ * O que a bolinha do dashboard conta: tudo o que ainda não está resolvido.
+ *
+ * Derivado de `TRANSICOES` em vez de escrito à mão, para que um estado novo na
+ * máquina de estados passe a contar sozinho. Uma segunda lista escrita à parte
+ * ficava desactualizada em silêncio, e o sintoma seria o pior possível: pedidos
+ * a existir sem aparecerem no aviso.
+ */
+export const ESTADOS_POR_RESOLVER: readonly EstadoTicket[] = (
+  Object.keys(TRANSICOES) as EstadoTicket[]
+).filter((estado) => estado !== 'resolvido');

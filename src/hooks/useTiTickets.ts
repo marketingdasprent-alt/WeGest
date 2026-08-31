@@ -1,11 +1,17 @@
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { proximoEstado, type EstadoTicket } from '@/lib/tiTicketEstados';
+import { ESTADOS_POR_RESOLVER, proximoEstado, type EstadoTicket } from '@/lib/tiTicketEstados';
+import { ordenarSugestoes } from '@/lib/tiTicketContinuacao';
 
 export interface TiSugestao {
   id: string;
   texto: string;
   util: boolean | null;
+  /** O que o autor escreveu ao recusar a sugestão. Nulo se não explicou. */
+  resposta_texto: string | null;
+  /** Quem escreveu a sugestão, em texto — ver a migração para o porquê. */
+  criado_por_nome: string | null;
   created_at: string;
 }
 
@@ -17,29 +23,116 @@ export interface TiTicket {
   descricao: string;
   status: EstadoTicket;
   created_at: string;
+  /** Empresa de onde veio o pedido. Nulo se a RLS não deixar ler a organização. */
+  organizacao: { nome: string } | null;
+  resolvido_por_nome: string | null;
+  resolvido_em: string | null;
   sugestoes: TiSugestao[];
 }
 
 const CHAVE = ['ti-tickets'];
+
+/**
+ * Nome de quem está a usar a aplicação, para creditar quem respondeu ou
+ * resolveu.
+ *
+ * Nunca lança: falhar a leitura do perfil não pode impedir uma sugestão de ser
+ * gravada nem um pedido de ser fechado. Sem nome, o cartão fica sem crédito —
+ * mau, mas melhor do que perder o trabalho.
+ */
+async function nomeDaSessao(): Promise<string | null> {
+  try {
+    const { data: user } = await supabase.auth.getUser();
+    const uid = user?.user?.id;
+    if (!uid) return null;
+    const { data } = await supabase
+      .from('profiles')
+      .select('nome, email, org_id')
+      .eq('id', uid)
+      .single();
+    return (data as { nome?: string | null } | null)?.nome ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export function useTiTickets(enabled = true) {
   return useQuery({
     queryKey: CHAVE,
     enabled,
     queryFn: async (): Promise<TiTicket[]> => {
-      // A RLS já limita à organização e a quem tem ti_tickets_gerir. Repetir a
-      // verificação aqui daria uma segunda definição de "quem pode ver".
+      // A RLS já decide o que aparece — a organização própria para toda a
+      // gente, e todas as organizações para quem faz suporte à plataforma.
+      // Repetir a verificação aqui daria uma segunda definição de "quem pode
+      // ver", e seria essa a que ficaria desactualizada.
       const { data, error } = await (supabase as any)
         .from('ti_tickets')
         .select(
           'id, numero, autor_nome, autor_email, descricao, status, created_at,' +
-            ' sugestoes:ti_ticket_sugestoes(id, texto, util, created_at)'
+            ' resolvido_por_nome, resolvido_em,' +
+            ' organizacao:organizacoes(nome),' +
+            ' sugestoes:ti_ticket_sugestoes(id, texto, util, resposta_texto, criado_por_nome, created_at)'
         )
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data ?? []) as TiTicket[];
+      // Pedidos do mais recente para o mais antigo, mas as sugestões DENTRO de
+      // cada pedido pela ordem em que foram escritas: é essa ordem que dá
+      // sentido a "tentativa 1, tentativa 2".
+      return ((data ?? []) as TiTicket[]).map((t) => ({
+        ...t,
+        sugestoes: ordenarSugestoes(t.sugestoes ?? []),
+      }));
     },
   });
+}
+
+/**
+ * Quantos pedidos estão por resolver, para o aviso do dashboard.
+ *
+ * Conta no servidor (`head: true`) em vez de trazer a lista e medir o
+ * comprimento: quem tem o aviso no ecrã não precisa do conteúdo dos pedidos, e
+ * a lista cresce sem limite.
+ *
+ * A chave vive debaixo de `['ti-tickets']` de propósito — as invalidações que
+ * já existem nas mutações apanham-na por prefixo, e uma sugestão enviada
+ * corrige o número sem código novo.
+ */
+export function useTiTicketsAbertos(enabled = true) {
+  const qc = useQueryClient();
+
+  const query = useQuery({
+    queryKey: [...CHAVE, 'abertos'],
+    enabled,
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await (supabase as any)
+        .from('ti_tickets')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ESTADOS_POR_RESOLVER as EstadoTicket[]);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    // Qualquer alteração conta: um pedido novo faz subir, um resolvido faz
+    // descer, e uma mudança de estado pode fazer as duas coisas. Invalidar é
+    // mais barato de manter do que reproduzir aqui a regra de que estados
+    // contam — essa vive em ESTADOS_POR_RESOLVER e num sítio só.
+    const canal = supabase
+      .channel('ti-tickets-abertos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ti_tickets' }, () => {
+        qc.invalidateQueries({ queryKey: [...CHAVE, 'abertos'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [enabled, qc]);
+
+  return query;
 }
 
 export function useCriarSugestao() {
@@ -59,9 +152,13 @@ export function useCriarSugestao() {
       const { data: user } = await supabase.auth.getUser();
       const { error: erroIns } = await (supabase as any).from('ti_ticket_sugestoes').insert({
         ticket_id: ticketId,
+        // O org_id vem do PEDIDO, não de quem escreve: quem faz suporte
+        // responde a pedidos de outras empresas, e uma sugestão com o org_id
+        // errado desaparecia da lista do próprio pedido.
         org_id: ticket.org_id,
         texto,
         criado_por: user?.user?.id ?? null,
+        criado_por_nome: await nomeDaSessao(),
       });
       if (erroIns) throw erroIns;
 
@@ -115,7 +212,12 @@ export function useMarcarPresencial() {
  * são elas que impedem um botão futuro de pôr um ticket num estado impossível —
  * a regra continua num sítio só, em `tiTicketEstados.ts`.
  */
-function useTransicaoTicket(evento: 'fechar' | 'reabrir', erroSeProibido: string) {
+function useTransicaoTicket(
+  evento: 'fechar' | 'reabrir',
+  erroSeProibido: string,
+  /** Campos que a transição escreve além do estado (quem resolveu, quando). */
+  camposExtra: () => Promise<Record<string, unknown>>
+) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ ticketId }: { ticketId: string }) => {
@@ -131,7 +233,11 @@ function useTransicaoTicket(evento: 'fechar' | 'reabrir', erroSeProibido: string
 
       const { error: erroUpd } = await (supabase as any)
         .from('ti_tickets')
-        .update({ status: novo, updated_at: new Date().toISOString() })
+        .update({
+          status: novo,
+          updated_at: new Date().toISOString(),
+          ...(await camposExtra()),
+        })
         .eq('id', ticketId);
       if (erroUpd) throw erroUpd;
     },
@@ -141,12 +247,24 @@ function useTransicaoTicket(evento: 'fechar' | 'reabrir', erroSeProibido: string
 
 /** Fecha o pedido: o admin dá-o por resolvido. Funciona de qualquer estado. */
 export function useMarcarResolvido() {
-  return useTransicaoTicket('fechar', 'Este pedido já está resolvido.');
+  return useTransicaoTicket('fechar', 'Este pedido já está resolvido.', async () => ({
+    resolvido_por_nome: await nomeDaSessao(),
+    resolvido_em: new Date().toISOString(),
+  }));
 }
 
-/** Reabre um pedido resolvido — volta a `nao_resolvido`, a precisar de atenção. */
+/**
+ * Reabre um pedido resolvido — volta a `nao_resolvido`, a precisar de atenção.
+ *
+ * Limpa quem tinha resolvido: sem isso, um pedido outra vez à espera de alguém
+ * continuava a dizer "Resolvido por X" no cartão.
+ */
 export function useReabrirTicket() {
-  return useTransicaoTicket('reabrir', 'Só se reabre um pedido que esteja resolvido.');
+  return useTransicaoTicket(
+    'reabrir',
+    'Só se reabre um pedido que esteja resolvido.',
+    async () => ({ resolvido_por_nome: null, resolvido_em: null })
+  );
 }
 
 /** Ticket aberto pelo próprio admin dentro da aplicação: fica com `criado_por`. */

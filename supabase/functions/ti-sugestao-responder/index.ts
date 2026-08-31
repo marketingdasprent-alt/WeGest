@@ -36,13 +36,32 @@ function isValidUUID(value: unknown): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
+// Não é um limite de UI, é um limite de escrita: sem tecto, um POST directo
+// grava um texto de qualquer tamanho numa tabela que a lista do admin lê
+// inteira.
+const MAX_RESPOSTA = 2000;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
 
   try {
-    const { acesso_token, sugestao_id, util } = await req.json();
+    const { acesso_token, sugestao_id, util, resposta_texto } = await req.json();
     if (!acesso_token || !sugestao_id || typeof util !== 'boolean') {
       return json({ success: false, error: 'Pedido incompleto.' }, 400);
+    }
+
+    // A explicação é opcional e só existe na recusa: dizer "ajudou" e mandar
+    // texto junto seria um estado que a lista do admin não sabe mostrar, por
+    // isso ignora-se em vez de se gravar.
+    if (resposta_texto != null && typeof resposta_texto !== 'string') {
+      return json({ success: false, error: 'Pedido incompleto.' }, 400);
+    }
+    const explicacao = util ? null : (resposta_texto ?? '').trim() || null;
+    if (explicacao && explicacao.length > MAX_RESPOSTA) {
+      return json(
+        { success: false, error: `A explicação não pode passar de ${MAX_RESPOSTA} caracteres.` },
+        400
+      );
     }
 
     // Valida formato de UUID antes de ir à base de dados (Minor #3)
@@ -73,7 +92,7 @@ Deno.serve(async (req) => {
     // válido poderia responder a sugestões de outro ticket.
     const { data: sugestao, error: sugestaoError } = await sb
       .from('ti_ticket_sugestoes')
-      .select('id, util')
+      .select('id, util, criado_por_nome')
       .eq('id', sugestao_id)
       .eq('ticket_id', ticket.id)
       .maybeSingle();
@@ -101,7 +120,7 @@ Deno.serve(async (req) => {
     // (lógica de três valores); .is() é o método correcto para comparar com NULL.
     const { data: updateSugestaoData, error: updateSugestaoError } = await sb
       .from('ti_ticket_sugestoes')
-      .update({ util, respondida_em: new Date().toISOString() })
+      .update({ util, resposta_texto: explicacao, respondida_em: new Date().toISOString() })
       .eq('id', sugestao.id)
       .is('util', null) // CRITICAL #1: compare-and-swap com .is() para NULL
       .select('id');
@@ -116,9 +135,19 @@ Deno.serve(async (req) => {
       return json({ success: false, error: 'Já respondeu a esta sugestão.' }, 409);
     }
 
+    // Quando é o próprio requerente a dizer que resolveu, quem merece o crédito
+    // é quem escreveu a sugestão — não o requerente. É a mesma pergunta a que a
+    // lista responde quando o admin fecha o pedido à mão: "quem tratou disto?".
+    const agora = new Date().toISOString();
+    const patchTicket: Record<string, unknown> = { status: novo, updated_at: agora };
+    if (util) {
+      patchTicket.resolvido_por_nome = sugestao.criado_por_nome ?? null;
+      patchTicket.resolvido_em = agora;
+    }
+
     const { error: updateTicketError } = await sb
       .from('ti_tickets')
-      .update({ status: novo, updated_at: new Date().toISOString() })
+      .update(patchTicket)
       .eq('id', ticket.id);
 
     if (updateTicketError) {
@@ -128,7 +157,7 @@ Deno.serve(async (req) => {
       // sem culpa sua.
       const { error: revertError } = await sb
         .from('ti_ticket_sugestoes')
-        .update({ util: null, respondida_em: null })
+        .update({ util: null, resposta_texto: null, respondida_em: null })
         .eq('id', sugestao.id);
 
       if (revertError) {

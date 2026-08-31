@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
 
     const { data: sugestoes, error: sugestoesError } = await sb
       .from('ti_ticket_sugestoes')
-      .select('id, texto, util, created_at')
+      .select('id, texto, util, resposta_texto, created_at')
       .eq('ticket_id', ticket.id)
       .order('created_at', { ascending: true });
 
