@@ -84,6 +84,10 @@ html[data-native-app='true'] .native-bottom {
     --fluxo-notificacao: 330 65% 40%;
     --fluxo-estado: 291 50% 40%;
     --fluxo-condicao: 45 92% 30%;
+    /* O email, separado da notificação. Matiz no maior intervalo livre da
+       paleta acima (45→142): a dois blocos com cores parecidas leem-se como o
+       mesmo, e é esse o problema que ter um token próprio evita. */
+    --fluxo-email: 85 60% 30%;
     /* Editor de automações — escada de elevação.
        O canvas é a base, os painéis um degrau acima e os cartões dos nós o
        degrau mais alto. Sem esta separação os nós não saltam do fundo, que
@@ -181,6 +185,7 @@ html[data-native-app='true'] .native-bottom {
     --fluxo-notificacao: 330 80% 70%;
     --fluxo-estado: 291 70% 70%;
     --fluxo-condicao: 45 92% 58%;
+    --fluxo-email: 85 60% 58%;
     /* Mesma escada, invertida: no escuro o canvas é o mais fundo e os
        cartões os mais claros. */
     --canvas-bg: 222 47% 6%;

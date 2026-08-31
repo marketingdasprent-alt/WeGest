@@ -31,12 +31,11 @@ export interface RegraParaEditar {
   eventType: string;
   cooldownMinutos: number;
   cargoIds: string[];
-  enviarEmail: boolean;
   /** 'individual' = só as pessoas em `userIds`, dentro dos cargos escolhidos. */
   modo: 'grupo' | 'individual';
   userIds: string[];
   condicoes: CondicaoGravada[];
-  /** 'notificacao' | 'automacao_interna'. Decide o que o nó da acção mostra. */
+  /** 'notificacao' | 'email' | 'automacao_interna'. Decide o que o nó da acção mostra. */
   acaoTipo: string;
   /** A `acao_config` crua, levada inteira para o nó — o painel lê dela o que
    * precisa. Levar só os campos que hoje se mostram apagava o resto ao gravar. */
@@ -121,15 +120,21 @@ export function fluxoDaRegra(regra: RegraParaEditar): { nodes: Node[]; edges: Ed
       accao:
         regra.acaoTipo === 'automacao_interna'
           ? ((regra.acaoConfig.accao as string) ?? '')
-          : 'notificacao',
+          : regra.acaoTipo === 'email'
+            ? 'email'
+            : 'notificacao',
       acaoTipo: regra.acaoTipo,
-      rotulo: regra.acaoTipo === 'automacao_interna' ? 'Executar acção' : 'Enviar notificação',
+      rotulo:
+        regra.acaoTipo === 'automacao_interna'
+          ? 'Executar acção'
+          : regra.acaoTipo === 'email'
+            ? 'Enviar email'
+            : 'Enviar notificação',
       // Config da acção interna, reconstruída ao abrir. Sem isto, editar uma
       // automação interna existente perdia o campo e o valor.
       campo: (regra.acaoConfig.campo as string) ?? '',
       valor: (regra.acaoConfig.valor as string) ?? '',
       cargoIds: regra.cargoIds,
-      enviarEmail: regra.enviarEmail,
       modo: regra.modo,
       userIds: regra.userIds,
       cooldownMinutos: regra.cooldownMinutos,

@@ -8,14 +8,14 @@ import { useAccoesDoNo } from './useAccoesDoNo';
 import { BlocoBase } from './BlocoBase';
 
 export interface DadosAccaoBuilder extends Record<string, unknown> {
-  /** Para notificações é 'notificacao'; para acções internas é o id do catálogo. */
+  /** 'notificacao' ou 'email' para as duas acções de aviso; para acções
+   * internas é o id do catálogo. */
   accao: string;
-  /** 'notificacao' | 'automacao_interna'. */
+  /** 'notificacao' | 'email' | 'automacao_interna'. */
   acaoTipo?: string;
   rotulo: string;
   cooldownMinutos: number;
   cargoIds?: string[];
-  enviarEmail?: boolean;
   campo?: string;
   valor?: string;
   /** Vem das estatísticas da regra, não da configuração. */
@@ -36,10 +36,9 @@ function detalhe(data: DadosAccaoBuilder): string {
     const alvo = data.campo ? `${data.campo} → ` : '';
     return `${alvo}${data.valor || '?'}`;
   }
-  if (data.accao === 'notificacao') {
+  if (data.acaoTipo === 'notificacao' || data.acaoTipo === 'email') {
     const n = data.cargoIds?.length ?? 0;
-    const grupos = n === 1 ? '1 grupo' : `${n} grupos`;
-    return `${grupos}${data.enviarEmail ? ' · com email' : ''}`;
+    return n === 1 ? '1 grupo' : `${n} grupos`;
   }
   return data.campo ? `${data.campo} → ${data.valor || '?'}` : 'Sem campo escolhido';
 }
@@ -65,7 +64,9 @@ function faltaConfigurar(data: DadosAccaoBuilder): boolean {
   // Numa acção interna o `campo` só existe nas que escrevem num campo; exigi-lo
   // sempre marcava como incompleta uma acção de conjunto fechado já correcta.
   if (data.acaoTipo === 'automacao_interna') return !data.accao || !data.valor;
-  if (data.accao === 'notificacao') return (data.cargoIds?.length ?? 0) === 0;
+  if (data.acaoTipo === 'notificacao' || data.acaoTipo === 'email') {
+    return (data.cargoIds?.length ?? 0) === 0;
+  }
   return false;
 }
 

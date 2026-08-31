@@ -5,6 +5,7 @@ import {
   Euro,
   Filter,
   LifeBuoy,
+  Mail,
   ToggleRight,
   Users,
   Wrench,
@@ -115,14 +116,32 @@ export const CATALOGO: TemplateDeNo[] = [
     chave: 'notificacao',
     tipo: 'accao',
     rotulo: 'Enviar notificação',
-    descricao: 'Avisa cargos ou pessoas, com email opcional',
+    // Já não é "com email opcional": o email tem acção própria desde a
+    // divisão de 2026-09-01. Duas coisas, dois blocos — não um interruptor
+    // escondido dentro de outra acção.
+    descricao: 'Avisa cargos ou pessoas dentro da aplicação',
     Icone: Bell,
     cor: '--fluxo-notificacao',
     dados: {
       accao: 'notificacao',
+      acaoTipo: 'notificacao',
       rotulo: 'Enviar notificação',
       cargoIds: [],
-      enviarEmail: false,
+      cooldownMinutos: COOLDOWN_PADRAO_MINUTOS,
+    },
+  },
+  {
+    chave: 'email',
+    tipo: 'accao',
+    rotulo: 'Enviar email',
+    descricao: 'Envia por correio a cargos ou pessoas, sem aviso na aplicação',
+    Icone: Mail,
+    cor: '--fluxo-email',
+    dados: {
+      accao: 'email',
+      acaoTipo: 'email',
+      rotulo: 'Enviar email',
+      cargoIds: [],
       cooldownMinutos: COOLDOWN_PADRAO_MINUTOS,
     },
   },

@@ -4,6 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   useAtualizarConfigRegra,
   useAutomationRuleConfig,
+  type AutomationRuleAcaoConfig,
 } from '@/hooks/automacao/useAutomationRulesConfig';
 import { useAutomacaoEstatisticasPorRegra } from '@/hooks/useAutomationQueue';
 import { useUltimaFalhaDaRegra } from '@/hooks/automacao/useUltimaFalhaDaRegra';
@@ -22,6 +23,22 @@ import { configDoFluxo } from './configDoFluxo';
 import { fluxoDaRegra, type CondicaoGravada } from './fluxoDaRegra';
 import { serializarFluxo } from './serializar';
 import { TODOS_OS_MODULOS } from '../rotulos';
+
+/**
+ * A config sem as chaves de email antigas.
+ *
+ * Só usada ao gravar uma NOTIFICAÇÃO: `enviar_email` deixou de ser válido aí
+ * desde a divisão de 2026-09-01, e o validador do servidor recusa a chave.
+ * Uma regra anterior à migração que ainda a tivesse na `acao_config` ficava
+ * presa — gravar qualquer alteração seria recusado por um campo que o próprio
+ * editor já não escreve.
+ */
+export function semChavesDeEmailAntigo(
+  config: AutomationRuleAcaoConfig
+): Omit<AutomationRuleAcaoConfig, 'enviar_email' | 'enviar_email_digest'> {
+  const { enviar_email: _enviarEmail, enviar_email_digest: _enviarEmailDigest, ...resto } = config;
+  return resto;
+}
 
 export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
   // `useState` simples em vez dos hooks da biblioteca: o canvas trabalha em
@@ -78,7 +95,6 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
       eventType: config.event_type,
       cooldownMinutos: config.cooldown_minutos,
       cargoIds: config.acao_config?.destinatarios_cargo_ids ?? [],
-      enviarEmail: config.acao_config?.enviar_email ?? false,
       modo: config.acao_config?.destinatarios_modo ?? 'grupo',
       userIds: config.acao_config?.destinatarios_user_ids ?? [],
       condicoes,
@@ -191,14 +207,22 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
           // configuração de notificação para dentro de uma acção que não os
           // usa — e o validador do servidor recusa chaves que não conhece.
           //
-          // A notificação continua a FUNDIR: o editor não mostra tudo o que lá
-          // está, e substituir apagava em silêncio o que não mostra.
+          // Notificação e email continuam a FUNDIR: o editor não mostra tudo o
+          // que lá está (ex.: `enviar_email_digest`, sem controlo na UI), e
+          // substituir apagava em silêncio o que não mostra.
           acaoConfig: extraida.acaoInterna
             ? extraida.acaoInterna
             : {
-                ...config.acao_config,
+                // `enviar_email` deixou de ser válido numa notificação — o
+                // email tem acção própria desde 2026-09-01, e o validador do
+                // servidor recusa a chave. Uma regra anterior à divisão que
+                // ainda a tivesse perde-a aqui; uma acção de email nunca a
+                // teve. `enviar_email_digest` sai com ela só para
+                // notificação — para email continua válido.
+                ...(extraida.acaoTipo === 'notificacao'
+                  ? semChavesDeEmailAntigo(config.acao_config)
+                  : config.acao_config),
                 destinatarios_cargo_ids: extraida.cargoIds,
-                enviar_email: extraida.enviarEmail,
                 // O editor passou a cobrir a escolha de pessoas — já não há
                 // Sheet separada a escrevê-las por trás.
                 destinatarios_modo: extraida.modo,
