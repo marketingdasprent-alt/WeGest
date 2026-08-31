@@ -31,7 +31,7 @@
 -- ============================================================
 
 begin;
-select plan(17);
+select plan(18);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'exec-runs-a');
@@ -94,11 +94,19 @@ select is(
   'as notificações ficam com rastreabilidade até ao automation_run'
 );
 
--- 6. enviar_email=true cria um item de fila de email por destinatário.
+-- 6. `enviar_email` na config de uma notificação já não enfileira email.
+--
+-- Desde a migração 20260901100000, o executor decide enfileirar pelo
+-- `acao_tipo` da regra (`v_enviar_email := v_rule.acao_tipo = 'email'`), não
+-- pelo campo `enviar_email` da config — que esta regra ainda tem, por ser
+-- daqui que o resto do ficheiro precisa da linha em `notifications` (o
+-- trigger `fn_notifications_so_quando_ha_email` continua a olhar para esse
+-- campo como caminho antigo). A fila é outra coisa; ver o Cenário H para a
+-- prova positiva com uma regra `acao_tipo = 'email'`.
 select is(
   (select count(*)::int from public.notification_queue where destinatario = 'admin@exec-runs.pt'),
-  1,
-  'enviar_email=true cria um item de fila de email para o admin'
+  0,
+  'enviar_email na config de uma notificação não enfileira — o tipo da acção é quem decide'
 );
 
 -- Cenário B: acao_tipo diferente de notificacao só conclui, sem ação.
@@ -281,6 +289,28 @@ select is(
   (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0007' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0005'),
   0,
   'modo individual: outra pessoa do mesmo cargo, não escolhida individualmente, não recebe'
+);
+
+-- Cenário H: acao_tipo='email' é quem realmente enfileira, desde a divisão.
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-000000460008', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_email', 'Regra de Email', 'teste.evento8', 'email',
+   jsonb_build_object('titulo', 'Titulo de Teste', 'template_codigo', 'teste.notif', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000c60001')));
+
+insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
+  ('00000000-0000-0000-0000-0000004c0008', '00000000-0000-0000-0000-000000460008', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-00000ef70008');
+
+select public.execute_automation_runs();
+
+-- 17. Uma regra acao_tipo='email' enfileira, sem precisar de enviar_email na config.
+--
+-- `notification_queue` não tem rule_run_id directo — chega-se lá por
+-- notification_id, que aponta para a linha em `notifications`.
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+    where q.destinatario = 'admin@exec-runs.pt' and n.rule_run_id = '00000000-0000-0000-0000-0000004c0008'),
+  1,
+  'acao_tipo=email enfileira email para o admin, sem depender de enviar_email na config'
 );
 
 select * from finish();

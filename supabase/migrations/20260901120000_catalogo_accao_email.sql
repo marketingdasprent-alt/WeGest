@@ -1,31 +1,21 @@
 -- ============================================================================
--- automation_catalogo() ganha a entrada do email
+-- automation_catalogo() ganha a descrição do canal de email
 -- ============================================================================
 --
--- Consistência, não consumo: nada lê esta entrada hoje. `accoesParaEvento`
--- no frontend só é chamada na secção "Acção no sistema" (automação interna),
--- e filtra por `entidade` — como esta entrada tem `entidade: null`, nunca
--- aparece nessa lista, que é o comportamento certo: o email não é uma acção
--- interna e não deve aparecer ao lado delas.
+-- NÃO fica dentro de `'accoes'`. Essa chave é especificamente «as acções que
+-- `fn_executar_accao_interna` sabe despachar» — e há um teste pgTAP
+-- (accoes_internas.test.sql) que fixa isso como invariante: «o catálogo
+-- declara exactamente três acções». Foi tentado meter o email lá dentro, com
+-- `entidade: null` e `recurso` meramente descritivo, e partiu esse invariante
+-- — com razão: o email nunca passa por `fn_executar_accao_interna`, não tem
+-- handler, não tem entidade do domínio para cruzar com a do evento. Não era
+-- uma acção interna a mais, e fingir que era só para "consistência de forma"
+-- confundia o que `'accoes'` promete.
 --
--- ── PORQUE `entidade` É `null` E `recurso` NÃO É APLICADO ───────────────────
---
--- As três acções internas usam estes dois campos a sério: `entidade` é
--- cruzada com a do evento no validador (`fn_validar_acao_config`) e no
--- despacho (`fn_executar_accao_interna`); `recurso` é verificado com
--- `can_edit(auth.uid(), recurso)` antes de aceitar a gravação.
---
--- O email não opera sobre uma entidade do domínio — dirige-se a pessoas
--- (cargos, utilizadores), não a um registo que possa ser comparado com o do
--- evento. E não há um `recurso` PRÓPRIO a verificar: quem escreve qualquer
--- linha de `automation_rules`, seja qual for o `acao_tipo`, já passa pela RLS
--- de `can_edit(user, 'automacoes')` na própria tabela. Um segundo gate aqui
--- seria redundante, não mais seguro.
---
--- Por isso `entidade: null` e `recurso: 'automacoes'` ficam como metadados
--- descritivos — coerentes com o resto do catálogo, mas sem comportamento
--- amarrado a eles. Se um dia precisarem de ser aplicados, é aqui que já
--- estão à espera.
+-- Fica numa chave própria, `notificacao_email`, com só o que é verdade sobre
+-- ela: nome e módulo. Nada lê isto ainda — existe para o dia em que o editor
+-- quiser mostrar a descrição do canal a partir do servidor em vez de a ter
+-- escrita em `catalogo.ts`.
 -- ============================================================================
 
 create or replace function public.automation_catalogo()
@@ -82,19 +72,18 @@ as $$
         'entidade', 'assistencia_tickets',
         'recurso',  'tickets_gerir',
         'valores', jsonb_build_array('pendente','aberto','em_andamento','aguardando','resolvido','fechado')
-      ),
-      'notificacao.email', jsonb_build_object(
-        'label',    'Enviar email',
-        'modulo',   'Notificações',
-        'entidade', null,
-        'recurso',  'automacoes'
       )
+    ),
+    -- Fora de 'accoes' de propósito — ver o cabeçalho deste ficheiro.
+    'notificacao_email', jsonb_build_object(
+      'label',  'Enviar email',
+      'modulo', 'Notificações'
     )
   );
 $$;
 
 comment on function public.automation_catalogo() is
-  'Fonte única do que é automatizável: eventos (com os campos do payload e o seu tipo) e acções (com permissão e configuração permitida). Lido pelo editor, pelo validador e pelo despacho. `notificacao.email` é descritiva — entidade e recurso não são aplicados para ela, ao contrário das acções internas.';
+  'Fonte única do que é automatizável: eventos (com os campos do payload e o seu tipo), acções internas (com permissão, entidade e configuração permitida) e a descrição do canal de email. Lido pelo editor, pelo validador e pelo despacho.';
 
 revoke all on function public.automation_catalogo() from public, anon;
 grant execute on function public.automation_catalogo() to authenticated, service_role;

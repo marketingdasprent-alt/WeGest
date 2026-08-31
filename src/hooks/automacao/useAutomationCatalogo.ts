@@ -34,13 +34,12 @@ export interface AccaoCatalogo {
   label: string;
   modulo: string;
   /**
-   * Tabela sobre que a acção opera. O motor recusa se não bater com a do run
-   * — mas só para automações INTERNAS. A acção de email não opera sobre uma
-   * entidade do domínio (dirige-se a pessoas, não a registos) e vem com
-   * `entidade: null`; `accoesParaEvento` já trata isso como "não aparece na
-   * lista de acções internas", que é o comportamento certo.
+   * Tabela sobre que a acção opera. O motor recusa se não bater com a do run.
+   * Só acções internas vivem aqui — a acção de email não opera sobre uma
+   * entidade do domínio (dirige-se a pessoas, não a registos) e por isso tem
+   * a sua própria chave no catálogo, `notificacao_email`, fora de `accoes`.
    */
-  entidade: string | null;
+  entidade: string;
   /**
    * Recurso do RBAC associado à acção. Só é EXIGIDO pelo validador do
    * servidor nas automações internas (`can_edit(user, recurso)`); para

@@ -38,9 +38,15 @@ insert into public.organizacoes (id, nome, codigo) values
 select public.seed_automacao_defaults('00000000-0000-0000-0000-0000000a0000');
 
 -- 1. Semeia o número de regras esperado.
+--
+-- Escopado a acao_tipo = 'notificacao': o INSERT em organizacoes já dispara
+-- trg_organizacoes_seed_automacao, que semeia E divide (migração
+-- 20260901110000) — a organização nasce também com as gémeas de email.
+-- Contar todas as linhas mediria o seed mais a divisão, duas coisas
+-- diferentes; este teste é só sobre o seed.
 select is(
   (select count(*)::int from public.automation_rules
-     where org_id = '00000000-0000-0000-0000-0000000a0000'),
+     where org_id = '00000000-0000-0000-0000-0000000a0000' and acao_tipo = 'notificacao'),
   (select regras_esperadas from _esperado),
   'seed_automacao_defaults() cria todas as regras por omissão'
 );
@@ -50,7 +56,7 @@ select is(
 --    em vez de depender de o INSERT rebentar.
 select is(
   (select count(distinct codigo)::int from public.automation_rules
-     where org_id = '00000000-0000-0000-0000-0000000a0000'),
+     where org_id = '00000000-0000-0000-0000-0000000a0000' and acao_tipo = 'notificacao'),
   (select regras_esperadas from _esperado),
   'cada regra semeada tem um código distinto'
 );
