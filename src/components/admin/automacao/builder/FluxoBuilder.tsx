@@ -22,6 +22,7 @@ import { inserirEntre, inserirNaPonta } from './inserirPasso';
 import { nodeTypesBuilder } from './nodes';
 import { PainelBlocos } from './PainelBlocos';
 import { PainelPropriedades } from './sidebar/PainelPropriedades';
+import { validarLigacao } from './validarLigacao';
 import { TODOS_OS_MODULOS } from '../rotulos';
 import '@realflow/react/styles.css';
 
@@ -178,6 +179,7 @@ function Construtor() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        validateConnection={(candidato) => validarLigacao(candidato, nodes, edges)}
         nodeTypes={nodeTypesBuilder}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={arestaPorOmissao(cores.aresta)}
@@ -291,7 +293,6 @@ function Construtor() {
             onFechar={() => setPainelAberto(false)}
             onEscolher={escolherBloco}
             moduloFiltro={moduloFiltro === TODOS_OS_MODULOS ? undefined : moduloFiltro}
-            temAccao={nodes.some((n) => n.type === 'accao')}
           />
         ) : (
           seleccionado && (
