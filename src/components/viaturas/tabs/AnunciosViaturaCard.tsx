@@ -57,6 +57,7 @@ export function AnunciosViaturaCard({ viaturaId }: AnunciosViaturaCardProps) {
     atribuir.mutate(
       { anuncioId, viaturaId },
       {
+        onSuccess: () => setValorEscolhido(''),
         onError: (e) => {
           toast.error(e.message);
           setValorEscolhido('');
@@ -96,7 +97,10 @@ export function AnunciosViaturaCard({ viaturaId }: AnunciosViaturaCardProps) {
                 onClick={() =>
                   desatribuir.mutate(
                     { anuncioId: anuncioAtual.id },
-                    { onError: () => toast.error('Não foi possível desatribuir.') }
+                    {
+                      onSuccess: () => setValorEscolhido(''),
+                      onError: () => toast.error('Não foi possível desatribuir.'),
+                    }
                   )
                 }
               >
