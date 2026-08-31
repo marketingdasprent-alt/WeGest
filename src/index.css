@@ -84,6 +84,15 @@ html[data-native-app='true'] .native-bottom {
     --fluxo-notificacao: 330 65% 40%;
     --fluxo-estado: 291 50% 40%;
     --fluxo-condicao: 45 92% 30%;
+    /* Os três módulos que faltavam quando a lista passou a ter cor. As matizes
+       saem dos maiores intervalos vazios da paleta acima (45→142 e 199→262):
+       dois módulos com cores parecidas seriam indistinguíveis, que é o
+       problema que isto existe para resolver.
+       `outros` é cinzento de propósito — é onde cai o que o produto ainda não
+       nomeou, e não deve competir por atenção com um módulo a sério. */
+    --fluxo-seguranca: 225 70% 45%;
+    --fluxo-utilizadores: 95 55% 30%;
+    --fluxo-outros: 220 9% 46%;
     /* Editor de automações — escada de elevação.
        O canvas é a base, os painéis um degrau acima e os cartões dos nós o
        degrau mais alto. Sem esta separação os nós não saltam do fundo, que
@@ -181,6 +190,11 @@ html[data-native-app='true'] .native-bottom {
     --fluxo-notificacao: 330 80% 70%;
     --fluxo-estado: 291 70% 70%;
     --fluxo-condicao: 45 92% 58%;
+    /* As mesmas três, subidas em luminosidade como as outras oito: no escuro
+       a cor tem de vir do lado claro da escala para se ler sobre --card. */
+    --fluxo-seguranca: 225 85% 72%;
+    --fluxo-utilizadores: 95 60% 55%;
+    --fluxo-outros: 220 10% 65%;
     /* Mesma escada, invertida: no escuro o canvas é o mais fundo e os
        cartões os mais claros. */
     --canvas-bg: 222 47% 6%;
