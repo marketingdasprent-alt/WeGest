@@ -1,28 +1,18 @@
 begin;
-select plan(5);
+select plan(9);
 
 -- ============================================================================
 -- A acção de email, separada da notificação
 -- ============================================================================
 --
--- Nesta fase o ficheiro cobre só as DUAS CORRECÇÕES que a divisão obriga.
--- Ainda não existe `acao_tipo = 'email'`, portanto não há comportamento novo a
--- exercitar — mas há duas formas de o partir em silêncio, e são estas.
---
--- As asserções são sobre a DEFINIÇÃO das funções e não sobre a execução, de
--- propósito: o que estas correcções mudam é uma decisão que só se manifesta
--- quando o tipo novo existir. Testar a execução hoje passaria sem provar nada,
--- e um teste que passa sem provar nada é pior do que não existir — foi assim
--- que o teste do painel de blocos validou a chave errada durante semanas.
+-- Fixtures verificadas contra o schema real, não assumidas: `codigo` é TEXT
+-- (não inteiro — é o próprio `event_type`, com UNIQUE(codigo, org_id)) e
+-- `prioridade` é um enum de texto ('baixa'|'media'|'alta'), não um inteiro.
+-- Assumir os tipos errados aqui teria feito os testes falhar por motivos que
+-- nada têm a ver com o que se está a testar.
 -- ============================================================================
 
--- ── 1. A supressão por aviso em aberto ──────────────────────────────────────
---
--- Medido em produção a 2026-08-31: 354 `ignorada_aviso_em_aberto` contra 43
--- `executada` em 24h. É o caminho dominante, e é avaliado POR REGRA num laço
--- sem ORDER BY. Sem este guarda, a regra de email passaria a ser suprimida
--- pelo aviso que a regra de notificação acabou de criar — às vezes sim, às
--- vezes não, consoante a ordem em que o laço as apanhasse.
+-- ── Task 1: as duas correcções que a divisão obriga ─────────────────────────
 select ok(
   pg_get_functiondef('public.process_domain_events(integer)'::regprocedure)
     like '%v_rule.acao_tipo = ''notificacao'' and v_tipo_legado%',
@@ -35,11 +25,6 @@ select ok(
   'e continua a existir — o guarda restringe-a, não a apaga'
 );
 
--- ── 2. O trigger que cancelaria todas as linhas de email ────────────────────
---
--- `fn_notifications_so_quando_ha_email` cancela a linha de `notifications`
--- quando a config diz `enviar_email = false`. Uma regra de email não tem esse
--- campo: sem este ramo, o coalesce daria false e cancelaria tudo.
 select ok(
   pg_get_functiondef('public.fn_notifications_so_quando_ha_email()'::regprocedure)
     like '%v_tipo = ''email''%',
@@ -52,13 +37,43 @@ select ok(
   'e mantém o caminho antigo, enquanto houver regras por migrar'
 );
 
--- ── 3. O que NÃO pode ter mudado ────────────────────────────────────────────
--- A Fase 3 congelou a definição no run. Uma cirurgia mal ancorada no executor
--- teria apagado isto sem ninguém dar por ela.
 select ok(
   pg_get_functiondef('public.execute_automation_runs(integer)'::regprocedure)
     like '%jsonb_populate_record%',
   'o executor continua a ler a definição congelada, não a regra viva'
+);
+
+-- ── Task 2: acao_tipo = 'email' ──────────────────────────────────────────────
+select lives_ok($$
+  insert into public.automation_rules (org_id, codigo, nome, event_type, condicoes,
+                                       acao_tipo, acao_config, prioridade, cooldown_minutos, ativo)
+  values ((select id from public.organizacoes limit 1), 'zz.teste.pgtap.email', 'teste email',
+          'viatura.seguro_expirando', '[]'::jsonb, 'email',
+          jsonb_build_object('template_codigo','teste','titulo','Teste',
+                             'destinatarios_cargo_ids', jsonb_build_array()),
+          'media', 1440, true)
+$$, 'o CHECK de acao_tipo aceita email, e o validador aceita a config mínima');
+
+select throws_ok($$
+  insert into public.automation_rules (org_id, codigo, nome, event_type, condicoes,
+                                       acao_tipo, acao_config, prioridade, cooldown_minutos, ativo)
+  values ((select id from public.organizacoes limit 1), 'zz.teste.pgtap.email.sem_template',
+          'sem template', 'viatura.seguro_expirando', '[]'::jsonb, 'email',
+          jsonb_build_object('titulo','X'), 'media', 1440, true)
+$$, 'P0001', null, 'o validador exige template_codigo numa acção de email');
+
+select ok(
+  pg_get_functiondef('public.execute_automation_runs(integer)'::regprocedure)
+    like '%v_enviar_email := (v_rule.acao_tipo = ''email'')%',
+  'o executor decide o email pelo tipo da acção, não pela config'
+);
+
+select ok(
+  (length(pg_get_functiondef('public.execute_automation_runs(integer)'::regprocedure))
+   - length(replace(pg_get_functiondef('public.execute_automation_runs(integer)'::regprocedure),
+                    'acao_tipo = ''notificacao'' and v_tipo_legado', '')))
+  / length('acao_tipo = ''notificacao'' and v_tipo_legado') = 2,
+  'os dois inserts em notificacoes ficam restritos a regras de notificação'
 );
 
 select * from finish();
