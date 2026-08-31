@@ -125,7 +125,7 @@ export function SeccaoAnuncios({ clienteId }: SeccaoAnunciosProps) {
 
       {elegivel && (
         <div className="space-y-3">
-          <Button size="sm" variant="outline" onClick={() => setAAdicionar((v) => !v)}>
+          <Button type="button" size="sm" variant="outline" onClick={() => setAAdicionar((v) => !v)}>
             Adicionar anúncio
           </Button>
 
@@ -160,7 +160,7 @@ export function SeccaoAnuncios({ clienteId }: SeccaoAnunciosProps) {
                   />
                 </div>
               </div>
-              <Button size="sm" disabled={criarAnuncio.isPending} onClick={submeterNovo}>
+              <Button type="button" size="sm" disabled={criarAnuncio.isPending} onClick={submeterNovo}>
                 Guardar anúncio
               </Button>
             </Card>
@@ -204,13 +204,14 @@ export function SeccaoAnuncios({ clienteId }: SeccaoAnunciosProps) {
                 </div>
                 <div className="flex gap-2">
                   <Button
+                    type="button"
                     size="sm"
                     disabled={atualizarAnuncio.isPending}
                     onClick={() => guardarEdicao(a.id)}
                   >
                     Guardar
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditandoId(null)}>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setEditandoId(null)}>
                     Cancelar
                   </Button>
                 </div>
@@ -221,13 +222,14 @@ export function SeccaoAnuncios({ clienteId }: SeccaoAnunciosProps) {
               <span className="text-muted-foreground">
                 {formatarDataPt(a.data_inicio)} a {formatarDataPt(a.data_fim)}
               </span>
-              <Button size="sm" variant="ghost" onClick={() => iniciarEdicao(a)}>
+              <Button type="button" size="sm" variant="ghost" onClick={() => iniciarEdicao(a)}>
                 Editar
               </Button>
               {a.viatura_matricula ? (
                 <>
                   <Badge variant="outline">{a.viatura_matricula}</Badge>
                   <Button
+                    type="button"
                     size="sm"
                     variant="ghost"
                     disabled={desatribuir.isPending}
@@ -245,6 +247,7 @@ export function SeccaoAnuncios({ clienteId }: SeccaoAnunciosProps) {
                 <>
                   <span className="text-muted-foreground">Sem viatura atribuída</span>
                   <Button
+                    type="button"
                     size="sm"
                     variant="ghost"
                     disabled={apagarAnuncio.isPending}
