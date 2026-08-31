@@ -110,6 +110,11 @@ html[data-native-app='true'] .native-bottom {
     --fluxo-seguranca: 225 70% 45%;
     --fluxo-utilizadores: 95 55% 30%;
     --fluxo-outros: 220 9% 46%;
+    /* O email, separado da notificação. 68 fica no meio do intervalo entre
+       --fluxo-condicao (45) e --fluxo-utilizadores (95) — não nos 85
+       originais, que ficavam a só 10° de utilizadores e eram quase
+       indistinguíveis dele. */
+    --fluxo-email: 68 60% 30%;
     /* Editor de automações — escada de elevação.
        O canvas é a base, os painéis um degrau acima e os cartões dos nós o
        degrau mais alto. Sem esta separação os nós não saltam do fundo, que
@@ -212,6 +217,7 @@ html[data-native-app='true'] .native-bottom {
     --fluxo-seguranca: 225 85% 72%;
     --fluxo-utilizadores: 95 60% 55%;
     --fluxo-outros: 220 10% 65%;
+    --fluxo-email: 68 60% 58%;
     /* Mesma escada, invertida: no escuro o canvas é o mais fundo e os
        cartões os mais claros. */
     --canvas-bg: 222 47% 6%;

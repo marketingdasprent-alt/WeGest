@@ -199,10 +199,13 @@ export function CamposDoPasso(props: CamposDoPassoProps) {
               onValueChange={(v) =>
                 // Trocar de tipo limpa a acção interna: manter `accao` de um
                 // tipo no outro gravava configuração que o validador recusa.
+                // Notificação e email partilham `accao` = o próprio tipo — é
+                // o que `configDoFluxo` e `visualDoBloco` usam para distinguir
+                // os blocos na paleta.
                 onAlterar(
                   v === 'automacao_interna'
                     ? { acaoTipo: v, accao: '', campo: '', valor: '' }
-                    : { acaoTipo: v, accao: 'notificacao' }
+                    : { acaoTipo: v, accao: v }
                 )
               }
             >
@@ -211,6 +214,7 @@ export function CamposDoPasso(props: CamposDoPassoProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="notificacao">Enviar notificação</SelectItem>
+                <SelectItem value="email">Enviar email</SelectItem>
                 <SelectItem value="automacao_interna">Executar acção no sistema</SelectItem>
               </SelectContent>
             </Select>
@@ -307,9 +311,16 @@ export function CamposDoPasso(props: CamposDoPassoProps) {
         </Seccao>
       )}
 
-      {!interna && accao === 'notificacao' && (
+      {(acaoTipo === 'notificacao' || acaoTipo === 'email') && (
         <>
-          <Destinatarios noId={noId} dados={dados} onAlterar={onAlterar} />
+          {/* Notificação e email escolhem destinatários da mesma forma — só
+              o canal (badge dentro de Destinatarios) muda. */}
+          <Destinatarios
+            noId={noId}
+            dados={dados}
+            onAlterar={onAlterar}
+            canal={acaoTipo === 'email' ? 'email' : 'notificacao'}
+          />
           <Mensagem
             payload={props.payload}
             corpo={props.corpo}

@@ -15,7 +15,6 @@ function accao(data: Record<string, unknown> = {}, x = 400): Node {
     data: {
       accao: 'notificacao',
       cargoIds: ['c1'],
-      enviarEmail: true,
       modo: 'grupo',
       userIds: [],
       cooldownMinutos: 1440,
@@ -34,12 +33,11 @@ function condicao(campo: string, x: number, over: Record<string, unknown> = {}):
 }
 
 describe('configDoFluxo', () => {
-  it('lê os destinatários, o email e o cooldown da acção', () => {
+  it('lê os destinatários e o cooldown da acção', () => {
     const config = configDoFluxo([accao()]);
 
     expect(config).toMatchObject({
       cargoIds: ['c1'],
-      enviarEmail: true,
       cooldownMinutos: 1440,
     });
   });
@@ -108,7 +106,7 @@ describe('configDoFluxo', () => {
       { id: 'a1', type: 'accao', position: { x: 0, y: 0 }, data: { accao: 'notificacao' } },
     ]);
 
-    expect(config).toMatchObject({ cargoIds: [], enviarEmail: false, modo: 'grupo', userIds: [] });
+    expect(config).toMatchObject({ cargoIds: [], modo: 'grupo', userIds: [] });
     expect(typeof config?.cooldownMinutos).toBe('number');
   });
 
@@ -120,5 +118,17 @@ describe('configDoFluxo', () => {
     ]);
 
     expect(config).toBeNull();
+  });
+
+  it('uma acção de email produz acaoTipo email com os mesmos destinatários', () => {
+    // Notificação e email escolhem pessoas da mesma forma — só o tipo muda.
+    const config = configDoFluxo([
+      accao({ accao: 'email', acaoTipo: 'email', cargoIds: ['c1', 'c2'] }),
+    ]);
+
+    expect(config?.acaoTipo).toBe('email');
+    expect(config?.cargoIds).toEqual(['c1', 'c2']);
+    // O email nunca teve a flag — não sobra rasto dela no resultado.
+    expect(config).not.toHaveProperty('enviarEmail');
   });
 });
