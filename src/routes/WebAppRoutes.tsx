@@ -330,7 +330,14 @@ const WebAppRoutes = () => {
               path="/admin/automacao"
               element={
                 <ProtectedRoute requiredResource={RECURSOS.AUTOMACOES}>
-                  <DashboardLayout>
+                  {/* `fullBleed` porque esta página gere o seu próprio scroll:
+                      o canvas não pode empurrar a página e cada vista rola por
+                      dentro. Sem ele o <main> não tem altura definida, os
+                      contentores internos crescem até caber o conteúdo e o
+                      `overflow-y-auto` deixa de ter o que limitar — a
+                      monitorização ficava sem scroll nenhum. O padding que o
+                      fullBleed tira é reposto dentro da própria página. */}
+                  <DashboardLayout fullBleed>
                     <AutomacaoPage />
                   </DashboardLayout>
                 </ProtectedRoute>

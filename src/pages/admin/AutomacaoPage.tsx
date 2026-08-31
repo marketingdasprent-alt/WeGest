@@ -26,7 +26,17 @@ function Conteudo() {
   return (
     // `min-h-0` em toda a cadeia: sem isto o filho de altura calculada estica o
     // pai e aparece a barra de scroll da página por cima da do canvas.
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    //
+    // `h-full` SÓ funciona porque a rota monta esta página com
+    // `<DashboardLayout fullBleed>`, que dá ao <main> uma altura definida. Sem
+    // isso, cada nível cresce até caber o conteúdo, o contentor de scroll fica
+    // tão alto como aquilo que devia limitar — e, por ser na mesma um contentor
+    // de scroll, o `overscroll-behavior-y: contain` global impede a roda de
+    // passar para a janela. A monitorização ficava sem scroll nenhum.
+    //
+    // O padding e a largura máxima vivem aqui porque o `fullBleed` os tira do
+    // <main>; sem eles a página encostava às margens.
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1920px] flex-col gap-4 p-4 md:p-8">
       <StickyPageHeader
         title="Automação"
         description="Estado, saúde e controlo do motor de automações do WeGest."
