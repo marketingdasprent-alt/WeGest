@@ -474,6 +474,7 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
                 tarifasTvdeModelo={tarifasTvdeModelo}
                 tarifasRacModelo={tarifasRacModelo}
                 estacoes={estacoes}
+                viaturaId={viatura?.id ?? null}
               />
 
               <Separator />
