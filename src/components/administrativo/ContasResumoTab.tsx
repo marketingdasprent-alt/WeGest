@@ -106,7 +106,6 @@ export function ContasResumoTab() {
   const [importarWizardOpen, setImportarWizardOpen] = useState(false);
   const [relatorioPagamentoOpen, setRelatorioPagamentoOpen] = useState(false);
   const [motoristasList, setMotoristasList] = useState<Array<{ id: string; nome: string }>>([]);
-  const [rendaAluguerSemana, setRendaAluguerSemana] = useState(0);
   const [fechandoSemana, setFechandoSemana] = useState(false);
   // Período a fechar (independente da semana visualizada na tabela) — null =
   // segue a semana selecionada (weekStart/weekEnd); só passa a fixo quando o
@@ -768,8 +767,6 @@ export function ContasResumoTab() {
       // Mapa: motorista_id → ganhos extras (créditos)
       const extrasByMotorista: Record<string, number> = {};
 
-      let rendaAluguerTotal = 0;
-
       (financeiroResult.data || []).forEach((m: any) => {
         if (!m.motorista_id) return;
         const val = Number(m.valor) || 0;
@@ -786,14 +783,18 @@ export function ContasResumoTab() {
           reparacoesByMotorista[m.motorista_id] =
             (reparacoesByMotorista[m.motorista_id] || 0) + val;
         } else if (m.categoria === 'renda_viatura') {
-          aluguerByMotorista[m.motorista_id] = (aluguerByMotorista[m.motorista_id] || 0) + val;
-          rendaAluguerTotal += val;
+          // Ignora-se de propósito: aluguerByMotorista já vem completo do
+          // cálculo por viatura×dias, logo abaixo (buildSlotPeriodos). Somar
+          // aqui um débito de renda_viatura DUPLICAVA o aluguer — caso real:
+          // Ranjeet Singh (PREMIUM RIDE) apareceu com 450 €, exactamente o
+          // dobro dos 225 € certos, por causa de um débito automático
+          // semanal com esta categoria. A mesma regra já valia no resumo do
+          // motorista e no fecho (ver movimentosMotorista.ts) — só esta
+          // lista, com a sua própria cópia da lógica, ainda não a tinha.
         } else {
           adhocByMotorista[m.motorista_id] = (adhocByMotorista[m.motorista_id] || 0) + val;
         }
       });
-
-      setRendaAluguerSemana(rendaAluguerTotal);
 
       // Mapa de viagens reais da atividade Uber (por uber_driver_id)
       const uberViagensByDriver: Record<string, number> = {};
