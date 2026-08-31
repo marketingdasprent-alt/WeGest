@@ -1,5 +1,5 @@
 begin;
-select plan(9);
+select plan(15);
 
 -- ============================================================================
 -- A acção de email, separada da notificação
@@ -74,6 +74,61 @@ select ok(
                     'acao_tipo = ''notificacao'' and v_tipo_legado', '')))
   / length('acao_tipo = ''notificacao'' and v_tipo_legado') = 2,
   'os dois inserts em notificacoes ficam restritos a regras de notificação'
+);
+
+-- ── Task 3: a divisão das regras existentes, e o validador a recusar ───────
+--
+-- Isto corre DEPOIS da migração de divisão já ter passado (é uma migração,
+-- não um `do $$`solto — já foi aplicada quando este ficheiro corre em CI).
+-- As asserções verificam o RESULTADO, não repetem a divisão.
+
+select is(
+  (select count(*)::int from public.automation_rules
+    where acao_tipo = 'notificacao' and acao_config ? 'enviar_email'),
+  0,
+  'nenhuma regra de notificação fica com enviar_email na config'
+);
+
+select is(
+  (select count(*)::int from public.automation_rules
+    where acao_tipo = 'notificacao' and acao_config ? 'enviar_email_digest'),
+  0,
+  'nem com enviar_email_digest'
+);
+
+-- A recusa é para QUEM CONFIGURA; o contexto de sistema está isento. Correr
+-- este teste sem identidade testaria o ramo isento e passaria sem provar nada
+-- — foi assim que um teste de permissões do MVP validou a fronteira errada.
+select set_config('request.jwt.claim.sub',
+  (select id::text from auth.users limit 1), true);
+
+select throws_ok($$
+  update public.automation_rules
+     set acao_config = acao_config || jsonb_build_object('enviar_email', true)
+   where id = (select id from public.automation_rules where acao_tipo = 'notificacao' limit 1)
+$$, 'P0001', null, 'quem configura à mão não pode repor enviar_email numa notificação');
+
+-- E o contrário: o contexto de sistema continua a poder, senão o seed parte.
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claims', '', true);
+
+select lives_ok($$
+  update public.automation_rules
+     set acao_config = acao_config || jsonb_build_object('enviar_email', true)
+   where id = (select id from public.automation_rules where acao_tipo = 'notificacao' limit 1)
+$$, 'o contexto de sistema continua a poder — é o que deixa o seed funcionar');
+
+-- ── Task 3, Step 5: uma organização nova nasce já dividida ─────────────────
+select lives_ok($$
+  insert into public.organizacoes (nome, codigo)
+  values ('Org de teste da divisão (pgtap)', 'ZZ_PGTAP_DIV')
+$$, 'criar uma organização nova continua a funcionar depois da divisão');
+
+select ok(
+  (select count(*) from public.automation_rules r
+    join public.organizacoes o on o.id = r.org_id
+   where o.codigo = 'ZZ_PGTAP_DIV' and r.acao_tipo = 'email') > 0,
+  'a organização nova nasce já com as regras de email separadas'
 );
 
 select * from finish();
