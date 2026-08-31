@@ -271,6 +271,7 @@ jobs:
             accoes_internas \
             accao_email \
             notifications_destinatario_externo \
+            automation_rules_grupo_id \
             automation_queue \
             automation_rules \
             automation_runs_complete_duracao \
