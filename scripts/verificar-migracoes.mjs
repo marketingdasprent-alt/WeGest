@@ -34,15 +34,40 @@
  *
  *    O modo manual continua a funcionar, e é o que se usa sem credenciais.
  *
+ * ── ACTUALIZADO A 2026-08-31 ────────────────────────────────────────────────
+ *
+ * CONHECE O CUTOVER PARA BASELINE. A versão anterior acusava 19 migrações, e
+ * 16 delas eram falsos positivos: aplicadas ANTES do cutover, portanto os seus
+ * efeitos estão dentro do dump da baseline — que os traz consolidados num
+ * ficheiro cujo nome não corresponde a migração nenhuma. Comparar por nome não
+ * as podia encontrar.
+ *
+ * O cutover é deduzido do arquivo: é o carimbo do ficheiro arquivado mais
+ * recente. Tudo o que produção registou até esse ponto está no dump; só o que
+ * veio depois precisa de ficheiro próprio.
+ *
+ * Um gate que grita 16 falsos positivos deixa de ser lido ao fim de uma semana,
+ * e o dia em que gritar por um motivo verdadeiro ninguém repara. É por isso que
+ * esta distinção importa e não é cosmética.
+ *
+ * O QUE A BASELINE NÃO COBRE, e este script não pode ver: foi gerada com
+ * `supabase db dump --schema public`, portanto NÃO traz o schema `cron`. Uma
+ * migração pré-cutover que só agendou um job não é reproduzida por um clone
+ * novo, e aqui aparece como coberta. É uma limitação assumida — um clone local
+ * não deve agendar jobs de produção — mas não é o mesmo que estar coberta.
+ *
  * COMO USAR
  *
  *   Automático (precisa de psql e de SUPABASE_DB_URL):
  *     SUPABASE_DB_URL='postgresql://…' node scripts/verificar-migracoes.mjs
  *
  *   Manual, a partir de uma lista já extraída:
- *     select string_agg(name, E'\n' order by version)
+ *     select string_agg(version || '|' || name, E'\n' order by version)
  *       from supabase_migrations.schema_migrations where name is not null;
  *     node scripts/verificar-migracoes.mjs <ficheiro>
+ *
+ *   Uma lista só com nomes (o formato antigo) continua a ser aceite; sem
+ *   versão não há como saber o que é pré-cutover, e tudo é verificado.
  *
  * Sai com código 1 se houver migrações em produção sem ficheiro, para poder ser
  * usado num gate.
@@ -55,7 +80,7 @@ const DIRS = ['supabase/migrations', 'supabase/migrations_archive'];
 // ── De onde vêm os nomes de produção ────────────────────────────────────────
 function nomesDaBaseDeDados(url) {
   const sql =
-    'select name from supabase_migrations.schema_migrations ' +
+    "select version || '|' || name from supabase_migrations.schema_migrations " +
     'where name is not null order by version';
   try {
     const saida = execFileSync('psql', [url, '-Atc', sql], {
@@ -111,10 +136,43 @@ for (const dir of DIRS) {
  */
 const semPrefixoVersao = (nome) => nome.replace(/^\d{14}_/, '');
 
-const ausentes = nomesProducao.filter((nome) => {
-  const alvo = semPrefixoVersao(nome);
-  return !ficheiros.some((f) => f.nome.includes(alvo));
+/**
+ * Cada linha de produção pode vir como `versão|nome` ou só `nome`. Sem versão,
+ * `versao` fica a null e a entrada é sempre verificada — é o comportamento
+ * antigo, e o certo: não se pode afirmar que está na baseline o que não se
+ * consegue datar.
+ */
+const registos = nomesProducao.map((linha) => {
+  const m = linha.match(/^(\d{14})\|(.+)$/);
+  return m ? { versao: m[1], nome: m[2] } : { versao: null, nome: linha };
 });
+
+/**
+ * O cutover: o carimbo do ficheiro arquivado mais recente.
+ *
+ * `supabase/migrations_archive` é para onde o cutover moveu tudo o que a
+ * baseline passou a conter. Logo, o maior carimbo lá dentro é o instante que o
+ * dump retratou — e tudo o que produção registou até aí está no dump, mesmo que
+ * nunca tenha tido ficheiro com esse nome.
+ */
+const carimbosArquivados = ficheiros
+  .filter((f) => f.dir === 'supabase/migrations_archive')
+  .map((f) => f.nome.match(/^(\d{14})_/)?.[1])
+  .filter(Boolean)
+  .sort();
+const cutover = carimbosArquivados.at(-1) ?? null;
+
+const temFicheiro = (nome) => {
+  const alvo = semPrefixoVersao(nome);
+  return ficheiros.some((f) => f.nome.includes(alvo));
+};
+
+// Comparação de strings, não de números: os carimbos têm todos 14 dígitos e
+// ordenam lexicograficamente pela mesma ordem em que ordenam cronologicamente.
+const naBaseline = (r) => cutover !== null && r.versao !== null && r.versao <= cutover;
+
+const cobertasPelaBaseline = registos.filter((r) => !temFicheiro(r.nome) && naBaseline(r));
+const ausentes = registos.filter((r) => !temFicheiro(r.nome) && !naBaseline(r)).map((r) => r.nome);
 
 // Versões duplicadas: `version` é a CHAVE PRIMÁRIA de schema_migrations, logo
 // dois ficheiros com o mesmo prefixo não podem ambos ser registados. Num replay
@@ -136,10 +194,23 @@ console.log(`Origem dos nomes de produção:      ${origem}`);
 console.log(`Ficheiros activos:                 ${activos}`);
 console.log(`Ficheiros arquivados:              ${arquivados}`);
 console.log(`Migrações registadas em produção:  ${nomesProducao.length}`);
+console.log(`Cutover para baseline:             ${cutover ?? '(sem arquivo — nada é dado por coberto)'}`);
+if (cobertasPelaBaseline.length > 0) {
+  console.log(
+    `Sem ficheiro mas dentro da baseline: ${cobertasPelaBaseline.length} ` +
+      `(aplicadas até ao cutover; o dump traz o efeito)`
+  );
+}
 console.log('');
 
 if (ausentes.length === 0) {
-  console.log('OK  Todas as migrações de produção têm ficheiro no repositório.');
+  console.log('OK  Todas as migrações de produção posteriores à baseline têm ficheiro.');
+  if (cobertasPelaBaseline.length > 0) {
+    console.log('');
+    console.log('    Nota: a baseline foi gerada com `db dump --schema public` e NÃO');
+    console.log('    traz o schema `cron`. Uma das que se dá por coberta pode ter sido');
+    console.log('    só um agendamento — nesse caso um clone novo não o tem.');
+  }
 } else {
   console.log(`FALHA  ${ausentes.length} migrações em produção SEM ficheiro no repositório:`);
   for (const n of ausentes) console.log(`         ${n}`);

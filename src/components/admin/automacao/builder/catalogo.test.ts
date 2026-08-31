@@ -109,10 +109,14 @@ describe('visualDoBloco', () => {
 
   it('resolve o visual de uma acção pelo tipo de acção', () => {
     const notificar = CATALOGO.find((t) => t.chave === 'notificacao')!;
-    const alterar = CATALOGO.find((t) => t.chave === 'alterar-estado')!;
+    const interna = CATALOGO.find((t) => t.chave === 'accao-interna')!;
 
     expect(visualDoBloco('accao', { accao: 'notificacao' }).cor).toBe(notificar.cor);
-    expect(visualDoBloco('accao', { accao: 'alterar_estado' }).cor).toBe(alterar.cor);
+    // O id da acção vem do catálogo do servidor e não está na paleta: é o
+    // `acaoTipo` que a identifica.
+    expect(
+      visualDoBloco('accao', { accao: 'ticket.alterar_estado', acaoTipo: 'automacao_interna' }).cor
+    ).toBe(interna.cor);
   });
 
   it('a condição tem visual próprio', () => {

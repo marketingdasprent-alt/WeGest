@@ -24,21 +24,43 @@ insert into public.user_organizacoes (user_id, org_id, is_admin) values
   ('00000000-0000-0000-0000-000000010a01', '00000000-0000-0000-0000-000000010000', true);
 
 -- 300 emails já "sent" HOJE (simula o limite diário já atingido) + 1 pending
--- por enfileirar. notification_id só existe para satisfazer a FK — não é o
--- foco deste teste, por isso aponta todos para o mesmo registo dummy.
+-- por enfileirar.
+--
+-- Cada linha da fila tem a SUA notificação. Até 2026-08-28 apontavam todas
+-- para o mesmo registo dummy, com a nota de que «notification_id só existe
+-- para satisfazer a FK» — um atalho que o índice `idx_notification_queue_idem`
+-- (Fase 2, único em notification_id + canal + destinatário) deixou de
+-- permitir.
+--
+-- O atalho não era só inaplicável, era irrealista: o incidente que este
+-- ficheiro modela — 1764 emails/dia para 21 pessoas — são 1764 notificações
+-- distintas, não uma repetida. Os quatro produtores da fila criam sempre uma
+-- `notifications` nova por linha enfileirada. Nenhuma asserção muda: o limite
+-- diário conta LINHAS DA FILA por organização e por dia, não notificações.
 insert into public.notifications (id, org_id, destinatario_user_id, template_codigo, titulo, payload) values
-  ('00000000-0000-0000-0000-000000f10001', '00000000-0000-0000-0000-000000010000', '00000000-0000-0000-0000-000000010a02', 'teste.limite', 'Aviso', '{}'::jsonb);
+  ('00000000-0000-0000-0000-000000f10001', '00000000-0000-0000-0000-000000010000', '00000000-0000-0000-0000-000000010a02', 'teste.limite', 'Aviso pendente de hoje', '{}'::jsonb),
+  ('00000000-0000-0000-0000-000000f10002', '00000000-0000-0000-0000-000000010000', '00000000-0000-0000-0000-000000010a02', 'teste.limite', 'Aviso de ontem', '{}'::jsonb);
+
+insert into public.notifications (id, org_id, destinatario_user_id, template_codigo, titulo, payload)
+select
+  ('00000000-0000-0000-0000-0000f1' || lpad(g::text, 6, '0'))::uuid,
+  '00000000-0000-0000-0000-000000010000',
+  '00000000-0000-0000-0000-000000010a02',
+  'teste.limite',
+  'Aviso enviado ' || g,
+  '{}'::jsonb
+from generate_series(1, 300) g;
 
 insert into public.notification_queue (notification_id, org_id, canal, destinatario, template_codigo, status, created_at)
 select
-  '00000000-0000-0000-0000-000000f10001',
+  ('00000000-0000-0000-0000-0000f1' || lpad(g::text, 6, '0'))::uuid,
   '00000000-0000-0000-0000-000000010000',
   'email',
   'destino@limite-email.pt',
   'teste.limite',
   'sent',
   now()
-from generate_series(1, 300);
+from generate_series(1, 300) g;
 
 insert into public.notification_queue (notification_id, org_id, canal, destinatario, template_codigo, status, created_at)
 values (
@@ -49,7 +71,7 @@ values (
 -- Um email de ONTEM sent não deve contar para o limite de hoje.
 insert into public.notification_queue (notification_id, org_id, canal, destinatario, template_codigo, status, created_at)
 values (
-  '00000000-0000-0000-0000-000000f10001', '00000000-0000-0000-0000-000000010000',
+  '00000000-0000-0000-0000-000000f10002', '00000000-0000-0000-0000-000000010000',
   'email', 'destino@limite-email.pt', 'teste.limite', 'sent', now() - interval '1 day'
 );
 

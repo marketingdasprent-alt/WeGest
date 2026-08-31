@@ -18,6 +18,8 @@ function regra(over: Partial<RegraParaEditar> = {}): RegraParaEditar {
     modo: 'grupo',
     userIds: [],
     condicoes: [],
+    acaoTipo: 'notificacao',
+    acaoConfig: {},
     ativo: true,
     ultimaExecucao: null,
     duracaoMediaMs: null,

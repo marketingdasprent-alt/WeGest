@@ -82,6 +82,8 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
       modo: config.acao_config?.destinatarios_modo ?? 'grupo',
       userIds: config.acao_config?.destinatarios_user_ids ?? [],
       condicoes,
+      acaoTipo: config.acao_tipo,
+      acaoConfig: (config.acao_config ?? {}) as unknown as Record<string, unknown>,
       // Estado vem das estatísticas, não da config: é o que já correu.
       ativo: estatistica?.ativo ?? true,
       ultimaExecucao: estatistica?.ultima_execucao ?? null,
@@ -183,18 +185,25 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
       try {
         await atualizar.mutateAsync({
           id: regraId,
-          // FUNDE com a config existente: o editor não mostra destinatarios_modo
-          // nem destinatarios_user_ids, e substituir apagava em silêncio as
-          // pessoas escolhidas à mão.
-          acaoConfig: {
-            ...config.acao_config,
-            destinatarios_cargo_ids: extraida.cargoIds,
-            enviar_email: extraida.enviarEmail,
-            // O editor passou a cobrir a escolha de pessoas — já não há
-            // Sheet separada a escrevê-las por trás.
-            destinatarios_modo: extraida.modo,
-            destinatarios_user_ids: extraida.userIds,
-          },
+          acaoTipo: extraida.acaoTipo,
+          // Uma acção interna SUBSTITUI a config em vez de fundir. Fundir
+          // arrastaria `template_codigo`, `destinatarios_*` e o resto da
+          // configuração de notificação para dentro de uma acção que não os
+          // usa — e o validador do servidor recusa chaves que não conhece.
+          //
+          // A notificação continua a FUNDIR: o editor não mostra tudo o que lá
+          // está, e substituir apagava em silêncio o que não mostra.
+          acaoConfig: extraida.acaoInterna
+            ? extraida.acaoInterna
+            : {
+                ...config.acao_config,
+                destinatarios_cargo_ids: extraida.cargoIds,
+                enviar_email: extraida.enviarEmail,
+                // O editor passou a cobrir a escolha de pessoas — já não há
+                // Sheet separada a escrevê-las por trás.
+                destinatarios_modo: extraida.modo,
+                destinatarios_user_ids: extraida.userIds,
+              },
           cooldownMinutos: extraida.cooldownMinutos,
           condicoes: extraida.condicoes,
         });

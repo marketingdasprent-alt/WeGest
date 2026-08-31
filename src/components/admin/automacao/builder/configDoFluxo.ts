@@ -10,6 +10,10 @@ import type { CondicaoGravada } from './fluxoDaRegra';
  */
 
 export interface ConfigDoFluxo {
+  /** 'notificacao' ou 'automacao_interna' — o que vai para `acao_tipo`. */
+  acaoTipo: 'notificacao' | 'automacao_interna';
+  /** Preenchido só quando `acaoTipo` é 'automacao_interna'. */
+  acaoInterna: { accao: string; campo?: string; valor: string } | null;
   cargoIds: string[];
   enviarEmail: boolean;
   modo: 'grupo' | 'individual';
@@ -22,20 +26,32 @@ export interface ConfigDoFluxo {
 const COOLDOWN_PADRAO_MINUTOS = 1440;
 
 export function configDoFluxo(nodes: Node[]): ConfigDoFluxo | null {
-  const accao = nodes.find(
-    (n) => n.type === 'accao' && (n.data as { accao?: string }).accao === 'notificacao'
-  );
-  // 'alterar_estado' não tem hoje para onde ser gravado; tratá-lo como
-  // notificação escrevia destinatários vazios por cima dos reais.
+  const accao = nodes.find((n) => n.type === 'accao');
   if (!accao) return null;
 
   const dados = accao.data as {
+    accao?: string;
+    acaoTipo?: string;
+    campo?: string;
+    valor?: string;
     cargoIds?: string[];
     enviarEmail?: boolean;
     modo?: 'grupo' | 'individual';
     userIds?: string[];
     cooldownMinutos?: number;
   };
+
+  const interna = dados.acaoTipo === 'automacao_interna';
+
+  // Uma acção interna sem acção escolhida não é gravável: o servidor recusaria
+  // com «acção interna não existe no catálogo», e gravar por cima da config
+  // real com um vazio era pior do que não gravar.
+  if (interna && !dados.accao) return null;
+
+  // O tipo antigo continua a exigir o nó de notificação. Antes disto, um nó de
+  // acção com outro `accao` fazia esta função devolver null — que era a forma
+  // de impedir que destinatários vazios fossem escritos por cima dos reais.
+  if (!interna && dados.accao !== 'notificacao') return null;
 
   // 'individual' com a lista vazia deixava a regra sem destinatário nenhum e
   // sem nada no ecrã a dizê-lo.
@@ -53,6 +69,17 @@ export function configDoFluxo(nodes: Node[]): ConfigDoFluxo | null {
     .map((c) => ({ campo: c.campo, operador: c.operador, valor: c.valor }));
 
   return {
+    acaoTipo: interna ? 'automacao_interna' : 'notificacao',
+    // As chaves são as do servidor. `campo` só vai quando existe: as acções de
+    // conjunto fechado não o têm, e mandá-lo vazio seria configuração que o
+    // validador recusa.
+    acaoInterna: interna
+      ? {
+          accao: dados.accao as string,
+          ...(dados.campo ? { campo: dados.campo } : {}),
+          valor: dados.valor ?? '',
+        }
+      : null,
     cargoIds: dados.cargoIds ?? [],
     enviarEmail: dados.enviarEmail ?? false,
     modo,
