@@ -10,6 +10,7 @@ import {
   Calendar,
   FileText,
   ToggleLeft,
+  type LucideIcon,
 } from 'lucide-react';
 import { FormField } from './DynamicFieldEditor';
 import { FieldEditor } from './FieldEditor';
@@ -23,10 +24,23 @@ interface FieldCardProps {
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }
 
-const fieldTypeIcons = {
+/**
+ * Um ícone para CADA tipo de campo — o `Record` obriga-o.
+ *
+ * Faltava aqui o `phone` ("Telefone (com código país)"), que o selector de
+ * tipos oferece na mesma: escolher esse tipo devolvia `undefined` e a página
+ * inteira ia abaixo com o React error #130 ("Element type is invalid"), a
+ * mostrar o ecrã de erro em vez do criador de formulários.
+ *
+ * Com `Record<FormField['type'], LucideIcon>`, acrescentar um tipo novo sem
+ * lhe dar ícone passa a partir a compilação — deixa de poder chegar a
+ * produção em silêncio.
+ */
+const fieldTypeIcons: Record<FormField['type'], LucideIcon> = {
   text: Type,
   email: Mail,
   tel: Phone,
+  phone: Phone,
   textarea: FileText,
   select: ToggleLeft,
   date: Calendar,
@@ -42,7 +56,10 @@ export const FieldCard: React.FC<FieldCardProps> = ({
   onUpdate,
   dragHandleProps,
 }) => {
-  const IconComponent = fieldTypeIcons[field.type];
+  // Cinto e suspensórios: os campos já gravados vêm da base de dados, onde o
+  // `type` é texto livre. Um valor que o TypeScript não conhece não pode
+  // voltar a deitar o ecrã abaixo.
+  const IconComponent = fieldTypeIcons[field.type] ?? Type;
 
   return (
     <Card className="bg-card border-border">
