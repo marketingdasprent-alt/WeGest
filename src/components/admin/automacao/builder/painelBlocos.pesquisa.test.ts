@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CATALOGO } from './catalogo';
+import { MODULOS } from '../rotulos';
 import { agruparBlocos, achatar, proximoIndice } from './painelBlocos.pesquisa';
 
 /**
@@ -53,6 +54,36 @@ describe('agruparBlocos', () => {
 
     expect(gatilhos?.itens.map((t) => t.chave)).toEqual(['trigger-viaturas']);
     expect(grupos.find((g) => g.categoria === 'Ações')?.itens.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * O guarda que faltava.
+   *
+   * O teste acima passa-lhe `'viatura'` à mão e sempre passou. Mas o filtro da
+   * barra guardava o NOME do módulo ('Viaturas') e era esse valor que chegava
+   * aqui — nunca casava com `dados.modulo`, e filtrar por módulo na lista
+   * deixava a paleta do canvas sem um único gatilho, em silêncio.
+   *
+   * Provar que a função funciona não é provar que o chamador lhe dá o que ela
+   * espera. Isto liga os dois vocabulários: o que o filtro guarda é o que a
+   * paleta reconhece.
+   */
+  it('toda a chave de MODULOS com gatilho na paleta encontra esse gatilho', () => {
+    const comGatilho = MODULOS.filter((m) =>
+      CATALOGO.some(
+        (t) => t.tipo === 'trigger' && (t.dados as { modulo?: string }).modulo === m.chave
+      )
+    );
+
+    // Se isto for zero, o teste passa sem testar nada.
+    expect(comGatilho.length).toBeGreaterThan(0);
+
+    for (const modulo of comGatilho) {
+      const gatilhos = agruparBlocos(CATALOGO, '', modulo.chave).find(
+        (g) => g.categoria === 'Gatilhos'
+      );
+      expect(gatilhos?.itens.length, `módulo ${modulo.chave} ficou sem gatilho`).toBeGreaterThan(0);
+    }
   });
 });
 

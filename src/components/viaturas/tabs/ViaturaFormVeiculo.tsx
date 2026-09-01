@@ -21,6 +21,7 @@ import {
   type RentingGrupo,
   type Estacao,
 } from './viaturaTabDados.types';
+import { AnunciosViaturaCard } from './AnunciosViaturaCard';
 
 interface ViaturaFormVeiculoProps {
   form: UseFormReturn<ViaturaFormData>;
@@ -52,6 +53,7 @@ interface ViaturaFormVeiculoProps {
     preco_mes: number | null;
   }>;
   estacoes: Estacao[];
+  viaturaId: string | null;
 }
 
 export function ViaturaFormVeiculo({
@@ -67,6 +69,7 @@ export function ViaturaFormVeiculo({
   tarifasTvdeModelo,
   tarifasRacModelo,
   estacoes,
+  viaturaId,
 }: ViaturaFormVeiculoProps) {
   // is_slot deriva do TIPO: ao escolher o tipo "SLOT", is_slot é ligado
   // automaticamente. Antes o toggle estava escondido atrás de `elegivel_tvde`,
@@ -480,23 +483,28 @@ export function ViaturaFormVeiculo({
           NOTA: "Elegível para TVDE?" (habilitada_tvde) foi removido daqui — não
           tinha efeito. A elegibilidade real vem de viatura_tipos.elegivel_tvde
           (ver useModelosElegiveisTvde). O campo mantém-se na BD. */}
-      <div className="md:col-span-3 mt-2">
-        <div className="flex max-w-md items-center justify-between rounded-lg border bg-muted/30 p-4">
-          <div>
-            <p className="font-medium">Viatura SLOT</p>
-            <Badge variant={form.watch('is_slot') ? 'default' : 'secondary'}>
-              {form.watch('is_slot') ? 'Ativo' : 'Inativo'}
-            </Badge>
-            {isTipoSlot && (
-              <p className="mt-1 text-xs text-muted-foreground">Definido pelo tipo SLOT</p>
-            )}
+      <div className="md:col-span-3 mt-2 flex flex-col gap-4 md:flex-row md:items-start">
+        <div className="flex-1">
+          <div className="flex max-w-md items-center justify-between rounded-lg border bg-muted/30 p-4">
+            <div>
+              <p className="font-medium">Viatura SLOT</p>
+              <Badge variant={form.watch('is_slot') ? 'default' : 'secondary'}>
+                {form.watch('is_slot') ? 'Ativo' : 'Inativo'}
+              </Badge>
+              {isTipoSlot && (
+                <p className="mt-1 text-xs text-muted-foreground">Definido pelo tipo SLOT</p>
+              )}
+            </div>
+            <Switch
+              checked={form.watch('is_slot')}
+              disabled={isTipoSlot}
+              onCheckedChange={(checked) =>
+                form.setValue('is_slot', checked, { shouldDirty: true })
+              }
+            />
           </div>
-          <Switch
-            checked={form.watch('is_slot')}
-            disabled={isTipoSlot}
-            onCheckedChange={(checked) => form.setValue('is_slot', checked, { shouldDirty: true })}
-          />
         </div>
+        <AnunciosViaturaCard viaturaId={viaturaId} />
       </div>
     </div>
   );

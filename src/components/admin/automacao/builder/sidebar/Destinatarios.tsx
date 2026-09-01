@@ -1,4 +1,4 @@
-import { Mail, X } from 'lucide-react';
+import { Bell, Mail, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -14,15 +14,24 @@ import { Campo, Seccao } from './CamposDoPasso';
  *
  * Absorveu a Sheet separada que existia antes: ter dois ecrãs a escrever os
  * mesmos campos era a duplicação que este redesenho veio eliminar.
+ *
+ * O CANAL DEIXOU DE SER UMA ESCOLHA. Até à divisão entre notificação e email
+ * (2026-09-01), esta secção tinha um interruptor: a notificação na app era
+ * sempre criada, e o email era opcional por cima dela. Agora são duas acções
+ * diferentes — quem quer as duas cria dois blocos — e o canal de cada uma é
+ * fixo. O que era um `Switch` passa a um selo informativo.
  */
 export function Destinatarios({
   noId,
   dados,
   onAlterar,
+  canal,
 }: {
   noId: string;
   dados: Record<string, unknown>;
   onAlterar: (alteracao: Record<string, unknown>) => void;
+  /** 'notificacao' → só na aplicação. 'email' → só por correio. */
+  canal: 'notificacao' | 'email';
 }) {
   const { data: cargos = [] } = useCargosDisponiveis();
   const escolhidos = (dados.cargoIds as string[]) ?? [];
@@ -39,22 +48,20 @@ export function Destinatarios({
   return (
     <>
       <Seccao titulo="Canal">
-        <div className="flex items-center justify-between gap-3">
-          {/* A notificação na aplicação é sempre criada pelo motor — é um
-              estado, não um interruptor. */}
-          <Badge variant="secondary">Na aplicação</Badge>
-          <div className="flex items-center gap-2">
-            <Label htmlFor={`email-${noId}`} className="flex items-center gap-1.5 text-xs">
-              <Mail className="h-3.5 w-3.5" />
-              Email
-            </Label>
-            <Switch
-              id={`email-${noId}`}
-              checked={Boolean(dados.enviarEmail)}
-              onCheckedChange={(v) => onAlterar({ enviarEmail: v })}
-            />
-          </div>
-        </div>
+        {/* Estado, não interruptor: o canal é o que a acção É, não uma opção
+            dentro dela. Duas automações separadas cobrem quem precisa das
+            duas — ver o cabeçalho deste ficheiro. */}
+        {canal === 'email' ? (
+          <Badge variant="secondary" className="gap-1.5">
+            <Mail className="h-3.5 w-3.5" />
+            Por email
+          </Badge>
+        ) : (
+          <Badge variant="secondary" className="gap-1.5">
+            <Bell className="h-3.5 w-3.5" />
+            Na aplicação
+          </Badge>
+        )}
       </Seccao>
 
       <Seccao titulo="Destinatários">

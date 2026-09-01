@@ -299,12 +299,36 @@ describe('AutomacaoPage — Regras e permissões', () => {
     });
     expect(screen.getByText('Nova cobrança gerada')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('option', { name: 'Financeiro' }));
+    // O controlo passou de `<Select>` a chips — mudança de desenho, não
+    // regressão. A garantia testada é a mesma: escolher um módulo esconde as
+    // regras dos outros. O chip leva a contagem no nome acessível.
+    fireEvent.click(screen.getByRole('button', { name: /^Financeiro, \d+ automa/ }));
 
     await waitFor(() => {
       expect(screen.queryByText('Regra Estatística Teste')).toBeNull();
     });
     expect(screen.getByText('Nova cobrança gerada')).toBeTruthy();
+  });
+
+  it('com "Todas" a lista agrupa por módulo, e o chip escolhido desfaz o agrupamento', async () => {
+    renderPage();
+    irParaTabelaDeRegras();
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+
+    // Duas regras de módulos diferentes ⇒ duas secções. A contagem do
+    // cabeçalho é o que só existe no cabeçalho: o nome do módulo aparece
+    // também no badge da linha e num cargo com o mesmo nome.
+    expect(screen.getAllByText(/^\d+ automaç(ão|ões)$/)).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Financeiro, \d+ automa/ }));
+
+    // Com um módulo só, um cabeçalho para a única secção seria ruído: some.
+    await waitFor(() => {
+      expect(screen.queryByText(/^\d+ automaç(ão|ões)$/)).toBeNull();
+    });
   });
 
   it('o painel abre pré-preenchido com os grupos já configurados', async () => {

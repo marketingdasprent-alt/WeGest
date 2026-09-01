@@ -30,12 +30,21 @@
 -- nova, o retry não criava linha — incrementava `agrupadas` e repetia o item.
 -- O utilizador via "3 avisos" onde houve 2 eventos. Duplicação na mesma.
 --
--- ── PORQUE `enviar_email: true` EM TODAS AS REGRAS ──────────────────────────
+-- ── PORQUE `enviar_email: true` NA REGRA DE NOTIFICAÇÃO ─────────────────────
 --
 -- `trg_notifications_so_quando_ha_email` cancela o insert em `notifications`
 -- quando a regra tem `enviar_email = false`. Com `false`, todas as contagens
--- deste ficheiro dariam 0 sem nada estar partido. Ver a nota longa no topo de
--- execute_automation_runs.test.sql.
+-- de `notifications`/`notificacoes` deste ficheiro dariam 0 sem nada estar
+-- partido. Ver a nota longa no topo de execute_automation_runs.test.sql.
+--
+-- ── PORQUE A FILA (notification_queue) PRECISA DE UMA REGRA `email` ─────────
+--
+-- Desde a divisão entre notificação e email (2026-09-01), o executor decide
+-- ENFILEIRAR pelo `acao_tipo`, não por `enviar_email` na config — só uma regra
+-- `acao_tipo='email'` produz linhas em `notification_queue`; uma notificação
+-- nunca produz, mesmo com a chave antiga presente (é o que as primeiras duas
+-- asserções de fila provam). Por isso as secções deste ficheiro que testam a
+-- idempotência da FILA usam uma segunda regra, dedicada, com `acao_tipo='email'`.
 --
 -- ── PORQUE `event_type` NÃO É INVENTADO ─────────────────────────────────────
 --
@@ -60,7 +69,7 @@
 -- ============================================================
 
 begin;
-select plan(28);
+select plan(29);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000d0000', 'Org Idempotencia', 'idem-a');
@@ -140,12 +149,17 @@ select is(
   'o mesmo run produz efeitos distintos para destinatários distintos'
 );
 
+-- Desde a divisão entre notificação e email (2026-09-01), o executor decide
+-- enfileirar pelo `acao_tipo`, não por `enviar_email` na config. Uma regra
+-- `notificacao` NUNCA enfileira, mesmo com a chave antiga presente — aqui ela
+-- só serve para manter viva a linha de `notifications`, ver a nota do topo.
+-- A prova POSITIVA do enfileiramento é mais abaixo, com `acao_tipo='email'`.
 select is(
   (select count(*)::int from public.notification_queue q
      join public.notifications n on n.id = q.notification_id
     where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'),
-  2,
-  'run A enfileira um email por destinatário'
+  0,
+  'uma regra de notificação nunca enfileira email — isso passou a ser a acção email'
 );
 
 select is(
@@ -184,8 +198,8 @@ select is(
   (select count(*)::int from public.notification_queue q
      join public.notifications n on n.id = q.notification_id
     where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'),
-  2,
-  'o retry não volta a enfileirar o mesmo email'
+  0,
+  'o retry de uma notificação continua sem enfileirar nada'
 );
 
 select is(
@@ -213,48 +227,76 @@ select is(
 );
 
 -- ════════════════════════════════════════════════════════════
--- T2b — FALHA PARCIAL: o retry completa o que faltou
+-- T2b — FALHA PARCIAL: o retry completa o que faltou (acção EMAIL)
 -- ════════════════════════════════════════════════════════════
 -- Este é o teste que justifica `do update` em vez de `do nothing` no insert de
 -- `notifications`. Sem ele, a decisão mais carregada da migração estaria
 -- assente só num comentário.
 --
---   1.ª tentativa:  notifications ✓   notificacoes ✓   queue ✗ (morreu aqui)
---   retry:          notifications —   notificacoes —   queue DEVE acontecer
+--   1.ª tentativa:  notifications ✓   queue ✗ (morreu aqui)
+--   retry:          notifications —   queue DEVE acontecer
+--
+-- Desde a divisão de 2026-09-01, quem enfileira é `acao_tipo='email'` — não
+-- uma notificação com `enviar_email` na config, que já não enfileira nada
+-- (provado acima). Mesmos destinatários da regra de notificação, mesma
+-- estratégia de cargo; muda só o tipo, e a config não precisa de
+-- `enviar_email` porque o tipo já o diz.
 --
 -- Com `do nothing`, o `returning id into v_notification_id` devolvia NULL no
 -- retry. O insert na fila do ramo do motorista está guardado por
 -- `v_notification_id is not null`, e no laço geral a fila usa esse mesmo id
 -- como chave estrangeira — em qualquer dos casos a linha em falta nunca mais
 -- nascia. A fila ficava permanentemente incompleta e ninguém dava por isso.
---
--- Apaga-se a linha de fila de UM destinatário para simular a morte a meio. A do
--- outro fica, e tem de continuar única — o retry não pode reparar um lado e
--- duplicar o outro.
-delete from public.notification_queue q
- using public.notifications n
- where n.id = q.notification_id
-   and n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
-   and q.destinatario = 'admin@idem.pt';
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-0000004d0003', '00000000-0000-0000-0000-0000000d0000',
+   'teste.idem_seguro.email', 'Regra Seguro (email)', 'viatura.seguro_expirando', 'email',
+   jsonb_build_object(
+     'titulo', 'Seguro a expirar',
+     'template_codigo', 'teste.idem.email',
+     'destinatarios_estrategia', 'cargo',
+     'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000cd0001')));
 
-select is(
-  (select count(*)::int from public.notification_queue q
-     join public.notifications n on n.id = q.notification_id
-    where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'),
-  1,
-  'pré-condição: a fila ficou com um destinatário por enviar'
-);
-
-update public.automation_runs
-   set status = 'pending', started_at = null, next_attempt_at = now()
- where id = '00000000-0000-0000-0000-00000c4d0001';
+insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
+  ('00000000-0000-0000-0000-00000c4d0004', '00000000-0000-0000-0000-0000004d0003',
+   '00000000-0000-0000-0000-0000000d0000', 'viaturas', '00000000-0000-0000-0000-0000008d0001');
 
 select public.execute_automation_runs();
 
 select is(
   (select count(*)::int from public.notification_queue q
      join public.notifications n on n.id = q.notification_id
-    where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
+    where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'),
+  2,
+  'uma regra de email enfileira um item por destinatário'
+);
+
+-- Apaga-se a linha de fila de UM destinatário para simular a morte a meio. A do
+-- outro fica, e tem de continuar única — o retry não pode reparar um lado e
+-- duplicar o outro.
+delete from public.notification_queue q
+ using public.notifications n
+ where n.id = q.notification_id
+   and n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'
+   and q.destinatario = 'admin@idem.pt';
+
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+    where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'),
+  1,
+  'pré-condição: a fila ficou com um destinatário por enviar'
+);
+
+update public.automation_runs
+   set status = 'pending', started_at = null, next_attempt_at = now()
+ where id = '00000000-0000-0000-0000-00000c4d0004';
+
+select public.execute_automation_runs();
+
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+    where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'
       and q.destinatario = 'admin@idem.pt'),
   1,
   'falha parcial: o retry recupera o notification_id e cria a linha de fila em falta'
@@ -263,14 +305,14 @@ select is(
 select is(
   (select count(*)::int from public.notification_queue q
      join public.notifications n on n.id = q.notification_id
-    where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'),
+    where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'),
   2,
   'falha parcial: o destinatário que já tinha fila não ganha uma segunda linha'
 );
 
 select is(
   (select count(*)::int from public.notifications
-    where rule_run_id = '00000000-0000-0000-0000-00000c4d0001'),
+    where rule_run_id = '00000000-0000-0000-0000-00000c4d0004'),
   2,
   'falha parcial: reparar a fila não cria notifications novas'
 );
@@ -378,12 +420,14 @@ select is(
 -- do resultado silencioso do `on conflict`. 23505 = unique_violation. É o que
 -- prova que a garantia não depende de um `if not exists` no plpgsql — e por
 -- isso é a que continua a valer com dois workers em paralelo.
+-- Usa run E (a regra de email): é onde há efectivamente fila para tentar
+-- duplicar — run A (notificação) já provou acima que nunca enfileira.
 select throws_ok(
   $$insert into public.notification_queue (notification_id, org_id, canal, destinatario, template_codigo)
     select q.notification_id, q.org_id, q.canal, q.destinatario, q.template_codigo
       from public.notification_queue q
       join public.notifications n on n.id = q.notification_id
-     where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
+     where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'
        and n.destinatario_user_id = '00000000-0000-0000-0000-0000000d0001'$$,
   '23505',
   null,
@@ -395,14 +439,14 @@ insert into public.notification_queue (notification_id, org_id, canal, destinata
 select q.notification_id, q.org_id, 'sms', q.destinatario, q.template_codigo
   from public.notification_queue q
   join public.notifications n on n.id = q.notification_id
- where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
+ where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'
    and n.destinatario_user_id = '00000000-0000-0000-0000-0000000d0001'
    and q.canal = 'email';
 
 select is(
   (select count(*)::int from public.notification_queue q
      join public.notifications n on n.id = q.notification_id
-    where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
+    where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'
       and n.destinatario_user_id = '00000000-0000-0000-0000-0000000d0001'),
   2,
   'canal diferente para a mesma notificação continua a ser permitido'

@@ -1,16 +1,7 @@
 import type { AutomationNode as Node, PosicaoNo as XYPosition } from './dominio/tipos';
-import {
-  Bell,
-  Car,
-  Euro,
-  Filter,
-  LifeBuoy,
-  ToggleRight,
-  Users,
-  Wrench,
-  Zap,
-  type LucideIcon,
-} from 'lucide-react';
+import { Bell, Filter, Mail, ToggleRight, Zap, type LucideIcon } from 'lucide-react';
+// A identidade dos módulos — nome, cor e ícone — vive num sítio só.
+import { identidadeDoModulo } from '../rotulos';
 
 /**
  * Os blocos que o utilizador pode arrastar para o canvas.
@@ -56,52 +47,33 @@ export const OPERADORES = [
   { valor: '!=', rotulo: 'é diferente de' },
 ] as const;
 
+/**
+ * Um gatilho da paleta, com a identidade do módulo lida de `rotulos.ts`.
+ *
+ * O nome, a cor e o ícone estavam escritos aqui E lá. Duas cópias da mesma
+ * coisa divergem sempre — e já tinham divergido: a lista mostrava o módulo a
+ * cinzento enquanto o canvas o mostrava a cores. Aqui fica só o que é próprio
+ * da paleta: a chave do bloco e a descrição do que aquele gatilho vigia.
+ */
+function gatilho(chaveDoBloco: string, chaveDoModulo: string, descricao: string): TemplateDeNo {
+  const modulo = identidadeDoModulo(chaveDoModulo);
+  return {
+    chave: chaveDoBloco,
+    tipo: 'trigger',
+    rotulo: modulo.nome,
+    descricao,
+    Icone: modulo.Icone,
+    cor: modulo.token,
+    dados: { modulo: modulo.chave, rotulo: modulo.nome, eventType: null },
+  };
+}
+
 export const CATALOGO: TemplateDeNo[] = [
-  {
-    chave: 'trigger-renting',
-    tipo: 'trigger',
-    rotulo: 'Renting',
-    descricao: 'Contratos, reservas e devoluções',
-    Icone: Car,
-    cor: '--fluxo-renting',
-    dados: { modulo: 'contrato_renting', rotulo: 'Renting', eventType: null },
-  },
-  {
-    chave: 'trigger-motoristas',
-    tipo: 'trigger',
-    rotulo: 'Motoristas',
-    descricao: 'Cartas, licenças, candidaturas e fichas',
-    Icone: Users,
-    cor: '--fluxo-motoristas',
-    dados: { modulo: 'motorista', rotulo: 'Motoristas', eventType: null },
-  },
-  {
-    chave: 'trigger-viaturas',
-    tipo: 'trigger',
-    rotulo: 'Viaturas',
-    descricao: 'Seguro, inspeção, IUC e manutenção',
-    Icone: Wrench,
-    cor: '--fluxo-viaturas',
-    dados: { modulo: 'viatura', rotulo: 'Viaturas', eventType: null },
-  },
-  {
-    chave: 'trigger-financeiro',
-    tipo: 'trigger',
-    rotulo: 'Financeiro',
-    descricao: 'Cobranças geradas e faturas por enviar',
-    Icone: Euro,
-    cor: '--fluxo-financeiro',
-    dados: { modulo: 'cobranca', rotulo: 'Financeiro', eventType: null },
-  },
-  {
-    chave: 'trigger-assistencia',
-    tipo: 'trigger',
-    rotulo: 'Assistência',
-    descricao: 'Tickets abertos há demasiado tempo',
-    Icone: LifeBuoy,
-    cor: '--fluxo-assistencia',
-    dados: { modulo: 'assistencia_ticket', rotulo: 'Assistência', eventType: null },
-  },
+  gatilho('trigger-renting', 'contrato_renting', 'Contratos, reservas e devoluções'),
+  gatilho('trigger-motoristas', 'motorista', 'Cartas, licenças, candidaturas e fichas'),
+  gatilho('trigger-viaturas', 'viatura', 'Seguro, inspeção, IUC e manutenção'),
+  gatilho('trigger-financeiro', 'cobranca', 'Cobranças geradas e faturas por enviar'),
+  gatilho('trigger-assistencia', 'assistencia_ticket', 'Tickets abertos há demasiado tempo'),
   {
     chave: 'condicao',
     tipo: 'condicao',
@@ -115,14 +87,32 @@ export const CATALOGO: TemplateDeNo[] = [
     chave: 'notificacao',
     tipo: 'accao',
     rotulo: 'Enviar notificação',
-    descricao: 'Avisa cargos ou pessoas, com email opcional',
+    // Já não é "com email opcional": o email tem acção própria desde a
+    // divisão de 2026-09-01. Duas coisas, dois blocos — não um interruptor
+    // escondido dentro de outra acção.
+    descricao: 'Avisa cargos ou pessoas dentro da aplicação',
     Icone: Bell,
     cor: '--fluxo-notificacao',
     dados: {
       accao: 'notificacao',
+      acaoTipo: 'notificacao',
       rotulo: 'Enviar notificação',
       cargoIds: [],
-      enviarEmail: false,
+      cooldownMinutos: COOLDOWN_PADRAO_MINUTOS,
+    },
+  },
+  {
+    chave: 'email',
+    tipo: 'accao',
+    rotulo: 'Enviar email',
+    descricao: 'Envia por correio a cargos ou pessoas, sem aviso na aplicação',
+    Icone: Mail,
+    cor: '--fluxo-email',
+    dados: {
+      accao: 'email',
+      acaoTipo: 'email',
+      rotulo: 'Enviar email',
+      cargoIds: [],
       cooldownMinutos: COOLDOWN_PADRAO_MINUTOS,
     },
   },

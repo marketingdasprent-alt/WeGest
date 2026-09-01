@@ -14,7 +14,6 @@ function regra(over: Partial<RegraParaEditar> = {}): RegraParaEditar {
     eventType: 'viatura.seguro_expirando',
     cooldownMinutos: 1440,
     cargoIds: ['cargo-1'],
-    enviarEmail: true,
     modo: 'grupo',
     userIds: [],
     condicoes: [],
@@ -144,16 +143,24 @@ describe('fluxoDaRegra', () => {
     expect(nodes[0].data).toMatchObject({ modulo: 'cobranca' });
   });
 
-  it('a acção traz os cargos, o email e o cooldown que estavam gravados', () => {
-    const { nodes } = fluxoDaRegra(
-      regra({ cargoIds: ['c1', 'c2'], enviarEmail: false, cooldownMinutos: 60 })
-    );
+  it('a acção traz os cargos e o cooldown que estavam gravados', () => {
+    const { nodes } = fluxoDaRegra(regra({ cargoIds: ['c1', 'c2'], cooldownMinutos: 60 }));
 
     expect(nodes[1].data).toMatchObject({
       accao: 'notificacao',
       cargoIds: ['c1', 'c2'],
-      enviarEmail: false,
       cooldownMinutos: 60,
+    });
+  });
+
+  it('uma regra de email traz accao e rótulo próprios', () => {
+    const { nodes } = fluxoDaRegra(regra({ acaoTipo: 'email', cargoIds: ['c1'] }));
+
+    expect(nodes[1].data).toMatchObject({
+      accao: 'email',
+      acaoTipo: 'email',
+      rotulo: 'Enviar email',
+      cargoIds: ['c1'],
     });
   });
 

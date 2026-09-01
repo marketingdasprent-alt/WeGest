@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { AutomationNode as Node } from './dominio/tipos';
+import type { AutomationRuleAcaoConfig } from '@/hooks/automacao/useAutomationRulesConfig';
 import { configDoFluxo } from './configDoFluxo';
+import { semChavesDeEmailAntigo } from './EditorAutomacaoProvider';
 import { fluxoDaRegra } from './fluxoDaRegra';
 import { paraValorJson } from './valorTipado';
 
@@ -26,12 +28,15 @@ function payloadParaSupabase(
 
   return {
     acao_tipo: extraida.acaoTipo,
+    // Usa a MESMA função que EditorAutomacaoProvider — não uma reimplementação
+    // paralela que podia divergir dela sem os testes notarem.
     acao_config: extraida.acaoInterna
       ? extraida.acaoInterna
       : {
-          ...configExistente,
+          ...(extraida.acaoTipo === 'notificacao'
+            ? semChavesDeEmailAntigo(configExistente as unknown as AutomationRuleAcaoConfig)
+            : configExistente),
           destinatarios_cargo_ids: extraida.cargoIds,
-          enviar_email: extraida.enviarEmail,
           destinatarios_modo: extraida.modo,
           destinatarios_user_ids: extraida.userIds,
         },
@@ -186,8 +191,8 @@ describe('compatibilidade com as notificações', () => {
           position: { x: 0, y: 0 },
           data: {
             accao: 'notificacao',
+            acaoTipo: 'notificacao',
             cargoIds: ['c1'],
-            enviarEmail: true,
             modo: 'grupo',
             userIds: [],
             cooldownMinutos: 60,
@@ -204,8 +209,89 @@ describe('compatibilidade com as notificações', () => {
       template_codigo: 'algo.existente',
       titulo: 'Título',
       destinatarios_cargo_ids: ['c1'],
-      enviar_email: true,
     });
+  });
+
+  it('uma regra de notificação anterior à divisão perde o enviar_email ao ser gravada', () => {
+    // `enviar_email` deixou de ser válido numa notificação desde 2026-09-01 —
+    // o email tem acção própria, e o validador do servidor recusa a chave. Uma
+    // regra antiga que ainda a tivesse ficaria presa: qualquer alteração seria
+    // recusada por um campo que o próprio editor já não escreve.
+    const payload = payloadParaSupabase(
+      [
+        {
+          id: 'a1',
+          type: 'accao',
+          position: { x: 0, y: 0 },
+          data: {
+            accao: 'notificacao',
+            acaoTipo: 'notificacao',
+            cargoIds: ['c1'],
+            modo: 'grupo',
+            userIds: [],
+            cooldownMinutos: 60,
+          },
+        },
+      ],
+      { template_codigo: 'legado', titulo: 'Título', enviar_email: true, enviar_email_digest: true }
+    );
+
+    expect(payload?.acao_config).not.toHaveProperty('enviar_email');
+    expect(payload?.acao_config).not.toHaveProperty('enviar_email_digest');
+  });
+});
+
+describe('a acção de email', () => {
+  it('produz acao_tipo email e os mesmos destinatários da notificação', () => {
+    const payload = payloadParaSupabase(
+      [
+        {
+          id: 'a1',
+          type: 'accao',
+          position: { x: 0, y: 0 },
+          data: {
+            accao: 'email',
+            acaoTipo: 'email',
+            cargoIds: ['c1'],
+            modo: 'grupo',
+            userIds: [],
+            cooldownMinutos: 1440,
+          },
+        },
+      ],
+      { template_codigo: 'aviso.email', titulo: 'Aviso' }
+    );
+
+    expect(payload?.acao_tipo).toBe('email');
+    expect(payload?.acao_config).toMatchObject({
+      template_codigo: 'aviso.email',
+      titulo: 'Aviso',
+      destinatarios_cargo_ids: ['c1'],
+    });
+    expect(payload?.acao_config).not.toHaveProperty('enviar_email');
+  });
+
+  it('preserva enviar_email_digest — continua válido para email', () => {
+    const payload = payloadParaSupabase(
+      [
+        {
+          id: 'a1',
+          type: 'accao',
+          position: { x: 0, y: 0 },
+          data: {
+            accao: 'email',
+            acaoTipo: 'email',
+            cargoIds: ['c1'],
+            modo: 'grupo',
+            userIds: [],
+            cooldownMinutos: 1440,
+          },
+        },
+      ],
+      { template_codigo: 'aviso.email', titulo: 'Aviso', enviar_email_digest: true }
+    );
+
+    expect(payload?.acao_config).toMatchObject({ enviar_email_digest: true });
   });
 });
 
@@ -217,7 +303,6 @@ describe('reabrir uma automação interna já gravada', () => {
       eventType: 'viatura.seguro_expirando',
       cooldownMinutos: 1440,
       cargoIds: [],
-      enviarEmail: false,
       modo: 'grupo',
       userIds: [],
       condicoes: [],
@@ -255,7 +340,6 @@ describe('reabrir uma automação interna já gravada', () => {
       eventType: 'assistencia_ticket.aberto_demasiado_tempo',
       cooldownMinutos: 1440,
       cargoIds: [],
-      enviarEmail: false,
       modo: 'grupo',
       userIds: [],
       condicoes: [{ campo: 'prioridade', operador: '!=', valor: 'urgente' }],

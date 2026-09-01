@@ -269,6 +269,7 @@ jobs:
             snapshot_da_regra \
             motor_de_condicoes \
             accoes_internas \
+            accao_email \
             automation_queue \
             automation_rules \
             automation_runs_complete_duracao \
