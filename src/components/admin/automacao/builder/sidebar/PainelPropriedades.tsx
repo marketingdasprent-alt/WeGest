@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { useAutomationRuleConfig } from '@/hooks/automacao/useAutomationRulesConfig';
+import { useAutomationRuleConfig, useTestarRegra } from '@/hooks/automacao/useAutomationRulesConfig';
 import { useUltimoPayloadDaRegra } from '@/hooks/automacao/useUltimoPayloadDaRegra';
 import { useGuardarTemplate, useTemplateDaRegra } from '@/hooks/automacao/useTemplateDaRegra';
 import { useToast } from '@/hooks/use-toast';
@@ -40,6 +40,7 @@ export function PainelPropriedades({
   const codigo = config?.acao_config?.template_codigo ?? null;
   const { data: template } = useTemplateDaRegra(codigo);
   const guardarTemplate = useGuardarTemplate();
+  const testar = useTestarRegra();
 
   // Inicializado na montagem, não num efeito: com um efeito, o primeiro
   // render tinha o rascunho vazio e a secção de destinatários nem existia.
@@ -58,22 +59,68 @@ export function PainelPropriedades({
     rascunho as { modulo?: string; accao?: string }
   );
 
+  const acaoTipo = (rascunho.acaoTipo as string) ?? 'notificacao';
+  const podeTestar = no.type === 'accao' && (acaoTipo === 'notificacao' || acaoTipo === 'email');
+
   const alterar = (alteracao: Record<string, unknown>) =>
     setRascunho((r) => ({ ...r, ...alteracao }));
+
+  // O corpo vive noutra tabela e não passa pelo gravar da regra — partilhado
+  // entre `guardar` (fecha o painel a seguir) e `testarAgora` (continua para
+  // o teste em vez de fechar).
+  const persistir = async () => {
+    if (codigo && template && corpo !== template.corpo) {
+      await guardarTemplate.mutateAsync({ codigo, assunto: template.assunto, corpo });
+    }
+    await onGuardarFluxo(no.id, rascunho);
+  };
 
   const guardar = async () => {
     setAGuardar(true);
     try {
-      // O corpo vive noutra tabela e não passa pelo gravar da regra.
-      if (codigo && template && corpo !== template.corpo) {
-        await guardarTemplate.mutateAsync({ codigo, assunto: template.assunto, corpo });
-      }
-      await onGuardarFluxo(no.id, rascunho);
+      await persistir();
       onFechar();
     } catch (erro) {
       toast({
         title: 'Erro',
         description: erro instanceof Error ? erro.message : 'Não foi possível guardar.',
+        variant: 'destructive',
+      });
+    } finally {
+      setAGuardar(false);
+    }
+  };
+
+  const testarAgora = async () => {
+    if (!regraId) return;
+    setAGuardar(true);
+    try {
+      await persistir();
+    } catch (erro) {
+      toast({
+        title: 'Erro',
+        description: erro instanceof Error ? erro.message : 'Não foi possível guardar.',
+        variant: 'destructive',
+      });
+      setAGuardar(false);
+      return;
+    }
+    try {
+      const resultado = await testar.mutateAsync(regraId);
+      const nomes = resultado.destinatarios_reais.slice(0, 3).map((d) => d.nome);
+      const resto = resultado.destinatarios_reais.length - nomes.length;
+      const listaDestinatarios =
+        nomes.length > 0
+          ? `Iria também para: ${nomes.join(', ')}${resto > 0 ? ` e mais ${resto}` : ''}.`
+          : 'Ninguém mais está configurado para receber.';
+      toast({
+        title: `Teste enviado${resultado.email_enviado ? ' por email' : ''}.`,
+        description: `${resultado.email_teste ? `Para ${resultado.email_teste}. ` : ''}${listaDestinatarios}`,
+      });
+    } catch (erro) {
+      toast({
+        title: 'Não foi possível testar',
+        description: erro instanceof Error ? erro.message : 'Erro desconhecido.',
         variant: 'destructive',
       });
     } finally {
@@ -127,6 +174,17 @@ export function PainelPropriedades({
 
       <Separator />
       <div className="flex items-center justify-end gap-2 p-3">
+        {podeTestar && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={testarAgora}
+            disabled={aGuardar || !payload}
+            title={!payload ? 'Esta automação ainda não correu — não há dados para testar.' : undefined}
+          >
+            Testar
+          </Button>
+        )}
         <Button variant="ghost" size="sm" onClick={onFechar} disabled={aGuardar}>
           Cancelar
         </Button>
