@@ -26,14 +26,22 @@ export function CabecalhoDoPasso({
   return (
     <div className="flex min-w-0 items-center gap-3">
       <span
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-        style={{ backgroundColor: `hsl(var(${cor}) / 0.15)`, color: `hsl(var(${cor}))` }}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1"
+        style={{
+          backgroundColor: `hsl(var(${cor}) / 0.15)`,
+          color: `hsl(var(${cor}))`,
+          // @ts-expect-error -- variável CSS lida só pela classe ring-*, o TS não a conhece.
+          '--tw-ring-color': `hsl(var(${cor}) / 0.35)`,
+        }}
         aria-hidden="true"
       >
-        <Icone className="h-[18px] w-[18px]" />
+        <Icone className="h-5 w-5" />
       </span>
       <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <p
+          className="text-[11px] font-semibold uppercase tracking-wide"
+          style={{ color: `hsl(var(${cor}))` }}
+        >
           {ETIQUETA[tipo] ?? 'Passo'}
         </p>
         <p className="truncate text-sm font-semibold text-foreground">{nome || 'Sem nome'}</p>
