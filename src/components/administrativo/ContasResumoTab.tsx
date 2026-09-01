@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek } from 'date-fns';
+import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek, addDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { Loader2, Lock } from 'lucide-react';
@@ -17,6 +17,7 @@ import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { matchesSearch } from '@/lib/utils';
 import { buildSlotPeriodos, type ViaturaPeriodoInput } from './motorista-resumo/slotPeriodos';
+import { periodosDeContratos } from './motorista-resumo/periodosDoContrato';
 import {
   buildTvdeModeloPrecoMap,
   buildPrecoPorTarifaModelo,
@@ -504,12 +505,21 @@ export function ContasResumoTab() {
       // Era o que acontecia — o motorista #252 devolveu a viatura a 17/08 e o
       // aluguer da semana 03–09/08, que ele tem de pagar, ficou a 0,00 €
       // enquanto o detalhe do resumo continuava a mostrar os 175,00 €.
+      // O aluguer sai do CONTRATO — datas e preço —, não da atribuição da
+      // viatura. Um contrato criado com início retroactivo (transferência de
+      // organização, regularização) fica com a atribuição carimbada com a
+      // data de hoje, e a semana que o contrato cobre aparecia a 0,00 €.
+      // Ver motorista-resumo/periodosDoContrato.ts — é o mesmo módulo que a
+      // ficha do motorista usa, para os dois ecrãs darem o mesmo número.
       const viaturasQuery = supabase
-        .from('motorista_viaturas')
+        .from('contratos_renting')
         .select(
-          'motorista_id, viatura_id, data_inicio, data_fim, viaturas(matricula, grupo_id, modelo_id)'
+          'viatura_id, data_inicio, data_fim, valor_total_manual, tarifa_id, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)'
         )
-        .lte('data_inicio', format(weekEnd, 'yyyy-MM-dd'))
+        .is('deleted_at', null)
+        // `data_inicio` é timestamptz: com `.lte(data)` perde-se um contrato
+        // que comece com hora no último dia do período.
+        .lt('data_inicio', format(addDays(weekEnd, 1), 'yyyy-MM-dd'))
         .or(`data_fim.is.null,data_fim.gte.${format(weekStart, 'yyyy-MM-dd')}`);
 
       // 4e. Buscar resumos semanais Bolt (dados CSV) cujo intervalo intersecte a semana seleccionada
@@ -697,30 +707,9 @@ export function ContasResumoTab() {
         if (c.viatura_id && c.tarifa_id) contratoTarifaPorViatura[c.viatura_id] = c.tarifa_id;
       });
 
-      /** Preço semanal da viatura, pela cascata acordada: tarifa do contrato →
-       *  tarifa do grupo → tarifa TVDE do modelo. `estimado` assinala que o
-       *  preço NÃO veio de um contrato, para o resumo poder avisar em vez de
-       *  mostrar um número de origem desconhecida como se fosse certo. */
-      const precoSemanalViatura = (
-        viaturaId: string | null,
-        grupoId: string | null,
-        modeloId: string | null
-      ): { preco: number | null; estimado: boolean } => {
-        const tarifaContrato = viaturaId ? contratoTarifaPorViatura[viaturaId] : undefined;
-        if (tarifaContrato) {
-          const doModelo = modeloId
-            ? precoPorTarifaModelo.get(`${tarifaContrato}|${modeloId}`)
-            : undefined;
-          if (doModelo != null) return { preco: doModelo, estimado: false };
-          const doGrupo = precoPorTarifaId[tarifaContrato];
-          if (doGrupo != null) return { preco: doGrupo, estimado: false };
-        }
-        const fallback =
-          (grupoId ? grupoTarifaMap[grupoId] : undefined) ??
-          (modeloId ? modeloTvdeTarifaMap[modeloId] : undefined) ??
-          null;
-        return { preco: fallback, estimado: fallback != null };
-      };
+      // A cascata do preço (valor acordado no contrato → tarifa do contrato →
+      // recurso pelo grupo/modelo) passou para periodosDoContrato.ts, para
+      // este ecrã e a ficha do motorista usarem exactamente a mesma.
 
       // Mapa: motorista_id → aluguer da semana. Usa o MESMO cálculo do
       // "Aluguer — Detalhe" do resumo individual (buildSlotPeriodos): dias
@@ -733,21 +722,32 @@ export function ContasResumoTab() {
       // como aviso no resumo: melhor dizer "sem contrato" do que apresentar um
       // preço de origem desconhecida como se fosse acordado.
       const aluguerEstimadoMap: Record<string, boolean> = {};
-      (viaturasResult.data || []).forEach((mv: any) => {
-        if (!mv.motorista_id) return;
-        const grupoId = (mv.viaturas as any)?.grupo_id ?? null;
-        const modeloId = (mv.viaturas as any)?.modelo_id ?? null;
-        const { preco, estimado } = precoSemanalViatura(mv.viatura_id, grupoId, modeloId);
-        if (estimado) aluguerEstimadoMap[mv.motorista_id] = true;
-        const lista = viaturasPorMotorista.get(mv.motorista_id) ?? [];
-        lista.push({
-          viatura_id: mv.viatura_id,
-          data_inicio: mv.data_inicio,
-          data_fim: mv.data_fim,
-          preco_semana: preco,
-          viaturas: null,
+      // Um contrato pode ter mais do que um condutor associado ao longo do
+      // tempo; cada linha devolvida traz o(s) seu(s) condutor(es) e o período
+      // é imputado a cada um deles (buildSlotPeriodos reparte depois os dias,
+      // por pessoa, com a regra de um dia, um dono).
+      (viaturasResult.data || []).forEach((ct: any) => {
+        const condutores: Array<{ motorista_id: string | null }> = Array.isArray(
+          ct.contrato_condutores
+        )
+          ? ct.contrato_condutores
+          : ct.contrato_condutores
+            ? [ct.contrato_condutores]
+            : [];
+        const { periodos, estimado } = periodosDeContratos([ct], {
+          porTarifaModelo: precoPorTarifaModelo,
+          porTarifa: precoPorTarifaId,
+          porGrupo: grupoTarifaMap,
+          porModelo: modeloTvdeTarifaMap,
         });
-        viaturasPorMotorista.set(mv.motorista_id, lista);
+        if (periodos.length === 0) return;
+        for (const c of condutores) {
+          if (!c?.motorista_id) continue;
+          if (estimado) aluguerEstimadoMap[c.motorista_id] = true;
+          const lista = viaturasPorMotorista.get(c.motorista_id) ?? [];
+          lista.push(...periodos);
+          viaturasPorMotorista.set(c.motorista_id, lista);
+        }
       });
       setAluguerEstimadoMap(aluguerEstimadoMap);
 
