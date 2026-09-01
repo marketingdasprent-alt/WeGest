@@ -95,15 +95,15 @@ describe('PainelPropriedades — botão Testar', () => {
   });
 
   it('mostra um toast de erro quando o teste falha', async () => {
-    testarMutateAsync.mockRejectedValue(new Error('Esta automação ainda não correu — não há dados para testar.'));
+    testarMutateAsync.mockRejectedValue(
+      new Error('Esta automação ainda não correu — não há dados para testar.')
+    );
 
     renderPainel();
     fireEvent.click(screen.getByRole('button', { name: /testar/i }));
 
     await waitFor(() =>
-      expect(toastMock).toHaveBeenCalledWith(
-        expect.objectContaining({ variant: 'destructive' })
-      )
+      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }))
     );
   });
 });

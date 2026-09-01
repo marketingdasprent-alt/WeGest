@@ -4,7 +4,10 @@ import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { useAutomationRuleConfig, useTestarRegra } from '@/hooks/automacao/useAutomationRulesConfig';
+import {
+  useAutomationRuleConfig,
+  useTestarRegra,
+} from '@/hooks/automacao/useAutomationRulesConfig';
 import { useUltimoPayloadDaRegra } from '@/hooks/automacao/useUltimoPayloadDaRegra';
 import { useGuardarTemplate, useTemplateDaRegra } from '@/hooks/automacao/useTemplateDaRegra';
 import { useToast } from '@/hooks/use-toast';
@@ -180,7 +183,9 @@ export function PainelPropriedades({
             size="sm"
             onClick={testarAgora}
             disabled={aGuardar || !payload}
-            title={!payload ? 'Esta automação ainda não correu — não há dados para testar.' : undefined}
+            title={
+              !payload ? 'Esta automação ainda não correu — não há dados para testar.' : undefined
+            }
           >
             Testar
           </Button>
