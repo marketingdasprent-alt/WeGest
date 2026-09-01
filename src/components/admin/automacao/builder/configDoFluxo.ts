@@ -1,4 +1,4 @@
-import type { AutomationNode as Node } from './dominio/tipos';
+import type { AutomationNode as Node, AutomationEdge as Edge } from './dominio/tipos';
 import type { CondicaoGravada } from './fluxoDaRegra';
 
 /**
@@ -10,6 +10,10 @@ import type { CondicaoGravada } from './fluxoDaRegra';
  */
 
 export interface ConfigDoFluxo {
+  /** O id do nó de acção no canvas — liga esta config ao nó que a gerou;
+   * o diff em EditorAutomacaoProvider usa-o para saber a que regra-irmã (ou
+   * "nenhuma ainda") corresponde cada configuração. */
+  noId: string;
   /** O que vai para `acao_tipo`. */
   acaoTipo: 'notificacao' | 'email' | 'automacao_interna';
   /** Preenchido só quando `acaoTipo` é 'automacao_interna'. */
@@ -29,15 +33,65 @@ export interface ConfigDoFluxo {
 /** O mesmo valor por omissão das regras que já existem. */
 const COOLDOWN_PADRAO_MINUTOS = 1440;
 
-export function configDoFluxo(nodes: Node[]): ConfigDoFluxo | null {
-  const accoes = nodes.filter((n) => n.type === 'accao');
-  // Uma regra é UMA corrente com UMA acção (ver BarraDoNo.tsx). O painel de
-  // blocos já não oferece uma segunda depois da primeira, mas isto é o que
-  // decide o que se grava — falha fechado aqui também, em vez de escolher a
-  // primeira e apagar a outra em silêncio.
-  if (accoes.length !== 1) return null;
-  const [accao] = accoes;
+/**
+ * Percorre a árvore a partir do gatilho e devolve uma configuração por
+ * acção alcançável — cada uma com as condições do SEU caminho, não as de
+ * outro ramo.
+ *
+ * Falha fechado: um grafo malformado (acção sem caminho até ao gatilho,
+ * zero acções) devolve null — nada se grava sobre configuração real.
+ */
+export function configsDoFluxo(nodes: Node[], edges: Edge[]): ConfigDoFluxo[] | null {
+  const gatilho = nodes.find((n) => n.type === 'trigger');
+  if (!gatilho) return null;
 
+  const accoes = nodes.filter((n) => n.type === 'accao');
+  if (accoes.length === 0) return null;
+
+  const configs: ConfigDoFluxo[] = [];
+
+  for (const accao of accoes) {
+    const caminho = caminhoAteAoGatilho(accao.id, gatilho.id, edges);
+    // Sem caminho até ao gatilho: a acção está solta no canvas — não é uma
+    // regra gravável, e fingir que é apagava a config real por cima.
+    if (!caminho) return null;
+
+    const condicoes = caminho
+      .map((id) => nodes.find((n) => n.id === id))
+      .filter((n): n is Node => n?.type === 'condicao')
+      .map((n) => n.data as unknown as CondicaoGravada)
+      .filter((c) => c.campo?.trim())
+      .map((c) => ({ campo: c.campo, operador: c.operador, valor: c.valor }));
+
+    const config = configDoUmaAccao(accao, condicoes);
+    if (!config) return null;
+    configs.push(config);
+  }
+
+  return configs;
+}
+
+/** Os ids do caminho gatilho→...→acção, ou null se não houver nenhum (a
+ * acção não está ligada a nada, ou está ligada a algo que não chega ao
+ * gatilho). Assume a árvore que `validarLigacao` já impõe — um nó, uma
+ * entrada — por isso não há ambiguidade de qual é "o" caminho. */
+function caminhoAteAoGatilho(accaoId: string, gatilhoId: string, edges: Edge[]): string[] | null {
+  const caminho: string[] = [];
+  let actual = accaoId;
+  const vistos = new Set<string>();
+
+  while (actual !== gatilhoId) {
+    if (vistos.has(actual)) return null; // ciclo — nunca devia acontecer com a árvore imposta
+    vistos.add(actual);
+    const entrada = edges.find((e) => e.target === actual);
+    if (!entrada) return null; // sem ligação a entrar e ainda não chegou ao gatilho
+    caminho.unshift(entrada.source);
+    actual = entrada.source;
+  }
+  return caminho;
+}
+
+function configDoUmaAccao(accao: Node, condicoes: CondicaoGravada[]): ConfigDoFluxo | null {
   const dados = accao.data as {
     accao?: string;
     acaoTipo?: string;
@@ -71,17 +125,11 @@ export function configDoFluxo(nodes: Node[]): ConfigDoFluxo | null {
   const userIds = dados.userIds ?? [];
   const modo = dados.modo === 'individual' && userIds.length > 0 ? 'individual' : 'grupo';
 
-  const condicoes = nodes
-    .filter((n) => n.type === 'condicao')
-    // Ordem visual, não a de criação: é a que quem lê a regra vê no ecrã.
-    .sort((a, b) => a.position.x - b.position.x)
-    .map((n) => n.data as unknown as CondicaoGravada)
-    // Um bloco largado e não configurado é ruído — o motor compararia o
-    // evento contra um campo vazio.
-    .filter((c) => c.campo?.trim())
-    .map((c) => ({ campo: c.campo, operador: c.operador, valor: c.valor }));
-
   return {
+    // O id do nó de acção no canvas — liga esta config ao nó que a gerou;
+    // o diff em EditorAutomacaoProvider usa-o para saber a que regra-irmã
+    // (ou "nenhuma ainda") corresponde cada configuração.
+    noId: accao.id,
     acaoTipo: interna ? 'automacao_interna' : email ? 'email' : 'notificacao',
     // As chaves são as do servidor. `campo` só vai quando existe: as acções de
     // conjunto fechado não o têm, e mandá-lo vazio seria configuração que o

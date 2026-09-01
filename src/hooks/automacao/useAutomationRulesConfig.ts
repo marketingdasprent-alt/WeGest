@@ -223,6 +223,123 @@ export function useAtualizarConfigRegra() {
   });
 }
 
+export interface AutomationRuleConfigComGrupo extends AutomationRuleConfig {
+  grupo_id: string;
+  ativo: boolean;
+  org_id: string;
+}
+
+/** Todas as regras-irmãs de UM grupo — dado o id de qualquer uma delas.
+ * Duas idas ao servidor: primeiro o grupo_id dessa regra, depois todas as
+ * que o partilham. Aceitável aqui — corre só ao abrir o editor, não num
+ * caminho quente. */
+export function useGrupoDeRegras(ruleId: string | null) {
+  return useQuery({
+    queryKey: ['grupo-de-regras', ruleId],
+    queryFn: async (): Promise<AutomationRuleConfigComGrupo[]> => {
+      const { data: base, error: eBase } = await supabase
+        .from('automation_rules')
+        .select('grupo_id')
+        .eq('id', ruleId as string)
+        .single();
+      if (eBase) throw eBase;
+
+      const { data, error } = await supabase
+        .from('automation_rules')
+        .select(
+          'id, nome, event_type, condicoes, acao_tipo, acao_config, cooldown_minutos, grupo_id, ativo, org_id'
+        )
+        .eq('grupo_id', base.grupo_id)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as AutomationRuleConfigComGrupo[];
+    },
+    enabled: !!ruleId,
+  });
+}
+
+export interface AccaoParaGravar {
+  /** Presente quando a acção já existe na BD (nó hidratado); ausente para
+   * uma acção nova arrastada nesta sessão. */
+  id?: string;
+  /** Sempre conhecido: `configsDoFluxo` já resolve o tipo de cada acção —
+   * ao contrário de `useAtualizarConfigRegra`, aqui não há "omitir para
+   * manter o tipo actual". */
+  acaoTipo: string;
+  acaoConfig: AutomationRuleAcaoConfig | AcaoInternaConfig;
+  cooldownMinutos: number;
+  condicoes?: CondicaoTipada[];
+}
+
+/** Sincroniza um conjunto de acções com as regras-irmãs que já existem na
+ * BD: as que têm `id` actualizam; as que não têm criam-se com o mesmo
+ * `grupo_id`; as regras-irmãs que já existiam e não aparecem na lista nova
+ * são apagadas. */
+export function useSincronizarGrupo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      grupoId,
+      orgId,
+      eventType,
+      nome,
+      acoes,
+      idsExistentes,
+    }: {
+      grupoId: string;
+      orgId: string;
+      eventType: string;
+      nome: string;
+      acoes: AccaoParaGravar[];
+      /** Todos os ids que este grupo tinha ANTES desta gravação — o que
+       * sobrar depois de tirar os que `acoes` ainda referencia é o que se
+       * apaga. */
+      idsExistentes: string[];
+    }) => {
+      const idsMantidos = new Set(acoes.map((a) => a.id).filter(Boolean));
+      const idsParaApagar = idsExistentes.filter((id) => !idsMantidos.has(id));
+
+      for (const accao of acoes) {
+        const alteracao = {
+          acao_config: accao.acaoConfig as unknown as Json,
+          acao_tipo: accao.acaoTipo,
+          cooldown_minutos: accao.cooldownMinutos,
+          ...(accao.condicoes ? { condicoes: accao.condicoes as unknown as Json } : {}),
+        };
+
+        if (accao.id) {
+          const { error } = await supabase
+            .from('automation_rules')
+            .update(alteracao)
+            .eq('id', accao.id);
+          if (error) throw error;
+        } else {
+          // codigo tem de ser único por org — sufixo aleatório, como o
+          // padrão já usado pelas regras gémeas da divisão de email.
+          const { error } = await supabase.from('automation_rules').insert({
+            org_id: orgId,
+            grupo_id: grupoId,
+            codigo: `${eventType}.${accao.acaoTipo}.${crypto.randomUUID().slice(0, 8)}`,
+            nome,
+            event_type: eventType,
+            ...alteracao,
+          });
+          if (error) throw error;
+        }
+      }
+
+      if (idsParaApagar.length > 0) {
+        const { error } = await supabase.from('automation_rules').delete().in('id', idsParaApagar);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['automacao-estatisticas-por-regra'] });
+      queryClient.invalidateQueries({ queryKey: ['grupo-de-regras'] });
+    },
+  });
+}
+
 /**
  * Botão "Correr agora": dispara manualmente os scans (expirações de
  * viatura/motorista, renovação de renting, cobranças atrasadas) e o

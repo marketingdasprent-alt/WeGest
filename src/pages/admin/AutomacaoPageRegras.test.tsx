@@ -85,7 +85,7 @@ vi.mock('@/integrations/supabase/client', () => ({
           return Promise.resolve({ error: null });
         }),
       })),
-      select: vi.fn(() => {
+      select: vi.fn((columns?: string) => {
         if (table === 'automation_runs') {
           return chainable({
             data: [
@@ -134,21 +134,55 @@ vi.mock('@/integrations/supabase/client', () => ({
           });
         }
         if (table === 'automation_rules') {
-          return chainable({
-            data: {
-              id: 'rule-1',
-              nome: 'Regra Estatística Teste',
-              event_type: 'viatura.seguro_expirando',
-              condicoes: [],
-              acao_config: {
-                template_codigo: 'teste',
-                titulo: 'Regra Estatística Teste',
-                destinatarios_estrategia: 'cargo',
-                destinatarios_cargo_ids: ['cargo-1'],
-                enviar_email: false,
+          // Três formas diferentes de perguntar por automation_rules, a
+          // distinguir pelas colunas pedidas — cada hook pede as suas:
+          //   1. useGrupoDeRegras, 1ª consulta: só 'grupo_id' (linha só).
+          //   2. useAutomationRuleConfig (PainelPropriedades): as 7 colunas
+          //      de sempre, .single() — linha só, forma inalterada.
+          //   3. useGrupoDeRegras, 2ª consulta: a lista completa das
+          //      regras-irmãs de um grupo — sempre um array.
+          if (columns === 'grupo_id') {
+            return chainable({ data: { grupo_id: 'grupo-rule-1' }, error: null });
+          }
+          if (columns === 'id, nome, event_type, condicoes, acao_tipo, acao_config, cooldown_minutos') {
+            return chainable({
+              data: {
+                id: 'rule-1',
+                nome: 'Regra Estatística Teste',
+                event_type: 'viatura.seguro_expirando',
+                condicoes: [],
+                acao_config: {
+                  template_codigo: 'teste',
+                  titulo: 'Regra Estatística Teste',
+                  destinatarios_estrategia: 'cargo',
+                  destinatarios_cargo_ids: ['cargo-1'],
+                  enviar_email: false,
+                },
+                cooldown_minutos: 1440,
               },
-              cooldown_minutos: 1440,
-            },
+              error: null,
+            });
+          }
+          return chainable({
+            data: [
+              {
+                id: 'rule-1',
+                nome: 'Regra Estatística Teste',
+                event_type: 'viatura.seguro_expirando',
+                condicoes: [],
+                acao_config: {
+                  template_codigo: 'teste',
+                  titulo: 'Regra Estatística Teste',
+                  destinatarios_estrategia: 'cargo',
+                  destinatarios_cargo_ids: ['cargo-1'],
+                  enviar_email: false,
+                },
+                cooldown_minutos: 1440,
+                grupo_id: 'grupo-rule-1',
+                ativo: true,
+                org_id: 'org-1',
+              },
+            ],
             error: null,
           });
         }

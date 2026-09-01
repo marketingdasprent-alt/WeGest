@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { AutomationNode as Node } from './dominio/tipos';
+import type { AutomationEdge as Edge, AutomationNode as Node } from './dominio/tipos';
 import type { AutomationRuleAcaoConfig } from '@/hooks/automacao/useAutomationRulesConfig';
-import { configDoFluxo } from './configDoFluxo';
+import { configsDoFluxo } from './configDoFluxo';
 import { semChavesDeEmailAntigo } from './EditorAutomacaoProvider';
 import { fluxoDaRegra } from './fluxoDaRegra';
 import { paraValorJson } from './valorTipado';
@@ -18,12 +18,36 @@ import { paraValorJson } from './valorTipado';
  * com ele — é esse o ponto.
  */
 
-/** O que o provider constrói a partir do que `configDoFluxo` extraiu. */
+/**
+ * Encadeia os nós dados numa árvore linear gatilho→...→acção, para os testes
+ * não terem de desenhar o gatilho e as arestas à mão em cada caso — só
+ * interessa aqui que o caminho exista, não a topologia.
+ *
+ * Se o primeiro nó já for um gatilho (ex.: o resultado de `fluxoDaRegra`),
+ * usa-o tal como está — não insere um segundo.
+ */
+function encadear(nodes: Node[]): { nodes: Node[]; edges: Edge[] } {
+  const jaTemGatilho = nodes[0]?.type === 'trigger';
+  const todos = jaTemGatilho ? nodes : [trigger(), ...nodes];
+  const edges: Edge[] = [];
+  for (let i = 0; i < todos.length - 1; i++) {
+    edges.push({ id: `${todos[i].id}--${todos[i + 1].id}`, source: todos[i].id, target: todos[i + 1].id });
+  }
+  return { nodes: todos, edges };
+}
+
+/** O que o provider constrói a partir do que `configsDoFluxo` extraiu. */
 function payloadParaSupabase(
   nodes: Node[],
-  configExistente: Record<string, unknown> = {}
+  configExistente: Record<string, unknown> = {},
+  /** Arestas reais, quando o teste já as tem (ex.: vindas de `fluxoDaRegra`) —
+   * sem isto, `encadear` monta uma árvore linear a partir da ordem do array. */
+  edgesFornecidas?: Edge[]
 ): Record<string, unknown> | null {
-  const extraida = configDoFluxo(nodes);
+  const { nodes: todos, edges } = edgesFornecidas
+    ? { nodes, edges: edgesFornecidas }
+    : encadear(nodes);
+  const extraida = configsDoFluxo(todos, edges)?.[0];
   if (!extraida) return null;
 
   return {
@@ -297,27 +321,29 @@ describe('a acção de email', () => {
 
 describe('reabrir uma automação interna já gravada', () => {
   it('reconstrói acção, campo e valor no nó', () => {
-    const { nodes } = fluxoDaRegra({
-      ruleId: 'r1',
-      nome: 'Regra',
-      eventType: 'viatura.seguro_expirando',
-      cooldownMinutos: 1440,
-      cargoIds: [],
-      modo: 'grupo',
-      userIds: [],
-      condicoes: [],
-      acaoTipo: 'automacao_interna',
-      acaoConfig: {
-        accao: 'viatura.atualizar_campo',
-        campo: 'observacoes',
-        valor: 'Rever seguro',
+    const { nodes } = fluxoDaRegra([
+      {
+        ruleId: 'r1',
+        nome: 'Regra',
+        eventType: 'viatura.seguro_expirando',
+        cooldownMinutos: 1440,
+        cargoIds: [],
+        modo: 'grupo',
+        userIds: [],
+        condicoes: [],
+        acaoTipo: 'automacao_interna',
+        acaoConfig: {
+          accao: 'viatura.atualizar_campo',
+          campo: 'observacoes',
+          valor: 'Rever seguro',
+        },
+        ativo: true,
+        ultimaExecucao: null,
+        duracaoMediaMs: null,
+        falhas: 0,
+        ultimaFalha: null,
       },
-      ativo: true,
-      ultimaExecucao: null,
-      duracaoMediaMs: null,
-      falhas: 0,
-      ultimaFalha: null,
-    });
+    ]);
 
     const no = nodes.find((n) => n.type === 'accao');
     expect(no?.data).toMatchObject({
@@ -334,27 +360,29 @@ describe('reabrir uma automação interna já gravada', () => {
       valor: 'em_andamento',
     };
 
-    const { nodes } = fluxoDaRegra({
-      ruleId: 'r1',
-      nome: 'Regra',
-      eventType: 'assistencia_ticket.aberto_demasiado_tempo',
-      cooldownMinutos: 1440,
-      cargoIds: [],
-      modo: 'grupo',
-      userIds: [],
-      condicoes: [{ campo: 'prioridade', operador: '!=', valor: 'urgente' }],
-      acaoTipo: 'automacao_interna',
-      acaoConfig,
-      ativo: true,
-      ultimaExecucao: null,
-      duracaoMediaMs: null,
-      falhas: 0,
-      ultimaFalha: null,
-    });
+    const { nodes, edges } = fluxoDaRegra([
+      {
+        ruleId: 'r1',
+        nome: 'Regra',
+        eventType: 'assistencia_ticket.aberto_demasiado_tempo',
+        cooldownMinutos: 1440,
+        cargoIds: [],
+        modo: 'grupo',
+        userIds: [],
+        condicoes: [{ campo: 'prioridade', operador: '!=', valor: 'urgente' }],
+        acaoTipo: 'automacao_interna',
+        acaoConfig,
+        ativo: true,
+        ultimaExecucao: null,
+        duracaoMediaMs: null,
+        falhas: 0,
+        ultimaFalha: null,
+      },
+    ]);
 
     // Ida e volta sem perdas: é isto que impede que abrir e gravar uma
     // automação sem lhe tocar a altere.
-    const payload = payloadParaSupabase(nodes);
+    const payload = payloadParaSupabase(nodes, {}, edges);
     expect(payload?.acao_config).toEqual(acaoConfig);
     expect(payload?.condicoes).toEqual([{ campo: 'prioridade', operador: '!=', valor: 'urgente' }]);
   });

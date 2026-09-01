@@ -866,6 +866,7 @@ export type Database = {
           criado_por: string | null
           descricao: string | null
           event_type: string
+          grupo_id: string
           id: string
           nome: string
           org_id: string
@@ -883,6 +884,7 @@ export type Database = {
           criado_por?: string | null
           descricao?: string | null
           event_type: string
+          grupo_id?: string
           id?: string
           nome: string
           org_id: string
@@ -900,6 +902,7 @@ export type Database = {
           criado_por?: string | null
           descricao?: string | null
           event_type?: string
+          grupo_id?: string
           id?: string
           nome?: string
           org_id?: string
