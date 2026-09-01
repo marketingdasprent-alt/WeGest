@@ -132,4 +132,33 @@ describe('MeusTiTicketsLista', () => {
       )
     );
   });
+
+  it('pagina os próprios pedidos de 5 em 5', async () => {
+    const tickets = Array.from({ length: 7 }, (_, i) => ({
+      id: `t${i + 1}`,
+      numero: i + 1,
+      autor_nome: 'Bruno Paulo',
+      autor_email: 'bruno@exemplo.pt',
+      descricao: `Pedido número ${i + 1}`,
+      status: 'aberto',
+      created_at: '2026-09-01T10:00:00Z',
+      organizacao: null,
+      resolvido_por_nome: null,
+      resolvido_em: null,
+      sugestoes: [],
+      anexos: [],
+    }));
+    mockMeusTickets(tickets);
+
+    renderComQueryClient();
+    await waitFor(() => expect(screen.getByText('Os meus pedidos (7)')).toBeInTheDocument());
+
+    expect(screen.getByText('Pedido número 1')).toBeInTheDocument();
+    expect(screen.queryByText('Pedido número 6')).toBeNull();
+
+    fireEvent.click(screen.getByText('2'));
+
+    await waitFor(() => expect(screen.getByText('Pedido número 6')).toBeInTheDocument());
+    expect(screen.queryByText('Pedido número 1')).toBeNull();
+  });
 });
