@@ -111,6 +111,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     motoristaIban,
     extraCosts,
     outrasReceitas,
+    dinheiroIgnorado,
     slotPeriodos,
     aluguerSemTarifa,
     aluguerEstimado,
@@ -378,6 +379,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             totalDespesas={totalDespesas}
             aluguerSemTarifa={mostrarAvisoAluguer}
             aluguerEstimado={aluguerEstimado}
+            dinheiroIgnorado={dinheiroIgnorado}
             slotPeriodos={slotPeriodos}
             totalSlot={totalSlot}
             valoresSemanaAnterior={valoresSemanaAnterior}

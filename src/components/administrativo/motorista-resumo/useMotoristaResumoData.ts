@@ -6,7 +6,7 @@ import { buildSlotPeriodos } from './slotPeriodos';
 import { periodosDeContratos, type ContratoParaPeriodo } from './periodosDoContrato';
 import { buildTvdeModeloPrecoMap, buildPrecoPorTarifaModelo } from './tvdeModeloPreco';
 import { formatCartoesFrota, type CartaoFrotaResumo } from './cartoesFrota';
-import { agregarMovimentos } from '@shared/movimentosMotorista';
+import { agregarMovimentos, DEBITOS_QUE_O_CONTRATO_COBRE } from '@shared/movimentosMotorista';
 
 export interface UseMotoristaResumoDataReturn {
   loading: boolean;
@@ -18,6 +18,9 @@ export interface UseMotoristaResumoDataReturn {
   motoristaIban: string | null;
   extraCosts: { caucao: number; seguros: number; outros: number };
   outrasReceitas: number;
+  /** Valor do período que ficou de fora do resumo e não está representado em
+   *  mais lado nenhum. `null` quando não há nada por explicar. */
+  dinheiroIgnorado: { valor: number; motivo: string } | null;
   slotPeriodos: SlotPeriodo[];
   aluguerSemTarifa: boolean;
   /** O aluguer NAO veio de um contrato (preco tirado da tarifa do modelo).
@@ -49,6 +52,10 @@ export function useMotoristaResumoData(
     { caucao: 0, seguros: 0, outros: 0 }
   );
   const [outrasReceitas, setOutrasReceitas] = useState(0);
+  const [dinheiroIgnorado, setDinheiroIgnorado] = useState<{
+    valor: number;
+    motivo: string;
+  } | null>(null);
   const [slotPeriodos, setSlotPeriodos] = useState<SlotPeriodo[]>([]);
   const [aluguerSemTarifa, setAluguerSemTarifa] = useState(false);
   const [aluguerEstimado, setAluguerEstimado] = useState(false);
@@ -231,6 +238,31 @@ export function useMotoristaResumoData(
             outros: mov.outros,
           });
           setOutrasReceitas(mov.receitaOutras);
+
+          // Dinheiro ignorado que NÃO está representado em mais lado nenhum.
+          //
+          // Ignorar um débito de renda é correcto enquanto o aluguer vier do
+          // contrato: seria contá-lo duas vezes. Sem contrato a cobrir o
+          // período não há aluguer nenhum a representá-lo, e o valor
+          // desaparece do resumo sem deixar rasto — foi o que fez os 225,00 €
+          // do Paulo André Antunes Badalo ficarem invisíveis. Nesse caso o
+          // resumo tem de o dizer, em vez de calar.
+          const semAluguerCalculado = periodosDoAluguer.length === 0;
+          const rendaIgnorada = semAluguerCalculado
+            ? mov.ignorados
+                .filter(
+                  (i) => i.tipo === 'debito' && DEBITOS_QUE_O_CONTRATO_COBRE.includes(i.categoria)
+                )
+                .reduce((s, i) => s + i.valor, 0)
+            : 0;
+          setDinheiroIgnorado(
+            rendaIgnorada > 0
+              ? {
+                  valor: rendaIgnorada,
+                  motivo: 'lançado como renda, sem contrato a cobrir este período',
+                }
+              : null
+          );
         }
       }
     } catch (error) {
@@ -250,6 +282,7 @@ export function useMotoristaResumoData(
     motoristaIban,
     extraCosts,
     outrasReceitas,
+    dinheiroIgnorado,
     slotPeriodos,
     aluguerSemTarifa,
     aluguerEstimado,
