@@ -199,6 +199,19 @@ export const contratoFormSchema = z
       });
     }
 
+    // "Intervalo de dias" sem o número de dias passava o zod e só rebentava
+    // na BD (chk_contratos_renovacao_intervalo_obrigatorio) — um erro em bruto
+    // do Postgres em vez de um aviso no campo. O campo só aparece na UI depois
+    // de escolher esta opção (ver ALDFields), por isso é fácil ficar por
+    // preencher.
+    if (d.renovacao_opcao === 'intervalo_dias' && !d.renovacao_intervalo_dias) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['renovacao_intervalo_dias'],
+        message: 'Indica de quantos em quantos dias renova.',
+      });
+    }
+
     // TVDE: data de fim OPCIONAL — sem ela o contrato fica em aberto e a 1.ª
     // renovação (RPC renovar_contrato_renting) fecha o período até hoje e
     // arranca o ciclo mensal. Quando fornecida, valida-se só a ordem.
