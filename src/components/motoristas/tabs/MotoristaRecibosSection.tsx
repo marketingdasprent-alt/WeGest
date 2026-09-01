@@ -45,6 +45,15 @@ import { Separator } from '@/components/ui/separator';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { MotoristaResumoDialog } from '@/components/administrativo/MotoristaResumoDialog';
+import { buildSlotPeriodos } from '@/components/administrativo/motorista-resumo/slotPeriodos';
+import {
+  periodosDeContratos,
+  type ContratoParaPeriodo,
+} from '@/components/administrativo/motorista-resumo/periodosDoContrato';
+import {
+  buildPrecoPorTarifaModelo,
+  buildTvdeModeloPrecoMap,
+} from '@/components/administrativo/motorista-resumo/tvdeModeloPreco';
 
 interface Recibo {
   id: string;
@@ -322,18 +331,49 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         .lte('data_movimento', weekEndStr)
         .eq('status', 'pendente');
 
-      // 5b. Aluguer semanal = preco_semana da tarifa do grupo da viatura ativa
-      const { data: viaturaContratos } = await supabase
-        .from('motorista_viaturas')
-        .select('viaturas(grupo_id, renting_grupos(renting_tarifas(preco_semana, ativa)))')
-        .eq('motorista_id', motoristaId)
-        .eq('status', 'ativo');
+      // 5b. Aluguer da semana — do CONTRATO, pelo mesmo caminho que o resumo
+      // do motorista e a lista de Contas/Resumo usam (periodosDoContrato.ts +
+      // buildSlotPeriodos). Isto era a última cópia independente do cálculo, e
+      // errava de três maneiras ao mesmo tempo: cobrava a tarifa do grupo em
+      // vez do preço acordado no contrato, cobrava a semana inteira sem
+      // pro-rata dos dias, e filtrava por status='ativo' — o que punha a
+      // 0,00 € o aluguer de qualquer semana passada cuja viatura já tivesse
+      // sido devolvida.
+      const [{ data: contratosSemana }, { data: tarifasModeloRows }] = await Promise.all([
+        supabase
+          .from('contratos_renting')
+          .select(
+            'viatura_id, data_inicio, data_fim, valor_total_manual, tarifa_id, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)'
+          )
+          .eq('contrato_condutores.motorista_id', motoristaId)
+          .is('deleted_at', null)
+          // timestamptz: com `.lte(data)` perde-se um contrato que comece com
+          // hora no último dia da semana.
+          .lt('data_inicio', format(addDays(weekEnd, 1), 'yyyy-MM-dd'))
+          .or(`data_fim.is.null,data_fim.gte.${weekStartStr}`),
+        supabase
+          .from('renting_tarifa_precos_modelo')
+          .select('tarifa_id, modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
+          .eq('renting_tarifas.tipo', 'tvde')
+          .eq('renting_tarifas.ativa', true),
+      ]);
 
-      const fixedRent = (viaturaContratos || []).reduce((acc, curr) => {
-        const tarifas = (curr.viaturas as any)?.renting_grupos?.renting_tarifas || [];
-        const tarifa = tarifas.find((t: any) => t.ativa);
-        return acc + (Number(tarifa?.preco_semana) || 0);
-      }, 0);
+      const tarifasModelo = (tarifasModeloRows ?? []) as Array<{
+        tarifa_id: string | null;
+        modelo_id: string;
+        preco_semana: number;
+      }>;
+      const { periodos: periodosAluguer } = periodosDeContratos(
+        (contratosSemana ?? []) as ContratoParaPeriodo[],
+        {
+          porTarifaModelo: buildPrecoPorTarifaModelo(tarifasModelo),
+          porModelo: buildTvdeModeloPrecoMap(tarifasModelo),
+        }
+      );
+      const fixedRent = buildSlotPeriodos(periodosAluguer, weekStart, weekEnd, new Map()).reduce(
+        (soma, p) => soma + p.custo,
+        0
+      );
 
       // 5c. Fetch Additional Costs (motorista_custos_adicionais)
       const { data: extraCostsData } = await supabase
