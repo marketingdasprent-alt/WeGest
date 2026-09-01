@@ -172,4 +172,62 @@ describe('TiTicketLista', () => {
       expect(screen.getByText('Nenhum pedido corresponde à pesquisa.')).toBeInTheDocument()
     );
   });
+
+  it('pagina a lista de 5 em 5 e muda de página ao clicar', async () => {
+    const tickets = Array.from({ length: 7 }, (_, i) => ({
+      id: `t${i + 1}`,
+      numero: i + 1,
+      autor_nome: `Autor ${i + 1}`,
+      autor_email: `autor${i + 1}@exemplo.pt`,
+      descricao: `Pedido número ${i + 1}`,
+      status: 'aberto',
+      created_at: '2026-09-01T10:00:00Z',
+      organizacao: null,
+      resolvido_por_nome: null,
+      resolvido_em: null,
+      sugestoes: [],
+      anexos: [],
+    }));
+    mockTickets(tickets);
+
+    renderComQueryClient();
+    await waitFor(() => expect(screen.getByText('Pedidos actuais (7)')).toBeInTheDocument());
+
+    // Página 1: os 5 mais recentes (numero 1 a 5, na ordem devolvida).
+    expect(screen.getByText('Pedido número 1')).toBeInTheDocument();
+    expect(screen.getByText('Pedido número 5')).toBeInTheDocument();
+    expect(screen.queryByText('Pedido número 6')).toBeNull();
+
+    // PaginationLink renderiza um <a> sem href, que não tem role="link"
+    // implícito — por isso o texto, não o role.
+    fireEvent.click(screen.getByText('2'));
+
+    await waitFor(() => expect(screen.getByText('Pedido número 6')).toBeInTheDocument());
+    expect(screen.getByText('Pedido número 7')).toBeInTheDocument();
+    expect(screen.queryByText('Pedido número 1')).toBeNull();
+  });
+
+  it('não mostra paginação quando cabe tudo numa página só', async () => {
+    mockTickets([
+      {
+        id: 't1',
+        numero: 1,
+        autor_nome: 'Bruno Paulo',
+        autor_email: 'bruno@exemplo.pt',
+        descricao: 'O portátil não liga',
+        status: 'aberto',
+        created_at: '2026-09-01T10:00:00Z',
+        organizacao: null,
+        resolvido_por_nome: null,
+        resolvido_em: null,
+        sugestoes: [],
+        anexos: [],
+      },
+    ]);
+
+    renderComQueryClient();
+
+    await waitFor(() => expect(screen.getByText('O portátil não liga')).toBeInTheDocument());
+    expect(screen.queryByRole('navigation')).toBeNull();
+  });
 });

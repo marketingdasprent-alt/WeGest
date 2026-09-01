@@ -44,8 +44,8 @@ export default function TicketsTI() {
     return (
       <div className="mx-auto max-w-6xl space-y-6 p-6">
         {cabecalho}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div>{caixa}</div>
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+          {caixa}
           <TiTicketLista />
         </div>
       </div>
