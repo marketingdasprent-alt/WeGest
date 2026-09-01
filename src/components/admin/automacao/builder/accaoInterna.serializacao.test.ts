@@ -31,7 +31,11 @@ function encadear(nodes: Node[]): { nodes: Node[]; edges: Edge[] } {
   const todos = jaTemGatilho ? nodes : [trigger(), ...nodes];
   const edges: Edge[] = [];
   for (let i = 0; i < todos.length - 1; i++) {
-    edges.push({ id: `${todos[i].id}--${todos[i + 1].id}`, source: todos[i].id, target: todos[i + 1].id });
+    edges.push({
+      id: `${todos[i].id}--${todos[i + 1].id}`,
+      source: todos[i].id,
+      target: todos[i + 1].id,
+    });
   }
   return { nodes: todos, edges };
 }

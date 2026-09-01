@@ -123,7 +123,12 @@ describe('configsDoFluxo', () => {
   });
 
   it('campos em falta na acção caem para valores seguros', () => {
-    const acc: Node = { id: 'a1', type: 'accao', position: { x: 0, y: 0 }, data: { accao: 'notificacao' } };
+    const acc: Node = {
+      id: 'a1',
+      type: 'accao',
+      position: { x: 0, y: 0 },
+      data: { accao: 'notificacao' },
+    };
     const configs = configsDoFluxo([gatilho(), acc], [ligar('t', 'a1')]);
 
     expect(configs?.[0]).toMatchObject({ cargoIds: [], modo: 'grupo', userIds: [] });
@@ -133,7 +138,12 @@ describe('configsDoFluxo', () => {
   it('ignora acções que não sejam de notificação', () => {
     // 'alterar_estado' não tem para onde ser gravado hoje; tratá-lo como
     // notificação escrevia destinatários vazios por cima dos reais.
-    const acc: Node = { id: 'a1', type: 'accao', position: { x: 0, y: 0 }, data: { accao: 'alterar_estado' } };
+    const acc: Node = {
+      id: 'a1',
+      type: 'accao',
+      position: { x: 0, y: 0 },
+      data: { accao: 'alterar_estado' },
+    };
     const configs = configsDoFluxo([gatilho(), acc], [ligar('t', 'a1')]);
 
     expect(configs).toBeNull();

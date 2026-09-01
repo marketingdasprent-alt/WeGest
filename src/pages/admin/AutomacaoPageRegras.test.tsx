@@ -144,7 +144,9 @@ vi.mock('@/integrations/supabase/client', () => ({
           if (columns === 'grupo_id') {
             return chainable({ data: { grupo_id: 'grupo-rule-1' }, error: null });
           }
-          if (columns === 'id, nome, event_type, condicoes, acao_tipo, acao_config, cooldown_minutos') {
+          if (
+            columns === 'id, nome, event_type, condicoes, acao_tipo, acao_config, cooldown_minutos'
+          ) {
             return chainable({
               data: {
                 id: 'rule-1',
