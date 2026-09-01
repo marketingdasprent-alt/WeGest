@@ -130,6 +130,11 @@ export function PainelBlocos({
                 <button
                   key={t.chave}
                   type="button"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('application/x-wegest-bloco', t.chave);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
                   data-activo={activo}
                   // O nome acessível não é inferido do texto em spans.
                   aria-label={`Escolher bloco ${t.rotulo}`}

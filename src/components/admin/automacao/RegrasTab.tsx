@@ -9,7 +9,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { useEditorAutomacao } from './builder/editorAutomacao.contexto';
 import { RegrasTabela } from './RegrasTabela';
-import { agruparPorModulo } from './agrupamento';
+import { agruparPorModulo, outrasAccoesDoGrupo } from './agrupamento';
 import { chaveDoEvento, TODOS_OS_MODULOS } from './rotulos';
 
 /**
@@ -63,6 +63,9 @@ export function RegrasTab() {
 
   // Com um módulo escolhido sobra um grupo, e a tabela não desenha cabeçalhos.
   const grupos = agruparPorModulo(regrasFiltradas);
+  // Sobre TODAS as regras, não só as filtradas: uma acção-irmã pode ter
+  // ficado fora do módulo escolhido, mas o badge continua a fazer sentido.
+  const outrasAccoes = outrasAccoesDoGrupo(regras);
 
   return (
     // Só esta vista tem scroll próprio: é uma lista. O canvas não scrolla.
@@ -80,6 +83,7 @@ export function RegrasTab() {
           toggleOcupado={toggleRule.isPending}
           onToggle={handleToggle}
           onAbrir={(regra) => abrirRegra(regra.id)}
+          outrasAccoes={outrasAccoes}
         />
       )}
     </div>

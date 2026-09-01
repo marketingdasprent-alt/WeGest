@@ -19,6 +19,15 @@ import { identidadeDoEvento, type ModuloIdentidade } from './rotulos';
 /** As colunas do cabeçalho. O cabeçalho de secção atravessa-as todas. */
 const N_COLUNAS = 8;
 
+/** O mesmo vocabulário que o construtor usa para os blocos de acção
+ * (ver fluxoDaRegra.ts) — para o badge dizer "+ Enviar email", não
+ * "+ email". */
+const ROTULO_DA_ACCAO: Record<string, string> = {
+  notificacao: 'Enviar notificação',
+  email: 'Enviar email',
+  automacao_interna: 'Executar acção',
+};
+
 /**
  * Cabeçalho de secção: uma linha que atravessa a tabela.
  *
@@ -68,6 +77,7 @@ export function RegrasTabela({
   toggleOcupado,
   onToggle,
   onAbrir,
+  outrasAccoes,
 }: {
   grupos: GrupoDeRegras[];
   podeGerir: boolean;
@@ -75,6 +85,9 @@ export function RegrasTabela({
   onToggle: (id: string, ativo: boolean) => void;
   /** Clicar na linha abre a automação no construtor. */
   onAbrir: (regra: { id: string; nome: string }) => void;
+  /** rule_id → tipos de acção das regras-irmãs (mesmo grupo_id, sem ela
+   * própria) — de `outrasAccoesDoGrupo`. */
+  outrasAccoes: Map<string, string[]>;
 }) {
   const comSeccoes = grupos.length > 1;
 
@@ -134,6 +147,16 @@ export function RegrasTabela({
                 </TableCell>
                 <TableCell className="font-medium">
                   {regra.nome}
+                  {/* Uma automação com várias acções (o mesmo grupo_id) —
+                      diz que outras dispara, sem abrir o construtor. */}
+                  {(outrasAccoes.get(regra.rule_id) ?? []).length > 0 && (
+                    <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">
+                      +{' '}
+                      {(outrasAccoes.get(regra.rule_id) ?? [])
+                        .map((tipo) => ROTULO_DA_ACCAO[tipo] ?? tipo)
+                        .join(', ')}
+                    </span>
+                  )}
                   {/* Em ecrãs estreitos o módulo perde a coluna, mas não se perde. */}
                   <span
                     className="block text-[11px] md:hidden"

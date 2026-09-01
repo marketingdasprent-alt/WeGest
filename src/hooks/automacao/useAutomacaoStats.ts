@@ -51,6 +51,10 @@ export interface RegraEstatistica {
   falhas: number;
   ultima_execucao: string | null;
   duracao_media_ms: number | null;
+  /** Regras com o mesmo grupo_id são a mesma automação, com acções
+   * diferentes — ver a migração 20260903090000. */
+  grupo_id: string;
+  acao_tipo: string;
 }
 
 export function useAutomacaoEstatisticasPorRegra() {

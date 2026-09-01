@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, ChevronDown, Database, Eye } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Database, Eye, MessageSquareText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
@@ -33,7 +33,7 @@ export function Mensagem({
   const { usados, desconhecidos } = tokensUsados(corpo, payload);
 
   return (
-    <Seccao titulo="Mensagem">
+    <Seccao titulo="Mensagem" icone={MessageSquareText}>
       {/* O corpo vive em notification_templates, indexado por código — é
           partilhado por todas as regras com o mesmo template. */}
       {regrasQueUsam > 1 && (

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import type { MotoristaResumoProps, SlotPeriodo } from '../MotoristaResumoDialog';
-import { deriveAluguerSemTarifa } from './aluguerSemTarifa';
 import { buildSlotPeriodos } from './slotPeriodos';
+import { periodosDeContratos, type ContratoParaPeriodo } from './periodosDoContrato';
 import { buildTvdeModeloPrecoMap, buildPrecoPorTarifaModelo } from './tvdeModeloPreco';
 import { formatCartoesFrota, type CartaoFrotaResumo } from './cartoesFrota';
-import { agregarMovimentos } from '@shared/movimentosMotorista';
+import { agregarMovimentos, DEBITOS_QUE_O_CONTRATO_COBRE } from '@shared/movimentosMotorista';
 
 export interface UseMotoristaResumoDataReturn {
   loading: boolean;
@@ -18,6 +18,9 @@ export interface UseMotoristaResumoDataReturn {
   motoristaIban: string | null;
   extraCosts: { caucao: number; seguros: number; outros: number };
   outrasReceitas: number;
+  /** Valor do período que ficou de fora do resumo e não está representado em
+   *  mais lado nenhum. `null` quando não há nada por explicar. */
+  dinheiroIgnorado: { valor: number; motivo: string } | null;
   slotPeriodos: SlotPeriodo[];
   aluguerSemTarifa: boolean;
   /** O aluguer NAO veio de um contrato (preco tirado da tarifa do modelo).
@@ -49,6 +52,10 @@ export function useMotoristaResumoData(
     { caucao: 0, seguros: 0, outros: 0 }
   );
   const [outrasReceitas, setOutrasReceitas] = useState(0);
+  const [dinheiroIgnorado, setDinheiroIgnorado] = useState<{
+    valor: number;
+    motivo: string;
+  } | null>(null);
   const [slotPeriodos, setSlotPeriodos] = useState<SlotPeriodo[]>([]);
   const [aluguerSemTarifa, setAluguerSemTarifa] = useState(false);
   const [aluguerEstimado, setAluguerEstimado] = useState(false);
@@ -130,13 +137,22 @@ export function useMotoristaResumoData(
             .gte('data_movimento', format(dateRange.from, 'yyyy-MM-dd'))
             .lte('data_movimento', format(dateRange.to, 'yyyy-MM-dd'))
             .neq('status', 'cancelado'),
+          // O aluguer sai do CONTRATO — datas e preço. Isto lia
+          // `motorista_viaturas`, e um contrato criado com início retroactivo
+          // (transferência, regularização) ficava com a atribuição carimbada
+          // com a data de hoje: o contrato dizia 24/08, a atribuição dizia
+          // 01/09, e a semana de 24–30/08 aparecia a 0,00 € de aluguer com o
+          // contrato à frente dos olhos. Ver periodosDoContrato.ts.
           supabase
-            .from('motorista_viaturas')
+            .from('contratos_renting')
             .select(
-              'viatura_id, data_inicio, data_fim, viaturas(matricula, grupo_id, modelo_id, renting_grupos(renting_tarifas(preco_semana, ativa)))'
+              'viatura_id, data_inicio, data_fim, valor_total_manual, tarifa_id, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)'
             )
-            .eq('motorista_id', resolvedMotoristaId)
-            .lte('data_inicio', format(dateRange.to, 'yyyy-MM-dd'))
+            .eq('contrato_condutores.motorista_id', resolvedMotoristaId)
+            .is('deleted_at', null)
+            // `data_inicio` é timestamptz: com `.lte(data)` perde-se um
+            // contrato que comece com hora no último dia do período.
+            .lt('data_inicio', format(addDays(dateRange.to, 1), 'yyyy-MM-dd'))
             .or(`data_fim.is.null,data_fim.gte.${format(dateRange.from, 'yyyy-MM-dd')}`)
             .order('data_inicio', { ascending: true }),
           // TVDE não tem preço por grupo — é por MODELO (renting_tarifa_precos_
@@ -147,14 +163,6 @@ export function useMotoristaResumoData(
             .select('tarifa_id, modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
             .eq('renting_tarifas.tipo', 'tvde')
             .eq('renting_tarifas.ativa', true),
-          // O CONTRATO é a fonte de verdade do preço do aluguer — o modelo da
-          // viatura pode ter várias tarifas ativas e escolher "uma qualquer"
-          // dava o preço errado (ver ContasResumoTab, mesma cascata).
-          supabase
-            .from('contratos_renting')
-            .select('viatura_id, tarifa_id, estado_operacional, data_inicio, created_at')
-            .is('deleted_at', null)
-            .not('viatura_id', 'is', null),
           // Cartões de combustível: a MESMA fonte que a ficha do motorista
           // usa. Ver cartoesFrota.ts — o resumo lia as colunas de texto
           // motoristas_ativos.cartao_*, que a ficha já não mantém.
@@ -169,19 +177,7 @@ export function useMotoristaResumoData(
         const viaturaData = results[0].data;
         const motoristaData = results[1].data;
         const financeiroData = results[2].data;
-        const viaturasPeriodoData = (results[3].data ?? []) as Array<{
-          viatura_id: string;
-          data_inicio: string;
-          data_fim: string | null;
-          viaturas: {
-            matricula: string;
-            grupo_id: string | null;
-            modelo_id: string | null;
-            renting_grupos: {
-              renting_tarifas: Array<{ preco_semana: number | null; ativa: boolean }>;
-            } | null;
-          } | null;
-        }>;
+        const contratosDoMotorista = (results[3].data ?? []) as ContratoParaPeriodo[];
         const tarifasModelo = (results[4].data ?? []) as Array<{
           tarifa_id: string | null;
           modelo_id: string;
@@ -195,33 +191,25 @@ export function useMotoristaResumoData(
         // contrato indica em vez de uma qualquer que esteja ativa.
         const precoPorTarifaModelo = buildPrecoPorTarifaModelo(tarifasModelo);
 
-        // viatura_id → tarifa do contrato (em curso primeiro, senão o mais
-        // recente). Mesma cascata da tabela de Contas/Resumo — os dois ecrãs
-        // têm de mostrar o mesmo aluguer.
-        const contratoTarifaPorViatura = new Map<string, string>();
-        [...((results[5].data as any[]) ?? [])]
-          .sort((a, b) => {
-            const emCurso = (c: any) => (c.estado_operacional === 'em_curso' ? 1 : 0);
-            if (emCurso(a) !== emCurso(b)) return emCurso(a) - emCurso(b);
-            return String(a.data_inicio ?? a.created_at ?? '').localeCompare(
-              String(b.data_inicio ?? b.created_at ?? '')
-            );
-          })
-          .forEach((c: any) => {
-            if (c.viatura_id && c.tarifa_id)
-              contratoTarifaPorViatura.set(c.viatura_id, c.tarifa_id);
-          });
+        // Os períodos de aluguer saem dos CONTRATOS: datas do contrato, preço
+        // do contrato. Ver periodosDoContrato.ts.
+        const { periodos: periodosDoAluguer, estimado: algumEstimado } = periodosDeContratos(
+          contratosDoMotorista,
+          { porTarifaModelo: precoPorTarifaModelo, porModelo: tvdeModeloPrecoMap }
+        );
 
         if (viaturaData?.viaturas) {
           setMatricula((viaturaData.viaturas as any).matricula);
         }
 
-        // Aviso "sem tarifa": tem viatura ativa mas o grupo não tem tarifa
-        // ativa com preço semanal > 0 (aluguer aparece a 0€ por falta de
-        // configuração, não por ser grátis).
-        setAluguerSemTarifa(deriveAluguerSemTarifa(viaturasPeriodoData, tvdeModeloPrecoMap));
+        // Aviso "sem tarifa": há contrato a cobrir o período mas nenhum
+        // conseguiu produzir um preço (aluguer a 0€ por falta de configuração,
+        // não por ser grátis).
+        setAluguerSemTarifa(
+          periodosDoAluguer.length > 0 && periodosDoAluguer.every((p) => p.preco_semana == null)
+        );
 
-        setCartaoFrota(formatCartoesFrota((results[6].data ?? []) as CartaoFrotaResumo[]));
+        setCartaoFrota(formatCartoesFrota((results[5].data ?? []) as CartaoFrotaResumo[]));
 
         if (motoristaData) {
           const m = motoristaData as any;
@@ -231,22 +219,9 @@ export function useMotoristaResumoData(
           setGestor(m.gestor_responsavel || null);
         }
 
-        if (viaturasPeriodoData.length > 0) {
-          // Resolve o preço pela tarifa do CONTRATO quando existe; sem
-          // contrato, buildSlotPeriodos cai na tarifa do grupo/modelo (o
-          // comportamento antigo) e o resumo assinala isso como estimado.
-          let algumEstimado = false;
-          const comPrecoDoContrato = viaturasPeriodoData.map((mv) => {
-            const tarifaContrato = contratoTarifaPorViatura.get(mv.viatura_id);
-            const preco =
-              tarifaContrato && mv.viaturas?.modelo_id
-                ? precoPorTarifaModelo.get(`${tarifaContrato}|${mv.viaturas.modelo_id}`)
-                : undefined;
-            if (preco == null) algumEstimado = true;
-            return { ...mv, preco_semana: preco ?? null };
-          });
+        if (periodosDoAluguer.length > 0) {
           setSlotPeriodos(
-            buildSlotPeriodos(comPrecoDoContrato, dateRange.from, dateRange.to, tvdeModeloPrecoMap)
+            buildSlotPeriodos(periodosDoAluguer, dateRange.from, dateRange.to, tvdeModeloPrecoMap)
           );
           setAluguerEstimado(algumEstimado);
         }
@@ -263,6 +238,31 @@ export function useMotoristaResumoData(
             outros: mov.outros,
           });
           setOutrasReceitas(mov.receitaOutras);
+
+          // Dinheiro ignorado que NÃO está representado em mais lado nenhum.
+          //
+          // Ignorar um débito de renda é correcto enquanto o aluguer vier do
+          // contrato: seria contá-lo duas vezes. Sem contrato a cobrir o
+          // período não há aluguer nenhum a representá-lo, e o valor
+          // desaparece do resumo sem deixar rasto — foi o que fez os 225,00 €
+          // do Paulo André Antunes Badalo ficarem invisíveis. Nesse caso o
+          // resumo tem de o dizer, em vez de calar.
+          const semAluguerCalculado = periodosDoAluguer.length === 0;
+          const rendaIgnorada = semAluguerCalculado
+            ? mov.ignorados
+                .filter(
+                  (i) => i.tipo === 'debito' && DEBITOS_QUE_O_CONTRATO_COBRE.includes(i.categoria)
+                )
+                .reduce((s, i) => s + i.valor, 0)
+            : 0;
+          setDinheiroIgnorado(
+            rendaIgnorada > 0
+              ? {
+                  valor: rendaIgnorada,
+                  motivo: 'lançado como renda, sem contrato a cobrir este período',
+                }
+              : null
+          );
         }
       }
     } catch (error) {
@@ -282,6 +282,7 @@ export function useMotoristaResumoData(
     motoristaIban,
     extraCosts,
     outrasReceitas,
+    dinheiroIgnorado,
     slotPeriodos,
     aluguerSemTarifa,
     aluguerEstimado,

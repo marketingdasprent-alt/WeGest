@@ -58,3 +58,27 @@ export interface ContagemDeModulo {
 export function contagemPorModulo(regras: RegraEstatistica[]): ContagemDeModulo[] {
   return agruparPorModulo(regras).map((g) => ({ modulo: g.modulo, total: g.regras.length }));
 }
+
+/**
+ * Para cada regra, os tipos de acção das SUAS irmãs (mesmo grupo_id,
+ * excluindo ela própria) — o que o badge "também dispara..." mostra na
+ * lista.
+ */
+export function outrasAccoesDoGrupo(regras: RegraEstatistica[]): Map<string, string[]> {
+  const porGrupo = new Map<string, RegraEstatistica[]>();
+  for (const r of regras) {
+    const lista = porGrupo.get(r.grupo_id);
+    if (lista) lista.push(r);
+    else porGrupo.set(r.grupo_id, [r]);
+  }
+
+  const resultado = new Map<string, string[]>();
+  for (const r of regras) {
+    const irmas = porGrupo.get(r.grupo_id) ?? [];
+    resultado.set(
+      r.rule_id,
+      irmas.filter((i) => i.rule_id !== r.rule_id).map((i) => i.acao_tipo)
+    );
+  }
+  return resultado;
+}

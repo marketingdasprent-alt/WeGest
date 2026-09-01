@@ -31,14 +31,14 @@ function regra(over: Partial<RegraParaEditar> = {}): RegraParaEditar {
 describe('fluxoDaRegra — estado de execução', () => {
   it('o gatilho sabe se a regra está ligada', () => {
     // O estado tem de ser perceptível no canvas sem abrir o painel.
-    const { nodes } = fluxoDaRegra(regra({ ativo: false }));
+    const { nodes } = fluxoDaRegra([regra({ ativo: false })]);
     expect(nodes[0].data).toMatchObject({ ativo: false });
   });
 
   it('a acção leva a última execução e a duração média', () => {
-    const { nodes } = fluxoDaRegra(
-      regra({ ultimaExecucao: '2026-08-27T09:00:00Z', duracaoMediaMs: 2500 })
-    );
+    const { nodes } = fluxoDaRegra([
+      regra({ ultimaExecucao: '2026-08-27T09:00:00Z', duracaoMediaMs: 2500 }),
+    ]);
 
     expect(nodes[1].data).toMatchObject({
       ultimaExecucao: '2026-08-27T09:00:00Z',
@@ -47,24 +47,24 @@ describe('fluxoDaRegra — estado de execução', () => {
   });
 
   it('regra que já correu sem falhar fica em sucesso', () => {
-    const { nodes } = fluxoDaRegra(regra({ ultimaExecucao: '2026-08-27T09:00:00Z' }));
+    const { nodes } = fluxoDaRegra([regra({ ultimaExecucao: '2026-08-27T09:00:00Z' })]);
     expect(nodes[1].data).toMatchObject({ estado: 'sucesso' });
   });
 
   it('regra que nunca correu não fica em sucesso nem em erro', () => {
     // Pintar de verde uma automação que nunca disparou dava confiança falsa.
-    const { nodes } = fluxoDaRegra(regra({ ultimaExecucao: null }));
+    const { nodes } = fluxoDaRegra([regra({ ultimaExecucao: null })]);
     expect(nodes[1].data).toMatchObject({ estado: 'normal' });
   });
 
   it('regra com falha conhecida fica em erro', () => {
-    const { nodes } = fluxoDaRegra(
+    const { nodes } = fluxoDaRegra([
       regra({
         ultimaExecucao: '2026-08-27T09:00:00Z',
         falhas: 3,
         ultimaFalha: { runId: 'run-1', erro: 'boom', quando: '2026-08-27T09:00:00Z' },
-      })
-    );
+      }),
+    ]);
 
     expect(nodes.find((n) => n.type === 'accao')?.data).toMatchObject({ estado: 'erro' });
   });
@@ -82,7 +82,7 @@ describe('fluxoDaRegra — nó de erro', () => {
     });
 
   it('acrescenta um nó de erro ligado à acção', () => {
-    const { nodes, edges } = fluxoDaRegra(comFalha());
+    const { nodes, edges } = fluxoDaRegra([comFalha()]);
 
     const erro = nodes.find((n) => n.type === 'erro');
     const accao = nodes.find((n) => n.type === 'accao');
@@ -96,18 +96,18 @@ describe('fluxoDaRegra — nó de erro', () => {
   });
 
   it('sem falha conhecida não há nó de erro', () => {
-    expect(fluxoDaRegra(regra()).nodes.some((n) => n.type === 'erro')).toBe(false);
+    expect(fluxoDaRegra([regra()]).nodes.some((n) => n.type === 'erro')).toBe(false);
   });
 
   it('contador de falhas sem run conhecido não cria nó vazio', () => {
     // Acontece quando o run saiu da janela de retenção mas o contador não.
     // Um nó vermelho sem mensagem nem runId não tem o que depurar.
-    const { nodes } = fluxoDaRegra(regra({ falhas: 2, ultimaFalha: null }));
+    const { nodes } = fluxoDaRegra([regra({ falhas: 2, ultimaFalha: null })]);
     expect(nodes.some((n) => n.type === 'erro')).toBe(false);
   });
 
   it('o nó de erro fica depois da acção, na mesma linha', () => {
-    const { nodes } = fluxoDaRegra(comFalha());
+    const { nodes } = fluxoDaRegra([comFalha()]);
     const accao = nodes.find((n) => n.type === 'accao');
     const erro = nodes.find((n) => n.type === 'erro');
 
@@ -118,7 +118,7 @@ describe('fluxoDaRegra — nó de erro', () => {
 
 describe('fluxoDaRegra', () => {
   it('uma regra simples vira gatilho + acção ligados', () => {
-    const { nodes, edges } = fluxoDaRegra(regra());
+    const { nodes, edges } = fluxoDaRegra([regra()]);
 
     expect(nodes.map((n) => n.type)).toEqual(['trigger', 'accao']);
     expect(edges).toHaveLength(1);
@@ -126,7 +126,7 @@ describe('fluxoDaRegra', () => {
   });
 
   it('o gatilho abre já com o evento escolhido, não por configurar', () => {
-    const { nodes } = fluxoDaRegra(regra({ eventType: 'motorista.carta_expirando' }));
+    const { nodes } = fluxoDaRegra([regra({ eventType: 'motorista.carta_expirando' })]);
 
     expect(nodes[0].data).toMatchObject({
       eventType: 'motorista.carta_expirando',
@@ -138,13 +138,13 @@ describe('fluxoDaRegra', () => {
     // 'invoice.*' pertence ao módulo Financeiro, cuja chave é 'cobranca'.
     // Usar o prefixo dava um módulo que o catálogo não conhece, e o bloco
     // ficava sem ícone, sem cor e sem lista de eventos.
-    const { nodes } = fluxoDaRegra(regra({ eventType: 'invoice.nao_enviada_ao_cliente' }));
+    const { nodes } = fluxoDaRegra([regra({ eventType: 'invoice.nao_enviada_ao_cliente' })]);
 
     expect(nodes[0].data).toMatchObject({ modulo: 'cobranca' });
   });
 
   it('a acção traz os cargos e o cooldown que estavam gravados', () => {
-    const { nodes } = fluxoDaRegra(regra({ cargoIds: ['c1', 'c2'], cooldownMinutos: 60 }));
+    const { nodes } = fluxoDaRegra([regra({ cargoIds: ['c1', 'c2'], cooldownMinutos: 60 })]);
 
     expect(nodes[1].data).toMatchObject({
       accao: 'notificacao',
@@ -154,7 +154,7 @@ describe('fluxoDaRegra', () => {
   });
 
   it('uma regra de email traz accao e rótulo próprios', () => {
-    const { nodes } = fluxoDaRegra(regra({ acaoTipo: 'email', cargoIds: ['c1'] }));
+    const { nodes } = fluxoDaRegra([regra({ acaoTipo: 'email', cargoIds: ['c1'] })]);
 
     expect(nodes[1].data).toMatchObject({
       accao: 'email',
@@ -164,23 +164,44 @@ describe('fluxoDaRegra', () => {
     });
   });
 
+  it('hidrata os endereços livres para o nó de acção', () => {
+    const { nodes } = fluxoDaRegra([
+      regra({
+        acaoTipo: 'email',
+        acaoConfig: {
+          template_codigo: 'x',
+          titulo: 'x',
+          destinatarios_emails_livres: ['a@b.pt'],
+        },
+      }),
+    ]);
+
+    expect(nodes[1].data).toMatchObject({ emailsLivres: ['a@b.pt'] });
+  });
+
+  it('uma regra de email sem endereços livres hidrata um array vazio, não undefined', () => {
+    const { nodes } = fluxoDaRegra([regra({ acaoTipo: 'email', acaoConfig: {} })]);
+
+    expect(nodes[1].data).toMatchObject({ emailsLivres: [] });
+  });
+
   it('traz o modo e as pessoas escolhidas à mão', () => {
     // Sem isto, abrir a automação no editor e voltar a gravar apagava quem
     // tinha sido escolhido individualmente dentro de um cargo.
-    const { nodes } = fluxoDaRegra(regra({ modo: 'individual', userIds: ['user-1', 'user-2'] }));
+    const { nodes } = fluxoDaRegra([regra({ modo: 'individual', userIds: ['user-1', 'user-2'] })]);
 
     expect(nodes[1].data).toMatchObject({ modo: 'individual', userIds: ['user-1', 'user-2'] });
   });
 
   it('cada condição gravada vira um bloco, pela ordem, entre gatilho e acção', () => {
-    const { nodes, edges } = fluxoDaRegra(
+    const { nodes, edges } = fluxoDaRegra([
       regra({
         condicoes: [
           { campo: 'severidade', operador: '=', valor: 'alta' },
           { campo: 'origem', operador: '!=', valor: 'manual' },
         ],
-      })
-    );
+      }),
+    ]);
 
     expect(nodes.map((n) => n.type)).toEqual(['trigger', 'condicao', 'condicao', 'accao']);
     expect(nodes[1].data).toMatchObject({ campo: 'severidade', operador: '=', valor: 'alta' });
@@ -190,15 +211,15 @@ describe('fluxoDaRegra', () => {
   });
 
   it('os ids derivam do ruleId e não se repetem', () => {
-    const { nodes } = fluxoDaRegra(
+    const { nodes } = fluxoDaRegra([
       regra({
         ruleId: 'r9',
         condicoes: [
           { campo: 'a', operador: '=', valor: '1' },
           { campo: 'b', operador: '=', valor: '2' },
         ],
-      })
-    );
+      }),
+    ]);
     const ids = nodes.map((n) => n.id);
 
     expect(new Set(ids).size).toBe(ids.length);
@@ -206,9 +227,9 @@ describe('fluxoDaRegra', () => {
   });
 
   it('a corrente fica numa linha, da esquerda para a direita', () => {
-    const { nodes } = fluxoDaRegra(
-      regra({ condicoes: [{ campo: 'a', operador: '=', valor: '1' }] })
-    );
+    const { nodes } = fluxoDaRegra([
+      regra({ condicoes: [{ campo: 'a', operador: '=', valor: '1' }] }),
+    ]);
 
     expect(new Set(nodes.map((n) => n.position.y)).size).toBe(1);
     const xs = nodes.map((n) => n.position.x);
@@ -217,9 +238,51 @@ describe('fluxoDaRegra', () => {
   });
 
   it('regra de um módulo desconhecido ainda abre, em vez de rebentar', () => {
-    const { nodes } = fluxoDaRegra(regra({ eventType: 'coisa_nova.aconteceu' }));
+    const { nodes } = fluxoDaRegra([regra({ eventType: 'coisa_nova.aconteceu' })]);
 
     expect(nodes).toHaveLength(2);
     expect(nodes[0].data).toMatchObject({ eventType: 'coisa_nova.aconteceu' });
+  });
+});
+
+describe('fluxoDaRegra — várias regras-irmãs', () => {
+  it('duas regras-irmãs (mesmo grupo) desenham um gatilho e duas acções', () => {
+    const irma1 = regra({ ruleId: 'r1', acaoTipo: 'notificacao' });
+    const irma2 = regra({ ruleId: 'r2', acaoTipo: 'email', cargoIds: ['c2'] });
+
+    const { nodes, edges } = fluxoDaRegra([irma1, irma2]);
+
+    expect(nodes.filter((n) => n.type === 'trigger')).toHaveLength(1);
+    expect(nodes.filter((n) => n.type === 'accao')).toHaveLength(2);
+    // gatilho→acção1, gatilho→acção2 — nenhuma acção liga a outra.
+    expect(edges).toHaveLength(2);
+    expect(edges.every((e) => e.source === nodes[0].id)).toBe(true);
+  });
+
+  it('cada regra-irmã hidrata o seu próprio estado activo/inactivo', () => {
+    const irma1 = regra({ ruleId: 'r1', ativo: true });
+    const irma2 = regra({ ruleId: 'r2', ativo: false });
+
+    const { nodes } = fluxoDaRegra([irma1, irma2]);
+    const accoes = nodes.filter((n) => n.type === 'accao');
+
+    expect(accoes.find((n) => n.id.includes('r1'))?.data).toMatchObject({ ativo: true });
+    expect(accoes.find((n) => n.id.includes('r2'))?.data).toMatchObject({ ativo: false });
+  });
+
+  it('condições de uma regra-irmã não aparecem no ramo da outra', () => {
+    const irma1 = regra({
+      ruleId: 'r1',
+      condicoes: [{ campo: 'x', operador: '=', valor: 'y' }],
+    });
+    const irma2 = regra({ ruleId: 'r2', condicoes: [] });
+
+    const { nodes, edges } = fluxoDaRegra([irma1, irma2]);
+    const gatilho = nodes.find((n) => n.type === 'trigger')!;
+    const accaoR2 = nodes.find((n) => n.id.includes('r2') && n.type === 'accao')!;
+
+    // r2 liga directamente ao gatilho — sem passar por nenhuma condição de r1.
+    expect(edges.some((e) => e.source === gatilho.id && e.target === accaoR2.id)).toBe(true);
+    expect(nodes.filter((n) => n.type === 'condicao')).toHaveLength(1);
   });
 });

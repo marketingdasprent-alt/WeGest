@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { RegraEstatistica } from '@/hooks/automacao/useAutomacaoStats';
-import { agruparPorModulo, contagemPorModulo } from './agrupamento';
+import { agruparPorModulo, contagemPorModulo, outrasAccoesDoGrupo } from './agrupamento';
 
 /**
  * O agrupamento é lógica pura, e é aqui que se testa — não a renderizar.
@@ -106,5 +106,39 @@ describe('contagemPorModulo', () => {
 
   it('sem regras não há chips', () => {
     expect(contagemPorModulo([])).toEqual([]);
+  });
+});
+
+function regraComGrupo(over: Partial<RegraEstatistica> = {}): RegraEstatistica {
+  return {
+    rule_id: 'r1',
+    nome: 'x',
+    event_type: 'x',
+    ativo: true,
+    cooldown_minutos: 60,
+    execucoes: 0,
+    falhas: 0,
+    ultima_execucao: null,
+    duracao_media_ms: null,
+    grupo_id: 'g1',
+    acao_tipo: 'notificacao',
+    ...over,
+  } as RegraEstatistica;
+}
+
+describe('outrasAccoesDoGrupo', () => {
+  it('duas regras do mesmo grupo apontam uma para a outra', () => {
+    const a = regraComGrupo({ rule_id: 'r1', acao_tipo: 'notificacao' });
+    const b = regraComGrupo({ rule_id: 'r2', acao_tipo: 'email' });
+
+    const mapa = outrasAccoesDoGrupo([a, b]);
+
+    expect(mapa.get('r1')).toEqual(['email']);
+    expect(mapa.get('r2')).toEqual(['notificacao']);
+  });
+
+  it('uma regra sozinha no seu grupo não tem outras acções', () => {
+    const a = regraComGrupo({ rule_id: 'r1', grupo_id: 'sozinha' });
+    expect(outrasAccoesDoGrupo([a]).get('r1')).toEqual([]);
   });
 });

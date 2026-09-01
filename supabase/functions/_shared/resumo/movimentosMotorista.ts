@@ -31,12 +31,7 @@ export interface MovimentoMotorista {
   valor: number | string | null;
 }
 
-export type DestinoMovimento =
-  | 'receita_outras'
-  | 'caucao'
-  | 'seguros'
-  | 'outros'
-  | 'ignorado';
+export type DestinoMovimento = 'receita_outras' | 'caucao' | 'seguros' | 'outros' | 'ignorado';
 
 export interface Classificacao {
   destino: DestinoMovimento;
@@ -44,8 +39,14 @@ export interface Classificacao {
   motivo?: string;
 }
 
+/** Categorias cujo débito o CONTRATO já representa (aluguer = dias × tarifa).
+ *  Exportada porque quem mostra o resumo precisa de saber isto: sem contrato
+ *  a cobrir o período, um débito destes não está representado em lado nenhum
+ *  e tem de ser mostrado como valor por explicar, em vez de sumir. */
+export const DEBITOS_QUE_O_CONTRATO_COBRE = ['aluguer', 'renda_viatura'];
+
 /** Categorias cujo DÉBITO o resumo já calcula por outra via. */
-const JA_CALCULADAS_COMO_DEBITO = ['aluguer', 'renda_viatura', 'reparacao'];
+const JA_CALCULADAS_COMO_DEBITO = [...DEBITOS_QUE_O_CONTRATO_COBRE, 'reparacao'];
 
 /** Categorias cujo CRÉDITO já vem na receita das plataformas. */
 const JA_CONTADAS_COMO_RECEITA = ['bolt', 'uber'];
