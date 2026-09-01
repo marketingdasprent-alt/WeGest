@@ -1,8 +1,15 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { validarAnexosSubmissao, TI_ANEXO_MAX_BYTES, TI_ANEXO_MAX_FICHEIROS } from './anexos.ts';
 
+// btoa(texto) directo só funciona para ASCII — 'á' é multi-byte em UTF-8, e
+// btoa trata a string como code units, não como bytes. Codifica primeiro
+// para bytes UTF-8 (o que um ficheiro real tem), só depois para base64 —
+// mesmo caminho que um ficheiro carregado pelo browser segue de verdade.
 function base64De(texto: string): string {
-  return btoa(texto);
+  const bytes = new TextEncoder().encode(texto);
+  let binario = '';
+  for (const b of bytes) binario += String.fromCharCode(b);
+  return btoa(binario);
 }
 
 Deno.test('sem anexos (undefined) é válido — devolve lista vazia', () => {
@@ -48,7 +55,10 @@ Deno.test('rejeita item sem nome, mimeType ou conteudoBase64', () => {
     validarAnexosSubmissao([{ mimeType: 'image/png', conteudoBase64: base64De('x') }]).ok,
     false
   );
-  assertEquals(validarAnexosSubmissao([{ nome: 'a.png', conteudoBase64: base64De('x') }]).ok, false);
+  assertEquals(
+    validarAnexosSubmissao([{ nome: 'a.png', conteudoBase64: base64De('x') }]).ok,
+    false
+  );
   assertEquals(validarAnexosSubmissao([{ nome: 'a.png', mimeType: 'image/png' }]).ok, false);
 });
 
@@ -117,9 +127,7 @@ Deno.test('todos os tipos de MIME documentados são aceites', () => {
     'text/plain',
   ];
   for (const mimeType of tipos) {
-    const result = validarAnexosSubmissao([
-      { nome: 'f', mimeType, conteudoBase64: base64De('x') },
-    ]);
+    const result = validarAnexosSubmissao([{ nome: 'f', mimeType, conteudoBase64: base64De('x') }]);
     assertEquals(result.ok, true, `esperava aceitar ${mimeType}`);
   }
 });
