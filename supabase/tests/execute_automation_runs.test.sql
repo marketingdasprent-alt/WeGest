@@ -327,9 +327,18 @@ select public.execute_automation_runs();
 
 -- 18. Cada endereço livre ganha a sua própria notifications, com o
 --     destinatario_email_externo certo — sem destinatario_user_id nenhum.
+--
+-- Filtrado a destinatario_email_externo is not null de propósito: este org
+-- tem um admin (00000000-0000-0000-0000-0000000a0001), e o laço geral do
+-- executor resolve sempre os admins da organização, independentemente de
+-- destinatarios_cargo_ids — já testado no Cenário A. Contar TODAS as
+-- notifications do run mediria as duas coisas juntas; esta asserção é só
+-- sobre os endereços livres.
 select is(
   (select array_agg(destinatario_email_externo order by destinatario_email_externo)
-     from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0009'),
+     from public.notifications
+    where rule_run_id = '00000000-0000-0000-0000-0000004c0009'
+      and destinatario_email_externo is not null),
   array['fornecedor@fora.pt', 'outro@fora.pt'],
   'cada endereço livre ganha a sua própria notifications'
 );
@@ -338,7 +347,8 @@ select is(
 select is(
   (select count(*)::int from public.notification_queue q
      join public.notifications n on n.id = q.notification_id
-    where n.rule_run_id = '00000000-0000-0000-0000-0000004c0009'),
+    where n.rule_run_id = '00000000-0000-0000-0000-0000004c0009'
+      and n.destinatario_email_externo is not null),
   2,
   'os dois endereços livres enfileiram para envio'
 );
@@ -350,7 +360,9 @@ update public.automation_runs set status = 'pending', error_message = null
 select public.execute_automation_runs();
 
 select is(
-  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0009'),
+  (select count(*)::int from public.notifications
+    where rule_run_id = '00000000-0000-0000-0000-0000004c0009'
+      and destinatario_email_externo is not null),
   2,
   'um retry não duplica as notifications dos endereços livres'
 );
