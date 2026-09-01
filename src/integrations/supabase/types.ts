@@ -10767,6 +10767,60 @@ export type Database = {
           },
         ]
       }
+      ti_ticket_anexos: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          criado_por_nome: string
+          ficheiro_url: string
+          id: string
+          mime_type: string | null
+          nome: string
+          org_id: string
+          tamanho_bytes: number | null
+          ticket_id: string
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          criado_por_nome: string
+          ficheiro_url: string
+          id?: string
+          mime_type?: string | null
+          nome: string
+          org_id: string
+          tamanho_bytes?: number | null
+          ticket_id: string
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          criado_por_nome?: string
+          ficheiro_url?: string
+          id?: string
+          mime_type?: string | null
+          nome?: string
+          org_id?: string
+          tamanho_bytes?: number | null
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ti_ticket_anexos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ti_ticket_anexos_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "ti_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ti_ticket_sugestoes: {
         Row: {
           created_at: string

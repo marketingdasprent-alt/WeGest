@@ -792,6 +792,34 @@ export type ReverterFechoArgs = Pick<
 /** fechado OU cancelado → em_curso. A recolha volta a ficar pendente.
  *  ('devolvido' é legado — nada o escreve desde 20260820150200, mas linhas
  *  antigas ainda têm de poder ser revertidas.) */
+/**
+ * O que se desescreve no contrato ao reverter um fecho.
+ *
+ * Reverter apaga os factos ADMINISTRATIVOS do fecho, e só esses. Sem isto, o
+ * contrato ficava a afirmar duas coisas incompatíveis ao mesmo tempo — "está em
+ * curso" e "foi devolvido" — e como a viatura só conta o estado, voltava a
+ * ficar presa. Era preciso reverter e fechar outra vez para os campos voltarem
+ * a concordar.
+ *
+ * O que NÃO se apaga, de propósito: os quilómetros e o combustível de entrada,
+ * os danos e as fotos registados na recolha. Esses são factos físicos, medidos
+ * na altura em que o carro foi visto. Um gestor que reverte um fecho para
+ * corrigir uma data não pode perder as fotos dos danos por causa disso. Pela
+ * mesma razão fica a estação de recolha: não sabemos qual era antes, e
+ * apagá-la perdia uma escolha legítima.
+ */
+export function patchContratoAoReverterFecho(userId: string): TablesUpdate<'contratos_renting'> {
+  return {
+    estado_operacional: 'em_curso',
+    updated_by: userId,
+    // Como o contrato acabou — deixou de ter acabado.
+    tipo_fecho: null,
+    // A DUA só volta ao cofre quando o contrato fecha mesmo. Reaberto, o
+    // ciclo dela reabre também: senão ficava dada como devolvida sem o ser.
+    dua_devolvida_em: null,
+  };
+}
+
 export function useReverterFecho() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -823,7 +851,7 @@ export function useReverterFecho() {
 
       const { data: updated, error } = await supabase
         .from('contratos_renting')
-        .update({ estado_operacional: 'em_curso', updated_by: userId })
+        .update(patchContratoAoReverterFecho(userId))
         .eq('id', contratoId)
         .in('estado_operacional', ['fechado', 'devolvido', 'cancelado'])
         .select('id')
