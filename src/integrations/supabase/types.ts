@@ -14193,6 +14193,7 @@ export type Database = {
       enviar_digests_diarios: { Args: never; Returns: undefined }
       executar_jobs_automacao_manualmente: { Args: never; Returns: Json }
       execute_automation_runs: { Args: { p_max?: number }; Returns: undefined }
+      testar_regra_automacao: { Args: { p_rule_id: string }; Returns: Json }
       execute_gestor_assignment: { Args: never; Returns: number }
       faturacao_outbox_claim: {
         Args: { p_max: number }
