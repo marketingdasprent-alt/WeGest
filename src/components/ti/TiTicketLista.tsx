@@ -14,9 +14,10 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { Paperclip } from 'lucide-react';
 import {
+  abrirTiAnexo,
   useCriarSugestao,
-  useCriarTicketComoAdmin,
   useMarcarPresencial,
   useMarcarResolvido,
   useReabrirTicket,
@@ -45,12 +46,9 @@ export function TiTicketLista() {
   const marcarPresencial = useMarcarPresencial();
   const marcarResolvido = useMarcarResolvido();
   const reabrir = useReabrirTicket();
-  const criarComoAdmin = useCriarTicketComoAdmin();
 
   const [aSugerir, setASugerir] = useState<string | null>(null);
   const [texto, setTexto] = useState('');
-  const [novoAberto, setNovoAberto] = useState(false);
-  const [novaDescricao, setNovaDescricao] = useState('');
   const [empresa, setEmpresa] = useState(TODAS);
 
   // Quem faz suporte à plataforma vê os pedidos de todas as empresas; toda a
@@ -129,45 +127,8 @@ export function TiTicketLista() {
               </SelectContent>
             </Select>
           )}
-          <Button size="sm" variant="outline" onClick={() => setNovoAberto((v) => !v)}>
-            Novo pedido
-          </Button>
         </div>
       </div>
-
-      {novoAberto && (
-        <Card className="space-y-2 p-4">
-          <Label htmlFor="ti-nova-descricao">Descrição</Label>
-          <Textarea
-            id="ti-nova-descricao"
-            rows={3}
-            value={novaDescricao}
-            onChange={(e) => setNovaDescricao(e.target.value)}
-          />
-          <Button
-            size="sm"
-            disabled={!novaDescricao.trim() || criarComoAdmin.isPending}
-            onClick={async () => {
-              try {
-                const r = await criarComoAdmin.mutateAsync({ descricao: novaDescricao });
-                setNovaDescricao('');
-                setNovoAberto(false);
-                // Mesma distinção da sugestão: "aberto" não é o mesmo que
-                // "aberto e o suporte foi avisado".
-                if (r?.emailFalhou) {
-                  toast.warning('Pedido aberto, mas o aviso ao suporte não saiu.');
-                } else {
-                  toast.success('Pedido aberto.');
-                }
-              } catch (e: any) {
-                toast.error(e.message ?? 'Não foi possível abrir o pedido.');
-              }
-            }}
-          >
-            Abrir pedido
-          </Button>
-        </Card>
-      )}
 
       {visiveis.length === 0 && (
         <p className="text-sm text-muted-foreground">
@@ -206,6 +167,29 @@ export function TiTicketLista() {
             </div>
 
             <p className="whitespace-pre-wrap text-sm">{t.descricao}</p>
+
+            {t.anexos.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {t.anexos.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={async () => {
+                      const url = await abrirTiAnexo(a.ficheiro_url);
+                      if (!url) {
+                        toast.error('Não foi possível abrir o anexo.');
+                        return;
+                      }
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
+                  >
+                    <Paperclip className="h-3 w-3" />
+                    {a.nome}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Quem tratou disto. É a primeira pergunta quando um pedido volta
                 a abrir, e sem isto a resposta estava só na cabeça de alguém. */}

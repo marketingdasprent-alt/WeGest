@@ -3,7 +3,7 @@ import { renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-import { useCriarTicketComoAdmin, useMarcarResolvido, useReabrirTicket } from './useTiTickets';
+import { abrirTiAnexo, useMarcarResolvido, useReabrirTicket } from './useTiTickets';
 import { supabase } from '@/integrations/supabase/client';
 
 function createWrapper() {
@@ -15,84 +15,42 @@ function createWrapper() {
   };
 }
 
-/** profiles → select().eq().single(); ti_tickets → insert().select().single() */
-function mockCriacao(ticketId: string) {
-  (supabase as unknown as { auth: { getUser: unknown } }).auth.getUser = vi
-    .fn()
-    .mockResolvedValue({ data: { user: { id: 'u1' } } });
-
-  (supabase.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
-    if (tabela === 'profiles') {
-      return {
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { nome: 'Ana', email: 'ana@exemplo.pt', org_id: 'org-1' },
-              error: null,
-            }),
-          }),
-        }),
-      };
-    }
-    if (tabela === 'ti_tickets') {
-      return {
-        insert: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: { id: ticketId }, error: null }),
-          }),
-        }),
-      };
-    }
-    throw new Error(`tabela inesperada: ${tabela}`);
-  });
-}
-
-describe('useCriarTicketComoAdmin', () => {
+describe('abrirTiAnexo', () => {
+  // O mock partilhado de src/__tests__/setup.ts não inclui `storage` (só
+  // `from`, `rpc`, `auth`, `functions`) — nenhum outro teste ainda o tinha
+  // usado. Mesmo padrão já usado neste ficheiro para `auth.getUser`: aumenta
+  // o mock localmente em vez de mexer no partilhado.
   beforeEach(() => {
     vi.clearAllMocks();
+    (supabase as unknown as { storage: { from: ReturnType<typeof vi.fn> } }).storage = {
+      from: vi.fn(),
+    };
   });
 
-  it('avisa o suporte do pedido acabado de abrir', async () => {
-    mockCriacao('t1');
-    (supabase.functions.invoke as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { success: true },
-      error: null,
-    });
+  it('devolve a URL assinada quando o storage responde bem', async () => {
+    const createSignedUrl = vi
+      .fn()
+      .mockResolvedValue({ data: { signedUrl: 'https://exemplo/assinado' }, error: null });
+    (supabase.storage.from as ReturnType<typeof vi.fn>).mockReturnValue({ createSignedUrl });
 
-    const { result } = renderHook(() => useCriarTicketComoAdmin(), { wrapper: createWrapper() });
-    await result.current.mutateAsync({ descricao: 'O portátil não liga' });
+    const url = await abrirTiAnexo('ticket-1/123-foto.png');
 
-    expect(supabase.functions.invoke).toHaveBeenCalledWith('ti-ticket-novo-email', {
-      body: { ticket_id: 't1' },
-    });
+    expect(url).toBe('https://exemplo/assinado');
+    expect(supabase.storage.from).toHaveBeenCalledWith('ti-ticket-anexos');
+    expect(createSignedUrl).toHaveBeenCalledWith('ticket-1/123-foto.png', 600);
   });
 
-  // Sem isto, o admin via "Pedido aberto." e ficava convencido de que o suporte
-  // tinha sido avisado, mesmo quando o email não saiu.
-  it('reporta que o aviso não saiu quando o email falha', async () => {
-    mockCriacao('t2');
-    (supabase.functions.invoke as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: null,
-      error: new Error('Brevo 500'),
-    });
+  // A RLS recusa (empresa errada) ou o ficheiro já não existe — nos dois casos
+  // o storage devolve um erro, e quem chama não deve rebentar por causa disso.
+  it('devolve null quando o storage recusa ou falha', async () => {
+    const createSignedUrl = vi
+      .fn()
+      .mockResolvedValue({ data: null, error: new Error('não autorizado') });
+    (supabase.storage.from as ReturnType<typeof vi.fn>).mockReturnValue({ createSignedUrl });
 
-    const { result } = renderHook(() => useCriarTicketComoAdmin(), { wrapper: createWrapper() });
-    const r = await result.current.mutateAsync({ descricao: 'Impressora encravada' });
+    const url = await abrirTiAnexo('ticket-1/123-foto.png');
 
-    expect(r).toEqual({ emailFalhou: true });
-  });
-
-  it('o pedido continua aberto quando o aviso sai bem', async () => {
-    mockCriacao('t3');
-    (supabase.functions.invoke as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { success: true },
-      error: null,
-    });
-
-    const { result } = renderHook(() => useCriarTicketComoAdmin(), { wrapper: createWrapper() });
-    const r = await result.current.mutateAsync({ descricao: 'Rato sem bateria' });
-
-    expect(r).toEqual({ emailFalhou: false });
+    expect(url).toBeNull();
   });
 });
 

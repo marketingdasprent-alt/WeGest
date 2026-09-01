@@ -15,6 +15,17 @@ export interface TiSugestao {
   created_at: string;
 }
 
+export interface TiAnexo {
+  id: string;
+  nome: string;
+  ficheiro_url: string;
+  tamanho_bytes: number | null;
+  mime_type: string | null;
+  /** Quem anexou — sempre preenchido, mesmo quando é o autor (sem conta). */
+  criado_por_nome: string;
+  created_at: string;
+}
+
 export interface TiTicket {
   id: string;
   numero: number;
@@ -28,6 +39,8 @@ export interface TiTicket {
   resolvido_por_nome: string | null;
   resolvido_em: string | null;
   sugestoes: TiSugestao[];
+  /** Anexados no momento da submissão — ver ti-ticket-submeter. */
+  anexos: TiAnexo[];
 }
 
 const CHAVE = ['ti-tickets'];
@@ -71,16 +84,17 @@ export function useTiTickets(enabled = true) {
           'id, numero, autor_nome, autor_email, descricao, status, created_at,' +
             ' resolvido_por_nome, resolvido_em,' +
             ' organizacao:organizacoes(nome),' +
-            ' sugestoes:ti_ticket_sugestoes(id, texto, util, resposta_texto, criado_por_nome, created_at)'
+            ' sugestoes:ti_ticket_sugestoes(id, texto, util, resposta_texto, criado_por_nome, created_at),' +
+            ' anexos:ti_ticket_anexos(id, nome, ficheiro_url, tamanho_bytes, mime_type, criado_por_nome, created_at)'
         )
         .order('created_at', { ascending: false });
       if (error) throw error;
-      // Pedidos do mais recente para o mais antigo, mas as sugestões DENTRO de
-      // cada pedido pela ordem em que foram escritas: é essa ordem que dá
-      // sentido a "tentativa 1, tentativa 2".
+      // Pedidos do mais recente para o mais antigo, mas as sugestões e os
+      // anexos DENTRO de cada pedido pela ordem em que foram criados.
       return ((data ?? []) as TiTicket[]).map((t) => ({
         ...t,
         sugestoes: ordenarSugestoes(t.sugestoes ?? []),
+        anexos: [...(t.anexos ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at)),
       }));
     },
   });
@@ -267,43 +281,16 @@ export function useReabrirTicket() {
   );
 }
 
-/** Ticket aberto pelo próprio admin dentro da aplicação: fica com `criado_por`. */
-export function useCriarTicketComoAdmin() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ descricao }: { descricao: string }) => {
-      const { data: user } = await supabase.auth.getUser();
-      const uid = user?.user?.id ?? '';
-      const { data: perfil, error: erroPerfil } = await supabase
-        .from('profiles')
-        .select('nome, email, org_id')
-        .eq('id', uid)
-        .single();
-      if (erroPerfil) throw erroPerfil;
-
-      const { data: ticket, error } = await (supabase as any)
-        .from('ti_tickets')
-        .insert({
-          org_id: perfil?.org_id,
-          autor_nome: perfil?.nome ?? 'Administrador',
-          autor_email: perfil?.email ?? '',
-          descricao,
-          criado_por: uid || null,
-        })
-        .select('id')
-        .single();
-      if (error) throw error;
-
-      // Mesmo raciocínio do aviso de sugestão: o email é o último passo e não
-      // desfaz o pedido se falhar. Quando a organização não tem email de
-      // suporte configurado, a função devolve sucesso sem enviar nada.
-      const { error: erroEmail } = await supabase.functions.invoke('ti-ticket-novo-email', {
-        body: { ticket_id: ticket.id },
-      });
-      return { emailFalhou: !!erroEmail };
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: CHAVE }),
-  });
+/**
+ * URL assinada (10 min) para abrir um anexo num separador novo. `null` se a
+ * RLS recusar ou o ficheiro já não existir no bucket.
+ */
+export async function abrirTiAnexo(ficheiroUrl: string): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from('ti-ticket-anexos')
+    .createSignedUrl(ficheiroUrl, 60 * 10);
+  if (error) return null;
+  return data.signedUrl;
 }
 
 /** Link público de submissão da organização da sessão. */
