@@ -91,6 +91,9 @@ export function PainelPropriedades({
       aria-label="Propriedades do passo"
       className="absolute inset-y-0 right-0 z-10 flex w-full max-w-[380px] flex-col border-l border-node-border bg-panel shadow-xl sm:w-[380px]"
     >
+      {/* Liga visualmente o painel ao nó que está a editar — a mesma cor do
+          chip do cabeçalho, só que espalhada pela largura toda. */}
+      <div className="h-1 shrink-0" style={{ backgroundColor: `hsl(var(${visual.cor}))` }} />
       <div className="flex items-start justify-between gap-2 border-b border-node-border p-4">
         <CabecalhoDoPasso
           cor={visual.cor}

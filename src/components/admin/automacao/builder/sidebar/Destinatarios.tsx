@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, Mail, X } from 'lucide-react';
+import { Bell, Mail, Users, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,36 +73,38 @@ export function Destinatarios({
 
   return (
     <>
-      <Seccao titulo="Canal">
-        {/* Estado, não interruptor: o canal é o que a acção É, não uma opção
-            dentro dela. Duas automações separadas cobrem quem precisa das
-            duas — ver o cabeçalho deste ficheiro. */}
-        {canal === 'email' ? (
-          <Badge variant="secondary" className="gap-1.5">
-            <Mail className="h-3.5 w-3.5" />
-            Por email
-          </Badge>
-        ) : (
-          <Badge variant="secondary" className="gap-1.5">
-            <Bell className="h-3.5 w-3.5" />
-            Na aplicação
-          </Badge>
-        )}
-      </Seccao>
-
-      <Seccao titulo="Destinatários">
+      <Seccao
+        titulo="Destinatários"
+        icone={Users}
+        extra={
+          // Estado, não interruptor: o canal é o que a acção É, não uma opção
+          // dentro dela. Duas automações separadas cobrem quem precisa das
+          // duas — ver o cabeçalho deste ficheiro.
+          canal === 'email' ? (
+            <Badge variant="secondary" className="gap-1.5">
+              <Mail className="h-3.5 w-3.5" />
+              Por email
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="gap-1.5">
+              <Bell className="h-3.5 w-3.5" />
+              Na aplicação
+            </Badge>
+          )
+        }
+      >
         <Campo label="Grupos que recebem">
           <div className="flex flex-wrap gap-1.5">
             {escolhidos.map((id) => {
               const nome = cargos.find((c) => c.id === id)?.nome ?? id;
               return (
-                <Badge key={id} variant="secondary" className="gap-1 pr-1">
+                <Badge key={id} variant="secondary" className="gap-1 py-1 pl-2.5 pr-1">
                   {nome}
                   <button
                     type="button"
                     aria-label={`Remover ${nome}`}
                     onClick={() => alternarCargo(id)}
-                    className="rounded-full p-0.5 transition-colors hover:bg-background/60"
+                    className="rounded-full p-1 transition-colors hover:bg-background/60"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -110,7 +112,9 @@ export function Destinatarios({
               );
             })}
             {escolhidos.length === 0 && (
-              <span className="text-xs text-muted-foreground">Ninguém escolhido</span>
+              <span className="rounded-md border border-dashed border-border px-2 py-1 text-xs text-muted-foreground">
+                Ninguém escolhido
+              </span>
             )}
           </div>
 
@@ -122,7 +126,7 @@ export function Destinatarios({
                   key={c.id}
                   size="sm"
                   variant="outline"
-                  className="h-6 px-2 text-[11px] font-normal"
+                  className="h-7 px-2.5 text-[11px] font-normal"
                   onClick={() => alternarCargo(c.id)}
                 >
                   + {c.nome}
@@ -159,7 +163,7 @@ export function Destinatarios({
                         key={u.id}
                         size="sm"
                         variant={marcado ? 'secondary' : 'outline'}
-                        className="h-6 px-2 text-[11px] font-normal"
+                        className="h-7 px-2.5 text-[11px] font-normal"
                         onClick={() =>
                           onAlterar({
                             userIds: marcado
@@ -187,7 +191,7 @@ export function Destinatarios({
           <Campo label="Emails avulsos">
             <div className="flex flex-wrap gap-1.5">
               {emailsLivres.map((email) => (
-                <Badge key={email} variant="secondary" className="gap-1 pr-1">
+                <Badge key={email} variant="secondary" className="gap-1 py-1 pl-2.5 pr-1">
                   {email}
                   <button
                     type="button"
@@ -195,14 +199,16 @@ export function Destinatarios({
                     onClick={() =>
                       onAlterar({ emailsLivres: emailsLivres.filter((e) => e !== email) })
                     }
-                    className="rounded-full p-0.5 transition-colors hover:bg-background/60"
+                    className="rounded-full p-1 transition-colors hover:bg-background/60"
                   >
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>
               ))}
               {emailsLivres.length === 0 && (
-                <span className="text-xs text-muted-foreground">Nenhum endereço acrescentado</span>
+                <span className="rounded-md border border-dashed border-border px-2 py-1 text-xs text-muted-foreground">
+                  Nenhum endereço acrescentado
+                </span>
               )}
             </div>
 

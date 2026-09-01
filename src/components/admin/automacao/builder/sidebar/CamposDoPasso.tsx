@@ -1,3 +1,5 @@
+import type { LucideIcon } from 'lucide-react';
+import { Filter, Settings2, Timer, Zap } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -40,12 +42,28 @@ export interface CamposDoPassoProps {
   eventType?: string;
 }
 
-export function Seccao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+export function Seccao({
+  titulo,
+  icone: Icone,
+  extra,
+  children,
+}: {
+  titulo: string;
+  /** Ícone junto ao título — ajuda a percorrer o painel a olhar, não a ler. */
+  icone?: LucideIcon;
+  /** Selo/acção alinhada à direita do título — ex.: o canal, junto de "Destinatários". */
+  extra?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section className="space-y-3 border-b border-border p-4 last:border-b-0">
-      <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {titulo}
-      </h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground/70">
+          {Icone && <Icone className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+          {titulo}
+        </h3>
+        {extra}
+      </div>
       {children}
     </section>
   );
@@ -85,7 +103,7 @@ export function CamposDoPasso(props: CamposDoPassoProps) {
       </Seccao>
 
       {tipo === 'trigger' && (
-        <Seccao titulo="Quando dispara">
+        <Seccao titulo="Quando dispara" icone={Zap}>
           <Campo label="Evento">
             <Select
               value={(dados.eventType as string) ?? ''}
@@ -109,7 +127,7 @@ export function CamposDoPasso(props: CamposDoPassoProps) {
       )}
 
       {tipo === 'condicao' && (
-        <Seccao titulo="Só continua se">
+        <Seccao titulo="Só continua se" icone={Filter}>
           <Campo label="Campo do evento">
             {campos.length > 0 ? (
               <Select
@@ -192,7 +210,7 @@ export function CamposDoPasso(props: CamposDoPassoProps) {
       )}
 
       {interna && (
-        <Seccao titulo="Acção no sistema">
+        <Seccao titulo="Acção no sistema" icone={Settings2}>
           {/* Falha fechada: sem catálogo não se inventam acções localmente.
               Oferecer uma lista adivinhada levaria o utilizador a gravar
               configuração que o servidor recusa. */}
@@ -280,10 +298,13 @@ export function CamposDoPasso(props: CamposDoPassoProps) {
         </Seccao>
       )}
 
-      {(acaoTipo === 'notificacao' || acaoTipo === 'email') && (
+      {tipo === 'accao' && (acaoTipo === 'notificacao' || acaoTipo === 'email') && (
         <>
           {/* Notificação e email escolhem destinatários da mesma forma — só
-              o canal (badge dentro de Destinatarios) muda. */}
+              o canal (badge dentro de Destinatarios) muda. Sem o `tipo ===
+              'accao'` aqui, um nó de gatilho — que não tem `acaoTipo` e por
+              isso cai no valor por omissão 'notificacao' — mostrava esta
+              secção também. */}
           <Destinatarios
             noId={noId}
             dados={dados}
@@ -301,7 +322,7 @@ export function CamposDoPasso(props: CamposDoPassoProps) {
       )}
 
       {tipo === 'accao' && (
-        <Seccao titulo="Frequência">
+        <Seccao titulo="Frequência" icone={Timer}>
           <Campo label="Cooldown (minutos)">
             <Input
               type="number"
