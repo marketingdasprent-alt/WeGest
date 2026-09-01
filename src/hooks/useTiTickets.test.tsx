@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-import { abrirTiAnexo, useMarcarResolvido, useReabrirTicket } from './useTiTickets';
+import {
+  abrirTiAnexo,
+  useMarcarResolvido,
+  useMeusTiTickets,
+  useReabrirTicket,
+} from './useTiTickets';
 import { supabase } from '@/integrations/supabase/client';
 
 function createWrapper() {
@@ -51,6 +56,63 @@ describe('abrirTiAnexo', () => {
     const url = await abrirTiAnexo('ticket-1/123-foto.png');
 
     expect(url).toBeNull();
+  });
+});
+
+describe('useMeusTiTickets', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('devolve lista vazia sem rebentar quando não há sessão', async () => {
+    (supabase as unknown as { auth: { getUser: unknown } }).auth.getUser = vi
+      .fn()
+      .mockResolvedValue({ data: { user: null }, error: null });
+
+    const { result } = renderHook(() => useMeusTiTickets(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([]);
+    // Sem sessão, nem vale a pena perguntar à BD — não há utilizador para filtrar.
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  // O `.eq('criado_por', uid)` é a segunda camada de garantia (a RLS já
+  // limita, mas explicitar aqui evita depender só dela).
+  it('filtra os pedidos por criado_por do utilizador da sessão', async () => {
+    (supabase as unknown as { auth: { getUser: unknown } }).auth.getUser = vi
+      .fn()
+      .mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
+
+    const order = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 't1',
+          numero: 3,
+          autor_nome: 'Bruno Paulo',
+          autor_email: 'bruno@exemplo.pt',
+          descricao: 'Impressora encravada',
+          status: 'aberto',
+          created_at: '2026-09-01T10:00:00Z',
+          organizacao: null,
+          resolvido_por_nome: null,
+          resolvido_em: null,
+          sugestoes: [],
+          anexos: [],
+        },
+      ],
+      error: null,
+    });
+    const eq = vi.fn().mockReturnValue({ order });
+    const select = vi.fn().mockReturnValue({ eq });
+    (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue({ select });
+
+    const { result } = renderHook(() => useMeusTiTickets(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.data).toHaveLength(1));
+    expect(supabase.from).toHaveBeenCalledWith('ti_tickets');
+    expect(eq).toHaveBeenCalledWith('criado_por', 'u1');
+    expect(result.current.data?.[0].numero).toBe(3);
   });
 });
 

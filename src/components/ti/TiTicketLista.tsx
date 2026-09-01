@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -14,7 +15,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Paperclip } from 'lucide-react';
+import { Paperclip, Search } from 'lucide-react';
 import {
   abrirTiAnexo,
   useCriarSugestao,
@@ -23,20 +24,8 @@ import {
   useReabrirTicket,
   useTiTickets,
 } from '@/hooks/useTiTickets';
-import type { EstadoTicket } from '@/lib/tiTicketEstados';
+import { ESTADO_TICKET_ROTULO } from '@/lib/tiTicketEstados';
 import { resumoContinuacao } from '@/lib/tiTicketContinuacao';
-
-/** Rótulo e tom de cada estado. Um só sítio, para o mesmo estado não ter dois nomes. */
-const ESTADOS: Record<
-  EstadoTicket,
-  { rotulo: string; variante: 'default' | 'secondary' | 'destructive' }
-> = {
-  aberto: { rotulo: 'Aberto', variante: 'default' },
-  com_sugestao: { rotulo: 'À espera de resposta', variante: 'secondary' },
-  nao_resolvido: { rotulo: 'A sugestão não resolveu', variante: 'destructive' },
-  presencial: { rotulo: 'A resolver presencialmente', variante: 'default' },
-  resolvido: { rotulo: 'Resolvido', variante: 'secondary' },
-};
 
 const TODAS = '__todas__';
 
@@ -50,6 +39,7 @@ export function TiTicketLista() {
   const [aSugerir, setASugerir] = useState<string | null>(null);
   const [texto, setTexto] = useState('');
   const [empresa, setEmpresa] = useState(TODAS);
+  const [pesquisa, setPesquisa] = useState('');
 
   // Quem faz suporte à plataforma vê os pedidos de todas as empresas; toda a
   // gente vê só os da sua. O filtro sai da própria lista em vez de uma query às
@@ -60,10 +50,20 @@ export function TiTicketLista() {
       Array.from(new Set(data.map((t) => t.organizacao?.nome).filter(Boolean) as string[])).sort(),
     [data]
   );
-  const visiveis = useMemo(
-    () => (empresa === TODAS ? data : data.filter((t) => t.organizacao?.nome === empresa)),
-    [data, empresa]
-  );
+  const visiveis = useMemo(() => {
+    const porEmpresa =
+      empresa === TODAS ? data : data.filter((t) => t.organizacao?.nome === empresa);
+    const termo = pesquisa.trim().toLowerCase();
+    if (!termo) return porEmpresa;
+    // Número, nome de quem pediu, ou texto da descrição — o que quem procura
+    // costuma ter à mão para encontrar um pedido específico.
+    return porEmpresa.filter(
+      (t) =>
+        String(t.numero).includes(termo) ||
+        t.autor_nome.toLowerCase().includes(termo) ||
+        t.descricao.toLowerCase().includes(termo)
+    );
+  }, [data, empresa, pesquisa]);
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
   if (error) {
@@ -109,7 +109,17 @@ export function TiTicketLista() {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Pedidos actuais ({visiveis.length})</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={pesquisa}
+              onChange={(e) => setPesquisa(e.target.value)}
+              placeholder="Pesquisar por número, nome ou texto"
+              className="h-9 w-56 bg-background pl-8"
+              aria-label="Pesquisar pedidos"
+            />
+          </div>
           {/* Só faz sentido filtrar por empresa quando há mais do que uma na
               lista — para quem vê só a sua, seria um controlo com uma opção. */}
           {empresas.length > 1 && (
@@ -132,12 +142,19 @@ export function TiTicketLista() {
 
       {visiveis.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          {data.length === 0 ? 'Ainda não há pedidos.' : 'Nenhum pedido desta empresa.'}
+          {data.length === 0
+            ? 'Ainda não há pedidos.'
+            : pesquisa.trim()
+              ? 'Nenhum pedido corresponde à pesquisa.'
+              : 'Nenhum pedido desta empresa.'}
         </p>
       )}
 
       {visiveis.map((t) => {
-        const estado = ESTADOS[t.status] ?? { rotulo: t.status, variante: 'default' as const };
+        const estado = ESTADO_TICKET_ROTULO[t.status] ?? {
+          rotulo: t.status,
+          variante: 'default' as const,
+        };
         // As sugestões já vêm ordenadas do hook, por isso o índice é o número
         // da tentativa.
         const continuacao = resumoContinuacao(t.sugestoes);

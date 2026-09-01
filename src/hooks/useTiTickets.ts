@@ -45,6 +45,22 @@ export interface TiTicket {
 
 const CHAVE = ['ti-tickets'];
 
+const SELECT_TICKET_COMPLETO =
+  'id, numero, autor_nome, autor_email, descricao, status, created_at,' +
+  ' resolvido_por_nome, resolvido_em,' +
+  ' organizacao:organizacoes(nome),' +
+  ' sugestoes:ti_ticket_sugestoes(id, texto, util, resposta_texto, criado_por_nome, created_at),' +
+  ' anexos:ti_ticket_anexos(id, nome, ficheiro_url, tamanho_bytes, mime_type, criado_por_nome, created_at)';
+
+/** Ordena sugestões e anexos DENTRO de cada pedido pela ordem em que foram criados. */
+function normalizarTickets(data: TiTicket[] | null): TiTicket[] {
+  return (data ?? []).map((t) => ({
+    ...t,
+    sugestoes: ordenarSugestoes(t.sugestoes ?? []),
+    anexos: [...(t.anexos ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at)),
+  }));
+}
+
 /**
  * Nome de quem está a usar a aplicação, para creditar quem respondeu ou
  * resolveu.
@@ -80,22 +96,39 @@ export function useTiTickets(enabled = true) {
       // ver", e seria essa a que ficaria desactualizada.
       const { data, error } = await (supabase as any)
         .from('ti_tickets')
-        .select(
-          'id, numero, autor_nome, autor_email, descricao, status, created_at,' +
-            ' resolvido_por_nome, resolvido_em,' +
-            ' organizacao:organizacoes(nome),' +
-            ' sugestoes:ti_ticket_sugestoes(id, texto, util, resposta_texto, criado_por_nome, created_at),' +
-            ' anexos:ti_ticket_anexos(id, nome, ficheiro_url, tamanho_bytes, mime_type, criado_por_nome, created_at)'
-        )
+        .select(SELECT_TICKET_COMPLETO)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      // Pedidos do mais recente para o mais antigo, mas as sugestões e os
-      // anexos DENTRO de cada pedido pela ordem em que foram criados.
-      return ((data ?? []) as TiTicket[]).map((t) => ({
-        ...t,
-        sugestoes: ordenarSugestoes(t.sugestoes ?? []),
-        anexos: [...(t.anexos ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at)),
-      }));
+      return normalizarTickets(data as TiTicket[] | null);
+    },
+  });
+}
+
+/**
+ * O histórico de quem NÃO gere tickets: só os pedidos que a própria pessoa
+ * submeteu (enquanto tinha sessão — ver `criado_por` em `ti-ticket-submeter`).
+ * Modo leitura: quem vê isto nunca tem `ti_tickets_gerir`, por isso a RLS já
+ * limita a linhas próprias mesmo que o filtro `.eq` abaixo fosse removido —
+ * mas escrevê-lo explicitamente evita depender só da RLS para o comportamento
+ * correcto (uma segunda camada, não a única).
+ */
+export function useMeusTiTickets(enabled = true) {
+  return useQuery({
+    queryKey: [...CHAVE, 'meus'],
+    enabled,
+    queryFn: async (): Promise<TiTicket[]> => {
+      const { data: userData, error: erroUser } = await supabase.auth.getUser();
+      if (erroUser) throw erroUser;
+      const uid = userData?.user?.id;
+      if (!uid) return [];
+
+      const { data, error } = await (supabase as any)
+        .from('ti_tickets')
+        .select(SELECT_TICKET_COMPLETO)
+        .eq('criado_por', uid)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return normalizarTickets(data as TiTicket[] | null);
     },
   });
 }

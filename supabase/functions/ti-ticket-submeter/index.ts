@@ -60,6 +60,19 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    // Quando quem submete tem sessão activa, liga o ticket à conta — é o que
+    // deixa "o meu histórico" aparecer-lhe depois. O browser já manda o token
+    // de sessão sozinho quando existe; sem sessão, o header traz só a apikey
+    // pública, e getUser() devolve null para essa — o caminho anónimo continua
+    // exactamente igual.
+    let criadoPor: string | null = null;
+    const authHeader = req.headers.get('authorization') ?? '';
+    const jwt = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (jwt) {
+      const { data: sessao } = await sb.auth.getUser(jwt);
+      criadoPor = sessao?.user?.id ?? null;
+    }
+
     // O token resolve a organização. Desativado = link rodado, já não serve.
     const { data: linha, error: tokenError } = await sb
       .from('ti_tokens')
@@ -116,6 +129,7 @@ Deno.serve(async (req) => {
         autor_nome: nome.trim(),
         autor_email: email.trim().toLowerCase(),
         descricao: descricao.trim(),
+        criado_por: criadoPor,
       })
       .select('id, numero')
       .single();

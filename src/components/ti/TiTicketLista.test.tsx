@@ -118,4 +118,58 @@ describe('TiTicketLista', () => {
     await waitFor(() => expect(screen.getByText('Impressora encravada')).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /\.png|\.pdf/ })).toBeNull();
   });
+
+  it('a pesquisa filtra por número, nome do autor e texto da descrição', async () => {
+    mockTickets([
+      {
+        id: 't1',
+        numero: 1,
+        autor_nome: 'Bruno Paulo',
+        autor_email: 'bruno@exemplo.pt',
+        descricao: 'O portátil não liga',
+        status: 'aberto',
+        created_at: '2026-09-01T10:00:00Z',
+        organizacao: null,
+        resolvido_por_nome: null,
+        resolvido_em: null,
+        sugestoes: [],
+        anexos: [],
+      },
+      {
+        id: 't2',
+        numero: 2,
+        autor_nome: 'Márcia Gil',
+        autor_email: 'marcia@exemplo.pt',
+        descricao: 'Impressora encravada',
+        status: 'aberto',
+        created_at: '2026-09-01T10:00:00Z',
+        organizacao: null,
+        resolvido_por_nome: null,
+        resolvido_em: null,
+        sugestoes: [],
+        anexos: [],
+      },
+    ]);
+
+    renderComQueryClient();
+    await waitFor(() => expect(screen.getByText('Pedidos actuais (2)')).toBeInTheDocument());
+
+    const campo = screen.getByLabelText('Pesquisar pedidos');
+
+    fireEvent.change(campo, { target: { value: 'impressora' } });
+    await waitFor(() => expect(screen.getByText('Pedidos actuais (1)')).toBeInTheDocument());
+    expect(screen.getByText('Impressora encravada')).toBeInTheDocument();
+    expect(screen.queryByText('O portátil não liga')).toBeNull();
+
+    fireEvent.change(campo, { target: { value: 'bruno' } });
+    await waitFor(() => expect(screen.getByText('O portátil não liga')).toBeInTheDocument());
+
+    fireEvent.change(campo, { target: { value: '2' } });
+    await waitFor(() => expect(screen.getByText('Impressora encravada')).toBeInTheDocument());
+
+    fireEvent.change(campo, { target: { value: 'nada-a-ver' } });
+    await waitFor(() =>
+      expect(screen.getByText('Nenhum pedido corresponde à pesquisa.')).toBeInTheDocument()
+    );
+  });
 });
