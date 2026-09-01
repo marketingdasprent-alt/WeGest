@@ -62,7 +62,7 @@ function Construtor() {
     setVista,
   } = useEditorAutomacao();
   const cores = useCoresDoCanvas();
-  const { fitView, screenToFlow } = useRealFlow();
+  const { fitView, screenToFlow, deleteSelection } = useRealFlow();
 
   /**
    * O `fitView` da prop só corre na montagem — e nessa altura o canvas ainda
@@ -87,23 +87,34 @@ function Construtor() {
   const sequencia = useRef(0);
 
   /**
-   * Ctrl/Cmd+Z e Ctrl/Cmd+Shift+Z.
+   * Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, e Delete/Backspace para apagar a selecção.
    *
-   * Ignorados enquanto o foco está num campo de texto: aí o desfazer que se
-   * espera é o do próprio input, não o do grafo.
+   * A biblioteca traz os três de fábrica via `keyboardShortcuts`, mas esse
+   * prop é um interruptor único — ligá-lo também liga o undo/redo *dela*,
+   * que discorda do nosso (amarrado à assinatura do fluxo). Por isso o prop
+   * fica desligado e os três atalhos são geridos aqui, incluindo o apagar,
+   * que a biblioteca continua a fazer bem através de `deleteSelection`.
+   *
+   * Ignorados enquanto o foco está num campo de texto: aí o que se espera é
+   * o comportamento do próprio input, não o do grafo.
    */
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
       const alvo = e.target as HTMLElement | null;
       if (alvo?.closest('input, textarea, [contenteditable="true"]')) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        deleteSelection();
+        return;
+      }
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
       e.preventDefault();
       if (e.shiftKey) refazer();
       else desfazer();
     };
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
-  }, [desfazer, refazer]);
+  }, [desfazer, refazer, deleteSelection]);
 
   const arrumar = useCallback(() => {
     setNodes(arrumarFluxo(nodes, edges));
@@ -225,11 +236,9 @@ function Construtor() {
           setIdSeleccionado(no.id);
         }}
         onPaneClick={() => setIdSeleccionado(null)}
-        // Delete e Backspace apagam o que estiver seleccionado.
-        deleteKey
-        // O desfazer/refazer é o nosso — está amarrado à assinatura do fluxo,
-        // que é o mesmo cálculo que decide o badge "alterações por guardar".
-        // Ligar os atalhos internos punha os dois a discordar.
+        // Delete/Backspace, undo/redo: geridos no useEffect acima, não aqui —
+        // `keyboardShortcuts` é um interruptor único e ligá-lo traria de
+        // volta o undo/redo da biblioteca, que discorda do nosso.
         keyboardShortcuts={false}
         fitViewOnInit
         fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
