@@ -419,10 +419,10 @@ const FormularioPublico = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white/60 mx-auto mb-4"></div>
-          <p className="text-white text-lg">Carregando formulário...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-foreground text-lg">Carregando formulário...</p>
         </div>
       </div>
     );
@@ -430,10 +430,10 @@ const FormularioPublico = () => {
 
   if (!formulario) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">Formulário não encontrado</h1>
-          <p className="text-gray-400">
+          <h1 className="text-2xl font-bold text-foreground mb-4">Formulário não encontrado</h1>
+          <p className="text-muted-foreground">
             O formulário que você está procurando não existe ou está inativo.
           </p>
         </div>
@@ -444,10 +444,12 @@ const FormularioPublico = () => {
   // Se não há campos dinâmicos, mostrar mensagem
   if (!formulario.campos || formulario.campos.length === 0) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">Formulário em Configuração</h1>
-          <p className="text-gray-400">Este formulário ainda não possui campos configurados.</p>
+          <h1 className="text-2xl font-bold text-foreground mb-4">Formulário em Configuração</h1>
+          <p className="text-muted-foreground">
+            Este formulário ainda não possui campos configurados.
+          </p>
         </div>
       </div>
     );
@@ -469,7 +471,7 @@ const FormularioPublico = () => {
   return (
     // `variaveisCss` redefine `--primary` neste ramo: o indicador de etapas e
     // tudo o que use `bg-primary` seguem a cor da organização sem saberem dela.
-    <div className="min-h-screen bg-black" style={marca.variaveisCss}>
+    <div className="min-h-screen bg-background" style={marca.variaveisCss}>
       <motion.section
         className="relative py-20 px-4 text-center overflow-hidden min-h-screen flex items-center"
         initial="initial"
@@ -495,7 +497,7 @@ const FormularioPublico = () => {
           </motion.div>
 
           <motion.h1
-            className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight"
+            className="text-5xl md:text-7xl font-bold text-foreground mb-6 leading-tight"
             variants={fadeInUp}
           >
             {formulario.nome}
@@ -503,7 +505,7 @@ const FormularioPublico = () => {
 
           {formulario.descricao && (
             <motion.p
-              className="text-xl md:text-2xl text-gray-300 mb-8 max-w-3xl mx-auto leading-relaxed"
+              className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed"
               variants={fadeInUp}
             >
               {formulario.descricao}
@@ -512,7 +514,7 @@ const FormularioPublico = () => {
 
           {/* Form Modal ou Success Message */}
           <motion.div
-            className="bg-gray-900 border rounded-3xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto mx-auto"
+            className="bg-card border rounded-3xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto mx-auto"
             style={{ borderColor: marca.corDeContorno }}
             variants={fadeInUp}
           >
@@ -521,8 +523,8 @@ const FormularioPublico = () => {
               <div className="text-center">
                 <div className="mb-6">
                   <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                  <h3 className="text-2xl font-bold text-white mb-2">Formulário Enviado!</h3>
-                  <p className="text-gray-300 mb-6">
+                  <h3 className="text-2xl font-bold text-foreground mb-2">Formulário Enviado!</h3>
+                  <p className="text-muted-foreground mb-6">
                     Sua solicitação foi enviada com sucesso. Nossa equipe entrará em contacto
                     brevemente para finalizar os detalhes.
                   </p>
@@ -539,8 +541,8 @@ const FormularioPublico = () => {
               // Form
               <>
                 <div className="text-center mb-8">
-                  <h3 className="text-2xl font-bold text-white mb-2">Complete os Dados</h3>
-                  <p className="text-gray-300">Preencha as informações para continuar</p>
+                  <h3 className="text-2xl font-bold text-foreground mb-2">Complete os Dados</h3>
+                  <p className="text-muted-foreground">Preencha as informações para continuar</p>
                 </div>
 
                 <ProgressIndicator
@@ -573,7 +575,7 @@ const FormularioPublico = () => {
                     variant="outline"
                     onClick={handlePrevious}
                     disabled={currentStep === 0}
-                    className="bg-transparent hover:bg-white/5"
+                    className="bg-transparent hover:bg-muted"
                     style={{ borderColor: marca.corDeContorno, color: marca.cor }}
                   >
                     Anterior
@@ -614,7 +616,7 @@ const FormularioPublico = () => {
           fixo em "© 2024 DasPrent": todas as organizações mostravam a marca
           de outra empresa a quem preenchia o formulário delas. */}
       <footer className="py-8 px-4 text-center">
-        <p className="text-gray-400 text-sm">
+        <p className="text-muted-foreground text-sm">
           © {new Date().getFullYear()} {organizacao?.nome ?? 'WeGest'}. Todos os direitos
           reservados.
         </p>
