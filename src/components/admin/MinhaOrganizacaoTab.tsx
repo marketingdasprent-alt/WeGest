@@ -21,6 +21,8 @@ interface FormData {
   telefone: string;
   logo_url: string;
   email_suporte: string;
+  /** Hexadecimal #RRGGBB, ou vazio para usar a cor da aplicação. */
+  cor_primaria: string;
 }
 
 const emptyForm = (): FormData => ({
@@ -31,6 +33,7 @@ const emptyForm = (): FormData => ({
   telefone: '',
   logo_url: '',
   email_suporte: '',
+  cor_primaria: '',
 });
 
 export const MinhaOrganizacaoTab: React.FC = () => {
@@ -50,7 +53,7 @@ export const MinhaOrganizacaoTab: React.FC = () => {
     // hooks de TI já usam para as tabelas ti_*.
     const { data, error } = await (supabase as any)
       .from('organizacoes')
-      .select('nome, codigo, nif, morada, telefone, logo_url, email_suporte')
+      .select('nome, codigo, nif, morada, telefone, logo_url, email_suporte, cor_primaria')
       .eq('id', orgId)
       .single();
 
@@ -66,6 +69,7 @@ export const MinhaOrganizacaoTab: React.FC = () => {
         telefone: data.telefone ?? '',
         logo_url: data.logo_url ?? '',
         email_suporte: data.email_suporte ?? '',
+        cor_primaria: data.cor_primaria ?? '',
       });
     }
     setLoading(false);
@@ -112,6 +116,8 @@ export const MinhaOrganizacaoTab: React.FC = () => {
         logo_url: form.logo_url.trim() || null,
         // Vazio grava NULL — é o que desliga o aviso de novos pedidos.
         email_suporte: form.email_suporte.trim() || null,
+        // Vazio grava NULL: o formulário público cai na cor da aplicação.
+        cor_primaria: form.cor_primaria.trim() || null,
       })
       .eq('id', orgId);
 
@@ -275,6 +281,59 @@ export const MinhaOrganizacaoTab: React.FC = () => {
             )}
           </div>
         )}
+
+        <Separator />
+
+        {/* Cor da marca — usada nos ecrãs que o público vê (hoje, o formulário
+            público). Vazio = a organização usa a cor da aplicação. */}
+        <div className="space-y-1.5">
+          <Label htmlFor="cor_primaria">Cor da marca</Label>
+          {podeEditar ? (
+            <>
+              <div className="flex items-center gap-3">
+                <input
+                  id="cor_primaria"
+                  type="color"
+                  aria-label="Escolher cor da marca"
+                  value={form.cor_primaria || '#008073'}
+                  onChange={(e) => setForm((p) => ({ ...p, cor_primaria: e.target.value }))}
+                  className="h-10 w-14 cursor-pointer rounded border border-border bg-card p-1"
+                />
+                <Input
+                  value={form.cor_primaria}
+                  onChange={(e) => setForm((p) => ({ ...p, cor_primaria: e.target.value }))}
+                  placeholder="#008073"
+                  className="w-36 font-mono uppercase"
+                  maxLength={7}
+                />
+                {form.cor_primaria && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setForm((p) => ({ ...p, cor_primaria: '' }))}
+                  >
+                    Limpar
+                  </Button>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Aplicada aos formulários públicos desta organização. Sem cor nem logótipo definidos,
+                o formulário usa a marca WeGest.
+              </p>
+            </>
+          ) : form.cor_primaria ? (
+            <div className="flex items-center gap-2">
+              <span
+                className="h-5 w-5 rounded border border-border"
+                style={{ backgroundColor: form.cor_primaria }}
+              />
+              <span className="text-sm font-mono uppercase">{form.cor_primaria}</span>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">—</p>
+          )}
+        </div>
 
         {podeEditar && (
           <div className="flex justify-end pt-2">
