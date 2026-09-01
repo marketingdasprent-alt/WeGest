@@ -13418,12 +13418,14 @@ export type Database = {
     Views: {
       automacao_estatisticas_por_regra: {
         Row: {
+          acao_tipo: string | null
           ativo: boolean | null
           cooldown_minutos: number | null
           duracao_media_ms: number | null
           event_type: string | null
           execucoes: number | null
           falhas: number | null
+          grupo_id: string | null
           nome: string | null
           org_id: string | null
           rule_id: string | null
