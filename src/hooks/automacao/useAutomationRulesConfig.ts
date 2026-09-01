@@ -347,6 +347,36 @@ export function useSincronizarGrupo() {
  * Rate limit de 5 min é imposto no servidor (RPC) — este hook só reflete
  * o erro que vier de lá.
  */
+/**
+ * Interface do resultado de `testar_regra_automacao` — ver
+ * docs/superpowers/specs/2026-09-01-testar-automacao-individualmente-design.md.
+ */
+export interface ResultadoTesteRegra {
+  notificacao_id: string;
+  email_enviado: boolean;
+  email_teste: string | null;
+  payload_de: string;
+  destinatarios_reais: { nome: string; email: string; motivo: string }[];
+}
+
+/**
+ * Botão "Testar" no painel de propriedades: envia um aviso a sério, mas só
+ * para quem testou — nunca para os destinatários configurados na regra.
+ * Não passa pelo motor de execução normal, por isso não invalida as queries
+ * de estatísticas (execuções/falhas não mudam com um teste).
+ */
+export function useTestarRegra() {
+  return useMutation({
+    mutationFn: async (ruleId: string) => {
+      const { data, error } = await supabase.rpc('testar_regra_automacao', {
+        p_rule_id: ruleId,
+      });
+      if (error) throw error;
+      return data as unknown as ResultadoTesteRegra;
+    },
+  });
+}
+
 export function useExecutarAutomacoesManualmente() {
   const queryClient = useQueryClient();
   return useMutation({
