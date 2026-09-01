@@ -79,23 +79,20 @@ export const FormularioCard: React.FC<FormularioCardProps> = ({
   return (
     <>
       <Card
-        className={`bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-gray-700/50 backdrop-blur-sm transition-all duration-300 ${
+        className={`transition-all duration-300 ${
           formulario.ativo
-            ? 'hover:border-yellow-500/50 hover:shadow-lg hover:shadow-yellow-500/10'
+            ? 'hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10'
             : 'opacity-75'
         }`}
       >
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-white text-lg font-semibold truncate">
-              {formulario.nome}
-            </CardTitle>
+            <CardTitle className="text-lg font-semibold truncate">{formulario.nome}</CardTitle>
             <div className="flex items-center gap-2">
               {podeGerir && (
                 <Switch
                   checked={formulario.ativo}
                   onCheckedChange={() => onToggleAtivo(formulario.id, formulario.ativo)}
-                  className="data-[state=checked]:bg-green-500"
                 />
               )}
               <Badge
@@ -103,7 +100,7 @@ export const FormularioCard: React.FC<FormularioCardProps> = ({
                 className={
                   formulario.ativo
                     ? 'bg-green-500/20 text-green-300 border-green-500/30'
-                    : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                    : 'bg-muted text-muted-foreground border-border'
                 }
               >
                 {formulario.ativo ? 'Ativo' : 'Inativo'}
@@ -111,36 +108,40 @@ export const FormularioCard: React.FC<FormularioCardProps> = ({
             </div>
           </div>
           {formulario.descricao && (
-            <p className="text-gray-400 text-sm mt-2 line-clamp-2">{formulario.descricao}</p>
+            <p className="text-muted-foreground text-sm mt-2 line-clamp-2">
+              {formulario.descricao}
+            </p>
           )}
         </CardHeader>
 
         <CardContent className="space-y-4">
           {/* Link do Formulário */}
-          <div className="p-3 rounded-lg bg-gray-800/50 border border-gray-700">
+          <div className="p-3 rounded-lg bg-muted/50 border border-border">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Link className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm text-gray-300">Link de Divulgação</span>
+                <Link className="h-4 w-4 text-primary" />
+                <span className="text-sm">Link de Divulgação</span>
               </div>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={copyFormLink}
-                className="border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10"
+                className="border-primary/30 text-primary hover:bg-primary/10"
               >
                 <Copy className="h-3 w-3" />
               </Button>
             </div>
-            <p className="text-xs text-gray-500 mt-1 truncate">/formulario/{formulario.id}</p>
+            <p className="text-xs text-muted-foreground mt-1 truncate">
+              /formulario/{formulario.id}
+            </p>
           </div>
 
           {/* Campanhas Associadas */}
           {formulario.campanhas && formulario.campanhas.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Tag className="h-4 w-4 text-gray-400" />
-                <span className="text-sm text-gray-400">Campanhas</span>
+                <Tag className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Campanhas</span>
               </div>
               <div className="flex flex-wrap gap-1">
                 {formulario.campanhas.slice(0, 3).map((campanha) => (
@@ -152,7 +153,7 @@ export const FormularioCard: React.FC<FormularioCardProps> = ({
                   </Badge>
                 ))}
                 {formulario.campanhas.length > 3 && (
-                  <Badge className="bg-gray-600/20 text-gray-400 border-gray-600/30 px-2 py-1 text-xs">
+                  <Badge className="bg-muted text-muted-foreground border-border px-2 py-1 text-xs">
                     +{formulario.campanhas.length - 3}
                   </Badge>
                 )}
@@ -161,7 +162,7 @@ export const FormularioCard: React.FC<FormularioCardProps> = ({
           )}
 
           {/* Data de Criação */}
-          <div className="flex items-center gap-2 text-gray-500 text-xs">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs">
             <Calendar className="h-3 w-3" />
             <span>
               Criado em {format(new Date(formulario.created_at), 'dd/MM/yyyy', { locale: pt })}
@@ -175,7 +176,7 @@ export const FormularioCard: React.FC<FormularioCardProps> = ({
                 size="sm"
                 variant="outline"
                 onClick={() => onEdit(formulario)}
-                className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-yellow-500 hover:border-yellow-500/50"
+                className="flex-1 hover:text-primary hover:border-primary/50"
               >
                 <Edit className="h-3 w-3 mr-1" />
                 Editar
@@ -184,7 +185,7 @@ export const FormularioCard: React.FC<FormularioCardProps> = ({
                 size="sm"
                 variant="outline"
                 onClick={handleDeleteClick}
-                className="border-red-600/50 text-red-400 hover:bg-red-600/10 hover:border-red-500"
+                className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:border-destructive"
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
