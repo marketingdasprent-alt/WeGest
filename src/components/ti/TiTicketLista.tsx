@@ -202,6 +202,11 @@ export function TiTicketLista() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold">#{t.numero}</span>
                   <span className="text-sm text-muted-foreground">{t.autor_nome}</span>
+                  {/* Quando foi feito, dia e minuto — para quem gere vários
+                    pedidos da mesma pessoa distinguir qual é qual. */}
+                  <span className="text-xs text-muted-foreground">
+                    {format(new Date(t.created_at), 'dd/MM/yyyy HH:mm')}
+                  </span>
                   {/* De que empresa veio. O número do pedido é por organização,
                     portanto sem isto havia dois "#1" na mesma lista. */}
                   {empresas.length > 1 && t.organizacao?.nome && (
@@ -269,6 +274,8 @@ export function TiTicketLista() {
                   <p className="text-xs font-semibold text-muted-foreground">
                     Tentativa {i + 1}
                     {s.criado_por_nome && ` · por ${s.criado_por_nome}`}
+                    {' · '}
+                    {format(new Date(s.created_at), 'dd/MM/yyyy HH:mm')}
                   </p>
                   <p className="mt-1 whitespace-pre-wrap">{s.texto}</p>
                   <p className="mt-1 text-xs">

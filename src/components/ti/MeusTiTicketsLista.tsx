@@ -76,7 +76,12 @@ export function MeusTiTicketsLista() {
           return (
             <div key={t.id} className="space-y-3 rounded-lg border border-border p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-semibold">#{t.numero}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold">#{t.numero}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {format(new Date(t.created_at), 'dd/MM/yyyy HH:mm')}
+                  </span>
+                </div>
                 <Badge variant={estado.variante}>{estado.rotulo}</Badge>
               </div>
 
@@ -114,7 +119,9 @@ export function MeusTiTicketsLista() {
 
               {t.sugestoes.map((s, i) => (
                 <div key={s.id} className="rounded-md border border-border p-2 text-sm">
-                  <p className="text-xs font-semibold text-muted-foreground">Tentativa {i + 1}</p>
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    Tentativa {i + 1} · {format(new Date(s.created_at), 'dd/MM/yyyy HH:mm')}
+                  </p>
                   <p className="mt-1 whitespace-pre-wrap">{s.texto}</p>
                   <p className="mt-1 text-xs">
                     {s.util === true && (
