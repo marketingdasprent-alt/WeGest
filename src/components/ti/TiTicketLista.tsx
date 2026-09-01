@@ -187,7 +187,7 @@ export function TiTicketLista() {
         </p>
       )}
 
-      <div className="space-y-3">
+      <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-1">
         {naPagina.map((t) => {
           const estado = ESTADO_TICKET_ROTULO[t.status] ?? {
             rotulo: t.status,
