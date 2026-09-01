@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type { AutomationEdge as Edge, AutomationNode as Node } from './dominio/tipos';
 import { useToast } from '@/hooks/use-toast';
 import {
-  useAtualizarConfigRegra,
-  useAutomationRuleConfig,
+  useGrupoDeRegras,
+  useSincronizarGrupo,
   type AutomationRuleAcaoConfig,
 } from '@/hooks/automacao/useAutomationRulesConfig';
 import { useAutomacaoEstatisticasPorRegra } from '@/hooks/useAutomationQueue';
@@ -19,8 +19,8 @@ import {
   registar,
   type PilhaDeEdicoes,
 } from './pilhaDeEdicoes';
-import { configDoFluxo } from './configDoFluxo';
-import { fluxoDaRegra, type CondicaoGravada } from './fluxoDaRegra';
+import { configsDoFluxo } from './configDoFluxo';
+import { fluxoDaRegra, type CondicaoGravada, type RegraParaEditar } from './fluxoDaRegra';
 import { serializarFluxo } from './serializar';
 import { TODOS_OS_MODULOS } from '../rotulos';
 
@@ -35,8 +35,16 @@ import { TODOS_OS_MODULOS } from '../rotulos';
  */
 export function semChavesDeEmailAntigo(
   config: AutomationRuleAcaoConfig
-): Omit<AutomationRuleAcaoConfig, 'enviar_email' | 'enviar_email_digest'> {
-  const { enviar_email: _enviarEmail, enviar_email_digest: _enviarEmailDigest, ...resto } = config;
+): Omit<
+  AutomationRuleAcaoConfig,
+  'enviar_email' | 'enviar_email_digest' | 'destinatarios_emails_livres'
+> {
+  const {
+    enviar_email: _enviarEmail,
+    enviar_email_digest: _enviarEmailDigest,
+    destinatarios_emails_livres: _emailsLivres,
+    ...resto
+  } = config;
   return resto;
 }
 
@@ -67,52 +75,57 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
   const aRestaurar = useRef(false);
   const { toast } = useToast();
 
-  const { data: config } = useAutomationRuleConfig(regraId);
-  const atualizar = useAtualizarConfigRegra();
+  const { data: grupo } = useGrupoDeRegras(regraId);
+  const sincronizar = useSincronizarGrupo();
   // Mesma query da lista — o React Query devolve a cache, sem pedido novo.
   const { data: estatisticas = [] } = useAutomacaoEstatisticasPorRegra();
   const { data: ultimaFalha = null } = useUltimaFalhaDaRegra(regraId);
-  const estatistica = estatisticas.find((e) => e.rule_id === regraId) ?? null;
 
   /** Assinatura do que está gravado. Comparada com a actual para saber se há alterações. */
   const referencia = useRef<string>(assinaturaDoFluxo([], []));
 
   /**
-   * Carrega a regra escolhida na tabela.
+   * Carrega o grupo de regras-irmãs escolhido na tabela.
    *
-   * Depende da config e não só do id: reagir ao id sozinho limpava o canvas
+   * Depende do grupo e não só do id: reagir ao id sozinho limpava o canvas
    * antes de a query responder, e via-se o editor a piscar vazio.
    */
   useEffect(() => {
-    if (!regraId || !config) return;
+    if (!regraId || !grupo || grupo.length === 0) return;
 
-    const condicoes = Array.isArray(config.condicoes)
-      ? (config.condicoes as CondicaoGravada[])
-      : [];
-    const fluxo = fluxoDaRegra({
-      ruleId: config.id,
-      nome: config.nome,
-      eventType: config.event_type,
-      cooldownMinutos: config.cooldown_minutos,
-      cargoIds: config.acao_config?.destinatarios_cargo_ids ?? [],
-      modo: config.acao_config?.destinatarios_modo ?? 'grupo',
-      userIds: config.acao_config?.destinatarios_user_ids ?? [],
-      condicoes,
-      acaoTipo: config.acao_tipo,
-      acaoConfig: (config.acao_config ?? {}) as unknown as Record<string, unknown>,
-      // Estado vem das estatísticas, não da config: é o que já correu.
-      ativo: estatistica?.ativo ?? true,
-      ultimaExecucao: estatistica?.ultima_execucao ?? null,
-      duracaoMediaMs: estatistica?.duracao_media_ms ?? null,
-      falhas: estatistica?.falhas ?? 0,
-      ultimaFalha,
+    const regras: RegraParaEditar[] = grupo.map((config) => {
+      const condicoes = Array.isArray(config.condicoes)
+        ? (config.condicoes as CondicaoGravada[])
+        : [];
+      const estatisticaDesta = estatisticas.find((e) => e.rule_id === config.id) ?? null;
+      return {
+        ruleId: config.id,
+        nome: config.nome,
+        eventType: config.event_type,
+        cooldownMinutos: config.cooldown_minutos,
+        cargoIds: config.acao_config?.destinatarios_cargo_ids ?? [],
+        modo: config.acao_config?.destinatarios_modo ?? 'grupo',
+        userIds: config.acao_config?.destinatarios_user_ids ?? [],
+        condicoes,
+        acaoTipo: config.acao_tipo,
+        acaoConfig: (config.acao_config ?? {}) as unknown as Record<string, unknown>,
+        ativo: config.ativo,
+        ultimaExecucao: estatisticaDesta?.ultima_execucao ?? null,
+        duracaoMediaMs: estatisticaDesta?.duracao_media_ms ?? null,
+        falhas: estatisticaDesta?.falhas ?? 0,
+        // useUltimaFalhaDaRegra só busca a do regraId aberto — as outras
+        // regras-irmãs ficam sem esta informação nesta fase.
+        ultimaFalha: config.id === regraId ? ultimaFalha : null,
+      };
     });
+
+    const fluxo = fluxoDaRegra(regras);
     setNodes(fluxo.nodes);
     setEdges(fluxo.edges);
     // Acabado de carregar não é "por guardar": a referência passa a ser isto.
     referencia.current = assinaturaDoFluxo(fluxo.nodes, fluxo.edges);
     setGuardadoEm(null);
-  }, [regraId, config, estatistica, ultimaFalha, setNodes, setEdges]);
+  }, [regraId, grupo, estatisticas, ultimaFalha, setNodes, setEdges]);
 
   const assinatura = assinaturaDoFluxo(nodes, edges);
   const sujo = assinatura !== referencia.current;
@@ -180,7 +193,7 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
 
       // Sem regra carregada não há onde gravar: criar automações de raiz precisa
       // de um endpoint que ainda não existe.
-      if (!regraId || !config) {
+      if (!regraId || !grupo || grupo.length === 0) {
         toast({
           title: 'Payload gerado',
           description: 'Criar automações novas ainda não grava — o payload está na consola.',
@@ -188,48 +201,74 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const extraida = configDoFluxo(nos);
-      if (!extraida) {
+      const configs = configsDoFluxo(nos, edges);
+      if (!configs) {
         toast({
           title: 'Nada para guardar',
-          description: 'O fluxo precisa de um bloco "Enviar notificação".',
+          description:
+            'Cada acção precisa de um caminho até ao gatilho, e nenhum nó pode ter duas ligações a entrar.',
           variant: 'destructive',
         });
         return;
       }
 
+      const grupoId = grupo[0].grupo_id;
+
       try {
-        await atualizar.mutateAsync({
-          id: regraId,
-          acaoTipo: extraida.acaoTipo,
-          // Uma acção interna SUBSTITUI a config em vez de fundir. Fundir
-          // arrastaria `template_codigo`, `destinatarios_*` e o resto da
-          // configuração de notificação para dentro de uma acção que não os
-          // usa — e o validador do servidor recusa chaves que não conhece.
-          //
-          // Notificação e email continuam a FUNDIR: o editor não mostra tudo o
-          // que lá está (ex.: `enviar_email_digest`, sem controlo na UI), e
-          // substituir apagava em silêncio o que não mostra.
-          acaoConfig: extraida.acaoInterna
-            ? extraida.acaoInterna
-            : {
-                // `enviar_email` deixou de ser válido numa notificação — o
-                // email tem acção própria desde 2026-09-01, e o validador do
-                // servidor recusa a chave. Uma regra anterior à divisão que
-                // ainda a tivesse perde-a aqui; uma acção de email nunca a
-                // teve. `enviar_email_digest` sai com ela só para
-                // notificação — para email continua válido.
-                ...(extraida.acaoTipo === 'notificacao'
-                  ? semChavesDeEmailAntigo(config.acao_config)
-                  : config.acao_config),
-                destinatarios_cargo_ids: extraida.cargoIds,
-                // O editor passou a cobrir a escolha de pessoas — já não há
-                // Sheet separada a escrevê-las por trás.
-                destinatarios_modo: extraida.modo,
-                destinatarios_user_ids: extraida.userIds,
-              },
-          cooldownMinutos: extraida.cooldownMinutos,
-          condicoes: extraida.condicoes,
+        await sincronizar.mutateAsync({
+          grupoId,
+          orgId: grupo[0].org_id,
+          eventType: grupo[0].event_type,
+          nome: grupo[0].nome,
+          idsExistentes: grupo.map((g) => g.id),
+          acoes: configs.map((extraida) => {
+            // Um nó hidratado de uma regra existente tem id `accao-${g.id}`
+            // (ver fluxoDaRegra) — casa com exactamente uma regra-irmã. Um
+            // nó novo (arrastado nesta sessão) nunca casa com nenhum `g.id`,
+            // e configExistente fica undefined — é assim que se distingue
+            // "actualizar" de "criar" mais abaixo.
+            const configExistente = grupo.find((g) => extraida.noId === `accao-${g.id}`);
+
+            return {
+              id: configExistente?.id,
+              acaoTipo: extraida.acaoTipo,
+              // Uma acção interna SUBSTITUI a config em vez de fundir. Fundir
+              // arrastaria `template_codigo`, `destinatarios_*` e o resto da
+              // configuração de notificação para dentro de uma acção que não os
+              // usa — e o validador do servidor recusa chaves que não conhece.
+              //
+              // Notificação e email continuam a FUNDIR: o editor não mostra tudo o
+              // que lá está (ex.: `enviar_email_digest`, sem controlo na UI), e
+              // substituir apagava em silêncio o que não mostra.
+              acaoConfig: extraida.acaoInterna
+                ? extraida.acaoInterna
+                : {
+                    // `enviar_email` deixou de ser válido numa notificação — o
+                    // email tem acção própria desde 2026-09-01, e o validador do
+                    // servidor recusa a chave. Uma regra anterior à divisão que
+                    // ainda a tivesse perde-a aqui; uma acção de email nunca a
+                    // teve. `enviar_email_digest` sai com ela só para
+                    // notificação — para email continua válido.
+                    ...(extraida.acaoTipo === 'notificacao'
+                      ? semChavesDeEmailAntigo(
+                          configExistente?.acao_config ?? { template_codigo: '', titulo: '' }
+                        )
+                      : (configExistente?.acao_config ?? { template_codigo: '', titulo: '' })),
+                    destinatarios_cargo_ids: extraida.cargoIds,
+                    // O editor passou a cobrir a escolha de pessoas — já não há
+                    // Sheet separada a escrevê-las por trás.
+                    destinatarios_modo: extraida.modo,
+                    destinatarios_user_ids: extraida.userIds,
+                    // Só entra quando a acção É de email — extraida.emailsLivres
+                    // é null nos outros tipos precisamente para isto nunca correr.
+                    ...(extraida.emailsLivres !== null
+                      ? { destinatarios_emails_livres: extraida.emailsLivres }
+                      : {}),
+                  },
+              cooldownMinutos: extraida.cooldownMinutos,
+              condicoes: extraida.condicoes,
+            };
+          }),
         });
         referencia.current = assinaturaDoFluxo(nos, edges);
         setGuardadoEm(new Date());
@@ -241,7 +280,7 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [nodes, edges, regraId, config, atualizar, toast]
+    [nodes, edges, regraId, grupo, sincronizar, toast]
   );
 
   const valor = useMemo<EditorAutomacao>(
@@ -268,7 +307,7 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
       sujo,
       guardadoEm,
       guardar,
-      aGuardar: atualizar.isPending,
+      aGuardar: sincronizar.isPending,
       podeGuardar: nodes.length > 0,
     }),
     [
@@ -290,7 +329,7 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
       sujo,
       guardadoEm,
       guardar,
-      atualizar.isPending,
+      sincronizar.isPending,
     ]
   );
 

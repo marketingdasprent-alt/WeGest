@@ -31,7 +31,7 @@
 -- ============================================================
 
 begin;
-select plan(18);
+select plan(21);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'exec-runs-a');
@@ -311,6 +311,60 @@ select is(
     where q.destinatario = 'admin@exec-runs.pt' and n.rule_run_id = '00000000-0000-0000-0000-0000004c0008'),
   1,
   'acao_tipo=email enfileira email para o admin, sem depender de enviar_email na config'
+);
+
+-- Cenário I: destinatarios_emails_livres cria notifications+queue para
+-- endereços fora da WeGest, sem depender de nenhum utilizador resolvido.
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-000000460009', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_email_livre', 'Regra Email Livre', 'teste.evento9', 'email',
+   jsonb_build_object('titulo', 'Titulo de Teste', 'template_codigo', 'teste.notif',
+                       'destinatarios_emails_livres', jsonb_build_array('fornecedor@fora.pt', 'outro@fora.pt')));
+
+insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
+  ('00000000-0000-0000-0000-0000004c0009', '00000000-0000-0000-0000-000000460009', '00000000-0000-0000-0000-0000000a0000', 'viaturas', '00000000-0000-0000-0000-00000ef70009');
+
+select public.execute_automation_runs();
+
+-- 18. Cada endereço livre ganha a sua própria notifications, com o
+--     destinatario_email_externo certo — sem destinatario_user_id nenhum.
+--
+-- Filtrado a destinatario_email_externo is not null de propósito: este org
+-- tem um admin (00000000-0000-0000-0000-0000000a0001), e o laço geral do
+-- executor resolve sempre os admins da organização, independentemente de
+-- destinatarios_cargo_ids — já testado no Cenário A. Contar TODAS as
+-- notifications do run mediria as duas coisas juntas; esta asserção é só
+-- sobre os endereços livres.
+select is(
+  (select array_agg(destinatario_email_externo order by destinatario_email_externo)
+     from public.notifications
+    where rule_run_id = '00000000-0000-0000-0000-0000004c0009'
+      and destinatario_email_externo is not null),
+  array['fornecedor@fora.pt', 'outro@fora.pt'],
+  'cada endereço livre ganha a sua própria notifications'
+);
+
+-- 19. ...e cada uma enfileira, na fila de email.
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+    where n.rule_run_id = '00000000-0000-0000-0000-0000004c0009'
+      and n.destinatario_email_externo is not null),
+  2,
+  'os dois endereços livres enfileiram para envio'
+);
+
+-- 20. Idempotência: repor o run a pending e correr outra vez não duplica.
+update public.automation_runs set status = 'pending', error_message = null
+ where id = '00000000-0000-0000-0000-0000004c0009';
+
+select public.execute_automation_runs();
+
+select is(
+  (select count(*)::int from public.notifications
+    where rule_run_id = '00000000-0000-0000-0000-0000004c0009'
+      and destinatario_email_externo is not null),
+  2,
+  'um retry não duplica as notifications dos endereços livres'
 );
 
 select * from finish();

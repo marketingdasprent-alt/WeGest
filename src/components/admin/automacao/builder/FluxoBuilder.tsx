@@ -12,16 +12,17 @@ import { LayoutGrid, Plus, Redo2, Undo2, Workflow } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ExecucaoDrillDownSheet } from '../ExecucaoDrillDownSheet';
 import { IdentidadeDoFluxo } from './IdentidadeDoFluxo';
-import { criarNoDoTemplate, type TemplateDeNo } from './catalogo';
+import { criarNoDoTemplate, templatePorChave, type TemplateDeNo } from './catalogo';
 import { useCoresDoCanvas } from './coresDoCanvas';
 import type { AutomationEdge } from './dominio/tipos';
 import { useEditorAutomacao } from './editorAutomacao.contexto';
 import { edgeTypes } from './edges';
 import { arrumarFluxo } from './arrumarFluxo';
-import { inserirEntre, inserirNaPonta } from './inserirPasso';
+import { inserirEntre, inserirSolto } from './inserirPasso';
 import { nodeTypesBuilder } from './nodes';
 import { PainelBlocos } from './PainelBlocos';
 import { PainelPropriedades } from './sidebar/PainelPropriedades';
+import { validarLigacao } from './validarLigacao';
 import { TODOS_OS_MODULOS } from '../rotulos';
 import '@realflow/react/styles.css';
 
@@ -61,7 +62,7 @@ function Construtor() {
     setVista,
   } = useEditorAutomacao();
   const cores = useCoresDoCanvas();
-  const { fitView } = useRealFlow();
+  const { fitView, screenToFlow, deleteSelection } = useRealFlow();
 
   /**
    * O `fitView` da prop só corre na montagem — e nessa altura o canvas ainda
@@ -86,23 +87,34 @@ function Construtor() {
   const sequencia = useRef(0);
 
   /**
-   * Ctrl/Cmd+Z e Ctrl/Cmd+Shift+Z.
+   * Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, e Delete/Backspace para apagar a selecção.
    *
-   * Ignorados enquanto o foco está num campo de texto: aí o desfazer que se
-   * espera é o do próprio input, não o do grafo.
+   * A biblioteca traz os três de fábrica via `keyboardShortcuts`, mas esse
+   * prop é um interruptor único — ligá-lo também liga o undo/redo *dela*,
+   * que discorda do nosso (amarrado à assinatura do fluxo). Por isso o prop
+   * fica desligado e os três atalhos são geridos aqui, incluindo o apagar,
+   * que a biblioteca continua a fazer bem através de `deleteSelection`.
+   *
+   * Ignorados enquanto o foco está num campo de texto: aí o que se espera é
+   * o comportamento do próprio input, não o do grafo.
    */
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
       const alvo = e.target as HTMLElement | null;
       if (alvo?.closest('input, textarea, [contenteditable="true"]')) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        deleteSelection();
+        return;
+      }
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
       e.preventDefault();
       if (e.shiftKey) refazer();
       else desfazer();
     };
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
-  }, [desfazer, refazer]);
+  }, [desfazer, refazer, deleteSelection]);
 
   const arrumar = useCallback(() => {
     setNodes(arrumarFluxo(nodes, edges));
@@ -126,16 +138,35 @@ function Construtor() {
   const escolherBloco = useCallback(
     (template: TemplateDeNo) => {
       sequencia.current += 1;
-      const novo = criarNoDoTemplate(template, { x: 0, y: 0 }, sequencia.current);
       const alvo = arestaAlvo.current;
 
-      // Nós e arestas na mesma passagem: separá-las deixava o React Flow
-      // renderizar um instante com uma aresta a apontar a um nó inexistente.
-      const resultado = alvo
-        ? inserirEntre(nodes, edges, alvo, novo)
-        : inserirNaPonta(nodes, edges, novo);
-      setNodes(resultado.nodes);
-      setEdges(resultado.edges);
+      if (alvo) {
+        // Nós e arestas na mesma passagem: separá-las deixava o React Flow
+        // renderizar um instante com uma aresta a apontar a um nó inexistente.
+        const novo = criarNoDoTemplate(template, { x: 0, y: 0 }, sequencia.current);
+        const resultado = inserirEntre(nodes, edges, alvo, novo);
+        setNodes(resultado.nodes);
+        setEdges(resultado.edges);
+      } else {
+        // Sem aresta-alvo (clicou "Passo" na barra de topo): larga o bloco
+        // solto, ao lado do nó mais à direita — o utilizador liga à mão.
+        // Com várias acções possíveis por gatilho, "ligar ao último" deixou
+        // de ter um único significado correcto.
+        const posicao =
+          nodes.length === 0
+            ? { x: 0, y: 0 }
+            : nodes.reduce(
+                (maisAFrente, n) => (n.position.x > maisAFrente.x ? n.position : maisAFrente),
+                nodes[0].position
+              );
+        const resultado = inserirSolto(
+          nodes,
+          { x: posicao.x + 320, y: posicao.y },
+          template,
+          sequencia.current
+        );
+        setNodes(resultado.nodes);
+      }
       setPainelAberto(false);
     },
     [nodes, edges, setNodes, setEdges]
@@ -171,13 +202,32 @@ function Construtor() {
     | undefined;
 
   return (
-    <div className="relative h-full min-h-0 overflow-hidden rounded-xl border border-border bg-canvas">
+    <div
+      className="relative h-full min-h-0 overflow-hidden rounded-xl border border-border bg-canvas"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('application/x-wegest-bloco')) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }}
+      onDrop={(e) => {
+        const chave = e.dataTransfer.getData('application/x-wegest-bloco');
+        if (!chave) return;
+        e.preventDefault();
+        const template = templatePorChave(chave);
+        if (!template) return;
+        sequencia.current += 1;
+        const posicao = screenToFlow({ x: e.clientX, y: e.clientY });
+        const resultado = inserirSolto(nodes, posicao, template, sequencia.current);
+        setNodes(resultado.nodes);
+      }}
+    >
       <RealFlow
         nodes={nodes}
         edges={arestasComAccao}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        validateConnection={(candidato) => validarLigacao(candidato, nodes, edges)}
         nodeTypes={nodeTypesBuilder}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={arestaPorOmissao(cores.aresta)}
@@ -186,11 +236,9 @@ function Construtor() {
           setIdSeleccionado(no.id);
         }}
         onPaneClick={() => setIdSeleccionado(null)}
-        // Delete e Backspace apagam o que estiver seleccionado.
-        deleteKey
-        // O desfazer/refazer é o nosso — está amarrado à assinatura do fluxo,
-        // que é o mesmo cálculo que decide o badge "alterações por guardar".
-        // Ligar os atalhos internos punha os dois a discordar.
+        // Delete/Backspace, undo/redo: geridos no useEffect acima, não aqui —
+        // `keyboardShortcuts` é um interruptor único e ligá-lo traria de
+        // volta o undo/redo da biblioteca, que discorda do nosso.
         keyboardShortcuts={false}
         fitViewOnInit
         fitViewOptions={{ padding: 0.25, maxZoom: 1 }}

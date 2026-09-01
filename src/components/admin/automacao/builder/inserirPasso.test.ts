@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { AutomationEdge as Edge, AutomationNode as Node } from './dominio/tipos';
-import { inserirEntre, inserirNaPonta } from './inserirPasso';
+import { templatePorChave } from './catalogo';
+import { inserirEntre, inserirSolto } from './inserirPasso';
 
 function no(id: string, x = 0): Node {
   return { id, type: 'accao', position: { x, y: 0 }, data: {} };
@@ -51,22 +52,14 @@ describe('inserirEntre', () => {
   });
 });
 
-describe('inserirNaPonta', () => {
-  it('liga o passo novo ao último da corrente', () => {
-    const r = inserirNaPonta(
-      [no('a', 0), no('b', 400)],
-      [{ id: 'a-b', source: 'a', target: 'b' }],
-      NOVO()
-    );
+describe('inserirSolto', () => {
+  it('cria o nó sem nenhuma aresta', () => {
+    const gatilho: Node = { id: 't', type: 'trigger', position: { x: 0, y: 0 }, data: {} };
+    const template = templatePorChave('notificacao')!;
 
-    expect(r.edges.some((e) => e.source === 'b' && e.target === 'novo')).toBe(true);
-    expect(r.nodes.find((n) => n.id === 'novo')?.position.x).toBeGreaterThan(400);
-  });
+    const resultado = inserirSolto([gatilho], { x: 400, y: 200 }, template, 1);
 
-  it('num canvas vazio acrescenta sem ligação nenhuma', () => {
-    const r = inserirNaPonta([], [], NOVO());
-
-    expect(r.nodes).toHaveLength(1);
-    expect(r.edges).toEqual([]);
+    expect(resultado.nodes).toHaveLength(2);
+    expect(resultado.nodes[1].position).toEqual({ x: 400, y: 200 });
   });
 });

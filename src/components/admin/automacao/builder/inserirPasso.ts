@@ -1,11 +1,14 @@
 import type { AutomationEdge as Edge, AutomationNode as Node } from './dominio/tipos';
+import { criarNoDoTemplate, type TemplateDeNo } from './catalogo';
 
 /**
- * Acrescentar passos sem arrastar nada.
+ * As formas de acrescentar um passo ao fluxo.
  *
- * O `+` no meio de uma ligação e o `+` na ponta da corrente são as duas únicas
- * formas de crescer o fluxo — arrastar da paleta obrigava a acertar a posição
- * à mão e deixava blocos soltos por ligar.
+ * `inserirEntre` fica reservada ao "+" no meio de uma ligação existente —
+ * aí faz sentido religar as duas pontas através do passo novo. Para tudo o
+ * resto (arrastar da paleta, ou clicar sem uma aresta-alvo), o passo entra
+ * solto: com um gatilho a poder disparar várias acções em paralelo, não há
+ * um "último bloco" único a que ligar automaticamente.
  */
 
 /** Igual ao espaçamento com que o fluxo é desenhado a partir de uma regra. */
@@ -46,21 +49,20 @@ export function inserirEntre(
   };
 }
 
-export function inserirNaPonta(
+/**
+ * Larga um bloco no canvas sem ligação nenhuma.
+ *
+ * Com um gatilho a poder disparar várias acções em paralelo, "ligar ao
+ * último bloco" deixou de fazer sentido — não há como dizer se o novo nó
+ * é mais um ramo do gatilho ou uma continuação de outro. Quem liga é o
+ * utilizador, à mão.
+ */
+export function inserirSolto(
   nodes: Node[],
-  edges: Edge[],
-  novo: Node
-): { nodes: Node[]; edges: Edge[] } {
-  if (nodes.length === 0) return { nodes: [novo], edges };
-
-  // A ponta é o nó mais à direita — é assim que a corrente é desenhada.
-  const ultimo = nodes.reduce((a, b) => (b.position.x > a.position.x ? b : a));
-
-  return {
-    nodes: [
-      ...nodes,
-      { ...novo, position: { x: ultimo.position.x + PASSO_X, y: ultimo.position.y } },
-    ],
-    edges: [...edges, ligar(ultimo.id, novo.id)],
-  };
+  posicao: { x: number; y: number },
+  template: TemplateDeNo,
+  sequencia: number
+): { nodes: Node[] } {
+  const novo = criarNoDoTemplate(template, posicao, sequencia);
+  return { nodes: [...nodes, novo] };
 }

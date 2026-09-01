@@ -1,5 +1,5 @@
 begin;
-select plan(15);
+select plan(18);
 
 -- ============================================================================
 -- A acção de email, separada da notificação
@@ -104,6 +104,38 @@ select throws_ok($$
           'sem template', 'viatura.seguro_expirando', '[]'::jsonb, 'email',
           jsonb_build_object('titulo','X'), 'media', 1440, true)
 $$, '23514', null, 'o validador exige template_codigo numa acção de email');
+
+-- ── Fase 2: destinatarios_emails_livres ──────────────────────────────────
+select lives_ok($$
+  insert into public.automation_rules (org_id, codigo, nome, event_type, condicoes,
+                                       acao_tipo, acao_config, prioridade, cooldown_minutos, ativo)
+  values ('00000000-0000-0000-0000-0000000e0000', 'zz.teste.pgtap.email_livre', 'teste email livre',
+          'viatura.seguro_expirando', '[]'::jsonb, 'email',
+          jsonb_build_object('template_codigo','teste','titulo','Teste',
+                             'destinatarios_emails_livres', jsonb_build_array('fornecedor@fora.pt')),
+          'media', 1440, true)
+$$, 'o validador aceita destinatarios_emails_livres numa acção de email');
+
+select throws_ok($$
+  insert into public.automation_rules (org_id, codigo, nome, event_type, condicoes,
+                                       acao_tipo, acao_config, prioridade, cooldown_minutos, ativo)
+  values ('00000000-0000-0000-0000-0000000e0000', 'zz.teste.pgtap.email_mal_formado',
+          'endereço mal formado', 'viatura.seguro_expirando', '[]'::jsonb, 'email',
+          jsonb_build_object('template_codigo','teste','titulo','Teste',
+                             'destinatarios_emails_livres', jsonb_build_array('nao-e-email')),
+          'media', 1440, true)
+$$, '23514', null, 'o validador recusa um endereço mal formado');
+
+select throws_ok($$
+  insert into public.automation_rules (org_id, codigo, nome, event_type, condicoes,
+                                       acao_tipo, acao_config, prioridade, cooldown_minutos, ativo)
+  values ('00000000-0000-0000-0000-0000000e0000', 'zz.teste.pgtap.email_livre_notif',
+          'não pode numa notificação', 'viatura.seguro_expirando', '[]'::jsonb, 'notificacao',
+          jsonb_build_object('template_codigo','teste','titulo','Teste',
+                             'destinatarios_cargo_ids', jsonb_build_array(),
+                             'destinatarios_emails_livres', jsonb_build_array('a@b.pt')),
+          'media', 1440, true)
+$$, '23514', null, 'destinatarios_emails_livres é recusado numa notificação');
 
 reset role;
 select set_config('request.jwt.claim.sub', '', true);

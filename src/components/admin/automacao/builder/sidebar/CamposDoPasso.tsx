@@ -191,37 +191,6 @@ export function CamposDoPasso(props: CamposDoPassoProps) {
         </Seccao>
       )}
 
-      {tipo === 'accao' && (
-        <Seccao titulo="O que faz">
-          <Campo label="Tipo de acção">
-            <Select
-              value={acaoTipo}
-              onValueChange={(v) =>
-                // Trocar de tipo limpa a acção interna: manter `accao` de um
-                // tipo no outro gravava configuração que o validador recusa.
-                // Notificação e email partilham `accao` = o próprio tipo — é
-                // o que `configDoFluxo` e `visualDoBloco` usam para distinguir
-                // os blocos na paleta.
-                onAlterar(
-                  v === 'automacao_interna'
-                    ? { acaoTipo: v, accao: '', campo: '', valor: '' }
-                    : { acaoTipo: v, accao: v }
-                )
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="notificacao">Enviar notificação</SelectItem>
-                <SelectItem value="email">Enviar email</SelectItem>
-                <SelectItem value="automacao_interna">Executar acção no sistema</SelectItem>
-              </SelectContent>
-            </Select>
-          </Campo>
-        </Seccao>
-      )}
-
       {interna && (
         <Seccao titulo="Acção no sistema">
           {/* Falha fechada: sem catálogo não se inventam acções localmente.
