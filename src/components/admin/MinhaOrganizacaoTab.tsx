@@ -12,6 +12,7 @@ import { Building2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { validarEmail, validarNIF } from '@/lib/pt-validators';
 import { EmpresaImagemUpload } from './EmpresaImagemUpload';
+import { corDominanteDaImagem } from '@/lib/corDaLogo';
 
 interface FormData {
   nome: string;
@@ -44,6 +45,7 @@ export const MinhaOrganizacaoTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormData>(emptyForm());
+  const [aExtrairCor, setAExtrairCor] = useState(false);
 
   const fetchOrg = useCallback(async () => {
     if (!orgId) return;
@@ -79,8 +81,42 @@ export const MinhaOrganizacaoTab: React.FC = () => {
     fetchOrg();
   }, [fetchOrg]);
 
+  // Organização com logótipo mas ainda sem cor: propõe a do logótipo mal o
+  // ecrã abre, para a cor já vir preenchida em vez de ser mais um campo em
+  // branco à espera de alguém saber um código hexadecimal de cor.
+  useEffect(() => {
+    if (loading || !podeEditar) return;
+    if (form.logo_url && !form.cor_primaria) {
+      void sugerirCorDoLogo(form.logo_url, { substituir: false });
+    }
+    // Só quando o logótipo carregado muda — não a cada tecla no campo da cor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, podeEditar, form.logo_url]);
+
   const set = (field: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((p) => ({ ...p, [field]: e.target.value }));
+
+  /**
+   * Tira a cor do logótipo e põe-na no campo. Ninguém tem um hexadecimal à
+   * mão — o logótipo, esse, já está carregado e é ele que define a cor da
+   * empresa. `substituir: false` só preenche quando o campo está vazio, para
+   * uma escolha feita à mão nunca ser sobreposta.
+   */
+  const sugerirCorDoLogo = useCallback(
+    async (url: string, { substituir }: { substituir: boolean }) => {
+      setAExtrairCor(true);
+      const cor = await corDominanteDaImagem(url);
+      setAExtrairCor(false);
+
+      if (!cor) {
+        if (substituir) toast.error('Não foi possível tirar uma cor deste logótipo');
+        return;
+      }
+      setForm((p) => (substituir || !p.cor_primaria ? { ...p, cor_primaria: cor } : p));
+      if (substituir) toast.success(`Cor ${cor} tirada do logótipo`);
+    },
+    []
+  );
 
   const handleSave = async () => {
     if (!orgId) return;
@@ -265,7 +301,12 @@ export const MinhaOrganizacaoTab: React.FC = () => {
             label="Logótipo"
             description="Imagem da organização mostrada no login e outros ecrãs."
             value={form.logo_url}
-            onChange={(url) => setForm((p) => ({ ...p, logo_url: url }))}
+            onChange={(url) => {
+              setForm((p) => ({ ...p, logo_url: url }));
+              // Logótipo novo → propõe já a cor dele. Só propõe: se já havia
+              // uma cor escolhida à mão, não se mexe nela.
+              if (url) void sugerirCorDoLogo(url, { substituir: false });
+            }}
             prefix="org-logo"
             variant="square"
           />
@@ -306,6 +347,18 @@ export const MinhaOrganizacaoTab: React.FC = () => {
                   className="w-36 font-mono uppercase"
                   maxLength={7}
                 />
+                {form.logo_url && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={aExtrairCor}
+                    onClick={() => sugerirCorDoLogo(form.logo_url, { substituir: true })}
+                  >
+                    {aExtrairCor && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+                    Tirar do logótipo
+                  </Button>
+                )}
                 {form.cor_primaria && (
                   <Button
                     type="button"
@@ -318,8 +371,8 @@ export const MinhaOrganizacaoTab: React.FC = () => {
                 )}
               </div>
               <p className="text-sm text-muted-foreground">
-                Aplicada aos formulários públicos desta organização. Sem cor nem logótipo definidos,
-                o formulário usa a marca WeGest.
+                Vem do logótipo automaticamente — podes trocá-la aqui. Sem cor nem logótipo, o
+                formulário público usa a marca WeGest.
               </p>
             </>
           ) : form.cor_primaria ? (
