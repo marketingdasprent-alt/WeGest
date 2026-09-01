@@ -20,6 +20,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { initPixel, trackLeadOnce } from '@/lib/pixel';
+import { paletaDaMarca } from '@/lib/corDaMarca';
+
+/** Marca de recurso: uma organização sem logótipo carregado mostra a WeGest. */
+const LOGO_WEGEST = '/Logo.png';
 
 interface FormData {
   [key: string]: any;
@@ -38,6 +42,14 @@ const FormularioPublico = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false); // Ref para bloqueio síncrono
   const { toast } = useToast();
+
+  // A marca de quem criou o formulário. Antes disto a página tinha a paleta
+  // escrita à mão (preto e amarelo), o logótipo da Distância Arrojada e o
+  // rodapé da DasPrent — toda a gente mostrava a marca errada aos seus leads.
+  const organizacao = formulario?.organizacao as
+    | { nome?: string; logo_url?: string | null; cor_primaria?: string | null }
+    | undefined;
+  const marca = paletaDaMarca(organizacao?.cor_primaria);
 
   const fieldsPerStep = 3; // Quantos campos por etapa
   const totalSteps = formulario?.campos ? Math.ceil(formulario.campos.length / fieldsPerStep) : 1;
@@ -409,7 +421,7 @@ const FormularioPublico = () => {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white/60 mx-auto mb-4"></div>
           <p className="text-white text-lg">Carregando formulário...</p>
         </div>
       </div>
@@ -455,20 +467,30 @@ const FormularioPublico = () => {
   }
 
   return (
-    <div className="min-h-screen bg-black">
+    // `variaveisCss` redefine `--primary` neste ramo: o indicador de etapas e
+    // tudo o que use `bg-primary` seguem a cor da organização sem saberem dela.
+    <div className="min-h-screen bg-black" style={marca.variaveisCss}>
       <motion.section
         className="relative py-20 px-4 text-center overflow-hidden min-h-screen flex items-center"
         initial="initial"
         animate="animate"
       >
-        <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/5 to-yellow-600/5" />
+        <div
+          className="absolute inset-0"
+          style={{ background: `linear-gradient(90deg, ${marca.corSuave}, transparent)` }}
+        />
         <div className="relative z-10 max-w-6xl mx-auto">
-          {/* Logo */}
+          {/* Logótipo de quem criou o formulário. Sem logótipo carregado, cai
+              na marca WeGest — nunca na marca de outra organização, que era o
+              que acontecia (o logótipo da Distância Arrojada estava fixo aqui
+              para toda a gente). A cor segue a mesma regra, em corDaMarca.ts. */}
           <motion.div className="mb-12" variants={fadeInUp}>
             <img
-              src="/lovable-uploads/c0c8215b-1f0f-45fd-9958-dbac63dd9d3a.png"
-              alt="Distância Arrojada Logo"
-              className="h-20 mx-auto"
+              src={organizacao?.logo_url || LOGO_WEGEST}
+              alt={
+                organizacao?.logo_url ? `Logótipo de ${organizacao.nome ?? ''}`.trim() : 'WeGest'
+              }
+              className="h-20 mx-auto object-contain"
             />
           </motion.div>
 
@@ -476,7 +498,7 @@ const FormularioPublico = () => {
             className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight"
             variants={fadeInUp}
           >
-            Revolucione Sua Jornada
+            {formulario.nome}
           </motion.h1>
 
           {formulario.descricao && (
@@ -490,7 +512,8 @@ const FormularioPublico = () => {
 
           {/* Form Modal ou Success Message */}
           <motion.div
-            className="bg-gray-900 border border-yellow-500/20 rounded-3xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto mx-auto"
+            className="bg-gray-900 border rounded-3xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto mx-auto"
+            style={{ borderColor: marca.corDeContorno }}
             variants={fadeInUp}
           >
             {isSubmitted ? (
@@ -505,7 +528,8 @@ const FormularioPublico = () => {
                   </p>
                   <Button
                     onClick={handleNewForm}
-                    className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+                    className="font-semibold hover:brightness-110"
+                    style={{ backgroundColor: marca.cor, color: marca.corDoTexto }}
                   >
                     Enviar Novo Formulário
                   </Button>
@@ -543,11 +567,14 @@ const FormularioPublico = () => {
                 </AnimatePresence>
 
                 <div className="flex justify-between mt-8">
+                  {/* "Anterior" tinha texto quase preto sobre fundo escuro —
+                      ilegível. Passa a contorno e texto na cor da marca. */}
                   <Button
                     variant="outline"
                     onClick={handlePrevious}
                     disabled={currentStep === 0}
-                    className="border-yellow-500/30 hover:bg-gray-800 text-zinc-950"
+                    className="bg-transparent hover:bg-white/5"
+                    style={{ borderColor: marca.corDeContorno, color: marca.cor }}
                   >
                     Anterior
                   </Button>
@@ -555,7 +582,8 @@ const FormularioPublico = () => {
                   {currentStep < totalSteps - 1 ? (
                     <Button
                       onClick={handleNext}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+                      className="font-semibold hover:brightness-110"
+                      style={{ backgroundColor: marca.cor, color: marca.corDoTexto }}
                     >
                       Continuar
                     </Button>
@@ -563,7 +591,8 @@ const FormularioPublico = () => {
                     <Button
                       onClick={handleSubmit}
                       disabled={isSubmitting}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="font-semibold hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ backgroundColor: marca.cor, color: marca.corDoTexto }}
                     >
                       {isSubmitting ? 'Enviando...' : 'Enviar Formulário'}
                     </Button>
@@ -571,7 +600,7 @@ const FormularioPublico = () => {
                 </div>
 
                 <div className="text-center mt-6">
-                  <p className="text-sm text-yellow-500 font-medium">
+                  <p className="text-sm font-medium" style={{ color: marca.cor }}>
                     ⚡ Preencha todos os campos obrigatórios
                   </p>
                 </div>
@@ -581,9 +610,14 @@ const FormularioPublico = () => {
         </div>
       </motion.section>
 
-      {/* Footer */}
+      {/* Rodapé com o nome de quem angaria o lead, e o ano corrente. Estava
+          fixo em "© 2024 DasPrent": todas as organizações mostravam a marca
+          de outra empresa a quem preenchia o formulário delas. */}
       <footer className="py-8 px-4 text-center">
-        <p className="text-gray-400 text-sm">© 2024 DasPrent. Todos os direitos reservados.</p>
+        <p className="text-gray-400 text-sm">
+          © {new Date().getFullYear()} {organizacao?.nome ?? 'WeGest'}. Todos os direitos
+          reservados.
+        </p>
       </footer>
     </div>
   );
