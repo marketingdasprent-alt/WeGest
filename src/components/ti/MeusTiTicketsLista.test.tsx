@@ -161,4 +161,65 @@ describe('MeusTiTicketsLista', () => {
     await waitFor(() => expect(screen.getByText('Pedido número 6')).toBeInTheDocument());
     expect(screen.queryByText('Pedido número 1')).toBeNull();
   });
+
+  it('mostra a hora, não só a data, de quando o pedido foi resolvido', async () => {
+    mockMeusTickets([
+      {
+        id: 't1',
+        numero: 3,
+        autor_nome: 'Bruno Paulo',
+        autor_email: 'bruno@exemplo.pt',
+        descricao: 'Impressora encravada',
+        status: 'resolvido',
+        created_at: '2026-09-01T09:00:00Z',
+        organizacao: null,
+        resolvido_por_nome: 'Dinis Silva',
+        resolvido_em: '2026-09-01T15:45:00Z',
+        sugestoes: [],
+        anexos: [],
+      },
+    ]);
+
+    renderComQueryClient();
+
+    await waitFor(() => expect(screen.getByText('Dinis Silva')).toBeInTheDocument());
+    const paragrafo = screen.getByText('Dinis Silva').closest('p');
+    expect(paragrafo?.textContent).toMatch(
+      /^Resolvido por Dinis Silva a \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/
+    );
+  });
+
+  it('mostra a data e hora de quando a sugestão foi respondida', async () => {
+    mockMeusTickets([
+      {
+        id: 't1',
+        numero: 3,
+        autor_nome: 'Bruno Paulo',
+        autor_email: 'bruno@exemplo.pt',
+        descricao: 'Impressora encravada',
+        status: 'com_sugestao',
+        created_at: '2026-09-01T09:00:00Z',
+        organizacao: null,
+        resolvido_por_nome: null,
+        resolvido_em: null,
+        sugestoes: [
+          {
+            id: 's1',
+            texto: 'Reinicie a impressora',
+            util: true,
+            resposta_texto: null,
+            criado_por_nome: 'Suporte',
+            created_at: '2026-09-01T09:30:00Z',
+            respondida_em: '2026-09-01T10:15:00Z',
+          },
+        ],
+        anexos: [],
+      },
+    ]);
+
+    renderComQueryClient();
+
+    await waitFor(() => expect(screen.getByText('Marcaste: resolveu')).toBeInTheDocument());
+    expect(screen.getByText(/^· \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/)).toBeInTheDocument();
+  });
 });

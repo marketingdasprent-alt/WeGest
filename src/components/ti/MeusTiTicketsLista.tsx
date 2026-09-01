@@ -113,7 +113,7 @@ export function MeusTiTicketsLista() {
               {t.status === 'resolvido' && t.resolvido_por_nome && (
                 <p className="text-xs text-muted-foreground">
                   Resolvido por <b className="text-foreground">{t.resolvido_por_nome}</b>
-                  {t.resolvido_em && ` a ${format(new Date(t.resolvido_em), 'dd/MM/yyyy')}`}
+                  {t.resolvido_em && ` a ${format(new Date(t.resolvido_em), 'dd/MM/yyyy HH:mm')}`}
                 </p>
               )}
 
@@ -132,6 +132,12 @@ export function MeusTiTicketsLista() {
                     )}
                     {s.util === null && (
                       <span className="text-muted-foreground">Ainda por responder</span>
+                    )}
+                    {s.util !== null && s.respondida_em && (
+                      <span className="text-muted-foreground">
+                        {' '}
+                        · {format(new Date(s.respondida_em), 'dd/MM/yyyy HH:mm')}
+                      </span>
                     )}
                   </p>
                 </div>

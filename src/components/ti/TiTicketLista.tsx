@@ -258,7 +258,8 @@ export function TiTicketLista() {
                   {t.resolvido_por_nome ? (
                     <>
                       Resolvido por <b className="text-foreground">{t.resolvido_por_nome}</b>
-                      {t.resolvido_em && ` a ${format(new Date(t.resolvido_em), 'dd/MM/yyyy')}`}
+                      {t.resolvido_em &&
+                        ` a ${format(new Date(t.resolvido_em), 'dd/MM/yyyy HH:mm')}`}
                     </>
                   ) : (
                     // Pedidos fechados antes de existir a coluna. Dizer que não se
@@ -283,6 +284,12 @@ export function TiTicketLista() {
                     {s.util === false && <span className="text-destructive">Não resolveu</span>}
                     {s.util === null && (
                       <span className="text-muted-foreground">Sem resposta ainda</span>
+                    )}
+                    {s.util !== null && s.respondida_em && (
+                      <span className="text-muted-foreground">
+                        {' '}
+                        · {format(new Date(s.respondida_em), 'dd/MM/yyyy HH:mm')}
+                      </span>
                     )}
                   </p>
                   {/* O que o autor escreveu ao recusar. Distinguir "não explicou"

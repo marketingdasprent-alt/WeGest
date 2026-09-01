@@ -17,6 +17,7 @@ interface Sugestao {
   util: boolean | null;
   resposta_texto: string | null;
   created_at: string;
+  respondida_em: string | null;
 }
 
 interface Ticket {
@@ -174,6 +175,7 @@ export default function TicketTIAutor() {
                 {s.util
                   ? 'Marcou como: resolveu — o pedido foi fechado'
                   : 'Marcou como: não resolveu — alguém vai voltar a olhar para isto'}
+                {s.respondida_em && ` (${format(new Date(s.respondida_em), 'dd/MM/yyyy HH:mm')})`}
               </p>
               {s.resposta_texto && (
                 <p className="whitespace-pre-wrap rounded-md border border-border p-2 text-xs">

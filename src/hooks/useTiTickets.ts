@@ -13,6 +13,8 @@ export interface TiSugestao {
   /** Quem escreveu a sugestão, em texto — ver a migração para o porquê. */
   criado_por_nome: string | null;
   created_at: string;
+  /** Quando o autor respondeu (resolveu / não resolveu). Nulo enquanto por responder. */
+  respondida_em: string | null;
 }
 
 export interface TiAnexo {
@@ -49,7 +51,7 @@ const SELECT_TICKET_COMPLETO =
   'id, numero, autor_nome, autor_email, descricao, status, created_at,' +
   ' resolvido_por_nome, resolvido_em,' +
   ' organizacao:organizacoes(nome),' +
-  ' sugestoes:ti_ticket_sugestoes(id, texto, util, resposta_texto, criado_por_nome, created_at),' +
+  ' sugestoes:ti_ticket_sugestoes(id, texto, util, resposta_texto, criado_por_nome, created_at, respondida_em),' +
   ' anexos:ti_ticket_anexos(id, nome, ficheiro_url, tamanho_bytes, mime_type, criado_por_nome, created_at)';
 
 /** Ordena sugestões e anexos DENTRO de cada pedido pela ordem em que foram criados. */

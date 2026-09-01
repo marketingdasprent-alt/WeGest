@@ -69,4 +69,32 @@ describe('TicketTIAutor', () => {
     // Uma para o pedido, outra para a sugestão.
     expect(datas).toHaveLength(2);
   });
+
+  it('mostra a data e hora de quando a sugestão foi respondida', async () => {
+    renderComToken({
+      success: true,
+      ticket: {
+        numero: 5,
+        autor_nome: 'Bruno Paulo',
+        descricao: 'O portátil não liga',
+        status: 'resolvido',
+        created_at: '2026-09-01T14:07:00Z',
+      },
+      sugestoes: [
+        {
+          id: 's1',
+          texto: 'Reinicie o portátil',
+          util: true,
+          resposta_texto: null,
+          created_at: '2026-09-01T15:30:00Z',
+          respondida_em: '2026-09-01T16:00:00Z',
+        },
+      ],
+    });
+
+    await waitFor(() => expect(screen.getByText(/Marcou como: resolveu/)).toBeInTheDocument());
+    expect(
+      screen.getByText(/Marcou como: resolveu.*\(\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}\)/)
+    ).toBeInTheDocument();
+  });
 });
