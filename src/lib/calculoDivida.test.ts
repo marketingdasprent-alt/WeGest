@@ -49,25 +49,34 @@ describe('calcularValoresDivida', () => {
     expect(r.valorDanos).toBe(0);
   });
 
-  it('caução: crédito soma, débito subtrai — vem só de movimentosCaucao', () => {
+  it('caução: só o crédito conta — vem só de movimentosCaucao', () => {
     const caucao = [mov('credito', 'caucao', 300), mov('debito', 'dev_caucao', 100)];
-    // dev_caucao não é 'caucao' — não deve contar aqui (a categoria tem de
-    // ser exactamente 'caucao'; devoluções que usem outra categoria ficam
-    // de fora e são um caso a rever separadamente, fora deste cálculo).
+    // dev_caucao não é 'caucao' — não deve contar aqui de qualquer forma (a
+    // categoria tem de ser exactamente 'caucao').
     const r = calcularValoresDivida([], caucao);
     expect(r.valorCaucao).toBe(300);
   });
 
-  it('caução com categoria caucao em ambos os tipos', () => {
+  it('um débito de categoria caucao não abate ao valor atribuído', () => {
+    // Um débito 'caucao' não é devolução (isso seria dev_caucao) — na
+    // prática é uma parcela da própria caução ainda por pagar (ex.:
+    // "restante da caução 1/2"). Não é dinheiro que já saiu da caução detida,
+    // por isso não abate: o valor atribuído continua a ser só o crédito.
     const caucao = [mov('credito', 'caucao', 300), mov('debito', 'caucao', 100)];
     const r = calcularValoresDivida([], caucao);
-    expect(r.valorCaucao).toBe(200);
+    expect(r.valorCaucao).toBe(300);
   });
 
-  it('caução pode dar negativo (mais devolvido do que entregue)', () => {
-    const caucao = [mov('credito', 'caucao', 50), mov('debito', 'caucao', 200)];
+  it('vários créditos de caução somam-se', () => {
+    const caucao = [mov('credito', 'caucao', 50), mov('credito', 'caucao', 200)];
     const r = calcularValoresDivida([], caucao);
-    expect(r.valorCaucao).toBe(-150);
+    expect(r.valorCaucao).toBe(250);
+  });
+
+  it('só débito de caução (sem crédito) dá zero', () => {
+    const caucao = [mov('debito', 'caucao', 200)];
+    const r = calcularValoresDivida([], caucao);
+    expect(r.valorCaucao).toBe(0);
   });
 
   it('um movimento de caução dentro de movimentosPeriodo é ignorado', () => {
