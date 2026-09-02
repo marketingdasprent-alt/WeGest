@@ -347,25 +347,27 @@ export function useSincronizarGrupo() {
  * Rate limit de 5 min é imposto no servidor (RPC) — este hook só reflete
  * o erro que vier de lá.
  */
-/**
- * Interface do resultado de `testar_regra_automacao` — ver
- * docs/superpowers/specs/2026-09-01-testar-automacao-individualmente-design.md.
- */
+/** O resultado de `testar_regra_automacao` — um disparo real da regra. */
 export interface ResultadoTesteRegra {
-  notificacao_id: string;
-  email_enviado: boolean;
-  email_teste: string | null;
-  payload_de: string;
-  destinatarios_reais: { nome: string; email: string; motivo: string }[];
+  run_id: string;
+  /** 'completed', 'failed', ou 'pending' se o lote encheu antes deste run. */
+  status: string;
+  erro: string | null;
+  notificacoes_criadas: number;
+  emails_enfileirados: number;
+  destinatarios: { nome: string | null; email: string | null }[];
 }
 
 /**
- * Botão "Testar" no painel de propriedades: envia um aviso a sério, mas só
- * para quem testou — nunca para os destinatários configurados na regra.
- * Não passa pelo motor de execução normal, por isso não invalida as queries
- * de estatísticas (execuções/falhas não mudam com um teste).
+ * Botão "Testar" no painel de propriedades: cria um run a sério e deixa o
+ * executor de produção decidir tudo — os destinatários são exactamente os
+ * que um disparo normal teria, incluindo endereços externos.
+ *
+ * Conta como execução, por isso invalida as estatísticas — ao contrário da
+ * primeira versão, que enviava só para quem testava e não mexia em nada.
  */
 export function useTestarRegra() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (ruleId: string) => {
       const { data, error } = await supabase.rpc('testar_regra_automacao', {
@@ -373,6 +375,10 @@ export function useTestarRegra() {
       });
       if (error) throw error;
       return data as unknown as ResultadoTesteRegra;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['automacao-estatisticas-por-regra'] });
+      queryClient.invalidateQueries({ queryKey: ['automacao-timeline'] });
     },
   });
 }

@@ -74,13 +74,14 @@ describe('PainelPropriedades — botão Testar', () => {
     expect(screen.getByRole('button', { name: /testar/i })).toBeDisabled();
   });
 
-  it('guarda e depois chama o teste, mostrando o resultado num toast', async () => {
+  it('guarda e depois chama o teste, mostrando quem recebeu num toast', async () => {
     testarMutateAsync.mockResolvedValue({
-      notificacao_id: 'notif-1',
-      email_enviado: true,
-      email_teste: 'eu@empresa.pt',
-      payload_de: '2026-08-30T10:00:00Z',
-      destinatarios_reais: [{ nome: 'Maria', email: 'maria@empresa.pt', motivo: 'admin' }],
+      run_id: 'run-1',
+      status: 'completed',
+      erro: null,
+      notificacoes_criadas: 1,
+      emails_enfileirados: 1,
+      destinatarios: [{ nome: 'Fornecedor', email: 'fornecedor@exemplo.pt' }],
     });
 
     renderPainel();
@@ -89,7 +90,53 @@ describe('PainelPropriedades — botão Testar', () => {
     await waitFor(() => expect(testarMutateAsync).toHaveBeenCalledWith('regra-1'));
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith(
-        expect.objectContaining({ title: expect.stringMatching(/teste enviado/i) })
+        expect.objectContaining({
+          title: expect.stringMatching(/teste disparado/i),
+          description: expect.stringContaining('fornecedor@exemplo.pt'),
+        })
+      )
+    );
+  });
+
+  it('avisa quando o run correu mas falhou, com o erro do servidor', async () => {
+    testarMutateAsync.mockResolvedValue({
+      run_id: 'run-2',
+      status: 'failed',
+      erro: 'template não encontrado: zz.inexistente',
+      notificacoes_criadas: 0,
+      emails_enfileirados: 0,
+      destinatarios: [],
+    });
+
+    renderPainel();
+    fireEvent.click(screen.getByRole('button', { name: /testar/i }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variant: 'destructive',
+          description: 'template não encontrado: zz.inexistente',
+        })
+      )
+    );
+  });
+
+  it('diz que ficou em fila quando o lote não chegou a este run', async () => {
+    testarMutateAsync.mockResolvedValue({
+      run_id: 'run-3',
+      status: 'pending',
+      erro: null,
+      notificacoes_criadas: 0,
+      emails_enfileirados: 0,
+      destinatarios: [],
+    });
+
+    renderPainel();
+    fireEvent.click(screen.getByRole('button', { name: /testar/i }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: expect.stringMatching(/em fila/i) })
       )
     );
   });
