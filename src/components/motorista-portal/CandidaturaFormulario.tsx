@@ -262,16 +262,58 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
     comprovativoIbanUrl,
   ]);
 
+  // Persiste a URL do ficheiro assim que o upload acaba.
+  //
+  // O `if (!candidatura) return` que aqui estava desistia em silêncio para quem
+  // ainda não tinha linha na BD — ou seja, exactamente o candidato a preencher
+  // a candidatura pela primeira vez. O ficheiro subia para o Storage, o toast
+  // dizia "Upload concluído" e a URL ficava só em memória e no rascunho local;
+  // quem não chegasse a carregar em "Guardar" perdia tudo. Media-se em
+  // ficheiros órfãos no bucket. Agora cria-se a linha como rascunho.
+  //
+  // O upsert por user_id (a tabela tem UNIQUE nessa coluna) evita duplicar a
+  // linha quando dois uploads terminam ao mesmo tempo. O estado 'rascunho' não
+  // dispara o trigger notificar_motorista_pendente — só 'submetido' o faz —
+  // por isso isto não gera avisos ao gestor.
   const saveUploadUrlToDb = async (column: string, url: string) => {
-    if (!user || !candidatura) return;
+    if (!user) return;
     try {
-      await supabase
-        .from('motorista_candidaturas')
-        .update({ [column]: url || null } as TablesUpdate<'motorista_candidaturas'>)
-        .eq('id', candidatura.id);
+      if (candidatura) {
+        const { data: rows, error } = await supabase
+          .from('motorista_candidaturas')
+          .update({ [column]: url || null } as TablesUpdate<'motorista_candidaturas'>)
+          .eq('id', candidatura.id)
+          .select('id');
+        if (error) throw error;
+        // A RLS devolve 0 linhas em vez de erro quando a candidatura já não é
+        // editável pelo motorista (ex.: em análise). Sem isto, o "Upload
+        // concluído" mentia.
+        if (!rows || rows.length === 0) throw new Error('sem_permissao_guardar');
+      } else {
+        // `url` entra explicitamente: o setState correspondente ainda não foi
+        // aplicado quando esta função corre, logo buildCandidaturaData() ainda
+        // não o conhece.
+        const { error } = await supabase.from('motorista_candidaturas').upsert(
+          {
+            ...buildCandidaturaData(),
+            [column]: url || null,
+            status: 'rascunho',
+          } as TablesInsert<'motorista_candidaturas'>,
+          { onConflict: 'user_id' }
+        );
+        if (error) throw error;
+      }
       onUpdate();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao persistir URL do ficheiro na BD:', err);
+      toast({
+        title: 'Documento não associado à candidatura',
+        description: traduzirErro(
+          err?.message,
+          'O ficheiro foi enviado mas não ficou guardado. Carregue em "Guardar" antes de sair.'
+        ),
+        variant: 'destructive',
+      });
     }
   };
 
