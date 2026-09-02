@@ -53,15 +53,14 @@ export function calcularValoresDivida(
   // nesta coluna — é ruído de lançamento, não uma dívida negativa.
   valorDanos = Math.max(valorDanos, 0);
 
-  // Só o crédito conta — é o que foi atribuído ao motorista como caução.
-  // Um débito 'caucao' não é devolução (isso teria categoria dev_caucao);
-  // na prática representa uma parcela ainda por pagar da própria caução
-  // (ex.: "restante da caução 1/2") — não é dinheiro que já saiu da caução
-  // detida, por isso não abate ao valor atribuído.
+  // Tudo o que tiver categoria caucao, e mais nada — crédito soma, débito
+  // subtrai, o mesmo critério usado no resto da função e no resto da app
+  // (resumoMovimentos.ts: saldo = créditos − débitos).
   let valorCaucao = 0;
   for (const m of movimentosCaucao) {
-    if (m.status !== 'pendente' || m.categoria !== 'caucao' || m.tipo !== 'credito') continue;
-    valorCaucao += valorNumerico(m);
+    if (m.status !== 'pendente' || m.categoria !== 'caucao') continue;
+    const valor = valorNumerico(m);
+    valorCaucao += m.tipo === 'credito' ? valor : -valor;
   }
 
   // O período negativo e os danos são o que o motorista deve; a caução já
