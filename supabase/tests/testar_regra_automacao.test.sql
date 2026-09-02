@@ -236,9 +236,13 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000080a01', true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000080a01","role":"authenticated"}', true);
 
+-- Só o `email`: o `nome` sai de `profiles`, que aqui está vazia. O gatilho
+-- que cria o perfil ao inserir em `auth.users` vive no schema `auth`, e o
+-- baseline do CI só exporta o `public` — por isso numa base reconstruída
+-- não há perfis. É o email que identifica quem recebeu; o nome é adorno.
 select ok(
   (select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b04')->'destinatarios'
-     @> jsonb_build_array(jsonb_build_object('email', 'escolhido@testar-regra-g.pt', 'nome', 'escolhido@testar-regra-g.pt'))),
+     @> jsonb_build_array(jsonb_build_object('email', 'escolhido@testar-regra-g.pt'))),
   'destinatarios traz quem recebeu de facto'
 );
 
