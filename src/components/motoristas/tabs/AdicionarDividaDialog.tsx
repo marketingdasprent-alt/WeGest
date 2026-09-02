@@ -101,7 +101,12 @@ export function AdicionarDividaDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="divida-fim">Fim</Label>
-            <Input id="divida-fim" type="date" value={fim} onChange={(e) => setFim(e.target.value)} />
+            <Input
+              id="divida-fim"
+              type="date"
+              value={fim}
+              onChange={(e) => setFim(e.target.value)}
+            />
           </div>
         </div>
 

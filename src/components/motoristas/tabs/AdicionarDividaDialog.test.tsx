@@ -45,7 +45,13 @@ describe('AdicionarDividaDialog', () => {
 
   it('mostra a pré-visualização dos quatro valores', () => {
     calcular.mockReturnValue({
-      data: { valorPeriodo: -100, valorDanos: 40, valorCaucao: 30, valorTotal: 110, motoristaNome: 'Ana Costa' },
+      data: {
+        valorPeriodo: -100,
+        valorDanos: 40,
+        valorCaucao: 30,
+        valorTotal: 110,
+        motoristaNome: 'Ana Costa',
+      },
       isFetching: false,
     });
     renderDialog();
@@ -60,7 +66,13 @@ describe('AdicionarDividaDialog', () => {
 
   it('confirmar cria a dívida com exactamente os valores pré-visualizados', async () => {
     calcular.mockReturnValue({
-      data: { valorPeriodo: -100, valorDanos: 40, valorCaucao: 30, valorTotal: 110, motoristaNome: 'Ana Costa' },
+      data: {
+        valorPeriodo: -100,
+        valorDanos: 40,
+        valorCaucao: 30,
+        valorTotal: 110,
+        motoristaNome: 'Ana Costa',
+      },
       isFetching: false,
     });
     const onSuccess = vi.fn();
