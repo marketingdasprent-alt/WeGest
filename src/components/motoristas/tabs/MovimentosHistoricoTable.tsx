@@ -40,6 +40,7 @@ export interface MovimentosHistoricoTableProps {
   onSort: (field: string) => void;
   onRefresh: () => void;
   onNovoMovimento: () => void;
+  onAdicionarDivida: () => void;
   onAbrirAcordo: (movimento: MovimentoFinanceiro) => void;
   onAbrirEditar: (movimento: MovimentoFinanceiro) => void;
   onMarcarPago: (id: string) => void;
@@ -55,6 +56,7 @@ export function MovimentosHistoricoTable({
   onSort,
   onRefresh,
   onNovoMovimento,
+  onAdicionarDivida,
   onAbrirAcordo,
   onAbrirEditar,
   onMarcarPago,
@@ -79,6 +81,12 @@ export function MovimentosHistoricoTable({
             <Plus className="h-4 w-4 mr-2" />
             Novo Movimento
           </Button>
+          {canEdit && (
+            <Button size="sm" variant="outline" onClick={onAdicionarDivida}>
+              <HandCoins className="h-4 w-4 mr-2" />
+              Adicionar à dívida
+            </Button>
+          )}
         </div>
       </div>
 
