@@ -9,6 +9,7 @@ import { Eye, Tag, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
+import { saoRespostasDeFormulario } from '@/lib/camposDoLead';
 
 interface Lead {
   id: string;
@@ -34,20 +35,9 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, customTags = [] }) => 
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Função para verificar se o texto é JSON de dados do formulário
-  const isFormDataJSON = (text: string): boolean => {
-    try {
-      const parsed = JSON.parse(text);
-      return (
-        typeof parsed === 'object' &&
-        parsed !== null &&
-        !Array.isArray(parsed) &&
-        Object.keys(parsed).some((key) => key.startsWith('field_'))
-      );
-    } catch {
-      return false;
-    }
-  };
+  // A mesma leitura que o kanban e a lista de leads usam — este cartão tinha
+  // a sua cópia. Ver lib/camposDoLead.ts.
+  const isFormDataJSON = saoRespostasDeFormulario;
 
   // Função para extrair dados das observações
   const getLeadDisplayData = (lead: Lead) => {
