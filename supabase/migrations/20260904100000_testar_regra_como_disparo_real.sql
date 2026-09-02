@@ -90,7 +90,12 @@ begin
   -- é isso que faz o teste medir a configuração que está no ecrã, e não a que
   -- estava quando a automação disparou pela última vez.
   -- `automation_runs` não guarda event_type: o executor lê-o do snapshot da
-  -- regra (v_rule.event_type), que é onde a definição congelada vive.
+  -- regra, que é onde a definição congelada vive.
+  --
+  -- A snapshot é construída por `automation_rule_snapshot` — a MESMA função
+  -- que o motor usa. Montá-la à mão aqui não passaria sequer:
+  -- `automation_runs_snapshot_coerente` exige schema_version, definition_hash
+  -- e que o org_id de dentro bata certo com o do run.
   insert into public.automation_runs (
     org_id, rule_id, entity_table, entity_id, payload, status, rule_snapshot
   )
@@ -101,7 +106,7 @@ begin
     v_ultimo_run.entity_id,
     v_ultimo_run.payload,
     'pending',
-    jsonb_build_object('regra', to_jsonb(v_rule))
+    public.automation_rule_snapshot(v_rule)
   )
   returning id into v_run_id;
 

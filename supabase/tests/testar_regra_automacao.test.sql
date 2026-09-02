@@ -124,7 +124,9 @@ insert into public.automation_runs (id, org_id, rule_id, entity_table, entity_id
   '00000000-0000-0000-0000-000000080c02', '00000000-0000-0000-0000-000000080000',
   '00000000-0000-0000-0000-000000080b04', 'viaturas',
   '00000000-0000-0000-0000-000000080d01', jsonb_build_object('matricula', 'ZZ-00-ZZ'), 'completed',
-  jsonb_build_object('regra', to_jsonb((select r from public.automation_rules r where r.id = '00000000-0000-0000-0000-000000080b04')))
+  -- A mesma função que o motor usa: `automation_runs_snapshot_coerente` exige
+  -- schema_version + definition_hash + regra, e montá-la à mão não passa.
+  public.automation_rule_snapshot((select r from public.automation_rules r where r.id = '00000000-0000-0000-0000-000000080b04'))
 );
 
 set local role authenticated;
