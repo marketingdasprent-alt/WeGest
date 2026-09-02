@@ -110,15 +110,33 @@ export function PainelPropriedades({
     }
     try {
       const resultado = await testar.mutateAsync(regraId);
-      const nomes = resultado.destinatarios_reais.slice(0, 3).map((d) => d.nome);
-      const resto = resultado.destinatarios_reais.length - nomes.length;
-      const listaDestinatarios =
-        nomes.length > 0
-          ? `Iria também para: ${nomes.join(', ')}${resto > 0 ? ` e mais ${resto}` : ''}.`
-          : 'Ninguém mais está configurado para receber.';
+
+      if (resultado.status === 'failed') {
+        toast({
+          title: 'O teste correu mas falhou',
+          description: resultado.erro ?? 'Sem detalhe do erro.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Quem recebeu de facto, lido das notificações criadas — não de uma
+      // previsão à parte, que era o que antes conseguia mentir.
+      const quem = resultado.destinatarios
+        .map((d) => d.email ?? d.nome)
+        .filter((x): x is string => Boolean(x));
+      const primeiros = quem.slice(0, 3);
+      const resto = quem.length - primeiros.length;
+
       toast({
-        title: `Teste enviado${resultado.email_enviado ? ' por email' : ''}.`,
-        description: `${resultado.email_teste ? `Para ${resultado.email_teste}. ` : ''}${listaDestinatarios}`,
+        title:
+          resultado.status === 'pending'
+            ? 'Teste em fila — sai no próximo ciclo'
+            : `Teste disparado: ${resultado.emails_enfileirados} email(s) na fila`,
+        description:
+          quem.length > 0
+            ? `Para: ${primeiros.join(', ')}${resto > 0 ? ` e mais ${resto}` : ''}.`
+            : 'Nenhum destinatário resolvido — confirma os grupos e os emails avulsos.',
       });
     } catch (erro) {
       toast({

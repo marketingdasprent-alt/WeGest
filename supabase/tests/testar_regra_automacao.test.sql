@@ -3,61 +3,79 @@
 -- ============================================================
 -- Corre com:  supabase start  &&  supabase test db
 --
--- Cobre: permissão, regra de outra organização, acao_tipo inválido, sem
--- execução anterior, notificação de teste dirigida ao próprio testador
--- (nunca aos destinatários reais), email só quando acao_tipo = 'email',
--- cooldown de 30s, e a lista de "quem receberia a sério".
+-- Desde 20260904100000 o "Testar" é um DISPARO REAL: cria um
+-- `automation_runs` com a definição actual congelada e chama o executor de
+-- produção. Não há aqui lógica própria de destinatários — o que se testa é
+-- que o run nasce bem e que o resultado devolvido descreve o que aconteceu.
+--
+-- Por isso as asserções são sobre efeitos observáveis (o run concluiu, a
+-- fila ganhou linha, quem recebeu foi quem estava escolhido), não sobre um
+-- caminho paralelo.
 -- ============================================================
 
 begin;
-select plan(11);
+select plan(13);
 
 insert into public.organizacoes (id, nome, codigo) values
-  ('00000000-0000-0000-0000-000000080000', 'Org Testar Regra', 'testar-regra-g');
+  ('00000000-0000-0000-0000-000000080000', 'Org Testar Regra', 'testar-regra-g'),
+  ('00000000-0000-0000-0000-000000080ffe', 'Org Alheia', 'testar-regra-alheia');
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000080a01', 'admin@testar-regra-g.pt'),
   ('00000000-0000-0000-0000-000000080a02', 'sem-permissao@testar-regra-g.pt'),
-  ('00000000-0000-0000-0000-000000080a03', 'gestor@testar-regra-g.pt');
+  ('00000000-0000-0000-0000-000000080a03', 'escolhido@testar-regra-g.pt');
 
-insert into public.user_organizacoes (user_id, org_id, is_admin) values
-  ('00000000-0000-0000-0000-000000080a01', '00000000-0000-0000-0000-000000080000', true),
-  ('00000000-0000-0000-0000-000000080a02', '00000000-0000-0000-0000-000000080000', false),
-  ('00000000-0000-0000-0000-000000080a03', '00000000-0000-0000-0000-000000080000', false);
+insert into public.cargos (id, nome, org_id) values
+  ('00000000-0000-0000-0000-0000000c6001', 'Cargo Testar', '00000000-0000-0000-0000-000000080000');
+
+insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
+  ('00000000-0000-0000-0000-000000080a01', '00000000-0000-0000-0000-000000080000', true, null),
+  ('00000000-0000-0000-0000-000000080a02', '00000000-0000-0000-0000-000000080000', false, null),
+  ('00000000-0000-0000-0000-000000080a03', '00000000-0000-0000-0000-000000080000', false, '00000000-0000-0000-0000-0000000c6001');
 
 insert into public.user_org_ativa (user_id, org_id) values
   ('00000000-0000-0000-0000-000000080a01', '00000000-0000-0000-0000-000000080000'),
   ('00000000-0000-0000-0000-000000080a02', '00000000-0000-0000-0000-000000080000'),
   ('00000000-0000-0000-0000-000000080a03', '00000000-0000-0000-0000-000000080000');
 
--- Regra de notificação, sem execução ainda.
+-- Regra de notificação, sem execução anterior. `enviar_email` fica na config
+-- porque `fn_notifications_so_quando_ha_email` cancela o insert sem ele —
+-- mesma razão detalhada em execute_automation_runs.test.sql.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values (
   '00000000-0000-0000-0000-000000080b01', '00000000-0000-0000-0000-000000080000',
   'zz.teste.pgtap.testar.notif', 'Notificação de teste', 'viatura.seguro_expirando', 'notificacao',
-  jsonb_build_object('template_codigo', 'zz-teste', 'titulo', 'Seguro a expirar', 'destinatarios_cargo_ids', jsonb_build_array())
+  jsonb_build_object('template_codigo', 'zz-teste', 'titulo', 'Seguro a expirar',
+                     'destinatarios_cargo_ids', jsonb_build_array(), 'enviar_email', true)
 );
 
--- Regra automacao_interna — usada só para o teste do guarda de acao_tipo.
+-- Acção interna — só para o guarda de acao_tipo.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values (
   '00000000-0000-0000-0000-000000080b02', '00000000-0000-0000-0000-000000080000',
   'zz.teste.pgtap.testar.interna', 'Acção interna de teste', 'assistencia_ticket.aberto_demasiado_tempo', 'automacao_interna',
   jsonb_build_object('accao', 'ticket.alterar_estado', 'valor', 'resolvido')
 );
 
--- Regra de outra organização — usada só para o teste de isolamento.
-insert into public.organizacoes (id, nome, codigo) values
-  ('00000000-0000-0000-0000-000000080ffe', 'Org Alheia', 'testar-regra-alheia');
+-- Regra de outra organização — só para o teste de isolamento.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values (
   '00000000-0000-0000-0000-000000080b03', '00000000-0000-0000-0000-000000080ffe',
   'zz.teste.pgtap.testar.alheia', 'Regra de outra org', 'viatura.seguro_expirando', 'notificacao',
   jsonb_build_object('template_codigo', 'zz-teste', 'titulo', 'Alheia', 'destinatarios_cargo_ids', jsonb_build_array())
 );
 
+-- Regra de email, com um cargo escolhido: é este o destinatário esperado.
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values (
+  '00000000-0000-0000-0000-000000080b04', '00000000-0000-0000-0000-000000080000',
+  'zz.teste.pgtap.testar.email', 'Email de teste', 'viatura.seguro_expirando', 'email',
+  jsonb_build_object('template_codigo', 'zz-teste-email', 'titulo', 'Seguro a expirar (email)',
+                     'destinatarios_estrategia', 'cargo',
+                     'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-0000000c6001'))
+);
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000080a01', true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000080a01","role":"authenticated"}', true);
 
--- 1. Sem execução anterior — a regra de notificação nunca correu.
+-- 1. Sem execução anterior não há payload de onde partir.
 select throws_ok(
   $$ select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b01') $$,
   'P0001',
@@ -66,20 +84,11 @@ select throws_ok(
 );
 
 reset role;
-
--- Dá à regra de notificação um "último payload" real.
-insert into public.automation_runs (id, org_id, rule_id, event_type, entity_table, entity_id, payload, status, rule_snapshot) values (
-  '00000000-0000-0000-0000-000000080c01', '00000000-0000-0000-0000-000000080000',
-  '00000000-0000-0000-0000-000000080b01', 'viatura.seguro_expirando', 'viaturas',
-  '00000000-0000-0000-0000-000000080d01', jsonb_build_object('matricula', 'ZZ-00-ZZ'), 'completed',
-  jsonb_build_object('regra', to_jsonb((select r from public.automation_rules r where r.id = '00000000-0000-0000-0000-000000080b01')))
-);
-
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000080a02', true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000080a02","role":"authenticated"}', true);
 
--- 2. Utilizador sem permissão não consegue testar.
+-- 2. Sem permissão não se testa.
 select throws_ok(
   $$ select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b01') $$,
   'P0001',
@@ -92,7 +101,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000080a01', true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000080a01","role":"authenticated"}', true);
 
--- 3. Regra de outra organização — não encontrada.
+-- 3. Regra de outra organização não é visível.
 select throws_ok(
   $$ select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b03') $$,
   'P0001',
@@ -100,7 +109,7 @@ select throws_ok(
   'regra de outra organização não é visível para testar'
 );
 
--- 4. acao_tipo = 'automacao_interna' é recusado.
+-- 4. Acção interna não passa por este caminho.
 select throws_ok(
   $$ select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b02') $$,
   'P0001',
@@ -108,44 +117,9 @@ select throws_ok(
   'acção interna não pode ser testada por este caminho'
 );
 
--- 5. Admin consegue testar a regra de notificação — devolve notificacao_id.
-select isnt(
-  (select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b01')->>'notificacao_id'),
-  null,
-  'testar uma regra de notificação devolve o id da notificação criada'
-);
-
--- 6. A notificação de teste foi para o próprio admin, nunca para outro
---    utilizador, e sem rule_run_id (fora do ciclo real).
-select is(
-  (select destinatario_user_id from public.notifications where titulo like '[Teste]%' and org_id = '00000000-0000-0000-0000-000000080000' order by created_at desc limit 1),
-  '00000000-0000-0000-0000-000000080a01'::uuid,
-  'a notificação de teste é dirigida a quem testou'
-);
-
-select ok(
-  (select rule_run_id is null from public.notifications where titulo like '[Teste]%' order by created_at desc limit 1),
-  'a notificação de teste não fica ligada a nenhum run real'
-);
-
--- 7. acao_tipo = 'notificacao' não gera linha em notification_queue.
-select is(
-  (select count(*)::int from public.notification_queue nq
-     join public.notifications n on n.id = nq.notification_id
-     where n.titulo like '[Teste]%'),
-  0,
-  'testar uma regra de notificação não envia email nenhum'
-);
-
 reset role;
 
--- Regra de email, com o mesmo último payload.
-insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values (
-  '00000000-0000-0000-0000-000000080b04', '00000000-0000-0000-0000-000000080000',
-  'zz.teste.pgtap.testar.email', 'Email de teste', 'viatura.seguro_expirando', 'email',
-  jsonb_build_object('template_codigo', 'zz-teste-email', 'titulo', 'Seguro a expirar (email)')
-);
-
+-- Dá à regra de email um disparo anterior, de onde o teste tira o payload.
 insert into public.automation_runs (id, org_id, rule_id, event_type, entity_table, entity_id, payload, status, rule_snapshot) values (
   '00000000-0000-0000-0000-000000080c02', '00000000-0000-0000-0000-000000080000',
   '00000000-0000-0000-0000-000000080b04', 'viatura.seguro_expirando', 'viaturas',
@@ -157,23 +131,67 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000080a01', true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000080a01","role":"authenticated"}', true);
 
--- 8. acao_tipo = 'email' gera mesmo uma linha em notification_queue, para
---    o email do próprio admin.
-select is(
-  (select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b04')->>'email_enviado'),
-  'true',
-  'testar uma regra de email marca email_enviado como verdadeiro'
+-- 5. Testar devolve o id do run NOVO que criou.
+select isnt(
+  (select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b04')->>'run_id'),
+  null,
+  'testar cria um run e devolve o id dele'
 );
 
+reset role;
+
+-- 6. Esse run é um run a sério — e concluiu.
 select is(
-  (select nq.destinatario from public.notification_queue nq
-     join public.notifications n on n.id = nq.notification_id
-     where n.titulo like '[Teste]%Seguro a expirar (email)%' order by n.created_at desc limit 1),
-  'admin@testar-regra-g.pt',
-  'o email de teste vai para o email do próprio testador'
+  (select count(*)::int from public.automation_runs
+    where rule_id = '00000000-0000-0000-0000-000000080b04'
+      and id <> '00000000-0000-0000-0000-000000080c02'
+      and status = 'completed'),
+  1,
+  'o teste cria um run verdadeiro, que o executor conclui'
 );
 
--- 9. Repetir de imediato a mesma regra é bloqueado pelo cooldown.
+-- 7. Quem recebeu foi quem está no cargo escolhido.
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+     join public.automation_runs r on r.id = n.rule_run_id
+    where r.rule_id = '00000000-0000-0000-0000-000000080b04'
+      and r.id <> '00000000-0000-0000-0000-000000080c02'
+      and q.destinatario = 'escolhido@testar-regra-g.pt'),
+  1,
+  'o email do teste vai para quem está no cargo escolhido'
+);
+
+-- 8. E não para o admin, que não pertence ao cargo — uma acção de email não
+--    arrasta os administradores (20260904093000).
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+     join public.automation_runs r on r.id = n.rule_run_id
+    where r.rule_id = '00000000-0000-0000-0000-000000080b04'
+      and r.id <> '00000000-0000-0000-0000-000000080c02'
+      and q.destinatario = 'admin@testar-regra-g.pt'),
+  0,
+  'o teste não manda para o admin quando ele não foi escolhido'
+);
+
+-- Rebobina o cooldown para poder voltar a testar dentro do mesmo ficheiro.
+update public.automacao_regra_teste_cooldown
+set ultimo_teste_em = now() - interval '1 minute'
+where rule_id = '00000000-0000-0000-0000-000000080b04';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000080a01', true);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000080a01","role":"authenticated"}', true);
+
+-- 9. O resultado descreve o que aconteceu: um email na fila.
+select is(
+  (select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b04')->>'emails_enfileirados'),
+  '1',
+  'o resultado diz quantos emails ficaram em fila'
+);
+
+-- 10. Repetir de imediato é bloqueado pelo cooldown.
 select throws_ok(
   $$ select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b04') $$,
   'P0001',
@@ -183,7 +201,6 @@ select throws_ok(
 
 reset role;
 
--- Rebobina o cooldown desta regra — simula que passou tempo suficiente.
 update public.automacao_regra_teste_cooldown
 set ultimo_teste_em = now() - interval '1 minute'
 where rule_id = '00000000-0000-0000-0000-000000080b04';
@@ -192,32 +209,34 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000080a01', true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000080a01","role":"authenticated"}', true);
 
--- 10. Passado o cooldown, volta a funcionar.
+-- 11. Passado o cooldown, volta a funcionar.
 select isnt(
-  (select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b04')->>'notificacao_id'),
+  (select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b04')->>'run_id'),
   null,
   'passado o cooldown, o teste volta a funcionar'
 );
 
-reset role;
-
--- A regra de notificação (b01) já foi testada no teste 5 — rebobina o
--- cooldown dela também, senão o teste 11 cai no mesmo bloqueio do teste 9.
+-- 12. A lista de destinatários vem das notificações criadas, não de uma
+--     previsão à parte — e traz o endereço de quem recebeu.
 update public.automacao_regra_teste_cooldown
 set ultimo_teste_em = now() - interval '1 minute'
-where rule_id = '00000000-0000-0000-0000-000000080b01';
+where rule_id = '00000000-0000-0000-0000-000000080b04';
 
-set local role authenticated;
-select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000080a01', true);
-select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000080a01","role":"authenticated"}', true);
-
--- 11. destinatarios_reais inclui o admin (fallback automático de admin).
 select ok(
-  (select jsonb_array_length(public.testar_regra_automacao('00000000-0000-0000-0000-000000080b01')->'destinatarios_reais') > 0),
-  'destinatarios_reais não vem vazio quando há um admin na organização'
+  (select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b04')->'destinatarios'
+     @> jsonb_build_array(jsonb_build_object('email', 'escolhido@testar-regra-g.pt', 'nome', 'escolhido@testar-regra-g.pt'))),
+  'destinatarios traz quem recebeu de facto'
 );
 
 reset role;
+
+-- 13. Cada teste é uma execução: a regra passou a ter vários runs.
+select cmp_ok(
+  (select count(*)::int from public.automation_runs where rule_id = '00000000-0000-0000-0000-000000080b04'),
+  '>',
+  1,
+  'cada teste conta como uma execução da automação'
+);
 
 select * from finish();
 rollback;
