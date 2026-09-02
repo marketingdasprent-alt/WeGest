@@ -74,16 +74,25 @@ select plan(29);
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000d0000', 'Org Idempotencia', 'idem-a');
 
+-- `permitido2` existe num SEGUNDO cargo, usado só pela regra de email. Desde
+-- 20260904093000 uma acção de email já não arrasta os admins da organização,
+-- por isso os cenários de fila precisam de dois destinatários ESCOLHIDOS —
+-- antes o segundo era o admin, que vinha de borla. O segundo cargo mantém as
+-- contagens dos cenários de notificação (que continuam a incluir o admin)
+-- exactamente como estavam.
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000d0001', 'admin@idem.pt'),
-  ('00000000-0000-0000-0000-0000000d0002', 'permitido@idem.pt');
+  ('00000000-0000-0000-0000-0000000d0002', 'permitido@idem.pt'),
+  ('00000000-0000-0000-0000-0000000d0003', 'permitido2@idem.pt');
 
 insert into public.cargos (id, nome, org_id) values
-  ('00000000-0000-0000-0000-000000cd0001', 'Cargo Idem', '00000000-0000-0000-0000-0000000d0000');
+  ('00000000-0000-0000-0000-000000cd0001', 'Cargo Idem', '00000000-0000-0000-0000-0000000d0000'),
+  ('00000000-0000-0000-0000-000000cd0002', 'Cargo Idem Email', '00000000-0000-0000-0000-0000000d0000');
 
 insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
   ('00000000-0000-0000-0000-0000000d0001', '00000000-0000-0000-0000-0000000d0000', true, null),
-  ('00000000-0000-0000-0000-0000000d0002', '00000000-0000-0000-0000-0000000d0000', false, '00000000-0000-0000-0000-000000cd0001');
+  ('00000000-0000-0000-0000-0000000d0002', '00000000-0000-0000-0000-0000000d0000', false, '00000000-0000-0000-0000-000000cd0001'),
+  ('00000000-0000-0000-0000-0000000d0003', '00000000-0000-0000-0000-0000000d0000', false, '00000000-0000-0000-0000-000000cd0002');
 
 -- `notificacoes.viatura_id` tem FK para `viaturas`, e o executor preenche-a a
 -- partir de `entity_id` quando `entity_table = 'viaturas'`. As viaturas têm de
@@ -254,7 +263,12 @@ insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_
      'titulo', 'Seguro a expirar',
      'template_codigo', 'teste.idem.email',
      'destinatarios_estrategia', 'cargo',
-     'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000cd0001')));
+     -- Dois cargos, um utilizador em cada: são estes os dois destinatários
+     -- que os cenários de fila abaixo precisam. O admin já não entra numa
+     -- acção de email (20260904093000), por isso tem de vir escolhido.
+     'destinatarios_cargo_ids', jsonb_build_array(
+       '00000000-0000-0000-0000-000000cd0001',
+       '00000000-0000-0000-0000-000000cd0002')));
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-00000c4d0004', '00000000-0000-0000-0000-0000004d0003',
@@ -277,7 +291,7 @@ delete from public.notification_queue q
  using public.notifications n
  where n.id = q.notification_id
    and n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'
-   and q.destinatario = 'admin@idem.pt';
+   and q.destinatario = 'permitido2@idem.pt';
 
 select is(
   (select count(*)::int from public.notification_queue q
@@ -297,7 +311,7 @@ select is(
   (select count(*)::int from public.notification_queue q
      join public.notifications n on n.id = q.notification_id
     where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'
-      and q.destinatario = 'admin@idem.pt'),
+      and q.destinatario = 'permitido2@idem.pt'),
   1,
   'falha parcial: o retry recupera o notification_id e cria a linha de fila em falta'
 );
@@ -428,7 +442,7 @@ select throws_ok(
       from public.notification_queue q
       join public.notifications n on n.id = q.notification_id
      where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'
-       and n.destinatario_user_id = '00000000-0000-0000-0000-0000000d0001'$$,
+       and n.destinatario_user_id = '00000000-0000-0000-0000-0000000d0003'$$,
   '23505',
   null,
   'a mesma (notification_id, canal, destinatario) é rejeitada pelo banco'
@@ -440,14 +454,14 @@ select q.notification_id, q.org_id, 'sms', q.destinatario, q.template_codigo
   from public.notification_queue q
   join public.notifications n on n.id = q.notification_id
  where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'
-   and n.destinatario_user_id = '00000000-0000-0000-0000-0000000d0001'
+   and n.destinatario_user_id = '00000000-0000-0000-0000-0000000d0003'
    and q.canal = 'email';
 
 select is(
   (select count(*)::int from public.notification_queue q
      join public.notifications n on n.id = q.notification_id
     where n.rule_run_id = '00000000-0000-0000-0000-00000c4d0004'
-      and n.destinatario_user_id = '00000000-0000-0000-0000-0000000d0001'),
+      and n.destinatario_user_id = '00000000-0000-0000-0000-0000000d0003'),
   2,
   'canal diferente para a mesma notificação continua a ser permitido'
 );
