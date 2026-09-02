@@ -26,7 +26,8 @@ import {
   useAtualizarEstadoDivida,
   type Divida,
 } from '@/hooks/useDividasMotorista';
-import { useCanEditFinanceiro } from '@/hooks/useCanEditFinanceiro';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
 const ESTADO_LABEL: Record<Divida['estado'], string> = {
   por_cobrar: 'Por cobrar',
@@ -43,8 +44,15 @@ const ESTADO_CLASS: Record<Divida['estado'], string> = {
 export function DividasTab() {
   const [pesquisa, setPesquisa] = useState('');
   const [estado, setEstado] = useState<string>('por_cobrar');
-  const { canEdit } = useCanEditFinanceiro();
-  const { data: dividas, isLoading } = useDividasMotorista({
+  // Mesmo recurso que já gere a sidebar/rota/RLS desta funcionalidade
+  // (financeiro_recibos) — antes gate admin-only, agora alinhado.
+  const { hasAccessToResource } = usePermissions();
+  const canEdit = hasAccessToResource(RECURSOS.FINANCEIRO_RECIBOS);
+  const {
+    data: dividas,
+    isLoading,
+    isError,
+  } = useDividasMotorista({
     pesquisa: pesquisa || undefined,
     estado: estado === 'todas' ? undefined : estado,
   });
@@ -96,6 +104,8 @@ export function DividasTab() {
       >
         {isLoading ? (
           <p className="text-sm text-muted-foreground">A carregar...</p>
+        ) : isError ? (
+          <p className="text-sm text-destructive">Não foi possível carregar as dívidas.</p>
         ) : !dividas || dividas.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nenhuma dívida encontrada.</p>
         ) : (

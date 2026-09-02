@@ -3,14 +3,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-const { calcular, criar } = vi.hoisted(() => ({
+const { calcular, criar, dividasAbertas } = vi.hoisted(() => ({
   calcular: vi.fn(),
   criar: vi.fn(),
+  dividasAbertas: vi.fn(),
 }));
 
 vi.mock('@/hooks/useDividasMotorista', () => ({
   useCalcularDivida: (...args: unknown[]) => calcular(...args),
   useCriarDivida: () => ({ mutateAsync: criar, isPending: false }),
+  useDividasAbertasDoMotorista: (...args: unknown[]) => dividasAbertas(...args),
 }));
 
 import { AdicionarDividaDialog } from './AdicionarDividaDialog';
@@ -33,6 +35,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   calcular.mockReturnValue({ data: undefined, isFetching: false });
   criar.mockResolvedValue(undefined);
+  dividasAbertas.mockReturnValue({ data: [], isFetching: false });
 });
 
 describe('AdicionarDividaDialog', () => {
@@ -90,5 +93,25 @@ describe('AdicionarDividaDialog', () => {
       valores: { valorPeriodo: -100, valorDanos: 40, valorCaucao: 30, valorTotal: 110 },
     });
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+  });
+
+  it('avisa quando o motorista já tem dívidas em aberto com caução', () => {
+    dividasAbertas.mockReturnValue({
+      data: [
+        { id: 'd-1', periodo_inicio: '2026-07-01', periodo_fim: '2026-07-07', valor_caucao: 100 },
+      ],
+      isFetching: false,
+    });
+    renderDialog();
+    expect(screen.getByTestId('aviso-caucao-duplicada')).toBeInTheDocument();
+    expect(screen.getByTestId('aviso-caucao-duplicada')).toHaveTextContent(
+      'Este motorista já tem 1 dívida(s) em aberto'
+    );
+  });
+
+  it('não mostra aviso quando o motorista não tem dívidas em aberto', () => {
+    dividasAbertas.mockReturnValue({ data: [], isFetching: false });
+    renderDialog();
+    expect(screen.queryByTestId('aviso-caucao-duplicada')).not.toBeInTheDocument();
   });
 });

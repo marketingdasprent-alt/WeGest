@@ -91,10 +91,7 @@ describe('calcularValoresDivida', () => {
   });
 
   it('pago não conta em nenhum dos três', () => {
-    const periodo = [
-      mov('debito', 'outro', 500, 'pago'),
-      mov('debito', 'reparacao', 500, 'pago'),
-    ];
+    const periodo = [mov('debito', 'outro', 500, 'pago'), mov('debito', 'reparacao', 500, 'pago')];
     const caucao = [mov('credito', 'caucao', 500, 'pago')];
     const r = calcularValoresDivida(periodo, caucao);
     expect(r).toEqual({ valorPeriodo: 0, valorDanos: 0, valorCaucao: 0, valorTotal: 0 });

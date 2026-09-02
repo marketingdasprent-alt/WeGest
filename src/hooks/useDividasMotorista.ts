@@ -1,6 +1,7 @@
 // src/hooks/useDividasMotorista.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import {
   calcularValoresDivida,
   type ValoresDivida,
@@ -101,6 +102,34 @@ export function useCalcularDivida(
   });
 }
 
+/** Dívidas ainda em aberto (não canceladas) deste motorista com caução por
+ *  liquidar. valor_caucao numa dívida guardada é o saldo TOTAL da caução do
+ *  motorista (não filtrado por período) — se já houver uma dívida aberta que
+ *  também o descontou, uma nova dívida vai descontá-lo outra vez. Usado só
+ *  para avisar o admin em AdicionarDividaDialog antes de confirmar; não
+ *  bloqueia nem corrige o cálculo (fix a bloquear numa fase futura). */
+export function useDividasAbertasDoMotorista(motoristaId: string | null) {
+  return useQuery({
+    queryKey: ['dividas-abertas-motorista', motoristaId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('dividas_motorista')
+        .select('id, periodo_inicio, periodo_fim, valor_caucao')
+        .eq('motorista_id', motoristaId as string)
+        .neq('estado', 'cancelada')
+        .neq('valor_caucao', 0);
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string;
+        periodo_inicio: string;
+        periodo_fim: string;
+        valor_caucao: number;
+      }>;
+    },
+    enabled: !!motoristaId,
+  });
+}
+
 export function useCriarDivida() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -144,6 +173,15 @@ export function useAtualizarEstadoDivida() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dividas-motorista'] });
+    },
+    onError: (error: any) => {
+      // Supabase devolve PostgrestError — objecto plain, NÃO instanceof Error.
+      // Por isso lê-se .message directamente (mesmo padrão do catch em
+      // AdicionarDividaDialog.tsx), nunca "error instanceof Error ? ... :
+      // 'Erro inesperado'": essa gate já perdeu a causa real noutro hook
+      // desta app (ver comentário em useContratosRenting.ts) — aqui é um
+      // ecrã de dinheiro, não pode falhar em silêncio nem sem detalhe.
+      toast.error(`Erro ao atualizar a dívida: ${error?.message ?? 'erro desconhecido'}`);
     },
   });
 }

@@ -1,17 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
-const { useDividasMotorista, useAtualizarEstadoDivida, mutate, useCanEditFinanceiro } = vi.hoisted(
+const { useDividasMotorista, useAtualizarEstadoDivida, mutate, hasAccessToResource } = vi.hoisted(
   () => ({
     useDividasMotorista: vi.fn(),
     useAtualizarEstadoDivida: vi.fn(),
     mutate: vi.fn(),
-    useCanEditFinanceiro: vi.fn(),
+    hasAccessToResource: vi.fn(),
   })
 );
 
 vi.mock('@/hooks/useDividasMotorista', () => ({ useDividasMotorista, useAtualizarEstadoDivida }));
-vi.mock('@/hooks/useCanEditFinanceiro', () => ({ useCanEditFinanceiro }));
+vi.mock('@/hooks/usePermissions', () => ({ usePermissions: () => ({ hasAccessToResource }) }));
 
 import { DividasTab } from './DividasTab';
 
@@ -35,7 +35,7 @@ const DIVIDA_PAGA = { ...DIVIDA_POR_COBRAR, id: 'd-2', estado: 'paga' as const, 
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useCanEditFinanceiro.mockReturnValue({ canEdit: true, isLoading: false });
+  hasAccessToResource.mockReturnValue(true);
   useAtualizarEstadoDivida.mockReturnValue({ mutate, isPending: false });
 });
 
@@ -82,5 +82,12 @@ describe('DividasTab', () => {
     expect(useDividasMotorista).toHaveBeenCalledWith(
       expect.objectContaining({ estado: 'por_cobrar' })
     );
+  });
+
+  it('mostra uma mensagem de erro distinta do vazio quando a carga falha', () => {
+    useDividasMotorista.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+    render(<DividasTab />);
+    expect(screen.getByText('Não foi possível carregar as dívidas.')).toBeInTheDocument();
+    expect(screen.queryByText('Nenhuma dívida encontrada.')).not.toBeInTheDocument();
   });
 });

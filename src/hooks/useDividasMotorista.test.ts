@@ -10,6 +10,7 @@ const {
   update,
   getUser,
   profileSelect,
+  toastError,
 } = vi.hoisted(() => ({
   dividasSelect: vi.fn(),
   periodoSelect: vi.fn(),
@@ -19,7 +20,10 @@ const {
   update: vi.fn(),
   getUser: vi.fn(),
   profileSelect: vi.fn(),
+  toastError: vi.fn(),
 }));
+
+vi.mock('sonner', () => ({ toast: { error: toastError } }));
 
 // Declaração `function` (não `const`) de propósito: fica hoisted por inteiro
 // (não só a binding, o corpo também) antes do módulo correr, tal como as
@@ -30,6 +34,7 @@ function tabelaDividasEncadeavel() {
     order: () => builder,
     eq: () => builder,
     ilike: () => builder,
+    neq: () => builder,
     then: (onFulfilled: any, onRejected: any) => dividasSelect().then(onFulfilled, onRejected),
   };
   return builder;
@@ -79,6 +84,7 @@ import {
   useCalcularDivida,
   useCriarDivida,
   useAtualizarEstadoDivida,
+  useDividasAbertasDoMotorista,
 } from './useDividasMotorista';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -208,5 +214,35 @@ describe('useAtualizarEstadoDivida', () => {
     const [vals] = update.mock.calls[0];
     expect(vals.estado).toBe('cancelada');
     expect(vals.pago_em).toBeNull();
+  });
+
+  it('mostra toast de erro quando a mutação falha (ecrã de dinheiro não pode falhar em silêncio)', async () => {
+    update.mockResolvedValue({ error: { message: 'falha de rede' } });
+    const { result } = renderHook(() => useAtualizarEstadoDivida(), { wrapper });
+    result.current.mutate({ id: 'd-1', estado: 'paga' });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(toastError).toHaveBeenCalledWith('Erro ao atualizar a dívida: falha de rede');
+  });
+});
+
+describe('useDividasAbertasDoMotorista', () => {
+  it('não corre sem motoristaId', () => {
+    const { result } = renderHook(() => useDividasAbertasDoMotorista(null), { wrapper });
+    expect(result.current.fetchStatus).toBe('idle');
+  });
+
+  it('lista dívidas abertas (não canceladas, com caução por liquidar) do motorista', async () => {
+    dividasSelect.mockResolvedValue({
+      data: [
+        { id: 'd-1', periodo_inicio: '2026-07-01', periodo_fim: '2026-07-07', valor_caucao: 100 },
+      ],
+      error: null,
+    });
+    const { result } = renderHook(() => useDividasAbertasDoMotorista('m-1'), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([
+      { id: 'd-1', periodo_inicio: '2026-07-01', periodo_fim: '2026-07-07', valor_caucao: 100 },
+    ]);
   });
 });

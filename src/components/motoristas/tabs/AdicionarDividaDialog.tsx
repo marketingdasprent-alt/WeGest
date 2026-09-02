@@ -1,5 +1,6 @@
 // src/components/motoristas/tabs/AdicionarDividaDialog.tsx
 import { useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +14,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/utils/formatters';
-import { useCalcularDivida, useCriarDivida } from '@/hooks/useDividasMotorista';
+import {
+  useCalcularDivida,
+  useCriarDivida,
+  useDividasAbertasDoMotorista,
+} from '@/hooks/useDividasMotorista';
 
 export interface AdicionarDividaDialogProps {
   motoristaId: string;
@@ -46,6 +51,9 @@ export function AdicionarDividaDialog({
     intervaloValido ? { inicio, fim } : null
   );
   const { mutateAsync: criar, isPending } = useCriarDivida();
+  // Não depende do intervalo de datas — corre assim que o diálogo abre, para
+  // o aviso aparecer antes de o admin sequer escolher as datas.
+  const { data: dividasAbertas } = useDividasAbertasDoMotorista(motoristaId);
 
   const handleClose = (nextOpen: boolean) => {
     if (!nextOpen) {
@@ -112,6 +120,19 @@ export function AdicionarDividaDialog({
 
         {inicio && fim && !intervaloValido && (
           <p className="text-sm text-destructive">O fim não pode ser anterior ao início.</p>
+        )}
+
+        {!!dividasAbertas?.length && (
+          <div
+            data-testid="aviso-caucao-duplicada"
+            className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-600"
+          >
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <p>
+              Este motorista já tem {dividasAbertas.length} dívida(s) em aberto que também contam a
+              caução. Confirmar pode descontar o mesmo depósito mais do que uma vez.
+            </p>
+          </div>
         )}
 
         {intervaloValido && (

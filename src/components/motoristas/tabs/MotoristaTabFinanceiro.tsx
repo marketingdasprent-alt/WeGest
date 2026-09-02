@@ -7,6 +7,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Motorista } from '@/pages/Motoristas';
 import { useCanEditFinanceiro } from '@/hooks/useCanEditFinanceiro';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 import {
   NovoMovimentoFinanceiroOverlay,
   isMovimentoDaFaturacao,
@@ -43,6 +45,11 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   const [recorrencias, setRecorrencias] = useState<RecorrenciaFinanceira[]>([]);
   const [saldoPendente, setSaldoPendente] = useState<number | null>(null);
   const { canEdit } = useCanEditFinanceiro();
+  // Gate próprio de "Adicionar à dívida" (financeiro_recibos) — mais largo
+  // que canEdit (admin-only); mantém canEdit exactamente como estava para
+  // tudo o resto que já gere (ver MovimentosHistoricoTable).
+  const { hasAccessToResource } = usePermissions();
+  const podeGerirDividas = hasAccessToResource(RECURSOS.FINANCEIRO_RECIBOS);
   const [sortField, setSortField] = useState<string>('data_movimento');
   const [sortDir, setSortDir] = useState<SortDirection>('desc');
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
@@ -439,6 +446,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
           movimentos={movimentosOrdenados}
           movimentoFaturaMap={movimentoFaturaMap}
           canEdit={canEdit}
+          podeGerirDividas={podeGerirDividas}
           sortField={sortField}
           sortDir={sortDir}
           onSort={handleSort}

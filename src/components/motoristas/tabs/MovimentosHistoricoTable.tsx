@@ -35,6 +35,10 @@ export interface MovimentosHistoricoTableProps {
   movimentos: MovimentoFinanceiro[];
   movimentoFaturaMap: Map<string, string>;
   canEdit: boolean;
+  /** Gate próprio (financeiro_recibos) para "Adicionar à dívida" — mais largo
+   *  que `canEdit` (admin-only), por decisão de produto explícita. Não muda
+   *  o que `canEdit` continua a controlar nas outras ações desta tabela. */
+  podeGerirDividas: boolean;
   sortField: string;
   sortDir: SortDirection;
   onSort: (field: string) => void;
@@ -51,6 +55,7 @@ export function MovimentosHistoricoTable({
   movimentos,
   movimentoFaturaMap,
   canEdit,
+  podeGerirDividas,
   sortField,
   sortDir,
   onSort,
@@ -81,7 +86,7 @@ export function MovimentosHistoricoTable({
             <Plus className="h-4 w-4 mr-2" />
             Novo Movimento
           </Button>
-          {canEdit && (
+          {podeGerirDividas && (
             <Button size="sm" variant="outline" onClick={onAdicionarDivida}>
               <HandCoins className="h-4 w-4 mr-2" />
               Adicionar à dívida
