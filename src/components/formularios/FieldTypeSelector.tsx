@@ -17,12 +17,12 @@ interface FieldTypeSelectorProps {
 export const FieldTypeSelector: React.FC<FieldTypeSelectorProps> = ({ value, onChange }) => {
   return (
     <div>
-      <Label className="text-gray-300">Tipo de Campo</Label>
+      <Label>Tipo de Campo</Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+        <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
-        <SelectContent className="bg-gray-700 border-gray-600">
+        <SelectContent>
           <SelectItem value="text">Texto</SelectItem>
           <SelectItem value="email">Email</SelectItem>
           <SelectItem value="tel">Telefone (simples)</SelectItem>

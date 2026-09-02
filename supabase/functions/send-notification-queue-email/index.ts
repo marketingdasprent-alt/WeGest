@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { EmailProviderFactory } from "../_shared/email/factories/EmailProviderFactory.ts";
 import { renderTemplate } from "../_shared/notification-queue/renderTemplate.ts";
 import { batchLoadEnrichment, type QueueItemEnrichment } from "../_shared/notification-queue/enrichContext.ts";
+import { buildGenericEmailHtml } from "../_shared/notification-queue/buildGenericEmailHtml.ts";
 import { EmailService } from "../_shared/email/services/EmailService.ts";
 import type { EmailSendResult } from "../_shared/email/types/index.ts";
 
@@ -264,7 +265,14 @@ const TEMPLATE_HANDLERS: Record<string, TemplateHandler> = {
 // Caminho genérico atual (notification_templates + {{var}} interpolação) —
 // mantido tal e qual para qualquer template_codigo fora do TEMPLATE_HANDLERS
 // (ex.: digest.resumo_diario, cobranca.gerada, invoice.nao_enviada_ao_cliente).
-async function sendViaGenericTemplate(item: QueueItem, supabase: SupabaseClient): Promise<EmailSendResult> {
+// `ctx` é o mesmo enriquecimento (ctaUrl, marca da org, nome do
+// destinatário) que o caminho TEMPLATE_HANDLERS já recebia — só faltava
+// chegar aqui.
+async function sendViaGenericTemplate(
+  item: QueueItem,
+  supabase: SupabaseClient,
+  ctx: QueueItemEnrichment
+): Promise<EmailSendResult> {
   const { data: template, error: templateError } = await supabase
     .from("notification_templates")
     .select("assunto, corpo_template")
@@ -281,7 +289,8 @@ async function sendViaGenericTemplate(item: QueueItem, supabase: SupabaseClient)
 
   const vars = item.payload_render ?? {};
   const subject = renderTemplate(template.assunto ?? "", vars);
-  const html = renderTemplate(template.corpo_template, vars);
+  const corpo = renderTemplate(template.corpo_template, vars);
+  const html = buildGenericEmailHtml(subject, corpo, ctx);
 
   const { provider, sender } = await EmailProviderFactory.getProvider(item.org_id, supabase);
   return await provider.send({
@@ -321,7 +330,7 @@ serve(async (req) => {
         const handler = TEMPLATE_HANDLERS[item.template_codigo];
         const result = handler
           ? await handler(item, enrichment.get(item.id) ?? {}, emailService)
-          : await sendViaGenericTemplate(item, supabase);
+          : await sendViaGenericTemplate(item, supabase, enrichment.get(item.id) ?? {});
 
         await supabase.from("notification_delivery").insert({
           notification_queue_id: item.id,

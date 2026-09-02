@@ -31,7 +31,7 @@
 -- ============================================================
 
 begin;
-select plan(21);
+select plan(23);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'exec-runs-a');
@@ -305,12 +305,25 @@ select public.execute_automation_runs();
 --
 -- `notification_queue` não tem rule_run_id directo — chega-se lá por
 -- notification_id, que aponta para a linha em `notifications`.
+--
+-- A prova usa quem está no cargo ESCOLHIDO pela regra, não o admin: desde
+-- 20260904093000, uma acção de email já não arrasta os administradores da
+-- organização atrás — obedece só a quem foi escolhido.
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+    where q.destinatario = 'permitido@exec-runs.pt' and n.rule_run_id = '00000000-0000-0000-0000-0000004c0008'),
+  1,
+  'acao_tipo=email enfileira email para quem está no cargo escolhido, sem depender de enviar_email na config'
+);
+
+-- 17b. E o admin, que não pertence ao cargo escolhido, NÃO recebe o email.
 select is(
   (select count(*)::int from public.notification_queue q
      join public.notifications n on n.id = q.notification_id
     where q.destinatario = 'admin@exec-runs.pt' and n.rule_run_id = '00000000-0000-0000-0000-0000004c0008'),
-  1,
-  'acao_tipo=email enfileira email para o admin, sem depender de enviar_email na config'
+  0,
+  'uma acção de email não arrasta os admins da organização — só quem foi escolhido'
 );
 
 -- Cenário I: destinatarios_emails_livres cria notifications+queue para
@@ -327,13 +340,6 @@ select public.execute_automation_runs();
 
 -- 18. Cada endereço livre ganha a sua própria notifications, com o
 --     destinatario_email_externo certo — sem destinatario_user_id nenhum.
---
--- Filtrado a destinatario_email_externo is not null de propósito: este org
--- tem um admin (00000000-0000-0000-0000-0000000a0001), e o laço geral do
--- executor resolve sempre os admins da organização, independentemente de
--- destinatarios_cargo_ids — já testado no Cenário A. Contar TODAS as
--- notifications do run mediria as duas coisas juntas; esta asserção é só
--- sobre os endereços livres.
 select is(
   (select array_agg(destinatario_email_externo order by destinatario_email_externo)
      from public.notifications
@@ -341,6 +347,16 @@ select is(
       and destinatario_email_externo is not null),
   array['fornecedor@fora.pt', 'outro@fora.pt'],
   'cada endereço livre ganha a sua própria notifications'
+);
+
+-- 18b. E são as ÚNICAS: esta regra não escolheu cargo nenhum, por isso desde
+--      20260904093000 nem o admin da organização entra. Antes desta mudança
+--      o laço geral resolvia sempre os admins e este run tinha 3 linhas.
+select is(
+  (select count(*)::int from public.notifications
+    where rule_run_id = '00000000-0000-0000-0000-0000004c0009'),
+  2,
+  'email só com endereços livres não cria notificações para mais ninguém'
 );
 
 -- 19. ...e cada uma enfileira, na fila de email.

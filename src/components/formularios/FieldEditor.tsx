@@ -19,21 +19,19 @@ export const FieldEditor: React.FC<FieldEditorProps> = ({ field, onUpdate }) => 
         <FieldTypeSelector value={field.type} onChange={(value) => onUpdate({ type: value })} />
 
         <div>
-          <Label className="text-gray-300">Rótulo do Campo</Label>
+          <Label>Rótulo do Campo</Label>
           <Input
             value={field.label}
             onChange={(e) => onUpdate({ label: e.target.value })}
-            className="bg-gray-700 border-gray-600 text-white"
             placeholder="Ex: Nome Completo"
           />
         </div>
 
         <div>
-          <Label className="text-gray-300">Placeholder</Label>
+          <Label>Placeholder</Label>
           <Input
             value={field.placeholder || ''}
             onChange={(e) => onUpdate({ placeholder: e.target.value })}
-            className="bg-gray-700 border-gray-600 text-white"
             placeholder="Texto de ajuda"
           />
         </div>
@@ -43,7 +41,7 @@ export const FieldEditor: React.FC<FieldEditorProps> = ({ field, onUpdate }) => 
             checked={field.required}
             onCheckedChange={(checked) => onUpdate({ required: checked })}
           />
-          <Label className="text-gray-300">Campo Obrigatório</Label>
+          <Label>Campo Obrigatório</Label>
         </div>
       </div>
 

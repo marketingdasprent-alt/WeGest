@@ -15,15 +15,15 @@ export const OptionsEditor: React.FC<OptionsEditorProps> = ({ options, onChange 
 
   return (
     <div>
-      <Label className="text-gray-300">Opções (uma por linha)</Label>
+      <Label>Opções (uma por linha)</Label>
       <Textarea
         value={options?.join('\n') || ''}
         onChange={(e) => handleOptionsChange(e.target.value)}
-        className="bg-gray-700 border-gray-600 text-white min-h-[120px] resize-none font-mono"
+        className="min-h-[120px] resize-none font-mono"
         placeholder="Opção 1&#10;Opção 2&#10;Opção 3"
         rows={6}
       />
-      <p className="text-xs text-gray-400 mt-2">
+      <p className="text-xs text-muted-foreground mt-2">
         Digite cada opção em uma linha separada. Pressione Enter para criar uma nova linha.
       </p>
     </div>
