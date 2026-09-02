@@ -89,13 +89,14 @@ begin
   -- Um run como qualquer outro. `rule_snapshot` congela a definição ACTUAL —
   -- é isso que faz o teste medir a configuração que está no ecrã, e não a que
   -- estava quando a automação disparou pela última vez.
+  -- `automation_runs` não guarda event_type: o executor lê-o do snapshot da
+  -- regra (v_rule.event_type), que é onde a definição congelada vive.
   insert into public.automation_runs (
-    org_id, rule_id, event_type, entity_table, entity_id, payload, status, rule_snapshot
+    org_id, rule_id, entity_table, entity_id, payload, status, rule_snapshot
   )
   values (
     v_rule.org_id,
     v_rule.id,
-    v_rule.event_type,
     v_ultimo_run.entity_table,
     v_ultimo_run.entity_id,
     v_ultimo_run.payload,
