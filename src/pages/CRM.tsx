@@ -15,6 +15,7 @@ import { RealtimeStatus } from '@/components/crm/RealtimeStatus';
 import { CRMListView } from '@/components/crm/CRMListView';
 import { CRMViewToggle } from '@/components/crm/CRMViewToggle';
 import { KanbanBoard } from '@/components/ui/kanban-board';
+import { observacoesLegiveis } from '@/lib/camposDoLead';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2 } from 'lucide-react';
 import type { Column, Task } from '@/components/ui/kanban-board';
@@ -960,7 +961,10 @@ const CRM = () => {
                   email: lead.email,
                   telefone: lead.telefone,
                   zona: lead.zona,
-                  observacoes: lead.observacoes,
+                  // As respostas do formulário vêm em JSON; o cartão do
+                  // kanban mostrava-o em bruto ({"field_178…":{"label":…}).
+                  // Ver lib/camposDoLead.ts.
+                  observacoes: observacoesLegiveis(lead.observacoes),
                   tipo_viatura: lead.tipo_viatura,
                   tags: lead.campaign_tags || getTagsForFormulario(lead.formulario_id),
                   dueDate: lead.created_at

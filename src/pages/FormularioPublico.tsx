@@ -391,8 +391,11 @@ const FormularioPublico = () => {
         });
       }
 
-      // Redirecionar para página de obrigado
-      navigate('/obrigado');
+      // A marca viaja para a página de obrigado: é a continuação do mesmo
+      // ecrã para quem preencheu, e mudar de marca a meio seria estranho.
+      // Num refresh o estado perde-se e a página cai na marca WeGest, que é
+      // a regra em toda a parte.
+      navigate('/obrigado', { state: { organizacao } });
     } catch (error) {
       console.error('Erro ao salvar lead:', error);
 
@@ -496,13 +499,10 @@ const FormularioPublico = () => {
             />
           </motion.div>
 
-          <motion.h1
-            className="text-5xl md:text-7xl font-bold text-foreground mb-6 leading-tight"
-            variants={fadeInUp}
-          >
-            {formulario.nome}
-          </motion.h1>
-
+          {/* O nome do formulário é interno ("TVDE Geral") — serve para quem
+              o gere o distinguir dos outros, não para quem o vai preencher.
+              Quem chega aqui já sabe ao que vem: fica o logótipo, a descrição
+              e o formulário. */}
           {formulario.descricao && (
             <motion.p
               className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed"

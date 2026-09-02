@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { observacoesLegiveis } from '@/lib/camposDoLead';
 import {
   Table,
   TableBody,
@@ -407,10 +408,15 @@ const DasprentLeads = () => {
                           {format(new Date(lead.created_at), 'dd/MM/yyyy HH:mm', { locale: pt })}
                         </TableCell>
                         <TableCell className="text-gray-300 max-w-48">
-                          {lead.observacoes && (
+                          {/* As respostas do formulário estão guardadas em
+                              JSON — mostrar o campo em bruto despejava
+                              {"field_…":{"label":…}} na tabela. */}
+                          {observacoesLegiveis(lead.observacoes) && (
                             <div className="flex items-center gap-1">
                               <FileText className="h-3 w-3" />
-                              <span className="text-xs truncate">{lead.observacoes}</span>
+                              <span className="text-xs truncate">
+                                {observacoesLegiveis(lead.observacoes)}
+                              </span>
                             </div>
                           )}
                         </TableCell>
