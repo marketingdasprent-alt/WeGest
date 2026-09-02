@@ -1,13 +1,16 @@
 /**
  * Um movimento de motorista_financeiro, reduzido aos campos que este
  * cálculo precisa. `valor` aceita string porque é o que o Supabase devolve
- * para `numeric` sem um mapeamento explícito.
+ * para `numeric` sem um mapeamento explícito. `data_movimento` só é
+ * usado para aplicar o chão do período à reparação — o resto do cálculo
+ * já vem pré-filtrado pela query (ver useCalcularDivida).
  */
 export interface MovimentoParaDivida {
   tipo: string; // 'credito' | 'debito'
   categoria: string | null;
   valor: number | string;
   status: string;
+  data_movimento: string; // yyyy-MM-dd
 }
 
 export interface ValoresDivida {
@@ -32,10 +35,18 @@ function valorNumerico(m: MovimentoParaDivida): number {
  * de reparação nunca entra no período, um de caução nunca entra no período
  * nem é lido daqui (vem só de `movimentosCaucao`, que não tem filtro de
  * data — a caução de Janeiro continua a valer em Setembro).
+ *
+ * `movimentosPeriodo` já vem filtrado pela query até `periodoFim` (sem chão
+ * de início) — valor_periodo é saldo corrido, o mesmo critério de
+ * motorista_saldo_pendente (Σcrédito − Σdébito pendente até uma data), não
+ * "só o que aconteceu dentro desta janela". A reparação (danos) é a
+ * excepção: continua presa ao intervalo completo, por isso o chão de início
+ * é aplicado aqui, só a ela.
  */
 export function calcularValoresDivida(
   movimentosPeriodo: readonly MovimentoParaDivida[],
-  movimentosCaucao: readonly MovimentoParaDivida[]
+  movimentosCaucao: readonly MovimentoParaDivida[],
+  periodoInicio: string
 ): ValoresDivida {
   let valorPeriodo = 0;
   let valorDanos = 0;
@@ -44,6 +55,7 @@ export function calcularValoresDivida(
     if (m.status !== 'pendente') continue;
     const valor = valorNumerico(m);
     if (m.categoria === 'reparacao') {
+      if (m.data_movimento < periodoInicio) continue;
       valorDanos += m.tipo === 'debito' ? valor : -valor;
     } else if (m.categoria !== 'caucao') {
       valorPeriodo += m.tipo === 'credito' ? valor : -valor;

@@ -28,7 +28,7 @@ export interface DividaCalculada extends ValoresDivida {
   motoristaNome: string;
 }
 
-const MOVIMENTO_SELECT = 'tipo, categoria, valor, status';
+const MOVIMENTO_SELECT = 'tipo, categoria, valor, status, data_movimento';
 
 /** Igual ao helper privado de useTiTickets.ts — mesma origem (profiles.nome),
  *  não vale a pena partilhar por 6 linhas usadas em dois sítios. */
@@ -71,11 +71,15 @@ export function useCalcularDivida(
     queryKey: ['divida-calculo', motoristaId, periodo?.inicio, periodo?.fim],
     queryFn: async (): Promise<DividaCalculada> => {
       const [periodoRes, caucaoRes, motoristaRes] = await Promise.all([
+        // Sem chão de início de propósito: "valor do período" é saldo
+        // corrido (o mesmo critério de motorista_saldo_pendente — tudo o
+        // que está pendente até uma data, não só o que caiu dentro de uma
+        // janela) — só a reparação (danos) continua presa ao intervalo
+        // completo, aplicado dentro de calcularValoresDivida.
         supabase
           .from('motorista_financeiro')
           .select(MOVIMENTO_SELECT)
           .eq('motorista_id', motoristaId as string)
-          .gte('data_movimento', periodo!.inicio)
           .lte('data_movimento', periodo!.fim),
         supabase
           .from('motorista_financeiro')
@@ -94,7 +98,8 @@ export function useCalcularDivida(
 
       const valores = calcularValoresDivida(
         (periodoRes.data ?? []) as MovimentoParaDivida[],
-        (caucaoRes.data ?? []) as MovimentoParaDivida[]
+        (caucaoRes.data ?? []) as MovimentoParaDivida[],
+        periodo!.inicio
       );
       return { ...valores, motoristaNome: (motoristaRes.data as { nome: string }).nome };
     },

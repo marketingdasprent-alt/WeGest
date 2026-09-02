@@ -59,9 +59,13 @@ vi.mock('@/integrations/supabase/client', () => ({
       }
       if (tabela === 'motorista_financeiro') {
         return {
+          // A query real de período é .eq('motorista_id',X).lte('data_movimento',fim)
+          // directamente — sem chão de início, de propósito (valor_periodo é
+          // saldo corrido). lte fica exposto directo no objecto do primeiro
+          // .eq(), não encadeado atrás de um .gte() que já não existe.
           select: () => ({
             eq: (_col: string, motoristaId: string) => ({
-              gte: () => ({ lte: periodoSelect }),
+              lte: periodoSelect,
               eq: (col2: string) => (col2 === 'categoria' ? caucaoSelect(motoristaId) : undefined),
             }),
           }),
@@ -134,7 +138,15 @@ describe('useCalcularDivida', () => {
 
   it('combina período + caução + nome do motorista', async () => {
     periodoSelect.mockResolvedValue({
-      data: [{ tipo: 'debito', categoria: 'outro', valor: 100, status: 'pendente' }],
+      data: [
+        {
+          tipo: 'debito',
+          categoria: 'outro',
+          valor: 100,
+          status: 'pendente',
+          data_movimento: '2026-08-05',
+        },
+      ],
       error: null,
     });
     caucaoSelect.mockResolvedValue({
@@ -155,6 +167,30 @@ describe('useCalcularDivida', () => {
       valorTotal: 60,
       motoristaNome: 'Ana Costa',
     });
+  });
+
+  it('valor_periodo é saldo corrido: conta um movimento anterior ao início escolhido', async () => {
+    periodoSelect.mockResolvedValue({
+      data: [
+        {
+          tipo: 'debito',
+          categoria: 'outro',
+          valor: 30,
+          status: 'pendente',
+          data_movimento: '2026-07-10',
+        },
+      ],
+      error: null,
+    });
+    caucaoSelect.mockResolvedValue({ data: [], error: null });
+    motoristaSelect.mockResolvedValue({ data: { nome: 'Ana Costa' }, error: null });
+
+    const { result } = renderHook(
+      () => useCalcularDivida('m-1', { inicio: '2026-08-01', fim: '2026-08-07' }),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.valorPeriodo).toBe(-30);
   });
 });
 
