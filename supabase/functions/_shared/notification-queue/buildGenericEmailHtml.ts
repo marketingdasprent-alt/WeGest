@@ -94,7 +94,10 @@ export function buildGenericEmailHtml(
   return notificacaoTemplate({
     titulo,
     corpo: formatarCorpo(corpo),
-    destinatarioNome: ctx.destinatarioNome,
+    // Um aviso do motor lê-se como um painel: título, dados, botão. A
+    // saudação só empurrava a informação para baixo. Os emails escritos à
+    // mão, que falam com clientes e motoristas, mantêm-na.
+    semSaudacao: true,
     emissorNome: ctx.emissorNome,
     emissorLogoUrl: ctx.emissorLogoUrl,
     ctaLabel: ctx.ctaUrl ? "Ver detalhes" : undefined,

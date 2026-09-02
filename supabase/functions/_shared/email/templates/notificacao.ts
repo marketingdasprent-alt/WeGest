@@ -29,6 +29,13 @@ export interface NotificacaoTemplateInput {
   condutorNome?: string;
   /** Corpo HTML principal da notificação (parágrafos, listas, tabelas…) */
   corpo: string;
+  /**
+   * Esconde o "Olá." de abertura. Os avisos automáticos do motor são lidos
+   * como um painel — título, dados, botão — e a saudação só empurra a
+   * informação para baixo. Os emails escritos à mão, que falam com clientes
+   * e motoristas, mantêm-na.
+   */
+  semSaudacao?: boolean;
   /** Botão de ação opcional */
   ctaLabel?: string;
   ctaUrl?: string;
@@ -90,6 +97,7 @@ export function notificacaoTemplate(input: NotificacaoTemplateInput): string {
     emissorNome,
     emissorLogoUrl,
     severidade,
+    semSaudacao,
   } = input;
 
   const { accent: COR_ACENTO, tint: COR_ACENTO_TINT } = SEVERIDADE_COR[severidade ?? 'info'];
@@ -188,7 +196,7 @@ export function notificacaoTemplate(input: NotificacaoTemplateInput): string {
           <tr>
             <td style="padding:26px 32px 8px">
               <h1 style="margin:0 0 14px;font-size:21px;line-height:1.3;font-weight:800;color:${COR_NAVY};letter-spacing:-0.01em">${titulo}</h1>
-              <p style="margin:0 0 4px;font-size:14px;color:#1a1f29">${saudacao}</p>
+              ${semSaudacao ? '' : `<p style="margin:0 0 4px;font-size:14px;color:#1a1f29">${saudacao}</p>`}
               ${introducao ? `<p style="margin:4px 0 0;font-size:14px;line-height:1.55;color:${COR_MUTED}">${introducao}</p>` : ''}
               ${infoBlock}
               <div style="font-size:14px;line-height:1.65;color:#1a1f29">
