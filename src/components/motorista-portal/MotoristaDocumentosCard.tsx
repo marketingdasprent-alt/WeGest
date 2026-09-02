@@ -72,9 +72,28 @@ const TIPOS_DOCUMENTO: {
     validityField: 'licenca_tvde_validade',
     folder: 'tvde',
   },
-  { value: 'registo_criminal', label: 'Registo Criminal', folder: 'documentos' },
-  { value: 'comprovativo_morada', label: 'Comprovativo de Morada', folder: 'documentos' },
-  { value: 'comprovativo_iban', label: 'Comprovativo de IBAN', folder: 'documentos' },
+  // Estes três TÊM coluna na ficha (o FICHA_COLS abaixo já as lê). Sem o
+  // `field`, o resolveDoc saltava sempre para o fallback motorista_documentos
+  // e mostrava "em falta" um documento que o motorista já tinha enviado na
+  // candidatura — levando-o a enviá-lo outra vez e a criar um duplicado.
+  {
+    value: 'registo_criminal',
+    label: 'Registo Criminal',
+    field: 'registo_criminal_url',
+    folder: 'documentos',
+  },
+  {
+    value: 'comprovativo_morada',
+    label: 'Comprovativo de Morada',
+    field: 'comprovativo_morada_url',
+    folder: 'documentos',
+  },
+  {
+    value: 'comprovativo_iban',
+    label: 'Comprovativo de IBAN',
+    field: 'comprovativo_iban_url',
+    folder: 'documentos',
+  },
   { value: 'outros', label: 'Outros Documentos', folder: 'documentos' },
 ];
 
