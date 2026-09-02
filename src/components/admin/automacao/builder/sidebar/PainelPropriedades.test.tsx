@@ -74,6 +74,18 @@ describe('PainelPropriedades — botão Testar', () => {
     expect(screen.getByRole('button', { name: /testar/i })).toBeDisabled();
   });
 
+  it('mostra o corpo do email numa acção de email', () => {
+    renderPainel();
+    expect(screen.getByText('Corpo (email)')).toBeInTheDocument();
+  });
+
+  it('esconde o corpo do email numa acção de notificação', () => {
+    // O motor escreve mensagem = null na notificação in-app: o corpo não tem
+    // efeito nenhum aqui, e editá-lo mudava o email da automação gémea.
+    renderPainel({ data: { rotulo: 'Enviar notificação', acaoTipo: 'notificacao' } });
+    expect(screen.queryByText('Corpo (email)')).not.toBeInTheDocument();
+  });
+
   it('guarda e depois chama o teste, mostrando quem recebeu num toast', async () => {
     testarMutateAsync.mockResolvedValue({
       run_id: 'run-1',

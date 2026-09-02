@@ -311,13 +311,20 @@ export function CamposDoPasso(props: CamposDoPassoProps) {
             onAlterar={onAlterar}
             canal={acaoTipo === 'email' ? 'email' : 'notificacao'}
           />
-          <Mensagem
-            payload={props.payload}
-            corpo={props.corpo}
-            onCorpo={props.onCorpo}
-            regrasQueUsam={props.regrasQueUsam}
-            assunto={props.assuntoDoTemplate}
-          />
+          {/* O corpo só existe para o email. O motor escreve `mensagem = null`
+              na notificação in-app, portanto este campo não tinha efeito
+              nenhum numa acção de notificação — e, pior, como a gémea de
+              email partilha o mesmo `template_codigo`, editá-lo aqui mudava
+              em silêncio o email da OUTRA automação. */}
+          {acaoTipo === 'email' && (
+            <Mensagem
+              payload={props.payload}
+              corpo={props.corpo}
+              onCorpo={props.onCorpo}
+              regrasQueUsam={props.regrasQueUsam}
+              assunto={props.assuntoDoTemplate}
+            />
+          )}
         </>
       )}
 

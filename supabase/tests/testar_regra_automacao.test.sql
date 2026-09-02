@@ -120,11 +120,13 @@ select throws_ok(
 reset role;
 
 -- Dá à regra de email um disparo anterior, de onde o teste tira o payload.
-insert into public.automation_runs (id, org_id, rule_id, event_type, entity_table, entity_id, payload, status, rule_snapshot) values (
+insert into public.automation_runs (id, org_id, rule_id, entity_table, entity_id, payload, status, rule_snapshot) values (
   '00000000-0000-0000-0000-000000080c02', '00000000-0000-0000-0000-000000080000',
-  '00000000-0000-0000-0000-000000080b04', 'viatura.seguro_expirando', 'viaturas',
+  '00000000-0000-0000-0000-000000080b04', 'viaturas',
   '00000000-0000-0000-0000-000000080d01', jsonb_build_object('matricula', 'ZZ-00-ZZ'), 'completed',
-  jsonb_build_object('regra', to_jsonb((select r from public.automation_rules r where r.id = '00000000-0000-0000-0000-000000080b04')))
+  -- A mesma função que o motor usa: `automation_runs_snapshot_coerente` exige
+  -- schema_version + definition_hash + regra, e montá-la à mão não passa.
+  public.automation_rule_snapshot((select r from public.automation_rules r where r.id = '00000000-0000-0000-0000-000000080b04'))
 );
 
 set local role authenticated;
@@ -218,13 +220,29 @@ select isnt(
 
 -- 12. A lista de destinatários vem das notificações criadas, não de uma
 --     previsão à parte — e traz o endereço de quem recebeu.
+--
+-- `reset role` ANTES de rebobinar: `automacao_regra_teste_cooldown` tem RLS
+-- ligada e nenhuma política permissiva, e os privilégios estão revogados a
+-- `authenticated` — só `testar_regra_automacao` (SECURITY DEFINER) lhe toca.
+-- É o desenho certo, não um esquecimento; quem a escreve num teste tem de
+-- ser o superutilizador.
+reset role;
+
 update public.automacao_regra_teste_cooldown
 set ultimo_teste_em = now() - interval '1 minute'
 where rule_id = '00000000-0000-0000-0000-000000080b04';
 
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000080a01', true);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000080a01","role":"authenticated"}', true);
+
+-- Só o `email`: o `nome` sai de `profiles`, que aqui está vazia. O gatilho
+-- que cria o perfil ao inserir em `auth.users` vive no schema `auth`, e o
+-- baseline do CI só exporta o `public` — por isso numa base reconstruída
+-- não há perfis. É o email que identifica quem recebeu; o nome é adorno.
 select ok(
   (select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b04')->'destinatarios'
-     @> jsonb_build_array(jsonb_build_object('email', 'escolhido@testar-regra-g.pt', 'nome', 'escolhido@testar-regra-g.pt'))),
+     @> jsonb_build_array(jsonb_build_object('email', 'escolhido@testar-regra-g.pt'))),
   'destinatarios traz quem recebeu de facto'
 );
 
