@@ -220,9 +220,21 @@ select isnt(
 
 -- 12. A lista de destinatários vem das notificações criadas, não de uma
 --     previsão à parte — e traz o endereço de quem recebeu.
+--
+-- `reset role` ANTES de rebobinar: `automacao_regra_teste_cooldown` tem RLS
+-- ligada e nenhuma política permissiva, e os privilégios estão revogados a
+-- `authenticated` — só `testar_regra_automacao` (SECURITY DEFINER) lhe toca.
+-- É o desenho certo, não um esquecimento; quem a escreve num teste tem de
+-- ser o superutilizador.
+reset role;
+
 update public.automacao_regra_teste_cooldown
 set ultimo_teste_em = now() - interval '1 minute'
 where rule_id = '00000000-0000-0000-0000-000000080b04';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000080a01', true);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000080a01","role":"authenticated"}', true);
 
 select ok(
   (select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b04')->'destinatarios'
