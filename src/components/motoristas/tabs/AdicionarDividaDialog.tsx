@@ -143,7 +143,7 @@ export function AdicionarDividaDialog({
               <>
                 <Linha label="Valor do período" valor={calculo.valorPeriodo} />
                 <Linha label="Danos" valor={calculo.valorDanos} />
-                <Linha label="Caução (saldo total)" valor={calculo.valorCaucao} />
+                <Linha label="Caução" valor={calculo.valorCaucao} />
                 <div className="border-t pt-2">
                   <Linha label="Total" valor={calculo.valorTotal} />
                 </div>

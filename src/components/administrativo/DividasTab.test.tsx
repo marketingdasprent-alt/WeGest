@@ -62,8 +62,17 @@ describe('DividasTab', () => {
     expect(screen.getByTestId('dividas-total-por-cobrar')).toHaveTextContent('€110,00');
   });
 
-  it('uma dívida paga não mostra as acções de gestão', () => {
+  it('uma dívida paga não mostra "Marcar paga", mas mostra "Cancelar"', () => {
     useDividasMotorista.mockReturnValue({ data: [DIVIDA_PAGA], isLoading: false });
+    render(<DividasTab />);
+    expect(screen.queryByRole('button', { name: /marcar paga/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+    expect(mutate).toHaveBeenCalledWith({ id: 'd-2', estado: 'cancelada' });
+  });
+
+  it('uma dívida cancelada não mostra nenhuma acção', () => {
+    const DIVIDA_CANCELADA = { ...DIVIDA_POR_COBRAR, id: 'd-3', estado: 'cancelada' as const };
+    useDividasMotorista.mockReturnValue({ data: [DIVIDA_CANCELADA], isLoading: false });
     render(<DividasTab />);
     expect(screen.queryByRole('button', { name: /marcar paga/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /cancelar/i })).not.toBeInTheDocument();
@@ -74,6 +83,13 @@ describe('DividasTab', () => {
     render(<DividasTab />);
     fireEvent.click(screen.getByRole('button', { name: /marcar paga/i }));
     expect(mutate).toHaveBeenCalledWith({ id: 'd-1', estado: 'paga' });
+  });
+
+  it('uma dívida por cobrar também mostra "Cancelar", que chama a mutação', () => {
+    useDividasMotorista.mockReturnValue({ data: [DIVIDA_POR_COBRAR], isLoading: false });
+    render(<DividasTab />);
+    fireEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+    expect(mutate).toHaveBeenCalledWith({ id: 'd-1', estado: 'cancelada' });
   });
 
   it('o filtro de estado começa em "Por cobrar"', () => {

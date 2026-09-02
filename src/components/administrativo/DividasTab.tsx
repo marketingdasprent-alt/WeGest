@@ -149,16 +149,23 @@ export function DividasTab() {
                   </TableCell>
                   {canEdit && (
                     <TableCell>
-                      {d.estado === 'por_cobrar' && (
+                      {/* Cancelar fica disponível em qualquer estado que não seja já
+                          cancelada — é o mecanismo de correção que a spec descreve
+                          ("para corrigir, cancela-se e cria-se outra"), e só faz
+                          sentido se ainda funcionar depois de "Marcar paga" por
+                          engano. Marcar paga só faz sentido a partir de por_cobrar. */}
+                      {d.estado !== 'cancelada' && (
                         <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={isPending}
-                            onClick={() => atualizarEstado({ id: d.id, estado: 'paga' })}
-                          >
-                            Marcar paga
-                          </Button>
+                          {d.estado === 'por_cobrar' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={isPending}
+                              onClick={() => atualizarEstado({ id: d.id, estado: 'paga' })}
+                            >
+                              Marcar paga
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
