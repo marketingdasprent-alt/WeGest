@@ -140,66 +140,42 @@ html[data-native-app='true'] .native-bottom {
   }
 
   .dark {
-    /* Tema Escuro Rota Líquida - Obsidian Premium */
-    --background: 222 47% 4%;
-    --foreground: 210 40% 98%;
+    /* Tema Escuro — Grafite Neutro */
+    --background: 220 8% 11%;
+    --foreground: 220 15% 97%;
 
-    --card: 222 47% 7%;
-    --card-foreground: 210 40% 98%;
+    --card: 220 7% 16%;
+    --card-foreground: 220 15% 97%;
 
-    --popover: 222 47% 5%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 220 7% 18%;
+    --popover-foreground: 220 15% 97%;
 
-    /* PORQUE O TEAL TEM VALOR DIFERENTE EM CADA TEMA
-       O teal da logo (#00c4b0, L=38,4%) é claro. Sobre o fundo escuro lê-se
-       muito bem como texto (9,06:1), mas por trás de texto BRANCO dava 2,21:1
-       — os botões primários falhavam o mínimo de 4,5:1 nos dois temas, por
-       razões opostas: no claro o teal é demasiado claro para o fundo branco,
-       no escuro é demasiado claro para o texto branco em cima dele.
+    --primary: 174 50% 32%;
+    --primary-foreground: 0 0% 100%;
 
-       Por isso: no tema escuro fica o teal da marca intacto e o texto em cima
-       passa a quase-negro (8,83:1); no tema claro o teal desce a 25%, onde
-       serve para texto e para fundo com texto branco (4,87:1). O logótipo não
-       é afectado — usa a sua própria cor. */
-    --primary: 174 100% 38.4%;
-    --primary-foreground: 0 0% 8%;
+    --secondary: 220 7% 17%;
+    --secondary-foreground: 220 15% 97%;
 
-    --secondary: 222 47% 12%;
-    --secondary-foreground: 210 40% 98%;
+    --muted: 220 7% 20%;
+    --muted-foreground: 220 8% 70%;
 
-    --muted: 222 47% 15%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 174 55% 52%;
+    --accent-foreground: 220 10% 10%;
 
-    --accent: 174 100% 38.4%;
-    --accent-foreground: 0 0% 8%;
-
-    /* Era 30,6%: um vermelho escuro, pensado como FUNDO de botão com texto
-       branco. Só que o uso dominante é como cor de TEXTO (381 ocorrências), e
-       sobre os cartões escuros media 1,92:1 — ou seja, as mensagens de erro
-       estavam praticamente invisíveis no tema escuro.
-
-       Sobe a 60% (lê-se como texto, 5,03:1 sobre os cartões) e o texto por cima
-       inverte para quase-negro (4,81:1), pela mesma razão e pelo mesmo padrão
-       do --primary aqui em cima. Não há conflito entre os dois papéis: uma vez
-       que a cor do texto acompanha o tema, ambos querem o vermelho claro. */
-    --destructive: 0 70% 60%;
+    --destructive: 2 65% 62%;
     --destructive-foreground: 0 0% 8%;
 
-    /* O âmbar já cumpria nos dois papéis no tema escuro (9,67:1 como texto,
-       8,70:1 como fundo com o seu próprio foreground) — fica como está. */
-    --warning: 38 92% 55%;
+    --warning: 38 70% 62%;
     --warning-foreground: 20 91% 10%;
-    /* O verde lê-se bem como texto (8,27:1); o que falhava era o texto BRANCO
-       por cima dele (2,32:1), que inverte para quase-negro (7,90:1). */
-    --success: 142 70% 45%;
+    --success: 150 45% 58%;
     --success-foreground: 0 0% 8%;
 
-    --border: 222 47% 18%;
-    --input: 222 47% 18%;
-    --ring: 174 100% 38.4%;
+    --border: 220 7% 24%;
+    --input: 220 7% 28%;
+    --ring: 174 55% 52%;
 
     /* Azul-marinho mais claro p/ contraste em fundo escuro */
-    --brand-navy: 210 74% 64%;
+    --brand-navy: 212 55% 68%;
     --brand-navy-foreground: 222 47% 8%;
 
     /* Mesmos matizes da paleta do construtor, clareados: as versões do :root
@@ -220,13 +196,13 @@ html[data-native-app='true'] .native-bottom {
     --fluxo-email: 68 60% 58%;
     /* Mesma escada, invertida: no escuro o canvas é o mais fundo e os
        cartões os mais claros. */
-    --canvas-bg: 222 47% 6%;
-    --panel-bg: 222 47% 10%;
-    --node-bg: 222 47% 14%;
-    --node-border: 222 47% 22%;
-    --node-border-selected: 174 100% 38.4%;
-    --edge: 215 16% 47%;
-    --grid-dot: 222 30% 26%;
+    --canvas-bg: 220 8% 9%;
+    --panel-bg: 220 7% 14%;
+    --node-bg: 220 7% 18%;
+    --node-border: 220 7% 26%;
+    --node-border-selected: 174 55% 52%;
+    --edge: 220 8% 50%;
+    --grid-dot: 220 7% 26%;
 
     /* O --radius NÃO se redefine aqui de propósito. Havia 0,75rem neste bloco
        contra 0,5rem no :root, pelo que todos os cantos da aplicação mudavam de
@@ -234,14 +210,14 @@ html[data-native-app='true'] .native-bottom {
        foi distração e não intenção. O raio é geometria, não cor: não depende
        do tema. Vale o valor declarado no :root. */
 
-    --sidebar-background: 222 47% 5%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 174 100% 38.4%;
-    --sidebar-primary-foreground: 0 0% 8%;
-    --sidebar-accent: 222 47% 12%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 222 47% 18%;
-    --sidebar-ring: 174 100% 38.4%;
+    --sidebar-background: 220 8% 14%;
+    --sidebar-foreground: 220 15% 97%;
+    --sidebar-primary: 174 50% 32%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 7% 20%;
+    --sidebar-accent-foreground: 220 15% 97%;
+    --sidebar-border: 220 7% 22%;
+    --sidebar-ring: 174 55% 52%;
   }
 }
 
