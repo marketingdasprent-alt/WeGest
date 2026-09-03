@@ -106,21 +106,26 @@ insert into public.notifications (org_id, destinatario_user_id, template_codigo,
 
 select public.enviar_digests_diarios();
 
+-- `created_at` é `now()` — constante ao longo de TODA a transacção do
+-- ficheiro (não `clock_timestamp()`), por isso este email do digest e o dos
+-- testes 3-6 empatam nele; "order by created_at desc limit 1" não distingue
+-- os dois. `total = '1'` distingue-os de forma inequívoca — só este grupo
+-- tem um único item.
 select ok(
   (select payload_render->>'lista' from public.notification_queue
      where template_codigo = 'digest.resumo_diario' and destinatario = 'gestor@digest-h.pt'
-     order by created_at desc limit 1) like '%Matricula: AT-36-XD%',
+       and payload_render->>'total' = '1') like '%Matricula: AT-36-XD%',
   'sem mensagem, a linha do digest mostra o payload (ex.: a matrícula)'
 );
 
 select ok(
   (select payload_render->>'lista' from public.notification_queue
      where template_codigo = 'digest.resumo_diario' and destinatario = 'gestor@digest-h.pt'
-     order by created_at desc limit 1) not like '%https://wegest.pt/x%'
+       and payload_render->>'total' = '1') not like '%https://wegest.pt/x%'
   and
   (select payload_render->>'lista' from public.notification_queue
      where template_codigo = 'digest.resumo_diario' and destinatario = 'gestor@digest-h.pt'
-     order by created_at desc limit 1) not like '%11111111-1111-1111-1111-111111111111%',
+       and payload_render->>'total' = '1') not like '%11111111-1111-1111-1111-111111111111%',
   'a linha do digest não expõe o link cru nem o uuid interno de cliente_id'
 );
 
