@@ -272,6 +272,7 @@ jobs:
             accao_email \
             notifications_destinatario_externo \
             automation_rules_grupo_id \
+            email_gemea_herda_grupo_id \
             testar_regra_automacao \
             automation_queue \
             automation_rules \
