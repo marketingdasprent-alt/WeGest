@@ -271,6 +271,43 @@ export interface AccaoParaGravar {
   condicoes?: CondicaoTipada[];
 }
 
+/**
+ * Prepara uma acção nova (sem `id`, nunca gravada) para a inserção.
+ *
+ * Uma acção arrastada nesta sessão nunca passou por nenhum painel que
+ * preenchesse `template_codigo`/`titulo` — o servidor recusa `acao_config`
+ * sem os dois. `nome` (o rótulo do passo, sempre preenchido) serve de
+ * título por omissão — o mesmo fallback que o executor já usa
+ * (`coalesce(titulo, nome)`), e o próprio código novo serve de
+ * `template_codigo` por omissão, do mesmo jeito que as regras gémeas da
+ * divisão de email já fazem.
+ *
+ * Extraída à parte de `useSincronizarGrupo` para poder ser testada sem
+ * mockar o Supabase.
+ */
+export function prepararAccaoNova(
+  accao: AccaoParaGravar,
+  contexto: { eventType: string; nome: string }
+): { codigo: string; acaoConfig: AccaoParaGravar['acaoConfig'] } {
+  // codigo tem de ser único por org — sufixo aleatório, como o padrão já
+  // usado pelas regras gémeas da divisão de email.
+  const codigo = `${contexto.eventType}.${accao.acaoTipo}.${crypto.randomUUID().slice(0, 8)}`;
+
+  if (accao.acaoTipo !== 'email' && accao.acaoTipo !== 'notificacao') {
+    return { codigo, acaoConfig: accao.acaoConfig };
+  }
+
+  const config = accao.acaoConfig as AutomationRuleAcaoConfig;
+  return {
+    codigo,
+    acaoConfig: {
+      ...config,
+      template_codigo: config.template_codigo || codigo,
+      titulo: config.titulo || contexto.nome,
+    } as unknown as AccaoParaGravar['acaoConfig'],
+  };
+}
+
 /** Sincroniza um conjunto de acções com as regras-irmãs que já existem na
  * BD: as que têm `id` actualizam; as que não têm criam-se com o mesmo
  * `grupo_id`; as regras-irmãs que já existiam e não aparecem na lista nova
@@ -300,32 +337,51 @@ export function useSincronizarGrupo() {
       const idsParaApagar = idsExistentes.filter((id) => !idsMantidos.has(id));
 
       for (const accao of acoes) {
-        const alteracao = {
-          acao_config: accao.acaoConfig as unknown as Json,
-          acao_tipo: accao.acaoTipo,
-          cooldown_minutos: accao.cooldownMinutos,
-          ...(accao.condicoes ? { condicoes: accao.condicoes as unknown as Json } : {}),
-        };
-
         if (accao.id) {
           const { error } = await supabase
             .from('automation_rules')
-            .update(alteracao)
+            .update({
+              acao_config: accao.acaoConfig as unknown as Json,
+              acao_tipo: accao.acaoTipo,
+              cooldown_minutos: accao.cooldownMinutos,
+              ...(accao.condicoes ? { condicoes: accao.condicoes as unknown as Json } : {}),
+            })
             .eq('id', accao.id);
           if (error) throw error;
-        } else {
-          // codigo tem de ser único por org — sufixo aleatório, como o
-          // padrão já usado pelas regras gémeas da divisão de email.
-          const { error } = await supabase.from('automation_rules').insert({
-            org_id: orgId,
-            grupo_id: grupoId,
-            codigo: `${eventType}.${accao.acaoTipo}.${crypto.randomUUID().slice(0, 8)}`,
-            nome,
-            event_type: eventType,
-            ...alteracao,
-          });
-          if (error) throw error;
+          continue;
         }
+
+        const { codigo: codigoNovo, acaoConfig } = prepararAccaoNova(accao, { eventType, nome });
+
+        // Uma acção de email escreve directamente no template que acabou de
+        // apontar — sem esta linha, "Corpo (email)" faz um UPDATE contra um
+        // codigo que não existe em notification_templates, e o corpo nunca
+        // fica gravado (o UPDATE afecta zero linhas, sem erro nenhum).
+        if (accao.acaoTipo === 'email') {
+          const { error: erroTemplate } = await supabase.from('notification_templates').insert({
+            org_id: orgId,
+            codigo: (acaoConfig as AutomationRuleAcaoConfig).template_codigo,
+            canal: 'email',
+            idioma: 'pt-PT',
+            assunto: nome,
+            corpo_template: '',
+            corpo_formato: 'text',
+          });
+          if (erroTemplate) throw erroTemplate;
+        }
+
+        const { error } = await supabase.from('automation_rules').insert({
+          org_id: orgId,
+          grupo_id: grupoId,
+          codigo: codigoNovo,
+          nome,
+          event_type: eventType,
+          acao_config: acaoConfig as unknown as Json,
+          acao_tipo: accao.acaoTipo,
+          cooldown_minutos: accao.cooldownMinutos,
+          ...(accao.condicoes ? { condicoes: accao.condicoes as unknown as Json } : {}),
+        });
+        if (error) throw error;
       }
 
       if (idsParaApagar.length > 0) {

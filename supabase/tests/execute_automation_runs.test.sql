@@ -31,7 +31,7 @@
 -- ============================================================
 
 begin;
-select plan(23);
+select plan(25);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'exec-runs-a');
@@ -381,6 +381,51 @@ select is(
       and destinatario_email_externo is not null),
   2,
   'um retry não duplica as notifications dos endereços livres'
+);
+
+-- ════════════════════════════════════════════════════════════
+-- Cenário J: destinatarios_emails_livres também vale com estrategia='motorista'
+-- ════════════════════════════════════════════════════════════
+-- O ramo motorista terminava com o seu próprio automation_runs_complete +
+-- continue, ANTES de chegar ao bloco partilhado dos endereços livres — que
+-- por isso nunca corria para esta estratégia (duas regras semeadas usam-na:
+-- motorista.reparacao_cobranca, motorista.ficha_incompleta).
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000a0010', 'motorista.avulso@exec-runs.pt');
+
+insert into public.motoristas_ativos (id, org_id, nome, user_id, email) values
+  ('00000000-0000-0000-0000-000000e00010', '00000000-0000-0000-0000-0000000a0000', 'Motorista Avulso',
+   '00000000-0000-0000-0000-0000000a0010', 'motorista.avulso@exec-runs.pt');
+
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-000000460010', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_motorista_avulso', 'Regra Motorista com Avulso', 'teste.evento10', 'email',
+   jsonb_build_object('titulo', 'Titulo de Teste', 'template_codigo', 'teste.notif',
+                       'destinatarios_estrategia', 'motorista',
+                       'destinatarios_emails_livres', jsonb_build_array('fornecedor@fora.pt')));
+
+insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
+  ('00000000-0000-0000-0000-0000004c0010', '00000000-0000-0000-0000-000000460010', '00000000-0000-0000-0000-0000000a0000', 'motoristas_ativos', '00000000-0000-0000-0000-000000e00010');
+
+select public.execute_automation_runs();
+
+-- 21. O motorista continua a receber (o comportamento antigo não regrediu)...
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+    where n.rule_run_id = '00000000-0000-0000-0000-0000004c0010'
+      and q.destinatario = 'motorista.avulso@exec-runs.pt'),
+  1,
+  'estratégia motorista continua a enfileirar o email do motorista'
+);
+
+-- 22. ...e o endereço avulso enfileira também — é isto que estava a falhar.
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+    where n.rule_run_id = '00000000-0000-0000-0000-0000004c0010'
+      and q.destinatario = 'fornecedor@fora.pt'),
+  1,
+  'estratégia motorista TAMBÉM enfileira os endereços livres'
 );
 
 select * from finish();
