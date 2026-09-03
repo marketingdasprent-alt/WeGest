@@ -98,8 +98,12 @@ describe('tema claro', () => {
   });
 
   it('teal como texto sobre o fundo da página', () => {
-    // É o mesmo par de cores do botão, ao contrário: um valor serve os dois.
-    expect(contraste(CLARO['--primary'], CLARO['--background'])).toBeGreaterThanOrEqual(MIN_TEXTO);
+    // --primary-text é o token para este papel — neste tema tem o mesmo
+    // valor de --primary (um único teal já serve os dois), mas o teste mede
+    // o token certo, não o do botão por coincidirem.
+    expect(contraste(CLARO['--primary-text'], CLARO['--background'])).toBeGreaterThanOrEqual(
+      MIN_TEXTO
+    );
   });
 
   it('estado de hover (accent) legível', () => {
@@ -136,10 +140,12 @@ describe('tema escuro', () => {
   });
 
   it('teal como texto sobre o fundo e sobre os cartões', () => {
-    expect(contraste(ESCURO['--primary'], ESCURO['--background'])).toBeGreaterThanOrEqual(
+    // --primary aqui é escurecido para o botão (texto branco por cima); como
+    // texto solto usa-se --primary-text, o teal vivo da marca sem alteração.
+    expect(contraste(ESCURO['--primary-text'], ESCURO['--background'])).toBeGreaterThanOrEqual(
       MIN_TEXTO
     );
-    expect(contraste(ESCURO['--primary'], ESCURO['--card'])).toBeGreaterThanOrEqual(MIN_TEXTO);
+    expect(contraste(ESCURO['--primary-text'], ESCURO['--card'])).toBeGreaterThanOrEqual(MIN_TEXTO);
   });
 
   it('estado de hover (accent) legível', () => {
@@ -167,9 +173,11 @@ describe('tema escuro', () => {
   });
 
   it('mantém o teal da marca — a correcção não lhe mexeu', () => {
-    // O tema escuro é onde o teal da logo aparece tal e qual. Se alguém o
-    // alterar aqui, é uma decisão de marca e não uma correcção de contraste.
-    expect(ESCURO['--primary']).toBe('174 100% 38.4%');
+    // --primary-text é onde o teal da logo aparece tal e qual (--primary, o
+    // do botão, é deliberadamente mais escuro — ver a nota no index.css). Se
+    // alguém alterar --primary-text, é uma decisão de marca, não uma
+    // correcção de contraste.
+    expect(ESCURO['--primary-text']).toBe('174 100% 38.4%');
   });
 });
 

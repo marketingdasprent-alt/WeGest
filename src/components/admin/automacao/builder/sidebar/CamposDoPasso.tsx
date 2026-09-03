@@ -300,22 +300,14 @@ export function CamposDoPasso(props: CamposDoPassoProps) {
 
       {tipo === 'accao' && (acaoTipo === 'notificacao' || acaoTipo === 'email') && (
         <>
-          {/* Notificação e email escolhem destinatários da mesma forma — só
-              o canal (badge dentro de Destinatarios) muda. Sem o `tipo ===
-              'accao'` aqui, um nó de gatilho — que não tem `acaoTipo` e por
-              isso cai no valor por omissão 'notificacao' — mostrava esta
-              secção também. */}
+          {}
           <Destinatarios
             noId={noId}
             dados={dados}
             onAlterar={onAlterar}
             canal={acaoTipo === 'email' ? 'email' : 'notificacao'}
           />
-          {/* O corpo só existe para o email. O motor escreve `mensagem = null`
-              na notificação in-app, portanto este campo não tinha efeito
-              nenhum numa acção de notificação — e, pior, como a gémea de
-              email partilha o mesmo `template_codigo`, editá-lo aqui mudava
-              em silêncio o email da OUTRA automação. */}
+          {}
           {acaoTipo === 'email' && (
             <Mensagem
               payload={props.payload}

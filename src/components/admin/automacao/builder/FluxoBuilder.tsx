@@ -23,6 +23,7 @@ import { nodeTypesBuilder } from './nodes';
 import { PainelBlocos } from './PainelBlocos';
 import { PainelPropriedades } from './sidebar/PainelPropriedades';
 import { validarLigacao } from './validarLigacao';
+import { deveIgnorarAtalho } from './atalhosDoCanvas';
 import { TODOS_OS_MODULOS } from '../rotulos';
 import '@realflow/react/styles.css';
 
@@ -95,13 +96,16 @@ function Construtor() {
    * fica desligado e os três atalhos são geridos aqui, incluindo o apagar,
    * que a biblioteca continua a fazer bem através de `deleteSelection`.
    *
-   * Ignorados enquanto o foco está num campo de texto: aí o que se espera é
-   * o comportamento do próprio input, não o do grafo.
+   * Ignorados enquanto o foco está num campo de texto OU num controlo
+   * interactivo (botão, chip, select) — não só `input`/`textarea`. Sem os
+   * últimos, clicar em "Guardar", "Testar" ou no "x" de um chip de cargo, e
+   * a seguir carregar em Backspace por hábito, apagava o nó que se estava a
+   * editar: o foco ficava no botão, não num campo de texto, e o atalho
+   * corria à mesma.
    */
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
-      const alvo = e.target as HTMLElement | null;
-      if (alvo?.closest('input, textarea, [contenteditable="true"]')) return;
+      if (deveIgnorarAtalho(e.target as HTMLElement | null)) return;
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         deleteSelection();
