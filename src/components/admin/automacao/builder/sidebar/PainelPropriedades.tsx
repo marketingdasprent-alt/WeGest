@@ -38,8 +38,22 @@ export function PainelPropriedades({
   onGuardarFluxo: (id: string, alteracao: Record<string, unknown>) => Promise<void>;
 }) {
   const { toast } = useToast();
-  const { data: config } = useAutomationRuleConfig(regraId);
-  const { data: payload = null } = useUltimoPayloadDaRegra(regraId);
+
+  // `regraId` é a regra que abriu ESTA automação a partir da lista — não a
+  // do nó seleccionado. Numa automação com várias acções, cada nó de acção
+  // hidratado tem o id da sua PRÓPRIA regra-irmã (`accao-<uuid>`, ver
+  // fluxoDaRegra.ts). Sem isto, o painel lia sempre a config/payload da
+  // regra que abriu a lista, e "Testar" disparava sempre essa mesma regra —
+  // nunca a do nó que estava, de facto, seleccionado.
+  //
+  // Um nó novo, ainda por gravar (arrastado da paleta nesta sessão), não
+  // tem regra própria — cai no `regraId` da automação, que é `null` para
+  // uma automação nova de raiz. Não há o que testar nesse caso; o painel já
+  // trata `regraDoNo` nulo como "sem dados anteriores".
+  const regraDoNo = no.id.startsWith('accao-') ? no.id.slice('accao-'.length) : regraId;
+
+  const { data: config } = useAutomationRuleConfig(regraDoNo);
+  const { data: payload = null } = useUltimoPayloadDaRegra(regraDoNo);
   const codigo = config?.acao_config?.template_codigo ?? null;
   const { data: template } = useTemplateDaRegra(codigo);
   const guardarTemplate = useGuardarTemplate();
@@ -95,7 +109,7 @@ export function PainelPropriedades({
   };
 
   const testarAgora = async () => {
-    if (!regraId) return;
+    if (!regraDoNo) return;
     setAGuardar(true);
     try {
       await persistir();
@@ -109,7 +123,7 @@ export function PainelPropriedades({
       return;
     }
     try {
-      const resultado = await testar.mutateAsync(regraId);
+      const resultado = await testar.mutateAsync(regraDoNo);
 
       if (resultado.status === 'failed') {
         toast({
