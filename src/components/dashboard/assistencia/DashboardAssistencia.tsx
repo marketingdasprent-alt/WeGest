@@ -4,6 +4,7 @@ import { LifeBuoy, Wrench, ShieldAlert } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
+import { useViaturasNaOficina } from '@/hooks/useViaturasNaOficina';
 
 const ESTADOS_TICKET_ABERTO = ['pendente', 'aberto', 'em_andamento', 'aguardando'];
 
@@ -15,12 +16,6 @@ interface TicketResumo {
   created_at: string;
 }
 
-interface ViaturaEmOficina {
-  id: string;
-  matricula: string;
-  data_entrada: string | null;
-}
-
 interface ExtintorAPrazo {
   id: string;
   matricula: string;
@@ -30,9 +25,14 @@ interface ExtintorAPrazo {
 export function DashboardAssistencia() {
   const navigate = useNavigate();
   const [tickets, setTickets] = useState<TicketResumo[]>([]);
-  const [emOficina, setEmOficina] = useState<ViaturaEmOficina[]>([]);
   const [extintores, setExtintores] = useState<ExtintorAPrazo[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Reaproveita o hook existente em vez de reescrever a query: a relação
+  // viatura_reparacoes → viaturas não está declarada como FK no PostgREST,
+  // pelo que um join embebido falharia em silêncio (ver o comentário em
+  // useViaturasNaOficina.ts, que já resolve isto com duas consultas).
+  const { data: emOficina = [], isLoading: loadingOficina } = useViaturasNaOficina();
 
   useEffect(() => {
     let cancelado = false;
@@ -42,35 +42,22 @@ export function DashboardAssistencia() {
       limitExtintor.setDate(limitExtintor.getDate() + 15);
       const limitExtintorStr = limitExtintor.toISOString().split('T')[0];
 
-      const [{ data: ticketsData }, { data: reparacoesData }, { data: extintoresData }] =
-        await Promise.all([
-          supabase
-            .from('assistencia_tickets')
-            .select('id, numero, titulo, status, created_at')
-            .in('status', ESTADOS_TICKET_ABERTO)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('viatura_reparacoes')
-            .select('id, data_entrada, viaturas(matricula)')
-            .is('data_saida', null)
-            .order('data_entrada', { ascending: true }),
-          supabase
-            .from('viaturas')
-            .select('id, matricula, extintor_validade')
-            .not('extintor_validade', 'is', null)
-            .lte('extintor_validade', limitExtintorStr)
-            .order('extintor_validade', { ascending: true }),
-        ]);
+      const [{ data: ticketsData }, { data: extintoresData }] = await Promise.all([
+        supabase
+          .from('assistencia_tickets')
+          .select('id, numero, titulo, status, created_at')
+          .in('status', ESTADOS_TICKET_ABERTO)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('viaturas')
+          .select('id, matricula, extintor_validade')
+          .not('extintor_validade', 'is', null)
+          .lte('extintor_validade', limitExtintorStr)
+          .order('extintor_validade', { ascending: true }),
+      ]);
 
       if (cancelado) return;
       setTickets(ticketsData ?? []);
-      setEmOficina(
-        (reparacoesData ?? []).map((r: any) => ({
-          id: r.id,
-          matricula: r.viaturas?.matricula ?? '—',
-          data_entrada: r.data_entrada,
-        }))
-      );
       setExtintores(extintoresData ?? []);
       setLoading(false);
     }
@@ -95,7 +82,7 @@ export function DashboardAssistencia() {
         />
         <KpiCard
           label="Viaturas em oficina"
-          value={loading ? '—' : emOficina.length}
+          value={loadingOficina ? '—' : emOficina.length}
           icon={Wrench}
           color="amber"
         />
@@ -131,15 +118,13 @@ export function DashboardAssistencia() {
           <h3 className="font-semibold text-sm">Viaturas em oficina</h3>
           {emOficina.map((v) => (
             <div key={v.id} className="flex justify-between text-sm">
-              <span>{v.matricula}</span>
+              <span>{v.matricula ?? '—'}</span>
               <span className="text-muted-foreground">
-                {v.data_entrada
-                  ? `desde ${new Date(v.data_entrada).toLocaleDateString('pt-PT')}`
-                  : '—'}
+                desde {new Date(v.data_entrada).toLocaleDateString('pt-PT')}
               </span>
             </div>
           ))}
-          {!loading && emOficina.length === 0 && (
+          {!loadingOficina && emOficina.length === 0 && (
             <p className="text-sm text-muted-foreground">Nenhuma viatura em oficina.</p>
           )}
         </div>
