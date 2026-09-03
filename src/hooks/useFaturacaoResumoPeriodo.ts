@@ -28,8 +28,13 @@ export function useFaturacaoResumoPeriodo(periodoInicio: Date, periodoFim: Date)
     supabase
       .from('contrato_cobrancas')
       .select('estado, valor_total, periodo_ate')
-      .gte('periodo_de', inicioStr)
-      .lte('periodo_ate', fimStr)
+      // Overlap, nao contencao: uma cobranca (semanal ou mensal nao
+      // alinhada com o calendario) que atravesse a fronteira do periodo
+      // pedido tem de entrar na soma, senao fica subcontada nos dois
+      // periodos que ela toca. Mesmo raciocinio de
+      // dashboard_resumo_plataformas (Task 4).
+      .lte('periodo_de', fimStr)
+      .gte('periodo_ate', inicioStr)
       .neq('estado', 'anulada')
       .then(({ data, error }: { data: any; error: any }) => {
         if (cancelado) return;
