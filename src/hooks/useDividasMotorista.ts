@@ -174,14 +174,23 @@ export function useAtualizarEstadoDivida() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, estado }: { id: string; estado: 'paga' | 'cancelada' }) => {
+      const pago_em = estado === 'paga' ? new Date().toISOString() : null;
       const { error } = await supabase
         .from('dividas_motorista')
-        .update({ estado, pago_em: estado === 'paga' ? new Date().toISOString() : null })
+        .update({ estado, pago_em })
         .eq('id', id);
       if (error) throw error;
+      return { id, estado, pago_em };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dividas-motorista'] });
+    onSuccess: ({ id, estado, pago_em }) => {
+      // Actualiza só esta linha em cache, em vez de invalidar a lista.
+      // Invalidar refazia a query com o filtro actual (ex.: "Por cobrar") e a
+      // linha desaparecia da vista assim que mudava de estado — parecia
+      // apagada, não estava. O filtro real só volta a aplicar-se na próxima
+      // vez que a lista carregar de novo (mudar de filtro, reabrir a página).
+      queryClient.setQueriesData<Divida[]>({ queryKey: ['dividas-motorista'] }, (old) =>
+        old?.map((d) => (d.id === id ? { ...d, estado, pago_em } : d))
+      );
     },
     onError: (error: any) => {
       // Supabase devolve PostgrestError — objecto plain, NÃO instanceof Error.

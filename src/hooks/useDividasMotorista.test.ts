@@ -267,6 +267,45 @@ describe('useAtualizarEstadoDivida', () => {
 
     expect(toastError).toHaveBeenCalledWith('Erro ao atualizar a dívida: falha de rede');
   });
+
+  it('a linha continua na lista depois de marcar paga — não desaparece por causa do filtro', async () => {
+    // Antes disto, marcar paga invalidava a lista inteira e refazia a query
+    // com o filtro actual (ex.: "Por cobrar") — a linha saía da vista assim
+    // que mudava de estado, parecia apagada. Agora só a linha em cache é
+    // actualizada, sem voltar a pedir dados ao Supabase.
+    update.mockResolvedValue({ error: null });
+    dividasSelect.mockResolvedValue({
+      data: [{ id: 'd-1', motorista_nome: 'Ana Costa', estado: 'por_cobrar', pago_em: null }],
+      error: null,
+    });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapperPartilhado = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: qc }, children);
+    const chaveLista = ['dividas-motorista', '', 'por_cobrar'];
+
+    const { result: lista } = renderHook(() => useDividasMotorista({ estado: 'por_cobrar' }), {
+      wrapper: wrapperPartilhado,
+    });
+    await waitFor(() => expect(lista.current.isSuccess).toBe(true));
+    expect(dividasSelect).toHaveBeenCalledTimes(1);
+
+    const { result: mutacao } = renderHook(() => useAtualizarEstadoDivida(), {
+      wrapper: wrapperPartilhado,
+    });
+    mutacao.current.mutate({ id: 'd-1', estado: 'paga' });
+    await waitFor(() => expect(mutacao.current.isSuccess).toBe(true));
+
+    // A linha continua lá, com o estado novo — verificado directamente na
+    // cache partilhada da QueryClient (mais fiável em teste do que esperar
+    // que um segundo renderHook, montado numa raiz React separada, reflicta
+    // a alteração — a lógica em si já está confirmada: só a linha muda, sem
+    // um segundo pedido à tabela).
+    expect(qc.getQueryData(chaveLista)).toEqual([
+      { id: 'd-1', motorista_nome: 'Ana Costa', estado: 'paga', pago_em: expect.any(String) },
+    ]);
+    expect(dividasSelect).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('useDividasAbertasDoMotorista', () => {
