@@ -12,7 +12,7 @@
 -- ============================================================
 
 begin;
-select plan(7);
+select plan(9);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-000000030000', 'Org Digest', 'digest-h');
@@ -87,6 +87,41 @@ select is(
   (select count(*)::int from public.notification_templates where codigo = 'digest.resumo_diario' and canal = 'email' and org_id = '00000000-0000-0000-0000-000000030000'),
   1,
   'seed_automacao_defaults() cria o template de email do digest'
+);
+
+-- 8-9. Sem `mensagem` (o caso normal: `processar_automation_run` nunca a
+--      escreve), a linha usa o `payload` — as mesmas etiquetas que já lá
+--      estão. `link` e chaves `_id` ficam de fora (uuid interno e URL crua
+--      não dizem nada numa linha de texto); o resto aparece como
+--      "Campo: valor". Ver 20260905130000.
+insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id, payload) values
+  ('00000000-0000-0000-0000-0000004c3009', '00000000-0000-0000-0000-000000463001', '00000000-0000-0000-0000-000000030000', 'contratos_renting', '00000000-0000-0000-0000-000000ef3009',
+   jsonb_build_object('matricula', 'AT-36-XD', 'cliente_id', '11111111-1111-1111-1111-111111111111', 'link', 'https://wegest.pt/x'));
+
+insert into public.notifications (org_id, destinatario_user_id, template_codigo, titulo, mensagem, payload, rule_run_id) values (
+  '00000000-0000-0000-0000-000000030000', '00000000-0000-0000-0000-000000030a01', 'teste.digest_evento', 'Contrato a renovar', null,
+  jsonb_build_object('matricula', 'AT-36-XD', 'cliente_id', '11111111-1111-1111-1111-111111111111', 'link', 'https://wegest.pt/x'),
+  '00000000-0000-0000-0000-0000004c3009'
+);
+
+select public.enviar_digests_diarios();
+
+select ok(
+  (select payload_render->>'lista' from public.notification_queue
+     where template_codigo = 'digest.resumo_diario' and destinatario = 'gestor@digest-h.pt'
+     order by created_at desc limit 1) like '%Matricula: AT-36-XD%',
+  'sem mensagem, a linha do digest mostra o payload (ex.: a matrícula)'
+);
+
+select ok(
+  (select payload_render->>'lista' from public.notification_queue
+     where template_codigo = 'digest.resumo_diario' and destinatario = 'gestor@digest-h.pt'
+     order by created_at desc limit 1) not like '%https://wegest.pt/x%'
+  and
+  (select payload_render->>'lista' from public.notification_queue
+     where template_codigo = 'digest.resumo_diario' and destinatario = 'gestor@digest-h.pt'
+     order by created_at desc limit 1) not like '%11111111-1111-1111-1111-111111111111%',
+  'a linha do digest não expõe o link cru nem o uuid interno de cliente_id'
 );
 
 select * from finish();
