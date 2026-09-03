@@ -283,6 +283,13 @@ select throws_ok(
 
 reset role;
 
+-- Liberta o run activo do teste 14 — sem isto, o próprio
+-- idx_automation_runs_one_active_per_rule_entity bloqueia o teste 15 (regra
+-- e entidade iguais), pelo mesmo motivo que o teste 14 acabou de provar.
+update public.automation_runs
+set status = 'completed'
+where id = '00000000-0000-0000-0000-000000080c03';
+
 -- 15. `testar_regra_automacao` processa só o run que acabou de criar — não os
 --     até 20 pendentes de QUALQUER organização que `execute_automation_runs()`
 --     reclamaria (a fila é global, `automation_runs_claim` não filtra por
