@@ -96,7 +96,7 @@ vi.mock('@/integrations/supabase/client', () => {
 
 // ── Imports (após mocks) ──────────────────────────────────────────────────────
 
-import Dashboard from './Dashboard';
+import { DashboardFrota as Dashboard } from '@/components/dashboard/frota/DashboardFrota';
 import { useDashboardVariant } from '@/hooks/useDashboardVariant';
 import { supabase } from '@/integrations/supabase/client';
 
