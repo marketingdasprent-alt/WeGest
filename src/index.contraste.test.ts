@@ -145,9 +145,7 @@ describe('tema escuro', () => {
     expect(contraste(ESCURO['--primary-text'], ESCURO['--background'])).toBeGreaterThanOrEqual(
       MIN_TEXTO
     );
-    expect(contraste(ESCURO['--primary-text'], ESCURO['--card'])).toBeGreaterThanOrEqual(
-      MIN_TEXTO
-    );
+    expect(contraste(ESCURO['--primary-text'], ESCURO['--card'])).toBeGreaterThanOrEqual(MIN_TEXTO);
   });
 
   it('estado de hover (accent) legível', () => {
