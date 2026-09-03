@@ -25,9 +25,12 @@ BEGIN
          COALESCE(SUM(b.ganhos_brutos_total), 0)::numeric,
          COALESCE(SUM(b.comissoes), 0)::numeric
     FROM public.bolt_resumos_semanais b
+   -- overlap, nao contencao: uma semana Bolt/Uber que atravesse a fronteira do
+   -- mes (ex.: 28 Ago-3 Set pedido contra 1-30 Set) tem de entrar na soma da
+   -- vista "mes" do dashboard Financeiro, senao a receita fica subcontada.
    WHERE b.org_id = p_org_id
-     AND b.periodo_inicio >= p_periodo_inicio
-     AND b.periodo_fim <= p_periodo_fim
+     AND b.periodo_inicio <= p_periodo_fim
+     AND b.periodo_fim >= p_periodo_inicio
 
   UNION ALL
   SELECT 'Uber', 'receita',
@@ -36,8 +39,8 @@ BEGIN
          COALESCE(SUM(u.comissoes), 0)
     FROM public.uber_resumos_semanais u
    WHERE u.org_id = p_org_id
-     AND u.periodo_inicio >= p_periodo_inicio
-     AND u.periodo_fim <= p_periodo_fim
+     AND u.periodo_inicio <= p_periodo_fim
+     AND u.periodo_fim >= p_periodo_inicio
 
   UNION ALL
   SELECT 'BP', 'custo', COALESCE(SUM(t.amount), 0), NULL, NULL
