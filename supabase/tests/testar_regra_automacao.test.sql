@@ -14,7 +14,7 @@
 -- ============================================================
 
 begin;
-select plan(14);
+select plan(16);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-000000080000', 'Org Testar Regra', 'testar-regra-g'),
@@ -282,6 +282,41 @@ select throws_ok(
 );
 
 reset role;
+
+-- 15. `testar_regra_automacao` processa só o run que acabou de criar — não os
+--     até 20 pendentes de QUALQUER organização que `execute_automation_runs()`
+--     reclamaria (a fila é global, `automation_runs_claim` não filtra por
+--     org). Um run genuinamente pendente da "Org Alheia" tem de continuar
+--     exactamente como estava depois de um "Testar" na Org Testar Regra.
+insert into public.automation_runs (id, org_id, rule_id, entity_table, entity_id, payload, status, rule_snapshot) values (
+  '00000000-0000-0000-0000-000000080c04', '00000000-0000-0000-0000-000000080ffe',
+  '00000000-0000-0000-0000-000000080b03', 'viaturas', '00000000-0000-0000-0000-000000080d02',
+  jsonb_build_object('matricula', 'ZZ-99-ZZ'), 'pending',
+  public.automation_rule_snapshot((select r from public.automation_rules r where r.id = '00000000-0000-0000-0000-000000080b03'))
+);
+
+update public.automacao_regra_teste_cooldown
+set ultimo_teste_em = now() - interval '1 minute'
+where rule_id = '00000000-0000-0000-0000-000000080b04';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000080a01', true);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000080a01","role":"authenticated"}', true);
+
+select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b04');
+
+reset role;
+
+select is(
+  (select status from public.automation_runs where id = '00000000-0000-0000-0000-000000080c04'),
+  'pending',
+  'testar não toca num run pendente de outra organização'
+);
+
+select ok(
+  (select started_at is null from public.automation_runs where id = '00000000-0000-0000-0000-000000080c04'),
+  'esse run alheio nem sequer arranca — started_at continua nulo'
+);
 
 select * from finish();
 rollback;
