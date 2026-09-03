@@ -14,7 +14,7 @@
 -- ============================================================
 
 begin;
-select plan(13);
+select plan(14);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-000000080000', 'Org Testar Regra', 'testar-regra-g'),
@@ -255,6 +255,33 @@ select cmp_ok(
   1,
   'cada teste conta como uma execução da automação'
 );
+
+-- 14. Já com um run activo (pending) para a mesma regra+entidade, o teste
+--     dá uma mensagem clara — não o erro cru de chave duplicada que
+--     idx_automation_runs_one_active_per_rule_entity provocaria.
+insert into public.automation_runs (id, org_id, rule_id, entity_table, entity_id, payload, status, rule_snapshot) values (
+  '00000000-0000-0000-0000-000000080c03', '00000000-0000-0000-0000-000000080000',
+  '00000000-0000-0000-0000-000000080b04', 'viaturas', '00000000-0000-0000-0000-000000080d01',
+  jsonb_build_object('matricula', 'ZZ-00-ZZ'), 'pending',
+  public.automation_rule_snapshot((select r from public.automation_rules r where r.id = '00000000-0000-0000-0000-000000080b04'))
+);
+
+update public.automacao_regra_teste_cooldown
+set ultimo_teste_em = now() - interval '1 minute'
+where rule_id = '00000000-0000-0000-0000-000000080b04';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000080a01', true);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000080a01","role":"authenticated"}', true);
+
+select throws_ok(
+  $$ select public.testar_regra_automacao('00000000-0000-0000-0000-000000080b04') $$,
+  'P0001',
+  'Já há uma execução em curso para esta automação — aguarda o motor terminar antes de testar outra vez.',
+  'já com um run activo, o teste avisa em vez de rebentar com chave duplicada'
+);
+
+reset role;
 
 select * from finish();
 rollback;
