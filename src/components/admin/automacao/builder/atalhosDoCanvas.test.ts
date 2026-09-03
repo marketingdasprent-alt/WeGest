@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deveIgnorarAtalho } from './FluxoBuilder';
+import { deveIgnorarAtalho } from './atalhosDoCanvas';
 
 /**
  * Backspace/Delete/Ctrl+Z são do canvas — apagam o nó seleccionado, desfazem
