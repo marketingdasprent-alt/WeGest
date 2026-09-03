@@ -92,8 +92,8 @@ export function AdicionarDividaDialog({
         <DialogHeader>
           <DialogTitle>Adicionar à dívida</DialogTitle>
           <DialogDescription>
-            Escolhe o período. O valor do período e os danos vêm dos movimentos nesse intervalo; a
-            caução é o saldo total, não limitado ao período.
+            O saldo é o mesmo do perfil do motorista e a caução é o total, nenhum deles limitado ao
+            período. Só os danos vêm dos movimentos dentro do intervalo escolhido.
           </DialogDescription>
         </DialogHeader>
 
@@ -141,7 +141,7 @@ export function AdicionarDividaDialog({
               <p className="text-sm text-muted-foreground">A calcular…</p>
             ) : (
               <>
-                <Linha label="Valor do período" valor={calculo.valorPeriodo} />
+                <Linha label="Saldo" valor={calculo.valorPeriodo} />
                 <Linha label="Danos" valor={calculo.valorDanos} />
                 <Linha label="Caução" valor={calculo.valorCaucao} />
                 <div className="border-t pt-2">

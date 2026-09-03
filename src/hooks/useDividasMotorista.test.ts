@@ -3,9 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const {
   dividasSelect,
-  periodoSelect,
+  danosSelect,
   caucaoSelect,
   motoristaSelect,
+  rpcSaldo,
   insert,
   update,
   getUser,
@@ -13,9 +14,10 @@ const {
   toastError,
 } = vi.hoisted(() => ({
   dividasSelect: vi.fn(),
-  periodoSelect: vi.fn(),
+  danosSelect: vi.fn(),
   caucaoSelect: vi.fn(),
   motoristaSelect: vi.fn(),
+  rpcSaldo: vi.fn(),
   insert: vi.fn(),
   update: vi.fn(),
   getUser: vi.fn(),
@@ -25,10 +27,10 @@ const {
 
 vi.mock('sonner', () => ({ toast: { error: toastError } }));
 
-// Declaração `function` (não `const`) de propósito: fica hoisted por inteiro
-// (não só a binding, o corpo também) antes do módulo correr, tal como as
-// entradas de vi.hoisted() acima — ao contrário de uma `const`, que ficaria
-// em TDZ no momento em que o factory de vi.mock() é executado.
+// Declarações `function` (não `const`) de propósito: ficam hoisted por
+// inteiro (não só a binding, o corpo também) antes do módulo correr, tal
+// como as entradas de vi.hoisted() acima — ao contrário de uma `const`, que
+// ficaria em TDZ no momento em que o factory de vi.mock() é executado.
 function tabelaDividasEncadeavel() {
   const builder: any = {
     order: () => builder,
@@ -40,8 +42,22 @@ function tabelaDividasEncadeavel() {
   return builder;
 }
 
+/** As duas queries a motorista_financeiro partem do mesmo prefixo
+ *  (.eq('motorista_id').eq('categoria', …)) e só a dos danos continua com
+ *  .gte()/.lte(). Um builder encadeável e thenable serve as duas: aceita os
+ *  passos extra e resolve com o mock certo quando o `await` acontecer. */
+function movimentosEncadeavel(resolver: () => Promise<unknown>) {
+  const builder: any = {
+    gte: () => builder,
+    lte: () => builder,
+    then: (onFulfilled: any, onRejected: any) => resolver().then(onFulfilled, onRejected),
+  };
+  return builder;
+}
+
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
+    rpc: (nome: string, args: unknown) => rpcSaldo(nome, args),
     from: (tabela: string) => {
       if (tabela === 'dividas_motorista') {
         return {
@@ -49,9 +65,7 @@ vi.mock('@/integrations/supabase/client', () => ({
           // (só entram quando há filtro) e depois é feito `await` do que
           // sobrar da cadeia. Uma cadeia rígida só chegaria a `dividasSelect`
           // quando TODOS os métodos fossem chamados pela ordem exacta —
-          // falhava logo no teste com filtros vazios. Isto aceita qualquer
-          // subconjunto/ordem e resolve com `dividasSelect` quando o `await`
-          // acontecer, seja a que passo da cadeia for.
+          // falhava logo no teste com filtros vazios.
           select: () => tabelaDividasEncadeavel(),
           insert,
           update: (vals: unknown) => ({ eq: (col: string, id: string) => update(vals, col, id) }),
@@ -59,14 +73,10 @@ vi.mock('@/integrations/supabase/client', () => ({
       }
       if (tabela === 'motorista_financeiro') {
         return {
-          // A query real de período é .eq('motorista_id',X).lte('data_movimento',fim)
-          // directamente — sem chão de início, de propósito (valor_periodo é
-          // saldo corrido). lte fica exposto directo no objecto do primeiro
-          // .eq(), não encadeado atrás de um .gte() que já não existe.
           select: () => ({
-            eq: (_col: string, motoristaId: string) => ({
-              lte: periodoSelect,
-              eq: (col2: string) => (col2 === 'categoria' ? caucaoSelect(motoristaId) : undefined),
+            eq: () => ({
+              eq: (_col: string, categoria: string) =>
+                movimentosEncadeavel(categoria === 'reparacao' ? danosSelect : caucaoSelect),
             }),
           }),
         };
@@ -121,9 +131,7 @@ describe('useCalcularDivida', () => {
   it('não corre sem motoristaId', () => {
     const { result } = renderHook(
       () => useCalcularDivida(null, { inicio: '2026-08-01', fim: '2026-08-07' }),
-      {
-        wrapper,
-      }
+      { wrapper }
     );
     expect(result.current.fetchStatus).toBe('idle');
   });
@@ -136,17 +144,26 @@ describe('useCalcularDivida', () => {
     expect(result.current.fetchStatus).toBe('idle');
   });
 
-  it('combina período + caução + nome do motorista', async () => {
-    periodoSelect.mockResolvedValue({
-      data: [
-        {
-          tipo: 'debito',
-          categoria: 'outro',
-          valor: 100,
-          status: 'pendente',
-          data_movimento: '2026-08-05',
-        },
-      ],
+  it('o saldo vem do RPC motorista_saldo_pendente, sem limite de data', async () => {
+    rpcSaldo.mockResolvedValue({ data: 1135, error: null });
+    danosSelect.mockResolvedValue({ data: [], error: null });
+    caucaoSelect.mockResolvedValue({ data: [], error: null });
+    motoristaSelect.mockResolvedValue({ data: { nome: 'Ana Costa' }, error: null });
+
+    const { result } = renderHook(
+      () => useCalcularDivida('m-1', { inicio: '2026-08-01', fim: '2026-08-07' }),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(rpcSaldo).toHaveBeenCalledWith('motorista_saldo_pendente', { p_motorista_id: 'm-1' });
+    expect(result.current.data?.valorPeriodo).toBe(1135);
+  });
+
+  it('combina saldo + danos + caução + nome do motorista', async () => {
+    rpcSaldo.mockResolvedValue({ data: -100, error: null });
+    danosSelect.mockResolvedValue({
+      data: [{ tipo: 'debito', categoria: 'reparacao', valor: 20, status: 'pendente' }],
       error: null,
     });
     caucaoSelect.mockResolvedValue({
@@ -162,26 +179,16 @@ describe('useCalcularDivida', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({
       valorPeriodo: -100,
-      valorDanos: 0,
+      valorDanos: 20,
       valorCaucao: 40,
-      valorTotal: 60,
+      valorTotal: 80, // 100 + 20 - 40
       motoristaNome: 'Ana Costa',
     });
   });
 
-  it('valor_periodo é saldo corrido: conta um movimento anterior ao início escolhido', async () => {
-    periodoSelect.mockResolvedValue({
-      data: [
-        {
-          tipo: 'debito',
-          categoria: 'outro',
-          valor: 30,
-          status: 'pendente',
-          data_movimento: '2026-07-10',
-        },
-      ],
-      error: null,
-    });
+  it('saldo nulo do RPC (motorista sem movimentos) é tratado como zero', async () => {
+    rpcSaldo.mockResolvedValue({ data: null, error: null });
+    danosSelect.mockResolvedValue({ data: [], error: null });
     caucaoSelect.mockResolvedValue({ data: [], error: null });
     motoristaSelect.mockResolvedValue({ data: { nome: 'Ana Costa' }, error: null });
 
@@ -190,7 +197,7 @@ describe('useCalcularDivida', () => {
       { wrapper }
     );
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.valorPeriodo).toBe(-30);
+    expect(result.current.data?.valorPeriodo).toBe(0);
   });
 });
 

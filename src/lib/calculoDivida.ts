@@ -1,19 +1,19 @@
 /**
  * Um movimento de motorista_financeiro, reduzido aos campos que este
  * cálculo precisa. `valor` aceita string porque é o que o Supabase devolve
- * para `numeric` sem um mapeamento explícito. `data_movimento` só é
- * usado para aplicar o chão do período à reparação — o resto do cálculo
- * já vem pré-filtrado pela query (ver useCalcularDivida).
+ * para `numeric` sem um mapeamento explícito.
  */
 export interface MovimentoParaDivida {
   tipo: string; // 'credito' | 'debito'
   categoria: string | null;
   valor: number | string;
   status: string;
-  data_movimento: string; // yyyy-MM-dd
 }
 
 export interface ValoresDivida {
+  /** Saldo pendente do motorista — o mesmo número do cartão "Saldo Pendente"
+   *  do perfil (RPC motorista_saldo_pendente). Não é calculado aqui: vem
+   *  pronto de quem chama, para não haver duas versões da mesma conta. */
   valorPeriodo: number;
   valorDanos: number;
   valorCaucao: number;
@@ -30,44 +30,34 @@ function valorNumerico(m: MovimentoParaDivida): number {
 }
 
 /**
- * Os três valores da dívida saem exclusivamente de motorista_financeiro —
- * ver Global Constraints do plano. As categorias são disjuntas: um movimento
- * de reparação nunca entra no período, um de caução nunca entra no período
- * nem é lido daqui (vem só de `movimentosCaucao`, que não tem filtro de
- * data — a caução de Janeiro continua a valer em Setembro).
+ * Junta as três parcelas de uma dívida.
  *
- * `movimentosPeriodo` já vem filtrado pela query até `periodoFim` (sem chão
- * de início) — valor_periodo é saldo corrido, o mesmo critério de
- * motorista_saldo_pendente (Σcrédito − Σdébito pendente até uma data), não
- * "só o que aconteceu dentro desta janela". A reparação (danos) é a
- * excepção: continua presa ao intervalo completo, por isso o chão de início
- * é aplicado aqui, só a ela.
+ * `saldoPendente` vem do RPC motorista_saldo_pendente — é o mesmo valor que
+ * o perfil do motorista mostra, e é passado para dentro em vez de
+ * recalculado, para os dois ecrãs nunca discordarem.
+ *
+ * `movimentosDanos` já vem filtrado pela query ao intervalo escolhido;
+ * `movimentosCaucao` NÃO tem filtro de data — a caução de Janeiro continua
+ * a valer em Setembro.
  */
 export function calcularValoresDivida(
-  movimentosPeriodo: readonly MovimentoParaDivida[],
-  movimentosCaucao: readonly MovimentoParaDivida[],
-  periodoInicio: string
+  saldoPendente: number,
+  movimentosDanos: readonly MovimentoParaDivida[],
+  movimentosCaucao: readonly MovimentoParaDivida[]
 ): ValoresDivida {
-  let valorPeriodo = 0;
   let valorDanos = 0;
-
-  for (const m of movimentosPeriodo) {
-    if (m.status !== 'pendente') continue;
+  for (const m of movimentosDanos) {
+    if (m.status !== 'pendente' || m.categoria !== 'reparacao') continue;
     const valor = valorNumerico(m);
-    if (m.categoria === 'reparacao') {
-      if (m.data_movimento < periodoInicio) continue;
-      valorDanos += m.tipo === 'debito' ? valor : -valor;
-    } else if (m.categoria !== 'caucao') {
-      valorPeriodo += m.tipo === 'credito' ? valor : -valor;
-    }
+    valorDanos += m.tipo === 'debito' ? valor : -valor;
   }
   // Um estorno de reparação a mais não é dinheiro a favor do motorista
   // nesta coluna — é ruído de lançamento, não uma dívida negativa.
   valorDanos = Math.max(valorDanos, 0);
 
   // Tudo o que tiver categoria caucao, e mais nada — crédito soma, débito
-  // subtrai, o mesmo critério usado no resto da função e no resto da app
-  // (resumoMovimentos.ts: saldo = créditos − débitos).
+  // subtrai, o mesmo critério do resto da app (resumoMovimentos.ts:
+  // saldo = créditos − débitos).
   let valorCaucao = 0;
   for (const m of movimentosCaucao) {
     if (m.status !== 'pendente' || m.categoria !== 'caucao') continue;
@@ -75,13 +65,13 @@ export function calcularValoresDivida(
     valorCaucao += m.tipo === 'credito' ? valor : -valor;
   }
 
-  // O período negativo e os danos são o que o motorista deve; a caução já
-  // está em poder da empresa e abate. Um período positivo não perdoa danos
-  // por esta via (daí o min(...,0)) — seria compensar duas contas diferentes.
-  const valorTotal = Math.abs(Math.min(valorPeriodo, 0)) + valorDanos - valorCaucao;
+  // Saldo negativo e danos são o que o motorista deve; a caução já está em
+  // poder da empresa e abate. Um saldo positivo não perdoa danos por esta
+  // via (daí o min(...,0)) — seria compensar duas contas diferentes.
+  const valorTotal = Math.abs(Math.min(saldoPendente, 0)) + valorDanos - valorCaucao;
 
   return {
-    valorPeriodo: round2(valorPeriodo),
+    valorPeriodo: round2(saldoPendente),
     valorDanos: round2(valorDanos),
     valorCaucao: round2(valorCaucao),
     valorTotal: round2(valorTotal),

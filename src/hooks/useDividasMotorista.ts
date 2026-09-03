@@ -28,7 +28,7 @@ export interface DividaCalculada extends ValoresDivida {
   motoristaNome: string;
 }
 
-const MOVIMENTO_SELECT = 'tipo, categoria, valor, status, data_movimento';
+const MOVIMENTO_SELECT = 'tipo, categoria, valor, status';
 
 /** Igual ao helper privado de useTiTickets.ts — mesma origem (profiles.nome),
  *  não vale a pena partilhar por 6 linhas usadas em dois sítios. */
@@ -70,16 +70,19 @@ export function useCalcularDivida(
   return useQuery({
     queryKey: ['divida-calculo', motoristaId, periodo?.inicio, periodo?.fim],
     queryFn: async (): Promise<DividaCalculada> => {
-      const [periodoRes, caucaoRes, motoristaRes] = await Promise.all([
-        // Sem chão de início de propósito: "valor do período" é saldo
-        // corrido (o mesmo critério de motorista_saldo_pendente — tudo o
-        // que está pendente até uma data, não só o que caiu dentro de uma
-        // janela) — só a reparação (danos) continua presa ao intervalo
-        // completo, aplicado dentro de calcularValoresDivida.
+      const [saldoRes, danosRes, caucaoRes, motoristaRes] = await Promise.all([
+        // O MESMO RPC que alimenta o cartão "Saldo Pendente" do perfil do
+        // motorista (ver MotoristaTabFinanceiro.loadSaldo) — sem p_ate_data,
+        // para os dois ecrãs mostrarem exactamente o mesmo número. Nunca
+        // recalcular isto à mão: seria uma segunda versão da mesma conta.
+        supabase.rpc('motorista_saldo_pendente', { p_motorista_id: motoristaId as string }),
+        // Danos: só reparação, e só dentro do intervalo escolhido.
         supabase
           .from('motorista_financeiro')
           .select(MOVIMENTO_SELECT)
           .eq('motorista_id', motoristaId as string)
+          .eq('categoria', 'reparacao')
+          .gte('data_movimento', periodo!.inicio)
           .lte('data_movimento', periodo!.fim),
         supabase
           .from('motorista_financeiro')
@@ -92,14 +95,15 @@ export function useCalcularDivida(
           .eq('id', motoristaId as string)
           .single(),
       ]);
-      if (periodoRes.error) throw periodoRes.error;
+      if (saldoRes.error) throw saldoRes.error;
+      if (danosRes.error) throw danosRes.error;
       if (caucaoRes.error) throw caucaoRes.error;
       if (motoristaRes.error) throw motoristaRes.error;
 
       const valores = calcularValoresDivida(
-        (periodoRes.data ?? []) as MovimentoParaDivida[],
-        (caucaoRes.data ?? []) as MovimentoParaDivida[],
-        periodo!.inicio
+        Number(saldoRes.data) || 0,
+        (danosRes.data ?? []) as MovimentoParaDivida[],
+        (caucaoRes.data ?? []) as MovimentoParaDivida[]
       );
       return { ...valores, motoristaNome: (motoristaRes.data as { nome: string }).nome };
     },

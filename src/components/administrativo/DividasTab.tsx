@@ -114,7 +114,7 @@ export function DividasTab() {
               <TableRow>
                 <TableHead>Motorista</TableHead>
                 <TableHead>Período</TableHead>
-                <TableHead className="text-right">Valor do período</TableHead>
+                <TableHead className="text-right">Saldo</TableHead>
                 <TableHead className="text-right">Danos</TableHead>
                 <TableHead className="text-right">Caução</TableHead>
                 <TableHead className="text-right">Total</TableHead>
