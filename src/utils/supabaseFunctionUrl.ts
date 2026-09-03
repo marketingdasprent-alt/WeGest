@@ -1,4 +1,5 @@
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+// Já cortado de espaços/quebras de linha — ver integrations/supabase/env.ts.
+import { SUPABASE_URL } from '@/integrations/supabase/env';
 
 export function buildSupabaseFunctionUrl(
   functionName: string,
