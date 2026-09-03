@@ -85,6 +85,25 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
   const referencia = useRef<string>(assinaturaDoFluxo([], []));
 
   /**
+   * Assinatura só das estatísticas das regras-irmãs abertas — não do array
+   * inteiro.
+   *
+   * `useAutomacaoEstatisticasPorRegra` sondeia a cada 30s e devolve um array
+   * novo em cada resposta, mesmo quando os números não mudaram. Como
+   * dependência directa do efeito abaixo, isso recarregava o canvas do zero
+   * a cada 30s — e qualquer edição por gravar desaparecia sem aviso.
+   */
+  const assinaturaEstatisticasDoGrupo = useMemo(() => {
+    if (!grupo) return '';
+    return grupo
+      .map((g) => {
+        const e = estatisticas.find((item) => item.rule_id === g.id);
+        return `${g.id}:${e?.ultima_execucao ?? ''}:${e?.duracao_media_ms ?? ''}:${e?.falhas ?? ''}`;
+      })
+      .join('|');
+  }, [estatisticas, grupo]);
+
+  /**
    * Carrega o grupo de regras-irmãs escolhido na tabela.
    *
    * Depende do grupo e não só do id: reagir ao id sozinho limpava o canvas
@@ -125,7 +144,11 @@ export function EditorAutomacaoProvider({ children }: { children: ReactNode }) {
     // Acabado de carregar não é "por guardar": a referência passa a ser isto.
     referencia.current = assinaturaDoFluxo(fluxo.nodes, fluxo.edges);
     setGuardadoEm(null);
-  }, [regraId, grupo, estatisticas, ultimaFalha, setNodes, setEdges]);
+    // `estatisticas` fica de fora de propósito — só a assinatura acima
+    // (que só muda quando os números destas regras mudam) deve recarregar o
+    // canvas; o array bruto muda de referência a cada sondagem de 30s.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regraId, grupo, assinaturaEstatisticasDoGrupo, ultimaFalha, setNodes, setEdges]);
 
   const assinatura = assinaturaDoFluxo(nodes, edges);
   const sujo = assinatura !== referencia.current;
