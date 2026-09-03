@@ -16,6 +16,7 @@ import { RECURSOS } from '@/utils/permissions';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { matchesSearch } from '@/lib/utils';
+import { classificarMovimento } from '@shared/movimentosMotorista';
 import { buildSlotPeriodos, type ViaturaPeriodoInput } from './motorista-resumo/slotPeriodos';
 import { periodosDeContratos } from './motorista-resumo/periodosDoContrato';
 import {
@@ -764,34 +765,41 @@ export function ContasResumoTab() {
       const reparacoesByMotorista: Record<string, number> = {};
       // Mapa: motorista_id → total outros custos (débitos)
       const adhocByMotorista: Record<string, number> = {};
+      // Mapas: motorista_id → caução e seguros (débitos). Baldes próprios
+      // porque o resumo do motorista também os separa — e o líquido dos dois
+      // ecrãs tem de ser o mesmo número, não dois parecidos.
+      const caucaoByMotorista: Record<string, number> = {};
+      const segurosByMotorista: Record<string, number> = {};
       // Mapa: motorista_id → ganhos extras (créditos)
       const extrasByMotorista: Record<string, number> = {};
 
       (financeiroResult.data || []).forEach((m: any) => {
         if (!m.motorista_id) return;
         const val = Number(m.valor) || 0;
+        const categoria = (m.categoria ?? '').trim().toLowerCase();
 
-        if (m.tipo === 'credito') {
-          // Não incluir caução como receita/crédito no recibo semanal
-          if (m.categoria === 'caucao') return;
-          extrasByMotorista[m.motorista_id] = (extrasByMotorista[m.motorista_id] || 0) + val;
+        // A reparação tem balde próprio: é esta lista que a calcula, e o
+        // resumo do motorista recebe-a daqui. Sai antes da classificação
+        // partilhada — que a ignora precisamente por ser calculada à parte.
+        if (m.tipo === 'debito' && categoria === 'reparacao') {
+          reparacoesByMotorista[m.motorista_id] =
+            (reparacoesByMotorista[m.motorista_id] || 0) + val;
           return;
         }
 
-        // De aqui em diante são só débitos
-        if (m.categoria === 'reparacao') {
-          reparacoesByMotorista[m.motorista_id] =
-            (reparacoesByMotorista[m.motorista_id] || 0) + val;
-        } else if (m.categoria === 'renda_viatura') {
-          // Ignora-se de propósito: aluguerByMotorista já vem completo do
-          // cálculo por viatura×dias, logo abaixo (buildSlotPeriodos). Somar
-          // aqui um débito de renda_viatura DUPLICAVA o aluguer — caso real:
-          // Ranjeet Singh (PREMIUM RIDE) apareceu com 450 €, exactamente o
-          // dobro dos 225 € certos, por causa de um débito automático
-          // semanal com esta categoria. A mesma regra já valia no resumo do
-          // motorista e no fecho (ver movimentosMotorista.ts) — só esta
-          // lista, com a sua própria cópia da lógica, ainda não a tinha.
-        } else {
+        // Mesma regra do resumo do motorista e do fecho, agora numa cópia só
+        // (movimentosMotorista.ts). Esta lista tinha a sua própria versão, e
+        // discordava em dois pontos: cobrava débitos de categoria `aluguer`
+        // que o contrato já cobre, e somava como ganho extra os créditos de
+        // bolt/uber que já vêm dentro da receita da plataforma.
+        const { destino } = classificarMovimento(m);
+        if (destino === 'receita_outras') {
+          extrasByMotorista[m.motorista_id] = (extrasByMotorista[m.motorista_id] || 0) + val;
+        } else if (destino === 'caucao') {
+          caucaoByMotorista[m.motorista_id] = (caucaoByMotorista[m.motorista_id] || 0) + val;
+        } else if (destino === 'seguros') {
+          segurosByMotorista[m.motorista_id] = (segurosByMotorista[m.motorista_id] || 0) + val;
+        } else if (destino === 'outros') {
           adhocByMotorista[m.motorista_id] = (adhocByMotorista[m.motorista_id] || 0) + val;
         }
       });
@@ -1061,8 +1069,19 @@ export function ContasResumoTab() {
         }
       }
 
-      for (const [motoristaId, totalAdhoc] of Object.entries(adhocByMotorista)) {
-        if (!agrupado[motoristaId] && totalAdhoc > 0) {
+      // Um motorista só com custos (sem receita de plataforma) também tem de
+      // aparecer na lista. Conta a soma dos três baldes de débito, não só o
+      // "outros": desde que a caução e os seguros passaram a balde próprio,
+      // olhar só para o adhoc deixava de fora quem só tivesse caução.
+      const custosDoMotorista = (id: string) =>
+        (adhocByMotorista[id] || 0) + (caucaoByMotorista[id] || 0) + (segurosByMotorista[id] || 0);
+
+      for (const motoristaId of new Set([
+        ...Object.keys(adhocByMotorista),
+        ...Object.keys(caucaoByMotorista),
+        ...Object.keys(segurosByMotorista),
+      ])) {
+        if (!agrupado[motoristaId] && custosDoMotorista(motoristaId) > 0) {
           const motData = motoristaById.get(motoristaId);
           agrupado[motoristaId] = {
             motorista_id: motoristaId,
@@ -1164,8 +1183,21 @@ export function ContasResumoTab() {
         const aluguerValor = m.motorista_id ? aluguerByMotorista[m.motorista_id] || 0 : 0;
         const reparacoesValor = m.motorista_id ? reparacoesByMotorista[m.motorista_id] || 0 : 0;
         const adhocValor = m.motorista_id ? adhocByMotorista[m.motorista_id] || 0 : 0;
+        const caucaoValor = m.motorista_id ? caucaoByMotorista[m.motorista_id] || 0 : 0;
+        const segurosValor = m.motorista_id ? segurosByMotorista[m.motorista_id] || 0 : 0;
+        // Exactamente a conta do resumo do motorista (deriveResumoFinanceiro):
+        // receita ajustada menos TODAS as despesas, caução e seguros
+        // incluídos. Faltavam aqui, e era por isso que a lista e o resumo
+        // mostravam líquidos diferentes para a mesma semana.
         const liquido =
-          receita - combustivelValor - portagensValor - aluguerValor - reparacoesValor - adhocValor;
+          receita -
+          combustivelValor -
+          portagensValor -
+          aluguerValor -
+          reparacoesValor -
+          adhocValor -
+          caucaoValor -
+          segurosValor;
 
         return {
           driver_name: displayNameFinal,
@@ -1184,7 +1216,10 @@ export function ContasResumoTab() {
           combustivel: combustivelValor,
           portagens: portagensValor,
           reparacoes: reparacoesValor,
-          outros_custos: adhocValor,
+          // Continua a ser tudo o que não tem coluna própria na lista —
+          // caução e seguros incluídos. Só o cálculo do líquido é que os
+          // separa; a coluna mantém o significado (e o valor) que sempre teve.
+          outros_custos: adhocValor + caucaoValor + segurosValor,
           aluguer: aluguerValor,
           identificador_bolt: m.identificador_bolt,
         };
