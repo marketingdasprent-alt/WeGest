@@ -1,14 +1,49 @@
 // src/hooks/useDividasMotorista.ts
+//
+// A dívida de um motorista não é um registo que alguém cria: é o seu saldo
+// pendente quando dá negativo. Por isso a lista "por cobrar" vem de uma vista
+// (`dividas_motorista_abertas`) e não de uma tabela — não há nada para inserir,
+// nada que fique desactualizado, e o mesmo motorista nunca aparece duas vezes.
+//
+// A tabela `dividas_motorista` guarda LIQUIDAÇÕES: uma linha por cada vez que
+// alguém marcou a dívida como paga. Marcar paga liquida mesmo os movimentos
+// (passam a 'pago'), e por isso o motorista sai da lista de abertas — não é a
+// linha a desaparecer, é a dívida a deixar de existir.
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import {
-  calcularValoresDivida,
-  type ValoresDivida,
-  type MovimentoParaDivida,
-} from '@/lib/calculoDivida';
+
+export type EstadoDivida = 'por_cobrar' | 'paga';
 
 export interface Divida {
+  /** Chave de linha na tabela do ecrã. Numa dívida em aberto não existe registo
+   *  em BD, por isso usa-se o id do motorista; numa paga é o id da liquidação. */
+  id: string;
+  motorista_id: string;
+  motorista_nome: string;
+  periodo_inicio: string;
+  periodo_fim: string;
+  /** O saldo pendente do motorista. Negativo — é o que ele deve. */
+  valor_periodo: number;
+  valor_danos: number;
+  valor_caucao: number;
+  /** O mesmo saldo em positivo, que é como se lê uma dívida. */
+  valor_total: number;
+  estado: EstadoDivida;
+  pago_em: string | null;
+}
+
+interface LinhaAberta {
+  motorista_id: string;
+  motorista_nome: string;
+  saldo: number;
+  valor_danos: number;
+  valor_caucao: number;
+  periodo_inicio: string;
+  periodo_fim: string;
+}
+
+interface LinhaPaga {
   id: string;
   motorista_id: string;
   motorista_nome: string;
@@ -18,187 +53,142 @@ export interface Divida {
   valor_danos: number;
   valor_caucao: number;
   valor_total: number;
-  estado: 'por_cobrar' | 'paga' | 'cancelada';
   pago_em: string | null;
-  criado_por_nome: string | null;
   created_at: string;
 }
 
-export interface DividaCalculada extends ValoresDivida {
-  motoristaNome: string;
-}
+const CHAVE_LISTA = 'dividas-motorista';
 
-const MOVIMENTO_SELECT = 'tipo, categoria, valor, status';
+export function useDividasMotorista(filtros: {
+  pesquisa?: string;
+  estado?: 'por_cobrar' | 'paga' | 'todas';
+}) {
+  const estado = filtros.estado ?? 'todas';
+  const pesquisa = filtros.pesquisa ?? '';
 
-/** Igual ao helper privado de useTiTickets.ts — mesma origem (profiles.nome),
- *  não vale a pena partilhar por 6 linhas usadas em dois sítios. */
-async function nomeDaSessao(): Promise<string | null> {
-  try {
-    const { data: user } = await supabase.auth.getUser();
-    const uid = user?.user?.id;
-    if (!uid) return null;
-    const { data } = await supabase.from('profiles').select('nome').eq('id', uid).single();
-    return (data as { nome?: string | null } | null)?.nome ?? null;
-  } catch {
-    return null;
-  }
-}
-
-export function useDividasMotorista(filtros: { pesquisa?: string; estado?: string }) {
   return useQuery({
-    queryKey: ['dividas-motorista', filtros.pesquisa ?? '', filtros.estado ?? ''],
-    queryFn: async () => {
-      let query = supabase
-        .from('dividas_motorista')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (filtros.estado) query = query.eq('estado', filtros.estado);
-      if (filtros.pesquisa) query = query.ilike('motorista_nome', `%${filtros.pesquisa}%`);
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data ?? []) as Divida[];
-    },
-  });
-}
+    queryKey: [CHAVE_LISTA, pesquisa, estado],
+    queryFn: async (): Promise<Divida[]> => {
+      const querAbertas = estado === 'por_cobrar' || estado === 'todas';
+      const querPagas = estado === 'paga' || estado === 'todas';
 
-export function useCalcularDivida(
-  motoristaId: string | null,
-  periodo: { inicio: string; fim: string } | null
-) {
-  const valido =
-    !!motoristaId && !!periodo?.inicio && !!periodo?.fim && periodo.inicio <= periodo.fim;
-  return useQuery({
-    queryKey: ['divida-calculo', motoristaId, periodo?.inicio, periodo?.fim],
-    queryFn: async (): Promise<DividaCalculada> => {
-      const [saldoRes, danosRes, caucaoRes, motoristaRes] = await Promise.all([
-        // O MESMO RPC que alimenta o cartão "Saldo Pendente" do perfil do
-        // motorista (ver MotoristaTabFinanceiro.loadSaldo) — sem p_ate_data,
-        // para os dois ecrãs mostrarem exactamente o mesmo número. Nunca
-        // recalcular isto à mão: seria uma segunda versão da mesma conta.
-        supabase.rpc('motorista_saldo_pendente', { p_motorista_id: motoristaId as string }),
-        // Danos: só reparação, e SEM filtro de data — os três valores da
-        // dívida são totais. O intervalo do popup não filtra nada por agora.
-        supabase
-          .from('motorista_financeiro')
-          .select(MOVIMENTO_SELECT)
-          .eq('motorista_id', motoristaId as string)
-          .eq('categoria', 'reparacao'),
-        supabase
-          .from('motorista_financeiro')
-          .select(MOVIMENTO_SELECT)
-          .eq('motorista_id', motoristaId as string)
-          .eq('categoria', 'caucao'),
-        supabase
-          .from('motoristas_ativos')
-          .select('nome')
-          .eq('id', motoristaId as string)
-          .single(),
+      const [abertasRes, pagasRes] = await Promise.all([
+        querAbertas
+          ? (() => {
+              let q = supabase
+                .from('dividas_motorista_abertas')
+                .select('*')
+                // Mais a dever primeiro: o saldo é negativo, logo ascendente.
+                .order('saldo', { ascending: true });
+              if (pesquisa) q = q.ilike('motorista_nome', `%${pesquisa}%`);
+              return q;
+            })()
+          : Promise.resolve({ data: [], error: null }),
+        querPagas
+          ? (() => {
+              let q = supabase
+                .from('dividas_motorista')
+                .select('*')
+                .eq('estado', 'paga')
+                .order('pago_em', { ascending: false });
+              if (pesquisa) q = q.ilike('motorista_nome', `%${pesquisa}%`);
+              return q;
+            })()
+          : Promise.resolve({ data: [], error: null }),
       ]);
-      if (saldoRes.error) throw saldoRes.error;
-      if (danosRes.error) throw danosRes.error;
-      if (caucaoRes.error) throw caucaoRes.error;
-      if (motoristaRes.error) throw motoristaRes.error;
 
-      const valores = calcularValoresDivida(
-        Number(saldoRes.data) || 0,
-        (danosRes.data ?? []) as MovimentoParaDivida[],
-        (caucaoRes.data ?? []) as MovimentoParaDivida[]
-      );
-      return { ...valores, motoristaNome: (motoristaRes.data as { nome: string }).nome };
+      if (abertasRes.error) throw abertasRes.error;
+      if (pagasRes.error) throw pagasRes.error;
+
+      const abertas: Divida[] = ((abertasRes.data ?? []) as LinhaAberta[]).map((l) => ({
+        id: l.motorista_id,
+        motorista_id: l.motorista_id,
+        motorista_nome: l.motorista_nome,
+        periodo_inicio: l.periodo_inicio,
+        periodo_fim: l.periodo_fim,
+        valor_periodo: Number(l.saldo),
+        valor_danos: Number(l.valor_danos),
+        valor_caucao: Number(l.valor_caucao),
+        valor_total: Math.abs(Number(l.saldo)),
+        estado: 'por_cobrar',
+        pago_em: null,
+      }));
+
+      const pagas: Divida[] = ((pagasRes.data ?? []) as LinhaPaga[]).map((l) => ({
+        id: l.id,
+        motorista_id: l.motorista_id,
+        motorista_nome: l.motorista_nome,
+        periodo_inicio: l.periodo_inicio,
+        periodo_fim: l.periodo_fim,
+        valor_periodo: Number(l.valor_periodo),
+        valor_danos: Number(l.valor_danos),
+        valor_caucao: Number(l.valor_caucao),
+        valor_total: Number(l.valor_total),
+        estado: 'paga',
+        pago_em: l.pago_em,
+      }));
+
+      // Por cobrar primeiro: são as que ainda pedem alguma coisa a alguém.
+      return [...abertas, ...pagas];
     },
-    enabled: valido,
   });
 }
 
-/** Dívidas ainda em aberto (não canceladas) deste motorista com caução por
- *  liquidar. valor_caucao numa dívida guardada é o saldo TOTAL da caução do
- *  motorista (não filtrado por período) — se já houver uma dívida aberta que
- *  também o descontou, uma nova dívida vai descontá-lo outra vez. Usado só
- *  para avisar o admin em AdicionarDividaDialog antes de confirmar; não
- *  bloqueia nem corrige o cálculo (fix a bloquear numa fase futura). */
-export function useDividasAbertasDoMotorista(motoristaId: string | null) {
-  return useQuery({
-    queryKey: ['dividas-abertas-motorista', motoristaId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('dividas_motorista')
-        .select('id, periodo_inicio, periodo_fim, valor_caucao')
-        .eq('motorista_id', motoristaId as string)
-        .neq('estado', 'cancelada')
-        .neq('valor_caucao', 0);
-      if (error) throw error;
-      return (data ?? []) as Array<{
-        id: string;
-        periodo_inicio: string;
-        periodo_fim: string;
-        valor_caucao: number;
-      }>;
-    },
-    enabled: !!motoristaId,
-  });
+/** Erros do Supabase são objectos plain (PostgrestError), NÃO instanceof Error.
+ *  A gate `error instanceof Error ? ... : 'Erro inesperado'` já engoliu a causa
+ *  real noutro hook desta app — num ecrã de dinheiro isso não pode acontecer. */
+function mensagemDeErro(error: unknown): string {
+  return (error as { message?: string } | null)?.message ?? 'erro desconhecido';
 }
 
-export function useCriarDivida() {
+/**
+ * Liquida a dívida do motorista: os movimentos pendentes passam a 'pago' e o
+ * saldo vai a zero. A conta é feita e travada dentro da BD (RPC), não aqui —
+ * entre somar e liquidar não pode entrar um movimento que fique de fora.
+ */
+export function useMarcarDividaPaga() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      motoristaId: string;
-      motoristaNome: string;
-      periodoInicio: string;
-      periodoFim: string;
-      valores: ValoresDivida;
-    }) => {
-      const { data: user } = await supabase.auth.getUser();
-      const { error } = await supabase.from('dividas_motorista').insert({
-        motorista_id: input.motoristaId,
-        motorista_nome: input.motoristaNome,
-        periodo_inicio: input.periodoInicio,
-        periodo_fim: input.periodoFim,
-        valor_periodo: input.valores.valorPeriodo,
-        valor_danos: input.valores.valorDanos,
-        valor_caucao: input.valores.valorCaucao,
-        valor_total: input.valores.valorTotal,
-        criado_por: user?.user?.id ?? null,
-        criado_por_nome: await nomeDaSessao(),
+    mutationFn: async (motoristaId: string) => {
+      const { data, error } = await supabase.rpc('divida_marcar_paga', {
+        p_motorista_id: motoristaId,
       });
       if (error) throw error;
+      return data as string;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dividas-motorista'] });
+      // Aqui invalidar é o correcto: a dívida mudou mesmo de lista (saiu das
+      // abertas, entrou nas pagas) e os movimentos do motorista mudaram de
+      // estado. Um remendo em cache mentiria sobre ambos.
+      queryClient.invalidateQueries({ queryKey: [CHAVE_LISTA] });
+      queryClient.invalidateQueries({ queryKey: ['motorista-financeiro'] });
+      toast.success('Dívida marcada como paga. Os movimentos foram liquidados.');
+    },
+    onError: (error) => {
+      toast.error(`Não foi possível marcar como paga: ${mensagemDeErro(error)}`);
     },
   });
 }
 
-export function useAtualizarEstadoDivida() {
+/** Desfaz uma liquidação: devolve a pendente exactamente os movimentos que
+ *  aquela dívida levou, e mais nenhum. O motorista volta às dívidas em aberto. */
+export function useMarcarDividaNaoPaga() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, estado }: { id: string; estado: 'paga' | 'cancelada' }) => {
-      const pago_em = estado === 'paga' ? new Date().toISOString() : null;
-      const { error } = await supabase
-        .from('dividas_motorista')
-        .update({ estado, pago_em })
-        .eq('id', id);
+    mutationFn: async (dividaId: string) => {
+      const { error } = await supabase.rpc('divida_marcar_nao_paga', {
+        p_divida_id: dividaId,
+      });
       if (error) throw error;
-      return { id, estado, pago_em };
+      return dividaId;
     },
-    onSuccess: ({ id, estado, pago_em }) => {
-      // Actualiza só esta linha em cache, em vez de invalidar a lista.
-      // Invalidar refazia a query com o filtro actual (ex.: "Por cobrar") e a
-      // linha desaparecia da vista assim que mudava de estado — parecia
-      // apagada, não estava. O filtro real só volta a aplicar-se na próxima
-      // vez que a lista carregar de novo (mudar de filtro, reabrir a página).
-      queryClient.setQueriesData<Divida[]>({ queryKey: ['dividas-motorista'] }, (old) =>
-        old?.map((d) => (d.id === id ? { ...d, estado, pago_em } : d))
-      );
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [CHAVE_LISTA] });
+      queryClient.invalidateQueries({ queryKey: ['motorista-financeiro'] });
+      toast.success('Dívida reaberta. Os movimentos voltaram a pendente.');
     },
-    onError: (error: any) => {
-      // Supabase devolve PostgrestError — objecto plain, NÃO instanceof Error.
-      // Por isso lê-se .message directamente (mesmo padrão do catch em
-      // AdicionarDividaDialog.tsx), nunca "error instanceof Error ? ... :
-      // 'Erro inesperado'": essa gate já perdeu a causa real noutro hook
-      // desta app (ver comentário em useContratosRenting.ts) — aqui é um
-      // ecrã de dinheiro, não pode falhar em silêncio nem sem detalhe.
-      toast.error(`Erro ao atualizar a dívida: ${error?.message ?? 'erro desconhecido'}`);
+    onError: (error) => {
+      toast.error(`Não foi possível reabrir a dívida: ${mensagemDeErro(error)}`);
     },
   });
 }

@@ -51,11 +51,26 @@ const JA_CALCULADAS_COMO_DEBITO = [...DEBITOS_QUE_O_CONTRATO_COBRE, 'reparacao']
 /** Categorias cujo CRÉDITO já vem na receita das plataformas. */
 const JA_CONTADAS_COMO_RECEITA = ['bolt', 'uber'];
 
+/** O movimento que o próprio resumo escreve (o líquido da semana). Não pode
+ *  voltar a entrar no cálculo que o produziu: se entrasse, cada abertura do
+ *  resumo lia o seu resultado anterior como despesa (ou receita) nova e o
+ *  número fugia sozinho — −500, depois −1000, depois −1500. Regra: o resumo
+ *  não se conta a si mesmo, em nenhum dos sentidos. */
+const ESCRITAS_PELO_PROPRIO_RESUMO = ['resumos'];
+
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
 
 export function classificarMovimento(m: MovimentoMotorista): Classificacao {
   const categoria = norm(m.categoria);
   const ehCredito = norm(m.tipo) === 'credito';
+
+  // Antes de tudo o resto: o resumo nunca se lê a si próprio.
+  if (ESCRITAS_PELO_PROPRIO_RESUMO.includes(categoria)) {
+    return {
+      destino: 'ignorado',
+      motivo: 'é o líquido que este resumo produziu — não entra no próprio cálculo',
+    };
+  }
 
   if (ehCredito) {
     if (JA_CONTADAS_COMO_RECEITA.includes(categoria)) {

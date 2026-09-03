@@ -7044,9 +7044,11 @@ export type Database = {
           data_movimento: string
           data_pagamento: string | null
           descricao: string
+          divida_id: string | null
           fatura_url: string | null
           grupo_id: string | null
           id: string
+          liquido_semanal_id: string | null
           motorista_id: string
           org_id: string | null
           recorrencia_id: string | null
@@ -7067,9 +7069,11 @@ export type Database = {
           data_movimento: string
           data_pagamento?: string | null
           descricao: string
+          divida_id?: string | null
           fatura_url?: string | null
           grupo_id?: string | null
           id?: string
+          liquido_semanal_id?: string | null
           motorista_id: string
           org_id?: string | null
           recorrencia_id?: string | null
@@ -7090,9 +7094,11 @@ export type Database = {
           data_movimento?: string
           data_pagamento?: string | null
           descricao?: string
+          divida_id?: string | null
           fatura_url?: string | null
           grupo_id?: string | null
           id?: string
+          liquido_semanal_id?: string | null
           motorista_id?: string
           org_id?: string | null
           recorrencia_id?: string | null
@@ -13773,6 +13779,19 @@ export type Database = {
       }
     }
     Views: {
+      dividas_motorista_abertas: {
+        Row: {
+          motorista_id: string | null
+          motorista_nome: string | null
+          org_id: string | null
+          periodo_fim: string | null
+          periodo_inicio: string | null
+          saldo: number | null
+          valor_caucao: number | null
+          valor_danos: number | null
+        }
+        Relationships: []
+      }
       automacao_estatisticas_por_regra: {
         Row: {
           acao_tipo: string | null
@@ -14785,6 +14804,8 @@ export type Database = {
         }[]
       }
       motorista_meus_acordos_ativos: { Args: never; Returns: Json }
+      divida_marcar_nao_paga: { Args: { p_divida_id: string }; Returns: undefined }
+      divida_marcar_paga: { Args: { p_motorista_id: string }; Returns: string }
       motorista_saldo_pendente: {
         Args: { p_ate_data?: string; p_motorista_id: string }
         Returns: number

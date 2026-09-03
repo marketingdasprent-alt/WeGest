@@ -7,8 +7,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Motorista } from '@/pages/Motoristas';
 import { useCanEditFinanceiro } from '@/hooks/useCanEditFinanceiro';
-import { usePermissions } from '@/hooks/usePermissions';
-import { RECURSOS } from '@/utils/permissions';
 import {
   NovoMovimentoFinanceiroOverlay,
   isMovimentoDaFaturacao,
@@ -19,7 +17,6 @@ import { RecorrenciasAtivasList } from './RecorrenciasAtivasList';
 import { MovimentosHistoricoTable } from './MovimentosHistoricoTable';
 import { calcularResumoMovimentos } from './resumoMovimentos';
 import { legendaSaldoMotorista } from '@/lib/saldoMotorista';
-import { AdicionarDividaDialog } from './AdicionarDividaDialog';
 import { cn } from '@/lib/utils';
 
 interface MotoristaTabFinanceiroProps {
@@ -36,7 +33,6 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   const [movimentos, setMovimentos] = useState<MovimentoFinanceiro[]>([]);
   const [loading, setLoading] = useState(true);
   const [novoMovimentoOpen, setNovoMovimentoOpen] = useState(false);
-  const [adicionarDividaOpen, setAdicionarDividaOpen] = useState(false);
   const [reparacaoParaAcordo, setReparacaoParaAcordo] = useState<MovimentoFinanceiro | null>(null);
   const [movimentoParaEditar, setMovimentoParaEditar] = useState<MovimentoFinanceiro | null>(null);
   const [faturaUrlAcordo, setFaturaUrlAcordo] = useState<string | null>(null);
@@ -45,11 +41,6 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   const [recorrencias, setRecorrencias] = useState<RecorrenciaFinanceira[]>([]);
   const [saldoPendente, setSaldoPendente] = useState<number | null>(null);
   const { canEdit } = useCanEditFinanceiro();
-  // Gate próprio de "Adicionar à dívida" (financeiro_recibos) — mais largo
-  // que canEdit (admin-only); mantém canEdit exactamente como estava para
-  // tudo o resto que já gere (ver MovimentosHistoricoTable).
-  const { hasAccessToResource } = usePermissions();
-  const podeGerirDividas = hasAccessToResource(RECURSOS.FINANCEIRO_RECIBOS);
   const [sortField, setSortField] = useState<string>('data_movimento');
   const [sortDir, setSortDir] = useState<SortDirection>('desc');
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
@@ -319,13 +310,6 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
         />
       )}
 
-      <AdicionarDividaDialog
-        motoristaId={motoristaId}
-        open={adicionarDividaOpen}
-        onOpenChange={setAdicionarDividaOpen}
-        onSuccess={() => setAdicionarDividaOpen(false)}
-      />
-
       <div className="space-y-6">
         {/* Alerta de reparações a aguardar acordo */}
         {pendingRepairs.length > 0 && (
@@ -446,7 +430,6 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
           movimentos={movimentosOrdenados}
           movimentoFaturaMap={movimentoFaturaMap}
           canEdit={canEdit}
-          podeGerirDividas={podeGerirDividas}
           sortField={sortField}
           sortDir={sortDir}
           onSort={handleSort}
@@ -455,7 +438,6 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
             setReparacaoParaAcordo(null);
             setNovoMovimentoOpen(true);
           }}
-          onAdicionarDivida={() => setAdicionarDividaOpen(true)}
           onAbrirAcordo={handleOpenAcordo}
           onAbrirEditar={handleOpenEditar}
           onMarcarPago={handleMarcarPago}

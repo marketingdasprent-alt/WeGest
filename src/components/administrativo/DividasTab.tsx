@@ -23,27 +23,30 @@ import { formatCurrency, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import {
   useDividasMotorista,
-  useAtualizarEstadoDivida,
+  useMarcarDividaPaga,
+  useMarcarDividaNaoPaga,
   type Divida,
+  type EstadoDivida,
 } from '@/hooks/useDividasMotorista';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 
-const ESTADO_LABEL: Record<Divida['estado'], string> = {
+const ESTADO_LABEL: Record<EstadoDivida, string> = {
   por_cobrar: 'Por cobrar',
   paga: 'Paga',
-  cancelada: 'Cancelada',
 };
 
-const ESTADO_CLASS: Record<Divida['estado'], string> = {
+const ESTADO_CLASS: Record<EstadoDivida, string> = {
   por_cobrar: 'bg-red-500/10 text-red-600 border-red-200',
   paga: 'bg-green-500/10 text-green-600 border-green-200',
-  cancelada: 'bg-muted text-muted-foreground border-transparent',
 };
 
 export function DividasTab() {
   const [pesquisa, setPesquisa] = useState('');
-  const [estado, setEstado] = useState<string>('por_cobrar');
+  // "Todas" por omissão de propósito: marcar uma dívida como paga move-a de
+  // lista, e com o filtro em "Por cobrar" a linha sumia à frente de quem
+  // acabara de clicar — parecia apagada.
+  const [estado, setEstado] = useState<'por_cobrar' | 'paga' | 'todas'>('todas');
   // Mesmo recurso que já gere a sidebar/rota/RLS desta funcionalidade
   // (financeiro_recibos) — antes gate admin-only, agora alinhado.
   const { hasAccessToResource } = usePermissions();
@@ -52,15 +55,19 @@ export function DividasTab() {
     data: dividas,
     isLoading,
     isError,
-  } = useDividasMotorista({
-    pesquisa: pesquisa || undefined,
-    estado: estado === 'todas' ? undefined : estado,
-  });
-  const { mutate: atualizarEstado, isPending } = useAtualizarEstadoDivida();
+  } = useDividasMotorista({ pesquisa: pesquisa || undefined, estado });
+  const { mutate: marcarPaga, isPending: aPagar } = useMarcarDividaPaga();
+  const { mutate: marcarNaoPaga, isPending: aReabrir } = useMarcarDividaNaoPaga();
+  const ocupado = aPagar || aReabrir;
 
   const totalPorCobrar = (dividas ?? [])
     .filter((d) => d.estado === 'por_cobrar')
     .reduce((soma, d) => soma + d.valor_total, 0);
+
+  const alternarEstado = (d: Divida) => {
+    if (d.estado === 'por_cobrar') marcarPaga(d.motorista_id);
+    else marcarNaoPaga(d.id);
+  };
 
   return (
     <div className="space-y-4">
@@ -88,15 +95,17 @@ export function DividasTab() {
               onChange={(e) => setPesquisa(e.target.value)}
               className="h-8 w-48"
             />
-            <Select value={estado} onValueChange={setEstado}>
+            <Select
+              value={estado}
+              onValueChange={(v) => setEstado(v as 'por_cobrar' | 'paga' | 'todas')}
+            >
               <SelectTrigger className="h-8 w-36">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="todas">Todas</SelectItem>
                 <SelectItem value="por_cobrar">Por cobrar</SelectItem>
                 <SelectItem value="paga">Paga</SelectItem>
-                <SelectItem value="cancelada">Cancelada</SelectItem>
-                <SelectItem value="todas">Todas</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -124,7 +133,7 @@ export function DividasTab() {
             </TableHeader>
             <TableBody>
               {dividas.map((d) => (
-                <TableRow key={d.id}>
+                <TableRow key={`${d.estado}-${d.id}`}>
                   <TableCell>{d.motorista_nome}</TableCell>
                   <TableCell>
                     {formatDate(d.periodo_inicio)} – {formatDate(d.periodo_fim)}
@@ -137,7 +146,7 @@ export function DividasTab() {
                   <TableCell
                     className={cn(
                       'text-right font-bold',
-                      d.valor_total > 0 ? 'text-red-600' : d.valor_total < 0 ? 'text-green-600' : ''
+                      d.estado === 'por_cobrar' ? 'text-red-600' : 'text-muted-foreground'
                     )}
                   >
                     {formatCurrency(d.valor_total)}
@@ -149,33 +158,17 @@ export function DividasTab() {
                   </TableCell>
                   {canEdit && (
                     <TableCell>
-                      {/* Cancelar fica disponível em qualquer estado que não seja já
-                          cancelada — é o mecanismo de correção que a spec descreve
-                          ("para corrigir, cancela-se e cria-se outra"), e só faz
-                          sentido se ainda funcionar depois de "Marcar paga" por
-                          engano. Marcar paga só faz sentido a partir de por_cobrar. */}
-                      {d.estado !== 'cancelada' && (
-                        <div className="flex gap-2">
-                          {d.estado === 'por_cobrar' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={isPending}
-                              onClick={() => atualizarEstado({ id: d.id, estado: 'paga' })}
-                            >
-                              Marcar paga
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            disabled={isPending}
-                            onClick={() => atualizarEstado({ id: d.id, estado: 'cancelada' })}
-                          >
-                            Cancelar
-                          </Button>
-                        </div>
-                      )}
+                      {/* Um só botão, que alterna. Marcar paga liquida os
+                          movimentos do motorista; marcar não paga devolve a
+                          pendente exactamente os que aquela dívida levou. */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={ocupado}
+                        onClick={() => alternarEstado(d)}
+                      >
+                        {d.estado === 'por_cobrar' ? 'Marcar paga' : 'Marcar não paga'}
+                      </Button>
                     </TableCell>
                   )}
                 </TableRow>
