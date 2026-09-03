@@ -7288,6 +7288,57 @@ export type Database = {
           },
         ]
       }
+      motorista_liquido_semanal: {
+        Row: {
+          gravado_em: string
+          gravado_por: string | null
+          id: string
+          liquido: number
+          motorista_id: string
+          motorista_nome: string | null
+          org_id: string
+          semana_fim: string
+          semana_inicio: string
+        }
+        Insert: {
+          gravado_em?: string
+          gravado_por?: string | null
+          id?: string
+          liquido: number
+          motorista_id: string
+          motorista_nome?: string | null
+          org_id?: string
+          semana_fim: string
+          semana_inicio: string
+        }
+        Update: {
+          gravado_em?: string
+          gravado_por?: string | null
+          id?: string
+          liquido?: number
+          motorista_id?: string
+          motorista_nome?: string | null
+          org_id?: string
+          semana_fim?: string
+          semana_inicio?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motorista_liquido_semanal_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_liquido_semanal_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       motorista_plataforma_identidades: {
         Row: {
           created_at: string
@@ -14674,6 +14725,7 @@ export type Database = {
       is_current_user_admin: { Args: never; Returns: boolean }
       is_decada_ousada_admin: { Args: never; Returns: boolean }
       is_storage_admin: { Args: never; Returns: boolean }
+      is_suporte_ti_decada: { Args: never; Returns: boolean }
       limpar_danos_token: { Args: { p_token: string }; Returns: undefined }
       limpar_notificacoes_antigas: {
         Args: { p_dias_resolvidas?: number }
@@ -14859,6 +14911,10 @@ export type Database = {
         }
       }
       process_domain_events: { Args: { p_max?: number }; Returns: undefined }
+      processar_automation_run: {
+        Args: { v_run: Database["public"]["Tables"]["automation_runs"]["Row"] }
+        Returns: undefined
+      }
       proxima_data_renovacao: {
         Args: { p_inicio: string; p_intervalo: number; p_opcao: string }
         Returns: string

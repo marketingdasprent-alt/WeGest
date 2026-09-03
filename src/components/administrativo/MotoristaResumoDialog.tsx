@@ -15,6 +15,7 @@ import { deriveResumoFinanceiro } from './motorista-resumo/resumoFinanceiro';
 import { generateResumoPrintHTML } from './motorista-resumo/generateResumoPrintHTML';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useOrgId } from '@/contexts/TenantContext';
+import { useGravarLiquidoSemanal } from '@/hooks/useGravarLiquidoSemanal';
 
 // Linha Gorjeta: dados sensíveis (rendimento pessoal do motorista) — só
 // visível para admins da org dona dos dados, nunca para motoristas.
@@ -187,6 +188,18 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       valoresSemanaAnterior,
       liquidoImportado: motorista.liquido,
     });
+
+  // Guarda o líquido desta semana, tal como aparece no relatório. Grava o
+  // valor já calculado acima — não o recalcula — para o histórico nunca
+  // contradizer o que foi mostrado. Ver useGravarLiquidoSemanal.
+  useGravarLiquidoSemanal({
+    motoristaId: motorista.motorista_id,
+    motoristaNome: motorista.driver_name,
+    liquido,
+    semanaInicio: dateRange.from,
+    semanaFim: dateRange.to,
+    pronto: open && !loading,
+  });
 
   const fmt = (value: number) =>
     new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
