@@ -37,6 +37,10 @@ html[data-native-app='true'] .native-bottom {
        (bg-primary), porque é o mesmo par de cores nos dois casos. */
     --primary: 174 100% 25%;
     --primary-foreground: 0 0% 100%;
+    /* Mesmo valor de --primary neste tema — aqui um único teal já serve os
+       dois papéis (botão e texto solto). Existe como token à parte porque o
+       tema escuro precisa de dois valores diferentes; ver a nota lá. */
+    --primary-text: 174 100% 25%;
 
     --secondary: 174 20% 96.1%;
     --secondary-foreground: 174 100% 15%;
@@ -152,6 +156,13 @@ html[data-native-app='true'] .native-bottom {
 
     --primary: 174 50% 32%;
     --primary-foreground: 0 0% 100%;
+    /* --primary aqui é escurecido de propósito, para o texto branco do botão
+       cima dele se ler bem — o que o deixa demasiado escuro para servir
+       também como texto solto sobre --background/--card (3,4:1, abaixo do
+       mínimo de 4,5:1). O teal vivo da marca, intacto, já lia 7,8:1/6,7:1
+       nesses dois papéis — fica aqui, para quem usa o teal como texto
+       (text-primary-text), separado do teal do botão. */
+    --primary-text: 174 100% 38.4%;
 
     --secondary: 220 7% 17%;
     --secondary-foreground: 220 15% 97%;
@@ -162,7 +173,9 @@ html[data-native-app='true'] .native-bottom {
     --accent: 174 55% 52%;
     --accent-foreground: 220 10% 10%;
 
-    --destructive: 2 65% 62%;
+    /* 62% media 4,25:1 sobre --card (abaixo do mínimo de 4,5:1) — a 65% passa
+       nos dois papéis (5,5:1/4,7:1 como texto, 5,8:1 atrás do próprio texto). */
+    --destructive: 2 65% 65%;
     --destructive-foreground: 0 0% 8%;
 
     --warning: 38 70% 62%;
