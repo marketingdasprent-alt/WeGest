@@ -19,6 +19,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { SectionCard } from '@/components/ui/section-card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import {
@@ -64,8 +74,13 @@ export function DividasTab() {
     .filter((d) => d.estado === 'por_cobrar')
     .reduce((soma, d) => soma + d.valor_total, 0);
 
+  // Marcar paga muda o estado de todos os movimentos por liquidar do
+  // motorista de uma vez — um clique enganado já liquidou 55 movimentos de
+  // uma pessoa. Pede confirmação; reabrir não pede, porque devolve tudo.
+  const [aConfirmar, setAConfirmar] = useState<Divida | null>(null);
+
   const alternarEstado = (d: Divida) => {
-    if (d.estado === 'por_cobrar') marcarPaga(d.motorista_id);
+    if (d.estado === 'por_cobrar') setAConfirmar(d);
     else marcarNaoPaga(d.id);
   };
 
@@ -177,6 +192,31 @@ export function DividasTab() {
           </Table>
         )}
       </SectionCard>
+
+      <AlertDialog open={!!aConfirmar} onOpenChange={(v) => !v && setAConfirmar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Marcar a dívida como paga?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Todos os movimentos por liquidar de <strong>{aConfirmar?.motorista_nome}</strong>{' '}
+              passam a pago no perfil financeiro dele, e o saldo vai a zero — são{' '}
+              <strong>{formatCurrency(aConfirmar?.valor_total ?? 0)}</strong>. A linha fica aqui,
+              como paga, e podes desfazer a qualquer momento em "Marcar não paga".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (aConfirmar) marcarPaga(aConfirmar.motorista_id);
+                setAConfirmar(null);
+              }}
+            >
+              Marcar paga
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 
 const {
   useDividasMotorista,
@@ -74,12 +74,30 @@ describe('DividasTab', () => {
     expect(screen.getByTestId('dividas-total-por-cobrar')).toHaveTextContent('€110,00');
   });
 
-  it('uma dívida por cobrar liquida-se pelo motorista', () => {
+  it('uma dívida por cobrar liquida-se pelo motorista, depois de confirmar', () => {
     useDividasMotorista.mockReturnValue({ data: [POR_COBRAR], isLoading: false });
     render(<DividasTab />);
     fireEvent.click(screen.getByRole('button', { name: 'Marcar paga' }));
+
+    // O clique na tabela só abre a confirmação: liquidar todos os movimentos
+    // de um motorista não pode acontecer num clique enganado.
+    expect(marcarPaga).not.toHaveBeenCalled();
+    const dialogo = within(screen.getByRole('alertdialog'));
+    expect(dialogo.getByText('Ana Costa')).toBeInTheDocument();
+
+    fireEvent.click(dialogo.getByRole('button', { name: 'Marcar paga' }));
     expect(marcarPaga).toHaveBeenCalledWith('m-1');
     expect(marcarNaoPaga).not.toHaveBeenCalled();
+  });
+
+  it('cancelar a confirmação não liquida nada', () => {
+    useDividasMotorista.mockReturnValue({ data: [POR_COBRAR], isLoading: false });
+    render(<DividasTab />);
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar paga' }));
+    fireEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancelar' })
+    );
+    expect(marcarPaga).not.toHaveBeenCalled();
   });
 
   it('uma dívida paga reabre-se pela liquidação, e o botão alterna', () => {

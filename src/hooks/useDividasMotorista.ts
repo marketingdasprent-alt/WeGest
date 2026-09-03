@@ -128,8 +128,13 @@ export function useDividasMotorista(filtros: {
         pago_em: l.pago_em,
       }));
 
-      // Por cobrar primeiro: são as que ainda pedem alguma coisa a alguém.
-      return [...abertas, ...pagas];
+      // Abertas e pagas na MESMA ordem alfabética, não em dois blocos. Marcar
+      // uma dívida como paga muda-lhe o estado, não o lugar: com as abertas
+      // todas primeiro, a linha saltava para o fundo da lista no momento do
+      // clique e lia-se como tendo desaparecido.
+      return [...abertas, ...pagas].sort((a, b) =>
+        a.motorista_nome.localeCompare(b.motorista_nome, 'pt')
+      );
     },
   });
 }

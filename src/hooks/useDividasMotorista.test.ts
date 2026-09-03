@@ -93,12 +93,30 @@ beforeEach(() => {
 });
 
 describe('useDividasMotorista', () => {
-  it('junta as abertas (da vista) com as pagas, abertas primeiro', async () => {
+  it('junta as abertas (da vista) com as pagas', async () => {
     const { result } = renderHook(() => useDividasMotorista({}), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data).toHaveLength(2);
-    expect(result.current.data?.map((d) => d.estado)).toEqual(['por_cobrar', 'paga']);
+    expect(result.current.data?.map((d) => d.estado).sort()).toEqual(['paga', 'por_cobrar']);
+  });
+
+  // Marcar uma dívida como paga muda-lhe o estado, não o lugar: se as pagas
+  // fossem todas para o fundo, a linha saltava no momento do clique e lia-se
+  // como tendo desaparecido.
+  it('ordena por nome, sem separar pagas de por cobrar', async () => {
+    pagasSelect.mockResolvedValue({
+      data: [{ ...LINHA_PAGA, motorista_nome: 'Alberto Nunes' }],
+      error: null,
+    });
+    const { result } = renderHook(() => useDividasMotorista({}), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.map((d) => d.motorista_nome)).toEqual([
+      'Alberto Nunes',
+      'Ana Costa',
+    ]);
+    expect(result.current.data?.map((d) => d.estado)).toEqual(['paga', 'por_cobrar']);
   });
 
   it('a dívida em aberto usa o saldo como valor e o motorista como chave', async () => {
