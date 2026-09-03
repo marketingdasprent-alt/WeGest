@@ -85,7 +85,9 @@ describe('EditorAutomacaoProvider — hidratação do canvas', () => {
     // Edição em curso, ainda por gravar.
     act(() => {
       result.current.setNodes(
-        result.current.nodes.map((n) => (n.type === 'trigger' ? n : { ...n, position: { x: 999, y: 999 } }))
+        result.current.nodes.map((n) =>
+          n.type === 'trigger' ? n : { ...n, position: { x: 999, y: 999 } }
+        )
       );
     });
     const nosEditados = result.current.nodes;

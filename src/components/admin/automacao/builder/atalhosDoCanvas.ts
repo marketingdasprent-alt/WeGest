@@ -9,6 +9,8 @@
  */
 export function deveIgnorarAtalho(alvo: HTMLElement | null): boolean {
   return Boolean(
-    alvo?.closest('input, textarea, [contenteditable="true"], button, [role="button"], a[href], select')
+    alvo?.closest(
+      'input, textarea, [contenteditable="true"], button, [role="button"], a[href], select'
+    )
   );
 }

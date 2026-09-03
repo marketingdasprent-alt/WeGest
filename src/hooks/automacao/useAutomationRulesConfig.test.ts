@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { utilizadoresPorCargo, prepararAccaoNova, type AccaoParaGravar } from './useAutomationRulesConfig';
+import {
+  utilizadoresPorCargo,
+  prepararAccaoNova,
+  type AccaoParaGravar,
+} from './useAutomationRulesConfig';
 
 /**
  * `profiles.nome` e `profiles.email` são NULLABLE na base de dados. Hoje não há

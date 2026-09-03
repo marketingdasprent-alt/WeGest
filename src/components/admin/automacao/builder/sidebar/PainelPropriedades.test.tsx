@@ -187,9 +187,7 @@ describe('PainelPropriedades — botão Testar', () => {
     fireEvent.click(screen.getByRole('button', { name: /testar/i }));
 
     expect(useAutomationRuleConfigMock).toHaveBeenCalledWith('regra-especifica-do-no');
-    await waitFor(() =>
-      expect(testarMutateAsync).toHaveBeenCalledWith('regra-especifica-do-no')
-    );
+    await waitFor(() => expect(testarMutateAsync).toHaveBeenCalledWith('regra-especifica-do-no'));
     expect(testarMutateAsync).not.toHaveBeenCalledWith('regra-1');
   });
 
