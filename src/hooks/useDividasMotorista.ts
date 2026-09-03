@@ -76,14 +76,13 @@ export function useCalcularDivida(
         // para os dois ecrãs mostrarem exactamente o mesmo número. Nunca
         // recalcular isto à mão: seria uma segunda versão da mesma conta.
         supabase.rpc('motorista_saldo_pendente', { p_motorista_id: motoristaId as string }),
-        // Danos: só reparação, e só dentro do intervalo escolhido.
+        // Danos: só reparação, e SEM filtro de data — os três valores da
+        // dívida são totais. O intervalo do popup não filtra nada por agora.
         supabase
           .from('motorista_financeiro')
           .select(MOVIMENTO_SELECT)
           .eq('motorista_id', motoristaId as string)
-          .eq('categoria', 'reparacao')
-          .gte('data_movimento', periodo!.inicio)
-          .lte('data_movimento', periodo!.fim),
+          .eq('categoria', 'reparacao'),
         supabase
           .from('motorista_financeiro')
           .select(MOVIMENTO_SELECT)

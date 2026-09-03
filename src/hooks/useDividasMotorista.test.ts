@@ -181,7 +181,9 @@ describe('useCalcularDivida', () => {
       valorPeriodo: -100,
       valorDanos: 20,
       valorCaucao: 40,
-      valorTotal: 80, // 100 + 20 - 40
+      // Só o saldo: danos e caução já estão dentro dele (o RPC soma todas as
+      // categorias), por isso não se somam outra vez.
+      valorTotal: 100,
       motoristaNome: 'Ana Costa',
     });
   });

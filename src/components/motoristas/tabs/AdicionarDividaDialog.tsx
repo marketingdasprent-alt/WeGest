@@ -92,8 +92,9 @@ export function AdicionarDividaDialog({
         <DialogHeader>
           <DialogTitle>Adicionar à dívida</DialogTitle>
           <DialogDescription>
-            O saldo é o mesmo do perfil do motorista e a caução é o total, nenhum deles limitado ao
-            período. Só os danos vêm dos movimentos dentro do intervalo escolhido.
+            Os três valores são totais. O saldo é o mesmo do perfil do motorista, e os danos e a
+            caução são as partes dele que vêm de reparações e de caução — por isso não se somam ao
+            total, explicam-no.
           </DialogDescription>
         </DialogHeader>
 

@@ -35,11 +35,30 @@ describe('calcularValoresDivida', () => {
     expect(r.valorTotal).toBe(130);
   });
 
-  it('reparacao (débito) entra em valorDanos', () => {
+  it('reparacao (débito) entra em valorDanos, mas NÃO se soma ao total', () => {
+    // Os danos já estão dentro do saldo (o RPC soma todas as categorias) —
+    // somá-los outra vez contava o mesmo dinheiro duas vezes.
     const danos = [mov('debito', 'reparacao', 200)];
     const r = calcularValoresDivida(0, danos, []);
     expect(r.valorDanos).toBe(200);
-    expect(r.valorTotal).toBe(200);
+    expect(r.valorTotal).toBe(0);
+  });
+
+  it('caso real: saldo −70 com 70 de danos dá 70 de dívida, não 140', () => {
+    // André Bojaca Lopes, dados de produção a 2026-09-03: a dívida dele É a
+    // reparação, e a coluna Danos serve para dizer isso, não para acrescentar.
+    const r = calcularValoresDivida(-70, [mov('debito', 'reparacao', 70)], []);
+    expect(r.valorPeriodo).toBe(-70);
+    expect(r.valorDanos).toBe(70);
+    expect(r.valorTotal).toBe(70);
+  });
+
+  it('caso real: saldo −50 com caução dentro dele dá 50, não 100', () => {
+    // Daniel da Silva Reis: a caução pendente dele é um débito de 50, já
+    // contado no saldo. Subtraí-la outra vez duplicava a dívida.
+    const r = calcularValoresDivida(-50, [], [mov('debito', 'caucao', 50)]);
+    expect(r.valorCaucao).toBe(-50);
+    expect(r.valorTotal).toBe(50);
   });
 
   it('só reparacao conta para danos — outras categorias são ignoradas', () => {
@@ -88,20 +107,21 @@ describe('calcularValoresDivida', () => {
     expect(r).toEqual({ valorPeriodo: 0, valorDanos: 0, valorCaucao: 0, valorTotal: 0 });
   });
 
-  it('caução maior que a dívida dá total negativo', () => {
+  it('a caução não abate ao total — já está dentro do saldo', () => {
     const caucao = [mov('credito', 'caucao', 300)];
     const r = calcularValoresDivida(-100, [], caucao);
-    expect(r.valorTotal).toBe(-200);
+    expect(r.valorCaucao).toBe(300);
+    expect(r.valorTotal).toBe(100);
   });
 
-  it('total combina saldo negativo + danos − caução', () => {
+  it('o total é só o saldo negativo; danos e caução acompanham sem o alterar', () => {
     const danos = [mov('debito', 'reparacao', 40)];
     const caucao = [mov('credito', 'caucao', 30)];
     const r = calcularValoresDivida(-80, danos, caucao);
     expect(r.valorPeriodo).toBe(-80);
     expect(r.valorDanos).toBe(40);
     expect(r.valorCaucao).toBe(30);
-    expect(r.valorTotal).toBe(90); // 80 + 40 - 30
+    expect(r.valorTotal).toBe(80);
   });
 
   it('arredonda a 2 casas decimais sem ruído de vírgula flutuante', () => {

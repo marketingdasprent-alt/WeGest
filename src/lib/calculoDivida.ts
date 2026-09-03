@@ -30,15 +30,21 @@ function valorNumerico(m: MovimentoParaDivida): number {
 }
 
 /**
- * Junta as três parcelas de uma dívida.
+ * Junta as três parcelas de uma dívida. Todas são TOTAIS — nenhuma é
+ * filtrada por intervalo de datas (o intervalo do popup é, por agora, só
+ * um marcador para uso futuro).
  *
  * `saldoPendente` vem do RPC motorista_saldo_pendente — é o mesmo valor que
  * o perfil do motorista mostra, e é passado para dentro em vez de
  * recalculado, para os dois ecrãs nunca discordarem.
  *
- * `movimentosDanos` já vem filtrado pela query ao intervalo escolhido;
- * `movimentosCaucao` NÃO tem filtro de data — a caução de Janeiro continua
- * a valer em Setembro.
+ * DANOS E CAUÇÃO NÃO SE SOMAM AO TOTAL, de propósito. O saldo do RPC soma
+ * TODOS os movimentos pendentes, seja qual for a categoria — ou seja, a
+ * reparação e a caução já estão lá dentro. Somá-las outra vez contava o
+ * mesmo dinheiro duas vezes: o André Bojaca Lopes (saldo −70,00, danos
+ * 70,00) aparecia a dever 140,00 quando deve 70,00, e a dívida dele É essa
+ * reparação. As duas colunas ficam a explicar de que é feito o saldo, não a
+ * acrescentar-lhe nada.
  */
 export function calcularValoresDivida(
   saldoPendente: number,
@@ -65,10 +71,10 @@ export function calcularValoresDivida(
     valorCaucao += m.tipo === 'credito' ? valor : -valor;
   }
 
-  // Saldo negativo e danos são o que o motorista deve; a caução já está em
-  // poder da empresa e abate. Um saldo positivo não perdoa danos por esta
-  // via (daí o min(...,0)) — seria compensar duas contas diferentes.
-  const valorTotal = Math.abs(Math.min(saldoPendente, 0)) + valorDanos - valorCaucao;
+  // Só o saldo negativo. Danos e caução já estão dentro dele (ver o cabeçalho
+  // desta função) — somá-los aqui era contar o mesmo dinheiro duas vezes. Um
+  // saldo positivo não é dívida nenhuma: dá zero, daí o min(...,0).
+  const valorTotal = Math.abs(Math.min(saldoPendente, 0));
 
   return {
     valorPeriodo: round2(saldoPendente),
