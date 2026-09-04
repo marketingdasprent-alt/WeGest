@@ -1,18 +1,33 @@
-import { useMemo } from 'react';
+import { useMemo, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { CircleDollarSign, Wallet, FileText, Banknote, CalendarClock, Users } from 'lucide-react';
+import {
+  CircleDollarSign,
+  Wallet,
+  FileText,
+  Banknote,
+  CalendarClock,
+  CalendarRange,
+  Users,
+} from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { DashboardInicioHeader } from '@/components/dashboard/DashboardInicioHeader';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { KpiItem } from '@/components/dashboard/KpiItem';
 import { AlertaCategoriaRow, type CategoriaAlerta } from '@/components/dashboard/AlertaCategoriaRow';
+import { ChartMetric } from '@/components/dashboard/ChartMetric';
 import { useResumoPlataformas, type ResumoPlataforma } from '@/hooks/useResumoPlataformas';
 import { useFaturacaoResumoPeriodo } from '@/hooks/useFaturacaoResumoPeriodo';
 import { useContasAReceber } from '@/hooks/useContasAReceber';
 import { useContratosARenovar } from '@/hooks/useContratosARenovar';
 import { useTopMotoristasSemana } from '@/hooks/useTopMotoristasSemana';
+import { useFaturacaoDiaria } from '@/hooks/useFaturacaoDiaria';
+import { useRecibosVerdesResumo } from '@/hooks/useRecibosVerdesResumo';
+
+const FaturacaoChart = lazy(() => import('./FaturacaoChart'));
+const RecibosDonutChart = lazy(() => import('./RecibosDonutChart'));
 
 const fmtEur = (v: number) =>
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v);
@@ -62,6 +77,11 @@ export function DashboardFinanceiro() {
   const { data: contasAReceber } = useContasAReceber();
   const { contratos: contratosARenovar } = useContratosARenovar();
   const { motoristas: topMotoristas, periodo: periodoMotoristas } = useTopMotoristasSemana();
+  const { pontos: faturacaoDiaria, total: faturadoMes, totalDocumentos } = useFaturacaoDiaria(
+    mes.inicio,
+    mes.fim
+  );
+  const { resumo: recibos } = useRecibosVerdesResumo();
 
   const loading = loadingHoje || loadingSemana || loadingMes || loadingFaturacao;
   const semanaLabel = `${format(semana.inicio, 'd MMM', { locale: pt })} – ${format(semana.fim, 'd MMM', { locale: pt })}`;
@@ -187,6 +207,73 @@ export function DashboardFinanceiro() {
                   {format(mes.inicio, 'MMMM', { locale: pt })}
                 </span>
               </KpiItem>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_15rem] gap-4">
+              <Card className="rounded-xl shadow-none p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold">Faturação</h2>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <ChartMetric
+                        corClass="bg-primary"
+                        label="Faturado"
+                        valor={fmtEur(faturadoMes)}
+                      />
+                      <ChartMetric
+                        corClass="bg-brand-navy"
+                        label="Facturas"
+                        valor={totalDocumentos}
+                      />
+                    </div>
+                  </div>
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                    <CalendarRange className="h-3.5 w-3.5" />
+                    {format(mes.inicio, 'MMMM', { locale: pt })}
+                  </span>
+                </div>
+                <div className="mt-3">
+                  <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
+                    <FaturacaoChart data={faturacaoDiaria} formatCurrency={fmtEur} />
+                  </Suspense>
+                </div>
+              </Card>
+
+              <Card className="rounded-xl shadow-none p-4">
+                <h2 className="text-sm font-semibold">Recibos por Estado</h2>
+                <div className="mt-2">
+                  <Suspense fallback={<Skeleton className="h-[150px] w-full" />}>
+                    <RecibosDonutChart
+                      validados={recibos.validados}
+                      pendentes={recibos.pendentes}
+                      recusados={recibos.recusados}
+                    />
+                  </Suspense>
+                </div>
+                <div className="mt-3 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <span className="h-2 w-2 rounded-full bg-success" />
+                      Validados
+                    </span>
+                    <span className="font-semibold tabular-nums">{recibos.validados}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <span className="h-2 w-2 rounded-full bg-warning" />
+                      Pendentes
+                    </span>
+                    <span className="font-semibold tabular-nums">{recibos.pendentes}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <span className="h-2 w-2 rounded-full bg-destructive" />
+                      Recusados
+                    </span>
+                    <span className="font-semibold tabular-nums">{recibos.recusados}</span>
+                  </div>
+                </div>
+              </Card>
             </div>
 
             <Card className="p-4">

@@ -37,6 +37,7 @@ import {
 import { pt } from 'date-fns/locale';
 import { DashboardInicioHeader } from '@/components/dashboard/DashboardInicioHeader';
 import { KpiItem, KpiBar, KpiSparkline } from '@/components/dashboard/KpiItem';
+import { ChartMetric } from '@/components/dashboard/ChartMetric';
 import {
   AlertaCategoriaRow,
   type CategoriaAlerta,
@@ -888,21 +889,4 @@ export function DashboardFrota() {
 // divisor hairline à esquerda; o fundo e a risca de cor só aparecem no hover,
 // para o item parecer atalho e não display estático. ─────────────────────────
 
-function ChartMetric({
-  corClass,
-  label,
-  valor,
-}: {
-  corClass: string;
-  label: string;
-  valor: string | number;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', corClass)} />
-      <span>{label}</span>
-      <b className="font-semibold tabular-nums text-foreground">{valor}</b>
-    </span>
-  );
-}
 

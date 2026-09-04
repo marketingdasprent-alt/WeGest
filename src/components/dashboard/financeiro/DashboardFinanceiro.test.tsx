@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { DashboardFinanceiro } from './DashboardFinanceiro';
 
 // O cabeçalho partilhado é testado a sério em DashboardFrota.test.tsx (com
@@ -56,6 +56,34 @@ vi.mock('@/hooks/useTopMotoristasSemana', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useFaturacaoDiaria', () => ({
+  useFaturacaoDiaria: () => ({
+    loading: false,
+    total: 74512,
+    totalDocumentos: 213,
+    pontos: [
+      { dia: '2026-09-01', label: '01/09', valor: 40000, contagem: 120 },
+      { dia: '2026-09-02', label: '02/09', valor: 34512, contagem: 93 },
+    ],
+  }),
+}));
+vi.mock('@/hooks/useRecibosVerdesResumo', () => ({
+  useRecibosVerdesResumo: () => ({
+    loading: false,
+    resumo: { validados: 189, pendentes: 14, recusados: 10, totais: 213 },
+  }),
+}));
+
+beforeAll(() => {
+  // O gráfico e o donut usam recharts, que mede o contentor à custa
+  // de ResizeObserver — inexistente no jsdom.
+  (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
+
 function renderDashboard() {
   return render(
     <MemoryRouter>
@@ -85,6 +113,17 @@ describe('DashboardFinanceiro', () => {
     expect(screen.getByText('Uber')).toBeInTheDocument();
     // Bolt e Uber trazem ambos a linha de brutos/comissão; os custos não.
     expect(screen.getAllByText(/brutos/)).toHaveLength(2);
+  });
+
+  it('mostra a faturação do mês e os recibos por estado', async () => {
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Faturação')).toBeInTheDocument());
+    expect(screen.getByText('Recibos por Estado')).toBeInTheDocument();
+    // A legenda do gráfico e a do donut vêm de fontes diferentes; ambas contam.
+    expect(screen.getByText('Facturas')).toBeInTheDocument();
+    expect(screen.getByText('189')).toBeInTheDocument();
+    expect(screen.getByText('14')).toBeInTheDocument();
+    expect(screen.getByText('10')).toBeInTheDocument();
   });
 
   it('mostra os motoristas da semana', async () => {
