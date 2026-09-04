@@ -35,6 +35,25 @@ vi.mock('@/hooks/useContasAReceber', () => ({
     },
   }),
 }));
+vi.mock('@/hooks/useAluguerResumoPeriodo', () => ({
+  useAluguerResumoPeriodo: () => ({ loading: false, valor: 8750 }),
+}));
+vi.mock('@/hooks/useTopMotoristasSemana', () => ({
+  useTopMotoristasSemana: () => ({
+    loading: false,
+    periodo: { inicio: new Date('2026-08-26'), fim: new Date('2026-09-01') },
+    motoristas: [
+      { motoristaId: 'm1', nome: 'Ruben Alexandre', faturado: 680, liquido: 455 },
+      { motoristaId: 'm2', nome: 'Muhammad Tarar', faturado: 710.5, liquido: 485.5 },
+    ],
+  }),
+}));
+vi.mock('@/hooks/useRecibosVerdesResumo', () => ({
+  useRecibosVerdesResumo: () => ({
+    loading: false,
+    resumo: { pendentes: 12, validados: 68, recusados: 6, totais: 86 },
+  }),
+}));
 
 describe('DashboardFinanceiro', () => {
   it('mostra as plataformas do resumo', async () => {
@@ -47,5 +66,23 @@ describe('DashboardFinanceiro', () => {
   it('mostra as cobranças em aberto', async () => {
     render(<DashboardFinanceiro />);
     await waitFor(() => expect(screen.getByText('Maria Silva')).toBeInTheDocument());
+  });
+
+  it('mostra o resumo semanal de top motoristas', async () => {
+    render(<DashboardFinanceiro />);
+    await waitFor(() => expect(screen.getByText('Ruben Alexandre')).toBeInTheDocument());
+    expect(screen.getByText('Muhammad Tarar')).toBeInTheDocument();
+  });
+
+  it('mostra os totais de recibos verdes', async () => {
+    render(<DashboardFinanceiro />);
+    await waitFor(() => expect(screen.getByText('Recibos Verdes')).toBeInTheDocument());
+    expect(screen.getByText('86')).toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+  });
+
+  it('mostra o alerta de recibos a validar em Precisa de Atenção', async () => {
+    render(<DashboardFinanceiro />);
+    await waitFor(() => expect(screen.getByText(/a aguardar/)).toBeInTheDocument());
   });
 });

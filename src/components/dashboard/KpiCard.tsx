@@ -2,13 +2,14 @@ import type { LucideIcon } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-type KpiColor = 'green' | 'blue' | 'amber' | 'violet';
+type KpiColor = 'green' | 'blue' | 'amber' | 'violet' | 'red';
 
 const COLOR_CLASSES: Record<KpiColor, { border: string; icon: string; value: string }> = {
   green: { border: 'border-l-green-500', icon: 'text-green-500', value: 'text-green-500' },
   blue: { border: 'border-l-blue-500', icon: 'text-blue-500', value: 'text-blue-500' },
   amber: { border: 'border-l-amber-500', icon: 'text-amber-500', value: 'text-amber-500' },
   violet: { border: 'border-l-violet-500', icon: 'text-violet-500', value: 'text-violet-500' },
+  red: { border: 'border-l-destructive', icon: 'text-destructive', value: 'text-destructive' },
 };
 
 interface KpiCardProps {
