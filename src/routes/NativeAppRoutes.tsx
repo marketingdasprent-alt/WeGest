@@ -5,6 +5,7 @@ import { RouteErrorBoundary } from '@/components/ErrorBoundary';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { usePageTracking } from '@/hooks/usePageTracking';
 import { RECURSOS } from '@/utils/permissions';
+import { DASHBOARD_ACCESS_RESOURCES } from '@/hooks/useDashboardTipo';
 import { REALIZE_ORG_IDS } from '@/config/realize';
 import { Loader2 } from 'lucide-react';
 
@@ -268,7 +269,7 @@ const NativeAppRoutes = () => {
           <Route
             path="/dashboard"
             element={
-              <ProtectedRoute requiredResource={RECURSOS.MOTORISTAS_GESTAO}>
+              <ProtectedRoute requiredResource={DASHBOARD_ACCESS_RESOURCES}>
                 <DashboardLayout>
                   <Dashboard />
                 </DashboardLayout>
