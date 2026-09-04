@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { subWeeks, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import {
@@ -6,6 +7,7 @@ import {
   FileText,
   CalendarClock,
   Fuel,
+  Zap,
   CircleDollarSign,
   CarFront,
   TicketCheck,
@@ -40,14 +42,43 @@ function periodoAtual(granularidade: Granularidade, hoje = new Date()) {
 
 const CUSTO_COMBUSTIVEL = new Set(['BP', 'Repsol', 'EDP']);
 
-const PLATAFORMA_ESTILO: Record<string, { iniciais: string; fundo: string }> = {
-  Bolt: { iniciais: 'B', fundo: 'bg-green-600' },
-  Uber: { iniciais: 'U', fundo: 'bg-neutral-800' },
-  BP: { iniciais: 'bp', fundo: 'bg-emerald-600' },
-  Repsol: { iniciais: 'R', fundo: 'bg-orange-600' },
-  EDP: { iniciais: 'E', fundo: 'bg-blue-600' },
-  'Via Verde': { iniciais: 'VV', fundo: 'bg-teal-600' },
+// Mesmos logos e mesmas cores de marca já usadas em Integrações
+// (ImportarDadosWizard.tsx, IntegracaoDialog.tsx) — não inventar novas.
+const PLATAFORMA_ESTILO: Record<string, { logo: string; fundo: string; fallback: LucideIcon }> = {
+  Bolt: { logo: '/images/logo-bolt.png', fundo: 'bg-green-600', fallback: CircleDollarSign },
+  Uber: { logo: '/images/logo-uber.png', fundo: 'bg-neutral-800', fallback: CircleDollarSign },
+  BP: { logo: '/images/logo-bp.png', fundo: 'bg-orange-500', fallback: Fuel },
+  Repsol: { logo: '/images/logo-repsol.png', fundo: 'bg-red-500', fallback: Fuel },
+  EDP: { logo: '/images/logo-edp.png', fundo: 'bg-emerald-500', fallback: Zap },
+  'Via Verde': { logo: '/images/logo-via-verde.png', fundo: 'bg-green-600', fallback: TicketCheck },
 };
+
+/** Logo da plataforma; se a imagem falhar, cai no ícone Lucide — mesmo padrão do ImportarDadosWizard. */
+function PlataformaAvatar({ plataforma }: { plataforma: string }) {
+  const [erro, setErro] = useState(false);
+  const estilo = PLATAFORMA_ESTILO[plataforma];
+  const Fallback = estilo?.fallback ?? CircleDollarSign;
+
+  return (
+    <span
+      className={cn(
+        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white',
+        estilo?.fundo ?? 'bg-muted'
+      )}
+    >
+      {estilo && !erro ? (
+        <img
+          src={estilo.logo}
+          alt={plataforma}
+          className="h-4 w-4 object-contain"
+          onError={() => setErro(true)}
+        />
+      ) : (
+        <Fallback className="h-3.5 w-3.5" />
+      )}
+    </span>
+  );
+}
 
 export function DashboardFinanceiro() {
   const [granularidade, setGranularidade] = useState<Granularidade>('semana');
@@ -166,38 +197,28 @@ export function DashboardFinanceiro() {
                 <p className="text-sm text-muted-foreground">A carregar…</p>
               ) : (
                 <div className="divide-y">
-                  {plataformas.map((p) => {
-                    const estilo = PLATAFORMA_ESTILO[p.plataforma] ?? { iniciais: '?', fundo: 'bg-muted' };
-                    return (
-                      <div key={p.plataforma} className="flex items-center justify-between py-3 text-sm">
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={cn(
-                              'flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold text-white',
-                              estilo.fundo
-                            )}
-                          >
-                            {estilo.iniciais}
-                          </span>
-                          <span className="font-medium">{p.plataforma}</span>
-                        </div>
-                        <div className="text-right">
-                          <div className={p.tipo_valor === 'receita' ? 'text-success font-semibold' : 'text-destructive font-semibold'}>
-                            {fmtEur(p.valor)}
-                          </div>
-                          {p.valor_bruto !== null && p.comissao !== null ? (
-                            <div className="text-xs text-muted-foreground">
-                              {fmtEur(p.valor_bruto)} brutos - {fmtEur(p.comissao)} comissão
-                            </div>
-                          ) : (
-                            <div className="text-xs text-muted-foreground capitalize">
-                              {p.plataforma === 'Via Verde' ? 'portagens' : 'combustível'}
-                            </div>
-                          )}
-                        </div>
+                  {plataformas.map((p) => (
+                    <div key={p.plataforma} className="flex items-center justify-between py-3 text-sm">
+                      <div className="flex items-center gap-3">
+                        <PlataformaAvatar plataforma={p.plataforma} />
+                        <span className="font-medium">{p.plataforma}</span>
                       </div>
-                    );
-                  })}
+                      <div className="text-right">
+                        <div className={p.tipo_valor === 'receita' ? 'text-success font-semibold' : 'text-destructive font-semibold'}>
+                          {fmtEur(p.valor)}
+                        </div>
+                        {p.valor_bruto !== null && p.comissao !== null ? (
+                          <div className="text-xs text-muted-foreground">
+                            {fmtEur(p.valor_bruto)} brutos - {fmtEur(p.comissao)} comissão
+                          </div>
+                        ) : (
+                          <div className="text-xs text-muted-foreground capitalize">
+                            {p.plataforma === 'Via Verde' ? 'portagens' : 'combustível'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>
