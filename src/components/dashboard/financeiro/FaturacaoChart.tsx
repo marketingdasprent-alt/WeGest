@@ -75,7 +75,13 @@ export default function FaturacaoChart({ data, formatCurrency }: FaturacaoChartP
           allowDecimals={false}
         />
         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.4)' }} />
-        <Bar yAxisId="valor" dataKey="valor" fill={COR_VALOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
+        <Bar
+          yAxisId="valor"
+          dataKey="valor"
+          fill={COR_VALOR}
+          radius={[4, 4, 0, 0]}
+          maxBarSize={28}
+        />
         <Line
           yAxisId="documentos"
           type="monotone"

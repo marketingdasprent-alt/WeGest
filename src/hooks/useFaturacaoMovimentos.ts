@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
-import { format, eachDayOfInterval } from 'date-fns';
+import { format, differenceInCalendarDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  baldesDoIntervalo,
+  chaveDoBalde,
+  type Granularidade,
+} from '@/components/dashboard/periodo';
 
 export interface TotalFaturacao {
   valor: number;
@@ -18,11 +23,25 @@ export interface PontoFaturacao {
 export interface FaturacaoMovimentos {
   hoje: TotalFaturacao;
   semana: TotalFaturacao;
-  mes: TotalFaturacao;
+  /** Total do período escolhido no seletor do gráfico. */
+  periodo: TotalFaturacao;
   serie: PontoFaturacao[];
 }
 
 const VAZIO = (): TotalFaturacao => ({ valor: 0, count: 0 });
+
+/**
+ * Quantas barras cabem é uma propriedade DESTE gráfico, por isso a regra vive
+ * aqui e não em `periodo.ts`: um mês ao dia (31 barras) é exactamente a vista
+ * útil da faturação — saber em que dias se emitiu — enquanto o gráfico de
+ * atividade da frota, mais largo por barra, já agrupa à semana nesse tamanho.
+ */
+function granularidadePara(inicio: Date, fim: Date): Granularidade {
+  const dias = differenceInCalendarDays(fim, inicio) + 1;
+  if (dias <= 62) return 'dia'; // até dois meses: uma barra por dia
+  if (dias <= 186) return 'semana'; // até meio ano: ~27 barras
+  return 'mes'; // um ano dá 12 — à semana dava 53, ilegíveis
+}
 
 /**
  * Faturação tal como a sub-tab Administrativo › Faturação a calcula: sobre
@@ -30,20 +49,25 @@ const VAZIO = (): TotalFaturacao => ({ valor: 0, count: 0 });
  * sinal dado pelo `tipo` (débito soma, crédito subtrai) e a contagem só dos
  * débitos de cobrança — uma nota de crédito baixa o valor mas não é factura.
  *
- * Uma só query cobre os três períodos: o mês contém a semana e o dia.
+ * Uma só query cobre os três recortes: o período do gráfico, a semana e o dia.
  */
-export function useFaturacaoMovimentos(mesInicio: Date, mesFim: Date, semanaInicio: Date, semanaFim: Date) {
+export function useFaturacaoMovimentos(
+  periodoInicio: Date,
+  periodoFim: Date,
+  semanaInicio: Date,
+  semanaFim: Date
+) {
   const [dados, setDados] = useState<FaturacaoMovimentos>({
     hoje: VAZIO(),
     semana: VAZIO(),
-    mes: VAZIO(),
+    periodo: VAZIO(),
     serie: [],
   });
   const [loading, setLoading] = useState(true);
 
   // Ao dia, e não ao milissegundo — ver a nota em useResumoPlataformas.
-  const mesInicioStr = format(mesInicio, 'yyyy-MM-dd');
-  const mesFimStr = format(mesFim, 'yyyy-MM-dd');
+  const periodoInicioStr = format(periodoInicio, 'yyyy-MM-dd');
+  const periodoFimStr = format(periodoFim, 'yyyy-MM-dd');
   const semanaInicioStr = format(semanaInicio, 'yyyy-MM-dd');
   const semanaFimStr = format(semanaFim, 'yyyy-MM-dd');
 
@@ -51,10 +75,10 @@ export function useFaturacaoMovimentos(mesInicio: Date, mesFim: Date, semanaInic
     let cancelado = false;
     setLoading(true);
     const hojeStr = format(new Date(), 'yyyy-MM-dd');
-    // A semana pode começar no mês anterior; a query tem de cobrir a mais
-    // recuada das duas datas.
-    const desde = mesInicioStr < semanaInicioStr ? mesInicioStr : semanaInicioStr;
-    const ate = mesFimStr > semanaFimStr ? mesFimStr : semanaFimStr;
+    // A semana pode cair fora do período escolhido; a query tem de cobrir a
+    // união dos dois.
+    const desde = periodoInicioStr < semanaInicioStr ? periodoInicioStr : semanaInicioStr;
+    const ate = periodoFimStr > semanaFimStr ? periodoFimStr : semanaFimStr;
 
     supabase
       .from('conta_movimentos')
@@ -73,13 +97,19 @@ export function useFaturacaoMovimentos(mesInicio: Date, mesFim: Date, semanaInic
           if (cancelado) return;
           if (error || !data) {
             console.error('Erro ao carregar faturação:', error);
-            setDados({ hoje: VAZIO(), semana: VAZIO(), mes: VAZIO(), serie: [] });
+            setDados({ hoje: VAZIO(), semana: VAZIO(), periodo: VAZIO(), serie: [] });
             setLoading(false);
             return;
           }
 
-          const totais = { hoje: VAZIO(), semana: VAZIO(), mes: VAZIO() };
-          const porDia = new Map<string, { valor: number; contagem: number }>();
+          const granularidade = granularidadePara(periodoInicio, periodoFim);
+          const totais = { hoje: VAZIO(), semana: VAZIO(), periodo: VAZIO() };
+          const serie: PontoFaturacao[] = baldesDoIntervalo(
+            periodoInicio,
+            periodoFim,
+            granularidade
+          ).map((b) => ({ dia: b.chave, label: b.label, valor: 0, contagem: 0 }));
+          const porBalde = new Map(serie.map((p) => [p.dia, p]));
 
           for (const m of data) {
             const dia = m.data_movimento;
@@ -96,24 +126,16 @@ export function useFaturacaoMovimentos(mesInicio: Date, mesFim: Date, semanaInic
               totais.semana.valor += assinado;
               if (eFactura) totais.semana.count += 1;
             }
-            if (dia >= mesInicioStr && dia <= mesFimStr) {
-              totais.mes.valor += assinado;
-              if (eFactura) totais.mes.count += 1;
-              const actual = porDia.get(dia) ?? { valor: 0, contagem: 0 };
-              actual.valor += assinado;
-              if (eFactura) actual.contagem += 1;
-              porDia.set(dia, actual);
+            if (dia >= periodoInicioStr && dia <= periodoFimStr) {
+              totais.periodo.valor += assinado;
+              if (eFactura) totais.periodo.count += 1;
+              const balde = porBalde.get(chaveDoBalde(new Date(`${dia}T00:00:00`), granularidade));
+              if (balde) {
+                balde.valor += assinado;
+                if (eFactura) balde.contagem += 1;
+              }
             }
           }
-
-          // Todos os dias do mês, mesmo os vazios: sem isto o gráfico encolhia
-          // o eixo aos dias com movimento e dava a impressão de actividade
-          // contínua onde não houve nenhuma.
-          const serie = eachDayOfInterval({ start: mesInicio, end: mesFim }).map((d) => {
-            const dia = format(d, 'yyyy-MM-dd');
-            const v = porDia.get(dia) ?? { valor: 0, contagem: 0 };
-            return { dia, label: format(d, 'dd/MM'), valor: v.valor, contagem: v.contagem };
-          });
 
           setDados({ ...totais, serie });
           setLoading(false);
@@ -124,7 +146,7 @@ export function useFaturacaoMovimentos(mesInicio: Date, mesFim: Date, semanaInic
       cancelado = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mesInicioStr, mesFimStr, semanaInicioStr, semanaFimStr]);
+  }, [periodoInicioStr, periodoFimStr, semanaInicioStr, semanaFimStr]);
 
   return { ...dados, loading };
 }

@@ -23,10 +23,11 @@ export function useCartoesObeResumo() {
     let cancelado = false;
 
     async function carregar() {
-      const [{ data: cartoes, error: erroCartoes }, { data: obe, error: erroObe }] = await Promise.all([
-        supabase.from('cartoes_frota').select('tipo, status, ativo'),
-        supabase.from('dispositivos_obe').select('ativo, viatura_id'),
-      ]);
+      const [{ data: cartoes, error: erroCartoes }, { data: obe, error: erroObe }] =
+        await Promise.all([
+          supabase.from('cartoes_frota').select('tipo, status, ativo'),
+          supabase.from('dispositivos_obe').select('ativo, viatura_id'),
+        ]);
       if (cancelado) return;
 
       if (erroCartoes || erroObe) {

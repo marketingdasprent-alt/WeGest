@@ -1,46 +1,417 @@
-import { Wrench } from 'lucide-react';
-import { KpiCard } from '@/components/dashboard/KpiCard';
+import { useMemo, useState, lazy, Suspense } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Wrench, UserX, UserCheck, CircleCheck, CalendarClock, Car, Flame } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import { DashboardInicioHeader } from '@/components/dashboard/DashboardInicioHeader';
+import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
+import { KpiItem } from '@/components/dashboard/KpiItem';
+import {
+  AlertaCategoriaRow,
+  type CategoriaAlerta,
+} from '@/components/dashboard/AlertaCategoriaRow';
+import { ChartMetric } from '@/components/dashboard/ChartMetric';
+import { PeriodoSelector } from '@/components/dashboard/PeriodoSelector';
+import { getPeriodRange, type DateRange, type PeriodPreset } from '@/components/dashboard/periodo';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAssistenciaInicioResumo } from '@/hooks/useAssistenciaInicioResumo';
+import { useAssistenciaInicioResumo, type Prioridade } from '@/hooks/useAssistenciaInicioResumo';
+import { useViaturasNaOficina } from '@/hooks/useViaturasNaOficina';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
+import { construirSerieTickets, totaisDaSerie } from './serieTickets';
+
+const TicketsChart = lazy(() => import('./TicketsChart'));
+
+/** Dias a partir dos quais um ticket por atribuir passa a ser um aviso. */
+const DIAS_SEM_ATRIBUIR_ALERTA = 3;
+
+const PRIORIDADE_LABEL: Record<Prioridade, string> = {
+  urgente: 'Urgente',
+  alta: 'Alta',
+  media: 'Média',
+  baixa: 'Baixa',
+};
+
+const PRIORIDADE_COR: Record<Prioridade, string> = {
+  urgente: 'bg-destructive',
+  alta: 'bg-warning',
+  media: 'bg-brand-navy',
+  baixa: 'bg-muted-foreground/50',
+};
 
 export function DashboardAssistencia() {
+  const navigate = useNavigate();
   const { user } = useAuth();
-  const { kpis, categorias, loading } = useAssistenciaInicioResumo(user?.id);
+  const {
+    kpis,
+    categorias,
+    prioridades,
+    semPrioridade,
+    porAtribuir,
+    atrasados,
+    movimentos,
+    loading,
+  } = useAssistenciaInicioResumo(user?.id);
+  const { data: naOficina } = useViaturasNaOficina();
+  const { hasAccessToResource } = usePermissions();
+  const podeVerViaturas = hasAccessToResource(RECURSOS.VIATURAS_VER);
+
+  // Período do gráfico — o mesmo seletor das outras duas dashboards, e como lá
+  // só filtra este gráfico: os KPIs e os alertas são sempre do momento actual.
+  const [preset, setPreset] = useState<PeriodPreset>('mes');
+  const [range, setRange] = useState<DateRange>(() => getPeriodRange('mes'));
+
+  // Trocar de período é só voltar a somar: os movimentos já vieram todos ao dia.
+  const serie = useMemo(() => construirSerieTickets(movimentos, range), [movimentos, range]);
+  const totais = totaisDaSerie(serie);
+
+  const oficina = naOficina ?? [];
+  const urgentes = prioridades.find((p) => p.prioridade === 'urgente')?.contagem ?? 0;
+
+  const linhasPrioridade = [
+    ...prioridades.map((p) => ({
+      chave: p.prioridade,
+      label: PRIORIDADE_LABEL[p.prioridade],
+      corClass: PRIORIDADE_COR[p.prioridade],
+      contagem: p.contagem,
+    })),
+    ...(semPrioridade > 0
+      ? [
+          {
+            chave: 'sem',
+            label: 'Sem prioridade',
+            corClass: 'bg-muted-foreground/40',
+            contagem: semPrioridade,
+          },
+        ]
+      : []),
+  ];
+
+  // As contagens por categoria não somam necessariamente "Por resolver": um
+  // ticket pode não ter categoria nenhuma. Mostrar só as categorias deixava a
+  // diferença por explicar (10 num ecrã que diz 13) — a linha "Sem categoria"
+  // fecha a conta e, ainda por cima, é trabalho de arrumação a fazer.
+  const totalCategorizados = categorias.reduce((s, c) => s + c.contagem, 0);
+  const semCategoria = Math.max(0, kpis.porResolver - totalCategorizados);
+  const linhasCategoria = [
+    ...categorias.filter((c) => c.contagem > 0),
+    ...(semCategoria > 0
+      ? [
+          {
+            id: 'sem-categoria',
+            nome: 'Sem categoria',
+            cor: 'hsl(var(--muted-foreground))',
+            icone: 'wrench',
+            contagem: semCategoria,
+          },
+        ]
+      : []),
+  ];
+
+  // Mesma leitura das outras dashboards: cada categoria mostra o caso mais
+  // grave, e a segunda linha diz quantos mais existem.
+  const categoriasAlerta: CategoriaAlerta[] = [];
+  if (atrasados.length > 0) {
+    const pior = atrasados[0];
+    categoriasAlerta.push({
+      id: 'atrasados',
+      icon: CalendarClock,
+      cor: 'destructive',
+      titulo: 'Prazo ultrapassado',
+      descricao: `#${pior.numero} — ${pior.titulo}`,
+      detalhe: atrasados.length > 1 ? `+${atrasados.length - 1} outros fora do prazo` : null,
+      contagem: atrasados.length,
+      // Ao ticket em causa, não à lista: a linha nomeia um ticket concreto e é
+      // esse que se quer abrir. `/assistencia/:id` pede a mesma permissão que
+      // a lista, por isso quem vê esta dashboard chega lá.
+      href: `/assistencia/${pior.id}`,
+    });
+  }
+  const semAtribuirHaDias = porAtribuir.filter((t) => t.diasAberto >= DIAS_SEM_ATRIBUIR_ALERTA);
+  if (semAtribuirHaDias.length > 0) {
+    const pior = semAtribuirHaDias[0];
+    categoriasAlerta.push({
+      id: 'por-atribuir',
+      icon: UserX,
+      cor: 'warning',
+      titulo: 'Por atribuir',
+      descricao: `#${pior.numero} — aberto há ${pior.diasAberto} dias`,
+      detalhe:
+        semAtribuirHaDias.length > 1
+          ? `+${semAtribuirHaDias.length - 1} outros sem responsável`
+          : null,
+      contagem: semAtribuirHaDias.length,
+      href: `/assistencia/${pior.id}`,
+    });
+  }
+  if (urgentes > 0) {
+    categoriasAlerta.push({
+      id: 'urgentes',
+      icon: Flame,
+      cor: 'destructive',
+      titulo: 'Urgentes',
+      descricao: `${urgentes} ticket${urgentes === 1 ? '' : 's'} com prioridade urgente`,
+      detalhe: null,
+      contagem: urgentes,
+      href: '/assistencia',
+    });
+  }
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <DashboardInicioHeader perfil="Assistência" />
+    // Mesma estrutura da Frota e da Financeiro: sem padding próprio (o `main` do
+    // DashboardLayout já o traz) e travada à altura do ecrã a partir de `xl`,
+    // que é onde as duas colunas existem.
+    <div className="flex flex-col space-y-3 xl:h-[calc(100vh-4rem)]">
+      <DashboardInicioHeader perfil="Assistência" className="shrink-0 lg:pb-4 lg:mb-4" />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Por resolver" value={loading ? '—' : kpis.porResolver} icon={Wrench} color="amber" />
-        <KpiCard label="Não atribuídos" value={loading ? '—' : kpis.naoAtribuidos} icon={Wrench} color="red" />
-        <KpiCard label="Atribuídos a mim" value={loading ? '—' : kpis.atribuidosAMim} icon={Wrench} color="blue" />
-        <KpiCard label="Resolvidos hoje" value={loading ? '—' : kpis.resolvidosHoje} icon={Wrench} color="green" />
-      </div>
+      {loading ? (
+        <DashboardSkeleton />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 xl:min-h-0 xl:flex-1 xl:grid-cols-[1.6fr_1fr]">
+          {/* ── Coluna esquerda: KPIs + gráfico + categorias ──────────────── */}
+          <div className="space-y-4 xl:flex xl:min-h-0 xl:flex-col">
+            <div className="grid shrink-0 grid-cols-2 border-b border-border sm:grid-cols-3 lg:grid-cols-5">
+              <KpiItem
+                icon={Wrench}
+                cor="warning"
+                label="Por resolver"
+                valor={kpis.porResolver}
+                onClick={() => navigate('/assistencia')}
+                index={0}
+              >
+                <span className="text-[11px] text-muted-foreground">tickets abertos</span>
+              </KpiItem>
+              <KpiItem
+                icon={UserX}
+                cor="destructive"
+                label="Não atribuídos"
+                valor={kpis.naoAtribuidos}
+                onClick={() => navigate('/assistencia')}
+                index={1}
+              >
+                <span className="text-[11px] text-muted-foreground">
+                  {semAtribuirHaDias.length > 0
+                    ? `${semAtribuirHaDias.length} há +${DIAS_SEM_ATRIBUIR_ALERTA} dias`
+                    : 'nenhum a arrastar-se'}
+                </span>
+              </KpiItem>
+              <KpiItem
+                icon={UserCheck}
+                cor="navy"
+                label="Atribuídos a mim"
+                valor={kpis.atribuidosAMim}
+                onClick={() => navigate('/assistencia')}
+                index={2}
+              >
+                <span className="text-[11px] text-muted-foreground">por resolver</span>
+              </KpiItem>
+              <KpiItem
+                icon={CalendarClock}
+                cor="destructive"
+                label="Fora do prazo"
+                valor={kpis.prazoUltrapassado}
+                onClick={() => navigate('/assistencia')}
+                index={3}
+              >
+                <span className="text-[11px] text-muted-foreground">data estimada passada</span>
+              </KpiItem>
+              <KpiItem
+                icon={CircleCheck}
+                cor="success"
+                label="Resolvidos hoje"
+                valor={kpis.resolvidosHoje}
+                onClick={() => navigate('/assistencia')}
+                index={4}
+              >
+                <span className="text-[11px] text-muted-foreground">fechados hoje</span>
+              </KpiItem>
+            </div>
 
-      <div>
-        <h2 className="text-sm font-medium text-muted-foreground mb-2">Principais categorias</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {loading ? (
-            <p className="text-sm text-muted-foreground col-span-full">A carregar…</p>
-          ) : categorias.length === 0 ? (
-            <p className="text-sm text-muted-foreground col-span-full">Sem categorias configuradas.</p>
-          ) : (
-            categorias.map((c) => (
-              <div key={c.id} className="rounded-lg border bg-card p-3 shadow-sm space-y-1">
-                <Wrench className="h-5 w-5" style={{ color: c.cor }} />
-                <div className="text-lg font-bold truncate" title={c.nome}>
-                  {c.contagem} ticket{c.contagem !== 1 && 's'}
+            <Card className="shrink-0 rounded-xl p-4 shadow-none">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold">Tickets</h2>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <ChartMetric corClass="bg-brand-navy" label="Abertos" valor={totais.abertos} />
+                    <ChartMetric
+                      corClass="bg-success"
+                      label="Resolvidos"
+                      valor={totais.resolvidos}
+                    />
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground truncate" title={c.nome}>
-                  {c.nome}
-                </div>
+                <PeriodoSelector
+                  preset={preset}
+                  range={range}
+                  onChange={(p, r) => {
+                    setPreset(p);
+                    setRange(r);
+                  }}
+                />
               </div>
-            ))
-          )}
+              <div className="mt-3">
+                <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
+                  <TicketsChart data={serie} />
+                </Suspense>
+              </div>
+            </Card>
+
+            <Card className="flex flex-col p-4 xl:min-h-0 xl:flex-1">
+              <div className="mb-3 flex shrink-0 items-baseline justify-between gap-3">
+                <h2 className="text-sm font-semibold">Categorias</h2>
+                <span className="text-[11px] text-muted-foreground">
+                  {kpis.porResolver} por resolver
+                </span>
+              </div>
+              {linhasCategoria.length === 0 ? (
+                <p className="py-2 text-[13px] text-muted-foreground">
+                  {categorias.length === 0
+                    ? 'Sem categorias configuradas.'
+                    : 'Nenhuma categoria com tickets abertos.'}
+                </p>
+              ) : (
+                // Só as categorias COM tickets, e com barra de proporção: em
+                // caixas iguais, dez categorias a zero pesavam tanto no ecrã
+                // como as três que precisavam de trabalho.
+                // `content-start` e sem scroll: são poucas linhas e cabem
+                // sempre — a esticar pela altura do cartão ficavam separadas
+                // por buracos, e o `overflow` trazia atrás uma barra
+                // horizontal por causa da margem negativa das linhas.
+                <div className="grid grid-cols-1 content-start gap-x-6 sm:grid-cols-2">
+                  {linhasCategoria.map((c, i) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => navigate('/assistencia')}
+                      className={cn(
+                        'rounded-md border-b border-border/60 py-2 text-left transition-colors hover:bg-muted/60',
+                        'last:border-b-0',
+                        i >= linhasCategoria.length - (linhasCategoria.length % 2 === 0 ? 2 : 1) &&
+                          'sm:border-b-0'
+                      )}
+                    >
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="truncate text-[13px] font-medium" title={c.nome}>
+                          {c.nome}
+                        </span>
+                        <span className="shrink-0 text-[13px] font-semibold tabular-nums">
+                          {c.contagem}
+                        </span>
+                      </div>
+                      <span className="mt-1.5 block h-[3px] w-full overflow-hidden rounded-full bg-foreground/[0.07]">
+                        <span
+                          className="block h-full rounded-full"
+                          style={{
+                            width: `${(c.contagem / Math.max(1, kpis.porResolver)) * 100}%`,
+                            background: c.cor,
+                          }}
+                        />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* ── Coluna direita: atenção + prioridades + oficina ───────────── */}
+          <div className="space-y-4 xl:flex xl:min-h-0 xl:flex-col">
+            <Card className="flex shrink-0 flex-col p-4">
+              <h2 className="text-sm font-semibold">Precisa de atenção</h2>
+              {categoriasAlerta.length === 0 ? (
+                <p className="mt-3 text-[13px] text-muted-foreground">Nada a destacar por agora.</p>
+              ) : (
+                <div className="mt-1 flex flex-1 flex-col">
+                  {categoriasAlerta.map((categoria, i) => (
+                    <AlertaCategoriaRow
+                      key={categoria.id}
+                      categoria={categoria}
+                      index={i}
+                      onClick={() => navigate(categoria.href)}
+                    />
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <Card className="shrink-0 p-4">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <Flame className="h-4 w-4 text-primary" />
+                Por prioridade
+              </h2>
+              {/* A linha "Sem prioridade" só aparece quando existe, mas existe
+                  como linha própria: contá-los na média dava um número que a
+                  tabela não sustenta. */}
+              <div className="mt-3 space-y-2">
+                {linhasPrioridade.map((p) => (
+                  <div key={p.chave} className="flex items-center gap-3">
+                    <span className="w-20 shrink-0 truncate text-[11px] text-muted-foreground">
+                      {p.label}
+                    </span>
+                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-foreground/[0.07]">
+                      <span
+                        className={cn('block h-full rounded-full', p.corClass)}
+                        style={{
+                          width: `${(p.contagem / Math.max(1, kpis.porResolver)) * 100}%`,
+                        }}
+                      />
+                    </span>
+                    <span className="w-6 shrink-0 text-right text-[13px] font-semibold tabular-nums">
+                      {p.contagem}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="flex flex-col p-4 xl:min-h-0 xl:flex-1">
+              <div className="mb-3 flex shrink-0 items-baseline justify-between gap-3">
+                <h2 className="flex items-center gap-2 text-sm font-semibold">
+                  <Car className="h-4 w-4 text-primary" />
+                  Na oficina
+                </h2>
+                <span className="text-[11px] text-muted-foreground">
+                  {oficina.length} viatura{oficina.length === 1 ? '' : 's'} parada
+                  {oficina.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              {oficina.length === 0 ? (
+                <p className="py-2 text-[13px] text-muted-foreground">
+                  Nenhuma viatura com entrada por fechar.
+                </p>
+              ) : (
+                <div className="min-h-0 flex-1 divide-y divide-border/60 overflow-hidden">
+                  {/* `/viaturas/:id` pede VIATURAS_VER, que a Assistência não
+                      tem garantidamente — sem ela a linha mostra a informação
+                      mas não leva a uma página bloqueada. */}
+                  {oficina.slice(0, 6).map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      disabled={!podeVerViaturas}
+                      onClick={() => navigate(`/viaturas/${r.viatura_id}`)}
+                      className="-mx-2 flex w-[calc(100%+1rem)] items-start justify-between gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/60 disabled:pointer-events-none"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-[13px] font-medium">
+                          {r.matricula ?? 'sem matrícula'}
+                        </div>
+                        <div className="truncate text-[11px] text-muted-foreground">
+                          {[r.marca, r.modelo].filter(Boolean).join(' ') || r.descricao || '—'}
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        {r.oficina ?? '—'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

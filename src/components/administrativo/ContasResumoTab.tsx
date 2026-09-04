@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -84,6 +85,7 @@ export function ContasResumoTab() {
   const orgId = useOrgId();
   const canImportar = hasAccessToResource(RECURSOS.ADMINISTRATIVO_IMPORTAR);
   const showGorjeta = hasAccessToResource(RECURSOS.ADMINISTRATIVO_VER_GORJETA);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   // Estado: data dentro da semana selecionada
   const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
@@ -314,6 +316,28 @@ export function ContasResumoTab() {
     aluguerEstimadoMap,
     recarregar,
   } = useContasResumoSemana(weekStart, weekEnd, periodoFechado);
+
+  // Chegada por link — `/administrativo?motorista=<uuid>`, que é como a
+  // dashboard Financeiro manda abrir as contas de um motorista. Só corre
+  // depois de os resumos carregarem (é aí que o motorista existe) e limpa o
+  // parâmetro a seguir, para um refresh não voltar a abrir o diálogo.
+  const motoristaParam = searchParams.get('motorista');
+  useEffect(() => {
+    if (!motoristaParam || resumos.length === 0) return;
+    const alvo = resumos.find((r) => r.driver_uuid === motoristaParam);
+    if (alvo) {
+      setSelectedMotorista(alvo);
+      setDialogOpen(true);
+    }
+    setSearchParams(
+      (anteriores) => {
+        const proximos = new URLSearchParams(anteriores);
+        proximos.delete('motorista');
+        return proximos;
+      },
+      { replace: true }
+    );
+  }, [motoristaParam, resumos, setSearchParams]);
 
   // Filtrar + ordenar
   const filteredResumos = useMemo(() => {

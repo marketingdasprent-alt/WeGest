@@ -68,7 +68,9 @@ export function KpiItem({
       {/* Altura fixa no slot secundário: sem ela, os KPIs com sparkline, com
           barra e com texto ficavam com linhas de base diferentes e a faixa
           lia-se desalinhada. */}
-      <span className="mt-2 flex h-4 items-center overflow-hidden whitespace-nowrap">{children}</span>
+      <span className="mt-2 flex h-4 items-center overflow-hidden whitespace-nowrap">
+        {children}
+      </span>
       <span
         className={cn(
           'absolute inset-x-3 bottom-0 h-[2px] rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-100 xl:inset-x-4',
@@ -83,7 +85,10 @@ export function KpiBar({ pct, corClass }: { pct: number; corClass: string }) {
   return (
     <span className="block h-[3px] w-full overflow-hidden rounded-full bg-foreground/[0.07]">
       <span
-        className={cn('block h-full rounded-full transition-[width] duration-700 ease-out', corClass)}
+        className={cn(
+          'block h-full rounded-full transition-[width] duration-700 ease-out',
+          corClass
+        )}
         style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
       />
     </span>

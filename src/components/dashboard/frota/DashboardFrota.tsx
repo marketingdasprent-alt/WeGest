@@ -39,6 +39,14 @@ import { DashboardInicioHeader } from '@/components/dashboard/DashboardInicioHea
 import { KpiItem, KpiBar, KpiSparkline } from '@/components/dashboard/KpiItem';
 import { ChartMetric } from '@/components/dashboard/ChartMetric';
 import {
+  PRESET_LABELS,
+  getPeriodRange,
+  labelDoPeriodo,
+  type DateRange,
+  type FixedPreset,
+  type PeriodPreset,
+} from '@/components/dashboard/periodo';
+import {
   AlertaCategoriaRow,
   type CategoriaAlerta,
   type CorAlerta,
@@ -74,16 +82,7 @@ interface EventoAtividade {
   valor_aluguer: number;
 }
 
-/** Período do gráfico "Atividade". `personalizado` não tem range fixo — vem
- *  das duas datas escolhidas no calendário. */
-type PeriodPreset = 'semana' | 'mes' | 'trimestre' | 'ano' | 'personalizado';
-type FixedPreset = Exclude<PeriodPreset, 'personalizado'>;
 type Granularidade = 'dia' | 'semana' | 'mes';
-
-interface DateRange {
-  from: Date;
-  to: Date;
-}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -93,29 +92,6 @@ function formatCurrency(value: number): string {
 
 function normalizarMatricula(m: string | null | undefined): string {
   return (m ?? '').replace(/[-\s]/g, '').toUpperCase();
-}
-
-const PRESET_LABELS: Record<FixedPreset, string> = {
-  semana: 'Esta Semana',
-  mes: 'Este Mês',
-  trimestre: 'Trimestre',
-  ano: 'Este Ano',
-};
-
-function getPeriodRange(preset: FixedPreset): DateRange {
-  const now = new Date();
-  switch (preset) {
-    case 'semana':
-      return { from: startOfWeek(now, { weekStartsOn: 1 }), to: now };
-    case 'mes':
-      return { from: startOfMonth(now), to: now };
-    case 'trimestre':
-      // "Trimestre" = últimos 3 meses corridos (não o trimestre civil) — é o
-      // que a operação usa para comparar, e era o comportamento anterior.
-      return { from: subMonths(now, 3), to: now };
-    case 'ano':
-      return { from: startOfYear(now), to: now };
-  }
 }
 
 /** A granularidade não é escolha do utilizador — se fosse, teríamos dois
@@ -524,10 +500,7 @@ export function DashboardFrota() {
   );
   const sparkAlugadas = pontosSemanais.slice(-6).map((p) => p.alugados);
 
-  const periodoLabel =
-    preset === 'personalizado'
-      ? `${format(range.from, 'dd MMM', { locale: pt })} – ${format(range.to, 'dd MMM yyyy', { locale: pt })}`
-      : PRESET_LABELS[preset];
+  const periodoLabel = labelDoPeriodo(preset, range);
 
   const disponiveisAnim = useCountUp(fleet.disponiveis);
   const alugadasAnim = useCountUp(fleet.alugadas);
@@ -888,5 +861,3 @@ export function DashboardFrota() {
 // ── Faixa de KPIs — sem caixa por indicador: em repouso o único chrome é o
 // divisor hairline à esquerda; o fundo e a risca de cor só aparecem no hover,
 // para o item parecer atalho e não display estático. ─────────────────────────
-
-

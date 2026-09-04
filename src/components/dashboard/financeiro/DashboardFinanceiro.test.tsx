@@ -1,7 +1,13 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { DashboardFinanceiro } from './DashboardFinanceiro';
+
+const navegou = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-router-dom')>()),
+  useNavigate: () => navegou,
+}));
 
 // O cabeçalho partilhado é testado a sério em DashboardFrota.test.tsx (com
 // QueryClientProvider); aqui só interessa que recebe o perfil certo.
@@ -13,29 +19,41 @@ vi.mock('@/hooks/useResumoPlataformas', () => ({
   useResumoPlataformas: () => ({
     loading: false,
     dados: [
-      { plataforma: 'Bolt', tipo_valor: 'receita', valor: 8390, valor_bruto: 10240, comissao: 1850 },
+      {
+        plataforma: 'Bolt',
+        tipo_valor: 'receita',
+        valor: 8390,
+        valor_bruto: 10240,
+        comissao: 1850,
+      },
       { plataforma: 'Uber', tipo_valor: 'receita', valor: 7490, valor_bruto: 8960, comissao: 1470 },
       { plataforma: 'BP', tipo_valor: 'custo', valor: 1640.2, valor_bruto: null, comissao: null },
     ],
   }),
 }));
-vi.mock('@/hooks/useFaturacaoResumoPeriodo', () => ({
-  useFaturacaoResumoPeriodo: () => ({
-    loading: false,
-    resumo: {
-      pendentes: { count: 2, valor: 500 },
-      emitidas: { count: 5, valor: 3000 },
-      emAtraso: { count: 1, valor: 200 },
-    },
-  }),
+vi.mock('@/hooks/useFaturacaoPendentes', () => ({
+  useFaturacaoPendentes: () => ({ loading: false, pendentes: { count: 2, valor: 500 } }),
 }));
 vi.mock('@/hooks/useContasAReceber', () => ({
+  DIAS_EM_ABERTO_ALERTA: 30,
   useContasAReceber: () => ({
     data: {
       totalAReceber: 1875,
       emAberto: [
-        { id: 'c1', destinatarioNome: 'Maria Silva', contratoId: 'ct1', saldo: 1375, diasEmAberto: 56 },
-        { id: 'c2', destinatarioNome: 'Joao Costa', contratoId: 'ct2', saldo: 500, diasEmAberto: 12 },
+        {
+          id: 'c1',
+          destinatarioNome: 'Maria Silva',
+          contratoId: 'ct1',
+          saldo: 1375,
+          diasEmAberto: 56,
+        },
+        {
+          id: 'c2',
+          destinatarioNome: 'Joao Costa',
+          contratoId: 'ct2',
+          saldo: 500,
+          diasEmAberto: 12,
+        },
       ],
     },
   }),
@@ -44,7 +62,13 @@ vi.mock('@/hooks/useContratosARenovar', () => ({
   useContratosARenovar: () => ({
     loading: false,
     contratos: [
-      { id: 'ct1', numero_contrato: 552, motorista_nome: 'Maria', matricula: 'AA-11-BB', diasParaRenovar: 12 },
+      {
+        id: 'ct1',
+        numero_contrato: 552,
+        motorista_nome: 'Maria',
+        matricula: 'AA-11-BB',
+        diasParaRenovar: 12,
+      },
     ],
   }),
 }));
@@ -77,7 +101,7 @@ vi.mock('@/hooks/useFaturacaoMovimentos', () => ({
     loading: false,
     hoje: { valor: 4210, count: 7 },
     semana: { valor: 18940, count: 31 },
-    mes: { valor: 74512, count: 213 },
+    periodo: { valor: 74512, count: 213 },
     serie: [
       { dia: '2026-09-01', label: '01/09', valor: 40000, contagem: 120 },
       { dia: '2026-09-02', label: '02/09', valor: 34512, contagem: 93 },
@@ -88,7 +112,12 @@ vi.mock('@/hooks/useCartoesObeResumo', () => ({
   useCartoesObeResumo: () => ({
     loading: false,
     resumo: {
-      cartoes: { total: 211, emUso: 149, disponiveis: 62, porTipo: { bp: 120, repsol: 60, edp: 31 } },
+      cartoes: {
+        total: 211,
+        emUso: 149,
+        disponiveis: 62,
+        porTipo: { bp: 120, repsol: 60, edp: 31 },
+      },
       obe: { total: 89, ativos: 84, semViatura: 5 },
     },
   }),
@@ -109,6 +138,8 @@ beforeAll(() => {
     disconnect() {}
   };
 });
+
+beforeEach(() => navegou.mockClear());
 
 function renderDashboard() {
   return render(
@@ -155,6 +186,32 @@ describe('DashboardFinanceiro', () => {
   it('mostra as contas de motoristas da ultima semana fechada', async () => {
     renderDashboard();
     await waitFor(() => expect(screen.getByText('Ruben Alexandre')).toBeInTheDocument());
+    // O cartão não rola: a lista está cortada e o rodapé leva ao separador
+    // onde ela está inteira.
+    expect(screen.getByRole('button', { name: /Ver em Administrativo/ })).toBeInTheDocument();
+  });
+
+  it('abre a conta do motorista no separador Resumos', async () => {
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Ruben Alexandre')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Ruben Alexandre'));
+
+    // O uuid é o que o separador Resumos usa para encontrar o motorista e
+    // abrir-lhe o diálogo — sem ele o clique não leva a lado nenhum.
+    expect(navegou).toHaveBeenCalledWith('/administrativo?motorista=d1');
+  });
+
+  it('deixa escolher o período do gráfico de faturação', async () => {
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Faturação')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Este Mês/ }));
+
+    expect(screen.getByRole('button', { name: 'Esta Semana' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Trimestre' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Este Ano' })).toBeInTheDocument();
+    expect(screen.getByText('Intervalo personalizado')).toBeInTheDocument();
   });
 
   it('mostra os cartões de frota e os dispositivos OBE', async () => {

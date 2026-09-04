@@ -1,6 +1,6 @@
 // Donut dos recibos por estado — companheiro do gráfico de faturação, e
 // isolado pelo mesmo motivo (recharts fora do chunk inicial).
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 export interface RecibosDonutData {
   validados: number;
@@ -15,8 +15,8 @@ const CORES = {
 };
 
 // Mesma regra do donut da frota: uma fatia com 1% do total desenha-se como um
-// risco e não como cunha. Só o ÂNGULO é inflacionado — legenda e tooltip
-// mostram sempre o valor real.
+// risco e não como cunha. Só o ÂNGULO é inflacionado — a legenda mostra
+// sempre o valor real.
 const MIN_VISUAL_SHARE = 0.06;
 
 export default function RecibosDonutChart({ validados, pendentes, recusados }: RecibosDonutData) {
@@ -43,17 +43,10 @@ export default function RecibosDonutChart({ validados, pendentes, recusados }: R
     },
   ];
 
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (!active || !payload?.length) return null;
-    const p = payload[0];
-    return (
-      <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
-        <p className="font-semibold text-popover-foreground">{p.payload.name}</p>
-        <p className="text-muted-foreground tabular-nums">{p.payload.value} recibos</p>
-      </div>
-    );
-  };
-
+  // Sem tooltip. O recharts posiciona-o no cursor, e numa coroa deste raio o
+  // cursor está sempre a um palmo do centro: a caixa caía por cima do total
+  // ("42 recibos") e as duas leituras sobrepunham-se. Não se perde nada — a
+  // legenda por baixo já dá os três estados com o valor exacto.
   return (
     <div className="relative">
       <ResponsiveContainer width="100%" height={150}>
@@ -71,7 +64,6 @@ export default function RecibosDonutChart({ validados, pendentes, recusados }: R
               <Cell key={d.name} fill={d.color} />
             ))}
           </Pie>
-          <Tooltip content={<CustomTooltip />} />
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
