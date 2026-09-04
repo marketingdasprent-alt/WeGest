@@ -307,7 +307,6 @@ export function ContasResumoTab() {
     loading,
     setLoading,
     statusAtivoMap,
-    rendaAluguerSemana,
     motoristasList,
     matriculaMap,
     gestorMap,
