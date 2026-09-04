@@ -86,14 +86,21 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
   const renovacaoEstado = estadoRenovacaoContrato(contrato);
 
   // Prolongar: esticar a data de fim do MESMO contrato, sem mudar de código.
+  //
   // Só rent-a-car — em TVDE o período avança pela renovação, e a data de fim
-  // ali é a "próxima renovação", calculada, não escrita à mão. Precisa de uma
-  // data de fim para esticar, e de um contrato vivo.
+  // ali é a "próxima renovação", calculada, não escrita à mão.
+  //
+  // Exige 'em_curso', pela mesma razão que a renovação exige (ver
+  // 20260723150003_renovacao_exige_em_curso): prolongar pressupõe que o carro
+  // está com o cliente. Num contrato FECHADO a viatura já foi recolhida —
+  // esticar a data ali mexia no evento de recolha e na atribuição de um
+  // contrato terminado; quem se enganou no fecho reverte-o primeiro. Num
+  // AGENDADO o período ainda não arrancou, e as datas editam-se no formulário.
   const podeProlongar =
     contrato.regime === 'rent_a_car' &&
     !!contrato.data_fim &&
     !contrato.substituido_em &&
-    contrato.estado_operacional !== 'cancelado';
+    contrato.estado_operacional === 'em_curso';
 
   if (
     !podeFechar &&

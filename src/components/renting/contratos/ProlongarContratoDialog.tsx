@@ -37,7 +37,11 @@ export function ProlongarContratoDialog({ open, onOpenChange, contrato }: Props)
   // O valor só se auto-preenche até o gestor lhe tocar: a partir daí é dele.
   const [valorTocado, setValorTocado] = useState(false);
 
-  const jaFaturado = contrato.estado_financeiro === 'facturado';
+  // 'pago' também conta como faturado: mais faturado do que pago não há, e os
+  // totais estão igualmente congelados. 'anulado' fica de fora — aí a
+  // faturação tem de ser refeita antes de se cobrar seja o que for.
+  const jaFaturado =
+    contrato.estado_financeiro === 'facturado' || contrato.estado_financeiro === 'pago';
 
   useEffect(() => {
     if (!open) return;

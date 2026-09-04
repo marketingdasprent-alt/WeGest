@@ -63,8 +63,13 @@ BEGIN
     RAISE EXCEPTION 'O prolongamento é só para contratos rent-a-car. Em TVDE o período avança pela renovação.';
   END IF;
 
-  IF v_c.estado_operacional = 'cancelado' THEN
-    RAISE EXCEPTION 'Contrato cancelado não se prolonga.';
+  -- Exige 'em_curso', como a renovação (ver renovacao_exige_em_curso):
+  -- prolongar pressupõe que o carro está com o cliente. Num contrato fechado a
+  -- viatura já foi recolhida e mexer na data arrastava o evento de recolha e a
+  -- atribuição de um contrato terminado; num agendado o período nem começou.
+  IF v_c.estado_operacional <> 'em_curso' THEN
+    RAISE EXCEPTION 'Só se prolonga um contrato em curso (este está %). Se o fecho foi engano, reverte-o primeiro.',
+      v_c.estado_operacional;
   END IF;
 
   IF v_c.data_fim IS NULL THEN
@@ -127,10 +132,14 @@ BEGIN
     RAISE EXCEPTION 'O valor do prolongamento não pode ser negativo.';
   END IF;
 
-  -- Só se emite documento sobre um contrato já faturado. Num contrato ainda
-  -- pendente, faturar os dias extra à parte cobrava-os duas vezes: a faturação
-  -- normal conta o período todo, já esticado.
-  IF v_c.estado_financeiro <> 'facturado' THEN
+  -- Só se emite documento sobre um contrato já faturado (ou já pago — mais
+  -- faturado do que isso não há). Num contrato ainda pendente, faturar os dias
+  -- extra à parte cobrava-os duas vezes: a faturação normal conta o período
+  -- todo, já esticado.
+  IF v_c.estado_financeiro = 'anulado' THEN
+    RAISE EXCEPTION 'A faturação deste contrato está anulada — refaz a faturação antes de cobrar dias extra.';
+  END IF;
+  IF v_c.estado_financeiro NOT IN ('facturado', 'pago') THEN
     RAISE EXCEPTION 'Este contrato ainda não está faturado — os dias extra entram na fatura normal, não num documento à parte.';
   END IF;
 

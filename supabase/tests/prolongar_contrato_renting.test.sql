@@ -14,7 +14,7 @@
 -- ============================================================
 
 begin;
-select plan(10);
+select plan(11);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000f0000', 'Org Prolongamento', 'prolong-e');
@@ -143,6 +143,20 @@ select throws_like(
   $$ select prolongar_contrato_renting('00000000-0000-0000-0000-0000000f0002', '2026-11-15T10:00:00Z', null) $$,
   '%já tem o contrato%',
   'não se estica por cima de outro contrato da mesma viatura'
+);
+
+-- ── Contrato fechado ───────────────────────────────────────
+-- A viatura já foi recolhida: esticar a data ali arrastava o evento de recolha
+-- e a atribuição de um contrato terminado.
+
+update public.contratos_renting
+   set estado_operacional = 'fechado'
+ where id = '00000000-0000-0000-0000-0000000f0001';
+
+select throws_like(
+  $$ select prolongar_contrato_renting('00000000-0000-0000-0000-0000000f0001', '2026-10-20T10:00:00Z', null) $$,
+  '%Só se prolonga um contrato em curso%',
+  'contrato fechado é recusado — reverte-se o fecho primeiro'
 );
 
 select * from finish();
