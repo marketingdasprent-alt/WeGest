@@ -1132,6 +1132,50 @@ export function useRenovarContrato() {
   });
 }
 
+/**
+ * Prolonga um contrato rent-a-car (RPC prolongar_contrato_renting): estica a
+ * data de fim do MESMO contrato e, quando o contrato já está faturado, cria a
+ * cobrança dos dias extra na mesma transação.
+ *
+ * Não confundir com renovar, que fecha o período e abre outro com código novo.
+ *
+ * Devolve o id da cobrança criada, ou `null` quando só esticou a data (contrato
+ * ainda por faturar — nesse caso a faturação normal já cobre o período todo).
+ */
+export function useProlongarContrato() {
+  const qc = useQueryClient();
+
+  return useMutation<
+    string | null,
+    Error,
+    { contratoId: string; novaDataFim: string; valorSemIva?: number | null }
+  >({
+    mutationFn: async ({ contratoId, novaDataFim, valorSemIva }): Promise<string | null> => {
+      // A RPC ainda não consta dos tipos gerados — cast controlado, como no
+      // useRenovarContrato acima.
+      const { data, error } = await (
+        supabase.rpc as unknown as (
+          fn: string,
+          args: Record<string, unknown>
+        ) => Promise<{ data: string | null; error: { message: string } | null }>
+      )('prolongar_contrato_renting', {
+        p_contrato_id: contratoId,
+        p_nova_data_fim: novaDataFim,
+        p_valor_sem_iva: valorSemIva ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return data ?? null;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });
+      invalidarOcupacaoViaturas(qc);
+      qc.invalidateQueries({ queryKey: ['renting'] });
+      qc.invalidateQueries({ queryKey: ['contrato-cobrancas'] });
+      qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+    },
+  });
+}
+
 /** Carrega toda a cadeia de versões de um contrato (mais recente primeiro),
  *  a partir de qualquer ponto da cadeia — inclui tanto as versões
  *  anteriores como as seguintes. Isto garante que abrir uma versão antiga

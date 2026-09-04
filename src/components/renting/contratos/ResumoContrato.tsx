@@ -7,6 +7,7 @@ import { calcExtraTotal } from '@/hooks/useContratoExtras';
 import { calcTaxaValor } from '@/hooks/useContratoTaxas';
 import type { ExtraFormItem, TaxaFormItem } from '@/types/contratoRenting';
 import { formatCurrency } from './contratosUtils';
+import { contratoDias } from '@/lib/contratoDias';
 
 interface ResumoContratoProps {
   dataInicio: string | null | undefined;
@@ -37,15 +38,8 @@ interface ResumoContratoProps {
   editavel?: boolean;
 }
 
-/**
- * Calcula dias entre 2 datas com ceil (1d+1h = 2 dias).
- * Espelha public.fn_contrato_dias() na BD.
- */
-function calcDias(inicio: string, fim: string): number {
-  const ms = new Date(fim).getTime() - new Date(inicio).getTime();
-  if (!Number.isFinite(ms) || ms <= 0) return 0;
-  return Math.max(1, Math.ceil(ms / 86400000));
-}
+/** Dias entre 2 datas com ceil (1d+1h = 2 dias) — ver lib/contratoDias.ts. */
+const calcDias = contratoDias;
 
 export const ResumoContrato: React.FC<ResumoContratoProps> = ({
   dataInicio,
