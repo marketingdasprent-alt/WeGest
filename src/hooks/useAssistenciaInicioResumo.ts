@@ -3,17 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 
 const ESTADOS_ABERTO = ['pendente', 'aberto', 'em_andamento', 'aguardando'];
 
-/**
- * Os dois estados que querem dizer "a viatura está na oficina" — são as
- * etiquetas que a própria página de Assistência usa no filtro de estado
- * ("Em Manutenção" e "Aguardando Peças").
- */
-export const ESTADOS_EM_OFICINA = ['em_andamento', 'aguardando'] as const;
-
-export const ESTADO_LABEL: Record<string, string> = {
-  em_andamento: 'Em manutenção',
-  aguardando: 'Aguarda peças',
-};
+// NOTA sobre os dados (verificado na base a 2026-09-04): dos 141 tickets, os
+// estados em uso são só 'resolvido' (128), 'pendente' (11) e 'aberto' (2).
+// 'em_andamento' e 'aguardando' NUNCA foram usados, e nenhum ticket aberto tem
+// mecânico, responsável, prazo ou reparação associada — o fluxo real vai de
+// aberto/pendente directo a resolvido. Qualquer bloco assente nesses campos
+// aparece vazio para sempre; já aconteceu duas vezes neste ecrã.
 
 /** Ordem de gravidade, do mais grave para o menos. */
 export const PRIORIDADES = ['urgente', 'alta', 'media', 'baixa'] as const;
@@ -24,9 +19,14 @@ export interface AssistenciaInicioKpis {
   naoAtribuidos: number;
   atribuidosAMim: number;
   resolvidosHoje: number;
-  /** Abertos cuja `data_estimada` já passou. */
-  prazoUltrapassado: number;
+  /** Dias do ticket aberto há mais tempo. 0 quando não há nenhum. */
+  diasMaisAntigo: number;
+  /** Abertos há mais de `DIAS_ABERTO_DEMAIS`. */
+  abertosHaMuito: number;
 }
+
+/** A partir daqui um ticket aberto deixa de ser normal e passa a ser acumulação. */
+export const DIAS_ABERTO_DEMAIS = 30;
 
 export interface CategoriaResumo {
   id: string;
@@ -48,7 +48,7 @@ export interface TicketAberto {
   dataEstimada: string | null;
   /** Dias corridos desde a abertura. */
   diasAberto: number;
-  /** Só preenchida para os tickets em oficina — ver `emOficina`. */
+  /** Matrícula da viatura do ticket — ver `viaturasComTicket`. */
   matricula: string | null;
 }
 
@@ -70,8 +70,8 @@ export interface AssistenciaInicioResumo {
   porAtribuir: TicketAberto[];
   /** Abertos com prazo ultrapassado, do mais atrasado para o menos. */
   atrasados: TicketAberto[];
-  /** Abertos em manutenção / à espera de peças, com a matrícula da viatura. */
-  emOficina: TicketAberto[];
+  /** Abertos com a matrícula da viatura, do mais antigo para o mais recente. */
+  viaturasComTicket: TicketAberto[];
   /** Aberturas e resoluções ao dia — o gráfico agrupa a partir daqui. */
   movimentos: MovimentoTicket[];
   loading: boolean;
@@ -82,7 +82,8 @@ const KPIS_VAZIO: AssistenciaInicioKpis = {
   naoAtribuidos: 0,
   atribuidosAMim: 0,
   resolvidosHoje: 0,
-  prazoUltrapassado: 0,
+  diasMaisAntigo: 0,
+  abertosHaMuito: 0,
 };
 
 const VAZIO: Omit<AssistenciaInicioResumo, 'loading'> = {
@@ -92,7 +93,7 @@ const VAZIO: Omit<AssistenciaInicioResumo, 'loading'> = {
   semPrioridade: 0,
   porAtribuir: [],
   atrasados: [],
-  emOficina: [],
+  viaturasComTicket: [],
   movimentos: [],
 };
 
@@ -176,7 +177,16 @@ export function useAssistenciaInicioResumo(userId: string | null | undefined) {
         naoAtribuidos: porAtribuir.length,
         atribuidosAMim: userId ? abertos.filter((t) => t.atribuido_a === userId).length : 0,
         resolvidosHoje: todosTickets.filter((t) => dia(t.data_resolucao) === hojeStr).length,
-        prazoUltrapassado: atrasados.length,
+        // O KPI mede IDADE e não prazo: nenhum ticket tem `data_estimada`
+        // preenchida, por isso "fora do prazo" dava 0 para sempre e escondia
+        // que há tickets abertos há mais de cem dias.
+        diasMaisAntigo: abertos.reduce(
+          (max, t) => Math.max(max, diasDesde(t.created_at, agora)),
+          0
+        ),
+        abertosHaMuito: abertos.filter(
+          (t) => diasDesde(t.created_at, agora) > DIAS_ABERTO_DEMAIS
+        ).length,
       };
 
       const contagemPorCategoria = new Map<string, number>();
@@ -205,21 +215,18 @@ export function useAssistenciaInicioResumo(userId: string | null | undefined) {
       }));
       const semPrioridade = abertos.length - prioridades.reduce((s, p) => s + p.contagem, 0);
 
-      // "Na oficina" sai dos TICKETS, não de viatura_reparacoes: essa tabela só
-      // ganha linha quando o ticket é FECHADO (ver useTicketClosure), e nessa
-      // altura já leva data de saída — o bloco aparecia sempre vazio, mesmo com
-      // uma dúzia de tickets abertos. Os estados em_andamento/aguardando são o
-      // que a própria página de Assistência chama "Em Manutenção" e
-      // "Aguardando Peças".
-      const ticketsOficina = abertos
-        .filter((t) => (ESTADOS_EM_OFICINA as readonly string[]).includes(t.status ?? ''))
-        .sort((a, b) => diasDesde(b.created_at, agora) - diasDesde(a.created_at, agora));
+      // Que viaturas têm problema por resolver — o único recorte com dados a
+      // sério (ver a nota no topo do ficheiro). Filtrar por estado de oficina
+      // ou por mecânico atribuído dava sempre lista vazia.
+      const porIdade = [...abertos].sort(
+        (a, b) => diasDesde(b.created_at, agora) - diasDesde(a.created_at, agora)
+      );
 
       // Segunda consulta em vez de join embebido — mesma razão de
       // useViaturasNaOficina: a relação não está declarada como FK no PostgREST
       // e o embedding falharia em silêncio.
       const matriculaPorViatura = new Map<string, string | null>();
-      const idsViatura = [...new Set(ticketsOficina.map((t) => t.viatura_id).filter(Boolean))];
+      const idsViatura = [...new Set(porIdade.map((t) => t.viatura_id).filter(Boolean))];
       if (idsViatura.length > 0) {
         const { data: viaturas } = await supabase
           .from('viaturas')
@@ -228,7 +235,7 @@ export function useAssistenciaInicioResumo(userId: string | null | undefined) {
         if (cancelado) return;
         (viaturas ?? []).forEach((v) => matriculaPorViatura.set(v.id, v.matricula));
       }
-      const emOficina = ticketsOficina.map((t) =>
+      const viaturasComTicket = porIdade.map((t) =>
         paraTicket(t, matriculaPorViatura.get(t.viatura_id) ?? null)
       );
 
@@ -254,7 +261,7 @@ export function useAssistenciaInicioResumo(userId: string | null | undefined) {
         semPrioridade,
         porAtribuir,
         atrasados,
-        emOficina,
+        viaturasComTicket,
         movimentos: [...porDia.values()].sort((a, b) => (a.dia < b.dia ? -1 : 1)),
       });
       setLoading(false);

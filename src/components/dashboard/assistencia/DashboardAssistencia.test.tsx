@@ -28,7 +28,8 @@ vi.mock('@/hooks/useAssistenciaInicioResumo', async (importOriginal) => ({
       naoAtribuidos: 3,
       atribuidosAMim: 2,
       resolvidosHoje: 1,
-      prazoUltrapassado: 2,
+      diasMaisAntigo: 108,
+      abertosHaMuito: 4,
     },
     categorias: [
       { id: 'c1', nome: 'Mecanotécnico', cor: '#3B82F6', icone: 'wrench', contagem: 3 },
@@ -71,12 +72,12 @@ vi.mock('@/hooks/useAssistenciaInicioResumo', async (importOriginal) => ({
         matricula: null,
       },
     ],
-    emOficina: [
+    viaturasComTicket: [
       {
         id: 't3',
         numero: 52,
         titulo: 'Embraiagem a patinar',
-        status: 'em_andamento',
+        status: 'aberto',
         prioridade: 'media',
         atribuido: true,
         criadoEm: '2026-09-01T10:00:00Z',
@@ -123,7 +124,7 @@ describe('DashboardAssistencia', () => {
     await waitFor(() => expect(screen.getByText('Por resolver')).toBeInTheDocument());
     expect(screen.getByText('Não atribuídos')).toBeInTheDocument();
     expect(screen.getByText('Atribuídos a mim')).toBeInTheDocument();
-    expect(screen.getByText('Fora do prazo')).toBeInTheDocument();
+    expect(screen.getByText('Mais antigo')).toBeInTheDocument();
     expect(screen.getByText('Resolvidos hoje')).toBeInTheDocument();
   });
 
@@ -179,12 +180,14 @@ describe('DashboardAssistencia', () => {
     expect(screen.getByText('Baixa')).toBeInTheDocument();
   });
 
-  it('lista os tickets em oficina e abre o ticket', async () => {
+  it('lista as viaturas com ticket aberto e abre o ticket', async () => {
     renderDashboard();
-    await waitFor(() => expect(screen.getByText('Na oficina')).toBeInTheDocument());
-    // Vem dos TICKETS em manutencao, nao de viatura_reparacoes — essa tabela so
-    // ganha linha quando o ticket fecha, e o cartao aparecia sempre vazio.
-    expect(screen.getByText('Em manutenção')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText('Viaturas com ticket aberto')).toBeInTheDocument()
+    );
+    // Sai de TODOS os tickets abertos: filtrar por estado de oficina ou por
+    // mecanico atribuido dava lista vazia — nenhum ticket usa esses campos.
+    expect(screen.getByText('AA-11-BB')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('AA-11-BB'));
 

@@ -17,7 +17,7 @@ import { getPeriodRange, type DateRange, type PeriodPreset } from '@/components/
 import { useAuth } from '@/contexts/AuthContext';
 import {
   useAssistenciaInicioResumo,
-  ESTADO_LABEL,
+  DIAS_ABERTO_DEMAIS,
   type Prioridade,
 } from '@/hooks/useAssistenciaInicioResumo';
 import { construirSerieTickets, totaisDaSerie } from './serieTickets';
@@ -51,7 +51,7 @@ export function DashboardAssistencia() {
     semPrioridade,
     porAtribuir,
     atrasados,
-    emOficina,
+    viaturasComTicket,
     movimentos,
     loading,
   } = useAssistenciaInicioResumo(user?.id);
@@ -204,15 +204,22 @@ export function DashboardAssistencia() {
               >
                 <span className="text-[11px] text-muted-foreground">por resolver</span>
               </KpiItem>
+              {/* Idade, não prazo: nenhum ticket tem data estimada preenchida,
+                  por isso "fora do prazo" dava 0 para sempre — e escondia que o
+                  mais antigo está aberto há mais de cem dias. */}
               <KpiItem
                 icon={CalendarClock}
                 cor="destructive"
-                label="Fora do prazo"
-                valor={kpis.prazoUltrapassado}
+                label="Mais antigo"
+                valor={kpis.diasMaisAntigo > 0 ? `${kpis.diasMaisAntigo}d` : '—'}
                 onClick={() => navigate('/assistencia')}
                 index={3}
               >
-                <span className="text-[11px] text-muted-foreground">data estimada passada</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {kpis.abertosHaMuito > 0
+                    ? `${kpis.abertosHaMuito} há +${DIAS_ABERTO_DEMAIS} dias`
+                    : 'nada a acumular'}
+                </span>
               </KpiItem>
               <KpiItem
                 icon={CircleCheck}
@@ -370,19 +377,21 @@ export function DashboardAssistencia() {
               <div className="mb-3 flex shrink-0 items-baseline justify-between gap-3">
                 <h2 className="flex items-center gap-2 text-sm font-semibold">
                   <Car className="h-4 w-4 text-primary" />
-                  Na oficina
+                  Viaturas com ticket aberto
                 </h2>
                 <span className="text-[11px] text-muted-foreground">
-                  {emOficina.length} ticket{emOficina.length === 1 ? '' : 's'}
+                  {viaturasComTicket.length} por resolver
                 </span>
               </div>
-              {emOficina.length === 0 ? (
+              {viaturasComTicket.length === 0 ? (
                 <p className="py-2 text-[13px] text-muted-foreground">
-                  Nenhum ticket em manutenção ou à espera de peças.
+                  Nenhum ticket aberto.
                 </p>
               ) : (
+                // Da mais parada para a mais recente: o que interessa aqui é
+                // quem está há mais tempo à espera.
                 <div className="min-h-0 flex-1 divide-y divide-border/60 overflow-hidden">
-                  {emOficina.slice(0, 6).map((t) => (
+                  {viaturasComTicket.slice(0, 6).map((t) => (
                     <button
                       key={t.id}
                       type="button"
@@ -395,8 +404,15 @@ export function DashboardAssistencia() {
                         </div>
                         <div className="truncate text-[11px] text-muted-foreground">{t.titulo}</div>
                       </div>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">
-                        {ESTADO_LABEL[t.status ?? ''] ?? '—'}
+                      <span
+                        className={cn(
+                          'shrink-0 text-[11px] tabular-nums',
+                          t.diasAberto > DIAS_ABERTO_DEMAIS
+                            ? 'font-semibold text-destructive'
+                            : 'text-muted-foreground'
+                        )}
+                      >
+                        {t.diasAberto}d
                       </span>
                     </button>
                   ))}
