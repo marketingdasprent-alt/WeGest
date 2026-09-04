@@ -277,32 +277,34 @@ export function DashboardAssistencia() {
                 // repartem a altura que sobra no cartão, em vez de ficarem
                 // amontoadas em cima com um vazio por baixo. O conteúdo de cada
                 // uma centra-se na sua faixa, senão a barra descolava do nome.
-                <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2 xl:min-h-0 xl:flex-1">
-                  {linhasCategoria.map((c, i) => (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:min-h-0 xl:flex-1">
+                  {linhasCategoria.map((c) => (
                     <button
                       key={c.id}
                       type="button"
                       onClick={() => navigate(`/assistencia?categoria=${c.id}`)}
-                      className={cn(
-                        'flex flex-col justify-center rounded-md border-b border-border/60 py-2 text-left transition-colors hover:bg-muted/60',
-                        'last:border-b-0',
-                        i >= linhasCategoria.length - (linhasCategoria.length % 2 === 0 ? 2 : 1) &&
-                          'sm:border-b-0'
-                      )}
+                      // O nome e a contagem estão em spans separados; o leitor
+                      // de ecrã leria "Acidente 3" sem dizer 3 de quê.
+                      aria-label={`${c.nome}: ${c.contagem} ticket${c.contagem === 1 ? '' : 's'}`}
+                      className="flex flex-col justify-center rounded-lg border border-border/60 bg-muted/20 px-3 py-3 text-left transition-colors hover:bg-muted/60"
                     >
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="truncate text-[13px] font-medium" title={c.nome}>
+                        <span className="truncate text-[13px] font-semibold" title={c.nome}>
                           {c.nome}
                         </span>
                         <span className="shrink-0 text-[13px] font-semibold tabular-nums">
                           {c.contagem}
                         </span>
                       </div>
-                      <span className="mt-1.5 block h-[3px] w-full overflow-hidden rounded-full bg-foreground/[0.07]">
+                      <span className="mt-2 block h-2.5 w-full overflow-hidden rounded-full bg-foreground/[0.08]">
                         <span
                           className="block h-full rounded-full"
                           style={{
-                            width: `${(c.contagem / Math.max(1, kpis.porResolver)) * 100}%`,
+                            // Piso de 6%: com a barra grossa e as pontas
+                            // redondas, uma categoria com 1 em 12 desenhava-se
+                            // como um ponto e não como barra. Só a LARGURA leva
+                            // o piso — o número ao lado é sempre o real.
+                            width: `${Math.max(6, (c.contagem / Math.max(1, kpis.porResolver)) * 100)}%`,
                             background: c.cor,
                           }}
                         />
