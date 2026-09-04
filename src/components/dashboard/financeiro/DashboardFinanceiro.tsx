@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { CircleDollarSign, Wallet, FileText, Banknote, CalendarClock, Users } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -40,12 +41,19 @@ function somaReceita(dados: ResumoPlataforma[]): number {
 
 export function DashboardFinanceiro() {
   const navigate = useNavigate();
-  const hoje = new Date();
-  const semana = {
-    inicio: startOfWeek(hoje, { weekStartsOn: 1 }),
-    fim: endOfWeek(hoje, { weekStartsOn: 1 }),
-  };
-  const mes = { inicio: startOfMonth(hoje), fim: endOfMonth(hoje) };
+  // Calculado uma vez: `new Date()` a cada render dava instantes sempre novos,
+  // e um hook que dependesse deles voltava a pedir os dados em ciclo.
+  const { hoje, semana, mes } = useMemo(() => {
+    const agora = new Date();
+    return {
+      hoje: startOfDay(agora),
+      semana: {
+        inicio: startOfWeek(agora, { weekStartsOn: 1 }),
+        fim: endOfWeek(agora, { weekStartsOn: 1 }),
+      },
+      mes: { inicio: startOfMonth(agora), fim: endOfMonth(agora) },
+    };
+  }, []);
 
   const { dados: dadosHoje, loading: loadingHoje } = useResumoPlataformas(hoje, hoje);
   const { dados: dadosSemana, loading: loadingSemana } = useResumoPlataformas(semana.inicio, semana.fim);

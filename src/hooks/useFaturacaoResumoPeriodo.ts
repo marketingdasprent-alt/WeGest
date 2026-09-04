@@ -18,11 +18,13 @@ export function useFaturacaoResumoPeriodo(periodoInicio: Date, periodoFim: Date)
   const [resumo, setResumo] = useState<FaturacaoResumoPeriodo>(VAZIO);
   const [loading, setLoading] = useState(true);
 
+  // Ao dia, e nao ao milissegundo — ver a mesma nota em useResumoPlataformas.
+  const inicioStr = format(periodoInicio, 'yyyy-MM-dd');
+  const fimStr = format(periodoFim, 'yyyy-MM-dd');
+
   useEffect(() => {
     let cancelado = false;
     setLoading(true);
-    const inicioStr = format(periodoInicio, 'yyyy-MM-dd');
-    const fimStr = format(periodoFim, 'yyyy-MM-dd');
     const hojeStr = format(new Date(), 'yyyy-MM-dd');
 
     supabase
@@ -69,7 +71,7 @@ export function useFaturacaoResumoPeriodo(periodoInicio: Date, periodoFim: Date)
     return () => {
       cancelado = true;
     };
-  }, [periodoInicio.getTime(), periodoFim.getTime()]);
+  }, [inicioStr, fimStr]);
 
   return { resumo, loading };
 }

@@ -15,6 +15,11 @@ export function useResumoPlataformas(periodoInicio: Date, periodoFim: Date) {
   const orgId = useOrgId();
   const [dados, setDados] = useState<ResumoPlataforma[]>([]);
   const [loading, setLoading] = useState(true);
+  // Ao dia, e nao ao milissegundo: o pedido so tem granularidade de dia, e uma
+  // dependencia em getTime() fazia o efeito voltar a correr a cada render de um
+  // chamador que passasse `new Date()` — ciclo infinito de pedidos.
+  const inicioStr = format(periodoInicio, 'yyyy-MM-dd');
+  const fimStr = format(periodoFim, 'yyyy-MM-dd');
 
   useEffect(() => {
     if (!orgId) return;
@@ -24,8 +29,8 @@ export function useResumoPlataformas(periodoInicio: Date, periodoFim: Date) {
     supabase
       .rpc('dashboard_resumo_plataformas', {
         p_org_id: orgId,
-        p_periodo_inicio: format(periodoInicio, 'yyyy-MM-dd'),
-        p_periodo_fim: format(periodoFim, 'yyyy-MM-dd'),
+        p_periodo_inicio: inicioStr,
+        p_periodo_fim: fimStr,
       })
       .then(({ data, error }: { data: any; error: any }) => {
         if (cancelado) return;
@@ -49,7 +54,7 @@ export function useResumoPlataformas(periodoInicio: Date, periodoFim: Date) {
     return () => {
       cancelado = true;
     };
-  }, [orgId, periodoInicio.getTime(), periodoFim.getTime()]);
+  }, [orgId, inicioStr, fimStr]);
 
   return { dados, loading };
 }
