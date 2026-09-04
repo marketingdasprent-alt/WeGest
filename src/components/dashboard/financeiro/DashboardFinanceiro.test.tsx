@@ -22,67 +22,25 @@ vi.mock('@/hooks/useFaturacaoResumoPeriodo', () => ({
     },
   }),
 }));
-vi.mock('@/hooks/useContratosARenovar', () => ({
-  useContratosARenovar: () => ({ loading: false, contratos: [] }),
-}));
-vi.mock('@/hooks/useContasAReceber', () => ({
-  useContasAReceber: () => ({
-    data: {
-      totalAReceber: 500,
-      emAberto: [
-        { id: 'cobranca-1', destinatarioNome: 'Maria Silva', contratoId: 'contrato-1', saldo: 500, diasEmAberto: 45 },
-      ],
-    },
-  }),
-}));
-vi.mock('@/hooks/useAluguerResumoPeriodo', () => ({
-  useAluguerResumoPeriodo: () => ({ loading: false, valor: 8750 }),
-}));
-vi.mock('@/hooks/useTopMotoristasSemana', () => ({
-  useTopMotoristasSemana: () => ({
-    loading: false,
-    periodo: { inicio: new Date('2026-08-26'), fim: new Date('2026-09-01') },
-    motoristas: [
-      { motoristaId: 'm1', nome: 'Ruben Alexandre', faturado: 680, liquido: 455 },
-      { motoristaId: 'm2', nome: 'Muhammad Tarar', faturado: 710.5, liquido: 485.5 },
-    ],
-  }),
-}));
-vi.mock('@/hooks/useRecibosVerdesResumo', () => ({
-  useRecibosVerdesResumo: () => ({
-    loading: false,
-    resumo: { pendentes: 12, validados: 68, recusados: 6, totais: 86 },
-  }),
-}));
 
 describe('DashboardFinanceiro', () => {
-  it('mostra as plataformas do resumo', async () => {
+  it('mostra o cabeçalho com o rótulo do perfil', async () => {
     render(<DashboardFinanceiro />);
-    await waitFor(() => expect(screen.getByText('Bolt')).toBeInTheDocument());
-    expect(screen.getByText('Uber')).toBeInTheDocument();
-    expect(screen.getByText('BP')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Financeiro')).toBeInTheDocument());
   });
 
-  it('mostra as cobranças em aberto', async () => {
+  it('mostra os KPIs do topo', async () => {
     render(<DashboardFinanceiro />);
-    await waitFor(() => expect(screen.getByText('Maria Silva')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Faturado hoje')).toBeInTheDocument());
+    expect(screen.getByText('Esta semana')).toBeInTheDocument();
+    expect(screen.getByText('Recibos pendentes')).toBeInTheDocument();
+    expect(screen.getByText('Líquido este mês')).toBeInTheDocument();
   });
 
-  it('mostra o resumo semanal de top motoristas', async () => {
+  it('mostra as plataformas da semana', async () => {
     render(<DashboardFinanceiro />);
-    await waitFor(() => expect(screen.getByText('Ruben Alexandre')).toBeInTheDocument());
-    expect(screen.getByText('Muhammad Tarar')).toBeInTheDocument();
-  });
-
-  it('mostra os totais de recibos verdes', async () => {
-    render(<DashboardFinanceiro />);
-    await waitFor(() => expect(screen.getByText('Recibos Verdes')).toBeInTheDocument());
-    expect(screen.getByText('86')).toBeInTheDocument();
-    expect(screen.getByText('12')).toBeInTheDocument();
-  });
-
-  it('mostra o alerta de recibos a validar em Precisa de Atenção', async () => {
-    render(<DashboardFinanceiro />);
-    await waitFor(() => expect(screen.getByText(/a aguardar/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByAltText('Bolt')).toBeInTheDocument());
+    expect(screen.getByAltText('Uber')).toBeInTheDocument();
+    expect(screen.getByAltText('BP')).toBeInTheDocument();
   });
 });

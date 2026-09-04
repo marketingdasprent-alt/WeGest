@@ -1,131 +1,51 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { LifeBuoy, Wrench, ShieldAlert } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { LayoutDashboard, Wrench } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
-import { useViaturasNaOficina } from '@/hooks/useViaturasNaOficina';
-
-const ESTADOS_TICKET_ABERTO = ['pendente', 'aberto', 'em_andamento', 'aguardando'];
-
-interface TicketResumo {
-  id: string;
-  numero: number;
-  titulo: string;
-  status: string;
-  created_at: string;
-}
-
-interface ExtintorAPrazo {
-  id: string;
-  matricula: string;
-  extintor_validade: string;
-}
+import { useAuth } from '@/contexts/AuthContext';
+import { useAssistenciaInicioResumo } from '@/hooks/useAssistenciaInicioResumo';
 
 export function DashboardAssistencia() {
-  const navigate = useNavigate();
-  const [tickets, setTickets] = useState<TicketResumo[]>([]);
-  const [extintores, setExtintores] = useState<ExtintorAPrazo[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Reaproveita o hook existente em vez de reescrever a query: a relação
-  // viatura_reparacoes → viaturas não está declarada como FK no PostgREST,
-  // pelo que um join embebido falharia em silêncio (ver o comentário em
-  // useViaturasNaOficina.ts, que já resolve isto com duas consultas).
-  const { data: emOficina = [], isLoading: loadingOficina } = useViaturasNaOficina();
-
-  useEffect(() => {
-    let cancelado = false;
-
-    async function carregar() {
-      const limitExtintor = new Date();
-      limitExtintor.setDate(limitExtintor.getDate() + 15);
-      const limitExtintorStr = limitExtintor.toISOString().split('T')[0];
-
-      const [{ data: ticketsData }, { data: extintoresData }] = await Promise.all([
-        supabase
-          .from('assistencia_tickets')
-          .select('id, numero, titulo, status, created_at')
-          .in('status', ESTADOS_TICKET_ABERTO)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('viaturas')
-          .select('id, matricula, extintor_validade')
-          .not('extintor_validade', 'is', null)
-          .lte('extintor_validade', limitExtintorStr)
-          .order('extintor_validade', { ascending: true }),
-      ]);
-
-      if (cancelado) return;
-      setTickets(ticketsData ?? []);
-      setExtintores(extintoresData ?? []);
-      setLoading(false);
-    }
-
-    carregar();
-    return () => {
-      cancelado = true;
-    };
-  }, []);
+  const { user } = useAuth();
+  const { kpis, categorias, loading } = useAssistenciaInicioResumo(user?.id);
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <StickyPageHeader title="Assistência" />
+    <div className="p-4 md:p-6 space-y-5">
+      <StickyPageHeader title="Início" />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <KpiCard
-          label="Tickets abertos"
-          value={loading ? '—' : tickets.length}
-          icon={LifeBuoy}
-          color="blue"
-          onClick={() => navigate('/assistencia')}
-        />
-        <KpiCard
-          label="Viaturas em oficina"
-          value={loadingOficina ? '—' : emOficina.length}
-          icon={Wrench}
-          color="amber"
-        />
-        <KpiCard
-          label="Extintores a expirar"
-          value={loading ? '—' : extintores.length}
-          icon={ShieldAlert}
-          color="violet"
-        />
+      <div className="flex items-center gap-2">
+        <LayoutDashboard className="h-5 w-5 text-primary" />
+        <h1 className="text-xl font-bold">Início</h1>
+        <span className="ml-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+          Assistência
+        </span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-lg border p-4 space-y-2">
-          <h3 className="font-semibold text-sm">Tickets mais recentes</h3>
-          {tickets.slice(0, 8).map((t) => (
-            <div
-              key={t.id}
-              className="flex justify-between text-sm cursor-pointer hover:underline"
-              onClick={() => navigate(`/assistencia/${t.id}`)}
-            >
-              <span>
-                #{t.numero} — {t.titulo}
-              </span>
-              <span className="text-muted-foreground">{t.status}</span>
-            </div>
-          ))}
-          {!loading && tickets.length === 0 && (
-            <p className="text-sm text-muted-foreground">Sem tickets abertos.</p>
-          )}
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard label="Por resolver" value={loading ? '—' : kpis.porResolver} icon={Wrench} color="amber" />
+        <KpiCard label="Não atribuídos" value={loading ? '—' : kpis.naoAtribuidos} icon={Wrench} color="red" />
+        <KpiCard label="Atribuídos a mim" value={loading ? '—' : kpis.atribuidosAMim} icon={Wrench} color="blue" />
+        <KpiCard label="Resolvidos hoje" value={loading ? '—' : kpis.resolvidosHoje} icon={Wrench} color="green" />
+      </div>
 
-        <div className="rounded-lg border p-4 space-y-2">
-          <h3 className="font-semibold text-sm">Viaturas em oficina</h3>
-          {emOficina.map((v) => (
-            <div key={v.id} className="flex justify-between text-sm">
-              <span>{v.matricula ?? '—'}</span>
-              <span className="text-muted-foreground">
-                desde {new Date(v.data_entrada).toLocaleDateString('pt-PT')}
-              </span>
-            </div>
-          ))}
-          {!loadingOficina && emOficina.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nenhuma viatura em oficina.</p>
+      <div>
+        <h2 className="text-sm font-medium text-muted-foreground mb-2">Principais categorias</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {loading ? (
+            <p className="text-sm text-muted-foreground col-span-full">A carregar…</p>
+          ) : categorias.length === 0 ? (
+            <p className="text-sm text-muted-foreground col-span-full">Sem categorias configuradas.</p>
+          ) : (
+            categorias.map((c) => (
+              <div key={c.id} className="rounded-lg border bg-card p-3 shadow-sm space-y-1">
+                <Wrench className="h-5 w-5" style={{ color: c.cor }} />
+                <div className="text-lg font-bold truncate" title={c.nome}>
+                  {c.contagem} ticket{c.contagem !== 1 && 's'}
+                </div>
+                <div className="text-xs text-muted-foreground truncate" title={c.nome}>
+                  {c.nome}
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>
