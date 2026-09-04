@@ -44,16 +44,16 @@ const CUSTO_COMBUSTIVEL = new Set(['BP', 'Repsol', 'EDP']);
 
 // Mesmos logos e mesmas cores de marca já usadas em Integrações
 // (ImportarDadosWizard.tsx, IntegracaoDialog.tsx) — não inventar novas.
-const PLATAFORMA_ESTILO: Record<string, { logo: string; fundo: string; fallback: LucideIcon }> = {
-  Bolt: { logo: '/images/logo-bolt.png', fundo: 'bg-green-600', fallback: CircleDollarSign },
-  Uber: { logo: '/images/logo-uber.png', fundo: 'bg-neutral-800', fallback: CircleDollarSign },
-  BP: { logo: '/images/logo-bp.png', fundo: 'bg-orange-500', fallback: Fuel },
-  Repsol: { logo: '/images/logo-repsol.png', fundo: 'bg-red-500', fallback: Fuel },
-  EDP: { logo: '/images/logo-edp.png', fundo: 'bg-emerald-500', fallback: Zap },
-  'Via Verde': { logo: '/images/logo-via-verde.png', fundo: 'bg-green-600', fallback: TicketCheck },
+const PLATAFORMA_ESTILO: Record<string, { logo: string; borda: string; texto: string; fallback: LucideIcon }> = {
+  Bolt: { logo: '/images/logo-bolt.png', borda: 'border-green-600', texto: 'text-green-600', fallback: CircleDollarSign },
+  Uber: { logo: '/images/logo-uber.png', borda: 'border-neutral-500', texto: 'text-neutral-300', fallback: CircleDollarSign },
+  BP: { logo: '/images/logo-bp.png', borda: 'border-orange-500', texto: 'text-orange-500', fallback: Fuel },
+  Repsol: { logo: '/images/logo-repsol.png', borda: 'border-red-500', texto: 'text-red-500', fallback: Fuel },
+  EDP: { logo: '/images/logo-edp.png', borda: 'border-emerald-500', texto: 'text-emerald-500', fallback: Zap },
+  'Via Verde': { logo: '/images/logo-via-verde.png', borda: 'border-green-600', texto: 'text-green-600', fallback: TicketCheck },
 };
 
-/** Logo da plataforma; se a imagem falhar, cai no ícone Lucide — mesmo padrão do ImportarDadosWizard. */
+/** Logo da plataforma sem fundo, só com borda; se a imagem falhar, cai no ícone Lucide. */
 function PlataformaAvatar({ plataforma }: { plataforma: string }) {
   const [erro, setErro] = useState(false);
   const estilo = PLATAFORMA_ESTILO[plataforma];
@@ -62,19 +62,19 @@ function PlataformaAvatar({ plataforma }: { plataforma: string }) {
   return (
     <span
       className={cn(
-        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white',
-        estilo?.fundo ?? 'bg-muted'
+        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 bg-background',
+        estilo?.borda ?? 'border-border'
       )}
     >
       {estilo && !erro ? (
         <img
           src={estilo.logo}
           alt={plataforma}
-          className="h-4 w-4 object-contain"
+          className="h-5 w-5 object-contain"
           onError={() => setErro(true)}
         />
       ) : (
-        <Fallback className="h-3.5 w-3.5" />
+        <Fallback className={cn('h-4 w-4', estilo?.texto ?? 'text-muted-foreground')} />
       )}
     </span>
   );
