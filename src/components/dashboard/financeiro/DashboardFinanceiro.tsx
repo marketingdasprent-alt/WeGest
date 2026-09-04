@@ -44,16 +44,21 @@ const CUSTO_COMBUSTIVEL = new Set(['BP', 'Repsol', 'EDP']);
 
 // Mesmos logos e mesmas cores de marca já usadas em Integrações
 // (ImportarDadosWizard.tsx, IntegracaoDialog.tsx) — não inventar novas.
-const PLATAFORMA_ESTILO: Record<string, { logo: string; borda: string; texto: string; fallback: LucideIcon }> = {
+// Combustível (BP/Repsol/EDP) leva fundo cheio: são as marcas cujo logo tem
+// elementos claros que somem contra o fundo do card no tema escuro.
+const PLATAFORMA_ESTILO: Record<
+  string,
+  { logo: string; borda: string; fundo?: string; texto: string; fallback: LucideIcon }
+> = {
   Bolt: { logo: '/images/logo-bolt.png', borda: 'border-green-600', texto: 'text-green-600', fallback: CircleDollarSign },
   Uber: { logo: '/images/logo-uber.png', borda: 'border-neutral-500', texto: 'text-neutral-300', fallback: CircleDollarSign },
-  BP: { logo: '/images/logo-bp.png', borda: 'border-orange-500', texto: 'text-orange-500', fallback: Fuel },
-  Repsol: { logo: '/images/logo-repsol.png', borda: 'border-red-500', texto: 'text-red-500', fallback: Fuel },
-  EDP: { logo: '/images/logo-edp.png', borda: 'border-emerald-500', texto: 'text-emerald-500', fallback: Zap },
+  BP: { logo: '/images/logo-bp.png', borda: 'border-orange-500', fundo: 'bg-orange-500', texto: 'text-white', fallback: Fuel },
+  Repsol: { logo: '/images/logo-repsol.png', borda: 'border-red-500', fundo: 'bg-red-500', texto: 'text-white', fallback: Fuel },
+  EDP: { logo: '/images/logo-edp.png', borda: 'border-emerald-500', fundo: 'bg-emerald-500', texto: 'text-white', fallback: Zap },
   'Via Verde': { logo: '/images/logo-via-verde.png', borda: 'border-green-600', texto: 'text-green-600', fallback: TicketCheck },
 };
 
-/** Logo da plataforma sem fundo, só com borda; se a imagem falhar, cai no ícone Lucide. */
+/** Logo da plataforma; se a imagem falhar, cai no ícone Lucide. */
 function PlataformaAvatar({ plataforma }: { plataforma: string }) {
   const [erro, setErro] = useState(false);
   const estilo = PLATAFORMA_ESTILO[plataforma];
@@ -62,7 +67,8 @@ function PlataformaAvatar({ plataforma }: { plataforma: string }) {
   return (
     <span
       className={cn(
-        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 bg-background',
+        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 overflow-hidden',
+        estilo?.fundo ?? 'bg-background',
         estilo?.borda ?? 'border-border'
       )}
     >
@@ -70,7 +76,7 @@ function PlataformaAvatar({ plataforma }: { plataforma: string }) {
         <img
           src={estilo.logo}
           alt={plataforma}
-          className="h-5 w-5 object-contain"
+          className="h-full w-full object-cover"
           onError={() => setErro(true)}
         />
       ) : (
