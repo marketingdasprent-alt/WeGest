@@ -18,6 +18,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { matchesSearch } from '@/lib/utils';
 import { classificarMovimento } from '@shared/movimentosMotorista';
 import { buildSlotPeriodos, type ViaturaPeriodoInput } from './motorista-resumo/slotPeriodos';
+import { construirLinhasLiquidoSemanal } from './motorista-resumo/linhasLiquidoSemanal';
 import { periodosDeContratos } from './motorista-resumo/periodosDoContrato';
 import {
   buildTvdeModeloPrecoMap,
@@ -1232,6 +1233,36 @@ export function ContasResumoTab() {
         _uid: r.motorista_id || r.driver_uuid || `${r.driver_name || 'sem-nome'}__${idx}`,
       }));
       setResumos(comUid);
+
+      // Grava o líquido da semana de TODOS os motoristas de uma vez.
+      //
+      // O trigger em motorista_liquido_semanal transforma cada linha num
+      // movimento no perfil financeiro do motorista; o saldo dele passa a
+      // contar esse líquido junto com danos, cauções e o resto, e quem ficar
+      // negativo aparece sozinho na aba Dívidas. Antes disto o líquido só era
+      // gravado ao abrir o Resumo de um motorista à vez — quem nunca fosse
+      // aberto não tinha movimento nenhum e nunca chegava às Dívidas mesmo a
+      // dever.
+      //
+      // Falha em silêncio de propósito (só consola): quem não tem permissão de
+      // escrita continua a poder ver a lista, e um erro aqui não pode derrubar
+      // o ecrã todo — por isso o try/catch próprio, fora do da lista.
+      try {
+        const linhas = construirLinhasLiquidoSemanal(comUid, {
+          semanaInicio: weekStartStr,
+          semanaFim: weekEndStr,
+          gravadoEm: new Date().toISOString(),
+          gravadoPor: (await supabase.auth.getUser()).data.user?.id ?? null,
+        });
+        if (linhas.length > 0) {
+          const { error: erroGravar } = await supabase
+            .from('motorista_liquido_semanal')
+            .upsert(linhas, { onConflict: 'motorista_id,semana_inicio' });
+          if (erroGravar) console.error('[liquido semanal] falha ao gravar em lote:', erroGravar);
+        }
+      } catch (erroGravar) {
+        console.error('[liquido semanal] falha ao gravar em lote:', erroGravar);
+      }
 
       // Saldo pendente em lote (uma RPC para todos os motoristas da página,
       // não N chamadas) — mesmo valor mostrado no separador Financeiro do
