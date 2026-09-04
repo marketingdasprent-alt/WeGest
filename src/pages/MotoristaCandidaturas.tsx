@@ -89,6 +89,7 @@ interface Candidatura {
   licenca_tvde_ficheiro_url: string | null;
   registo_criminal_url: string | null;
   comprovativo_morada_url: string | null;
+  iban: string | null;
   comprovativo_iban_url: string | null;
   outros_documentos: any[];
   status: 'rascunho' | 'submetido' | 'em_analise' | 'aprovado' | 'rejeitado';
@@ -706,6 +707,10 @@ const MotoristaCandidaturas: React.FC = () => {
                         <div>
                           <span className="text-muted-foreground text-xs">Cidade</span>
                           <p className="font-medium">{selectedCandidatura.cidade || '-'}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground text-xs">IBAN</span>
+                          <p className="font-medium truncate">{selectedCandidatura.iban || '-'}</p>
                         </div>
                         <div className="col-span-2">
                           <span className="text-muted-foreground text-xs">Morada</span>

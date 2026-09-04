@@ -5,6 +5,7 @@ import {
   validarCartaConducao,
   validarTelefone,
   validarEmail,
+  validarIBAN,
 } from '@/lib/pt-validators';
 
 export const CATEGORIAS_CARTA = [
@@ -54,6 +55,7 @@ export interface CandidaturaCampos {
   licencaTvdeFicheiroUrl: string;
   registoCriminalUrl: string;
   comprovativoMoradaUrl: string;
+  iban: string;
   comprovativoIbanUrl: string;
 }
 
@@ -159,6 +161,12 @@ export function buildValidationErrors(campos: CandidaturaCampos): Record<string,
 
   // Documentos Adicionais
   if (!campos.registoCriminalUrl) errors.registoCriminalUrl = `Registo Criminal: ${UPLOAD_HINT}`;
+  if (!campos.iban.trim()) {
+    errors.iban = 'Documentos Adicionais — IBAN: indique o seu IBAN.';
+  } else {
+    const r = validarIBAN(campos.iban);
+    if (!r.valid) errors.iban = `Documentos Adicionais — IBAN: ${r.message}`;
+  }
   if (!campos.comprovativoIbanUrl)
     errors.comprovativoIbanUrl = `Comprovativo de IBAN: ${UPLOAD_HINT}`;
 
