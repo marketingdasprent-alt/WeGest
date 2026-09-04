@@ -42,20 +42,16 @@ function periodoAtual(granularidade: Granularidade, hoje = new Date()) {
 
 const CUSTO_COMBUSTIVEL = new Set(['BP', 'Repsol', 'EDP']);
 
-// Mesmos logos e mesmas cores de marca já usadas em Integrações
-// (ImportarDadosWizard.tsx, IntegracaoDialog.tsx) — não inventar novas.
-// Combustível (BP/Repsol/EDP) leva fundo cheio: são as marcas cujo logo tem
-// elementos claros que somem contra o fundo do card no tema escuro.
-const PLATAFORMA_ESTILO: Record<
-  string,
-  { logo: string; borda: string; fundo?: string; texto: string; fallback: LucideIcon }
-> = {
-  Bolt: { logo: '/images/logo-bolt.png', borda: 'border-green-600', texto: 'text-green-600', fallback: CircleDollarSign },
-  Uber: { logo: '/images/logo-uber.png', borda: 'border-neutral-500', texto: 'text-neutral-300', fallback: CircleDollarSign },
-  BP: { logo: '/images/logo-bp.png', borda: 'border-orange-500', fundo: 'bg-orange-500', texto: 'text-white', fallback: Fuel },
-  Repsol: { logo: '/images/logo-repsol.png', borda: 'border-red-500', fundo: 'bg-red-500', texto: 'text-white', fallback: Fuel },
-  EDP: { logo: '/images/logo-edp.png', borda: 'border-emerald-500', fundo: 'bg-emerald-500', texto: 'text-white', fallback: Zap },
-  'Via Verde': { logo: '/images/logo-via-verde.png', borda: 'border-green-600', texto: 'text-green-600', fallback: TicketCheck },
+// Mesmos logos e o mesmo padrão de moldura já usados em Integrações
+// (IntegracaoCard.tsx: rounded-lg, bg-muted/60, p-1, object-contain) — não
+// inventar um estilo novo.
+const PLATAFORMA_ESTILO: Record<string, { logo: string; fallback: LucideIcon }> = {
+  Bolt: { logo: '/images/logo-bolt.png', fallback: CircleDollarSign },
+  Uber: { logo: '/images/logo-uber.png', fallback: CircleDollarSign },
+  BP: { logo: '/images/logo-bp.png', fallback: Fuel },
+  Repsol: { logo: '/images/logo-repsol.png', fallback: Fuel },
+  EDP: { logo: '/images/logo-edp.png', fallback: Zap },
+  'Via Verde': { logo: '/images/logo-via-verde.png', fallback: TicketCheck },
 };
 
 /** Logo da plataforma; se a imagem falhar, cai no ícone Lucide. */
@@ -65,22 +61,16 @@ function PlataformaAvatar({ plataforma }: { plataforma: string }) {
   const Fallback = estilo?.fallback ?? CircleDollarSign;
 
   return (
-    <span
-      className={cn(
-        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 overflow-hidden',
-        estilo?.fundo ?? 'bg-background',
-        estilo?.borda ?? 'border-border'
-      )}
-    >
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 overflow-hidden p-1">
       {estilo && !erro ? (
         <img
           src={estilo.logo}
           alt={plataforma}
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
           onError={() => setErro(true)}
         />
       ) : (
-        <Fallback className={cn('h-4 w-4', estilo?.texto ?? 'text-muted-foreground')} />
+        <Fallback className="h-4 w-4 text-muted-foreground" />
       )}
     </span>
   );
