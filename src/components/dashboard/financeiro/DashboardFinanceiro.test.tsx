@@ -56,15 +56,25 @@ vi.mock('@/hooks/useTopMotoristasSemana', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useFaturacaoDiaria', () => ({
-  useFaturacaoDiaria: () => ({
+vi.mock('@/hooks/useFaturacaoMovimentos', () => ({
+  useFaturacaoMovimentos: () => ({
     loading: false,
-    total: 74512,
-    totalDocumentos: 213,
-    pontos: [
+    hoje: { valor: 4210, count: 7 },
+    semana: { valor: 18940, count: 31 },
+    mes: { valor: 74512, count: 213 },
+    serie: [
       { dia: '2026-09-01', label: '01/09', valor: 40000, contagem: 120 },
       { dia: '2026-09-02', label: '02/09', valor: 34512, contagem: 93 },
     ],
+  }),
+}));
+vi.mock('@/hooks/useCartoesObeResumo', () => ({
+  useCartoesObeResumo: () => ({
+    loading: false,
+    resumo: {
+      cartoes: { total: 211, emUso: 149, disponiveis: 62, porTipo: { bp: 120, repsol: 60, edp: 31 } },
+      obe: { total: 89, ativos: 84, semViatura: 5 },
+    },
   }),
 }));
 vi.mock('@/hooks/useRecibosVerdesResumo', () => ({
@@ -129,6 +139,14 @@ describe('DashboardFinanceiro', () => {
   it('mostra os motoristas da semana', async () => {
     renderDashboard();
     await waitFor(() => expect(screen.getByText('Ruben Alexandre')).toBeInTheDocument());
+  });
+
+  it('mostra os cartões de frota e os dispositivos OBE', async () => {
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Cartões Frota e OBE')).toBeInTheDocument());
+    expect(screen.getByText('211')).toBeInTheDocument();
+    expect(screen.getByText('89')).toBeInTheDocument();
+    expect(screen.getByText(/84 ativos · 5 sem viatura associada/)).toBeInTheDocument();
   });
 
   it('junta cobranças, recibos e contratos em "Precisa de atenção"', async () => {

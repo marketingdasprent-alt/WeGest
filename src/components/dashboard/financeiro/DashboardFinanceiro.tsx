@@ -9,7 +9,9 @@ import {
   Banknote,
   CalendarClock,
   CalendarRange,
+  CreditCard,
   Users,
+  Wifi,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,7 +25,8 @@ import { useFaturacaoResumoPeriodo } from '@/hooks/useFaturacaoResumoPeriodo';
 import { useContasAReceber } from '@/hooks/useContasAReceber';
 import { useContratosARenovar } from '@/hooks/useContratosARenovar';
 import { useTopMotoristasSemana } from '@/hooks/useTopMotoristasSemana';
-import { useFaturacaoDiaria } from '@/hooks/useFaturacaoDiaria';
+import { useFaturacaoMovimentos } from '@/hooks/useFaturacaoMovimentos';
+import { useCartoesObeResumo } from '@/hooks/useCartoesObeResumo';
 import { useRecibosVerdesResumo } from '@/hooks/useRecibosVerdesResumo';
 
 const FaturacaoChart = lazy(() => import('./FaturacaoChart'));
@@ -77,13 +80,11 @@ export function DashboardFinanceiro() {
   const { data: contasAReceber } = useContasAReceber();
   const { contratos: contratosARenovar } = useContratosARenovar();
   const { motoristas: topMotoristas, periodo: periodoMotoristas } = useTopMotoristasSemana();
-  const { pontos: faturacaoDiaria, total: faturadoMes, totalDocumentos } = useFaturacaoDiaria(
-    mes.inicio,
-    mes.fim
-  );
+  const faturado = useFaturacaoMovimentos(mes.inicio, mes.fim, semana.inicio, semana.fim);
+  const { resumo: cartoesObe } = useCartoesObeResumo();
   const { resumo: recibos } = useRecibosVerdesResumo();
 
-  const loading = loadingHoje || loadingSemana || loadingMes || loadingFaturacao;
+  const loading = loadingHoje || loadingSemana || loadingMes || loadingFaturacao || faturado.loading;
   const semanaLabel = `${format(semana.inicio, 'd MMM', { locale: pt })} – ${format(semana.fim, 'd MMM', { locale: pt })}`;
 
   const cobrancas = contasAReceber?.emAberto ?? [];
@@ -149,17 +150,20 @@ export function DashboardFinanceiro() {
                 icon={CircleDollarSign}
                 cor="success"
                 label="Faturado hoje"
-                valor={fmtEur(somaReceita(dadosHoje))}
+                valor={fmtEur(faturado.hoje.valor)}
                 onClick={() => navigate('/administrativo')}
                 index={0}
               >
-                <span className="text-[11px] text-muted-foreground">Bolt + Uber</span>
+                <span className="text-[11px] text-muted-foreground">
+                  <b className="font-semibold text-foreground tabular-nums">{faturado.hoje.count}</b>{' '}
+                  facturas
+                </span>
               </KpiItem>
               <KpiItem
                 icon={Wallet}
                 cor="navy"
                 label="Esta semana"
-                valor={fmtEur(somaReceita(dadosSemana))}
+                valor={fmtEur(faturado.semana.valor)}
                 onClick={() => navigate('/administrativo')}
                 index={1}
               >
@@ -218,12 +222,12 @@ export function DashboardFinanceiro() {
                       <ChartMetric
                         corClass="bg-primary"
                         label="Faturado"
-                        valor={fmtEur(faturadoMes)}
+                        valor={fmtEur(faturado.mes.valor)}
                       />
                       <ChartMetric
                         corClass="bg-brand-navy"
                         label="Facturas"
-                        valor={totalDocumentos}
+                        valor={faturado.mes.count}
                       />
                     </div>
                   </div>
@@ -234,7 +238,7 @@ export function DashboardFinanceiro() {
                 </div>
                 <div className="mt-3">
                   <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
-                    <FaturacaoChart data={faturacaoDiaria} formatCurrency={fmtEur} />
+                    <FaturacaoChart data={faturado.serie} formatCurrency={fmtEur} />
                   </Suspense>
                 </div>
               </Card>
@@ -361,8 +365,9 @@ export function DashboardFinanceiro() {
             </Card>
           </div>
 
-          {/* ── Coluna direita: "Precisa de atenção" ───────────────────────── */}
-          <Card className="flex flex-col p-4">
+          {/* ── Coluna direita: atenção + cartões/OBE ──────────────────────── */}
+          <div className="space-y-4">
+            <Card className="flex flex-col p-4">
             <h2 className="text-sm font-semibold">Precisa de atenção</h2>
             {categoriasAlerta.length === 0 ? (
               <p className="mt-3 text-[13px] text-muted-foreground">Nada a destacar por agora.</p>
@@ -377,8 +382,64 @@ export function DashboardFinanceiro() {
                   />
                 ))}
               </div>
-            )}
-          </Card>
+              )}
+            </Card>
+
+            <Card className="p-4">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <CreditCard className="h-4 w-4 text-primary" />
+                Cartões Frota e OBE
+              </h2>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => navigate('/administrativo/cartoes')}
+                  className="rounded-lg border border-border/70 p-2 transition-colors hover:bg-muted/60"
+                >
+                  <div className="text-lg font-semibold tabular-nums">{cartoesObe.cartoes.total}</div>
+                  <div className="text-[11px] text-muted-foreground">Cartões</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/administrativo/cartoes')}
+                  className="rounded-lg border border-border/70 p-2 transition-colors hover:bg-muted/60"
+                >
+                  <div className="text-lg font-semibold tabular-nums text-success">
+                    {cartoesObe.cartoes.emUso}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">Em uso</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/administrativo/cartoes')}
+                  className="rounded-lg border border-border/70 p-2 transition-colors hover:bg-muted/60"
+                >
+                  <div className="text-lg font-semibold tabular-nums">
+                    {cartoesObe.cartoes.disponiveis}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">Disponíveis</div>
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/administrativo/obe')}
+                className="mt-2 flex w-full items-center gap-3 rounded-lg border border-border/70 p-2.5 text-left transition-colors hover:bg-muted/60"
+              >
+                <Wifi className="h-4 w-4 shrink-0 text-primary" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-medium">Dispositivos OBE</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    {cartoesObe.obe.ativos} ativos
+                    {cartoesObe.obe.semViatura > 0 &&
+                      ` · ${cartoesObe.obe.semViatura} sem viatura associada`}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold tabular-nums">
+                  {cartoesObe.obe.total}
+                </span>
+              </button>
+            </Card>
+          </div>
         </div>
       )}
     </div>

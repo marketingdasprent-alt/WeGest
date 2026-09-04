@@ -16,7 +16,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import type { PontoFaturacao } from '@/hooks/useFaturacaoDiaria';
+import type { PontoFaturacao } from '@/hooks/useFaturacaoMovimentos';
 
 interface FaturacaoChartProps {
   data: PontoFaturacao[];
