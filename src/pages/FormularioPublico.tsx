@@ -489,7 +489,7 @@ const FormularioPublico = () => {
               na marca WeGest — nunca na marca de outra organização, que era o
               que acontecia (o logótipo da Distância Arrojada estava fixo aqui
               para toda a gente). A cor segue a mesma regra, em corDaMarca.ts. */}
-          <motion.div className="mb-12" variants={fadeInUp}>
+          <motion.div className="mb-4" variants={fadeInUp}>
             <img
               src={organizacao?.logo_url || LOGO_WEGEST}
               alt={
