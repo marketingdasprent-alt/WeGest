@@ -61,7 +61,13 @@ export function ProlongarContratoDialog({ open, onOpenChange, contrato }: Props)
         },
         novaDataStr ? `${novaDataStr}T23:59:59Z` : null
       ),
-    [contrato.data_inicio, contrato.data_fim, contrato.valor_total_manual, contrato.tarifa_diaria, novaDataStr]
+    [
+      contrato.data_inicio,
+      contrato.data_fim,
+      contrato.valor_total_manual,
+      contrato.tarifa_diaria,
+      novaDataStr,
+    ]
   );
 
   // Proposta de valor, sempre que os dias mudam e o gestor ainda não escreveu.

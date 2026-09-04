@@ -32,9 +32,7 @@ describe('diariaDoContrato', () => {
   });
 
   it('sem valor manual, usa a tarifa diária', () => {
-    expect(
-      diariaDoContrato({ ...CONTRATO, valor_total_manual: null, tarifa_diaria: 45 })
-    ).toBe(45);
+    expect(diariaDoContrato({ ...CONTRATO, valor_total_manual: null, tarifa_diaria: 45 })).toBe(45);
   });
 
   it('o valor manual manda sobre a tarifa diária, como no congelamento de totais', () => {
