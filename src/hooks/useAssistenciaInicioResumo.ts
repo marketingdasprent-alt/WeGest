@@ -184,9 +184,8 @@ export function useAssistenciaInicioResumo(userId: string | null | undefined) {
           (max, t) => Math.max(max, diasDesde(t.created_at, agora)),
           0
         ),
-        abertosHaMuito: abertos.filter(
-          (t) => diasDesde(t.created_at, agora) > DIAS_ABERTO_DEMAIS
-        ).length,
+        abertosHaMuito: abertos.filter((t) => diasDesde(t.created_at, agora) > DIAS_ABERTO_DEMAIS)
+          .length,
       };
 
       const contagemPorCategoria = new Map<string, number>();

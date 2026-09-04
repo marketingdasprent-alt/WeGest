@@ -384,9 +384,7 @@ export function DashboardAssistencia() {
                 </span>
               </div>
               {viaturasComTicket.length === 0 ? (
-                <p className="py-2 text-[13px] text-muted-foreground">
-                  Nenhum ticket aberto.
-                </p>
+                <p className="py-2 text-[13px] text-muted-foreground">Nenhum ticket aberto.</p>
               ) : (
                 // Da mais parada para a mais recente: o que interessa aqui é
                 // quem está há mais tempo à espera.

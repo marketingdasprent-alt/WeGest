@@ -182,9 +182,7 @@ describe('DashboardAssistencia', () => {
 
   it('lista as viaturas com ticket aberto e abre o ticket', async () => {
     renderDashboard();
-    await waitFor(() =>
-      expect(screen.getByText('Viaturas com ticket aberto')).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByText('Viaturas com ticket aberto')).toBeInTheDocument());
     // Sai de TODOS os tickets abertos: filtrar por estado de oficina ou por
     // mecanico atribuido dava lista vazia — nenhum ticket usa esses campos.
     expect(screen.getByText('AA-11-BB')).toBeInTheDocument();
