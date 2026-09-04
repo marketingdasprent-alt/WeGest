@@ -44,6 +44,7 @@ export interface Candidatura {
   licenca_tvde_ficheiro_url: string | null;
   registo_criminal_url: string | null;
   comprovativo_morada_url: string | null;
+  iban: string | null;
   comprovativo_iban_url: string | null;
   outros_documentos: any[];
   status: CandidaturaStatus;
