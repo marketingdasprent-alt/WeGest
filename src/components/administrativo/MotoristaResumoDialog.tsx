@@ -127,37 +127,40 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     saveSettings(next);
   };
 
-  if (!motorista) return null;
-
   /* ───────── computed values ───────── */
-  const isImportado = motorista.tem_recibo_importado === true;
-  const gorjetaBolt = isImportado ? 0 : motorista.gorjeta_bolt || 0;
-  const gorjetaUber = isImportado ? 0 : motorista.gorjeta_uber || 0;
+  // Este bloco corre mesmo com motorista===null (o guard fica mais abaixo,
+  // depois do useGravarLiquidoSemanal): esse hook não pode vir depois de um
+  // return condicional — React Rules of Hooks — ou o mesmo dialog já montado
+  // rebenta com "Rendered more hooks than during the previous render" ao
+  // passar de fechado para aberto (motorista null → objecto).
+  const isImportado = motorista?.tem_recibo_importado === true;
+  const gorjetaBolt = isImportado ? 0 : motorista?.gorjeta_bolt || 0;
+  const gorjetaUber = isImportado ? 0 : motorista?.gorjeta_uber || 0;
   const receitas = {
-    bolt: motorista.faturado_bolt,
-    uber: motorista.faturado_uber,
+    bolt: motorista?.faturado_bolt || 0,
+    uber: motorista?.faturado_uber || 0,
     outras_receitas: isImportado ? 0 : outrasReceitas || 0,
   };
   const totalReceitas = receitas.bolt + receitas.uber + receitas.outras_receitas;
 
   const despesas = isImportado
     ? {
-        aluguer: motorista.aluguer || 0,
-        combustivel: motorista.combustivel || 0,
-        portagens: motorista.portagens || 0,
-        outros_custos: motorista.outros_custos || 0,
+        aluguer: motorista?.aluguer || 0,
+        combustivel: motorista?.combustivel || 0,
+        portagens: motorista?.portagens || 0,
+        outros_custos: motorista?.outros_custos || 0,
         caucao: 0,
         seguros: 0,
-        reparacoes: motorista.reparacoes || 0,
+        reparacoes: motorista?.reparacoes || 0,
       }
     : {
-        aluguer: motorista.aluguer || 0,
-        combustivel: motorista.combustivel || 0,
-        portagens: motorista.portagens || 0,
+        aluguer: motorista?.aluguer || 0,
+        combustivel: motorista?.combustivel || 0,
+        portagens: motorista?.portagens || 0,
         outros_custos: extraCosts.outros,
         caucao: extraCosts.caucao,
         seguros: extraCosts.seguros,
-        reparacoes: motorista.reparacoes || 0,
+        reparacoes: motorista?.reparacoes || 0,
       };
   const totalSlot = slotPeriodos.reduce((s, p) => s + p.custo, 0);
   const totalDespesas = Object.values(despesas).reduce((a, b) => a + b, 0);
@@ -180,26 +183,28 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
   const { receitasExibidas, receitaAjustada, totalAReceber, liquido, gorjeta } =
     deriveResumoFinanceiro({
       isImportado,
-      reciboVerde: motorista.recibo_verde,
+      reciboVerde: motorista?.recibo_verde ?? false,
       receitas,
       gorjetaBolt,
       gorjetaUber,
       totalDespesas,
       valoresSemanaAnterior,
-      liquidoImportado: motorista.liquido,
+      liquidoImportado: motorista?.liquido ?? 0,
     });
 
   // Guarda o líquido desta semana, tal como aparece no relatório. Grava o
   // valor já calculado acima — não o recalcula — para o histórico nunca
   // contradizer o que foi mostrado. Ver useGravarLiquidoSemanal.
   useGravarLiquidoSemanal({
-    motoristaId: motorista.motorista_id,
-    motoristaNome: motorista.driver_name,
+    motoristaId: motorista?.motorista_id,
+    motoristaNome: motorista?.driver_name,
     liquido,
     semanaInicio: dateRange.from,
     semanaFim: dateRange.to,
-    pronto: open && !loading,
+    pronto: open && !loading && !!motorista,
   });
+
+  if (!motorista) return null;
 
   const fmt = (value: number) =>
     new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);

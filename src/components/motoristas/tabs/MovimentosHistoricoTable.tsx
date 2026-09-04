@@ -1,5 +1,17 @@
+import { useState } from 'react';
 import { format } from 'date-fns';
-import { Plus, RefreshCw, ListOrdered, HandCoins, FileText, Check, X, Pencil } from 'lucide-react';
+import {
+  Plus,
+  RefreshCw,
+  ListOrdered,
+  HandCoins,
+  FileText,
+  Check,
+  X,
+  Pencil,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -60,6 +72,16 @@ export function MovimentosHistoricoTable({
   onMarcarPago,
   onCancelar,
 }: MovimentosHistoricoTableProps) {
+  // Movimentos futuros (parcelamentos de acordo, sobretudo) escondem-se por
+  // omissão: um acordo de dezenas de semanas põe o crédito ou débito mais
+  // recente lá para trás na ordenação por data, invisível sem scroll.
+  const [mostrarFuturos, setMostrarFuturos] = useState(false);
+  const hojeStr = format(new Date(), 'yyyy-MM-dd');
+  const futuros = movimentos.filter((m) => m.data_movimento > hojeStr);
+  const movimentosVisiveis = mostrarFuturos
+    ? movimentos
+    : movimentos.filter((m) => m.data_movimento <= hojeStr);
+
   return (
     <SectionCard
       icon={<ListOrdered className="h-4 w-4" />}
@@ -71,6 +93,18 @@ export function MovimentosHistoricoTable({
           Histórico de movimentos financeiros do motorista.
         </p>
         <div className="flex gap-2">
+          {futuros.length > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setMostrarFuturos((v) => !v)}>
+              {mostrarFuturos ? (
+                <EyeOff className="h-4 w-4 mr-2" />
+              ) : (
+                <Eye className="h-4 w-4 mr-2" />
+              )}
+              {mostrarFuturos
+                ? 'Ocultar futuros'
+                : `Mostrar ${futuros.length} futuro${futuros.length > 1 ? 's' : ''}`}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={onRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Atualizar
@@ -136,14 +170,16 @@ export function MovimentosHistoricoTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {movimentos.length === 0 ? (
+          {movimentosVisiveis.length === 0 ? (
             <TableRow>
               <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                Nenhum movimento financeiro registado.
+                {movimentos.length === 0
+                  ? 'Nenhum movimento financeiro registado.'
+                  : 'Sem movimentos até hoje — todos os registados são futuros.'}
               </TableCell>
             </TableRow>
           ) : (
-            movimentos.map((movimento) => (
+            movimentosVisiveis.map((movimento) => (
               <TableRow
                 key={movimento.id}
                 className={cn(
