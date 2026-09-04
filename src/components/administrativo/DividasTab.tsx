@@ -139,9 +139,6 @@ export function DividasTab() {
                 <TableHead>Motorista</TableHead>
                 <TableHead>Período</TableHead>
                 <TableHead className="text-right">Saldo</TableHead>
-                <TableHead className="text-right">Danos</TableHead>
-                <TableHead className="text-right">Caução</TableHead>
-                <TableHead className="text-right">Total</TableHead>
                 <TableHead>Estado</TableHead>
                 {canEdit && <TableHead>Ações</TableHead>}
               </TableRow>
@@ -153,18 +150,13 @@ export function DividasTab() {
                   <TableCell>
                     {formatDate(d.periodo_inicio)} – {formatDate(d.periodo_fim)}
                   </TableCell>
-                  <TableCell className={cn('text-right', d.valor_periodo < 0 && 'text-red-600')}>
-                    {formatCurrency(d.valor_periodo)}
-                  </TableCell>
-                  <TableCell className="text-right">{formatCurrency(d.valor_danos)}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(d.valor_caucao)}</TableCell>
                   <TableCell
                     className={cn(
                       'text-right font-bold',
-                      d.estado === 'por_cobrar' ? 'text-red-600' : 'text-muted-foreground'
+                      d.valor_periodo < 0 ? 'text-red-600' : 'text-muted-foreground'
                     )}
                   >
-                    {formatCurrency(d.valor_total)}
+                    {formatCurrency(d.valor_periodo)}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={ESTADO_CLASS[d.estado]}>

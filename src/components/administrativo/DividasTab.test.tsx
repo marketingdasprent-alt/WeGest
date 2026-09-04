@@ -62,10 +62,11 @@ describe('DividasTab', () => {
     useDividasMotorista.mockReturnValue({ data: [POR_COBRAR], isLoading: false });
     render(<DividasTab />);
     expect(screen.getByText('Ana Costa')).toBeInTheDocument();
-    // '€110,00' aparece duas vezes (o cartão de total E a coluna Total da
-    // linha) — testid a desambiguar o cartão, getAllByText a confirmar as duas.
+    // Danos, Caução e Total saíram da tabela — só fica o Saldo (o mesmo valor,
+    // em negativo). '€110,00' positivo só aparece no cartão de total.
     expect(screen.getByTestId('dividas-total-por-cobrar')).toHaveTextContent('€110,00');
-    expect(screen.getAllByText('€110,00')).toHaveLength(2);
+    expect(screen.getAllByText('€110,00')).toHaveLength(1);
+    expect(screen.getByText('-€110,00')).toBeInTheDocument();
   });
 
   it('o cartão de total soma só as por cobrar, mesmo com pagas no ecrã', () => {
