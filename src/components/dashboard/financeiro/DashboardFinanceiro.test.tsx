@@ -26,7 +26,14 @@ vi.mock('@/hooks/useContratosARenovar', () => ({
   useContratosARenovar: () => ({ loading: false, contratos: [] }),
 }));
 vi.mock('@/hooks/useContasAReceber', () => ({
-  useContasAReceber: () => ({ data: [] }),
+  useContasAReceber: () => ({
+    data: {
+      totalAReceber: 500,
+      emAberto: [
+        { id: 'cobranca-1', destinatarioNome: 'Maria Silva', contratoId: 'contrato-1', saldo: 500, diasEmAberto: 45 },
+      ],
+    },
+  }),
 }));
 
 describe('DashboardFinanceiro', () => {
@@ -35,5 +42,10 @@ describe('DashboardFinanceiro', () => {
     await waitFor(() => expect(screen.getByText('Bolt')).toBeInTheDocument());
     expect(screen.getByText('Uber')).toBeInTheDocument();
     expect(screen.getByText('BP')).toBeInTheDocument();
+  });
+
+  it('mostra as cobranças em aberto', async () => {
+    render(<DashboardFinanceiro />);
+    await waitFor(() => expect(screen.getByText('Maria Silva')).toBeInTheDocument());
   });
 });

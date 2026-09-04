@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { subWeeks, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { subWeeks, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { Wallet, FileText, CalendarClock } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
@@ -57,7 +57,11 @@ export function DashboardFinanceiro() {
             >
               Mês
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setReferencia(subWeeks(referencia, granularidade === 'semana' ? 1 : 4))}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setReferencia(granularidade === 'semana' ? subWeeks(referencia, 1) : subMonths(referencia, 1))}
+            >
               ◀
             </Button>
           </div>
