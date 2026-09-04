@@ -495,7 +495,7 @@ const FormularioPublico = () => {
               alt={
                 organizacao?.logo_url ? `Logótipo de ${organizacao.nome ?? ''}`.trim() : 'WeGest'
               }
-              className="h-20 mx-auto object-contain"
+              className="h-60 mx-auto object-contain"
             />
           </motion.div>
 
@@ -599,12 +599,6 @@ const FormularioPublico = () => {
                       {isSubmitting ? 'Enviando...' : 'Enviar Formulário'}
                     </Button>
                   )}
-                </div>
-
-                <div className="text-center mt-6">
-                  <p className="text-sm font-medium" style={{ color: marca.cor }}>
-                    ⚡ Preencha todos os campos obrigatórios
-                  </p>
                 </div>
               </>
             )}
