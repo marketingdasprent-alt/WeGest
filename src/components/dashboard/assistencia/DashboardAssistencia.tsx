@@ -15,10 +15,11 @@ import { ChartMetric } from '@/components/dashboard/ChartMetric';
 import { PeriodoSelector } from '@/components/dashboard/PeriodoSelector';
 import { getPeriodRange, type DateRange, type PeriodPreset } from '@/components/dashboard/periodo';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAssistenciaInicioResumo, type Prioridade } from '@/hooks/useAssistenciaInicioResumo';
-import { useViaturasNaOficina } from '@/hooks/useViaturasNaOficina';
-import { usePermissions } from '@/hooks/usePermissions';
-import { RECURSOS } from '@/utils/permissions';
+import {
+  useAssistenciaInicioResumo,
+  DIAS_ABERTO_DEMAIS,
+  type Prioridade,
+} from '@/hooks/useAssistenciaInicioResumo';
 import { construirSerieTickets, totaisDaSerie } from './serieTickets';
 
 const TicketsChart = lazy(() => import('./TicketsChart'));
@@ -50,12 +51,10 @@ export function DashboardAssistencia() {
     semPrioridade,
     porAtribuir,
     atrasados,
+    viaturasComTicket,
     movimentos,
     loading,
   } = useAssistenciaInicioResumo(user?.id);
-  const { data: naOficina } = useViaturasNaOficina();
-  const { hasAccessToResource } = usePermissions();
-  const podeVerViaturas = hasAccessToResource(RECURSOS.VIATURAS_VER);
 
   // Período do gráfico — o mesmo seletor das outras duas dashboards, e como lá
   // só filtra este gráfico: os KPIs e os alertas são sempre do momento actual.
@@ -66,7 +65,6 @@ export function DashboardAssistencia() {
   const serie = useMemo(() => construirSerieTickets(movimentos, range), [movimentos, range]);
   const totais = totaisDaSerie(serie);
 
-  const oficina = naOficina ?? [];
   const urgentes = prioridades.find((p) => p.prioridade === 'urgente')?.contagem ?? 0;
 
   const linhasPrioridade = [
@@ -206,15 +204,22 @@ export function DashboardAssistencia() {
               >
                 <span className="text-[11px] text-muted-foreground">por resolver</span>
               </KpiItem>
+              {/* Idade, não prazo: nenhum ticket tem data estimada preenchida,
+                  por isso "fora do prazo" dava 0 para sempre — e escondia que o
+                  mais antigo está aberto há mais de cem dias. */}
               <KpiItem
                 icon={CalendarClock}
                 cor="destructive"
-                label="Fora do prazo"
-                valor={kpis.prazoUltrapassado}
+                label="Mais antigo"
+                valor={kpis.diasMaisAntigo > 0 ? `${kpis.diasMaisAntigo}d` : '—'}
                 onClick={() => navigate('/assistencia')}
                 index={3}
               >
-                <span className="text-[11px] text-muted-foreground">data estimada passada</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {kpis.abertosHaMuito > 0
+                    ? `${kpis.abertosHaMuito} há +${DIAS_ABERTO_DEMAIS} dias`
+                    : 'nada a acumular'}
+                </span>
               </KpiItem>
               <KpiItem
                 icon={CircleCheck}
@@ -274,36 +279,39 @@ export function DashboardAssistencia() {
                 // Só as categorias COM tickets, e com barra de proporção: em
                 // caixas iguais, dez categorias a zero pesavam tanto no ecrã
                 // como as três que precisavam de trabalho.
-                // `content-start` e sem scroll: são poucas linhas e cabem
-                // sempre — a esticar pela altura do cartão ficavam separadas
-                // por buracos, e o `overflow` trazia atrás uma barra
-                // horizontal por causa da margem negativa das linhas.
-                <div className="grid grid-cols-1 content-start gap-x-6 sm:grid-cols-2">
-                  {linhasCategoria.map((c, i) => (
+                // Sem scroll (`overflow` trazia atrás uma barra horizontal por
+                // causa da margem negativa das linhas) mas a ESTICAR: as linhas
+                // repartem a altura que sobra no cartão, em vez de ficarem
+                // amontoadas em cima com um vazio por baixo. O conteúdo de cada
+                // uma centra-se na sua faixa, senão a barra descolava do nome.
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:min-h-0 xl:flex-1">
+                  {linhasCategoria.map((c) => (
                     <button
                       key={c.id}
                       type="button"
-                      onClick={() => navigate('/assistencia')}
-                      className={cn(
-                        'rounded-md border-b border-border/60 py-2 text-left transition-colors hover:bg-muted/60',
-                        'last:border-b-0',
-                        i >= linhasCategoria.length - (linhasCategoria.length % 2 === 0 ? 2 : 1) &&
-                          'sm:border-b-0'
-                      )}
+                      onClick={() => navigate(`/assistencia?categoria=${c.id}`)}
+                      // O nome e a contagem estão em spans separados; o leitor
+                      // de ecrã leria "Acidente 3" sem dizer 3 de quê.
+                      aria-label={`${c.nome}: ${c.contagem} ticket${c.contagem === 1 ? '' : 's'}`}
+                      className="flex flex-col justify-center rounded-lg border border-border/60 bg-muted/20 px-3 py-3 text-left transition-colors hover:bg-muted/60"
                     >
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="truncate text-[13px] font-medium" title={c.nome}>
+                        <span className="truncate text-[13px] font-semibold" title={c.nome}>
                           {c.nome}
                         </span>
                         <span className="shrink-0 text-[13px] font-semibold tabular-nums">
                           {c.contagem}
                         </span>
                       </div>
-                      <span className="mt-1.5 block h-[3px] w-full overflow-hidden rounded-full bg-foreground/[0.07]">
+                      <span className="mt-2 block h-2.5 w-full overflow-hidden rounded-full bg-foreground/[0.08]">
                         <span
                           className="block h-full rounded-full"
                           style={{
-                            width: `${(c.contagem / Math.max(1, kpis.porResolver)) * 100}%`,
+                            // Piso de 6%: com a barra grossa e as pontas
+                            // redondas, uma categoria com 1 em 12 desenhava-se
+                            // como um ponto e não como barra. Só a LARGURA leva
+                            // o piso — o número ao lado é sempre o real.
+                            width: `${Math.max(6, (c.contagem / Math.max(1, kpis.porResolver)) * 100)}%`,
                             background: c.cor,
                           }}
                         />
@@ -369,40 +377,48 @@ export function DashboardAssistencia() {
               <div className="mb-3 flex shrink-0 items-baseline justify-between gap-3">
                 <h2 className="flex items-center gap-2 text-sm font-semibold">
                   <Car className="h-4 w-4 text-primary" />
-                  Na oficina
+                  Viaturas com ticket aberto
                 </h2>
                 <span className="text-[11px] text-muted-foreground">
-                  {oficina.length} viatura{oficina.length === 1 ? '' : 's'} parada
-                  {oficina.length === 1 ? '' : 's'}
+                  {viaturasComTicket.length} por resolver
                 </span>
               </div>
-              {oficina.length === 0 ? (
-                <p className="py-2 text-[13px] text-muted-foreground">
-                  Nenhuma viatura com entrada por fechar.
-                </p>
+              {viaturasComTicket.length === 0 ? (
+                <p className="py-2 text-[13px] text-muted-foreground">Nenhum ticket aberto.</p>
               ) : (
-                <div className="min-h-0 flex-1 divide-y divide-border/60 overflow-hidden">
-                  {/* `/viaturas/:id` pede VIATURAS_VER, que a Assistência não
-                      tem garantidamente — sem ela a linha mostra a informação
-                      mas não leva a uma página bloqueada. */}
-                  {oficina.slice(0, 6).map((r) => (
+                // Da mais parada para a mais recente: o que interessa aqui é
+                // quem está há mais tempo à espera.
+                //
+                // `-mx-4` anula o padding do cartão: é o contentor que sangra
+                // até à borda, não cada linha. Assim o realce do hover E os
+                // riscos entre linhas chegam os dois ao fim — antes a linha
+                // esticava-se 8px de cada lado (`-mx-2`) contra 16px de
+                // padding, e o realce ficava a meio caminho da borda.
+                // As linhas repartem a altura (`flex-1`) em vez de ficarem
+                // encostadas ao topo com um vazio por baixo.
+                <div className="-mx-4 flex min-h-0 flex-1 flex-col divide-y divide-border/60">
+                  {viaturasComTicket.slice(0, 6).map((t) => (
                     <button
-                      key={r.id}
+                      key={t.id}
                       type="button"
-                      disabled={!podeVerViaturas}
-                      onClick={() => navigate(`/viaturas/${r.viatura_id}`)}
-                      className="-mx-2 flex w-[calc(100%+1rem)] items-start justify-between gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/60 disabled:pointer-events-none"
+                      onClick={() => navigate(`/assistencia/${t.id}`)}
+                      className="flex flex-1 items-center justify-between gap-3 px-4 text-left transition-colors hover:bg-muted/60"
                     >
                       <div className="min-w-0">
-                        <div className="truncate text-[13px] font-medium">
-                          {r.matricula ?? 'sem matrícula'}
+                        <div className="truncate text-sm font-semibold">
+                          {t.matricula ?? `#${t.numero}`}
                         </div>
-                        <div className="truncate text-[11px] text-muted-foreground">
-                          {[r.marca, r.modelo].filter(Boolean).join(' ') || r.descricao || '—'}
-                        </div>
+                        <div className="truncate text-xs text-muted-foreground">{t.titulo}</div>
                       </div>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">
-                        {r.oficina ?? '—'}
+                      <span
+                        className={cn(
+                          'shrink-0 text-xs tabular-nums',
+                          t.diasAberto > DIAS_ABERTO_DEMAIS
+                            ? 'font-semibold text-destructive'
+                            : 'text-muted-foreground'
+                        )}
+                      >
+                        {t.diasAberto}d
                       </span>
                     </button>
                   ))}

@@ -13,10 +13,6 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' } }),
 }));
 
-vi.mock('@/hooks/usePermissions', () => ({
-  usePermissions: () => ({ hasAccessToResource: () => true }),
-}));
-
 // O cabeçalho partilhado é testado a sério em DashboardFrota.test.tsx (com
 // QueryClientProvider); aqui só interessa que recebe o perfil certo.
 vi.mock('@/components/dashboard/DashboardInicioHeader', () => ({
@@ -32,7 +28,8 @@ vi.mock('@/hooks/useAssistenciaInicioResumo', async (importOriginal) => ({
       naoAtribuidos: 3,
       atribuidosAMim: 2,
       resolvidosHoje: 1,
-      prazoUltrapassado: 2,
+      diasMaisAntigo: 108,
+      abertosHaMuito: 4,
     },
     categorias: [
       { id: 'c1', nome: 'Mecanotécnico', cor: '#3B82F6', icone: 'wrench', contagem: 3 },
@@ -52,11 +49,13 @@ vi.mock('@/hooks/useAssistenciaInicioResumo', async (importOriginal) => ({
         id: 't1',
         numero: 41,
         titulo: 'Fuga de óleo',
+        status: 'aberto',
         prioridade: 'alta',
         atribuido: false,
         criadoEm: '2026-08-20T10:00:00Z',
         dataEstimada: null,
         diasAberto: 15,
+        matricula: null,
       },
     ],
     atrasados: [
@@ -64,34 +63,32 @@ vi.mock('@/hooks/useAssistenciaInicioResumo', async (importOriginal) => ({
         id: 't2',
         numero: 37,
         titulo: 'Travões a chiar',
+        status: 'aberto',
         prioridade: 'urgente',
         atribuido: true,
         criadoEm: '2026-08-10T10:00:00Z',
         dataEstimada: '2026-08-30',
         diasAberto: 25,
+        matricula: null,
+      },
+    ],
+    viaturasComTicket: [
+      {
+        id: 't3',
+        numero: 52,
+        titulo: 'Embraiagem a patinar',
+        status: 'aberto',
+        prioridade: 'media',
+        atribuido: true,
+        criadoEm: '2026-09-01T10:00:00Z',
+        dataEstimada: null,
+        diasAberto: 3,
+        matricula: 'AA-11-BB',
       },
     ],
     movimentos: [
       { dia: '2026-09-01', abertos: 3, resolvidos: 1 },
       { dia: '2026-09-02', abertos: 2, resolvidos: 4 },
-    ],
-  }),
-}));
-
-vi.mock('@/hooks/useViaturasNaOficina', () => ({
-  useViaturasNaOficina: () => ({
-    data: [
-      {
-        id: 'r1',
-        viatura_id: 'v1',
-        matricula: 'AA-11-BB',
-        marca: 'Renault',
-        modelo: 'Clio',
-        descricao: null,
-        oficina: 'Oficina Central',
-        data_entrada: '2026-09-01',
-        km_entrada: 120000,
-      },
     ],
   }),
 }));
@@ -127,7 +124,7 @@ describe('DashboardAssistencia', () => {
     await waitFor(() => expect(screen.getByText('Por resolver')).toBeInTheDocument());
     expect(screen.getByText('Não atribuídos')).toBeInTheDocument();
     expect(screen.getByText('Atribuídos a mim')).toBeInTheDocument();
-    expect(screen.getByText('Fora do prazo')).toBeInTheDocument();
+    expect(screen.getByText('Mais antigo')).toBeInTheDocument();
     expect(screen.getByText('Resolvidos hoje')).toBeInTheDocument();
   });
 
@@ -144,6 +141,19 @@ describe('DashboardAssistencia', () => {
     // 8 por resolver, 3 + 2 categorizados: os outros 3 não desaparecem do
     // cartão só por não terem categoria.
     await waitFor(() => expect(screen.getByText('Sem categoria')).toBeInTheDocument());
+  });
+
+  it('leva o filtro da categoria para a lista de tickets', async () => {
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Mecanotécnico')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Mecanotécnico'));
+    expect(navegou).toHaveBeenCalledWith('/assistencia?categoria=c1');
+
+    // "Sem categoria" também filtra — é a única forma de chegar aos tickets
+    // por classificar a partir daqui.
+    fireEvent.click(screen.getByText('Sem categoria'));
+    expect(navegou).toHaveBeenCalledWith('/assistencia?categoria=sem-categoria');
   });
 
   it('abre o ticket em causa a partir de "Precisa de atenção"', async () => {
@@ -170,13 +180,16 @@ describe('DashboardAssistencia', () => {
     expect(screen.getByText('Baixa')).toBeInTheDocument();
   });
 
-  it('lista as viaturas na oficina e abre a ficha da viatura', async () => {
+  it('lista as viaturas com ticket aberto e abre o ticket', async () => {
     renderDashboard();
-    await waitFor(() => expect(screen.getByText('Na oficina')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Viaturas com ticket aberto')).toBeInTheDocument());
+    // Sai de TODOS os tickets abertos: filtrar por estado de oficina ou por
+    // mecanico atribuido dava lista vazia — nenhum ticket usa esses campos.
+    expect(screen.getByText('AA-11-BB')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('AA-11-BB'));
 
-    expect(navegou).toHaveBeenCalledWith('/viaturas/v1');
+    expect(navegou).toHaveBeenCalledWith('/assistencia/t3');
   });
 
   it('deixa escolher o período do gráfico de tickets', async () => {
