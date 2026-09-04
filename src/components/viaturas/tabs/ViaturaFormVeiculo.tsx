@@ -318,25 +318,39 @@ export function ViaturaFormVeiculo({
           const tipoId = form.watch('tipo_id');
           const modeloId = form.watch('modelo_id');
           const isTvde = viaturasTipos.find((t) => t.id === tipoId)?.elegivel_tvde ?? false;
-          const tarifaTvdeModelo = isTvde
-            ? tarifasTvdeModelo.find((t) => t.modelo_id === modeloId)
-            : undefined;
+          // TODAS as tarifas do modelo, não uma. O mesmo modelo está em mais do
+          // que uma tarifa activa com frequência (Açores 225 € e TVDE - Base
+          // 325 € para o mesmo carro, por exemplo) e o `.find()` mostrava a que
+          // a base devolvesse primeiro — sem ordem garantida, podia ser
+          // qualquer uma das duas, e a diferença chega aos 100 €/semana.
+          // Ordenado por nome para a ordem não depender da base de dados.
+          const tarifasTvdeDoModelo = isTvde
+            ? tarifasTvdeModelo
+                .filter((t) => t.modelo_id === modeloId)
+                .slice()
+                .sort((a, b) => a.tarifa_nome.localeCompare(b.tarifa_nome, 'pt'))
+            : [];
 
-          if (tarifas.length === 0 && tarifaTvdeModelo) {
-            const fmtTvde = new Intl.NumberFormat('pt-PT', {
-              style: 'currency',
-              currency: 'EUR',
-            }).format(tarifaTvdeModelo.preco_semana);
+          if (tarifas.length === 0 && tarifasTvdeDoModelo.length > 0) {
+            const fmtTvde = (v: number) =>
+              new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v);
             return (
               <div className="md:col-span-3 rounded-lg border bg-muted/20 p-4">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                  Tarifa TVDE (por modelo)
+                  {tarifasTvdeDoModelo.length > 1
+                    ? 'Tarifas TVDE (por modelo)'
+                    : 'Tarifa TVDE (por modelo)'}
                 </p>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">{tarifaTvdeModelo.tarifa_nome}</p>
-                  <p className="text-sm font-semibold text-primary">
-                    {fmtTvde} <span className="text-xs text-muted-foreground">/semana</span>
-                  </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {tarifasTvdeDoModelo.map((t) => (
+                    <div key={t.tarifa_nome} className="space-y-1">
+                      <p className="text-xs text-muted-foreground">{t.tarifa_nome}</p>
+                      <p className="text-sm font-semibold text-primary">
+                        {fmtTvde(t.preco_semana)}{' '}
+                        <span className="text-xs text-muted-foreground">/semana</span>
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </div>
             );
