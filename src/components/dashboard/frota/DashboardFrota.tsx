@@ -2,10 +2,6 @@ import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } fro
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import { useTiLinkPublico, useTiTicketsAbertos } from '@/hooks/useTiTickets';
-import { linkListaTickets } from '@/lib/ticketsUrl';
-import { usePermissions } from '@/hooks/usePermissions';
-import { RECURSOS } from '@/utils/permissions';
 import {
   CircleCheck,
   Car,
@@ -16,9 +12,6 @@ import {
   ShieldAlert,
   Wallet,
   UserPlus,
-  RefreshCw,
-  LayoutDashboard,
-  LifeBuoy,
   CalendarRange,
   ChevronRight,
 } from 'lucide-react';
@@ -42,10 +35,9 @@ import {
   eachDayOfInterval,
 } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
+import { DashboardInicioHeader } from '@/components/dashboard/DashboardInicioHeader';
 import { useDashboardVariant } from '@/hooks/useDashboardVariant';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 import { deriveViaturaEstado, ESTADOS_EM_USO } from '@/lib/viaturas';
@@ -247,27 +239,8 @@ function useCountUp(target: number, durationMs = 850): number {
 export function DashboardFrota() {
   const { toast } = useToast();
   const navigate = useNavigate();
-  // Link público de pedidos de informática da própria organização. Abre em
-  // separador novo porque o objectivo é poder ser partilhado com quem não tem
-  // conta no WeGest.
-  const { data: tiToken } = useTiLinkPublico();
-  const abrirTicketsTI = () => {
-    if (!tiToken) {
-      toast({
-        title: 'Link de pedidos indisponível',
-        description: 'A organização ainda não tem link de pedidos de informática.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    window.open(linkListaTickets(tiToken), '_blank', 'noopener,noreferrer');
-  };
-  // Mesma condição que decide quem vê a lista de pedidos em TicketsTI. Mostrar
-  // o número a quem não pode abrir a lista seria dar um aviso sobre algo que
-  // essa pessoa não consegue ir ver.
-  const { isAdmin, canEdit } = usePermissions();
-  const podeGerirTickets = isAdmin || canEdit(RECURSOS.TI_TICKETS_GERIR);
-  const { data: ticketsPorResolver = 0 } = useTiTicketsAbertos(podeGerirTickets);
+  // O botão de pedidos de informática e as suas permissões vivem agora em
+  // DashboardInicioHeader, partilhado pelas três dashboards.
   const { isExecutivo } = useDashboardVariant();
   // Query própria (não faz parte do fetchData sequencial abaixo) — dá-lhe o
   // seu próprio loading, em vez de ficar bloqueada atrás do resto da homepage.
@@ -687,42 +660,11 @@ export function DashboardFrota() {
     <div className="space-y-3">
       {/* O cabeçalho aperta-se aqui (e só aqui): a homepage é a única
           página desenhada para caber num ecrã sem scroll. */}
-      <StickyPageHeader title="Início" icon={LayoutDashboard} className="lg:pb-4 lg:mb-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={fetchData}
-          disabled={atualizando}
-          title="Atualizar"
-        >
-          <RefreshCw className={cn('h-4 w-4', atualizando && 'animate-spin')} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative"
-          onClick={abrirTicketsTI}
-          title={
-            ticketsPorResolver > 0
-              ? `Pedidos de informática — ${ticketsPorResolver} por resolver`
-              : 'Pedidos de informática'
-          }
-        >
-          <LifeBuoy className="h-4 w-4" />
-          {/* Em baixo do ícone, e não em cima como no sino: os dois avisos
-              vivem no mesmo cabeçalho e a posição é o que os distingue de
-              relance. */}
-          {ticketsPorResolver > 0 && (
-            <span
-              aria-label={`${ticketsPorResolver} pedidos de informática por resolver`}
-              className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground"
-            >
-              {ticketsPorResolver > 99 ? '99+' : ticketsPorResolver}
-            </span>
-          )}
-        </Button>
-        <ThemeToggle />
-      </StickyPageHeader>
+      <DashboardInicioHeader
+        onAtualizar={fetchData}
+        atualizando={atualizando}
+        className="lg:pb-4 lg:mb-4"
+      />
 
       {loading ? (
         <DashboardSkeleton />

@@ -1,6 +1,6 @@
-import { LayoutDashboard, Wrench } from 'lucide-react';
+import { Wrench } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
-import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
+import { DashboardInicioHeader } from '@/components/dashboard/DashboardInicioHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAssistenciaInicioResumo } from '@/hooks/useAssistenciaInicioResumo';
 
@@ -10,15 +10,7 @@ export function DashboardAssistencia() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      <StickyPageHeader title="Início" />
-
-      <div className="flex items-center gap-2">
-        <LayoutDashboard className="h-5 w-5 text-primary" />
-        <h1 className="text-xl font-bold">Início</h1>
-        <span className="ml-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-          Assistência
-        </span>
-      </div>
+      <DashboardInicioHeader perfil="Assistência" />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Por resolver" value={loading ? '—' : kpis.porResolver} icon={Wrench} color="amber" />

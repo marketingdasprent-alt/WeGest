@@ -6,6 +6,12 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' } }),
 }));
 
+// O cabeçalho partilhado é testado a sério em DashboardFrota.test.tsx (com
+// QueryClientProvider); aqui só interessa que recebe o perfil certo.
+vi.mock('@/components/dashboard/DashboardInicioHeader', () => ({
+  DashboardInicioHeader: ({ perfil }: { perfil?: string }) => <div>perfil:{perfil}</div>,
+}));
+
 vi.mock('@/hooks/useAssistenciaInicioResumo', () => ({
   useAssistenciaInicioResumo: () => ({
     loading: false,
@@ -18,9 +24,9 @@ vi.mock('@/hooks/useAssistenciaInicioResumo', () => ({
 }));
 
 describe('DashboardAssistencia', () => {
-  it('mostra o cabeçalho com o rótulo do perfil', async () => {
+  it('identifica-se ao cabeçalho como o perfil Assistência', async () => {
     render(<DashboardAssistencia />);
-    await waitFor(() => expect(screen.getByText('Assistência')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/perfil:Assistência/)).toBeInTheDocument());
   });
 
   it('mostra os KPIs do topo', async () => {

@@ -1,9 +1,9 @@
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
-import { LayoutDashboard, CircleDollarSign, Wallet, FileText, Banknote } from 'lucide-react';
+import { CircleDollarSign, Wallet, FileText, Banknote } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
-import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
+import { DashboardInicioHeader } from '@/components/dashboard/DashboardInicioHeader';
 import { useResumoPlataformas, type ResumoPlataforma } from '@/hooks/useResumoPlataformas';
 import { useFaturacaoResumoPeriodo } from '@/hooks/useFaturacaoResumoPeriodo';
 
@@ -56,15 +56,7 @@ export function DashboardFinanceiro() {
 
   return (
     <div className="p-4 md:p-6 space-y-5">
-      <StickyPageHeader title="Início" />
-
-      <div className="flex items-center gap-2">
-        <LayoutDashboard className="h-5 w-5 text-primary" />
-        <h1 className="text-xl font-bold">Início</h1>
-        <span className="ml-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-          Financeiro
-        </span>
-      </div>
+      <DashboardInicioHeader perfil="Financeiro" />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard

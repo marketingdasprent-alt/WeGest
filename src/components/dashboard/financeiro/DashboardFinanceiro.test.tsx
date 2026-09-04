@@ -2,6 +2,12 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { DashboardFinanceiro } from './DashboardFinanceiro';
 
+// O cabeçalho partilhado é testado a sério em DashboardFrota.test.tsx (com
+// QueryClientProvider); aqui só interessa que recebe o perfil certo.
+vi.mock('@/components/dashboard/DashboardInicioHeader', () => ({
+  DashboardInicioHeader: ({ perfil }: { perfil?: string }) => <div>perfil:{perfil}</div>,
+}));
+
 vi.mock('@/hooks/useResumoPlataformas', () => ({
   useResumoPlataformas: () => ({
     loading: false,
@@ -24,9 +30,9 @@ vi.mock('@/hooks/useFaturacaoResumoPeriodo', () => ({
 }));
 
 describe('DashboardFinanceiro', () => {
-  it('mostra o cabeçalho com o rótulo do perfil', async () => {
+  it('identifica-se ao cabeçalho como o perfil Financeiro', async () => {
     render(<DashboardFinanceiro />);
-    await waitFor(() => expect(screen.getByText('Financeiro')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/perfil:Financeiro/)).toBeInTheDocument());
   });
 
   it('mostra os KPIs do topo', async () => {
