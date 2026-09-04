@@ -14089,6 +14089,16 @@ export type Database = {
         Returns: number
       }
       current_user_cargo: { Args: never; Returns: string }
+      dashboard_resumo_plataformas: {
+        Args: { p_org_id: string; p_periodo_fim: string; p_periodo_inicio: string }
+        Returns: {
+          comissao: number
+          plataforma: string
+          tipo_valor: string
+          valor: number
+          valor_bruto: number
+        }[]
+      }
       devolver_cartao_frota: {
         Args: { p_cartao_id: string }
         Returns: undefined

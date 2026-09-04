@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -8,10 +7,6 @@ import {
   CalendarClock,
   Wrench,
   TrendingUp,
-  FileText,
-  ShieldAlert,
-  Wallet,
-  UserPlus,
   CalendarRange,
   ChevronRight,
 } from 'lucide-react';
@@ -20,21 +15,7 @@ import { Card } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import type { DateRange as DayPickerRange } from 'react-day-picker';
-import {
-  format,
-  startOfWeek,
-  startOfMonth,
-  startOfYear,
-  endOfMonth,
-  endOfDay,
-  subMonths,
-  addMonths,
-  differenceInCalendarDays,
-  eachMonthOfInterval,
-  eachWeekOfInterval,
-  eachDayOfInterval,
-} from 'date-fns';
-import { pt } from 'date-fns/locale';
+import { startOfMonth, endOfDay } from 'date-fns';
 import { DashboardInicioHeader } from '@/components/dashboard/DashboardInicioHeader';
 import { KpiItem, KpiBar, KpiSparkline } from '@/components/dashboard/KpiItem';
 import { ChartMetric } from '@/components/dashboard/ChartMetric';
@@ -49,12 +30,21 @@ import {
 import {
   AlertaCategoriaRow,
   type CategoriaAlerta,
-  type CorAlerta,
 } from '@/components/dashboard/AlertaCategoriaRow';
 import { useDashboardVariant } from '@/hooks/useDashboardVariant';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
+import { useContagemAnimada } from '@/hooks/useContagemAnimada';
+import {
+  buildChartPoints,
+  formatCurrency,
+  granularidadePara,
+  normalizarMatricula,
+  type EventoAtividade,
+} from './atividade';
+import { construirAlertasFrota, classificarContratos } from './alertas';
+import { fetchViaturasFrota, fetchAlertasFrota } from '@/hooks/dashboardFrotaQueries';
 import { deriveViaturaEstado, ESTADOS_EM_USO } from '@/lib/viaturas';
 import { useContasAReceber } from '@/hooks/useContasAReceber';
 import { CheckinCheckoutHistoricoCard } from '@/components/dashboard/CheckinCheckoutHistoricoCard';
@@ -74,130 +64,6 @@ interface FleetCounts {
   alugadas: number;
   reservadas: number;
   oficina: number;
-}
-
-interface EventoAtividade {
-  tipo: string;
-  data_inicio: string;
-  valor_aluguer: number;
-}
-
-type Granularidade = 'dia' | 'semana' | 'mes';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
-}
-
-function normalizarMatricula(m: string | null | undefined): string {
-  return (m ?? '').replace(/[-\s]/g, '').toUpperCase();
-}
-
-/** A granularidade não é escolha do utilizador — se fosse, teríamos dois
- *  controlos de tempo lado a lado a dizer "Semana" e a parecerem o mesmo. Sai
- *  do tamanho do intervalo, procurando ~5 a 15 barras: um ano ao dia dava 365
- *  barras ilegíveis, uma semana ao mês dava uma só. */
-function granularidadePara({ from, to }: DateRange): Granularidade {
-  const dias = differenceInCalendarDays(to, from) + 1;
-  if (dias <= 14) return 'dia';
-  if (dias <= 92) return 'semana';
-  return 'mes';
-}
-
-/** Constrói os pontos do gráfico de atividade a partir dos eventos já
- *  carregados (não faz novas queries) — o intervalo vem do seletor de período
- *  e os eventos já foram buscados para esse mesmo intervalo. */
-function buildChartPoints(
-  eventos: EventoAtividade[],
-  inicio: Date,
-  fim: Date,
-  granularidade: Granularidade
-): ChartPoint[] {
-  const calcBucket = (
-    bucketStart: Date,
-    bucketEnd: Date,
-    label: string,
-    periodo: string
-  ): ChartPoint => {
-    const bStartStr = bucketStart.toISOString().split('T')[0];
-    const bEndStr = bucketEnd.toISOString().split('T')[0];
-
-    const eventosBucket = eventos.filter((ev) => {
-      const evDate = ev.data_inicio.split('T')[0];
-      return evDate >= bStartStr && evDate <= bEndStr;
-    });
-    const entregasBucket = eventosBucket.filter((ev) => ev.tipo === 'entrega');
-    const alugados = entregasBucket.length;
-    const devolvidos = eventosBucket.filter(
-      (ev) => ev.tipo === 'devolucao' || ev.tipo === 'recolha'
-    ).length;
-    const receitaContratada = entregasBucket.reduce((sum, ev) => sum + ev.valor_aluguer, 0);
-
-    return { periodo, label, receitaContratada, alugados, devolvidos };
-  };
-
-  if (granularidade === 'dia') {
-    const dias = eachDayOfInterval({ start: inicio, end: fim });
-    return dias.map((dia) =>
-      calcBucket(dia, dia, format(dia, 'dd MMM', { locale: pt }), format(dia, 'dd/MM'))
-    );
-  }
-
-  if (granularidade === 'mes') {
-    const meses = eachMonthOfInterval({ start: inicio, end: fim });
-    return meses.map((mesInicio, i) => {
-      // O último balde fecha em `fim` (o mês em curso está incompleto), os
-      // restantes no fim do próprio mês.
-      const mesFim = i + 1 < meses.length ? endOfMonth(mesInicio) : fim;
-      return calcBucket(
-        mesInicio,
-        mesFim,
-        format(mesInicio, 'MMMM yyyy', { locale: pt }),
-        format(mesInicio, 'MMM yy', { locale: pt })
-      );
-    });
-  }
-
-  const semanas = eachWeekOfInterval({ start: inicio, end: fim }, { weekStartsOn: 1 });
-  return semanas.map((semanaInicio, i) => {
-    const semanaFim = i + 1 < semanas.length ? new Date(semanas[i + 1].getTime() - 1) : fim;
-    return calcBucket(
-      semanaInicio,
-      semanaFim,
-      `Semana ${format(semanaInicio, 'dd MMM', { locale: pt })}`,
-      format(semanaInicio, 'dd/MM', { locale: pt })
-    );
-  });
-}
-
-/** Anima um valor de 0 até `target` — respeita prefers-reduced-motion.
- *  Reanima do zero sempre que `target` muda (ex: depois de um refresh), o
- *  que é uma leitura aceitável de "os dados actualizaram-se". */
-function useCountUp(target: number, durationMs = 850): number {
-  const [display, setDisplay] = useState(0);
-  const prefersReduced = useRef(
-    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-
-  useEffect(() => {
-    if (prefersReduced.current) {
-      setDisplay(target);
-      return;
-    }
-    let raf: number;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const p = Math.min(1, (now - start) / durationMs);
-      const eased = 1 - Math.pow(1 - p, 3);
-      setDisplay(Math.round(target * eased));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, durationMs]);
-
-  return display;
 }
 
 // ── Dashboard Component ───────────────────────────────────────────────────────
@@ -289,10 +155,8 @@ export function DashboardFrota() {
       // ── Frota — o estado é derivado das ocupações ativas (contrato /
       // reserva / movimentação / reparação), igual à listagem da Frota — não
       // do campo `status` (em_uso manual foi descontinuado).
-      const [{ data: viaturas }, ocupacao] = await Promise.all([
-        supabase
-          .from('viaturas')
-          .select('id, status, is_slot, is_vendida, matricula, valor_aluguer'),
+      const [viaturas, ocupacao] = await Promise.all([
+        fetchViaturasFrota(),
         fetchViaturasOcupacao(),
       ]);
 
@@ -339,46 +203,8 @@ export function DashboardFrota() {
       limitExtintor.setDate(limitExtintor.getDate() + 15);
       const extStrStr = limitExtintor.toISOString().split('T')[0];
 
-      const [
-        { data: extintoresData },
-        { data: contratosAtivos, error: contratosErr },
-        { count: pendentes },
-        { data: eventosMesData },
-      ] = await Promise.all([
-        supabase
-          .from('viaturas')
-          .select(
-            `
-          id,
-          matricula,
-          extintor_validade,
-          motorista_viaturas(
-            status,
-            motoristas_ativos(nome)
-          )
-        `
-          )
-          .not('extintor_validade', 'is', null)
-          .lte('extintor_validade', extStrStr)
-          .order('extintor_validade', { ascending: true }),
-        supabase
-          .from('contratos')
-          .select(
-            'id, numero_contrato, data_inicio, data_fim, duracao_meses, motorista_nome, motorista_id, viatura_id, viaturas:viatura_id(matricula)'
-          )
-          .eq('status', 'ativo')
-          .not('data_inicio', 'is', null),
-        supabase
-          .from('motorista_candidaturas')
-          .select('id', { count: 'exact', head: true })
-          .in('status', ['submetido', 'em_analise']),
-        supabase
-          .from('calendario_eventos')
-          .select('tipo, data_inicio, titulo')
-          .in('tipo', ['entrega', 'devolucao', 'recolha'])
-          .gte('data_inicio', range.from.toISOString())
-          .lte('data_inicio', range.to.toISOString()),
-      ]);
+      const { extintoresData, contratosAtivos, contratosErr, pendentes, eventosMesData } =
+        await fetchAlertasFrota(extStrStr, range.from.toISOString(), range.to.toISOString());
 
       // ── Extintores ────────────────────────────────────────────────────
       const extintoresComMotorista = (extintoresData || []).map((v) => {
@@ -398,40 +224,8 @@ export function DashboardFrota() {
         console.error('Erro ao carregar contratos:', contratosErr);
       }
 
-      const hojeSemHora = new Date();
-      hojeSemHora.setHours(0, 0, 0, 0);
-
-      const allContratos = (contratosAtivos || []).map((ct: any) => {
-        const fim = ct.data_fim
-          ? new Date(ct.data_fim + 'T00:00:00')
-          : addMonths(new Date(ct.data_inicio + 'T00:00:00'), ct.duracao_meses ?? 12);
-        const diffDays = Math.ceil((fim.getTime() - hojeSemHora.getTime()) / (1000 * 60 * 60 * 24));
-        return { ...ct, _renovacao: fim, _diffDays: diffDays };
-      });
-
-      // De-duplicar contratos repetidos: a mesma prestação aparece por vezes
-      // 2x na BD — chave motorista+viatura+início, mantém-se o mais recente.
-      const contratosUnicos = Array.from(
-        allContratos
-          .reduce((map: Map<string, any>, ct: any) => {
-            const key = `${ct.motorista_id ?? ''}|${ct.viatura_id ?? ''}|${ct.data_inicio ?? ''}`;
-            const existente = map.get(key);
-            if (!existente || (ct.numero_contrato ?? 0) > (existente.numero_contrato ?? 0)) {
-              map.set(key, ct);
-            }
-            return map;
-          }, new Map<string, any>())
-          .values()
-      );
-
-      const contratosRenovar = contratosUnicos
-        .filter((ct: any) => ct._diffDays >= 0 && ct._diffDays <= 60)
-        .sort((a: any, b: any) => a._renovacao.getTime() - b._renovacao.getTime());
-      const expirados = contratosUnicos
-        .filter((ct: any) => ct._diffDays < 0)
-        .sort((a: any, b: any) => a._renovacao.getTime() - b._renovacao.getTime());
-
-      setContratosAPrazo(contratosRenovar);
+      const { aPrazo, expirados } = classificarContratos(contratosAtivos);
+      setContratosAPrazo(aPrazo);
       setContratosExpirados(expirados);
       setCandidaturasPendentes(pendentes || 0);
 
@@ -502,120 +296,34 @@ export function DashboardFrota() {
 
   const periodoLabel = labelDoPeriodo(preset, range);
 
-  const disponiveisAnim = useCountUp(fleet.disponiveis);
-  const alugadasAnim = useCountUp(fleet.alugadas);
-  const reservadasAnim = useCountUp(fleet.reservadas);
-  const oficinaAnim = useCountUp(fleet.oficina);
-  const ocupacaoAnim = useCountUp(ocupacaoPct);
+  const disponiveisAnim = useContagemAnimada(fleet.disponiveis);
+  const alugadasAnim = useContagemAnimada(fleet.alugadas);
+  const reservadasAnim = useContagemAnimada(fleet.reservadas);
+  const oficinaAnim = useContagemAnimada(fleet.oficina);
+  const ocupacaoAnim = useContagemAnimada(ocupacaoPct);
 
   // ── Precisa da tua atenção — categorizado por tipo, não por severidade
   // fundida. No máximo 4 categorias — nunca uma lista longa. ────────────────
 
-  const categoriasAlerta: CategoriaAlerta[] = useMemo(() => {
-    const categorias: CategoriaAlerta[] = [];
-
-    const totalContratos = contratosExpirados.length + contratosAPrazo.length;
-    if (totalContratos > 0) {
-      const pior = contratosExpirados[0] ?? contratosAPrazo[0];
-      const codigo =
-        pior.numero_contrato != null
-          ? `CT-${String(pior.numero_contrato).padStart(4, '0')}`
-          : pior.motorista_nome;
-      const linha = contratosExpirados.includes(pior)
-        ? `${codigo} expirou há ${Math.abs(pior._diffDays)} dia${Math.abs(pior._diffDays) !== 1 ? 's' : ''}`
-        : `${codigo} renova em ${format(pior._renovacao, 'dd MMM', { locale: pt })}`;
-      const outros = totalContratos - 1;
-      categorias.push({
-        id: 'contratos',
-        icon: FileText,
-        cor: contratosExpirados.length > 0 ? 'destructive' : 'warning',
-        titulo: 'Contratos',
-        descricao: linha,
-        detalhe:
-          outros > 0
-            ? `+${outros} outro${outros !== 1 ? 's' : ''} contrato${outros !== 1 ? 's' : ''}`
-            : null,
-        contagem: totalContratos,
-        href: totalContratos === 1 ? `/renting/contratos/${pior.id}` : '/renting/contratos',
-      });
-    }
-
-    if (extintoresAPrazo.length > 0) {
-      // A lista vem ordenada por validade ascendente, logo [0] é o pior caso —
-      // e é dele que fala a linha principal. O agregado desce para a segunda
-      // linha: uma matrícula dá para agir, um número sozinho não dá.
-      const pior = extintoresAPrazo[0];
-      const validadePior = new Date(pior.extintor_validade);
-      const piorExpirado = validadePior.getTime() < Date.now();
-      const algumExpirado = extintoresAPrazo.some(
-        (e) => new Date(e.extintor_validade).getTime() < Date.now()
-      );
-      const outros = extintoresAPrazo.length - 1;
-      categorias.push({
-        id: 'seguranca',
-        icon: ShieldAlert,
-        cor: algumExpirado ? 'destructive' : 'warning',
-        titulo: 'Segurança',
-        descricao: piorExpirado
-          ? `${pior.matricula} — extintor expirado`
-          : `${pior.matricula} — extintor expira ${format(validadePior, 'dd MMM', { locale: pt })}`,
-        detalhe:
-          outros > 0
-            ? `+${outros} outra${outros !== 1 ? 's' : ''} viatura${outros !== 1 ? 's' : ''}`
-            : null,
-        contagem: extintoresAPrazo.length,
-        href: extintoresAPrazo.length === 1 ? `/viaturas/${pior.id}` : '/viaturas',
-      });
-    }
-
-    if (isExecutivo && (contasAReceber?.emAberto?.length ?? 0) > 0) {
-      const emAberto = contasAReceber!.emAberto;
-      const total = emAberto.reduce((s, c) => s + c.saldo, 0);
-      const algumCritico = emAberto.some((c) => c.diasEmAberto > 60);
-      // `emAberto` vem ordenado por dias em aberto (desc) — [0] é a mais antiga.
-      const pior = emAberto[0];
-      const outras = emAberto.length - 1;
-      categorias.push({
-        id: 'cobrancas',
-        icon: Wallet,
-        cor: algumCritico ? 'destructive' : 'warning',
-        titulo: 'Cobranças',
-        descricao: `${pior.destinatarioNome} · ${formatCurrency(pior.saldo)} há ${pior.diasEmAberto} dias`,
-        detalhe:
-          outras > 0
-            ? `+${outras} outra${outras !== 1 ? 's' : ''} · ${formatCurrency(total)} em aberto`
-            : null,
-        contagem: emAberto.length,
-        href: '/administrativo/faturacao',
-      });
-    }
-
-    if (candidaturasPendentes > 0) {
-      categorias.push({
-        id: 'motoristas',
-        icon: UserPlus,
-        cor: 'warning',
-        titulo: 'Motoristas',
-        descricao: `${candidaturasPendentes} candidatura${candidaturasPendentes !== 1 ? 's' : ''} aguarda${candidaturasPendentes !== 1 ? 'm' : ''} aprovação`,
-        detalhe: null,
-        contagem: candidaturasPendentes,
-        href: '/motoristas/candidaturas',
-      });
-    }
-
-    // O que já falhou (destructive) antes do que ainda está a prazo (warning).
-    // Antes a ordem era a de construção — o tipo de alerta —, o que punha um
-    // contrato a renovar daqui a 50 dias acima de faturas críticas.
-    // `sort` é estável, por isso dentro do mesmo nível a ordem por tipo mantém-se.
-    return categorias.sort((a, b) => (a.cor === b.cor ? 0 : a.cor === 'destructive' ? -1 : 1));
-  }, [
-    contratosExpirados,
-    contratosAPrazo,
-    extintoresAPrazo,
-    contasAReceber,
-    isExecutivo,
-    candidaturasPendentes,
-  ]);
+  const categoriasAlerta: CategoriaAlerta[] = useMemo(
+    () =>
+      construirAlertasFrota({
+        contratosExpirados,
+        contratosAPrazo,
+        extintoresAPrazo,
+        contasAReceber,
+        isExecutivo,
+        candidaturasPendentes,
+      }),
+    [
+      contratosExpirados,
+      contratosAPrazo,
+      extintoresAPrazo,
+      contasAReceber,
+      isExecutivo,
+      candidaturasPendentes,
+    ]
+  );
 
   // ── Render ───────────────────────────────────────────────────────────────
 

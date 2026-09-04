@@ -71,3 +71,11 @@ BEGIN
      AND t.transaction_date < (p_periodo_fim + 1)::timestamptz;
 END;
 $$;
+
+-- O Postgres concede EXECUTE a PUBLIC em funções novas, e esta é SECURITY
+-- DEFINER: sem isto ficava ao alcance de anon. Repetido na migração
+-- 20260904150000 para as bases onde esta já tinha sido aplicada.
+REVOKE ALL ON FUNCTION public.dashboard_resumo_plataformas(uuid, date, date)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.dashboard_resumo_plataformas(uuid, date, date)
+  TO authenticated;
