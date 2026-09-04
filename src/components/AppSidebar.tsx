@@ -21,6 +21,7 @@ import {
   Calculator,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { DASHBOARD_ACCESS_RESOURCES } from '@/hooks/useDashboardTipo';
 import { RECURSOS } from '@/utils/permissions';
 
 import {
@@ -60,7 +61,7 @@ const items: MenuItem[] = [
     title: 'Dashboard',
     url: '/dashboard',
     icon: LayoutDashboard,
-    recurso: RECURSOS.MOTORISTAS_GESTAO,
+    recursosAny: DASHBOARD_ACCESS_RESOURCES,
   },
   { title: 'CRM', url: '/crm', icon: BarChart3, recurso: RECURSOS.MOTORISTAS_CRM },
   { title: 'Meus Tickets', url: '/meus-tickets', icon: Wrench, recurso: RECURSOS.MOTORISTAS_CRM },
