@@ -48,14 +48,30 @@ vi.mock('@/hooks/useContratosARenovar', () => ({
     ],
   }),
 }));
-vi.mock('@/hooks/useTopMotoristasSemana', () => ({
-  useTopMotoristasSemana: () => ({
+vi.mock('@/hooks/useUltimaSemanaFechada', () => ({
+  useUltimaSemanaFechada: () => ({
     loading: false,
-    periodo: { inicio: new Date('2026-08-31'), fim: new Date('2026-09-06') },
-    motoristas: [{ motoristaId: 'm1', nome: 'Ruben Alexandre', faturado: 680, liquido: 455 }],
+    semana: { inicio: new Date('2026-08-31T00:00:00'), fim: new Date('2026-09-06T00:00:00') },
   }),
 }));
-
+vi.mock('@/hooks/useContasResumoSemana', () => ({
+  useContasResumoSemana: () => ({
+    loading: false,
+    resumos: [
+      {
+        _uid: 'm1',
+        driver_uuid: 'd1',
+        driver_name: 'Ruben Alexandre',
+        total_faturado: 680,
+        aluguer: 225,
+        combustivel: 40,
+        portagens: 10,
+        reparacoes: 0,
+        liquido: 405,
+      },
+    ],
+  }),
+}));
 vi.mock('@/hooks/useFaturacaoMovimentos', () => ({
   useFaturacaoMovimentos: () => ({
     loading: false,
@@ -136,7 +152,7 @@ describe('DashboardFinanceiro', () => {
     expect(screen.getByText('10')).toBeInTheDocument();
   });
 
-  it('mostra os motoristas da semana', async () => {
+  it('mostra as contas de motoristas da ultima semana fechada', async () => {
     renderDashboard();
     await waitFor(() => expect(screen.getByText('Ruben Alexandre')).toBeInTheDocument());
   });

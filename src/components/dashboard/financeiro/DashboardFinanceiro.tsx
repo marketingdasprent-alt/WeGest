@@ -24,7 +24,8 @@ import { useResumoPlataformas, type ResumoPlataforma } from '@/hooks/useResumoPl
 import { useFaturacaoResumoPeriodo } from '@/hooks/useFaturacaoResumoPeriodo';
 import { useContasAReceber } from '@/hooks/useContasAReceber';
 import { useContratosARenovar } from '@/hooks/useContratosARenovar';
-import { useTopMotoristasSemana } from '@/hooks/useTopMotoristasSemana';
+import { useUltimaSemanaFechada } from '@/hooks/useUltimaSemanaFechada';
+import { useContasResumoSemana } from '@/hooks/useContasResumoSemana';
 import { useFaturacaoMovimentos } from '@/hooks/useFaturacaoMovimentos';
 import { useCartoesObeResumo } from '@/hooks/useCartoesObeResumo';
 import { useRecibosVerdesResumo } from '@/hooks/useRecibosVerdesResumo';
@@ -79,7 +80,16 @@ export function DashboardFinanceiro() {
   const { resumo: faturacao, loading: loadingFaturacao } = useFaturacaoResumoPeriodo(mes.inicio, mes.fim);
   const { data: contasAReceber } = useContasAReceber();
   const { contratos: contratosARenovar } = useContratosARenovar();
-  const { motoristas: topMotoristas, periodo: periodoMotoristas } = useTopMotoristasSemana();
+  // Contas de motoristas: os mesmos numeros do separador Administrativo >
+  // Resumos, pelo mesmo calculo (useContasResumoSemana). Só existem para
+  // semanas ja fechadas, por isso mostra-se a ultima fechada e diz-se qual e.
+  const { semana: semanaFechada } = useUltimaSemanaFechada();
+  const { resumos: contasMotoristas } = useContasResumoSemana(
+    semanaFechada?.inicio ?? mes.inicio,
+    semanaFechada?.fim ?? mes.fim,
+    semanaFechada ? true : null
+  );
+  const topMotoristas = contasMotoristas.slice(0, 5);
   const faturado = useFaturacaoMovimentos(mes.inicio, mes.fim, semana.inicio, semana.fim);
   const { resumo: cartoesObe } = useCartoesObeResumo();
   const { resumo: recibos } = useRecibosVerdesResumo();
@@ -328,34 +338,51 @@ export function DashboardFinanceiro() {
               <div className="mb-3 flex items-baseline justify-between gap-3">
                 <h2 className="flex items-center gap-2 text-sm font-semibold">
                   <Users className="h-4 w-4 text-primary" />
-                  Motoristas da semana
+                  Contas de motoristas
                 </h2>
                 <span className="text-[11px] text-muted-foreground">
-                  {format(periodoMotoristas.inicio, 'd MMM', { locale: pt })} –{' '}
-                  {format(periodoMotoristas.fim, 'd MMM', { locale: pt })}
+                  {semanaFechada
+                    ? `semana fechada · ${format(semanaFechada.inicio, 'd MMM', { locale: pt })} – ${format(semanaFechada.fim, 'd MMM', { locale: pt })}`
+                    : 'sem semanas fechadas'}
                 </span>
               </div>
               {topMotoristas.length === 0 ? (
                 <p className="py-2 text-[13px] text-muted-foreground">
-                  Sem dados de Bolt/Uber importados para esta semana.
+                  {semanaFechada
+                    ? 'Sem contas nesta semana.'
+                    : 'Ainda nao ha nenhuma semana fechada.'}
                 </p>
               ) : (
                 <div className="divide-y divide-border/60">
-                  <div className="grid grid-cols-[1fr_auto_auto] gap-4 pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <div className="grid grid-cols-[1fr_repeat(4,auto)] gap-3 pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     <span>Motorista</span>
                     <span className="text-right">Faturado</span>
+                    <span className="text-right">Aluguer</span>
+                    <span className="text-right">Custos</span>
                     <span className="text-right">Líquido</span>
                   </div>
                   {topMotoristas.map((m) => (
                     <div
-                      key={m.motoristaId}
-                      className="grid grid-cols-[1fr_auto_auto] items-center gap-4 py-2 text-[13px]"
+                      key={m._uid ?? m.driver_uuid}
+                      className="grid grid-cols-[1fr_repeat(4,auto)] items-center gap-3 py-2 text-[13px]"
                     >
-                      <span className="truncate font-medium">{m.nome}</span>
+                      <span className="truncate font-medium">{m.driver_name}</span>
                       <span className="text-right tabular-nums text-muted-foreground">
-                        {fmtEur(m.faturado)}
+                        {fmtEur(m.total_faturado)}
                       </span>
-                      <span className="text-right font-semibold tabular-nums text-success">
+                      <span className="text-right tabular-nums text-muted-foreground">
+                        {fmtEur(m.aluguer)}
+                      </span>
+                      <span className="text-right tabular-nums text-muted-foreground">
+                        {fmtEur(m.combustivel + m.portagens + m.reparacoes)}
+                      </span>
+                      <span
+                        className={
+                          m.liquido < 0
+                            ? 'text-right font-semibold tabular-nums text-destructive'
+                            : 'text-right font-semibold tabular-nums text-success'
+                        }
+                      >
                         {fmtEur(m.liquido)}
                       </span>
                     </div>
