@@ -15,10 +15,11 @@ import { ChartMetric } from '@/components/dashboard/ChartMetric';
 import { PeriodoSelector } from '@/components/dashboard/PeriodoSelector';
 import { getPeriodRange, type DateRange, type PeriodPreset } from '@/components/dashboard/periodo';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAssistenciaInicioResumo, type Prioridade } from '@/hooks/useAssistenciaInicioResumo';
-import { useViaturasNaOficina } from '@/hooks/useViaturasNaOficina';
-import { usePermissions } from '@/hooks/usePermissions';
-import { RECURSOS } from '@/utils/permissions';
+import {
+  useAssistenciaInicioResumo,
+  ESTADO_LABEL,
+  type Prioridade,
+} from '@/hooks/useAssistenciaInicioResumo';
 import { construirSerieTickets, totaisDaSerie } from './serieTickets';
 
 const TicketsChart = lazy(() => import('./TicketsChart'));
@@ -50,12 +51,10 @@ export function DashboardAssistencia() {
     semPrioridade,
     porAtribuir,
     atrasados,
+    emOficina,
     movimentos,
     loading,
   } = useAssistenciaInicioResumo(user?.id);
-  const { data: naOficina } = useViaturasNaOficina();
-  const { hasAccessToResource } = usePermissions();
-  const podeVerViaturas = hasAccessToResource(RECURSOS.VIATURAS_VER);
 
   // Período do gráfico — o mesmo seletor das outras duas dashboards, e como lá
   // só filtra este gráfico: os KPIs e os alertas são sempre do momento actual.
@@ -66,7 +65,6 @@ export function DashboardAssistencia() {
   const serie = useMemo(() => construirSerieTickets(movimentos, range), [movimentos, range]);
   const totais = totaisDaSerie(serie);
 
-  const oficina = naOficina ?? [];
   const urgentes = prioridades.find((p) => p.prioridade === 'urgente')?.contagem ?? 0;
 
   const linhasPrioridade = [
@@ -274,18 +272,19 @@ export function DashboardAssistencia() {
                 // Só as categorias COM tickets, e com barra de proporção: em
                 // caixas iguais, dez categorias a zero pesavam tanto no ecrã
                 // como as três que precisavam de trabalho.
-                // `content-start` e sem scroll: são poucas linhas e cabem
-                // sempre — a esticar pela altura do cartão ficavam separadas
-                // por buracos, e o `overflow` trazia atrás uma barra
-                // horizontal por causa da margem negativa das linhas.
-                <div className="grid grid-cols-1 content-start gap-x-6 sm:grid-cols-2">
+                // Sem scroll (`overflow` trazia atrás uma barra horizontal por
+                // causa da margem negativa das linhas) mas a ESTICAR: as linhas
+                // repartem a altura que sobra no cartão, em vez de ficarem
+                // amontoadas em cima com um vazio por baixo. O conteúdo de cada
+                // uma centra-se na sua faixa, senão a barra descolava do nome.
+                <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2 xl:min-h-0 xl:flex-1">
                   {linhasCategoria.map((c, i) => (
                     <button
                       key={c.id}
                       type="button"
-                      onClick={() => navigate('/assistencia')}
+                      onClick={() => navigate(`/assistencia?categoria=${c.id}`)}
                       className={cn(
-                        'rounded-md border-b border-border/60 py-2 text-left transition-colors hover:bg-muted/60',
+                        'flex flex-col justify-center rounded-md border-b border-border/60 py-2 text-left transition-colors hover:bg-muted/60',
                         'last:border-b-0',
                         i >= linhasCategoria.length - (linhasCategoria.length % 2 === 0 ? 2 : 1) &&
                           'sm:border-b-0'
@@ -372,37 +371,30 @@ export function DashboardAssistencia() {
                   Na oficina
                 </h2>
                 <span className="text-[11px] text-muted-foreground">
-                  {oficina.length} viatura{oficina.length === 1 ? '' : 's'} parada
-                  {oficina.length === 1 ? '' : 's'}
+                  {emOficina.length} ticket{emOficina.length === 1 ? '' : 's'}
                 </span>
               </div>
-              {oficina.length === 0 ? (
+              {emOficina.length === 0 ? (
                 <p className="py-2 text-[13px] text-muted-foreground">
-                  Nenhuma viatura com entrada por fechar.
+                  Nenhum ticket em manutenção ou à espera de peças.
                 </p>
               ) : (
                 <div className="min-h-0 flex-1 divide-y divide-border/60 overflow-hidden">
-                  {/* `/viaturas/:id` pede VIATURAS_VER, que a Assistência não
-                      tem garantidamente — sem ela a linha mostra a informação
-                      mas não leva a uma página bloqueada. */}
-                  {oficina.slice(0, 6).map((r) => (
+                  {emOficina.slice(0, 6).map((t) => (
                     <button
-                      key={r.id}
+                      key={t.id}
                       type="button"
-                      disabled={!podeVerViaturas}
-                      onClick={() => navigate(`/viaturas/${r.viatura_id}`)}
-                      className="-mx-2 flex w-[calc(100%+1rem)] items-start justify-between gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/60 disabled:pointer-events-none"
+                      onClick={() => navigate(`/assistencia/${t.id}`)}
+                      className="-mx-2 flex w-[calc(100%+1rem)] items-start justify-between gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/60"
                     >
                       <div className="min-w-0">
                         <div className="truncate text-[13px] font-medium">
-                          {r.matricula ?? 'sem matrícula'}
+                          {t.matricula ?? `#${t.numero}`}
                         </div>
-                        <div className="truncate text-[11px] text-muted-foreground">
-                          {[r.marca, r.modelo].filter(Boolean).join(' ') || r.descricao || '—'}
-                        </div>
+                        <div className="truncate text-[11px] text-muted-foreground">{t.titulo}</div>
                       </div>
                       <span className="shrink-0 text-[11px] text-muted-foreground">
-                        {r.oficina ?? '—'}
+                        {ESTADO_LABEL[t.status ?? ''] ?? '—'}
                       </span>
                     </button>
                   ))}

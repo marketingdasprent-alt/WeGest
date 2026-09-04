@@ -3,6 +3,18 @@ import { supabase } from '@/integrations/supabase/client';
 
 const ESTADOS_ABERTO = ['pendente', 'aberto', 'em_andamento', 'aguardando'];
 
+/**
+ * Os dois estados que querem dizer "a viatura está na oficina" — são as
+ * etiquetas que a própria página de Assistência usa no filtro de estado
+ * ("Em Manutenção" e "Aguardando Peças").
+ */
+export const ESTADOS_EM_OFICINA = ['em_andamento', 'aguardando'] as const;
+
+export const ESTADO_LABEL: Record<string, string> = {
+  em_andamento: 'Em manutenção',
+  aguardando: 'Aguarda peças',
+};
+
 /** Ordem de gravidade, do mais grave para o menos. */
 export const PRIORIDADES = ['urgente', 'alta', 'media', 'baixa'] as const;
 export type Prioridade = (typeof PRIORIDADES)[number];
@@ -29,12 +41,15 @@ export interface TicketAberto {
   id: string;
   numero: number;
   titulo: string;
+  status: string | null;
   prioridade: Prioridade | null;
   atribuido: boolean;
   criadoEm: string | null;
   dataEstimada: string | null;
   /** Dias corridos desde a abertura. */
   diasAberto: number;
+  /** Só preenchida para os tickets em oficina — ver `emOficina`. */
+  matricula: string | null;
 }
 
 /** Um ponto da série: quantos abriram e quantos se resolveram no balde. */
@@ -55,6 +70,8 @@ export interface AssistenciaInicioResumo {
   porAtribuir: TicketAberto[];
   /** Abertos com prazo ultrapassado, do mais atrasado para o menos. */
   atrasados: TicketAberto[];
+  /** Abertos em manutenção / à espera de peças, com a matrícula da viatura. */
+  emOficina: TicketAberto[];
   /** Aberturas e resoluções ao dia — o gráfico agrupa a partir daqui. */
   movimentos: MovimentoTicket[];
   loading: boolean;
@@ -75,6 +92,7 @@ const VAZIO: Omit<AssistenciaInicioResumo, 'loading'> = {
   semPrioridade: 0,
   porAtribuir: [],
   atrasados: [],
+  emOficina: [],
   movimentos: [],
 };
 
@@ -111,7 +129,7 @@ export function useAssistenciaInicioResumo(userId: string | null | undefined) {
         supabase
           .from('assistencia_tickets')
           .select(
-            'id, numero, titulo, status, prioridade, atribuido_a, categoria_id, created_at, data_estimada, data_resolucao'
+            'id, numero, titulo, status, prioridade, atribuido_a, categoria_id, viatura_id, created_at, data_estimada, data_resolucao'
           ),
         supabase
           .from('assistencia_categorias')
@@ -124,15 +142,20 @@ export function useAssistenciaInicioResumo(userId: string | null | undefined) {
       const todosTickets = tickets ?? [];
       const abertos = todosTickets.filter((t) => ESTADOS_ABERTO.includes(t.status));
 
-      const paraTicket = (t: (typeof abertos)[number]): TicketAberto => ({
+      const paraTicket = (
+        t: (typeof abertos)[number],
+        matricula: string | null = null
+      ): TicketAberto => ({
         id: t.id,
         numero: t.numero,
         titulo: t.titulo,
+        status: t.status,
         prioridade: (t.prioridade as Prioridade | null) ?? null,
         atribuido: Boolean(t.atribuido_a),
         criadoEm: t.created_at,
         dataEstimada: t.data_estimada,
         diasAberto: diasDesde(t.created_at, agora),
+        matricula,
       });
 
       // Prazo ultrapassado: a data estimada é um dia de calendário, por isso
@@ -140,12 +163,12 @@ export function useAssistenciaInicioResumo(userId: string | null | undefined) {
       // atrasado.
       const atrasados = abertos
         .filter((t) => t.data_estimada && dia(t.data_estimada)! < hojeStr!)
-        .map(paraTicket)
+        .map((t) => paraTicket(t))
         .sort((a, b) => (a.dataEstimada! < b.dataEstimada! ? -1 : 1));
 
       const porAtribuir = abertos
         .filter((t) => !t.atribuido_a)
-        .map(paraTicket)
+        .map((t) => paraTicket(t))
         .sort((a, b) => b.diasAberto - a.diasAberto);
 
       const kpis: AssistenciaInicioKpis = {
@@ -182,6 +205,33 @@ export function useAssistenciaInicioResumo(userId: string | null | undefined) {
       }));
       const semPrioridade = abertos.length - prioridades.reduce((s, p) => s + p.contagem, 0);
 
+      // "Na oficina" sai dos TICKETS, não de viatura_reparacoes: essa tabela só
+      // ganha linha quando o ticket é FECHADO (ver useTicketClosure), e nessa
+      // altura já leva data de saída — o bloco aparecia sempre vazio, mesmo com
+      // uma dúzia de tickets abertos. Os estados em_andamento/aguardando são o
+      // que a própria página de Assistência chama "Em Manutenção" e
+      // "Aguardando Peças".
+      const ticketsOficina = abertos
+        .filter((t) => (ESTADOS_EM_OFICINA as readonly string[]).includes(t.status ?? ''))
+        .sort((a, b) => diasDesde(b.created_at, agora) - diasDesde(a.created_at, agora));
+
+      // Segunda consulta em vez de join embebido — mesma razão de
+      // useViaturasNaOficina: a relação não está declarada como FK no PostgREST
+      // e o embedding falharia em silêncio.
+      const matriculaPorViatura = new Map<string, string | null>();
+      const idsViatura = [...new Set(ticketsOficina.map((t) => t.viatura_id).filter(Boolean))];
+      if (idsViatura.length > 0) {
+        const { data: viaturas } = await supabase
+          .from('viaturas')
+          .select('id, matricula')
+          .in('id', idsViatura as string[]);
+        if (cancelado) return;
+        (viaturas ?? []).forEach((v) => matriculaPorViatura.set(v.id, v.matricula));
+      }
+      const emOficina = ticketsOficina.map((t) =>
+        paraTicket(t, matriculaPorViatura.get(t.viatura_id) ?? null)
+      );
+
       // Um movimento por dia com actividade. Abrir e resolver são eventos
       // distintos: o mesmo ticket conta no dia em que abriu E no dia em que se
       // resolveu.
@@ -204,6 +254,7 @@ export function useAssistenciaInicioResumo(userId: string | null | undefined) {
         semPrioridade,
         porAtribuir,
         atrasados,
+        emOficina,
         movimentos: [...porDia.values()].sort((a, b) => (a.dia < b.dia ? -1 : 1)),
       });
       setLoading(false);
