@@ -12,6 +12,7 @@ import {
   useRentingTarifasMin,
   useRentingTarifaPrecosModelo,
   calcularFaturacaoRenting,
+  resolverValorTotalManualAoMudarTarifa,
 } from '@/hooks/useRentingGruposTarifas';
 import { diferencaDias } from '@/utils/reserva-formatters';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -203,6 +204,37 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
     tarifa: tarifaDiaria ?? 0,
   };
 
+  // Mudar a tarifa NÃO recalculava o preço do contrato: valor_total_manual
+  // manda sobre tudo (calcularBaseAluguerRenting) e sobre o próprio preview
+  // deste cartão (a Tarifa & Faturação mostra valor_total_manual ?? faturacao.
+  // valor — com o manual preenchido, nem o preview mudava). Escolher uma
+  // tarifa nova ficava sem efeito nenhum, silenciosamente — em 206 dos 236
+  // contratos vivos há um valor_total_manual gravado.
+  //
+  // Corrige-se no onValueChange do Select: só dispara com uma escolha real do
+  // utilizador — nunca com a hidratação da edição (form.reset), que muda
+  // tarifa_id por fora e não pode reescrever silenciosamente um preço
+  // negociado só porque o contrato acabou de carregar.
+  const handleTarifaChange = (novoId: string | null) => {
+    form.setValue('tarifa_id', novoId, { shouldDirty: true });
+
+    const tarifaNova = novoId ? (tarifas.find((t) => t.id === novoId) ?? null) : null;
+    const linhaNova =
+      novoId && modeloIdSel
+        ? (precosModelo.find((p) => p.tarifa_id === novoId && p.modelo_id === modeloIdSel) ?? null)
+        : null;
+    const novoValor = resolverValorTotalManualAoMudarTarifa(
+      regime,
+      isLongaDuracao,
+      dias,
+      tarifaNova,
+      isTvde ? (linhaNova?.preco_semana ?? null) : null,
+      !isTvde ? (linhaNova?.preco_dia ?? null) : null,
+      !isTvde ? (linhaNova?.preco_mes ?? null) : null
+    );
+    if (novoValor != null) form.setValue('valor_total_manual', novoValor, { shouldDirty: true });
+  };
+
   return (
     <div className="space-y-6">
       <SectionRegime form={form} />
@@ -237,7 +269,10 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>{isTvde ? 'Tarifa TVDE' : 'Tarifa Rent-a-Car'}</FormLabel>
-                <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || null)}>
+                <Select
+                  value={field.value ?? ''}
+                  onValueChange={(v) => handleTarifaChange(v || null)}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue

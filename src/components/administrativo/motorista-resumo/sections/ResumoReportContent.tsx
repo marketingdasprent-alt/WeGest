@@ -55,6 +55,9 @@ interface ResumoReportContentProps {
   };
   totalDespesas: number;
   aluguerSemTarifa?: boolean;
+  /** Valor do período que ficou de fora do resumo e não está representado em
+   *  mais lado nenhum — mostrado como linha de aviso, nunca omitido. */
+  dinheiroIgnorado?: { valor: number; motivo: string } | null;
   /** Preco do aluguer sem contrato por tras (veio da tarifa do modelo). */
   aluguerEstimado?: boolean;
   slotPeriodos: SlotPeriodo[];
@@ -81,6 +84,7 @@ export function ResumoReportContent({
   totalDespesas,
   aluguerSemTarifa,
   aluguerEstimado,
+  dinheiroIgnorado,
   slotPeriodos,
   totalSlot,
   valoresSemanaAnterior,
@@ -244,6 +248,17 @@ export function ResumoReportContent({
                   : 'text-red-700 dark:text-red-300'
               }
             />
+            {/* Valor lançado no período que não entra em nenhuma linha acima e
+                não está representado em mais lado nenhum. Dizer que existe é
+                o mínimo: em silêncio, o dinheiro desaparecia do resumo e só
+                se dava por ele quando o motorista reclamava. */}
+            {dinheiroIgnorado && (
+              <Row
+                label={`⚠ Por explicar — ${dinheiroIgnorado.motivo}`}
+                value={fmt(dinheiroIgnorado.valor)}
+                colored="text-amber-600 dark:text-amber-400"
+              />
+            )}
             <Row
               label="Combustível"
               value={fmt(despesas.combustivel)}

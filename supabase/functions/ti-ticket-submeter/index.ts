@@ -2,6 +2,7 @@
 // ter conta nenhuma. A autorização é o token do link, validado aqui dentro; as
 // tabelas continuam fechadas por RLS a quem tem sessão.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { validarAnexosSubmissao } from '../_shared/ti-tickets/anexos.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -39,7 +40,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
 
   try {
-    const { token, nome, email, descricao } = await req.json();
+    const { token, nome, email, descricao, anexos } = await req.json();
 
     if (!token) return json({ success: false, error: 'Link inválido.' }, 400);
     if (typeof nome !== 'string' || !nome.trim())
@@ -49,10 +50,28 @@ Deno.serve(async (req) => {
     if (typeof descricao !== 'string' || !descricao.trim())
       return json({ success: false, error: 'Descreva o problema.' }, 400);
 
+    // Validado ANTES de tocar na base de dados: um anexo mal formado não deve
+    // criar um ticket órfão de anexo.
+    const anexosValidados = validarAnexosSubmissao(anexos);
+    if (!anexosValidados.ok) return json({ success: false, error: anexosValidados.error }, 400);
+
     const sb = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
+
+    // Quando quem submete tem sessão activa, liga o ticket à conta — é o que
+    // deixa "o meu histórico" aparecer-lhe depois. O browser já manda o token
+    // de sessão sozinho quando existe; sem sessão, o header traz só a apikey
+    // pública, e getUser() devolve null para essa — o caminho anónimo continua
+    // exactamente igual.
+    let criadoPor: string | null = null;
+    const authHeader = req.headers.get('authorization') ?? '';
+    const jwt = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (jwt) {
+      const { data: sessao } = await sb.auth.getUser(jwt);
+      criadoPor = sessao?.user?.id ?? null;
+    }
 
     // O token resolve a organização. Desativado = link rodado, já não serve.
     const { data: linha, error: tokenError } = await sb
@@ -110,11 +129,45 @@ Deno.serve(async (req) => {
         autor_nome: nome.trim(),
         autor_email: email.trim().toLowerCase(),
         descricao: descricao.trim(),
+        criado_por: criadoPor,
       })
       .select('id, numero')
       .single();
 
     if (error) throw error;
+
+    // Melhor esforço: os anexos nunca fazem falhar a submissão — o pedido já
+    // está gravado e a pessoa já tem o número. Falhar aqui devolvia "não foi
+    // possível registar o pedido" para algo que, na verdade, já registou.
+    let anexosFalhou = false;
+    for (const anexo of anexosValidados.data) {
+      const nomeSeguro = anexo.nome.replace(/[^\w.\-]/g, '_');
+      const caminho = `${ticket.id}/${Date.now()}-${nomeSeguro}`;
+
+      const { error: uploadError } = await sb.storage
+        .from('ti-ticket-anexos')
+        .upload(caminho, anexo.bytes, { contentType: anexo.mimeType, upsert: false });
+      if (uploadError) {
+        console.error('ti-ticket-submeter: falha a carregar anexo:', uploadError);
+        anexosFalhou = true;
+        continue;
+      }
+
+      const { error: anexoError } = await sb.from('ti_ticket_anexos').insert({
+        org_id: linha.org_id,
+        ticket_id: ticket.id,
+        nome: anexo.nome,
+        ficheiro_url: caminho,
+        tamanho_bytes: anexo.bytes.byteLength,
+        mime_type: anexo.mimeType,
+        criado_por_nome: nome.trim(),
+      });
+      if (anexoError) {
+        console.error('ti-ticket-submeter: falha a gravar anexo:', anexoError);
+        anexosFalhou = true;
+        await sb.storage.from('ti-ticket-anexos').remove([caminho]);
+      }
+    }
 
     const { error: submissaoError } = await sb
       .from('ti_submissoes')
@@ -142,7 +195,7 @@ Deno.serve(async (req) => {
       console.error('ti-ticket-submeter: aviso ao suporte não saiu:', emailError);
     }
 
-    return json({ success: true, numero: ticket.numero });
+    return json({ success: true, numero: ticket.numero, anexosFalhou });
   } catch (e) {
     console.error('ti-ticket-submeter:', e);
     return json({ success: false, error: 'Não foi possível registar o pedido.' }, 500);

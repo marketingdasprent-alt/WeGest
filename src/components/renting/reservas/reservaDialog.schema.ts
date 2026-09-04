@@ -169,6 +169,19 @@ export const reservaDialogSchema = z
       });
     }
 
+    // "Intervalo de dias" sem o número de dias: o campo só aparece na UI
+    // depois de escolher esta opção (ver ALDFields, partilhado com o
+    // contrato), por isso é fácil ficar por preencher. O contrato tem o
+    // mesmo caso coberto por um CHECK na BD; aqui não há, mas o dado ficaria
+    // igualmente incoerente.
+    if (d.renovacao_opcao === 'intervalo_dias' && !d.renovacao_intervalo_dias) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['renovacao_intervalo_dias'],
+        message: 'Indica de quantos em quantos dias renova.',
+      });
+    }
+
     // data_fim: obrigatória e válida fora dos regimes slot/tvde (ambos abertos,
     // sem data de fim fixa — TVDE renova automaticamente).
     if (!isSlot && d.regime !== 'tvde') {

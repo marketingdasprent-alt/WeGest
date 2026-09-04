@@ -49,3 +49,18 @@ export function proximoEstado(actual: EstadoTicket, evento: EventoTicket): Estad
 export const ESTADOS_POR_RESOLVER: readonly EstadoTicket[] = (
   Object.keys(TRANSICOES) as EstadoTicket[]
 ).filter((estado) => estado !== 'resolvido');
+
+/**
+ * Rótulo e tom de cada estado, para a UI. Um só sítio, para o mesmo estado
+ * não ter dois nomes em ecrãs diferentes (lista do admin, "os meus pedidos").
+ */
+export const ESTADO_TICKET_ROTULO: Record<
+  EstadoTicket,
+  { rotulo: string; variante: 'default' | 'secondary' | 'destructive' }
+> = {
+  aberto: { rotulo: 'Aberto', variante: 'default' },
+  com_sugestao: { rotulo: 'À espera de resposta', variante: 'secondary' },
+  nao_resolvido: { rotulo: 'A sugestão não resolveu', variante: 'destructive' },
+  presencial: { rotulo: 'A resolver presencialmente', variante: 'default' },
+  resolvido: { rotulo: 'Resolvido', variante: 'secondary' },
+};

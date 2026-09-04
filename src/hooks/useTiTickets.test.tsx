@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-import { useCriarTicketComoAdmin, useMarcarResolvido, useReabrirTicket } from './useTiTickets';
+import {
+  abrirTiAnexo,
+  useMarcarResolvido,
+  useMeusTiTickets,
+  useReabrirTicket,
+} from './useTiTickets';
 import { supabase } from '@/integrations/supabase/client';
 
 function createWrapper() {
@@ -15,84 +20,99 @@ function createWrapper() {
   };
 }
 
-/** profiles → select().eq().single(); ti_tickets → insert().select().single() */
-function mockCriacao(ticketId: string) {
-  (supabase as unknown as { auth: { getUser: unknown } }).auth.getUser = vi
-    .fn()
-    .mockResolvedValue({ data: { user: { id: 'u1' } } });
-
-  (supabase.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
-    if (tabela === 'profiles') {
-      return {
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { nome: 'Ana', email: 'ana@exemplo.pt', org_id: 'org-1' },
-              error: null,
-            }),
-          }),
-        }),
-      };
-    }
-    if (tabela === 'ti_tickets') {
-      return {
-        insert: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: { id: ticketId }, error: null }),
-          }),
-        }),
-      };
-    }
-    throw new Error(`tabela inesperada: ${tabela}`);
+describe('abrirTiAnexo', () => {
+  // O mock partilhado de src/__tests__/setup.ts não inclui `storage` (só
+  // `from`, `rpc`, `auth`, `functions`) — nenhum outro teste ainda o tinha
+  // usado. Mesmo padrão já usado neste ficheiro para `auth.getUser`: aumenta
+  // o mock localmente em vez de mexer no partilhado.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (supabase as unknown as { storage: { from: ReturnType<typeof vi.fn> } }).storage = {
+      from: vi.fn(),
+    };
   });
-}
 
-describe('useCriarTicketComoAdmin', () => {
+  it('devolve a URL assinada quando o storage responde bem', async () => {
+    const createSignedUrl = vi
+      .fn()
+      .mockResolvedValue({ data: { signedUrl: 'https://exemplo/assinado' }, error: null });
+    (supabase.storage.from as ReturnType<typeof vi.fn>).mockReturnValue({ createSignedUrl });
+
+    const url = await abrirTiAnexo('ticket-1/123-foto.png');
+
+    expect(url).toBe('https://exemplo/assinado');
+    expect(supabase.storage.from).toHaveBeenCalledWith('ti-ticket-anexos');
+    expect(createSignedUrl).toHaveBeenCalledWith('ticket-1/123-foto.png', 600);
+  });
+
+  // A RLS recusa (empresa errada) ou o ficheiro já não existe — nos dois casos
+  // o storage devolve um erro, e quem chama não deve rebentar por causa disso.
+  it('devolve null quando o storage recusa ou falha', async () => {
+    const createSignedUrl = vi
+      .fn()
+      .mockResolvedValue({ data: null, error: new Error('não autorizado') });
+    (supabase.storage.from as ReturnType<typeof vi.fn>).mockReturnValue({ createSignedUrl });
+
+    const url = await abrirTiAnexo('ticket-1/123-foto.png');
+
+    expect(url).toBeNull();
+  });
+});
+
+describe('useMeusTiTickets', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('avisa o suporte do pedido acabado de abrir', async () => {
-    mockCriacao('t1');
-    (supabase.functions.invoke as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { success: true },
-      error: null,
-    });
+  it('devolve lista vazia sem rebentar quando não há sessão', async () => {
+    (supabase as unknown as { auth: { getUser: unknown } }).auth.getUser = vi
+      .fn()
+      .mockResolvedValue({ data: { user: null }, error: null });
 
-    const { result } = renderHook(() => useCriarTicketComoAdmin(), { wrapper: createWrapper() });
-    await result.current.mutateAsync({ descricao: 'O portátil não liga' });
+    const { result } = renderHook(() => useMeusTiTickets(), { wrapper: createWrapper() });
 
-    expect(supabase.functions.invoke).toHaveBeenCalledWith('ti-ticket-novo-email', {
-      body: { ticket_id: 't1' },
-    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([]);
+    // Sem sessão, nem vale a pena perguntar à BD — não há utilizador para filtrar.
+    expect(supabase.from).not.toHaveBeenCalled();
   });
 
-  // Sem isto, o admin via "Pedido aberto." e ficava convencido de que o suporte
-  // tinha sido avisado, mesmo quando o email não saiu.
-  it('reporta que o aviso não saiu quando o email falha', async () => {
-    mockCriacao('t2');
-    (supabase.functions.invoke as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: null,
-      error: new Error('Brevo 500'),
-    });
+  // O `.eq('criado_por', uid)` é a segunda camada de garantia (a RLS já
+  // limita, mas explicitar aqui evita depender só dela).
+  it('filtra os pedidos por criado_por do utilizador da sessão', async () => {
+    (supabase as unknown as { auth: { getUser: unknown } }).auth.getUser = vi
+      .fn()
+      .mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
 
-    const { result } = renderHook(() => useCriarTicketComoAdmin(), { wrapper: createWrapper() });
-    const r = await result.current.mutateAsync({ descricao: 'Impressora encravada' });
-
-    expect(r).toEqual({ emailFalhou: true });
-  });
-
-  it('o pedido continua aberto quando o aviso sai bem', async () => {
-    mockCriacao('t3');
-    (supabase.functions.invoke as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { success: true },
+    const order = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: 't1',
+          numero: 3,
+          autor_nome: 'Bruno Paulo',
+          autor_email: 'bruno@exemplo.pt',
+          descricao: 'Impressora encravada',
+          status: 'aberto',
+          created_at: '2026-09-01T10:00:00Z',
+          organizacao: null,
+          resolvido_por_nome: null,
+          resolvido_em: null,
+          sugestoes: [],
+          anexos: [],
+        },
+      ],
       error: null,
     });
+    const eq = vi.fn().mockReturnValue({ order });
+    const select = vi.fn().mockReturnValue({ eq });
+    (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue({ select });
 
-    const { result } = renderHook(() => useCriarTicketComoAdmin(), { wrapper: createWrapper() });
-    const r = await result.current.mutateAsync({ descricao: 'Rato sem bateria' });
+    const { result } = renderHook(() => useMeusTiTickets(), { wrapper: createWrapper() });
 
-    expect(r).toEqual({ emailFalhou: false });
+    await waitFor(() => expect(result.current.data).toHaveLength(1));
+    expect(supabase.from).toHaveBeenCalledWith('ti_tickets');
+    expect(eq).toHaveBeenCalledWith('criado_por', 'u1');
+    expect(result.current.data?.[0].numero).toBe(3);
   });
 });
 

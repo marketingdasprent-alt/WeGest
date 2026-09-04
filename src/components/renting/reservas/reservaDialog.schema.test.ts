@@ -116,3 +116,44 @@ describe('reservaDialogSchema — rent_a_car não regrediu', () => {
     }
   });
 });
+
+// O campo só aparece na UI depois de escolher "Intervalo de dias" (ver
+// ALDFields, partilhado com o contrato) — fácil ficar por preencher e o
+// dado gravava incoerente (aconteceu em produção: reserva #905, 2026-09-01).
+describe('reservaDialogSchema — renovação por intervalo de dias', () => {
+  it('"intervalo_dias" sem o número de dias é inválido', () => {
+    const r = reservaDialogSchema.safeParse({
+      ...baseSlot,
+      estado: 'pendente',
+      is_longa_duracao: true,
+      renovacao_opcao: 'intervalo_dias',
+      renovacao_intervalo_dias: null,
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues.some((i) => i.path.includes('renovacao_intervalo_dias'))).toBe(true);
+    }
+  });
+
+  it('"intervalo_dias" com o número de dias é válido', () => {
+    const r = reservaDialogSchema.safeParse({
+      ...baseSlot,
+      estado: 'pendente',
+      is_longa_duracao: true,
+      renovacao_opcao: 'intervalo_dias',
+      renovacao_intervalo_dias: 30,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('outra opção de renovação não exige o número de dias', () => {
+    const r = reservaDialogSchema.safeParse({
+      ...baseSlot,
+      estado: 'pendente',
+      is_longa_duracao: true,
+      renovacao_opcao: 'primeiro_dia_mes',
+      renovacao_intervalo_dias: null,
+    });
+    expect(r.success).toBe(true);
+  });
+});

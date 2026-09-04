@@ -20,6 +20,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { initPixel, trackLeadOnce } from '@/lib/pixel';
+import { paletaDaMarca } from '@/lib/corDaMarca';
+
+/** Marca de recurso: uma organização sem logótipo carregado mostra a WeGest. */
+const LOGO_WEGEST = '/Logo.png';
 
 interface FormData {
   [key: string]: any;
@@ -38,6 +42,14 @@ const FormularioPublico = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false); // Ref para bloqueio síncrono
   const { toast } = useToast();
+
+  // A marca de quem criou o formulário. Antes disto a página tinha a paleta
+  // escrita à mão (preto e amarelo), o logótipo da Distância Arrojada e o
+  // rodapé da DasPrent — toda a gente mostrava a marca errada aos seus leads.
+  const organizacao = formulario?.organizacao as
+    | { nome?: string; logo_url?: string | null; cor_primaria?: string | null }
+    | undefined;
+  const marca = paletaDaMarca(organizacao?.cor_primaria);
 
   const fieldsPerStep = 3; // Quantos campos por etapa
   const totalSteps = formulario?.campos ? Math.ceil(formulario.campos.length / fieldsPerStep) : 1;
@@ -379,8 +391,11 @@ const FormularioPublico = () => {
         });
       }
 
-      // Redirecionar para página de obrigado
-      navigate('/obrigado');
+      // A marca viaja para a página de obrigado: é a continuação do mesmo
+      // ecrã para quem preencheu, e mudar de marca a meio seria estranho.
+      // Num refresh o estado perde-se e a página cai na marca WeGest, que é
+      // a regra em toda a parte.
+      navigate('/obrigado', { state: { organizacao } });
     } catch (error) {
       console.error('Erro ao salvar lead:', error);
 
@@ -407,10 +422,10 @@ const FormularioPublico = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto mb-4"></div>
-          <p className="text-white text-lg">Carregando formulário...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-foreground text-lg">Carregando formulário...</p>
         </div>
       </div>
     );
@@ -418,10 +433,10 @@ const FormularioPublico = () => {
 
   if (!formulario) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">Formulário não encontrado</h1>
-          <p className="text-gray-400">
+          <h1 className="text-2xl font-bold text-foreground mb-4">Formulário não encontrado</h1>
+          <p className="text-muted-foreground">
             O formulário que você está procurando não existe ou está inativo.
           </p>
         </div>
@@ -432,10 +447,12 @@ const FormularioPublico = () => {
   // Se não há campos dinâmicos, mostrar mensagem
   if (!formulario.campos || formulario.campos.length === 0) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">Formulário em Configuração</h1>
-          <p className="text-gray-400">Este formulário ainda não possui campos configurados.</p>
+          <h1 className="text-2xl font-bold text-foreground mb-4">Formulário em Configuração</h1>
+          <p className="text-muted-foreground">
+            Este formulário ainda não possui campos configurados.
+          </p>
         </div>
       </div>
     );
@@ -455,33 +472,40 @@ const FormularioPublico = () => {
   }
 
   return (
-    <div className="min-h-screen bg-black">
+    // `variaveisCss` redefine `--primary` neste ramo: o indicador de etapas e
+    // tudo o que use `bg-primary` seguem a cor da organização sem saberem dela.
+    <div className="min-h-screen bg-background" style={marca.variaveisCss}>
       <motion.section
         className="relative py-20 px-4 text-center overflow-hidden min-h-screen flex items-center"
         initial="initial"
         animate="animate"
       >
-        <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/5 to-yellow-600/5" />
+        <div
+          className="absolute inset-0"
+          style={{ background: `linear-gradient(90deg, ${marca.corSuave}, transparent)` }}
+        />
         <div className="relative z-10 max-w-6xl mx-auto">
-          {/* Logo */}
+          {/* Logótipo de quem criou o formulário. Sem logótipo carregado, cai
+              na marca WeGest — nunca na marca de outra organização, que era o
+              que acontecia (o logótipo da Distância Arrojada estava fixo aqui
+              para toda a gente). A cor segue a mesma regra, em corDaMarca.ts. */}
           <motion.div className="mb-12" variants={fadeInUp}>
             <img
-              src="/lovable-uploads/c0c8215b-1f0f-45fd-9958-dbac63dd9d3a.png"
-              alt="Distância Arrojada Logo"
-              className="h-20 mx-auto"
+              src={organizacao?.logo_url || LOGO_WEGEST}
+              alt={
+                organizacao?.logo_url ? `Logótipo de ${organizacao.nome ?? ''}`.trim() : 'WeGest'
+              }
+              className="h-20 mx-auto object-contain"
             />
           </motion.div>
 
-          <motion.h1
-            className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight"
-            variants={fadeInUp}
-          >
-            Revolucione Sua Jornada
-          </motion.h1>
-
+          {/* O nome do formulário é interno ("TVDE Geral") — serve para quem
+              o gere o distinguir dos outros, não para quem o vai preencher.
+              Quem chega aqui já sabe ao que vem: fica o logótipo, a descrição
+              e o formulário. */}
           {formulario.descricao && (
             <motion.p
-              className="text-xl md:text-2xl text-gray-300 mb-8 max-w-3xl mx-auto leading-relaxed"
+              className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed"
               variants={fadeInUp}
             >
               {formulario.descricao}
@@ -490,7 +514,8 @@ const FormularioPublico = () => {
 
           {/* Form Modal ou Success Message */}
           <motion.div
-            className="bg-gray-900 border border-yellow-500/20 rounded-3xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto mx-auto"
+            className="bg-card border rounded-3xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto mx-auto"
+            style={{ borderColor: marca.corDeContorno }}
             variants={fadeInUp}
           >
             {isSubmitted ? (
@@ -498,14 +523,15 @@ const FormularioPublico = () => {
               <div className="text-center">
                 <div className="mb-6">
                   <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                  <h3 className="text-2xl font-bold text-white mb-2">Formulário Enviado!</h3>
-                  <p className="text-gray-300 mb-6">
+                  <h3 className="text-2xl font-bold text-foreground mb-2">Formulário Enviado!</h3>
+                  <p className="text-muted-foreground mb-6">
                     Sua solicitação foi enviada com sucesso. Nossa equipe entrará em contacto
                     brevemente para finalizar os detalhes.
                   </p>
                   <Button
                     onClick={handleNewForm}
-                    className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+                    className="font-semibold hover:brightness-110"
+                    style={{ backgroundColor: marca.cor, color: marca.corDoTexto }}
                   >
                     Enviar Novo Formulário
                   </Button>
@@ -515,8 +541,8 @@ const FormularioPublico = () => {
               // Form
               <>
                 <div className="text-center mb-8">
-                  <h3 className="text-2xl font-bold text-white mb-2">Complete os Dados</h3>
-                  <p className="text-gray-300">Preencha as informações para continuar</p>
+                  <h3 className="text-2xl font-bold text-foreground mb-2">Complete os Dados</h3>
+                  <p className="text-muted-foreground">Preencha as informações para continuar</p>
                 </div>
 
                 <ProgressIndicator
@@ -543,11 +569,14 @@ const FormularioPublico = () => {
                 </AnimatePresence>
 
                 <div className="flex justify-between mt-8">
+                  {/* "Anterior" tinha texto quase preto sobre fundo escuro —
+                      ilegível. Passa a contorno e texto na cor da marca. */}
                   <Button
                     variant="outline"
                     onClick={handlePrevious}
                     disabled={currentStep === 0}
-                    className="border-yellow-500/30 hover:bg-gray-800 text-zinc-950"
+                    className="bg-transparent hover:bg-muted"
+                    style={{ borderColor: marca.corDeContorno, color: marca.cor }}
                   >
                     Anterior
                   </Button>
@@ -555,7 +584,8 @@ const FormularioPublico = () => {
                   {currentStep < totalSteps - 1 ? (
                     <Button
                       onClick={handleNext}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+                      className="font-semibold hover:brightness-110"
+                      style={{ backgroundColor: marca.cor, color: marca.corDoTexto }}
                     >
                       Continuar
                     </Button>
@@ -563,7 +593,8 @@ const FormularioPublico = () => {
                     <Button
                       onClick={handleSubmit}
                       disabled={isSubmitting}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="font-semibold hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ backgroundColor: marca.cor, color: marca.corDoTexto }}
                     >
                       {isSubmitting ? 'Enviando...' : 'Enviar Formulário'}
                     </Button>
@@ -571,7 +602,7 @@ const FormularioPublico = () => {
                 </div>
 
                 <div className="text-center mt-6">
-                  <p className="text-sm text-yellow-500 font-medium">
+                  <p className="text-sm font-medium" style={{ color: marca.cor }}>
                     ⚡ Preencha todos os campos obrigatórios
                   </p>
                 </div>
@@ -581,9 +612,14 @@ const FormularioPublico = () => {
         </div>
       </motion.section>
 
-      {/* Footer */}
+      {/* Rodapé com o nome de quem angaria o lead, e o ano corrente. Estava
+          fixo em "© 2024 DasPrent": todas as organizações mostravam a marca
+          de outra empresa a quem preenchia o formulário delas. */}
       <footer className="py-8 px-4 text-center">
-        <p className="text-gray-400 text-sm">© 2024 DasPrent. Todos os direitos reservados.</p>
+        <p className="text-muted-foreground text-sm">
+          © {new Date().getFullYear()} {organizacao?.nome ?? 'WeGest'}. Todos os direitos
+          reservados.
+        </p>
       </footer>
     </div>
   );

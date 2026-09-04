@@ -45,6 +45,15 @@ import { Separator } from '@/components/ui/separator';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { MotoristaResumoDialog } from '@/components/administrativo/MotoristaResumoDialog';
+import { buildSlotPeriodos } from '@/components/administrativo/motorista-resumo/slotPeriodos';
+import {
+  periodosDeContratos,
+  type ContratoParaPeriodo,
+} from '@/components/administrativo/motorista-resumo/periodosDoContrato';
+import {
+  buildPrecoPorTarifaModelo,
+  buildTvdeModeloPrecoMap,
+} from '@/components/administrativo/motorista-resumo/tvdeModeloPreco';
 
 interface Recibo {
   id: string;
@@ -251,21 +260,17 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         return;
       }
 
-      // 1. Fetch ALL associated Uber IDs for this driver
-      const { data: associatedUberDrivers } = await supabase
-        .from('uber_drivers')
-        .select('uber_driver_id')
-        .eq('motorista_id', motoristaId);
-
-      const associatedUberIds = (associatedUberDrivers || []).map((d) => d.uber_driver_id);
-
-      // 2. Uber Data (Official Transactions for ALL associated IDs)
+      // Uber: motorista_id já vem resolvido na própria linha do resumo
+      // semanal pelo gatilho de atribuição por plataforma (ver
+      // motorista_plataforma_identidades) — a mesma fonte que o fecho usa.
+      // Ir por uber_drivers.motorista_id (indirecção antiga) ficava para
+      // trás sempre que a identidade mudava de dono — caso real: Paulo
+      // André Antunes Badalo, transferido para a PREMIUM RIDE, aparecia
+      // aqui com 0 € de Uber apesar de ter 483,93 € já resolvidos.
       const { data: uberTrans } = await supabase
-        // O resumo semanal, não as transacções em bruto — a mesma fonte que o
-        // ecrã de Contas e o painel do motorista usam. Ver 20260814170000.
         .from('uber_resumos_semanais')
         .select('ganhos_brutos')
-        .in('uber_driver_id', associatedUberIds)
+        .eq('motorista_id', motoristaId)
         .lte('periodo_inicio', weekEndStr)
         .gte('periodo_fim', weekStartStr);
 
@@ -326,18 +331,49 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         .lte('data_movimento', weekEndStr)
         .eq('status', 'pendente');
 
-      // 5b. Aluguer semanal = preco_semana da tarifa do grupo da viatura ativa
-      const { data: viaturaContratos } = await supabase
-        .from('motorista_viaturas')
-        .select('viaturas(grupo_id, renting_grupos(renting_tarifas(preco_semana, ativa)))')
-        .eq('motorista_id', motoristaId)
-        .eq('status', 'ativo');
+      // 5b. Aluguer da semana — do CONTRATO, pelo mesmo caminho que o resumo
+      // do motorista e a lista de Contas/Resumo usam (periodosDoContrato.ts +
+      // buildSlotPeriodos). Isto era a última cópia independente do cálculo, e
+      // errava de três maneiras ao mesmo tempo: cobrava a tarifa do grupo em
+      // vez do preço acordado no contrato, cobrava a semana inteira sem
+      // pro-rata dos dias, e filtrava por status='ativo' — o que punha a
+      // 0,00 € o aluguer de qualquer semana passada cuja viatura já tivesse
+      // sido devolvida.
+      const [{ data: contratosSemana }, { data: tarifasModeloRows }] = await Promise.all([
+        supabase
+          .from('contratos_renting')
+          .select(
+            'viatura_id, data_inicio, data_fim, valor_total_manual, tarifa_id, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)'
+          )
+          .eq('contrato_condutores.motorista_id', motoristaId)
+          .is('deleted_at', null)
+          // timestamptz: com `.lte(data)` perde-se um contrato que comece com
+          // hora no último dia da semana.
+          .lt('data_inicio', format(addDays(weekEnd, 1), 'yyyy-MM-dd'))
+          .or(`data_fim.is.null,data_fim.gte.${weekStartStr}`),
+        supabase
+          .from('renting_tarifa_precos_modelo')
+          .select('tarifa_id, modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
+          .eq('renting_tarifas.tipo', 'tvde')
+          .eq('renting_tarifas.ativa', true),
+      ]);
 
-      const fixedRent = (viaturaContratos || []).reduce((acc, curr) => {
-        const tarifas = (curr.viaturas as any)?.renting_grupos?.renting_tarifas || [];
-        const tarifa = tarifas.find((t: any) => t.ativa);
-        return acc + (Number(tarifa?.preco_semana) || 0);
-      }, 0);
+      const tarifasModelo = (tarifasModeloRows ?? []) as Array<{
+        tarifa_id: string | null;
+        modelo_id: string;
+        preco_semana: number;
+      }>;
+      const { periodos: periodosAluguer } = periodosDeContratos(
+        (contratosSemana ?? []) as ContratoParaPeriodo[],
+        {
+          porTarifaModelo: buildPrecoPorTarifaModelo(tarifasModelo),
+          porModelo: buildTvdeModeloPrecoMap(tarifasModelo),
+        }
+      );
+      const fixedRent = buildSlotPeriodos(periodosAluguer, weekStart, weekEnd, new Map()).reduce(
+        (soma, p) => soma + p.custo,
+        0
+      );
 
       // 5c. Fetch Additional Costs (motorista_custos_adicionais)
       const { data: extraCostsData } = await supabase
@@ -356,7 +392,6 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       let finReparacoes = 0;
       let finCaucao = 0;
       let finSeguros = 0;
-      let finRendaViatura = 0;
       let finOutros = 0;
 
       (finData || []).forEach((mov: any) => {
@@ -368,7 +403,13 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
           if (mov.categoria === 'reparacao') finReparacoes += val;
           else if (mov.categoria === 'caucao') finCaucao += val;
           else if (mov.categoria === 'seguros') finSeguros += val;
-          else if (mov.categoria === 'renda_viatura') finRendaViatura += val;
+          // Um débito de renda_viatura já está representado no aluguer do
+          // contrato (fixedRent, acima) — somá-lo aqui duplicava sempre que
+          // havia contrato, e inventava dívida a partir do nada quando não
+          // havia (caso real: Paulo André Antunes Badalo, sem viatura
+          // atribuída, com 225 € "de aluguer" vindos só deste débito
+          // avulso). Mesma regra de movimentosMotorista.ts.
+          else if (mov.categoria === 'renda_viatura') return;
           else finOutros += val;
         }
       });
@@ -386,7 +427,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         ? faturadoPlataformas
         : faturadoPlataformas / 1.06;
 
-      const totalAluguer = fixedRent + finRendaViatura;
+      const totalAluguer = fixedRent;
       const totalOutrosCustos = finOutros + extraCostsTotal;
       const receitaTotalFinal = receitaLiquidaPlataformas + extraCredits;
       const custosTotal =

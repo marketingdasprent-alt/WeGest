@@ -344,6 +344,27 @@ export type Database = {
           },
         ]
       }
+      apify_credenciais_partilhadas: {
+        Row: {
+          apify_actor_id: string
+          apify_api_token: string
+          atualizado_em: string
+          robot_target_platform: string
+        }
+        Insert: {
+          apify_actor_id: string
+          apify_api_token: string
+          atualizado_em?: string
+          robot_target_platform: string
+        }
+        Update: {
+          apify_actor_id?: string
+          apify_api_token?: string
+          atualizado_em?: string
+          robot_target_platform?: string
+        }
+        Relationships: []
+      }
       assinaturas_handover: {
         Row: {
           assinado_em: string
@@ -934,7 +955,8 @@ export type Database = {
           org_id: string
           payload: Json
           priority: number
-          rule_id: string
+          rule_id: string | null
+          rule_snapshot: Json | null
           started_at: string | null
           status: string
           trigger_event_id: string | null
@@ -953,7 +975,8 @@ export type Database = {
           org_id: string
           payload?: Json
           priority?: number
-          rule_id: string
+          rule_id?: string | null
+          rule_snapshot?: Json | null
           started_at?: string | null
           status?: string
           trigger_event_id?: string | null
@@ -972,7 +995,8 @@ export type Database = {
           org_id?: string
           payload?: Json
           priority?: number
-          rule_id?: string
+          rule_id?: string | null
+          rule_snapshot?: Json | null
           started_at?: string | null
           status?: string
           trigger_event_id?: string | null
@@ -2745,6 +2769,70 @@ export type Database = {
           },
         ]
       }
+      cliente_anuncios: {
+        Row: {
+          cliente_id: string
+          created_at: string
+          created_by: string | null
+          data_fim: string
+          data_inicio: string
+          id: string
+          org_id: string
+          preco: number
+          updated_at: string
+          updated_by: string | null
+          viatura_id: string | null
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string
+          created_by?: string | null
+          data_fim: string
+          data_inicio: string
+          id?: string
+          org_id?: string
+          preco: number
+          updated_at?: string
+          updated_by?: string | null
+          viatura_id?: string | null
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string
+          data_inicio?: string
+          id?: string
+          org_id?: string
+          preco?: number
+          updated_at?: string
+          updated_by?: string | null
+          viatura_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_anuncios_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cliente_anuncios_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cliente_anuncios_viatura_id_fkey"
+            columns: ["viatura_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cliente_documentos: {
         Row: {
           cliente_id: string
@@ -2804,6 +2892,7 @@ export type Database = {
           created_by: string | null
           data_nascimento: string | null
           deleted_at: string | null
+          elegivel_anuncios: boolean
           email: string | null
           genero: Database["public"]["Enums"]["genero_enum"] | null
           iban: string | null
@@ -2839,6 +2928,7 @@ export type Database = {
           created_by?: string | null
           data_nascimento?: string | null
           deleted_at?: string | null
+          elegivel_anuncios?: boolean
           email?: string | null
           genero?: Database["public"]["Enums"]["genero_enum"] | null
           iban?: string | null
@@ -2874,6 +2964,7 @@ export type Database = {
           created_by?: string | null
           data_nascimento?: string | null
           deleted_at?: string | null
+          elegivel_anuncios?: boolean
           email?: string | null
           genero?: Database["public"]["Enums"]["genero_enum"] | null
           iban?: string | null
@@ -4801,43 +4892,61 @@ export type Database = {
       }
       domain_events: {
         Row: {
+          attempt: number
           correlation_id: string | null
           created_at: string
           emitted_by: string
           entity_id: string
           entity_table: string
+          error_message: string | null
           event_type: string
           id: string
+          max_attempts: number
+          next_attempt_at: string
           occurred_at: string
           org_id: string
           payload: Json
           processed_at: string | null
+          started_at: string | null
+          status: string
         }
         Insert: {
+          attempt?: number
           correlation_id?: string | null
           created_at?: string
           emitted_by: string
           entity_id: string
           entity_table: string
+          error_message?: string | null
           event_type: string
           id?: string
+          max_attempts?: number
+          next_attempt_at?: string
           occurred_at?: string
           org_id: string
           payload?: Json
           processed_at?: string | null
+          started_at?: string | null
+          status?: string
         }
         Update: {
+          attempt?: number
           correlation_id?: string | null
           created_at?: string
           emitted_by?: string
           entity_id?: string
           entity_table?: string
+          error_message?: string | null
           event_type?: string
           id?: string
+          max_attempts?: number
+          next_attempt_at?: string
           occurred_at?: string
           org_id?: string
           payload?: Json
           processed_at?: string | null
+          started_at?: string | null
+          status?: string
         }
         Relationships: [
           {
@@ -7990,6 +8099,7 @@ export type Database = {
           resolvida_em: string | null
           resolvida_por: string | null
           resolvida_por_nome: string | null
+          rule_run_id: string | null
           severidade: string
           tipo: string
           titulo: string
@@ -8011,6 +8121,7 @@ export type Database = {
           resolvida_em?: string | null
           resolvida_por?: string | null
           resolvida_por_nome?: string | null
+          rule_run_id?: string | null
           severidade?: string
           tipo: string
           titulo: string
@@ -8032,6 +8143,7 @@ export type Database = {
           resolvida_em?: string | null
           resolvida_por?: string | null
           resolvida_por_nome?: string | null
+          rule_run_id?: string | null
           severidade?: string
           tipo?: string
           titulo?: string
@@ -8057,6 +8169,20 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificacoes_rule_run_id_fkey"
+            columns: ["rule_run_id"]
+            isOneToOne: false
+            referencedRelation: "automacao_timeline_recente"
+            referencedColumns: ["run_id"]
+          },
+          {
+            foreignKeyName: "notificacoes_rule_run_id_fkey"
+            columns: ["rule_run_id"]
+            isOneToOne: false
+            referencedRelation: "automation_runs"
             referencedColumns: ["id"]
           },
           {
@@ -10641,13 +10767,69 @@ export type Database = {
           },
         ]
       }
+      ti_ticket_anexos: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          criado_por_nome: string
+          ficheiro_url: string
+          id: string
+          mime_type: string | null
+          nome: string
+          org_id: string
+          tamanho_bytes: number | null
+          ticket_id: string
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          criado_por_nome: string
+          ficheiro_url: string
+          id?: string
+          mime_type?: string | null
+          nome: string
+          org_id: string
+          tamanho_bytes?: number | null
+          ticket_id: string
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          criado_por_nome?: string
+          ficheiro_url?: string
+          id?: string
+          mime_type?: string | null
+          nome?: string
+          org_id?: string
+          tamanho_bytes?: number | null
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ti_ticket_anexos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ti_ticket_anexos_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "ti_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ti_ticket_sugestoes: {
         Row: {
           created_at: string
           criado_por: string | null
+          criado_por_nome: string | null
           id: string
           org_id: string
           respondida_em: string | null
+          resposta_texto: string | null
           texto: string
           ticket_id: string
           util: boolean | null
@@ -10655,9 +10837,11 @@ export type Database = {
         Insert: {
           created_at?: string
           criado_por?: string | null
+          criado_por_nome?: string | null
           id?: string
           org_id: string
           respondida_em?: string | null
+          resposta_texto?: string | null
           texto: string
           ticket_id: string
           util?: boolean | null
@@ -10665,9 +10849,11 @@ export type Database = {
         Update: {
           created_at?: string
           criado_por?: string | null
+          criado_por_nome?: string | null
           id?: string
           org_id?: string
           respondida_em?: string | null
+          resposta_texto?: string | null
           texto?: string
           ticket_id?: string
           util?: boolean | null
@@ -10700,6 +10886,8 @@ export type Database = {
           id: string
           numero: number | null
           org_id: string
+          resolvido_em: string | null
+          resolvido_por_nome: string | null
           status: string
           updated_at: string
         }
@@ -10713,6 +10901,8 @@ export type Database = {
           id?: string
           numero?: number | null
           org_id: string
+          resolvido_em?: string | null
+          resolvido_por_nome?: string | null
           status?: string
           updated_at?: string
         }
@@ -10726,6 +10916,8 @@ export type Database = {
           id?: string
           numero?: number | null
           org_id?: string
+          resolvido_em?: string | null
+          resolvido_por_nome?: string | null
           status?: string
           updated_at?: string
         }
@@ -13167,6 +13359,7 @@ export type Database = {
           data_primeiro_pagamento: string | null
           data_validade_financeira: string | null
           data_venda: string | null
+          elegivel_anuncios: boolean
           emissor_id: string | null
           estacao_id: string | null
           extintor_numero: string | null
@@ -13233,6 +13426,7 @@ export type Database = {
           data_primeiro_pagamento?: string | null
           data_validade_financeira?: string | null
           data_venda?: string | null
+          elegivel_anuncios?: boolean
           emissor_id?: string | null
           estacao_id?: string | null
           extintor_numero?: string | null
@@ -13299,6 +13493,7 @@ export type Database = {
           data_primeiro_pagamento?: string | null
           data_validade_financeira?: string | null
           data_venda?: string | null
+          elegivel_anuncios?: boolean
           emissor_id?: string | null
           estacao_id?: string | null
           extintor_numero?: string | null
@@ -13532,6 +13727,17 @@ export type Database = {
         }
         Relationships: []
       }
+      v_atraso_das_fontes: {
+        Row: {
+          atrasada: boolean | null
+          dias_de_atraso: number | null
+          fonte: string | null
+          org_id: string | null
+          organizacao: string | null
+          ultimo_dado: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       acordo_cancelar: { Args: { p_acordo_id: string }; Returns: undefined }
@@ -13601,7 +13807,13 @@ export type Database = {
         Args: { p_cartao_id: string; p_motorista_id: string }
         Returns: undefined
       }
-      automation_catalogo: { Args: Record<PropertyKey, never>; Returns: Json }
+      automation_catalogo: { Args: never; Returns: Json }
+      automation_rule_snapshot: {
+        Args: {
+          p_regra: Database["public"]["Tables"]["automation_rules"]["Row"]
+        }
+        Returns: Json
+      }
       automation_runs_claim: {
         Args: { p_max?: number }
         Returns: {
@@ -13618,7 +13830,8 @@ export type Database = {
           org_id: string
           payload: Json
           priority: number
-          rule_id: string
+          rule_id: string | null
+          rule_snapshot: Json | null
           started_at: string | null
           status: string
           trigger_event_id: string | null
@@ -13646,7 +13859,8 @@ export type Database = {
           org_id: string
           payload: Json
           priority: number
-          rule_id: string
+          rule_id: string | null
+          rule_snapshot: Json | null
           started_at: string | null
           status: string
           trigger_event_id: string | null
@@ -13674,7 +13888,8 @@ export type Database = {
           org_id: string
           payload: Json
           priority: number
-          rule_id: string
+          rule_id: string | null
+          rule_snapshot: Json | null
           started_at: string | null
           status: string
           trigger_event_id: string | null
@@ -13860,7 +14075,7 @@ export type Database = {
               p_contrato_id: string
               p_data_troca: string
               p_motivo: string
-              p_viatura_id?: string | null
+              p_viatura_id?: string
             }
             Returns: string
           }
@@ -13876,6 +14091,39 @@ export type Database = {
       current_user_cargo: { Args: never; Returns: string }
       devolver_cartao_frota: {
         Args: { p_cartao_id: string }
+        Returns: undefined
+      }
+      domain_events_claim: {
+        Args: { p_max?: number }
+        Returns: {
+          attempt: number
+          correlation_id: string | null
+          created_at: string
+          emitted_by: string
+          entity_id: string
+          entity_table: string
+          error_message: string | null
+          event_type: string
+          id: string
+          max_attempts: number
+          next_attempt_at: string
+          occurred_at: string
+          org_id: string
+          payload: Json
+          processed_at: string | null
+          started_at: string | null
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "domain_events"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      domain_events_complete: { Args: { p_id: string }; Returns: undefined }
+      domain_events_fail: {
+        Args: { p_erro: string; p_id: string }
         Returns: undefined
       }
       email_caixa_tem_credenciais: {
@@ -13973,6 +14221,26 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      fn_accao_motorista_atualizar_campo: {
+        Args: { p_config: Json; p_entity_id: string; p_org_id: string }
+        Returns: Json
+      }
+      fn_accao_ticket_alterar_estado: {
+        Args: { p_config: Json; p_entity_id: string; p_org_id: string }
+        Returns: Json
+      }
+      fn_accao_viatura_atualizar_campo: {
+        Args: { p_config: Json; p_entity_id: string; p_org_id: string }
+        Returns: Json
+      }
+      fn_avaliar_condicao: {
+        Args: { p_condicao: Json; p_payload: Json }
+        Returns: boolean
+      }
+      fn_avaliar_condicoes: {
+        Args: { p_condicoes: Json; p_payload: Json }
+        Returns: boolean
+      }
       fn_checkin_abrir_motorista_viatura: {
         Args: {
           p_data_inicio: string
@@ -13990,6 +14258,8 @@ export type Database = {
         }
         Returns: number
       }
+      fn_condicao_invalida: { Args: { p_condicao: Json }; Returns: string }
+      fn_condicoes_invalidas: { Args: { p_condicoes: Json }; Returns: string }
       fn_contrato_dias: {
         Args: { p_data_fim: string; p_data_inicio: string }
         Returns: number
@@ -14007,6 +14277,15 @@ export type Database = {
       fn_ensure_cliente_condutor: {
         Args: { p_motorista_id: string; p_org_id: string }
         Returns: string
+      }
+      fn_executar_accao_interna: {
+        Args: {
+          p_config: Json
+          p_entity_id: string
+          p_entity_table: string
+          p_org_id: string
+        }
+        Returns: Json
       }
       fn_slot_inserir_cobranca: {
         Args: {
@@ -14286,6 +14565,7 @@ export type Database = {
         Args: { p_dias_resolvidas?: number }
         Returns: Json
       }
+      limpar_notifications_inertes: { Args: { p_dias?: number }; Returns: Json }
       listar_colaboradores: {
         Args: never
         Returns: {
@@ -14700,10 +14980,10 @@ export type Database = {
         | "cancelada"
         | "expirada"
       tipo_documento_enum:
-        | "CartÃ£o CidadÃ£o"
+        | "Cartão Cidadão"
         | "Passaporte"
-        | "AutorizaÃ§Ã£o de ResidÃªncia"
-        | "Carta de ConduÃ§Ã£o"
+        | "Autorização de Residência"
+        | "Carta de Condução"
         | "Outro"
     }
     CompositeTypes: {
@@ -14864,10 +15144,10 @@ export const Constants = {
         "expirada",
       ],
       tipo_documento_enum: [
-        "CartÃ£o CidadÃ£o",
+        "Cartão Cidadão",
         "Passaporte",
-        "AutorizaÃ§Ã£o de ResidÃªncia",
-        "Carta de ConduÃ§Ã£o",
+        "Autorização de Residência",
+        "Carta de Condução",
         "Outro",
       ],
     },

@@ -8,6 +8,7 @@
  * ganhos de plataforma (essas deixaram de contar para o financeiro da
  * viatura — só o que está no contrato e o que ela custa em multas/oficina).
  */
+import { agregarMovimentos } from '../resumo/movimentosMotorista.ts';
 
 export interface ContratoSemanaInput {
   regime: 'tvde' | 'rent_a_car';
@@ -149,18 +150,15 @@ export function buildWeeklyContractSummary(
   let despesaCaucao = 0;
   let despesaSeguros = 0;
   let despesaOutros = 0;
-  for (const f of input.motoristaFinanceiro) {
-    const val = Number(f.valor) || 0;
-    if (f.tipo === 'credito') {
-      if (f.categoria === 'bolt' || f.categoria === 'uber') continue; // já vem em boltUber
-      receitaOutras += val;
-      continue;
-    }
-    if (f.categoria === 'aluguer' || f.categoria === 'renda_viatura' || f.categoria === 'reparacao')
-      continue; // já é custoAluguer / já é despesaDanos da viatura
-    if (f.categoria === 'caucao') despesaCaucao += val;
-    else if (f.categoria === 'seguros') despesaSeguros += val;
-    else despesaOutros += val;
+  // A mesma função que o resumo do motorista e a lista de Contas/Resumo
+  // usam. Estava aqui escrita à mão, e divergia das outras duas — ver
+  // ../resumo/movimentosMotorista.ts.
+  {
+    const mov = agregarMovimentos(input.motoristaFinanceiro);
+    receitaOutras += mov.receitaOutras;
+    despesaCaucao += mov.caucao;
+    despesaSeguros += mov.seguros;
+    despesaOutros += mov.outros;
   }
 
   return {

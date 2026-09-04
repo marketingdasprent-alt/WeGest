@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -16,6 +17,7 @@ interface Sugestao {
   util: boolean | null;
   resposta_texto: string | null;
   created_at: string;
+  respondida_em: string | null;
 }
 
 interface Ticket {
@@ -89,7 +91,12 @@ export default function TicketTIAutor() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-6">
-      <h1 className="text-lg font-semibold">Pedido #{ticket.numero}</h1>
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h1 className="text-lg font-semibold">Pedido #{ticket.numero}</h1>
+        <span className="text-xs text-muted-foreground">
+          {format(new Date(ticket.created_at), 'dd/MM/yyyy HH:mm')}
+        </span>
+      </div>
       <Card className="whitespace-pre-wrap p-4 text-sm">{ticket.descricao}</Card>
 
       {sugestoes.length === 0 && (
@@ -100,6 +107,9 @@ export default function TicketTIAutor() {
 
       {sugestoes.map((s) => (
         <Card key={s.id} className="space-y-3 p-4">
+          <p className="text-xs text-muted-foreground">
+            {format(new Date(s.created_at), 'dd/MM/yyyy HH:mm')}
+          </p>
           <p className="whitespace-pre-wrap text-sm">{s.texto}</p>
 
           {s.util === null && aRecusar !== s.id && (
@@ -165,6 +175,7 @@ export default function TicketTIAutor() {
                 {s.util
                   ? 'Marcou como: resolveu — o pedido foi fechado'
                   : 'Marcou como: não resolveu — alguém vai voltar a olhar para isto'}
+                {s.respondida_em && ` (${format(new Date(s.respondida_em), 'dd/MM/yyyy HH:mm')})`}
               </p>
               {s.resposta_texto && (
                 <p className="whitespace-pre-wrap rounded-md border border-border p-2 text-xs">
