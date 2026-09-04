@@ -390,23 +390,31 @@ export function DashboardAssistencia() {
               ) : (
                 // Da mais parada para a mais recente: o que interessa aqui é
                 // quem está há mais tempo à espera.
-                <div className="min-h-0 flex-1 divide-y divide-border/60 overflow-hidden">
+                //
+                // `-mx-4` anula o padding do cartão: é o contentor que sangra
+                // até à borda, não cada linha. Assim o realce do hover E os
+                // riscos entre linhas chegam os dois ao fim — antes a linha
+                // esticava-se 8px de cada lado (`-mx-2`) contra 16px de
+                // padding, e o realce ficava a meio caminho da borda.
+                // As linhas repartem a altura (`flex-1`) em vez de ficarem
+                // encostadas ao topo com um vazio por baixo.
+                <div className="-mx-4 flex min-h-0 flex-1 flex-col divide-y divide-border/60">
                   {viaturasComTicket.slice(0, 6).map((t) => (
                     <button
                       key={t.id}
                       type="button"
                       onClick={() => navigate(`/assistencia/${t.id}`)}
-                      className="-mx-2 flex w-[calc(100%+1rem)] items-start justify-between gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/60"
+                      className="flex flex-1 items-center justify-between gap-3 px-4 text-left transition-colors hover:bg-muted/60"
                     >
                       <div className="min-w-0">
-                        <div className="truncate text-[13px] font-medium">
+                        <div className="truncate text-sm font-semibold">
                           {t.matricula ?? `#${t.numero}`}
                         </div>
-                        <div className="truncate text-[11px] text-muted-foreground">{t.titulo}</div>
+                        <div className="truncate text-xs text-muted-foreground">{t.titulo}</div>
                       </div>
                       <span
                         className={cn(
-                          'shrink-0 text-[11px] tabular-nums',
+                          'shrink-0 text-xs tabular-nums',
                           t.diasAberto > DIAS_ABERTO_DEMAIS
                             ? 'font-semibold text-destructive'
                             : 'text-muted-foreground'
