@@ -60,6 +60,7 @@ const canEdit = vi.fn();
 vi.mock('@/hooks/usePermissions', () => ({ usePermissions: () => ({ canEdit }) }));
 
 const mockRpc = vi.fn();
+let updateSemEfeito = false;
 let capturedUpdatePayload: Record<string, unknown> | null = null;
 
 function chainable(result: unknown) {
@@ -80,9 +81,20 @@ vi.mock('@/integrations/supabase/client', () => ({
     from: vi.fn((table: string) => ({
       update: vi.fn((payload: unknown) => ({
         eq: vi.fn(() => {
-          if (table === 'automation_rules')
+          // Só regista quando a escrita tem mesmo efeito: com a RLS a filtrar,
+          // a base fica como estava e a releitura tem de continuar a devolver
+          // o valor antigo.
+          if (table === 'automation_rules' && !updateSemEfeito)
             capturedUpdatePayload = payload as Record<string, unknown>;
-          return Promise.resolve({ error: null });
+          // O toggle encadeia `.select('id')` para saber se alguma linha foi
+          // mesmo escrita (a RLS filtra sem devolver erro); os outros
+          // `update()` do ficheiro esperam o resultado logo a seguir ao
+          // `.eq()`. O objecto serve os dois: é thenable e tem `.select`.
+          const resultado = { data: updateSemEfeito ? [] : [{ id: 'regra-1' }], error: null };
+          return {
+            select: vi.fn(() => Promise.resolve(resultado)),
+            then: (resolve: (v: unknown) => void) => resolve(resultado),
+          };
         }),
       })),
       select: vi.fn((columns?: string) => {
@@ -210,7 +222,10 @@ vi.mock('@/integrations/supabase/client', () => ({
                 rule_id: 'rule-1',
                 nome: 'Regra Estatística Teste',
                 event_type: 'viatura.seguro_expirando',
-                ativo: true,
+                // Reflecte o que o update escreveu, como o servidor faria —
+                // com um valor fixo a releitura desfazia sempre o clique e o
+                // teste não distinguia "gravou" de "não gravou".
+                ativo: (capturedUpdatePayload?.ativo as boolean | undefined) ?? true,
                 cooldown_minutos: 1440,
                 execucoes: 5,
                 falhas: 1,
@@ -304,6 +319,7 @@ describe('AutomacaoPage — Regras e permissões', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedUpdatePayload = null;
+    updateSemEfeito = false;
     mockRpc.mockResolvedValue({ data: null, error: null });
     canEdit.mockReturnValue(true);
   });
@@ -323,6 +339,55 @@ describe('AutomacaoPage — Regras e permissões', () => {
       expect(mockToastFn).toHaveBeenCalledWith(
         expect.objectContaining({ title: 'Regra desligada' })
       );
+    });
+  });
+
+  it('o interruptor fica na posição nova depois do clique', async () => {
+    renderPage();
+    irParaTabelaDeRegras();
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+
+    const switchRegra = screen.getAllByRole('switch')[0];
+    expect(switchRegra.getAttribute('aria-checked')).toBe('true');
+
+    fireEvent.click(switchRegra);
+
+    // O toast dizia "Regra desligada" e o interruptor ficava ligado até a
+    // vista `automacao_estatisticas_por_regra` responder — meio segundo a
+    // varrer 22 mil linhas de log. Parecia que o clique não pegava.
+    await waitFor(() => {
+      expect(screen.getAllByRole('switch')[0].getAttribute('aria-checked')).toBe('false');
+    });
+  });
+
+  it('avisa quando o update não escreve nada em vez de dizer que correu bem', async () => {
+    updateSemEfeito = true;
+    renderPage();
+    irParaTabelaDeRegras();
+
+    await waitFor(() => {
+      expect(screen.getByText('Regra Estatística Teste')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByRole('switch')[0]);
+
+    // Um UPDATE que a RLS filtra devolve `error: null` e zero linhas. Sem
+    // olhar às linhas devolvidas, o ecrã dava a mudança por feita.
+    await waitFor(() => {
+      expect(mockToastFn).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Erro', variant: 'destructive' })
+      );
+    });
+    expect(mockToastFn).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Regra desligada' })
+    );
+    // E o interruptor volta ao sítio, em vez de ficar a mostrar um estado que
+    // a base de dados não tem.
+    await waitFor(() => {
+      expect(screen.getAllByRole('switch')[0].getAttribute('aria-checked')).toBe('true');
     });
   });
 

@@ -1,16 +1,49 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
+import {
+  CHAVE_ESTATISTICAS_POR_REGRA,
+  type RegraEstatistica,
+} from './useAutomacaoStats';
 
 export function useToggleAutomationRule() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ativo }: { id: string; ativo: boolean }) => {
-      const { error } = await supabase.from('automation_rules').update({ ativo }).eq('id', id);
+      // `.select()` não é decoração: um UPDATE que a RLS filtra devolve
+      // `error: null` e zero linhas, e sem isto o ecrã dizia "Regra ligada"
+      // sobre uma escrita que nunca aconteceu.
+      const { data, error } = await supabase
+        .from('automation_rules')
+        .update({ ativo })
+        .eq('id', id)
+        .select('id');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('A regra não foi actualizada — sem permissão ou já não existe.');
+      }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automacao-estatisticas-por-regra'] });
+    // Actualização optimista. A vista que alimenta a tabela varre os ~22 mil
+    // `automation_logs` a cada leitura (~0,5 s medidos): sem isto o
+    // interruptor ficava na posição antiga até o refetch chegar, com o toast
+    // já a dizer que tinha ligado — parecia que o clique não pegava.
+    onMutate: async ({ id, ativo }) => {
+      await queryClient.cancelQueries({ queryKey: CHAVE_ESTATISTICAS_POR_REGRA });
+      const anterior = queryClient.getQueryData<RegraEstatistica[]>(CHAVE_ESTATISTICAS_POR_REGRA);
+      queryClient.setQueryData<RegraEstatistica[]>(CHAVE_ESTATISTICAS_POR_REGRA, (regras) =>
+        regras?.map((r) => (r.rule_id === id ? { ...r, ativo } : r))
+      );
+      return { anterior };
+    },
+    onError: (_erro, _variaveis, contexto) => {
+      // Falhou: o interruptor volta ao sítio, senão ficava a mostrar um
+      // estado que a base não tem.
+      if (contexto?.anterior) {
+        queryClient.setQueryData(CHAVE_ESTATISTICAS_POR_REGRA, contexto.anterior);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: CHAVE_ESTATISTICAS_POR_REGRA });
     },
   });
 }
