@@ -66,3 +66,32 @@ export function calcularProlongamento(
   // Arredonda ao cêntimo: é o que vai para uma fatura.
   return { diasExtra, diaria, valorSugerido: Math.round(diaria * diasExtra * 100) / 100 };
 }
+
+/**
+ * Conversões entre o valor com e sem IVA do prolongamento.
+ *
+ * PORQUE VIVEM AQUI E NÃO NO DIÁLOGO
+ *
+ * A RPC recebe SEMPRE `valor_sem_iva` — é esse o contrato com a base de dados,
+ * e é sobre ele que o emissor soma o imposto. O ecrã é que deixa escolher em
+ * que base se escreve o número; a tradução para a base da RPC é uma regra de
+ * negócio, não decoração, por isso fica testável fora do componente.
+ *
+ * Uma taxa 0 (ou ausente) faz as duas direcções coincidirem — não há imposto
+ * para somar nem para tirar.
+ */
+
+/** Arredonda ao cêntimo. É o que vai para uma fatura. */
+const aoCentimo = (n: number): number => Math.round(n * 100) / 100;
+
+/** Tira o IVA a um valor que já o inclui. */
+export function semIva(valorComIva: number, taxaIva: number): number {
+  if (!Number.isFinite(taxaIva) || taxaIva <= 0) return aoCentimo(valorComIva);
+  return aoCentimo(valorComIva / (1 + taxaIva / 100));
+}
+
+/** Soma o IVA a um valor que não o inclui. */
+export function comIva(valorSemIva: number, taxaIva: number): number {
+  if (!Number.isFinite(taxaIva) || taxaIva <= 0) return aoCentimo(valorSemIva);
+  return aoCentimo(valorSemIva * (1 + taxaIva / 100));
+}

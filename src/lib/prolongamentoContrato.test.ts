@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { contratoDias } from './contratoDias';
-import { diariaDoContrato, calcularProlongamento } from './prolongamentoContrato';
+import { diariaDoContrato, calcularProlongamento, semIva, comIva } from './prolongamentoContrato';
 
 // Contrato típico: 30 dias, 1.400 € acordados à mão. Diária = 46,67 €.
 const CONTRATO = {
@@ -91,5 +91,44 @@ describe('calcularProlongamento', () => {
     expect(r.diasExtra).toBe(3);
     expect(r.diaria).toBeNull();
     expect(r.valorSugerido).toBeNull();
+  });
+});
+
+describe('conversões de IVA do prolongamento', () => {
+  it('tira o IVA a um valor que o inclui', () => {
+    // O caso real do contrato #841: 67,65 com IVA são 55,00 sem.
+    expect(semIva(67.65, 23)).toBe(55);
+  });
+
+  it('soma o IVA a um valor que não o inclui', () => {
+    expect(comIva(55, 23)).toBe(67.65);
+  });
+
+  it('as duas direcções fecham uma na outra quando o líquido é redondo', () => {
+    expect(comIva(semIva(67.65, 23), 23)).toBe(67.65);
+  });
+
+  it('ida e volta pode afastar-se um cêntimo — o líquido é que manda', () => {
+    // 123,45 / 1,23 = 100,3658… → 100,37 → × 1,23 = 123,4551 → 123,46.
+    // Não é bug: a fatura assenta no preço SEM IVA e o imposto é calculado por
+    // cima, como manda a faturação certificada. Quem escreve "com IVA" pode
+    // portanto ver 1 cêntimo de diferença no total — é por isso que o diálogo
+    // mostra a decomposição antes de emitir.
+    expect(comIva(semIva(123.45, 23), 23)).toBe(123.46);
+  });
+
+  it('arredonda ao cêntimo, que é o que vai para a fatura', () => {
+    // 100 / 1.23 = 81,300813... → 81,30
+    expect(semIva(100, 23)).toBe(81.3);
+  });
+
+  it('taxa zero faz as duas direcções coincidirem', () => {
+    expect(semIva(50, 0)).toBe(50);
+    expect(comIva(50, 0)).toBe(50);
+  });
+
+  it('taxa inválida não inventa imposto', () => {
+    expect(semIva(50, Number.NaN)).toBe(50);
+    expect(comIva(50, Number.NaN)).toBe(50);
   });
 });

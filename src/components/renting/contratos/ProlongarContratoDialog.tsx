@@ -16,7 +16,7 @@ import { formatDate } from '@/utils/formatters';
 import { useProlongarContrato } from '@/hooks/useContratosRenting';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { carregarCobrancaParaEmitir, baixarDocumentoPdf } from '@/lib/faturacao';
-import { calcularProlongamento } from '@/lib/prolongamentoContrato';
+import { calcularProlongamento, semIva, comIva } from '@/lib/prolongamentoContrato';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 interface Props {
@@ -36,6 +36,12 @@ export function ProlongarContratoDialog({ open, onOpenChange, contrato }: Props)
   const [valorStr, setValorStr] = useState('');
   // O valor só se auto-preenche até o gestor lhe tocar: a partir daí é dele.
   const [valorTocado, setValorTocado] = useState(false);
+  // Em que base é que o número escrito está. A RPC recebe sempre o valor SEM
+  // IVA — isto só diz como interpretar o que está no campo. Omissão: sem IVA,
+  // que é como o Rent-a-Car trabalha (a tarifa é sem imposto).
+  const [escritoComIva, setEscritoComIva] = useState(false);
+
+  const taxaIva = contrato.taxa_iva ?? 0;
 
   // 'pago' também conta como faturado: mais faturado do que pago não há, e os
   // totais estão igualmente congelados. 'anulado' fica de fora — aí a
@@ -48,6 +54,7 @@ export function ProlongarContratoDialog({ open, onOpenChange, contrato }: Props)
     setNovaDataStr('');
     setValorStr('');
     setValorTocado(false);
+    setEscritoComIva(false);
   }, [open]);
 
   const calc = useMemo(
@@ -71,13 +78,27 @@ export function ProlongarContratoDialog({ open, onOpenChange, contrato }: Props)
   );
 
   // Proposta de valor, sempre que os dias mudam e o gestor ainda não escreveu.
+  // A sugestão nasce sem IVA (é a diária do contrato); segue a base escolhida
+  // para o número no campo bater certo com o rótulo ao lado.
   useEffect(() => {
     if (valorTocado) return;
-    setValorStr(calc.valorSugerido != null ? calc.valorSugerido.toFixed(2) : '');
-  }, [calc.valorSugerido, valorTocado]);
+    if (calc.valorSugerido == null) {
+      setValorStr('');
+      return;
+    }
+    const base = escritoComIva ? comIva(calc.valorSugerido, taxaIva) : calc.valorSugerido;
+    setValorStr(base.toFixed(2));
+  }, [calc.valorSugerido, valorTocado, escritoComIva, taxaIva]);
 
   const valor = Number(valorStr.replace(',', '.'));
   const valorValido = valorStr.trim() !== '' && Number.isFinite(valor) && valor >= 0;
+
+  // O que vai realmente na RPC e na fatura. Trocar de base NÃO mexe no número
+  // escrito — só muda o que ele significa; quem se enganou na base corrige com
+  // um clique, sem ver o valor saltar-lhe debaixo do cursor.
+  const valorSemIvaFinal = valorValido ? (escritoComIva ? semIva(valor, taxaIva) : valor) : 0;
+  const valorComIvaFinal = comIva(valorSemIvaFinal, taxaIva);
+
   const podeConfirmar = calc.diasExtra > 0 && (!jaFaturado || valorValido);
 
   const fmt = (v: number) =>
@@ -90,7 +111,7 @@ export function ProlongarContratoDialog({ open, onOpenChange, contrato }: Props)
       const cobrancaId = await prolongarMut.mutateAsync({
         contratoId: contrato.id,
         novaDataFim: `${novaDataStr}T23:59:59Z`,
-        valorSemIva: jaFaturado ? valor : null,
+        valorSemIva: jaFaturado ? valorSemIvaFinal : null,
       });
 
       if (!cobrancaId) {
@@ -211,9 +232,38 @@ export function ProlongarContratoDialog({ open, onOpenChange, contrato }: Props)
 
           {jaFaturado ? (
             <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-2">
-              <Label htmlFor="prolongar-valor" className="text-xs text-muted-foreground">
-                Valor a faturar, sem IVA *
-              </Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="prolongar-valor" className="text-xs text-muted-foreground">
+                  Valor a faturar *
+                </Label>
+                {/* O número escrito fica quieto ao trocar de base — muda só a
+                    leitura dele. A decomposição por baixo mostra sempre o que
+                    vai mesmo para a fatura, para não restar dúvida. */}
+                <div className="flex rounded-md border overflow-hidden text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setEscritoComIva(false)}
+                    className={
+                      escritoComIva
+                        ? 'px-2 py-1 text-muted-foreground hover:bg-muted'
+                        : 'px-2 py-1 bg-primary text-primary-foreground font-medium'
+                    }
+                  >
+                    Sem IVA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEscritoComIva(true)}
+                    className={
+                      escritoComIva
+                        ? 'px-2 py-1 bg-primary text-primary-foreground font-medium'
+                        : 'px-2 py-1 text-muted-foreground hover:bg-muted'
+                    }
+                  >
+                    Com IVA
+                  </button>
+                </div>
+              </div>
               <Input
                 id="prolongar-valor"
                 type="number"
@@ -227,10 +277,23 @@ export function ProlongarContratoDialog({ open, onOpenChange, contrato }: Props)
                 }}
                 placeholder="0.00"
                 className="bg-background tabular-nums"
+                aria-describedby="prolongar-decomposicao"
               />
+              {valorValido && (
+                <p id="prolongar-decomposicao" className="text-xs tabular-nums">
+                  Na fatura: <strong>{fmt(valorSemIvaFinal)}</strong> sem IVA
+                  {taxaIva > 0 && (
+                    <>
+                      {' '}
+                      + {fmt(valorComIvaFinal - valorSemIvaFinal)} de IVA ({taxaIva}%) ={' '}
+                      <strong>{fmt(valorComIvaFinal)}</strong>
+                    </>
+                  )}
+                </p>
+              )}
               {calc.diaria != null && calc.diasExtra > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Sugestão: {calc.diasExtra} × {fmt(calc.diaria)} (diária do contrato) ={' '}
+                  Sugestão: {calc.diasExtra} × {fmt(calc.diaria)} (diária do contrato, sem IVA) ={' '}
                   {fmt(calc.valorSugerido ?? 0)}. Podes corrigir antes de emitir.
                 </p>
               )}
