@@ -229,7 +229,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
   const showsManual = valorTotalManual != null && valorTotalManual > 0 && !isFacturado;
 
   return (
-    <Card className="bg-card border-border sticky top-4">
+    <Card className="bg-card border-border">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">

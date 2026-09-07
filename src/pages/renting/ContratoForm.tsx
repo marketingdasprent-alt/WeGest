@@ -131,6 +131,22 @@ const ContratoForm = () => {
   const motoristaIdPrincipal =
     condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null;
 
+  // Um contrato já existente não se edita por aqui — só as acções dedicadas
+  // (Prolongar, Renovar, Fechar, Reverter para reserva) mexem nos valores.
+  // Na criação (isEdit=false) os campos continuam livres, para dar para
+  // preencher o contrato pela primeira vez.
+  const camposTravados = isEdit && !!contrato;
+  // pointer-events-none é o reforço: o Select da Radix decide se abre pelo
+  // seu próprio estado em JS, não só pelo atributo disabled nativo, por isso
+  // o fieldset sozinho não lhe chega. O cinzento dos campos já vem do próprio
+  // componente (disabled:opacity-*) — não se acrescenta opacidade ao bloco
+  // inteiro, que escurecia tudo lá dentro (labels, cartões) no tema escuro.
+  // min-w-0 desfaz o min-width:min-content que o fieldset traz de fábrica e
+  // que partia os grids lá dentro.
+  const camposFieldsetClass = camposTravados
+    ? 'min-w-0 border-0 p-0 m-0 pointer-events-none select-none'
+    : 'min-w-0 border-0 p-0 m-0';
+
   const abriuEntregaAoCriarRef = useRef(false);
 
   useEffect(() => {
@@ -273,7 +289,12 @@ const ContratoForm = () => {
         <Button
           type="button"
           onClick={handleSubmit}
-          disabled={isPending || contrato?.substituido_em != null || condutoresRascunho.length > 0}
+          disabled={
+            isPending ||
+            contrato?.substituido_em != null ||
+            condutoresRascunho.length > 0 ||
+            camposTravados
+          }
           className="gap-2"
         >
           {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -374,36 +395,44 @@ const ContratoForm = () => {
                   </TabsList>
 
                   <TabsContent value="geral" className="mt-4">
-                    <ContratoTabGeral
-                      form={form}
-                      clientes={clientes}
-                      motoristas={motoristas}
-                      viaturas={viaturasParaSelecao}
-                      grupos={grupos}
-                      grupoIdAtual={grupoIdAtual}
-                      estacoes={estacoes}
-                      viaturaLocked={viaturaLocked}
-                      reservaCodigo={reservaAssociada?.codigo ?? null}
-                      onViaturaChange={aplicarDadosViatura}
-                      contratoId={contrato?.id ?? null}
-                      onCriarNovoCliente={() => setClienteDialogOpen(true)}
-                      onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
-                    />
+                    <fieldset disabled={camposTravados} className={camposFieldsetClass}>
+                      <ContratoTabGeral
+                        form={form}
+                        clientes={clientes}
+                        motoristas={motoristas}
+                        viaturas={viaturasParaSelecao}
+                        grupos={grupos}
+                        grupoIdAtual={grupoIdAtual}
+                        estacoes={estacoes}
+                        viaturaLocked={viaturaLocked}
+                        reservaCodigo={reservaAssociada?.codigo ?? null}
+                        onViaturaChange={aplicarDadosViatura}
+                        contratoId={contrato?.id ?? null}
+                        onCriarNovoCliente={() => setClienteDialogOpen(true)}
+                        onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
+                      />
+                    </fieldset>
                   </TabsContent>
 
                   {isEdit && contrato && (
                     <TabsContent value="coberturas" className="mt-4">
-                      <ContratoTabCoberturas form={form} coberturas={coberturas} />
+                      <fieldset disabled={camposTravados} className={camposFieldsetClass}>
+                        <ContratoTabCoberturas form={form} coberturas={coberturas} />
+                      </fieldset>
                     </TabsContent>
                   )}
 
                   <TabsContent value="extras" className="mt-4">
-                    <ContratoTabExtras form={form} extras={extrasCatalogo} />
+                    <fieldset disabled={camposTravados} className={camposFieldsetClass}>
+                      <ContratoTabExtras form={form} extras={extrasCatalogo} />
+                    </fieldset>
                   </TabsContent>
 
                   {isEdit && contrato && (
                     <TabsContent value="taxas" className="mt-4">
-                      <ContratoTabTaxas form={form} taxas={taxasCatalogo} />
+                      <fieldset disabled={camposTravados} className={camposFieldsetClass}>
+                        <ContratoTabTaxas form={form} taxas={taxasCatalogo} />
+                      </fieldset>
                     </TabsContent>
                   )}
 
@@ -445,7 +474,7 @@ const ContratoForm = () => {
           </CardContent>
         </Card>
 
-        <aside>
+        <aside className="sticky top-4 space-y-4 self-start">
           <ResumoContrato
             dataInicio={dataInicio}
             dataFim={dataFim}
@@ -461,7 +490,7 @@ const ContratoForm = () => {
             totalSnapshot={contrato?.total_final}
             subtotalSnapshot={contrato?.total_subtotal}
             ivaSnapshot={contrato?.total_iva}
-            editavel
+            editavel={!camposTravados}
             onValorTotalManualChange={(valor) =>
               // Nota sobre shouldDirty: o que se escreve aqui sobrevive aos
               // `form.reset` dos efeitos de hidratação das relações (condutores,
