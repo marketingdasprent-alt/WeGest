@@ -25,7 +25,7 @@ import {
   type CategoriaAlerta,
 } from '@/components/dashboard/AlertaCategoriaRow';
 import { ChartMetric } from '@/components/dashboard/ChartMetric';
-import { useResumoPlataformas, type ResumoPlataforma } from '@/hooks/useResumoPlataformas';
+import { useResumoPlataformas } from '@/hooks/useResumoPlataformas';
 import { useFaturacaoPendentes } from '@/hooks/useFaturacaoPendentes';
 import { useContasAReceber, DIAS_EM_ABERTO_ALERTA } from '@/hooks/useContasAReceber';
 import { useContratosARenovar } from '@/hooks/useContratosARenovar';
@@ -58,10 +58,6 @@ const PLATAFORMA_SUB: Record<string, string> = {
   EDP: 'Energia',
   'Via Verde': 'Portagens',
 };
-
-function somaReceita(dados: ResumoPlataforma[]): number {
-  return dados.filter((p) => p.tipo_valor === 'receita').reduce((s, p) => s + p.valor, 0);
-}
 
 export function DashboardFinanceiro() {
   const navigate = useNavigate();
@@ -100,7 +96,6 @@ export function DashboardFinanceiro() {
     plataformasInicio,
     plataformasFim
   );
-  const { dados: dadosMes, loading: loadingMes } = useResumoPlataformas(mes.inicio, mes.fim);
   const { pendentes, loading: loadingPendentes } = useFaturacaoPendentes();
   const { data: contasAReceber } = useContasAReceber();
   const { contratos: contratosARenovar } = useContratosARenovar();
@@ -117,7 +112,7 @@ export function DashboardFinanceiro() {
   const { resumo: cartoesObe } = useCartoesObeResumo();
   const { resumo: recibos } = useRecibosVerdesResumo();
 
-  const loading = loadingPlataformas || loadingMes || loadingPendentes || faturado.loading;
+  const loading = loadingPlataformas || loadingPendentes || faturado.loading;
   const semanaLabel = `${format(semana.inicio, 'd MMM', { locale: pt })} – ${format(semana.fim, 'd MMM', { locale: pt })}`;
   const plataformasLabel = `${format(plataformasInicio, 'd MMM', { locale: pt })} – ${format(plataformasFim, 'd MMM', { locale: pt })}`;
 
@@ -244,16 +239,26 @@ export function DashboardFinanceiro() {
                   cobranças há +{DIAS_EM_ABERTO_ALERTA} dias
                 </span>
               </KpiItem>
+              {/* Era "Líquido este mês", e não era líquido nem do mês: somava
+                  só a receita Bolt+Uber, que são resumos SEMANAIS e só existem
+                  depois de a semana fechar — dava 0,00 € no início de cada mês
+                  com o gráfico ao lado a mostrar a faturação real.
+                  "A receber" é tudo o que está emitido e por liquidar, do
+                  mesmo hook que alimenta o "Em atraso" ao lado: este é o
+                  total, aquele é a fatia com mais de 30 dias. */}
               <KpiItem
                 icon={Banknote}
                 cor="violet"
-                label="Líquido este mês"
-                valor={fmtEur(somaReceita(dadosMes))}
-                onClick={() => navigate('/administrativo')}
+                label="A receber"
+                valor={fmtEur(contasAReceber?.totalAReceber ?? 0)}
+                onClick={() => navigate('/administrativo/faturacao')}
                 index={4}
               >
                 <span className="text-[11px] text-muted-foreground">
-                  {format(mes.inicio, 'MMMM', { locale: pt })}
+                  <b className="font-semibold text-foreground tabular-nums">
+                    {contasAReceber?.porLiquidar ?? 0}
+                  </b>{' '}
+                  cobranças emitidas
                 </span>
               </KpiItem>
             </div>

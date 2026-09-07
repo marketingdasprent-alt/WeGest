@@ -134,6 +134,22 @@ describe('calcularContasAReceber', () => {
 
   it('sem cobrangas devolve zeros', () => {
     const resultado = calcularContasAReceber([], new Map(), new Map(), AGORA);
-    expect(resultado).toEqual({ totalAReceber: 0, emAberto: [] });
+    expect(resultado).toEqual({ totalAReceber: 0, porLiquidar: 0, emAberto: [] });
+  });
+
+  it('conta quantas cobrancas compoem o total por liquidar', () => {
+    const resultado = calcularContasAReceber(
+      [
+        cobranca({ id: 'c1', valor_total: 100 }),
+        cobranca({ id: 'c2', valor_total: 50 }),
+        // Liquidada por completo: entra na lista mas nao no total nem na conta.
+        cobranca({ id: 'c3', valor_total: 30 }),
+      ],
+      new Map([['c3', 30]]),
+      new Map(),
+      AGORA
+    );
+    expect(resultado.totalAReceber).toBe(150);
+    expect(resultado.porLiquidar).toBe(2);
   });
 });
