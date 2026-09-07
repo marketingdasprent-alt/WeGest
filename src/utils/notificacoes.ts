@@ -4,7 +4,9 @@ import type { Notificacao } from '@/types/notificacao';
  * Destino e rótulo do botão "Ver" de cada tipo de notificação.
  *
  * PORQUE ISTO É UM MAPA EXPLÍCITO E NÃO UMA CADEIA DE `if`s
- * A base de dados aceita 25 tipos (CHECK `notificacoes_tipo_check`). A versão
+ * A base de dados aceita os tipos que estiverem em `notificacao_tipos` (era um
+ * CHECK; passou a tabela para acrescentar um tipo não obrigar a reescrever a
+ * lista toda). A versão
  * anterior deste ficheiro rotulava 10 e tinha `return 'Ver candidatura'` como
  * fallback — ou seja, um alerta de login suspeito, uma fatura por enviar e um
  * ticket em atraso mostravam todos um botão a dizer **"Ver candidatura"** que
@@ -17,7 +19,7 @@ import type { Notificacao } from '@/types/notificacao';
  * lista de tipos e falha se algum ficar de fora.
  */
 
-/** Todos os tipos aceites por `notificacoes_tipo_check`, na BD. */
+/** Todos os tipos aceites pela tabela `notificacao_tipos`, na BD. */
 export const TIPOS_NOTIFICACAO = [
   'assistencia_ticket_aberto_demasiado_tempo',
   'cobranca_em_atraso',
