@@ -57,9 +57,13 @@ export interface RegraEstatistica {
   acao_tipo: string;
 }
 
+/** Chave partilhada: quem invalida ou remenda a cache usa esta constante, e
+ *  nao uma string repetida que se desalinha da proxima vez que mudar. */
+export const CHAVE_ESTATISTICAS_POR_REGRA = ['automacao-estatisticas-por-regra'] as const;
+
 export function useAutomacaoEstatisticasPorRegra() {
   return useQuery({
-    queryKey: ['automacao-estatisticas-por-regra'],
+    queryKey: CHAVE_ESTATISTICAS_POR_REGRA,
     queryFn: async (): Promise<RegraEstatistica[]> => {
       const { data, error } = await supabase
         .from('automacao_estatisticas_por_regra')

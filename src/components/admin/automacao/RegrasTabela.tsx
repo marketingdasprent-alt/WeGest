@@ -74,14 +74,15 @@ function CabecalhoDeSeccao({ modulo, total }: { modulo: ModuloIdentidade; total:
 export function RegrasTabela({
   grupos,
   podeGerir,
-  toggleOcupado,
+  toggleEmCurso,
   onToggle,
   onAbrir,
   outrasAccoes,
 }: {
   grupos: GrupoDeRegras[];
   podeGerir: boolean;
-  toggleOcupado: boolean;
+  /** rule_id da regra a ser gravada — só essa fica travada. */
+  toggleEmCurso?: string;
   onToggle: (id: string, ativo: boolean) => void;
   /** Clicar na linha abre a automação no construtor. */
   onAbrir: (regra: { id: string; nome: string }) => void;
@@ -217,7 +218,7 @@ export function RegrasTabela({
                   <Switch
                     checked={regra.ativo}
                     onCheckedChange={(checked) => onToggle(regra.rule_id, checked)}
-                    disabled={!podeGerir || toggleOcupado}
+                    disabled={!podeGerir || toggleEmCurso === regra.rule_id}
                   />
                 </TableCell>
               </TableRow>

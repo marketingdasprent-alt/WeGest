@@ -80,7 +80,7 @@ export function RegrasTab() {
         <RegrasTabela
           grupos={grupos}
           podeGerir={podeGerir}
-          toggleOcupado={toggleRule.isPending}
+          toggleEmCurso={toggleRule.isPending ? toggleRule.variables?.id : undefined}
           onToggle={handleToggle}
           onAbrir={(regra) => abrirRegra(regra.id)}
           outrasAccoes={outrasAccoes}
