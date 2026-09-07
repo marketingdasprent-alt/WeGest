@@ -289,10 +289,15 @@ export function ContratoFaturarDialog({
       // antigas emitidas ao titular.
 
       // ── Fase 2 — emissão fiscal no provider configurado (NUNCA reverte a Fase 1) ────
-      if (faturaZero || !cobrancaId) {
-        // Fatura a 0€ não gera documento fiscal — só o documento interno.
+      // Uma fatura a 0€ TAMBÉM vai ao emissor fiscal. Até 07/09/2026 não ia:
+      // ficava só com o documento interno, sem número fiscal, e ninguém dava
+      // por isso — foi o que aconteceu ao contrato #0841 e a mais duas
+      // cobranças. Se o emissor recusar um total zero, o catch abaixo devolve
+      // exactamente o documento local de antes, por isso o pior caso é o
+      // comportamento antigo mais um aviso.
+      if (!cobrancaId) {
         await abrirDocumentoLocal(descricao, destinatarioIdFiscal);
-        toast.success('Fatura a 0€ registada (sem movimento de conta-corrente).');
+        toast.success('Fatura registada.');
       } else {
         try {
           // Itens fiscais = linhas brutas (sem a linha sintética de desconto);
@@ -528,8 +533,9 @@ export function ContratoFaturarDialog({
             </p>
           ) : faturaZero ? (
             <p className="text-xs text-muted-foreground">
-              Fatura a 0€ (cortesia / 100% desconto) — o contrato fica facturado, mas não gera
-              movimento de conta-corrente.
+              Fatura a 0€ (cortesia / 100% desconto) — o contrato fica facturado e não gera
+              movimento de conta-corrente, mas o documento fiscal é emitido no {providerLabel} na
+              mesma.
             </p>
           ) : null}
         </div>
