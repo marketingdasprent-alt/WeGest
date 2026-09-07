@@ -79,6 +79,40 @@ const normalize = (s: string) =>
     .trim()
     .replace(/\s+/g, ' ');
 
+/**
+ * Quais destes ids de plataforma já têm motorista noutro registo.
+ *
+ * Pergunta só pelos candidatos (dezenas), em lotes e com paginação. A versão
+ * anterior trazia TODAS as linhas já ligadas e metia-as num Set — mas são 2664
+ * na Uber e 6004 na Bolt, e o PostgREST devolve no máximo 1000 por pedido. O
+ * conjunto vinha ~83% incompleto na Bolt, por isso motoristas já associados
+ * reapareciam nesta lista: associava-se outra vez, e voltavam na mesma.
+ */
+async function idsJaLigados(
+  tabela: 'uber_transactions' | 'bolt_resumos_semanais',
+  coluna: 'uber_driver_id' | 'identificador_motorista',
+  candidatos: string[]
+): Promise<Set<string>> {
+  const ligados = new Set<string>();
+  const PAGINA = 1000;
+  for (let i = 0; i < candidatos.length; i += 50) {
+    const lote = candidatos.slice(i, i + 50);
+    for (let from = 0; ; from += PAGINA) {
+      const { data, error } = await (supabase as any)
+        .from(tabela)
+        .select(coluna)
+        .in(coluna, lote)
+        .not('motorista_id', 'is', null)
+        .range(from, from + PAGINA - 1);
+      if (error) throw error;
+      const linhas = (data ?? []) as Record<string, string>[];
+      linhas.forEach((r) => ligados.add(r[coluna]));
+      if (linhas.length < PAGINA) break;
+    }
+  }
+  return ligados;
+}
+
 export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
   open,
   onOpenChange,
@@ -136,20 +170,11 @@ export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
       );
       const boltJaLigados = new Set(crmList.map((m) => m.bolt_id).filter((x): x is string => !!x));
 
-      const [uberLigadosDb, boltLigadosDb] = await Promise.all([
-        supabase
-          .from('uber_transactions')
-          .select('uber_driver_id')
-          .not('motorista_id', 'is', null)
-          .not('uber_driver_id', 'is', null),
-        supabase
-          .from('bolt_resumos_semanais')
-          .select('identificador_motorista')
-          .not('motorista_id', 'is', null)
-          .not('identificador_motorista', 'is', null),
-      ]);
-      (uberLigadosDb.data || []).forEach((r: any) => uberJaLigados.add(r.uber_driver_id));
-      (boltLigadosDb.data || []).forEach((r: any) => boltJaLigados.add(r.identificador_motorista));
+      // (b) resolve-se mais abaixo, já com os candidatos em mão — ver
+      // `marcarJaLigados`. Trazer aqui TODAS as linhas ligadas não funciona: são
+      // 2664 na Uber e 6004 na Bolt, e o PostgREST corta nas primeiras 1000. O
+      // conjunto vinha ~83% incompleto, e motoristas já associados reapareciam
+      // nesta lista por mais vezes que alguém os associasse.
 
       // Janela: últimas 8 semanas
       const desde = new Date();
@@ -213,6 +238,15 @@ export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
         fontesBolt.set(id, cur);
       });
 
+      // (b) Com os candidatos em mão, confirmar quais já estão ligados noutro
+      // registo — agora sem truncagem, perguntando só por estes ids.
+      const [uberLigados, boltLigados] = await Promise.all([
+        idsJaLigados('uber_transactions', 'uber_driver_id', [...fontesUber.keys()]),
+        idsJaLigados('bolt_resumos_semanais', 'identificador_motorista', [...fontesBolt.keys()]),
+      ]);
+      uberLigados.forEach((id) => fontesUber.delete(id));
+      boltLigados.forEach((id) => fontesBolt.delete(id));
+
       // 2ª passagem: UNIFICAR por nome normalizado (mesma pessoa em Uber + Bolt = 1 linha)
       const grupos = new Map<string, NaoAssociado>();
       const addFonte = (
@@ -256,40 +290,79 @@ export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
   const associar = async (item: NaoAssociado, motoristaId: string) => {
     setAssociando(item.key);
     try {
+      // Liga UMA conta por plataforma, de propósito — não é descuido do .find().
+      // Os grupos desta lista são unificados por NOME, e o nome que as
+      // plataformas reportam não identifica a pessoa: "José Silva" na Bolt são
+      // três motoristas distintos, um deles de outra organização. Ligar todas
+      // as contas do grupo à mesma ficha atribuiria a facturação de várias
+      // pessoas a uma só. Suportar um motorista com várias contas exige
+      // confirmação explícita de quem associa — nunca inferência pelo nome.
       const uberId = item.fontes.find((f) => f.plataforma === 'uber')?.id_plataforma;
       const boltId = item.fontes.find((f) => f.plataforma === 'bolt')?.id_plataforma;
 
-      // Liga TODAS as plataformas deste motorista de uma só vez.
+      // Cada escrita é confirmada pelas linhas que devolve. Com RLS, um update
+      // sem permissão NÃO dá erro: acerta em zero linhas e devolve sucesso.
+      // Sem contar as linhas, este ecrã dizia "Associado" e podia não ter
+      // ligado nada — e a ficha até era gravada (basta `motoristas_gestao`)
+      // enquanto as tabelas de plataforma falhavam (exigem `financeiro_recibos`),
+      // deixando a facturação órfã. Ver auditoria de 2026-09-07.
+      const porLigar: string[] = [];
+
       const fichaUpdate: Record<string, any> = {};
       if (uberId) fichaUpdate.uber_uuid = uberId;
       if (boltId) fichaUpdate.bolt_id = boltId;
       if (Object.keys(fichaUpdate).length > 0) {
-        await supabase
+        const { data, error } = await supabase
           .from('motoristas_ativos')
           .update(fichaUpdate as any)
-          .eq('id', motoristaId);
+          .eq('id', motoristaId)
+          .select('id');
+        if (error) throw error;
+        if (!data?.length) porLigar.push('a ficha do motorista');
       }
 
       if (uberId) {
-        await supabase
+        const { data, error } = await supabase
           .from('uber_drivers')
           .update({ motorista_id: motoristaId })
-          .eq('uber_driver_id', uberId);
-        await supabase
+          .eq('uber_driver_id', uberId)
+          .select('uber_driver_id');
+        if (error) throw error;
+        if (!data?.length) porLigar.push('o condutor Uber');
+
+        // O item só está nesta lista porque tem viagens por ligar, por isso
+        // zero linhas aqui é sinal de problema, não de "nada a fazer".
+        const { data: tx, error: errTx } = await supabase
           .from('uber_transactions')
           .update({ motorista_id: motoristaId })
           .eq('uber_driver_id', uberId)
-          .is('motorista_id', null);
+          .is('motorista_id', null)
+          .select('uber_driver_id');
+        if (errTx) throw errTx;
+        if (!tx?.length) porLigar.push('as viagens Uber');
       }
       if (boltId) {
-        await supabase
+        const { data, error } = await supabase
           .from('bolt_resumos_semanais')
           .update({ motorista_id: motoristaId })
           .eq('identificador_motorista', boltId)
-          .is('motorista_id', null);
+          .is('motorista_id', null)
+          .select('identificador_motorista');
+        if (error) throw error;
+        if (!data?.length) porLigar.push('os resumos Bolt');
       }
 
-      const plats = item.fontes.map((f) => f.plataforma.toUpperCase()).join(' + ');
+      if (porLigar.length > 0) {
+        throw new Error(
+          `Ficou por ligar: ${porLigar.join(', ')}. ` +
+            'Falta-te provavelmente a permissão de financeiro — pede a um administrador ' +
+            'para associar este motorista ou para te dar acesso.'
+        );
+      }
+
+      // Plataformas distintas: um grupo com várias contas da mesma plataforma
+      // dava "BOLT + BOLT + BOLT", que não diz nada a ninguém.
+      const plats = [...new Set(item.fontes.map((f) => f.plataforma.toUpperCase()))].join(' + ');
       toast({
         title: 'Associado',
         description: `${item.nome} (${plats}) ligado à ficha selecionada.`,
@@ -298,10 +371,14 @@ export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
       onChanged?.();
     } catch (err: any) {
       toast({
-        title: 'Erro',
+        title: 'Associação incompleta',
         description: err.message || 'Falha ao associar.',
         variant: 'destructive',
       });
+      // Parte pode ter sido gravada antes de falhar: recarregar mostra o que
+      // ficou mesmo ligado, em vez de deixar o ecrã a afirmar o que não é.
+      await carregar();
+      onChanged?.();
     } finally {
       setAssociando(null);
     }
