@@ -74,6 +74,9 @@ const OUTROS: ModuloIdentidade = {
  */
 const ALIAS: Record<string, string> = {
   invoice: 'cobranca',
+  // O recibo verde e um documento do motorista, mas quem o valida e quem trata
+  // das contas — o evento vive no modulo de quem age sobre ele.
+  motorista_recibo: 'cobranca',
 };
 
 const POR_CHAVE = new Map(MODULOS.map((m) => [m.chave, m]));

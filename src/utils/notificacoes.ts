@@ -20,6 +20,7 @@ import type { Notificacao } from '@/types/notificacao';
 /** Todos os tipos aceites por `notificacoes_tipo_check`, na BD. */
 export const TIPOS_NOTIFICACAO = [
   'assistencia_ticket_aberto_demasiado_tempo',
+  'cobranca_em_atraso',
   'cobranca_gerada',
   'contrato_renting_criado',
   'contrato_renting_renovacao_proxima',
@@ -31,6 +32,7 @@ export const TIPOS_NOTIFICACAO = [
   'motorista_ficha_incompleta',
   'motorista_licenca_tvde_expirando',
   'motorista_pendente',
+  'motorista_recibo_por_validar',
   'motorista_reparacao_cobranca',
   'pedido_troca_kms',
   'recibo_anulado',
@@ -113,6 +115,8 @@ const DESTINOS: Record<TipoNotificacao, DestinoNotificacao> = {
 
   // ── Financeiro ──────────────────────────────────────────────────────────
   cobranca_gerada: { label: 'Ver cobrança', rota: '/administrativo/faturacao' },
+  cobranca_em_atraso: { label: 'Ver cobrança', rota: '/administrativo/faturacao' },
+  motorista_recibo_por_validar: { label: 'Ver recibos', rota: '/administrativo' },
   invoice_nao_enviada_ao_cliente: { label: 'Ver fatura', rota: '/administrativo/faturacao' },
   recibo_anulado: { label: 'Ver recibos', rota: '/administrativo' },
 

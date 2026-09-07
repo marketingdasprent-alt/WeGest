@@ -147,7 +147,14 @@ export const CATALOGO: TemplateDeNo[] = [
  */
 const EVENTOS_POR_MODULO: Record<string, string[]> = {
   assistencia_ticket: ['assistencia_ticket.aberto_demasiado_tempo'],
-  cobranca: ['cobranca.gerada', 'invoice.nao_enviada_ao_cliente'],
+  cobranca: [
+    'cobranca.em_atraso',
+    'cobranca.gerada',
+    'invoice.nao_enviada_ao_cliente',
+    // Fica no Financeiro, e nao nos Motoristas, porque quem valida o recibo
+    // verde e quem trata das contas — ver o ALIAS em rotulos.ts.
+    'motorista_recibo.por_validar',
+  ],
   contrato_renting: [
     'contrato_renting.criado',
     'contrato_renting.fechado_com_danos',
@@ -262,6 +269,7 @@ export function moduloDoEventType(eventType: string): string {
  */
 const ROTULOS: Record<string, string> = {
   'assistencia_ticket.aberto_demasiado_tempo': 'Ticket aberto há demasiado tempo',
+  'cobranca.em_atraso': 'Cobrança em atraso',
   'cobranca.gerada': 'Cobrança gerada',
   'invoice.nao_enviada_ao_cliente': 'Fatura emitida sem ser enviada',
   'contrato_renting.criado': 'Contrato criado',
@@ -273,6 +281,7 @@ const ROTULOS: Record<string, string> = {
   'motorista.ficha_incompleta': 'Ficha do motorista incompleta',
   'motorista.licenca_tvde_expirando': 'Licença TVDE a expirar',
   'motorista.reparacao_cobranca': 'Reparação com valor a cobrar',
+  'motorista_recibo.por_validar': 'Recibo verde por validar',
   'viatura.extintor_expirando': 'Extintor a expirar',
   'viatura.inspecao_expirando': 'Inspeção periódica (IPO) a expirar',
   'viatura.iuc_a_pagar': 'IUC por pagar',
