@@ -267,83 +267,44 @@ export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
       const uberId = item.fontes.find((f) => f.plataforma === 'uber')?.id_plataforma;
       const boltId = item.fontes.find((f) => f.plataforma === 'bolt')?.id_plataforma;
 
-      // Cada escrita é confirmada pelas linhas que devolve. Com RLS, um update
-      // sem permissão NÃO dá erro: acerta em zero linhas e devolve sucesso.
-      // Sem contar as linhas, este ecrã dizia "Associado" e podia não ter
-      // ligado nada — e a ficha até era gravada (basta `motoristas_gestao`)
-      // enquanto as tabelas de plataforma falhavam (exigem `financeiro_recibos`),
-      // deixando a facturação órfã. Ver auditoria de 2026-09-07.
-      const porLigar: string[] = [];
+      // Uma só chamada, no servidor, dentro de uma transacção. Antes eram
+      // quatro escritas soltas do browser que se contradiziam entre si:
+      //  - nenhuma escrevia motorista_plataforma_identidades, que é a fonte de
+      //    verdade — as triggers de bolt/uber consultam-na em cada escrita e
+      //    repunham NULL por cima do que o ecrã acabara de gravar;
+      //  - escrever na ficha exige `motoristas_gestao` e nas tabelas de
+      //    plataforma `financeiro_recibos`, por isso um Gestor TVDE gravava
+      //    metade e falhava a outra metade sem erro nenhum.
+      // Ver migração 20260907180000.
+      const { data, error } = await (supabase as any).rpc('associar_motorista_plataforma', {
+        p_motorista_id: motoristaId,
+        p_uber_id: uberId ?? null,
+        p_bolt_id: boltId ?? null,
+      });
+      if (error) throw error;
 
-      const fichaUpdate: Record<string, any> = {};
-      if (uberId) fichaUpdate.uber_uuid = uberId;
-      if (boltId) fichaUpdate.bolt_id = boltId;
-      if (Object.keys(fichaUpdate).length > 0) {
-        const { data, error } = await supabase
-          .from('motoristas_ativos')
-          .update(fichaUpdate as any)
-          .eq('id', motoristaId)
-          .select('id');
-        if (error) throw error;
-        if (!data?.length) porLigar.push('a ficha do motorista');
-      }
+      const r = (data ?? {}) as Record<string, number>;
+      const ligou = [
+        r.uber_viagens ? `${r.uber_viagens} viagem(ns) Uber` : null,
+        r.bolt_resumos ? `${r.bolt_resumos} semana(s) Bolt` : null,
+      ].filter(Boolean);
 
-      if (uberId) {
-        const { data, error } = await supabase
-          .from('uber_drivers')
-          .update({ motorista_id: motoristaId })
-          .eq('uber_driver_id', uberId)
-          .select('uber_driver_id');
-        if (error) throw error;
-        if (!data?.length) porLigar.push('o condutor Uber');
-
-        // O item só está nesta lista porque tem viagens por ligar, por isso
-        // zero linhas aqui é sinal de problema, não de "nada a fazer".
-        const { data: tx, error: errTx } = await supabase
-          .from('uber_transactions')
-          .update({ motorista_id: motoristaId })
-          .eq('uber_driver_id', uberId)
-          .is('motorista_id', null)
-          .select('uber_driver_id');
-        if (errTx) throw errTx;
-        if (!tx?.length) porLigar.push('as viagens Uber');
-      }
-      if (boltId) {
-        const { data, error } = await supabase
-          .from('bolt_resumos_semanais')
-          .update({ motorista_id: motoristaId })
-          .eq('identificador_motorista', boltId)
-          .is('motorista_id', null)
-          .select('identificador_motorista');
-        if (error) throw error;
-        if (!data?.length) porLigar.push('os resumos Bolt');
-      }
-
-      if (porLigar.length > 0) {
-        throw new Error(
-          `Ficou por ligar: ${porLigar.join(', ')}. ` +
-            'Falta-te provavelmente a permissão de financeiro — pede a um administrador ' +
-            'para associar este motorista ou para te dar acesso.'
-        );
-      }
-
-      // Plataformas distintas: um grupo com várias contas da mesma plataforma
-      // dava "BOLT + BOLT + BOLT", que não diz nada a ninguém.
-      const plats = [...new Set(item.fontes.map((f) => f.plataforma.toUpperCase()))].join(' + ');
       toast({
         title: 'Associado',
-        description: `${item.nome} (${plats}) ligado à ficha selecionada.`,
+        description: ligou.length
+          ? `${item.nome} — ${ligou.join(' + ')} ligada(s) à ficha.`
+          : `${item.nome} ligado à ficha. Não havia histórico por adoptar.`,
       });
       setNaoAssociados((prev) => prev.filter((n) => n.key !== item.key));
       onChanged?.();
     } catch (err: any) {
       toast({
-        title: 'Associação incompleta',
+        title: 'Não foi possível associar',
         description: err.message || 'Falha ao associar.',
         variant: 'destructive',
       });
-      // Parte pode ter sido gravada antes de falhar: recarregar mostra o que
-      // ficou mesmo ligado, em vez de deixar o ecrã a afirmar o que não é.
+      // A operação é atómica no servidor: ou foi tudo, ou não foi nada. Recarrega
+      // para o ecrã mostrar o estado real em vez de afirmar o que não é.
       await carregar();
       onChanged?.();
     } finally {
