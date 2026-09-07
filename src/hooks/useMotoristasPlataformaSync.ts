@@ -15,6 +15,41 @@ function normalizeStr(str: string): string {
 
 const PARTICLES = ['de', 'da', 'do', 'das', 'dos', 'e'];
 
+/**
+ * Quais destes ids de plataforma já têm motorista noutro registo.
+ *
+ * Pergunta só pelos candidatos (dezenas), em lotes e com paginação. Antes
+ * traziam-se TODAS as linhas já ligadas para um Set — mas são 2664 na Uber e
+ * 6004 na Bolt, e o PostgREST devolve no máximo 1000 por pedido. O conjunto
+ * vinha ~83% incompleto na Bolt, por isso motoristas já associados contavam
+ * como não-associados: reapareciam na lista e no contador por mais vezes que
+ * alguém os associasse.
+ */
+export async function idsJaLigados(
+  tabela: 'uber_transactions' | 'bolt_resumos_semanais',
+  coluna: 'uber_driver_id' | 'identificador_motorista',
+  candidatos: string[]
+): Promise<Set<string>> {
+  const ligados = new Set<string>();
+  const PAGINA = 1000;
+  for (let i = 0; i < candidatos.length; i += 50) {
+    const lote = candidatos.slice(i, i + 50);
+    for (let from = 0; ; from += PAGINA) {
+      const { data, error } = await (supabase as any)
+        .from(tabela)
+        .select(coluna)
+        .in(coluna, lote)
+        .not('motorista_id', 'is', null)
+        .range(from, from + PAGINA - 1);
+      if (error) throw error;
+      const linhas = (data ?? []) as Record<string, string>[];
+      linhas.forEach((r) => ligados.add(r[coluna]));
+      if (linhas.length < PAGINA) break;
+    }
+  }
+  return ligados;
+}
+
 /** Pessoas distintas na Uber/Bolt (últimas 8 semanas) sem ficha de motorista. */
 export function useMotoristasPlataformaNaoAssociadosCount() {
   return useQuery({
@@ -32,7 +67,7 @@ export function useMotoristasPlataformaNaoAssociadosCount() {
         (crm || []).map((m: any) => m.bolt_id).filter((x: any) => !!x)
       );
 
-      const [uberDrv, boltRows, uberLigDb, boltLigDb] = await Promise.all([
+      const [uberDrv, boltRows] = await Promise.all([
         supabase.from('uber_drivers').select('uber_driver_id, full_name').is('motorista_id', null),
         supabase
           .from('bolt_resumos_semanais')
@@ -40,19 +75,22 @@ export function useMotoristasPlataformaNaoAssociadosCount() {
           .is('motorista_id', null)
           .gte('periodo_inicio', desdeDate)
           .not('identificador_motorista', 'is', null),
-        supabase
-          .from('uber_transactions')
-          .select('uber_driver_id')
-          .not('motorista_id', 'is', null)
-          .not('uber_driver_id', 'is', null),
-        supabase
-          .from('bolt_resumos_semanais')
-          .select('identificador_motorista')
-          .not('motorista_id', 'is', null)
-          .not('identificador_motorista', 'is', null),
       ]);
-      (uberLigDb.data || []).forEach((r: any) => uberLigados.add(r.uber_driver_id));
-      (boltLigDb.data || []).forEach((r: any) => boltLigados.add(r.identificador_motorista));
+
+      // Já com os candidatos em mão, confirmar quais estão ligados noutro
+      // registo — perguntando só por estes ids, sem a truncagem dos 1000.
+      const candidatosUber = [
+        ...new Set((uberDrv.data || []).map((d: any) => d.uber_driver_id).filter(Boolean)),
+      ] as string[];
+      const candidatosBolt = [
+        ...new Set((boltRows.data || []).map((r: any) => r.identificador_motorista).filter(Boolean)),
+      ] as string[];
+      const [uberLigDb, boltLigDb] = await Promise.all([
+        idsJaLigados('uber_transactions', 'uber_driver_id', candidatosUber),
+        idsJaLigados('bolt_resumos_semanais', 'identificador_motorista', candidatosBolt),
+      ]);
+      uberLigDb.forEach((id) => uberLigados.add(id));
+      boltLigDb.forEach((id) => boltLigados.add(id));
 
       // Contar PESSOAS (nome normalizado distinto), não registos.
       const nomes = new Set<string>();

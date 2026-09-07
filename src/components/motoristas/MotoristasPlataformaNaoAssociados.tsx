@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { idsJaLigados } from '@/hooks/useMotoristasPlataformaSync';
 import {
   Dialog,
   DialogContent,
@@ -78,40 +79,6 @@ const normalize = (s: string) =>
     .replace(/[^a-z0-9 ]/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
-
-/**
- * Quais destes ids de plataforma já têm motorista noutro registo.
- *
- * Pergunta só pelos candidatos (dezenas), em lotes e com paginação. A versão
- * anterior trazia TODAS as linhas já ligadas e metia-as num Set — mas são 2664
- * na Uber e 6004 na Bolt, e o PostgREST devolve no máximo 1000 por pedido. O
- * conjunto vinha ~83% incompleto na Bolt, por isso motoristas já associados
- * reapareciam nesta lista: associava-se outra vez, e voltavam na mesma.
- */
-async function idsJaLigados(
-  tabela: 'uber_transactions' | 'bolt_resumos_semanais',
-  coluna: 'uber_driver_id' | 'identificador_motorista',
-  candidatos: string[]
-): Promise<Set<string>> {
-  const ligados = new Set<string>();
-  const PAGINA = 1000;
-  for (let i = 0; i < candidatos.length; i += 50) {
-    const lote = candidatos.slice(i, i + 50);
-    for (let from = 0; ; from += PAGINA) {
-      const { data, error } = await (supabase as any)
-        .from(tabela)
-        .select(coluna)
-        .in(coluna, lote)
-        .not('motorista_id', 'is', null)
-        .range(from, from + PAGINA - 1);
-      if (error) throw error;
-      const linhas = (data ?? []) as Record<string, string>[];
-      linhas.forEach((r) => ligados.add(r[coluna]));
-      if (linhas.length < PAGINA) break;
-    }
-  }
-  return ligados;
-}
 
 export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
   open,
