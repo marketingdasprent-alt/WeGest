@@ -22,6 +22,7 @@ export const TIPOS_NOTIFICACAO = [
   'assistencia_ticket_aberto_demasiado_tempo',
   'cobranca_em_atraso',
   'cobranca_gerada',
+  'custo_sem_viatura',
   'contrato_renting_criado',
   'contrato_renting_renovacao_proxima',
   'contrato_renting_sem_checkin',
@@ -117,6 +118,7 @@ const DESTINOS: Record<TipoNotificacao, DestinoNotificacao> = {
   cobranca_gerada: { label: 'Ver cobrança', rota: '/administrativo/faturacao' },
   cobranca_em_atraso: { label: 'Ver cobrança', rota: '/administrativo/faturacao' },
   motorista_recibo_por_validar: { label: 'Ver recibos', rota: '/administrativo' },
+  custo_sem_viatura: { label: 'Ver importações', rota: '/administrativo' },
   invoice_nao_enviada_ao_cliente: { label: 'Ver fatura', rota: '/administrativo/faturacao' },
   recibo_anulado: { label: 'Ver recibos', rota: '/administrativo' },
 

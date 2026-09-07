@@ -77,6 +77,8 @@ const ALIAS: Record<string, string> = {
   // O recibo verde e um documento do motorista, mas quem o valida e quem trata
   // das contas — o evento vive no modulo de quem age sobre ele.
   motorista_recibo: 'cobranca',
+  // Combustivel e portagens por imputar sao dinheiro por acertar.
+  custo: 'cobranca',
 };
 
 const POR_CHAVE = new Map(MODULOS.map((m) => [m.chave, m]));

@@ -149,6 +149,7 @@ const EVENTOS_POR_MODULO: Record<string, string[]> = {
   assistencia_ticket: ['assistencia_ticket.aberto_demasiado_tempo'],
   cobranca: [
     'cobranca.em_atraso',
+    'custo.sem_viatura',
     'cobranca.gerada',
     'invoice.nao_enviada_ao_cliente',
     // Fica no Financeiro, e nao nos Motoristas, porque quem valida o recibo
@@ -271,6 +272,7 @@ const ROTULOS: Record<string, string> = {
   'assistencia_ticket.aberto_demasiado_tempo': 'Ticket aberto há demasiado tempo',
   'cobranca.em_atraso': 'Cobrança em atraso',
   'cobranca.gerada': 'Cobrança gerada',
+  'custo.sem_viatura': 'Custo importado sem viatura atribuída',
   'invoice.nao_enviada_ao_cliente': 'Fatura emitida sem ser enviada',
   'contrato_renting.criado': 'Contrato criado',
   'contrato_renting.fechado_com_danos': 'Contrato fechado com danos',

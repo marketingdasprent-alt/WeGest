@@ -46,6 +46,7 @@ describe('CATALOGO', () => {
     // `cobranca` em rotulos.ts. Sem ele o gatilho caia em "Outros".
     expect(eventosDoModulo('cobranca')).toContain('cobranca.em_atraso');
     expect(eventosDoModulo('cobranca')).toContain('motorista_recibo.por_validar');
+    expect(eventosDoModulo('cobranca')).toContain('custo.sem_viatura');
   });
 
   it('módulo desconhecido devolve lista vazia em vez de rebentar', () => {
