@@ -402,8 +402,8 @@ select is(
 -- esconder o que se quer medir: aqui interessa saber que o ÍNDICE as deixa
 -- passar, não o trigger.
 --
--- `escalonamento` não é um nome à escolha: `notificacoes_tipo_check` é uma
--- lista fechada de 25 valores e um tipo inventado rebenta o insert. É também o
+-- `escalonamento` não é um nome à escolha: `notificacoes.tipo` tem chave
+-- estrangeira para `notificacao_tipos` e um tipo inventado rebenta o insert. É também o
 -- caso certo — um escalonamento é precisamente um alerta que não vem do motor.
 insert into public.notificacoes (org_id, tipo, titulo, severidade, destinatario_id) values
   ('00000000-0000-0000-0000-0000000d0000', 'escalonamento', 'Alerta directo 1', 'urgente', '00000000-0000-0000-0000-0000000d0002'),

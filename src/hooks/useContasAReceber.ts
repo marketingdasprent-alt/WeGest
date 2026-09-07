@@ -23,6 +23,8 @@ export interface CobrancaEmAberto {
 export interface ContasAReceber {
   /** Soma do saldo por liquidar de todas as cobranças emitidas (valor_total - pago - creditado). */
   totalAReceber: number;
+  /** Quantas cobranças compõem esse total — o `emAberto` só tem as de +30 dias. */
+  porLiquidar: number;
   /** Cobranças emitidas há mais de 30 dias e ainda com saldo por liquidar, da mais antiga para a mais recente. */
   emAberto: CobrancaEmAberto[];
 }
@@ -42,6 +44,7 @@ export function calcularContasAReceber(
   agora: Date = new Date()
 ): ContasAReceber {
   let totalAReceber = 0;
+  let porLiquidar = 0;
   const emAberto: CobrancaEmAberto[] = [];
 
   for (const c of cobrancas) {
@@ -52,6 +55,7 @@ export function calcularContasAReceber(
     if (saldo <= 0.005) continue; // liquidada (paga e/ou creditada por completo)
 
     totalAReceber += saldo;
+    porLiquidar += 1;
 
     const diasEmAberto = c.emitida_em
       ? Math.floor((agora.getTime() - new Date(c.emitida_em).getTime()) / 86_400_000)
@@ -71,6 +75,7 @@ export function calcularContasAReceber(
 
   return {
     totalAReceber: Math.round(totalAReceber * 100) / 100,
+    porLiquidar,
     emAberto,
   };
 }
@@ -96,7 +101,7 @@ export function useContasAReceber() {
         .eq('estado', 'emitida');
       if (cobrancasError) throw cobrancasError;
       if (!cobrancas || cobrancas.length === 0) {
-        return { totalAReceber: 0, emAberto: [] };
+        return { totalAReceber: 0, porLiquidar: 0, emAberto: [] };
       }
 
       const ids = cobrancas.map((c) => c.id);
