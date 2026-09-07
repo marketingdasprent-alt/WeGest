@@ -155,7 +155,7 @@ update public.contratos_renting
 
 select throws_like(
   $$ select prolongar_contrato_renting('00000000-0000-0000-0000-0000000f0001', '2026-10-20T10:00:00Z', null) $$,
-  '%Só se prolonga um contrato em curso%',
+  '%Só se prolonga um contrato agendado ou em curso%',
   'contrato fechado é recusado — reverte-se o fecho primeiro'
 );
 

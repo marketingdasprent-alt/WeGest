@@ -90,17 +90,17 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
   // Só rent-a-car — em TVDE o período avança pela renovação, e a data de fim
   // ali é a "próxima renovação", calculada, não escrita à mão.
   //
-  // Exige 'em_curso', pela mesma razão que a renovação exige (ver
-  // 20260723150003_renovacao_exige_em_curso): prolongar pressupõe que o carro
-  // está com o cliente. Num contrato FECHADO a viatura já foi recolhida —
-  // esticar a data ali mexia no evento de recolha e na atribuição de um
-  // contrato terminado; quem se enganou no fecho reverte-o primeiro. Num
-  // AGENDADO o período ainda não arrancou, e as datas editam-se no formulário.
+  // Agendado ou em_curso, nunca fechado: num contrato FECHADO a viatura já
+  // foi recolhida — esticar a data ali mexia no evento de recolha e na
+  // atribuição de um contrato terminado; quem se enganou no fecho reverte-o
+  // primeiro. Agendado entra porque os campos do contrato deixaram de se
+  // editar directamente aqui (ver camposTravados em ContratoForm) — prolongar
+  // é a única via para esticar o fim de um contrato que ainda nem arrancou.
   const podeProlongar =
     contrato.regime === 'rent_a_car' &&
     !!contrato.data_fim &&
     !contrato.substituido_em &&
-    contrato.estado_operacional === 'em_curso';
+    (contrato.estado_operacional === 'em_curso' || contrato.estado_operacional === 'agendado');
 
   if (
     !podeFechar &&

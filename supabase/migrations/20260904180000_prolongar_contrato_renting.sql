@@ -63,12 +63,14 @@ BEGIN
     RAISE EXCEPTION 'O prolongamento é só para contratos rent-a-car. Em TVDE o período avança pela renovação.';
   END IF;
 
-  -- Exige 'em_curso', como a renovação (ver renovacao_exige_em_curso):
-  -- prolongar pressupõe que o carro está com o cliente. Num contrato fechado a
-  -- viatura já foi recolhida e mexer na data arrastava o evento de recolha e a
-  -- atribuição de um contrato terminado; num agendado o período nem começou.
-  IF v_c.estado_operacional <> 'em_curso' THEN
-    RAISE EXCEPTION 'Só se prolonga um contrato em curso (este está %). Se o fecho foi engano, reverte-o primeiro.',
+  -- Agendado ou em_curso: um contrato fechado já teve a viatura recolhida, e
+  -- mexer na data arrastava o evento de recolha e a atribuição de um
+  -- contrato terminado. Agendado entra porque as datas do contrato deixaram
+  -- de se editar directamente no formulário (ver ContratoForm) — prolongar é
+  -- agora também a única via para esticar o fim de um contrato que ainda nem
+  -- arrancou.
+  IF v_c.estado_operacional NOT IN ('agendado', 'em_curso') THEN
+    RAISE EXCEPTION 'Só se prolonga um contrato agendado ou em curso (este está %). Se o fecho foi engano, reverte-o primeiro.',
       v_c.estado_operacional;
   END IF;
 
