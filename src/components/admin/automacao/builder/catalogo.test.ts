@@ -40,6 +40,14 @@ describe('CATALOGO', () => {
     expect(eventosDoModulo('motorista')).toContain('motorista.carta_expirando');
   });
 
+  it('os dois gatilhos financeiros ficam no modulo Financeiro', () => {
+    // O recibo verde e um documento do MOTORISTA, mas quem o valida e quem trata
+    // das contas — por isso o prefixo `motorista_recibo` tem alias para
+    // `cobranca` em rotulos.ts. Sem ele o gatilho caia em "Outros".
+    expect(eventosDoModulo('cobranca')).toContain('cobranca.em_atraso');
+    expect(eventosDoModulo('cobranca')).toContain('motorista_recibo.por_validar');
+  });
+
   it('módulo desconhecido devolve lista vazia em vez de rebentar', () => {
     expect(eventosDoModulo('inexistente')).toEqual([]);
   });
