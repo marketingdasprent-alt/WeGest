@@ -910,73 +910,75 @@ const CRM = () => {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent hidden dark:block" />
       <div className="absolute inset-0 bg-grid-foreground/[0.02] bg-[size:60px_60px] hidden dark:block" />
 
-      <div className="relative z-10 p-6">
-        <div className="max-w-7xl mx-auto">
-          {/* CRM Header: Stats and Filters */}
-          <div className="mb-4 space-y-4">
-            <div className="flex justify-between items-center px-1">
-              <CRMViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />
-              <RealtimeStatus isConnected={isConnected} lastActivity={lastActivity} />
-            </div>
-
-            <CRMStats leads={leads} statusColumns={statusColumns} />
-
-            <CRMFilters
-              filters={filters}
-              onFilterChange={setFilters}
-              statusColumns={statusColumns}
-              totalLeads={leads.length}
-              filteredCount={filteredLeads.length}
-              availableTags={availableTags}
-              onGenerateReport={generateReport}
-              filteredLeads={filteredLeads}
-            />
+      {/* Sem tecto de largura nem padding horizontal proprio: o `main` do
+          DashboardLayout ja traz `p-4 md:p-8` e o `max-w-[1920px]`. O
+          `max-w-7xl` (1280px) prendia a pagina a meio em qualquer ecra maior
+          do que isso, e o kanban e das vistas que mais agradece a largura. */}
+      <div className="relative z-10 py-6">
+        {/* CRM Header: Stats and Filters */}
+        <div className="mb-4 space-y-4">
+          <div className="flex justify-between items-center px-1">
+            <CRMViewToggle viewMode={viewMode} onViewModeChange={setViewMode} />
+            <RealtimeStatus isConnected={isConnected} lastActivity={lastActivity} />
           </div>
 
-          {/* Kanban Board - Lista ou Kanban Vista */}
-          {viewMode === 'lista' ? (
-            <CRMListView
-              leads={filteredLeads}
-              statusColumns={statusColumns}
-              getTagsForFormulario={getTagsForFormulario}
-            />
-          ) : (
-            <KanbanBoard
-              columns={statusColumns.map((col) => ({
-                id: col.id,
-                title: col.title,
-                color:
-                  col.id === 'novo'
-                    ? '#3B82F6'
-                    : col.id === 'contactado'
-                      ? '#A855F7'
-                      : col.id === 'interessado'
-                        ? '#EAB308'
-                        : col.id === 'convertido'
-                          ? '#22C55E'
-                          : '#EF4444',
-                tasks: getLeadsByStatus(col.id).map((lead) => ({
-                  id: lead.id,
-                  title: lead.nome || 'Lead sem nome',
-                  email: lead.email,
-                  telefone: lead.telefone,
-                  zona: lead.zona,
-                  // As respostas do formulário vêm em JSON; o cartão do
-                  // kanban mostrava-o em bruto ({"field_178…":{"label":…}).
-                  // Ver lib/camposDoLead.ts.
-                  observacoes: observacoesLegiveis(lead.observacoes),
-                  tipo_viatura: lead.tipo_viatura,
-                  tags: lead.campaign_tags || getTagsForFormulario(lead.formulario_id),
-                  dueDate: lead.created_at
-                    ? new Date(lead.created_at).toLocaleDateString('pt-PT')
-                    : undefined,
-                })),
-              }))}
-              onTaskMove={handleTaskMove}
-              onTaskClick={(task) => navigate(`/crm/lead/${task.id}`)}
-            />
-          )}
+          <CRMStats leads={leads} statusColumns={statusColumns} />
+
+          <CRMFilters
+            filters={filters}
+            onFilterChange={setFilters}
+            statusColumns={statusColumns}
+            totalLeads={leads.length}
+            filteredCount={filteredLeads.length}
+            availableTags={availableTags}
+            onGenerateReport={generateReport}
+            filteredLeads={filteredLeads}
+          />
         </div>
+
+        {/* Kanban Board - Lista ou Kanban Vista */}
+        {viewMode === 'lista' ? (
+          <CRMListView
+            leads={filteredLeads}
+            statusColumns={statusColumns}
+            getTagsForFormulario={getTagsForFormulario}
+          />
+        ) : (
+          <KanbanBoard
+            columns={statusColumns.map((col) => ({
+              id: col.id,
+              title: col.title,
+              color:
+                col.id === 'novo'
+                  ? '#3B82F6'
+                  : col.id === 'contactado'
+                    ? '#A855F7'
+                    : col.id === 'interessado'
+                      ? '#EAB308'
+                      : col.id === 'convertido'
+                        ? '#22C55E'
+                        : '#EF4444',
+              tasks: getLeadsByStatus(col.id).map((lead) => ({
+                id: lead.id,
+                title: lead.nome || 'Lead sem nome',
+                email: lead.email,
+                telefone: lead.telefone,
+                zona: lead.zona,
+                // As respostas do formulário vêm em JSON; o cartão do
+                // kanban mostrava-o em bruto ({"field_178…":{"label":…}).
+                // Ver lib/camposDoLead.ts.
+                observacoes: observacoesLegiveis(lead.observacoes),
+                tipo_viatura: lead.tipo_viatura,
+                tags: lead.campaign_tags || getTagsForFormulario(lead.formulario_id),
+                dueDate: lead.created_at
+                  ? new Date(lead.created_at).toLocaleDateString('pt-PT')
+                  : undefined,
+              })),
+            }))}
+            onTaskMove={handleTaskMove}
+            onTaskClick={(task) => navigate(`/crm/lead/${task.id}`)}
+          />
+        )}
       </div>
     </div>
   );
