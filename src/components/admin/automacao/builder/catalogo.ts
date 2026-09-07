@@ -72,8 +72,14 @@ export const CATALOGO: TemplateDeNo[] = [
   gatilho('trigger-renting', 'contrato_renting', 'Contratos, reservas e devoluções'),
   gatilho('trigger-motoristas', 'motorista', 'Cartas, licenças, candidaturas e fichas'),
   gatilho('trigger-viaturas', 'viatura', 'Seguro, inspeção, IUC e manutenção'),
-  gatilho('trigger-financeiro', 'cobranca', 'Cobranças geradas e faturas por enviar'),
+  gatilho('trigger-financeiro', 'cobranca', 'Cobranças, faturas, recibos e custos por imputar'),
   gatilho('trigger-assistencia', 'assistencia_ticket', 'Tickets abertos há demasiado tempo'),
+  // Os dois ultimos faltavam a paleta apesar de terem regras a correr em
+  // producao (10 e 5, todas activas a 2026-09-07): os modulos existiam em
+  // MODULOS e os eventos tinham rotulo, mas sem bloco de gatilho ninguem
+  // conseguia criar nem reabrir uma regra sobre eles no construtor.
+  gatilho('trigger-seguranca', 'seguranca', 'Tentativas de login suspeitas'),
+  gatilho('trigger-utilizadores', 'utilizador', 'Entrada de novos utilizadores'),
   {
     chave: 'condicao',
     tipo: 'condicao',
@@ -169,6 +175,8 @@ const EVENTOS_POR_MODULO: Record<string, string[]> = {
     'motorista.licenca_tvde_expirando',
     'motorista.reparacao_cobranca',
   ],
+  seguranca: ['seguranca.login_suspeito'],
+  utilizador: ['utilizador.criado'],
   viatura: [
     'viatura.extintor_expirando',
     'viatura.inspecao_expirando',
@@ -292,6 +300,14 @@ const ROTULOS: Record<string, string> = {
   'seguranca.login_suspeito': 'Tentativas de login suspeitas',
   'utilizador.criado': 'Novo utilizador criado',
 };
+
+/**
+ * Os eventos que o produto conhece pelo nome. Todo o que esteja aqui tem de
+ * ser escolhivel na paleta — ha um teste que o garante, porque ja aconteceu o
+ * contrario: eventos com rotulo, emissor e regras activas que nao estavam em
+ * modulo nenhum e por isso nao apareciam no construtor.
+ */
+export const EVENTOS_COM_ROTULO = Object.keys(ROTULOS);
 
 /** Cai para o identificador: um evento novo no motor não pode dar ecrã vazio. */
 export function rotuloDoEvento(eventType: string): string {
