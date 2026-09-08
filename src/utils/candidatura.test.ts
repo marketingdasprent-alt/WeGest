@@ -2,20 +2,23 @@ import { describe, it, expect } from 'vitest';
 import { traduzirErro } from './candidatura';
 
 describe('traduzirErro', () => {
-  it('cache do schema desactualizado: diz o que fazer, sem mandar procurar migrações', () => {
-    // Caso real, 2026-09-08: um motorista não conseguia submeter a candidatura.
-    // A mensagem antiga dizia "o administrador precisa de aplicar a migration
-    // mais recente" — e não havia migração nenhuma em falta: as 25 colunas do
-    // formulário estavam todas na tabela. Era o cache do PostgREST, que se
-    // resolve com NOTIFY pgrst, 'reload schema'.
+  it('campo que a base não reconhece: não manda repetir nem culpa o candidato', () => {
+    // Caso real, 2026-09-08: o formulário em produção enviava `iban` e a coluna
+    // não existia na tabela. Dois candidatos tentaram doze vezes em 40 minutos e
+    // nenhuma tentativa podia resultar — a mensagem de então mandava-os esperar
+    // um minuto e tentar de novo, e foi exactamente o que eles fizeram, para nada.
+    //
+    // Do lado do cliente as duas causas são indistinguíveis (a coluna falta mesmo,
+    // ou o cache do PostgREST está velho), por isso a mensagem não pode prometer
+    // que a espera resolve. Nomeia as duas para quem for tratar disto.
     const msg = traduzirErro(
-      "Could not find the 'observacoes' column of 'motorista_candidaturas' in the schema cache"
+      "Could not find the 'iban' column of 'motorista_candidaturas' in the schema cache"
     );
-    expect(msg).toContain('Aguarde um minuto');
-    expect(msg).toContain('recarregar o schema');
-    expect(msg).not.toContain('migration');
+    expect(msg).toContain('avise-nos');
+    expect(msg).toContain('falta a coluna');
+    expect(msg).toContain('recarregado');
+    expect(msg).not.toMatch(/Aguarde|tente novamente|migration/);
   });
-
   it('RLS vira mensagem de permissão', () => {
     expect(traduzirErro('new row violates row-level security policy')).toContain(
       'Não tem permissão'

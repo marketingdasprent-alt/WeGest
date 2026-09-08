@@ -69,19 +69,21 @@ export function traduzirErro(msg?: string, fallback = 'Ocorreu um erro. Tente no
   )
     return 'Não tem permissão para esta ação. Inicie sessão novamente e tente outra vez.';
   // O PostgREST devolve "Could not find the 'X' column ... in the schema cache"
-  // em dois casos muito diferentes: a coluna falta mesmo, ou o CACHE do schema
-  // está desactualizado. O segundo é bem mais comum — acontece a seguir a
-  // qualquer alteração de estrutura na base — e resolve-se com
-  // `NOTIFY pgrst, 'reload schema'`, sem migração nenhuma.
+  // em dois casos que o cliente não consegue distinguir: a coluna falta mesmo
+  // na tabela, ou está lá e o cache do PostgREST ainda não a viu.
   //
-  // A mensagem antiga dizia "o administrador precisa de aplicar a migration
-  // mais recente". Apanhou uma candidatura real a 2026-09-08 e mandou procurar
-  // migrações em falta que não existiam: as 25 colunas do formulário estavam
-  // todas na tabela. Quem lê isto é um motorista a candidatar-se, não um
-  // técnico — por isso diz-se o que ele pode fazer, e a pista para o
-  // administrador fica no fim.
+  // Caso real, 2026-09-08: o formulário em produção passou a enviar `iban` e a
+  // coluna nunca chegou à base. Dois candidatos tentaram DOZE vezes entre as
+  // 15:23 e as 16:02 — nenhuma tentativa podia resultar. Não era o cache: a
+  // coluna faltava mesmo, e só a migração das 16:07 a criou.
+  //
+  // Por isso a mensagem não manda esperar nem repetir. Quem a lê é um motorista
+  // a candidatar-se, que não tem nada para corrigir e só se cansa a tentar — foi
+  // o que os dois fizeram, doze vezes, porque a mensagem de então lhes dizia
+  // para aguardar. Diz-se-lhe que o problema é nosso e que nos avise; as duas
+  // causas ficam nomeadas no fim, para quem for tratar disto.
   if (m.includes('could not find') && m.includes('column'))
-    return 'O sistema está a atualizar-se e não reconheceu um dos campos. Aguarde um minuto e tente novamente. Se continuar, avise-nos: o administrador precisa de recarregar o schema no Supabase.';
+    return 'Não foi possível guardar: o sistema não reconheceu um dos campos do formulário. Não é nada que tenha preenchido mal, e repetir não resolve — avise-nos, por favor. (Para quem gere o sistema: falta a coluna na tabela, ou o schema do PostgREST precisa de ser recarregado.)';
   if (m.includes('duplicate') || m.includes('already exists') || m.includes('unique'))
     return 'Já existe um registo com estes dados.';
   if (m.includes('network') || m.includes('failed to fetch') || m.includes('fetch'))
