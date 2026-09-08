@@ -41,6 +41,7 @@ import {
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
+import { contratoDias } from '@/lib/contratoDias';
 import { useContratoCoberturas } from '@/hooks/useContratoCoberturas';
 import { useContratoExtras, calcExtraTotal } from '@/hooks/useContratoExtras';
 import { useContratoTaxas, calcTaxaValor } from '@/hooks/useContratoTaxas';
@@ -78,13 +79,8 @@ import {
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
-/** Dias entre datas (ceil; 1d+1h = 2 dias) — espelha public.fn_contrato_dias(). */
-function calcDias(inicio?: string | null, fim?: string | null): number {
-  if (!inicio || !fim) return 0;
-  const ms = new Date(fim).getTime() - new Date(inicio).getTime();
-  if (!Number.isFinite(ms) || ms <= 0) return 0;
-  return Math.max(1, Math.ceil(ms / 86400000));
-}
+/** Dias entre datas (ceil; 1d+1h = 2 dias) — ver lib/contratoDias.ts. */
+const calcDias = contratoDias;
 
 // Estado mostrado (inclui "Creditada" quando as NCs cobrem a fatura toda) —
 // ver src/lib/estadoCobranca.ts para o porquê de não se usar "Anulada".

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RotateCcw, Undo2, XCircle, RefreshCw } from 'lucide-react';
+import { RotateCcw, Undo2, XCircle, RefreshCw, CalendarPlus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { FecharContratoDialog } from '@/components/renting/contratos/FecharContratoDialog';
 import { RenovarContratoDialog } from '@/components/renting/contratos/RenovarContratoDialog';
+import { ProlongarContratoDialog } from '@/components/renting/contratos/ProlongarContratoDialog';
 import {
   useReverterAbertura,
   useReverterFecho,
@@ -53,6 +54,7 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
   const { canEdit } = usePermissions();
   const [dialogAberto, setDialogAberto] = useState(false);
   const [renovarAberto, setRenovarAberto] = useState(false);
+  const [prolongarAberto, setProlongarAberto] = useState(false);
   const [confirmarReverter, setConfirmarReverter] = useState<
     'abertura' | 'fecho' | 'paraReserva' | null
   >(null);
@@ -83,12 +85,30 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
   const podeRenovar = contratoRenovavel(contrato);
   const renovacaoEstado = estadoRenovacaoContrato(contrato);
 
+  // Prolongar: esticar a data de fim do MESMO contrato, sem mudar de código.
+  //
+  // Só rent-a-car — em TVDE o período avança pela renovação, e a data de fim
+  // ali é a "próxima renovação", calculada, não escrita à mão.
+  //
+  // Agendado ou em_curso, nunca fechado: num contrato FECHADO a viatura já
+  // foi recolhida — esticar a data ali mexia no evento de recolha e na
+  // atribuição de um contrato terminado; quem se enganou no fecho reverte-o
+  // primeiro. Agendado entra porque os campos do contrato deixaram de se
+  // editar directamente aqui (ver camposTravados em ContratoForm) — prolongar
+  // é a única via para esticar o fim de um contrato que ainda nem arrancou.
+  const podeProlongar =
+    contrato.regime === 'rent_a_car' &&
+    !!contrato.data_fim &&
+    !contrato.substituido_em &&
+    (contrato.estado_operacional === 'em_curso' || contrato.estado_operacional === 'agendado');
+
   if (
     !podeFechar &&
     !podeReverterAbertura &&
     !podeReverterFecho &&
     !podeReverterParaReserva &&
-    !podeRenovar
+    !podeRenovar &&
+    !podeProlongar
   )
     return null;
 
@@ -105,6 +125,19 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
           >
             <RefreshCw className="h-4 w-4" />
             {renovacaoEstado === 'atraso' ? 'Renovar (em atraso)' : 'Renovar contrato'}
+          </Button>
+        )}
+
+        {podeProlongar && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setProlongarAberto(true)}
+            className="gap-2"
+            title="Estica a data de fim deste contrato (mesmo código) e fatura os dias a mais."
+          >
+            <CalendarPlus className="h-4 w-4" />
+            Prolongar
           </Button>
         )}
 
@@ -179,6 +212,14 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
         <RenovarContratoDialog
           open={renovarAberto}
           onOpenChange={setRenovarAberto}
+          contrato={contrato}
+        />
+      )}
+
+      {podeProlongar && (
+        <ProlongarContratoDialog
+          open={prolongarAberto}
+          onOpenChange={setProlongarAberto}
           contrato={contrato}
         />
       )}
