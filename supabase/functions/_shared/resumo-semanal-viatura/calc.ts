@@ -127,17 +127,18 @@ export function buildWeeklyContractSummary(
   const receitaViatura = calcResumoSemanalViatura({
     semanaInicio: input.semanaInicio,
     semanaFim: input.semanaFim,
-    contrato: input.contrato.regime === 'tvde'
-      ? input.contrato
-      : {
-          regime: 'rent_a_car',
-          dataInicio: input.contrato.dataInicio,
-          dataFim: input.contrato.dataFim,
-          valorSemanalTvde: 0,
-          tarifaDiariaRentACar: input.contrato.tarifaDiariaRentACar,
-          valorTotalManualRentACar: input.contrato.valorTotalManualRentACar,
-          diasTotaisContrato: input.contrato.diasTotaisContrato,
-        },
+    contrato:
+      input.contrato.regime === 'tvde'
+        ? input.contrato
+        : {
+            regime: 'rent_a_car',
+            dataInicio: input.contrato.dataInicio,
+            dataFim: input.contrato.dataFim,
+            valorSemanalTvde: 0,
+            tarifaDiariaRentACar: input.contrato.tarifaDiariaRentACar,
+            valorTotalManualRentACar: input.contrato.valorTotalManualRentACar,
+            diasTotaisContrato: input.contrato.diasTotaisContrato,
+          },
     totalMultas: input.totalMultas,
     totalDanos: input.totalDanos,
   });
@@ -158,7 +159,12 @@ export function buildWeeklyContractSummary(
     receitaOutras += mov.receitaOutras;
     despesaCaucao += mov.caucao;
     despesaSeguros += mov.seguros;
-    despesaOutros += mov.outros;
+    // O slot (categoria 'slot_mensal') tem linha própria no resumo do
+    // motorista e na lista de Contas/Resumo (ver movimentosMotorista.ts) —
+    // aqui, no fecho semanal, fica dentro de "outros" porque este snapshot
+    // (motorista_resumo_semanal, usado no saldo pendente) não tem coluna
+    // própria para slot. O total fica certo; só não é discriminado aqui.
+    despesaOutros += mov.outros + mov.slot;
   }
 
   return {

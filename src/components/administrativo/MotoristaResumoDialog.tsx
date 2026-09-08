@@ -147,6 +147,9 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
         outros_custos: motorista.outros_custos || 0,
         caucao: 0,
         seguros: 0,
+        // recibos_importados (CSV) não distingue slot de outros custos — fica
+        // dentro de outros_custos, tal como sempre esteve neste ramo.
+        slot: 0,
         reparacoes: motorista.reparacoes || 0,
       }
     : {
@@ -156,6 +159,11 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
         outros_custos: extraCosts.outros,
         caucao: extraCosts.caucao,
         seguros: extraCosts.seguros,
+        // Categoria 'slot_mensal' — linha própria, não vai para outros_custos.
+        // Ver movimentosMotorista.ts. NÃO confundir com `totalSlot` abaixo, que
+        // é o aluguer pro-rata dos períodos de slot (dias × tarifa) — duas
+        // coisas diferentes com nomes parecidos.
+        slot: extraCosts.slot,
         reparacoes: motorista.reparacoes || 0,
       };
   const totalSlot = slotPeriodos.reduce((s, p) => s + p.custo, 0);
@@ -312,7 +320,10 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
           combustivel: despesas.combustivel,
           portagens: despesas.portagens,
           reparacoes: despesas.reparacoes,
-          outros: despesas.outros_custos + despesas.caucao + despesas.seguros,
+          // generateFinanceiroPDF só tem uma linha "outros" (sem slot próprio)
+          // — dobra-se aqui como já acontecia com caução/seguros. O total
+          // continua certo; só não é discriminado neste PDF em concreto.
+          outros: despesas.outros_custos + despesas.caucao + despesas.seguros + despesas.slot,
           total: totalDespesas,
         },
         resumo: {
