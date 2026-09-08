@@ -29,18 +29,24 @@ VALUES (
 )
 ON CONFLICT DO NOTHING;
 
+-- O cargo vem de um JOIN a `cargos`, não de um literal solto: foi criado à
+-- mão em produção e não existe numa base de dados reconstruída do zero. Com o
+-- literal, o INSERT rebentava a foreign key no CI (DB Rebuild + pgTAP); pelo
+-- JOIN, uma base sem esse cargo produz zero linhas e a migração passa. Em
+-- produção, onde o cargo existe, o resultado é exactamente o mesmo.
 INSERT INTO public.cargo_permissoes (cargo_id, recurso_id, tem_acesso, pode_editar, org_id)
 SELECT
-  '2ceaefc4-eb62-48ab-83ef-84b139b9472c'::uuid,  -- cargo "Suporte TI" (Década Ousada)
+  c.id,
   r.id,
   true,
   true,
   '11111111-1111-1111-1111-111111111111'::uuid   -- Década Ousada
-FROM public.recursos r
-WHERE r.nome = 'ti_tickets_gerir'
+FROM public.cargos c
+JOIN public.recursos r ON r.nome = 'ti_tickets_gerir'
+WHERE c.id = '2ceaefc4-eb62-48ab-83ef-84b139b9472c'::uuid  -- cargo "Suporte TI"
   AND NOT EXISTS (
     SELECT 1 FROM public.cargo_permissoes cp
-     WHERE cp.cargo_id = '2ceaefc4-eb62-48ab-83ef-84b139b9472c'::uuid
+     WHERE cp.cargo_id = c.id
        AND cp.recurso_id = r.id
   );
 
