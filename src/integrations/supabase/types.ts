@@ -803,6 +803,39 @@ export type Database = {
         }
         Relationships: []
       }
+      automacao_regra_teste_cooldown: {
+        Row: {
+          rule_id: string
+          testado_por: string | null
+          ultimo_teste_em: string
+        }
+        Insert: {
+          rule_id: string
+          testado_por?: string | null
+          ultimo_teste_em?: string
+        }
+        Update: {
+          rule_id?: string
+          testado_por?: string | null
+          ultimo_teste_em?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automacao_regra_teste_cooldown_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: true
+            referencedRelation: "automacao_estatisticas_por_regra"
+            referencedColumns: ["rule_id"]
+          },
+          {
+            foreignKeyName: "automacao_regra_teste_cooldown_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: true
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_logs: {
         Row: {
           created_at: string
@@ -4606,6 +4639,78 @@ export type Database = {
           },
         ]
       }
+      dividas_motorista: {
+        Row: {
+          created_at: string
+          criado_por: string | null
+          criado_por_nome: string | null
+          estado: string
+          id: string
+          motorista_id: string
+          motorista_nome: string
+          org_id: string
+          pago_em: string | null
+          periodo_fim: string
+          periodo_inicio: string
+          updated_at: string
+          valor_caucao: number
+          valor_danos: number
+          valor_periodo: number
+          valor_total: number
+        }
+        Insert: {
+          created_at?: string
+          criado_por?: string | null
+          criado_por_nome?: string | null
+          estado?: string
+          id?: string
+          motorista_id: string
+          motorista_nome: string
+          org_id?: string
+          pago_em?: string | null
+          periodo_fim: string
+          periodo_inicio: string
+          updated_at?: string
+          valor_caucao?: number
+          valor_danos?: number
+          valor_periodo?: number
+          valor_total: number
+        }
+        Update: {
+          created_at?: string
+          criado_por?: string | null
+          criado_por_nome?: string | null
+          estado?: string
+          id?: string
+          motorista_id?: string
+          motorista_nome?: string
+          org_id?: string
+          pago_em?: string | null
+          periodo_fim?: string
+          periodo_inicio?: string
+          updated_at?: string
+          valor_caucao?: number
+          valor_danos?: number
+          valor_periodo?: number
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dividas_motorista_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dividas_motorista_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_templates: {
         Row: {
           ativo: boolean | null
@@ -6942,9 +7047,11 @@ export type Database = {
           data_movimento: string
           data_pagamento: string | null
           descricao: string
+          divida_id: string | null
           fatura_url: string | null
           grupo_id: string | null
           id: string
+          liquido_semanal_id: string | null
           motorista_id: string
           org_id: string | null
           recorrencia_id: string | null
@@ -6965,9 +7072,11 @@ export type Database = {
           data_movimento: string
           data_pagamento?: string | null
           descricao: string
+          divida_id?: string | null
           fatura_url?: string | null
           grupo_id?: string | null
           id?: string
+          liquido_semanal_id?: string | null
           motorista_id: string
           org_id?: string | null
           recorrencia_id?: string | null
@@ -6988,9 +7097,11 @@ export type Database = {
           data_movimento?: string
           data_pagamento?: string | null
           descricao?: string
+          divida_id?: string | null
           fatura_url?: string | null
           grupo_id?: string | null
           id?: string
+          liquido_semanal_id?: string | null
           motorista_id?: string
           org_id?: string | null
           recorrencia_id?: string | null
@@ -7179,6 +7290,57 @@ export type Database = {
           },
           {
             foreignKeyName: "motorista_historico_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      motorista_liquido_semanal: {
+        Row: {
+          gravado_em: string
+          gravado_por: string | null
+          id: string
+          liquido: number
+          motorista_id: string
+          motorista_nome: string | null
+          org_id: string
+          semana_fim: string
+          semana_inicio: string
+        }
+        Insert: {
+          gravado_em?: string
+          gravado_por?: string | null
+          id?: string
+          liquido: number
+          motorista_id: string
+          motorista_nome?: string | null
+          org_id?: string
+          semana_fim: string
+          semana_inicio: string
+        }
+        Update: {
+          gravado_em?: string
+          gravado_por?: string | null
+          id?: string
+          liquido?: number
+          motorista_id?: string
+          motorista_nome?: string | null
+          org_id?: string
+          semana_fim?: string
+          semana_inicio?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motorista_liquido_semanal_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_liquido_semanal_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizacoes"
@@ -8404,7 +8566,8 @@ export type Database = {
       notifications: {
         Row: {
           created_at: string
-          destinatario_user_id: string
+          destinatario_email_externo: string | null
+          destinatario_user_id: string | null
           digest_enviado_em: string | null
           entity_id: string | null
           entity_table: string | null
@@ -8425,7 +8588,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          destinatario_user_id: string
+          destinatario_email_externo?: string | null
+          destinatario_user_id?: string | null
           digest_enviado_em?: string | null
           entity_id?: string | null
           entity_table?: string | null
@@ -8446,7 +8610,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          destinatario_user_id?: string
+          destinatario_email_externo?: string | null
+          destinatario_user_id?: string | null
           digest_enviado_em?: string | null
           entity_id?: string | null
           entity_table?: string | null
@@ -8613,6 +8778,7 @@ export type Database = {
         Row: {
           ativa: boolean
           codigo: string
+          cor_primaria: string | null
           created_at: string
           dominio_erro: string | null
           dominio_status: string
@@ -8628,6 +8794,7 @@ export type Database = {
         Insert: {
           ativa?: boolean
           codigo: string
+          cor_primaria?: string | null
           created_at?: string
           dominio_erro?: string | null
           dominio_status?: string
@@ -8643,6 +8810,7 @@ export type Database = {
         Update: {
           ativa?: boolean
           codigo?: string
+          cor_primaria?: string | null
           created_at?: string
           dominio_erro?: string | null
           dominio_status?: string
@@ -13614,6 +13782,19 @@ export type Database = {
       }
     }
     Views: {
+      dividas_motorista_abertas: {
+        Row: {
+          motorista_id: string | null
+          motorista_nome: string | null
+          org_id: string | null
+          periodo_fim: string | null
+          periodo_inicio: string | null
+          saldo: number | null
+          valor_caucao: number | null
+          valor_danos: number | null
+        }
+        Relationships: []
+      }
       automacao_estatisticas_por_regra: {
         Row: {
           acao_tipo: string | null
@@ -14206,7 +14387,6 @@ export type Database = {
       enviar_digests_diarios: { Args: never; Returns: undefined }
       executar_jobs_automacao_manualmente: { Args: never; Returns: Json }
       execute_automation_runs: { Args: { p_max?: number }; Returns: undefined }
-      testar_regra_automacao: { Args: { p_rule_id: string }; Returns: Json }
       execute_gestor_assignment: { Args: never; Returns: number }
       faturacao_outbox_claim: {
         Args: { p_max: number }
@@ -14286,6 +14466,10 @@ export type Database = {
           p_org_id: string
         }
         Returns: undefined
+      }
+      fn_dividir_email_das_regras: {
+        Args: { p_org_id: string }
+        Returns: number
       }
       fn_ensure_cliente_condutor: {
         Args: { p_motorista_id: string; p_org_id: string }
@@ -14573,6 +14757,7 @@ export type Database = {
       is_current_user_admin: { Args: never; Returns: boolean }
       is_decada_ousada_admin: { Args: never; Returns: boolean }
       is_storage_admin: { Args: never; Returns: boolean }
+      is_suporte_ti_decada: { Args: never; Returns: boolean }
       limpar_danos_token: { Args: { p_token: string }; Returns: undefined }
       limpar_notificacoes_antigas: {
         Args: { p_dias_resolvidas?: number }
@@ -14632,6 +14817,8 @@ export type Database = {
         }[]
       }
       motorista_meus_acordos_ativos: { Args: never; Returns: Json }
+      divida_marcar_nao_paga: { Args: { p_divida_id: string }; Returns: undefined }
+      divida_marcar_paga: { Args: { p_motorista_id: string }; Returns: string }
       motorista_saldo_pendente: {
         Args: { p_ate_data?: string; p_motorista_id: string }
         Returns: number
@@ -14758,6 +14945,10 @@ export type Database = {
         }
       }
       process_domain_events: { Args: { p_max?: number }; Returns: undefined }
+      processar_automation_run: {
+        Args: { v_run: Database["public"]["Tables"]["automation_runs"]["Row"] }
+        Returns: undefined
+      }
       proxima_data_renovacao: {
         Args: { p_inicio: string; p_intervalo: number; p_opcao: string }
         Returns: string
@@ -14874,6 +15065,7 @@ export type Database = {
         Args: { p_cartao_id: string }
         Returns: undefined
       }
+      testar_regra_automacao: { Args: { p_rule_id: string }; Returns: Json }
       trocar_condutor: {
         Args: {
           p_contrato_id: string
@@ -15013,12 +15205,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -15042,11 +15234,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -15067,11 +15259,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -15092,11 +15284,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -15109,11 +15301,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

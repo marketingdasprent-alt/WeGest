@@ -34,15 +34,27 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
  * mesma semana (troca de viatura a meio, ver comentário da própria
  * migração) — soma-se por motorista_id antes de construir o acerto.
  *
- * combustivel/reparacoes ficam de fora deliberadamente: não são agregados
- * em motorista_resumo_semanal (só em cartões-frota e viatura_reparacoes,
- * por viatura, não por motorista/semana) — enviar "€0" fingiria um dado
- * que não temos.
+ * O LÍQUIDO NÃO SE CALCULA AQUI.
+ *
+ * Vinha daqui um terceiro número: `faturado − aluguer − outros`, sem os 6%
+ * do recibo verde, sem combustível, sem portagens e sem reparações — porque
+ * motorista_resumo_semanal não tem colunas para nada disso. Era o valor mais
+ * afastado dos dois ecrãs, e ia por email para o próprio motorista.
+ *
+ * O líquido bom é um só: o que o resumo mostra e grava em
+ * motorista_liquido_semanal. É esse que aqui se lê, tal e qual. Um motorista
+ * sem líquido gravado (ninguém abriu o resumo da semana dele) NÃO leva
+ * email — mais vale não enviar nada do que enviar um número diferente
+ * daquele que lhe foi mostrado.
+ *
+ * As linhas de custo (aluguer, outros) continuam a vir do resumo semanal:
+ * servem só para detalhar o email, não para chegar ao total.
  */
 export function buildSettlements(
   resumoRows: ResumoSemanalRow[],
   motoristas: MotoristaInfo[],
   periodo: string,
+  liquidoPorMotorista: Map<string, number>,
 ): SettlementData[] {
   const motoristaById = new Map(motoristas.map((m) => [m.id, m]));
 
@@ -76,6 +88,11 @@ export function buildSettlements(
     const motorista = motoristaById.get(motoristaId);
     if (!motorista?.email) continue;
 
+    // Sem líquido gravado não há acerto para enviar. Ver o comentário da
+    // função: um número inventado aqui contradiria o resumo do motorista.
+    const liquido = liquidoPorMotorista.get(motoristaId);
+    if (liquido === undefined) continue;
+
     const total_faturado = round2(acc.bolt + acc.uber + acc.outras);
     const outros_custos = round2(acc.caucao + acc.seguros + acc.outros);
     const aluguer = round2(acc.aluguer);
@@ -86,7 +103,7 @@ export function buildSettlements(
       total_faturado,
       faturado_bolt: round2(acc.bolt),
       faturado_uber: round2(acc.uber),
-      liquido: round2(total_faturado - aluguer - outros_custos),
+      liquido: round2(liquido),
       aluguer,
       outros_custos,
       periodo,

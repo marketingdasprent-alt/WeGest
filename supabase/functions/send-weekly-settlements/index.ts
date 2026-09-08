@@ -82,15 +82,33 @@ Deno.serve(async (req) => {
 
     if (motoristasError) throw motoristasError;
 
+    // O líquido que vai no email é o do resumo do motorista, tal como lhe foi
+    // mostrado — nunca recalculado aqui. Ver buildSettlements.
+    const { data: liquidos, error: liquidosError } = await supabase
+      .from('motorista_liquido_semanal')
+      .select('motorista_id, liquido')
+      .eq('semana_inicio', semanaInicio)
+      .in('motorista_id', motoristaIds);
+
+    if (liquidosError) throw liquidosError;
+
+    const liquidoPorMotorista = new Map<string, number>(
+      (liquidos ?? []).map((l: { motorista_id: string; liquido: number }) => [
+        l.motorista_id,
+        Number(l.liquido),
+      ]),
+    );
+
     const settlements = buildSettlements(
       resumoRows as ResumoSemanalRow[],
       (motoristas ?? []) as MotoristaInfo[],
       formatPeriodo(semanaInicio, semanaFim),
+      liquidoPorMotorista,
     );
 
     if (settlements.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, semanaInicio, semanaFim, enviados: 0, falhados: 0, mensagem: 'nenhum motorista com email cadastrado' }),
+        JSON.stringify({ success: true, semanaInicio, semanaFim, enviados: 0, falhados: 0, mensagem: 'nenhum motorista com email e líquido do resumo gravado' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

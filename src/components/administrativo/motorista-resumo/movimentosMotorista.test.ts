@@ -58,6 +58,18 @@ describe('classificarMovimento', () => {
       'receita_outras'
     );
   });
+
+  // O resumo escreve o seu próprio líquido como movimento de categoria
+  // `resumos`. Se esse movimento voltasse a entrar no cálculo, cada abertura
+  // do resumo lia o resultado anterior como despesa (ou receita) nova e o
+  // número fugia sozinho: −500, −1000, −1500.
+  it('o líquido escrito pelo próprio resumo nunca reentra no cálculo', () => {
+    for (const tipo of ['debito', 'credito']) {
+      const c = classificarMovimento(mov(tipo, 'resumos', 500));
+      expect(c.destino).toBe('ignorado');
+      expect(c.motivo).toContain('não entra no próprio cálculo');
+    }
+  });
 });
 
 describe('agregarMovimentos', () => {
