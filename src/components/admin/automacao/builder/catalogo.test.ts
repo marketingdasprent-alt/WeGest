@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   CATALOGO,
+  EVENTOS_COM_ROTULO,
   OPERADORES,
   criarNoDoTemplate,
   eventosDoModulo,
@@ -22,10 +23,36 @@ describe('CATALOGO', () => {
   it('há gatilhos para os módulos do WeGest e acções para agir sobre eles', () => {
     const modulos = CATALOGO.filter((t) => t.tipo === 'trigger').map((t) => t.rotulo);
     expect(modulos).toEqual(
-      expect.arrayContaining(['Renting', 'Motoristas', 'Viaturas', 'Financeiro', 'Assistência'])
+      expect.arrayContaining([
+        'Renting',
+        'Motoristas',
+        'Viaturas',
+        'Financeiro',
+        'Assistência',
+        // Faltavam a paleta apesar de terem regras a correr em producao.
+        'Segurança',
+        'Utilizadores',
+      ])
     );
     expect(CATALOGO.filter((t) => t.tipo === 'accao').length).toBeGreaterThanOrEqual(2);
     expect(CATALOGO.filter((t) => t.tipo === 'condicao').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('todo o evento com rotulo pode ser escolhido no construtor', () => {
+    // O reverso do teste abaixo, e o que faltava: `seguranca.login_suspeito` e
+    // `utilizador.criado` tinham rotulo, emissor e regras activas, mas nao
+    // estavam em modulo nenhum da paleta — ninguem conseguia criar nem reabrir
+    // uma regra sobre eles.
+    const escolhiveis = new Set(
+      CATALOGO.filter((t) => t.tipo === 'trigger').flatMap((t) =>
+        eventosDoModulo((t.dados as { modulo: string }).modulo)
+      )
+    );
+    for (const evento of EVENTOS_COM_ROTULO) {
+      expect(escolhiveis.has(evento), `evento ${evento} tem rotulo mas nao se pode escolher`).toBe(
+        true
+      );
+    }
   });
 
   it('todo o gatilho tem pelo menos um evento para escolher', () => {
@@ -38,6 +65,15 @@ describe('CATALOGO', () => {
   it('os eventos são os que existem mesmo no motor', () => {
     expect(eventosDoModulo('viatura')).toContain('viatura.seguro_expirando');
     expect(eventosDoModulo('motorista')).toContain('motorista.carta_expirando');
+  });
+
+  it('os dois gatilhos financeiros ficam no modulo Financeiro', () => {
+    // O recibo verde e um documento do MOTORISTA, mas quem o valida e quem trata
+    // das contas — por isso o prefixo `motorista_recibo` tem alias para
+    // `cobranca` em rotulos.ts. Sem ele o gatilho caia em "Outros".
+    expect(eventosDoModulo('cobranca')).toContain('cobranca.em_atraso');
+    expect(eventosDoModulo('cobranca')).toContain('motorista_recibo.por_validar');
+    expect(eventosDoModulo('cobranca')).toContain('custo.sem_viatura');
   });
 
   it('módulo desconhecido devolve lista vazia em vez de rebentar', () => {

@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Wrench,
   Plus,
@@ -66,8 +66,16 @@ const Assistencia = () => {
   const [prioridadeFilter, setPrioridadeFilter] = useState<string>(
     sessionStorage.getItem('assistencia_prioridadeFilter') || 'todos'
   );
+  // `?categoria=<id>` ganha ao que ficou guardado da última visita: quem
+  // chega por um link da dashboard quer ver AQUELA categoria, não a que estava
+  // escolhida antes. O parâmetro é limpo a seguir (efeito abaixo) para o
+  // filtro voltar a ser só do utilizador.
+  const [searchParams, setSearchParams] = useSearchParams();
   const [categoriaFilter, setCategoriaFilter] = useState<string>(
-    sessionStorage.getItem('assistencia_categoriaFilter') || 'todos'
+    () =>
+      searchParams.get('categoria') ||
+      sessionStorage.getItem('assistencia_categoriaFilter') ||
+      'todos'
   );
   const [criadorFilter, setCriadorFilter] = useState<string>(
     sessionStorage.getItem('assistencia_criadorFilter') || 'todos'
@@ -91,6 +99,20 @@ const Assistencia = () => {
     setCategoriaFilter('todos');
     setCriadorFilter('todos');
   };
+
+  // O `?categoria=` já foi lido para o estado inicial; sai do URL para não
+  // voltar a impor-se se o utilizador mudar o filtro e depois recarregar.
+  useEffect(() => {
+    if (!searchParams.has('categoria')) return;
+    setSearchParams(
+      (anteriores) => {
+        const proximos = new URLSearchParams(anteriores);
+        proximos.delete('categoria');
+        return proximos;
+      },
+      { replace: true }
+    );
+  }, [searchParams, setSearchParams]);
 
   // Persist filters to sessionStorage
   useEffect(() => {
@@ -254,7 +276,11 @@ const Assistencia = () => {
     const matchesPrioridade =
       prioridadeFilter === 'todos' || ticket.prioridade === prioridadeFilter;
     const matchesCategoria =
-      categoriaFilter === 'todos' || ticket.categoria?.id === categoriaFilter;
+      categoriaFilter === 'todos'
+        ? true
+        : categoriaFilter === 'sem-categoria'
+          ? !ticket.categoria
+          : ticket.categoria?.id === categoriaFilter;
     const matchesCriador = criadorFilter === 'todos' || ticket.criador?.id === criadorFilter;
 
     let matchesAtribuido = true;
@@ -430,6 +456,7 @@ const Assistencia = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todas categorias</SelectItem>
+              <SelectItem value="sem-categoria">Sem categoria</SelectItem>
               {categorias.map((cat) => (
                 <SelectItem key={cat.id} value={cat.id}>
                   {cat.nome}

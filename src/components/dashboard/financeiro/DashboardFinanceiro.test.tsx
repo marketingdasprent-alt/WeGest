@@ -39,6 +39,7 @@ vi.mock('@/hooks/useContasAReceber', () => ({
   useContasAReceber: () => ({
     data: {
       totalAReceber: 1875,
+      porLiquidar: 9,
       emAberto: [
         {
           id: 'c1',
@@ -161,7 +162,7 @@ describe('DashboardFinanceiro', () => {
     expect(screen.getByText('Esta semana')).toBeInTheDocument();
     expect(screen.getByText('Por emitir')).toBeInTheDocument();
     expect(screen.getByText('Em atraso')).toBeInTheDocument();
-    expect(screen.getByText('Líquido este mês')).toBeInTheDocument();
+    expect(screen.getByText('A receber')).toBeInTheDocument();
   });
 
   it('mostra as plataformas com bruto e comissão', async () => {
