@@ -21,6 +21,7 @@ export type SortField =
   | 'combustivel'
   | 'portagens'
   | 'outros_custos'
+  | 'slot'
   | 'reparacoes'
   | 'gorjeta';
 
@@ -171,6 +172,15 @@ export function ContasResumoTabela({
                 Outros Custos
               </SortableTableHead>
               <SortableTableHead
+                field="slot"
+                align="right"
+                sortField={sortField}
+                sortDir={sortDir}
+                onSort={handleSort}
+              >
+                Slot
+              </SortableTableHead>
+              <SortableTableHead
                 field="reparacoes"
                 align="right"
                 sortField={sortField}
@@ -189,7 +199,7 @@ export function ContasResumoTabela({
             {filteredResumos.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={showGorjeta ? 11 : 10}
+                  colSpan={showGorjeta ? 12 : 11}
                   className="text-center py-8 text-muted-foreground"
                 >
                   Nenhum dado encontrado para o período selecionado
@@ -280,6 +290,15 @@ export function ContasResumoTabela({
                       {resumo.outros_custos > 0 ? (
                         <span className="font-medium text-green-600">
                           {formatCurrency(resumo.outros_custos)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">€0,00</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right" onClick={() => onRowClick(resumo)}>
+                      {resumo.slot > 0 ? (
+                        <span className="font-medium text-green-600">
+                          {formatCurrency(resumo.slot)}
                         </span>
                       ) : (
                         <span className="text-muted-foreground">€0,00</span>
@@ -419,6 +438,12 @@ export function ContasResumoTabela({
                         <span className="text-destructive">
                           -{formatCurrency(resumo.outros_custos)}
                         </span>
+                      </div>
+                    )}
+                    {resumo.slot > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Slot</span>
+                        <span className="text-destructive">-{formatCurrency(resumo.slot)}</span>
                       </div>
                     )}
                     {resumo.reparacoes > 0 && (

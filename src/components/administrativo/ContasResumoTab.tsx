@@ -131,6 +131,7 @@ export function ContasResumoTab() {
     | 'combustivel'
     | 'portagens'
     | 'outros_custos'
+    | 'slot'
     | 'reparacoes'
     | 'gorjeta';
   const [sortField, setSortField] = useState<SortField>('total_faturado');

@@ -31,7 +31,13 @@ export interface MovimentoMotorista {
   valor: number | string | null;
 }
 
-export type DestinoMovimento = 'receita_outras' | 'caucao' | 'seguros' | 'outros' | 'ignorado';
+export type DestinoMovimento =
+  | 'receita_outras'
+  | 'caucao'
+  | 'seguros'
+  | 'slot'
+  | 'outros'
+  | 'ignorado';
 
 export interface Classificacao {
   destino: DestinoMovimento;
@@ -81,6 +87,11 @@ export function classificarMovimento(m: MovimentoMotorista): Classificacao {
 
   if (categoria === 'caucao') return { destino: 'caucao' };
   if (categoria === 'seguros') return { destino: 'seguros' };
+  // Mensalidade de slot (categoria 'slot_mensal', ver NovoMovimentoFinanceiroOverlay
+  // e gerar_cobrancas_slot_mensais): linha própria, para não se misturar com
+  // despesas avulsas sem categoria reconhecida — era o que a tornava
+  // indistinguível de qualquer outro "outros custos" no resumo.
+  if (categoria === 'slot_mensal') return { destino: 'slot' };
   return { destino: 'outros' };
 }
 
@@ -88,6 +99,7 @@ export interface MovimentosAgregados {
   receitaOutras: number;
   caucao: number;
   seguros: number;
+  slot: number;
   outros: number;
   /** O que ficou de fora, e porquê. Para mostrar, auditar ou avisar. */
   ignorados: Array<{ categoria: string; tipo: string; valor: number; motivo: string }>;
@@ -100,6 +112,7 @@ export function agregarMovimentos(
     receitaOutras: 0,
     caucao: 0,
     seguros: 0,
+    slot: 0,
     outros: 0,
     ignorados: [],
   };
@@ -125,6 +138,9 @@ export function agregarMovimentos(
         break;
       case 'seguros':
         acc.seguros += valor;
+        break;
+      case 'slot':
+        acc.slot += valor;
         break;
       case 'outros':
         acc.outros += valor;

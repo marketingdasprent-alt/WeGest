@@ -16,7 +16,7 @@ export interface UseMotoristaResumoDataReturn {
   motoristaEmail: string | null;
   motoristaTelefone: string | null;
   motoristaIban: string | null;
-  extraCosts: { caucao: number; seguros: number; outros: number };
+  extraCosts: { caucao: number; seguros: number; slot: number; outros: number };
   outrasReceitas: number;
   /** Valor do período que ficou de fora do resumo e não está representado em
    *  mais lado nenhum. `null` quando não há nada por explicar. */
@@ -48,9 +48,12 @@ export function useMotoristaResumoData(
   const [motoristaEmail, setMotoristaEmail] = useState<string | null>(null);
   const [motoristaTelefone, setMotoristaTelefone] = useState<string | null>(null);
   const [motoristaIban, setMotoristaIban] = useState<string | null>(null);
-  const [extraCosts, setExtraCosts] = useState<{ caucao: number; seguros: number; outros: number }>(
-    { caucao: 0, seguros: 0, outros: 0 }
-  );
+  const [extraCosts, setExtraCosts] = useState<{
+    caucao: number;
+    seguros: number;
+    slot: number;
+    outros: number;
+  }>({ caucao: 0, seguros: 0, slot: 0, outros: 0 });
   const [outrasReceitas, setOutrasReceitas] = useState(0);
   const [dinheiroIgnorado, setDinheiroIgnorado] = useState<{
     valor: number;
@@ -75,7 +78,7 @@ export function useMotoristaResumoData(
     setCartaoFrota(null);
     setGestor(null);
     setMotoristaIban(null);
-    setExtraCosts({ caucao: 0, seguros: 0, outros: 0 });
+    setExtraCosts({ caucao: 0, seguros: 0, slot: 0, outros: 0 });
     setSlotPeriodos([]);
     setAluguerSemTarifa(false);
     setAluguerEstimado(false);
@@ -235,6 +238,7 @@ export function useMotoristaResumoData(
           setExtraCosts({
             caucao: mov.caucao,
             seguros: mov.seguros,
+            slot: mov.slot,
             outros: mov.outros,
           });
           setOutrasReceitas(mov.receitaOutras);

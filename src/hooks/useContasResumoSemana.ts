@@ -481,6 +481,8 @@ export function useContasResumoSemana(
       const reparacoesByMotorista: Record<string, number> = {};
       // Mapa: motorista_id → total outros custos (débitos)
       const adhocByMotorista: Record<string, number> = {};
+      // Mapa: motorista_id → total mensalidade de slot (categoria 'slot_mensal')
+      const slotByMotorista: Record<string, number> = {};
       // Mapa: motorista_id → ganhos extras (créditos)
       const extrasByMotorista: Record<string, number> = {};
 
@@ -508,6 +510,11 @@ export function useContasResumoSemana(
           // semanal com esta categoria. A mesma regra já valia no resumo do
           // motorista e no fecho (ver movimentosMotorista.ts) — só esta
           // lista, com a sua própria cópia da lógica, ainda não a tinha.
+        } else if (m.categoria === 'slot_mensal') {
+          // Linha própria — antes caía em "Outros Custos" e ficava
+          // indistinguível de qualquer despesa avulsa. Mesma regra do resumo
+          // individual do motorista, ver movimentosMotorista.ts.
+          slotByMotorista[m.motorista_id] = (slotByMotorista[m.motorista_id] || 0) + val;
         } else {
           adhocByMotorista[m.motorista_id] = (adhocByMotorista[m.motorista_id] || 0) + val;
         }
@@ -793,6 +800,21 @@ export function useContasResumoSemana(
         }
       }
 
+      for (const [motoristaId, totalSlotMotorista] of Object.entries(slotByMotorista)) {
+        if (!agrupado[motoristaId] && totalSlotMotorista > 0) {
+          const motData = motoristaById.get(motoristaId);
+          agrupado[motoristaId] = {
+            motorista_id: motoristaId,
+            driver_name: motData?.nome || 'Desconhecido',
+            driver_uuid: '',
+            faturado_bolt: 0,
+            faturado_uber: 0,
+            viagens_bolt: 0,
+            viagens_uber: 0,
+          };
+        }
+      }
+
       // 5c. Dedup final
       const fundir = (alvoKey: string, dupKey: string) => {
         if (alvoKey === dupKey) return;
@@ -881,8 +903,15 @@ export function useContasResumoSemana(
         const aluguerValor = m.motorista_id ? aluguerByMotorista[m.motorista_id] || 0 : 0;
         const reparacoesValor = m.motorista_id ? reparacoesByMotorista[m.motorista_id] || 0 : 0;
         const adhocValor = m.motorista_id ? adhocByMotorista[m.motorista_id] || 0 : 0;
+        const slotValor = m.motorista_id ? slotByMotorista[m.motorista_id] || 0 : 0;
         const liquido =
-          receita - combustivelValor - portagensValor - aluguerValor - reparacoesValor - adhocValor;
+          receita -
+          combustivelValor -
+          portagensValor -
+          aluguerValor -
+          reparacoesValor -
+          adhocValor -
+          slotValor;
 
         return {
           driver_name: displayNameFinal,
@@ -902,6 +931,7 @@ export function useContasResumoSemana(
           portagens: portagensValor,
           reparacoes: reparacoesValor,
           outros_custos: adhocValor,
+          slot: slotValor,
           aluguer: aluguerValor,
           identificador_bolt: m.identificador_bolt,
         };

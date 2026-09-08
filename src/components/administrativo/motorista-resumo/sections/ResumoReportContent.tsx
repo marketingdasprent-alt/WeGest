@@ -51,6 +51,9 @@ interface ResumoReportContentProps {
     outros_custos: number;
     caucao: number;
     seguros: number;
+    /** Mensalidade de slot (categoria 'slot_mensal') — não confundir com
+     *  `totalSlot`/`slotPeriodos` abaixo, que é o aluguer pro-rata por dias. */
+    slot: number;
     reparacoes: number;
   };
   totalDespesas: number;
@@ -274,6 +277,7 @@ export function ResumoReportContent({
               value={fmt(despesas.outros_custos)}
               colored="text-red-700 dark:text-red-300"
             />
+            <Row label="Slot" value={fmt(despesas.slot)} colored="text-red-700 dark:text-red-300" />
             <Row
               label="Caução"
               value={fmt(despesas.caucao)}
