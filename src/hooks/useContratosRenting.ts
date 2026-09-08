@@ -437,12 +437,6 @@ export interface FecharContratoArgs {
    *  simplificado de viaturas slot, que não captura km/combustível/fotos mas
    *  fecha o contrato por completo na mesma (não fica "a aguardar recolha"). */
   fecharAgora?: boolean;
-  /** true quando este fecho é o primeiro passo de uma TROCA de viatura. O
-   *  motorista não sai — passa para o contrato sucessor com outra viatura —,
-   *  por isso não pode ser desactivado aqui. Sem isto ficava inactivo durante
-   *  a janela entre o fecho e a criação do sucessor, e desaparecia dos resumos
-   *  semanais e das listas de cobrança dessa semana. */
-  manterMotoristaActivo?: boolean;
 }
 
 /** Título/descrição do toast final — depende de a recolha ter sido
@@ -478,7 +472,6 @@ export function useFecharContrato() {
       recolha,
       marcarDuaDevolvida,
       fecharAgora,
-      manterMotoristaActivo,
     }: FecharContratoArgs): Promise<{ fechouAgora: boolean }> => {
       const { data: estacao, error: errEstacao } = await supabase
         .from('estacoes')
@@ -638,20 +631,11 @@ export function useFecharContrato() {
         if (errFin) throw errFin;
       }
 
-      // Fechar o contrato termina o vínculo TVDE em curso — o motorista fica
-      // inactivo automaticamente até ser associado a um novo contrato/viatura.
-      // Acontece quando a recolha física já foi confirmada aqui (senão o
-      // motorista continua de posse da viatura até a recolha real acontecer)
-      // ou quando o fecho é forçado como definitivo (fecharAgora — slot, que
-      // não tem recolha física a capturar mas fecha por completo na mesma).
-      if (motoristaId && (recolha || fecharAgora) && !manterMotoristaActivo) {
-        const { error: errMotorista } = await supabase
-          .from('motoristas_ativos')
-          .update({ status_ativo: false })
-          .eq('id', motoristaId);
-        if (errMotorista) throw errMotorista;
-      }
-
+      // O contrato fecha; o motorista não muda de estado. Inactivá-lo aqui era
+      // uma de seis automações a disputar o mesmo campo (ver migração
+      // 20260907170000): quem gere activa e inactiva várias vezes ao longo da
+      // vida do motorista, e o fecho de um contrato não é essa decisão. O
+      // vínculo à viatura continua a fechar sozinho, por trigger.
       return { fechouAgora: !!recolha || !!fecharAgora };
     },
     onSuccess: ({ fechouAgora }) => {
@@ -912,24 +896,10 @@ export function useReverterFecho() {
         if (errInsert) throw errInsert;
       }
 
-      // Espelha (ao contrário) a desactivação automática do motorista no
-      // fecho (contrato_renting_inativar_motorista_na_devolucao) — senão o
-      // condutor ficava preso a "inactivo" com o contrato outra vez em curso.
-      const { data: condutores } = await supabase
-        .from('contrato_condutores')
-        .select('motorista_id')
-        .eq('contrato_id', contratoId)
-        .not('motorista_id', 'is', null);
-      const motoristaIds = (condutores ?? [])
-        .map((c) => c.motorista_id as string | null)
-        .filter((id): id is string => !!id);
-      if (motoristaIds.length > 0) {
-        const { error: errMotorista } = await supabase
-          .from('motoristas_ativos')
-          .update({ status_ativo: true })
-          .in('id', motoristaIds);
-        if (errMotorista) throw errMotorista;
-      }
+      // Este passo existia só para espelhar (ao contrário) a desactivação
+      // automática do fecho. Removida essa em 20260907170000, o espelho
+      // deixou de ter razão de ser: reverter o fecho de um contrato não é
+      // decidir que o condutor está activo.
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY_BASE });

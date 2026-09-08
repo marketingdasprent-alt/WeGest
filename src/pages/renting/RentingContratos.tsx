@@ -36,6 +36,7 @@ import {
 } from '@/components/renting/contratos/contratosUtils';
 import { RenovacoesBanner } from '@/components/renting/contratos/RenovacoesBanner';
 import { AnyRentPendentesBanner } from '@/components/renting/contratos/AnyRentPendentesBanner';
+import { ExpiradosSemRenovacaoBanner } from '@/components/renting/contratos/ExpiradosSemRenovacaoBanner';
 
 import {
   CONTRATO_ESTADO_FIN_LABELS,
@@ -273,6 +274,12 @@ const RentingContratos = () => {
       />
 
       <RenovacoesBanner
+        contratos={contratos}
+        getClienteNome={getClienteNome}
+        getCondutorNome={getCondutorNome}
+      />
+
+      <ExpiradosSemRenovacaoBanner
         contratos={contratos}
         getClienteNome={getClienteNome}
         getCondutorNome={getCondutorNome}

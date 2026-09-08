@@ -70,8 +70,20 @@ export function traduzirErro(msg?: string, fallback = 'Ocorreu um erro. Tente no
     m.includes('rls')
   )
     return 'Não tem permissão para esta ação. Inicie sessão novamente e tente outra vez.';
+  // O PostgREST devolve "Could not find the 'X' column ... in the schema cache"
+  // em dois casos muito diferentes: a coluna falta mesmo, ou o CACHE do schema
+  // está desactualizado. O segundo é bem mais comum — acontece a seguir a
+  // qualquer alteração de estrutura na base — e resolve-se com
+  // `NOTIFY pgrst, 'reload schema'`, sem migração nenhuma.
+  //
+  // A mensagem antiga dizia "o administrador precisa de aplicar a migration
+  // mais recente". Apanhou uma candidatura real a 2026-09-08 e mandou procurar
+  // migrações em falta que não existiam: as 25 colunas do formulário estavam
+  // todas na tabela. Quem lê isto é um motorista a candidatar-se, não um
+  // técnico — por isso diz-se o que ele pode fazer, e a pista para o
+  // administrador fica no fim.
   if (m.includes('could not find') && m.includes('column'))
-    return 'Erro de base de dados: uma coluna está em falta. O administrador precisa de aplicar a migration mais recente no Supabase.';
+    return 'O sistema está a atualizar-se e não reconheceu um dos campos. Aguarde um minuto e tente novamente. Se continuar, avise-nos: o administrador precisa de recarregar o schema no Supabase.';
   if (m.includes('duplicate') || m.includes('already exists') || m.includes('unique'))
     return 'Já existe um registo com estes dados.';
   if (m.includes('network') || m.includes('failed to fetch') || m.includes('fetch'))

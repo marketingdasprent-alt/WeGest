@@ -21,6 +21,8 @@ import { MotoristaStatusBadge } from '@/lib/statusBadges';
 import { Button } from '@/components/ui/button';
 import { MotoristaFullModal } from '@/components/motoristas/MotoristaFullModal';
 import { MotoristasPlataformaNaoAssociados } from '@/components/motoristas/MotoristasPlataformaNaoAssociados';
+import { MotoristasVariasViaturasDialog } from '@/components/motoristas/MotoristasVariasViaturasDialog';
+import { useMotoristasVariasViaturas } from '@/hooks/useMotoristasVariasViaturas';
 import { MotoristasFichaIncompleta } from '@/components/motoristas/MotoristasFichaIncompleta';
 import { CartoesNaoReconhecidos } from '@/components/motoristas/CartoesNaoReconhecidos';
 import { PortagensNaoAssociadas } from '@/components/motoristas/PortagensNaoAssociadas';
@@ -123,6 +125,10 @@ export default function Motoristas() {
   const naoAssociadosCountQuery = useMotoristasPlataformaNaoAssociadosCount();
   const naoAssociadosCount = naoAssociadosCountQuery.data ?? 0;
   const [cartoesOpen, setCartoesOpen] = useState(false);
+  const [variasViaturasOpen, setVariasViaturasOpen] = useState(false);
+  const variasViaturasQuery = useMotoristasVariasViaturas();
+  const variasViaturas = variasViaturasQuery.data ?? [];
+
   const cartoesCountQuery = useCartoesNaoAssociadosCount();
   const cartoesCount = cartoesCountQuery.data ?? 0;
   const [portagensOpen, setPortagensOpen] = useState(false);
@@ -367,6 +373,22 @@ export default function Motoristas() {
                 className="ml-1 bg-rose-500/20 text-rose-700 dark:text-rose-300"
               >
                 atualizar
+              </Badge>
+            </Button>
+          )}
+          {variasViaturas.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setVariasViaturasOpen(true)}
+              className="w-full sm:w-auto gap-2 border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
+            >
+              <Car className="h-4 w-4" />
+              {variasViaturas.length} com 2 viaturas
+              <Badge
+                variant="secondary"
+                className="ml-1 bg-orange-500/20 text-orange-700 dark:text-orange-300"
+              >
+                fechar
               </Badge>
             </Button>
           )}
@@ -737,6 +759,12 @@ export default function Motoristas() {
       />
 
       {/* Dialog: motoristas de plataforma sem ficha */}
+      <MotoristasVariasViaturasDialog
+        open={variasViaturasOpen}
+        onOpenChange={setVariasViaturasOpen}
+        motoristas={variasViaturas}
+      />
+
       <MotoristasPlataformaNaoAssociados
         open={naoAssociadosOpen}
         onOpenChange={setNaoAssociadosOpen}

@@ -64,14 +64,23 @@ describe('buildMotoristaPayload', () => {
     expect(payload.morada).toBeNull();
   });
 
-  it('status_ativo e is_slot têm default quando undefined', () => {
+  it('is_slot tem default quando undefined', () => {
     const payload = buildMotoristaPayload({
       ...baseValues,
-      status_ativo: undefined,
       is_slot: undefined,
     });
-    expect(payload.status_ativo).toBe(true);
     expect(payload.is_slot).toBe(false);
+  });
+
+  it('NUNCA leva status_ativo — gravar a ficha não decide o estado do motorista', () => {
+    // Sentinela: o campo não aparece no formulário, mas ia no payload com o
+    // valor que o form tinha em memória. Bastava activar um motorista pelo
+    // botão e gravar a ficha a seguir para o `false` velho voltar e desfazer
+    // a activação. Quem escreve o estado é o botão; quem cria põe true.
+    expect(buildMotoristaPayload(baseValues)).not.toHaveProperty('status_ativo');
+    expect(buildMotoristaPayload({ ...baseValues, status_ativo: false })).not.toHaveProperty(
+      'status_ativo'
+    );
   });
 
   it('inclui caucao_valor quando definido', () => {
