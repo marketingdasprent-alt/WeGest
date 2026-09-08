@@ -83,7 +83,9 @@ export function useMotoristasPlataformaNaoAssociadosCount() {
         ...new Set((uberDrv.data || []).map((d: any) => d.uber_driver_id).filter(Boolean)),
       ] as string[];
       const candidatosBolt = [
-        ...new Set((boltRows.data || []).map((r: any) => r.identificador_motorista).filter(Boolean)),
+        ...new Set(
+          (boltRows.data || []).map((r: any) => r.identificador_motorista).filter(Boolean)
+        ),
       ] as string[];
       const [uberLigDb, boltLigDb] = await Promise.all([
         idsJaLigados('uber_transactions', 'uber_driver_id', candidatosUber),

@@ -31,10 +31,10 @@ export function MotoristasVariasViaturasDialog({ open, onOpenChange, motoristas 
             <Car className="h-5 w-5 text-orange-600" /> Motoristas com mais de uma viatura
           </DialogTitle>
           <DialogDescription>
-            Um motorista conduz um carro de cada vez. Duas viaturas atribuídas ao mesmo tempo
-            querem dizer que uma atribuição ficou por fechar — uma substituição temporária que não
-            foi encerrada, ou uma troca feita fora do fluxo de troca. Confirma qual é o carro
-            actual e fecha o contrato do outro.
+            Um motorista conduz um carro de cada vez. Duas viaturas atribuídas ao mesmo tempo querem
+            dizer que uma atribuição ficou por fechar — uma substituição temporária que não foi
+            encerrada, ou uma troca feita fora do fluxo de troca. Confirma qual é o carro actual e
+            fecha o contrato do outro.
           </DialogDescription>
         </DialogHeader>
 

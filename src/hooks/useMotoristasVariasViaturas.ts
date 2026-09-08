@@ -53,7 +53,9 @@ export function useMotoristasVariasViaturas() {
           nome: v.nome,
           matriculas: [...v.matriculas.values()].sort(),
         }))
-        .sort((a, b) => b.matriculas.length - a.matriculas.length || a.nome.localeCompare(b.nome, 'pt'));
+        .sort(
+          (a, b) => b.matriculas.length - a.matriculas.length || a.nome.localeCompare(b.nome, 'pt')
+        );
     },
   });
 }

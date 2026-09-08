@@ -16,7 +16,6 @@ import { contratosPorRenovar, prazoRenovacao } from '@/lib/renovacaoContrato';
 
 import type { ContratoRenting } from '@/types/contratoRenting';
 
-
 interface Props {
   contratos: ContratoRenting[];
   getClienteNome: (id: string | null | undefined) => string;

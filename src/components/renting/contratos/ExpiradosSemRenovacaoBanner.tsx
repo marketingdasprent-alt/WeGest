@@ -13,7 +13,6 @@ import { formatDate } from '@/utils/formatters';
 import { contratosExpiradosSemRenovacao } from '@/lib/renovacaoContrato';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
-
 interface Props {
   contratos: ContratoRenting[];
   getClienteNome: (id: string | null | undefined) => string;
@@ -31,11 +30,7 @@ interface Props {
  * contrato ou acordar novas datas, e por isso vive num banner próprio em vez
  * de se misturar com "por renovar".
  */
-export function ExpiradosSemRenovacaoBanner({
-  contratos,
-  getClienteNome,
-  getCondutorNome,
-}: Props) {
+export function ExpiradosSemRenovacaoBanner({ contratos, getClienteNome, getCondutorNome }: Props) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
