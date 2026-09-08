@@ -61,3 +61,8 @@ UPDATE public.contratos_renting
 CREATE INDEX IF NOT EXISTS idx_contratos_renting_proxima_renovacao
     ON public.contratos_renting (proxima_renovacao_em)
  WHERE deleted_at IS NULL AND substituido_em IS NULL;
+
+-- O Supabase serve a API a partir de um cache do desenho da base: sem isto,
+-- a coluna/trigger novos so sao reconhecidos na proxima vez que ele recarregar.
+-- Ver AGENTS.md, "Toda a migracao que mexe em estrutura acaba com NOTIFY pgrst".
+NOTIFY pgrst, 'reload schema';

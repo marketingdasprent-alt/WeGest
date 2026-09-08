@@ -56,3 +56,8 @@ CREATE TRIGGER trg_a_tvde_nasce_sem_data_fim
   FOR EACH ROW
   WHEN (NEW.regime = 'tvde')
   EXECUTE FUNCTION public.fn_tvde_nasce_sem_data_fim();
+
+-- O Supabase serve a API a partir de um cache do desenho da base: sem isto,
+-- a coluna/trigger novos so sao reconhecidos na proxima vez que ele recarregar.
+-- Ver AGENTS.md, "Toda a migracao que mexe em estrutura acaba com NOTIFY pgrst".
+NOTIFY pgrst, 'reload schema';
