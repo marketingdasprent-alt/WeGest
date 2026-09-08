@@ -36,20 +36,28 @@ export const SectionEntregaRecolha: React.FC<SectionEntregaRecolhaProps> = ({ fo
     }
   }, [isTvde, form]);
 
-  // TVDE sem longa duração continua sem data de fim (contrato aberto).
+  // NENHUM contrato TVDE tem data de fim — nem os de longa duração. O contrato
+  // fica aberto enquanto o motorista lá estiver e cobra-se à semana; a
+  // renovação é um acto que se regista, não um prazo que expira.
+  //
+  // Enquanto a data da renovação era gravada aqui, passados 30 dias sem
+  // renovar o sistema lia "este contrato acabou": parava o aluguer no resumo
+  // semanal e a viatura ficava livre para outro contrato por cima. O servidor
+  // já força esta regra em qualquer caminho de criação (20260908092000); aqui
+  // é para o gestor não ver um campo que não vai a lado nenhum.
   useEffect(() => {
-    if (!(isTvde && !isLongaDuracao)) return;
+    if (!isTvde) return;
     if (form.getValues('data_fim')) {
       form.setValue('data_fim', null, { shouldDirty: true });
     }
-  }, [isTvde, isLongaDuracao, form]);
+  }, [isTvde, form]);
 
   // Longa duração (qualquer regime): data_fim passa a ser a "próxima
   // renovação", calculada a partir da Data Início + intervalo escolhido —
   // nunca digitada à mão. Sincroniza para o campo do formulário para que a
   // validação Zod e o submit continuem a usar `data_fim` como única fonte.
   useEffect(() => {
-    if (!isLongaDuracao || !dataInicio) return;
+    if (isTvde || !isLongaDuracao || !dataInicio) return;
     const calculada = calcularDataFimLongaDuracao(
       dataInicio,
       isLongaDuracao,
@@ -125,10 +133,13 @@ export const SectionEntregaRecolha: React.FC<SectionEntregaRecolhaProps> = ({ fo
               )}
             />
           )}
-          {isTvde && !isLongaDuracao ? (
+          {isTvde ? (
             <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 p-3 text-xs text-muted-foreground">
-              Contratos TVDE não têm data de fim — são abertos, com renovação automática (ver
-              Duração/Renovação abaixo).
+              Contratos TVDE não têm data de fim — ficam abertos enquanto o motorista lá estiver e
+              cobram-se à semana.
+              {isLongaDuracao
+                ? ' A renovação é feita à mão no contrato e fica registada (ver Duração/Renovação abaixo); não interrompe o aluguer.'
+                : ''}
             </div>
           ) : (
             <FormField
