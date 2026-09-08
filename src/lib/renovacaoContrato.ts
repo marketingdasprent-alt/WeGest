@@ -149,3 +149,72 @@ export function contratosPorRenovar<T extends ContratoRenovavelInput>(
     );
   });
 }
+
+/** Campos extra para medir o custo de deixar um contrato expirado. */
+export type ContratoExpiradoInput = ContratoRenovavelInput &
+  Pick<ContratoRenting, 'valor_total_manual'>;
+
+/** Uma semana em milissegundos. */
+const SEMANA_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Aluguer que um contrato expirado deixou de gerar desde que terminou.
+ *
+ * O aluguer sai do PERÍODO do contrato (ver periodosDoContrato): assim que a
+ * data_fim passa, as semanas seguintes contam 0 € — mesmo com o motorista na
+ * rua com a viatura e a tarifa na ficha. É esta a conta que o banner precisa
+ * de mostrar: "por renovar" lê-se como papelada adiável, "1 300 € por cobrar"
+ * lê-se como aquilo que é.
+ *
+ * Devolve 0 quando não há valor acordado no contrato — não se inventa preço a
+ * partir de tarifas aqui, ao contrário do resumo semanal, porque um aviso com
+ * um número estimado é pior do que um aviso sem número.
+ */
+export function aluguerNaoCobrado(c: ContratoExpiradoInput, hoje: Date = new Date()): number {
+  // SÓ conta com data_fim gravada. Um TVDE de longa duração sem data_fim tem
+  // prazo de renovação virtual (início + 30 dias) e aparece como "em atraso",
+  // mas o período dele fica ABERTO em periodosDoContrato (data_fim: null) e o
+  // aluguer continua a ser cobrado: ali o atraso é de papelada, não de
+  // dinheiro. Usar prazoRenovacao() aqui contava 25 contratos a mais e inflava
+  // o aviso de ~117 mil para ~178 mil euros.
+  if (!c.data_fim) return 0;
+  const prazo = new Date(c.data_fim);
+  const decorrido = inicioDoDia(hoje).getTime() - inicioDoDia(prazo).getTime();
+  if (decorrido <= 0) return 0;
+  const valor = Number(c.valor_total_manual);
+  if (!Number.isFinite(valor) || valor <= 0) return 0;
+  return (decorrido / SEMANA_MS) * valor;
+}
+
+/** Soma o aluguer por cobrar de uma lista de contratos expirados. */
+export function totalAluguerNaoCobrado(
+  contratos: ContratoExpiradoInput[],
+  hoje: Date = new Date()
+): number {
+  return contratos.reduce((soma, c) => soma + aluguerNaoCobrado(c, hoje), 0);
+}
+
+/**
+ * Contratos EM CURSO cuja data_fim já passou mas que `contratoRenovavel`
+ * ignora — na prática, os que não são de longa duração (rent-a-car de período
+ * fixo). Não têm renovação a propor, mas estar "em curso" depois do fim é um
+ * estado impossível na mesma: a viatura fica ocupada e o período deixa de
+ * gerar aluguer. Sem isto não apareciam em lado nenhum.
+ */
+export function contratosExpiradosSemRenovacao<T extends ContratoRenovavelInput>(
+  contratos: T[],
+  hoje: Date = new Date()
+): T[] {
+  const ref = inicioDoDia(hoje);
+  return contratos
+    .filter(
+      (c) =>
+        !contratoRenovavel(c) &&
+        !c.substituido_em &&
+        !c.deleted_at &&
+        c.estado_operacional === 'em_curso' &&
+        !!c.data_fim &&
+        inicioDoDia(new Date(c.data_fim)).getTime() < ref.getTime()
+    )
+    .sort((a, b) => new Date(a.data_fim!).getTime() - new Date(b.data_fim!).getTime());
+}

@@ -12,8 +12,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
-import { contratosPorRenovar, prazoRenovacao } from '@/lib/renovacaoContrato';
+import {
+  contratosPorRenovar,
+  prazoRenovacao,
+  totalAluguerNaoCobrado,
+} from '@/lib/renovacaoContrato';
+
 import type { ContratoRenting } from '@/types/contratoRenting';
+
+const fmtEur = (v: number) =>
+  new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v || 0);
 
 interface Props {
   contratos: ContratoRenting[];
@@ -28,6 +36,16 @@ export function RenovacoesBanner({ contratos, getClienteNome, getCondutorNome }:
   const porRenovar = useMemo(() => contratosPorRenovar(contratos), [contratos]);
   const nAtraso = porRenovar.filter((p) => p.estado === 'atraso').length;
   const nHoje = porRenovar.filter((p) => p.estado === 'hoje').length;
+
+  // Enquanto o contrato não é renovado, as semanas seguintes contam 0 € de
+  // aluguer — a viatura anda na rua de graça, do ponto de vista do resumo.
+  // Sem este número, "12 contratos por renovar" lia-se como papelada adiável:
+  // ficaram 20 contratos assim, o mais antigo há 15 meses. Ver auditoria de
+  // 2026-09-07 e o contrato 446 (Adair Pinheiro), 40 semanas × 325 €.
+  const porCobrar = useMemo(
+    () => totalAluguerNaoCobrado(porRenovar.filter((p) => p.estado === 'atraso').map((p) => p.contrato)),
+    [porRenovar]
+  );
 
   if (porRenovar.length === 0) return null;
 
@@ -51,6 +69,11 @@ export function RenovacoesBanner({ contratos, getClienteNome, getCondutorNome }:
             </strong>
             {partes.length > 0 && (
               <span className="text-amber-700/80"> · {partes.join(' · ')}</span>
+            )}
+            {porCobrar > 0 && (
+              <span className="block text-amber-700/90 dark:text-amber-300/80">
+                Enquanto não renovarem, {fmtEur(porCobrar)} de aluguer não entram nos resumos.
+              </span>
             )}
           </p>
         </div>
