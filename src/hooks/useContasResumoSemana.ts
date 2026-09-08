@@ -982,16 +982,27 @@ export function useContasResumoSemana(
       }
 
       // Saldo pendente em lote (uma RPC para todos os motoristas da página,
-      // não N chamadas) — mesmo valor mostrado no separador Financeiro do
-      // motorista e no portal dele. Não bloqueia a tabela principal: chega
-      // depois, por cima.
+      // não N chamadas). Não bloqueia a tabela principal: chega depois, por
+      // cima.
+      //
+      // Restrito à SEMANA escolhida. Sem as datas, a RPC soma a conta
+      // corrente inteira e a coluna destoava de todas as outras da tabela,
+      // que são da semana: com duas semanas gravadas, um motorista aparecia
+      // com 3.312,08 € numa linha cujo líquido era 1.599,63 €.
+      //
+      // O saldo global continua a ser o que a ficha do motorista e o portal
+      // mostram — chamam a mesma RPC sem datas.
       const motoristaIdsComSaldo = comUid
         .map((r) => r.motorista_id)
         .filter((id): id is string => !!id);
       if (motoristaIdsComSaldo.length > 0) {
         const { data: saldos, error: erroSaldos } = await supabase.rpc(
           'motoristas_saldo_pendente_lote',
-          { p_motorista_ids: motoristaIdsComSaldo }
+          {
+            p_motorista_ids: motoristaIdsComSaldo,
+            p_data_inicio: weekStartStr,
+            p_data_fim: weekEndStr,
+          }
         );
         if (erroSaldos) {
           console.error('Erro ao carregar saldos pendentes:', erroSaldos);

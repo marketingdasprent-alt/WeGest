@@ -14824,7 +14824,11 @@ export type Database = {
         Returns: number
       }
       motoristas_saldo_pendente_lote: {
-        Args: { p_motorista_ids: string[] }
+        Args: {
+          p_motorista_ids: string[]
+          p_data_inicio?: string | null
+          p_data_fim?: string | null
+        }
         Returns: {
           motorista_id: string
           saldo: number
