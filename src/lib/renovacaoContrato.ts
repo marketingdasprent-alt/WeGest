@@ -150,49 +150,26 @@ export function contratosPorRenovar<T extends ContratoRenovavelInput>(
   });
 }
 
-/** Campos extra para medir o custo de deixar um contrato expirado. */
-export type ContratoExpiradoInput = ContratoRenovavelInput &
-  Pick<ContratoRenting, 'valor_total_manual'>;
-
-/** Uma semana em milissegundos. */
-const SEMANA_MS = 7 * 24 * 60 * 60 * 1000;
-
 /**
- * Aluguer que um contrato expirado deixou de gerar desde que terminou.
+ * NÃO existe aqui um cálculo do aluguer por cobrar — foi tentado e removido.
  *
- * O aluguer sai do PERÍODO do contrato (ver periodosDoContrato): assim que a
- * data_fim passa, as semanas seguintes contam 0 € — mesmo com o motorista na
- * rua com a viatura e a tarifa na ficha. É esta a conta que o banner precisa
- * de mostrar: "por renovar" lê-se como papelada adiável, "1 300 € por cobrar"
- * lê-se como aquilo que é.
+ * Parecia trivial: (hoje − data_fim) × preço semanal. Mas o aluguer é
+ * calculado sobre TODAS as versões do contrato (periodosDoContrato inclui as
+ * substituídas), e o banner só recebe a versão ACTUAL — useContratosRenting
+ * filtra `substituido_em is null`. Uma troca de viatura escreve na versão que
+ * fecha `data_fim = data da troca`, pelo que a versão antiga costuma cobrir o
+ * período todo até à troca.
  *
- * Devolve 0 quando não há valor acordado no contrato — não se inventa preço a
- * partir de tarifas aqui, ao contrário do resumo semanal, porque um aviso com
- * um número estimado é pior do que um aviso sem número.
+ * Caso real, contrato 446 (Adair Pinheiro): a versão actual diz que terminou a
+ * 01/12/2025, mas a versão 1 cobre até 10/08/2026. Descoberto: 29 dias, não 9
+ * meses. A conta ingénua dava ~13 000 € num motorista onde faltam ~1 340 €, e
+ * ~115 000 € no total do banner — dez vezes a mais, num número que os gestores
+ * usariam para decidir quanto cobrar a pessoas.
+ *
+ * Para o mostrar é preciso o último dia coberto por QUALQUER versão do
+ * contrato, o que exige ir buscar as versões substituídas — trabalho de
+ * servidor, não deste ficheiro.
  */
-export function aluguerNaoCobrado(c: ContratoExpiradoInput, hoje: Date = new Date()): number {
-  // SÓ conta com data_fim gravada. Um TVDE de longa duração sem data_fim tem
-  // prazo de renovação virtual (início + 30 dias) e aparece como "em atraso",
-  // mas o período dele fica ABERTO em periodosDoContrato (data_fim: null) e o
-  // aluguer continua a ser cobrado: ali o atraso é de papelada, não de
-  // dinheiro. Usar prazoRenovacao() aqui contava 25 contratos a mais e inflava
-  // o aviso de ~117 mil para ~178 mil euros.
-  if (!c.data_fim) return 0;
-  const prazo = new Date(c.data_fim);
-  const decorrido = inicioDoDia(hoje).getTime() - inicioDoDia(prazo).getTime();
-  if (decorrido <= 0) return 0;
-  const valor = Number(c.valor_total_manual);
-  if (!Number.isFinite(valor) || valor <= 0) return 0;
-  return (decorrido / SEMANA_MS) * valor;
-}
-
-/** Soma o aluguer por cobrar de uma lista de contratos expirados. */
-export function totalAluguerNaoCobrado(
-  contratos: ContratoExpiradoInput[],
-  hoje: Date = new Date()
-): number {
-  return contratos.reduce((soma, c) => soma + aluguerNaoCobrado(c, hoje), 0);
-}
 
 /**
  * Contratos EM CURSO cuja data_fim já passou mas que `contratoRenovavel`

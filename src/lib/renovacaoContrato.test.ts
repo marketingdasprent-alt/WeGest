@@ -6,11 +6,8 @@ import {
   estadoRenovacaoContrato,
   prazoRenovacao,
   proximaDataRenovacao,
-  aluguerNaoCobrado,
-  totalAluguerNaoCobrado,
   contratosExpiradosSemRenovacao,
   type ContratoRenovavelInput,
-  type ContratoExpiradoInput,
 } from './renovacaoContrato';
 
 const base: ContratoRenovavelInput = {
@@ -219,55 +216,7 @@ describe('contratosPorRenovar', () => {
   });
 });
 
-// ─── Custo de deixar um contrato expirado ──────────────────────────────────
-// O caso real que motivou isto: contrato 446 (Adair Pinheiro), fim a
-// 01/12/2025, três trocas de viatura em Agosto/2026 que herdaram a data tal e
-// qual, e 40 semanas × 325 € que nunca entraram em resumo nenhum.
-
-describe('aluguerNaoCobrado', () => {
-  const expirado: ContratoExpiradoInput = {
-    ...base,
-    data_inicio: iso('2025-11-01'),
-    data_fim: iso('2025-12-01'),
-    valor_total_manual: 325,
-  };
-
-  it('conta as semanas desde o fim ao preço acordado no contrato', () => {
-    // 01/12/2025 → 29/12/2025 são 4 semanas certas.
-    expect(aluguerNaoCobrado(expirado, new Date(iso('2025-12-29')))).toBeCloseTo(1300, 2);
-  });
-
-  it('é zero enquanto o contrato ainda não terminou', () => {
-    expect(aluguerNaoCobrado(expirado, new Date(iso('2025-11-15')))).toBe(0);
-  });
-
-  it('é zero num TVDE sem data_fim — o período fica aberto e o aluguer continua a contar', () => {
-    // Sentinela: estes contratos aparecem como "em atraso" (prazo virtual de
-    // 30 dias) mas periodosDoContrato dá-lhes data_fim null, ou seja, período
-    // aberto. Contá-los aqui inflava o aviso de ~117 mil para ~178 mil euros.
-    const tvdeSemFim: ContratoExpiradoInput = {
-      ...expirado,
-      regime: 'tvde',
-      data_fim: null,
-      data_inicio: iso('2026-01-01'),
-    };
-    expect(estadoRenovacaoContrato(tvdeSemFim, new Date(iso('2026-09-07')))).toBe('atraso');
-    expect(aluguerNaoCobrado(tvdeSemFim, new Date(iso('2026-09-07')))).toBe(0);
-  });
-
-  it('é zero sem valor acordado — não se inventa preço a partir da tarifa', () => {
-    // O resumo semanal desce na cascata até à tarifa do grupo; um aviso não.
-    // Melhor um aviso sem número do que um aviso com um número inventado.
-    expect(
-      aluguerNaoCobrado({ ...expirado, valor_total_manual: null }, new Date(iso('2026-09-07')))
-    ).toBe(0);
-  });
-
-  it('soma vários contratos', () => {
-    const total = totalAluguerNaoCobrado([expirado, expirado], new Date(iso('2025-12-29')));
-    expect(total).toBeCloseTo(2600, 2);
-  });
-});
+// ─── Contratos expirados que nenhum aviso apanhava ──────────────────────────
 
 describe('contratosExpiradosSemRenovacao', () => {
   // Os dois rent-a-car de período fixo que ninguém via: o banner de renovações

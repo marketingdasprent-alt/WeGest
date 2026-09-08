@@ -10,14 +10,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { formatDate } from '@/utils/formatters';
-import {
-  contratosExpiradosSemRenovacao,
-  totalAluguerNaoCobrado,
-} from '@/lib/renovacaoContrato';
+import { contratosExpiradosSemRenovacao } from '@/lib/renovacaoContrato';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
-const fmtEur = (v: number) =>
-  new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v || 0);
 
 interface Props {
   contratos: ContratoRenting[];
@@ -45,7 +40,6 @@ export function ExpiradosSemRenovacaoBanner({
   const [open, setOpen] = useState(false);
 
   const expirados = useMemo(() => contratosExpiradosSemRenovacao(contratos), [contratos]);
-  const porCobrar = useMemo(() => totalAluguerNaoCobrado(expirados), [expirados]);
 
   if (expirados.length === 0) return null;
 
@@ -65,8 +59,7 @@ export function ExpiradosSemRenovacaoBanner({
               prazo terminado
             </strong>
             <span className="block text-rose-700/90 dark:text-rose-300/80">
-              A viatura continua ocupada e o período já não gera aluguer
-              {porCobrar > 0 ? ` — ${fmtEur(porCobrar)} por cobrar` : ''}. Fechar o contrato ou
+              A viatura continua ocupada e o período já não gera aluguer. Fechar o contrato ou
               acordar novas datas.
             </span>
           </p>
