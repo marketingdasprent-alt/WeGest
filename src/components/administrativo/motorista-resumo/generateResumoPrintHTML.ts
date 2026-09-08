@@ -24,6 +24,9 @@ interface Despesas {
   outros_custos: number;
   caucao: number;
   seguros: number;
+  /** Mensalidade de slot (categoria 'slot_mensal') — não confundir com
+   *  `totalSlot`/`slotPeriodos` abaixo, que é o aluguer pro-rata por dias. */
+  slot: number;
   reparacoes: number;
 }
 
@@ -107,6 +110,7 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
     ['Combustível', despesas.combustivel],
     ['Portagens', despesas.portagens],
     ['Outros Custos', despesas.outros_custos],
+    ['Slot', despesas.slot],
     ['Caução', despesas.caucao],
     ['Seguros', despesas.seguros],
     ['Reparações', despesas.reparacoes],

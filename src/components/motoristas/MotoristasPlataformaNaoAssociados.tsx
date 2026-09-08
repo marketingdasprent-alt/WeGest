@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { idsJaLigados } from '@/hooks/useMotoristasPlataformaSync';
 import {
   Dialog,
   DialogContent,
@@ -136,20 +137,11 @@ export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
       );
       const boltJaLigados = new Set(crmList.map((m) => m.bolt_id).filter((x): x is string => !!x));
 
-      const [uberLigadosDb, boltLigadosDb] = await Promise.all([
-        supabase
-          .from('uber_transactions')
-          .select('uber_driver_id')
-          .not('motorista_id', 'is', null)
-          .not('uber_driver_id', 'is', null),
-        supabase
-          .from('bolt_resumos_semanais')
-          .select('identificador_motorista')
-          .not('motorista_id', 'is', null)
-          .not('identificador_motorista', 'is', null),
-      ]);
-      (uberLigadosDb.data || []).forEach((r: any) => uberJaLigados.add(r.uber_driver_id));
-      (boltLigadosDb.data || []).forEach((r: any) => boltJaLigados.add(r.identificador_motorista));
+      // (b) resolve-se mais abaixo, já com os candidatos em mão — ver
+      // `marcarJaLigados`. Trazer aqui TODAS as linhas ligadas não funciona: são
+      // 2664 na Uber e 6004 na Bolt, e o PostgREST corta nas primeiras 1000. O
+      // conjunto vinha ~83% incompleto, e motoristas já associados reapareciam
+      // nesta lista por mais vezes que alguém os associasse.
 
       // Janela: últimas 8 semanas
       const desde = new Date();
@@ -213,6 +205,15 @@ export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
         fontesBolt.set(id, cur);
       });
 
+      // (b) Com os candidatos em mão, confirmar quais já estão ligados noutro
+      // registo — agora sem truncagem, perguntando só por estes ids.
+      const [uberLigados, boltLigados] = await Promise.all([
+        idsJaLigados('uber_transactions', 'uber_driver_id', [...fontesUber.keys()]),
+        idsJaLigados('bolt_resumos_semanais', 'identificador_motorista', [...fontesBolt.keys()]),
+      ]);
+      uberLigados.forEach((id) => fontesUber.delete(id));
+      boltLigados.forEach((id) => fontesBolt.delete(id));
+
       // 2ª passagem: UNIFICAR por nome normalizado (mesma pessoa em Uber + Bolt = 1 linha)
       const grupos = new Map<string, NaoAssociado>();
       const addFonte = (
@@ -256,52 +257,56 @@ export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
   const associar = async (item: NaoAssociado, motoristaId: string) => {
     setAssociando(item.key);
     try {
+      // Liga UMA conta por plataforma, de propósito — não é descuido do .find().
+      // Os grupos desta lista são unificados por NOME, e o nome que as
+      // plataformas reportam não identifica a pessoa: "José Silva" na Bolt são
+      // três motoristas distintos, um deles de outra organização. Ligar todas
+      // as contas do grupo à mesma ficha atribuiria a facturação de várias
+      // pessoas a uma só. Suportar um motorista com várias contas exige
+      // confirmação explícita de quem associa — nunca inferência pelo nome.
       const uberId = item.fontes.find((f) => f.plataforma === 'uber')?.id_plataforma;
       const boltId = item.fontes.find((f) => f.plataforma === 'bolt')?.id_plataforma;
 
-      // Liga TODAS as plataformas deste motorista de uma só vez.
-      const fichaUpdate: Record<string, any> = {};
-      if (uberId) fichaUpdate.uber_uuid = uberId;
-      if (boltId) fichaUpdate.bolt_id = boltId;
-      if (Object.keys(fichaUpdate).length > 0) {
-        await supabase
-          .from('motoristas_ativos')
-          .update(fichaUpdate as any)
-          .eq('id', motoristaId);
-      }
+      // Uma só chamada, no servidor, dentro de uma transacção. Antes eram
+      // quatro escritas soltas do browser que se contradiziam entre si:
+      //  - nenhuma escrevia motorista_plataforma_identidades, que é a fonte de
+      //    verdade — as triggers de bolt/uber consultam-na em cada escrita e
+      //    repunham NULL por cima do que o ecrã acabara de gravar;
+      //  - escrever na ficha exige `motoristas_gestao` e nas tabelas de
+      //    plataforma `financeiro_recibos`, por isso um Gestor TVDE gravava
+      //    metade e falhava a outra metade sem erro nenhum.
+      // Ver migração 20260907180000.
+      const { data, error } = await (supabase as any).rpc('associar_motorista_plataforma', {
+        p_motorista_id: motoristaId,
+        p_uber_id: uberId ?? null,
+        p_bolt_id: boltId ?? null,
+      });
+      if (error) throw error;
 
-      if (uberId) {
-        await supabase
-          .from('uber_drivers')
-          .update({ motorista_id: motoristaId })
-          .eq('uber_driver_id', uberId);
-        await supabase
-          .from('uber_transactions')
-          .update({ motorista_id: motoristaId })
-          .eq('uber_driver_id', uberId)
-          .is('motorista_id', null);
-      }
-      if (boltId) {
-        await supabase
-          .from('bolt_resumos_semanais')
-          .update({ motorista_id: motoristaId })
-          .eq('identificador_motorista', boltId)
-          .is('motorista_id', null);
-      }
+      const r = (data ?? {}) as Record<string, number>;
+      const ligou = [
+        r.uber_viagens ? `${r.uber_viagens} viagem(ns) Uber` : null,
+        r.bolt_resumos ? `${r.bolt_resumos} semana(s) Bolt` : null,
+      ].filter(Boolean);
 
-      const plats = item.fontes.map((f) => f.plataforma.toUpperCase()).join(' + ');
       toast({
         title: 'Associado',
-        description: `${item.nome} (${plats}) ligado à ficha selecionada.`,
+        description: ligou.length
+          ? `${item.nome} — ${ligou.join(' + ')} ligada(s) à ficha.`
+          : `${item.nome} ligado à ficha. Não havia histórico por adoptar.`,
       });
       setNaoAssociados((prev) => prev.filter((n) => n.key !== item.key));
       onChanged?.();
     } catch (err: any) {
       toast({
-        title: 'Erro',
+        title: 'Não foi possível associar',
         description: err.message || 'Falha ao associar.',
         variant: 'destructive',
       });
+      // A operação é atómica no servidor: ou foi tudo, ou não foi nada. Recarrega
+      // para o ecrã mostrar o estado real em vez de afirmar o que não é.
+      await carregar();
+      onChanged?.();
     } finally {
       setAssociando(null);
     }

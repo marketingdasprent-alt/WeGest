@@ -316,7 +316,9 @@ export function MotoristaDialog({
         // Insert - retornar os dados do novo motorista
         const { data: newMotorista, error } = await supabase
           .from('motoristas_ativos')
-          .insert(dataToSave)
+          // Um motorista novo nasce activo. Só na criação — a edição não
+          // toca no estado (ver buildMotoristaPayload).
+          .insert({ ...dataToSave, status_ativo: true })
           .select()
           .single();
 

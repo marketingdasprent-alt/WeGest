@@ -590,14 +590,8 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       // devolução, regista dua_devolvida_em no contrato (fecha o ciclo do aviso).
       marcarDuaDevolvida: !viaturaEhSlot && duaOriginalComMotorista && duaDevolvido,
       // Slot não tem recolha física a capturar, mas o fecho é sempre
-      // definitivo — motorista desactivado e toast "Contrato fechado", não
-      // "Recolha agendada".
+      // definitivo — toast "Contrato fechado", não "Recolha agendada".
       fecharAgora: viaturaEhSlot,
-      // Numa troca o motorista NÃO saiu — fica com a viatura nova, no contrato
-      // sucessor. Desactivá-lo aqui fazia-o desaparecer dos resumos semanais e
-      // das listas de cobrança durante a janela em que o sucessor ainda não
-      // existe (e, se algo falhasse a meio, para sempre).
-      manterMotoristaActivo: emModoTroca,
     });
     if (!viaturaEhSlot && registarAgora) {
       await gerarFolha('print');

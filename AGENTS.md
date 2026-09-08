@@ -318,6 +318,24 @@ CREATE POLICY "soft_delete_only" ON public.motoristas
   WITH CHECK (deleted_at IS NOT NULL OR public.is_current_user_admin());
 ```
 
+### Toda a migração que mexe em estrutura acaba com `NOTIFY pgrst`
+
+Sempre que uma migração criar ou alterar tabelas, colunas, tipos ou funções expostas na API, **termina com**:
+
+```sql
+NOTIFY pgrst, 'reload schema';
+```
+
+O Supabase serve a API a partir de um **cache do desenho da base**. Enquanto esse cache não recarrega, a API rejeita colunas que existem mesmo, com o erro:
+
+```
+Could not find the 'X' column of 'Y' in the schema cache
+```
+
+Isso não distingue "a coluna falta" de "o cache está velho" — e o segundo é muito mais comum. **A 2026-09-08 apanhou um motorista a submeter a candidatura**: as 25 colunas do formulário estavam todas na tabela, e a mensagem mandava o administrador procurar migrações que não faltavam. Resolveu-se com este `NOTIFY`.
+
+A linha é inofensiva quando é redundante. Custa nada e evita que o próximo a apanhar o problema seja um utilizador final.
+
 ### Regras de migração para tabelas novas
 
 1. **Toda a tabela nova** deve ter `deleted_at TIMESTAMPTZ` (nullable).

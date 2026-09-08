@@ -149,3 +149,49 @@ export function contratosPorRenovar<T extends ContratoRenovavelInput>(
     );
   });
 }
+
+/**
+ * NÃO existe aqui um cálculo do aluguer por cobrar — foi tentado e removido.
+ *
+ * Parecia trivial: (hoje − data_fim) × preço semanal. Mas o aluguer é
+ * calculado sobre TODAS as versões do contrato (periodosDoContrato inclui as
+ * substituídas), e o banner só recebe a versão ACTUAL — useContratosRenting
+ * filtra `substituido_em is null`. Uma troca de viatura escreve na versão que
+ * fecha `data_fim = data da troca`, pelo que a versão antiga costuma cobrir o
+ * período todo até à troca.
+ *
+ * Caso real, contrato 446 (Adair Pinheiro): a versão actual diz que terminou a
+ * 01/12/2025, mas a versão 1 cobre até 10/08/2026. Descoberto: 29 dias, não 9
+ * meses. A conta ingénua dava ~13 000 € num motorista onde faltam ~1 340 €, e
+ * ~115 000 € no total do banner — dez vezes a mais, num número que os gestores
+ * usariam para decidir quanto cobrar a pessoas.
+ *
+ * Para o mostrar é preciso o último dia coberto por QUALQUER versão do
+ * contrato, o que exige ir buscar as versões substituídas — trabalho de
+ * servidor, não deste ficheiro.
+ */
+
+/**
+ * Contratos EM CURSO cuja data_fim já passou mas que `contratoRenovavel`
+ * ignora — na prática, os que não são de longa duração (rent-a-car de período
+ * fixo). Não têm renovação a propor, mas estar "em curso" depois do fim é um
+ * estado impossível na mesma: a viatura fica ocupada e o período deixa de
+ * gerar aluguer. Sem isto não apareciam em lado nenhum.
+ */
+export function contratosExpiradosSemRenovacao<T extends ContratoRenovavelInput>(
+  contratos: T[],
+  hoje: Date = new Date()
+): T[] {
+  const ref = inicioDoDia(hoje);
+  return contratos
+    .filter(
+      (c) =>
+        !contratoRenovavel(c) &&
+        !c.substituido_em &&
+        !c.deleted_at &&
+        c.estado_operacional === 'em_curso' &&
+        !!c.data_fim &&
+        inicioDoDia(new Date(c.data_fim)).getTime() < ref.getTime()
+    )
+    .sort((a, b) => new Date(a.data_fim!).getTime() - new Date(b.data_fim!).getTime());
+}

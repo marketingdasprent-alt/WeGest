@@ -6,6 +6,7 @@ import {
   estadoRenovacaoContrato,
   prazoRenovacao,
   proximaDataRenovacao,
+  contratosExpiradosSemRenovacao,
   type ContratoRenovavelInput,
 } from './renovacaoContrato';
 
@@ -212,5 +213,43 @@ describe('contratosPorRenovar', () => {
       'hoje',
     ]);
     expect(r.every((x) => x.estado)).toBe(true);
+  });
+});
+
+// ─── Contratos expirados que nenhum aviso apanhava ──────────────────────────
+
+describe('contratosExpiradosSemRenovacao', () => {
+  // Os dois rent-a-car de período fixo que ninguém via: o banner de renovações
+  // exige is_longa_duracao, por isso caíam fora de todos os avisos.
+  const curto: ContratoRenovavelInput = {
+    ...base,
+    is_longa_duracao: false,
+    data_inicio: iso('2026-07-11'),
+    data_fim: iso('2026-08-10'),
+  };
+
+  it('apanha o rent-a-car expirado que o banner de renovações ignora', () => {
+    expect(contratoRenovavel(curto)).toBe(false); // sentinela: é por isto que passava despercebido
+    const r = contratosExpiradosSemRenovacao([curto], new Date(iso('2026-09-07')));
+    expect(r).toHaveLength(1);
+  });
+
+  it('não apanha contratos ainda dentro do prazo', () => {
+    expect(contratosExpiradosSemRenovacao([curto], new Date(iso('2026-08-01')))).toHaveLength(0);
+  });
+
+  it('não duplica o que já está no banner de renovações', () => {
+    // `base` é de longa duração: pertence a contratosPorRenovar, não aqui.
+    expect(contratosExpiradosSemRenovacao([base], new Date(iso('2026-09-07')))).toHaveLength(0);
+  });
+
+  it('ignora versões substituídas e contratos que não estão em curso', () => {
+    const hoje = new Date(iso('2026-09-07'));
+    expect(
+      contratosExpiradosSemRenovacao([{ ...curto, substituido_em: iso('2026-08-20') }], hoje)
+    ).toHaveLength(0);
+    expect(
+      contratosExpiradosSemRenovacao([{ ...curto, estado_operacional: 'fechado' }], hoje)
+    ).toHaveLength(0);
   });
 });

@@ -488,6 +488,8 @@ export function useContasResumoSemana(
       // ecrãs tem de ser o mesmo número, não dois parecidos.
       const caucaoByMotorista: Record<string, number> = {};
       const segurosByMotorista: Record<string, number> = {};
+      // Mapa: motorista_id → total mensalidade de slot (categoria 'slot_mensal')
+      const slotByMotorista: Record<string, number> = {};
       // Mapa: motorista_id → ganhos extras (créditos)
       const extrasByMotorista: Record<string, number> = {};
 
@@ -510,6 +512,10 @@ export function useContasResumoSemana(
         // discordava em dois pontos: cobrava débitos de categoria `aluguer`
         // que o contrato já cobre, e somava como ganho extra os créditos de
         // bolt/uber que já vêm dentro da receita da plataforma.
+        //
+        // O destino 'slot' (categoria slot_mensal) vem da mesma função: a
+        // mensalidade tem linha própria e deixa de se confundir com uma
+        // despesa avulsa em "Outros Custos".
         const { destino } = classificarMovimento(m);
         if (destino === 'receita_outras') {
           extrasByMotorista[m.motorista_id] = (extrasByMotorista[m.motorista_id] || 0) + val;
@@ -517,6 +523,8 @@ export function useContasResumoSemana(
           caucaoByMotorista[m.motorista_id] = (caucaoByMotorista[m.motorista_id] || 0) + val;
         } else if (destino === 'seguros') {
           segurosByMotorista[m.motorista_id] = (segurosByMotorista[m.motorista_id] || 0) + val;
+        } else if (destino === 'slot') {
+          slotByMotorista[m.motorista_id] = (slotByMotorista[m.motorista_id] || 0) + val;
         } else if (destino === 'outros') {
           adhocByMotorista[m.motorista_id] = (adhocByMotorista[m.motorista_id] || 0) + val;
         }
@@ -813,6 +821,21 @@ export function useContasResumoSemana(
         }
       }
 
+      for (const [motoristaId, totalSlotMotorista] of Object.entries(slotByMotorista)) {
+        if (!agrupado[motoristaId] && totalSlotMotorista > 0) {
+          const motData = motoristaById.get(motoristaId);
+          agrupado[motoristaId] = {
+            motorista_id: motoristaId,
+            driver_name: motData?.nome || 'Desconhecido',
+            driver_uuid: '',
+            faturado_bolt: 0,
+            faturado_uber: 0,
+            viagens_bolt: 0,
+            viagens_uber: 0,
+          };
+        }
+      }
+
       // 5c. Dedup final
       const fundir = (alvoKey: string, dupKey: string) => {
         if (alvoKey === dupKey) return;
@@ -903,8 +926,9 @@ export function useContasResumoSemana(
         const adhocValor = m.motorista_id ? adhocByMotorista[m.motorista_id] || 0 : 0;
         const caucaoValor = m.motorista_id ? caucaoByMotorista[m.motorista_id] || 0 : 0;
         const segurosValor = m.motorista_id ? segurosByMotorista[m.motorista_id] || 0 : 0;
+        const slotValor = m.motorista_id ? slotByMotorista[m.motorista_id] || 0 : 0;
         // Exactamente a conta do resumo do motorista (deriveResumoFinanceiro):
-        // receita ajustada menos TODAS as despesas, caução e seguros
+        // receita ajustada menos TODAS as despesas, caução, seguros e slot
         // incluídos. Faltavam aqui, e era por isso que a lista e o resumo
         // mostravam líquidos diferentes para a mesma semana.
         const liquido =
@@ -915,7 +939,8 @@ export function useContasResumoSemana(
           reparacoesValor -
           adhocValor -
           caucaoValor -
-          segurosValor;
+          segurosValor -
+          slotValor;
 
         return {
           driver_name: displayNameFinal,
@@ -934,10 +959,11 @@ export function useContasResumoSemana(
           combustivel: combustivelValor,
           portagens: portagensValor,
           reparacoes: reparacoesValor,
-          // Continua a ser tudo o que não tem coluna própria na lista —
-          // caução e seguros incluídos. Só o cálculo do líquido é que os
-          // separa; a coluna mantém o significado (e o valor) que sempre teve.
+          // Tudo o que não tem coluna própria na lista — caução e seguros
+          // incluídos. O slot saiu daqui: ganhou coluna própria no main, e
+          // somá-lo aqui contava-o duas vezes no total da tabela.
           outros_custos: adhocValor + caucaoValor + segurosValor,
+          slot: slotValor,
           aluguer: aluguerValor,
           identificador_bolt: m.identificador_bolt,
         };
