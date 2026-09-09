@@ -41,6 +41,7 @@ export const RECURSOS = {
   CONTRATOS_CRIAR: 'contratos_criar',
   CONTRATOS_REIMPRIMIR: 'contratos_reimprimir',
   CONTRATOS_REVERTER_RESERVA: 'contratos_reverter_reserva',
+  CONTRATOS_REVERTER_ABERTURA: 'contratos_reverter_abertura',
 
   // Assistência
   ASSISTENCIA_VER: 'assistencia_ver',
