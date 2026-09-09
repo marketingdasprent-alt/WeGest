@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { HandCoins } from 'lucide-react';
+import { HandCoins, ChevronLeft, ChevronRight } from 'lucide-react';
+import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, parseISO } from 'date-fns';
+import { pt } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +35,7 @@ import { formatCurrency, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import {
   useDividasMotorista,
+  useUltimaSemanaComLiquido,
   useMarcarDividaPaga,
   useMarcarDividaNaoPaga,
   type Divida,
@@ -61,11 +64,26 @@ export function DividasTab() {
   // (financeiro_recibos) — antes gate admin-only, agora alinhado.
   const { hasAccessToResource } = usePermissions();
   const canEdit = hasAccessToResource(RECURSOS.FINANCEIRO_RECIBOS);
+
+  // A semana em curso quase nunca tem líquido gravado (só existe depois de
+  // alguém carregar a semana em Contas), por isso abre-se na última que tem —
+  // caso contrário a lista aparecia vazia e parecia não haver dívidas.
+  const { data: ultimaSemana } = useUltimaSemanaComLiquido();
+  const [semanaEscolhida, setSemanaEscolhida] = useState<Date | null>(null);
+  const semanaBase = semanaEscolhida ?? (ultimaSemana ? parseISO(ultimaSemana.inicio) : null);
+  const semanaInicio = semanaBase ? startOfWeek(semanaBase, { weekStartsOn: 1 }) : null;
+  const semanaFim = semanaBase ? endOfWeek(semanaBase, { weekStartsOn: 1 }) : null;
+
   const {
     data: dividas,
     isLoading,
     isError,
-  } = useDividasMotorista({ pesquisa: pesquisa || undefined, estado });
+  } = useDividasMotorista({
+    pesquisa: pesquisa || undefined,
+    estado,
+    semanaInicio: semanaInicio ? format(semanaInicio, 'yyyy-MM-dd') : undefined,
+    semanaFim: semanaFim ? format(semanaFim, 'yyyy-MM-dd') : undefined,
+  });
   const { mutate: marcarPaga, isPending: aPagar } = useMarcarDividaPaga();
   const { mutate: marcarNaoPaga, isPending: aReabrir } = useMarcarDividaNaoPaga();
   const ocupado = aPagar || aReabrir;
@@ -84,10 +102,45 @@ export function DividasTab() {
     else marcarNaoPaga(d.id);
   };
 
+  const irSemanaAnterior = () => setSemanaEscolhida(subWeeks(semanaBase ?? new Date(), 1));
+  const irSemanaSeguinte = () => setSemanaEscolhida(addWeeks(semanaBase ?? new Date(), 1));
+
   return (
     <div className="space-y-4">
+      {/* Navegação de semanas, igual à da lista de Contas — todas as colunas
+          deste ecrã são da semana escolhida, os valores não acumulam de uma
+          para a outra. */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={irSemanaAnterior}
+          aria-label="Semana anterior"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="min-w-[220px] rounded-md border border-border bg-card px-4 py-2 text-center text-sm font-medium">
+          {semanaInicio && semanaFim
+            ? `${format(semanaInicio, "d 'de' MMM", { locale: pt })} – ${format(semanaFim, "d 'de' MMM yyyy", { locale: pt })}`
+            : 'A carregar…'}
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={irSemanaSeguinte}
+          aria-label="Semana seguinte"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        {ultimaSemana && (
+          <Button variant="ghost" size="sm" onClick={() => setSemanaEscolhida(null)}>
+            Última semana
+          </Button>
+        )}
+      </div>
+
       <div className="rounded-lg border border-border bg-card p-4">
-        <p className="text-sm text-muted-foreground">Total por cobrar (dívidas visíveis)</p>
+        <p className="text-sm text-muted-foreground">Total por cobrar nesta semana</p>
         <p
           data-testid="dividas-total-por-cobrar"
           className={cn(
@@ -200,7 +253,15 @@ export function DividasTab() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (aConfirmar) marcarPaga(aConfirmar.motorista_id);
+                // O período vai sempre: sem ele a RPC liquidaria todos os
+                // movimentos pendentes do motorista, incluindo os de semanas
+                // que nem estão à vista neste ecrã.
+                if (aConfirmar)
+                  marcarPaga({
+                    motoristaId: aConfirmar.motorista_id,
+                    periodoInicio: aConfirmar.periodo_inicio,
+                    periodoFim: aConfirmar.periodo_fim,
+                  });
                 setAConfirmar(null);
               }}
             >

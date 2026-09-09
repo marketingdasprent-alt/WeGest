@@ -1,14 +1,24 @@
 // src/hooks/useDividasMotorista.ts
 //
-// A dívida de um motorista não é um registo que alguém cria: é o seu saldo
-// pendente quando dá negativo. Por isso a lista "por cobrar" vem de uma vista
-// (`dividas_motorista_abertas`) e não de uma tabela — não há nada para inserir,
-// nada que fique desactualizado, e o mesmo motorista nunca aparece duas vezes.
+// A dívida de um motorista não é um registo que alguém cria: é o líquido da
+// SEMANA quando dá negativo. Por isso a lista "por cobrar" sai de
+// `motorista_liquido_semanal` — a mesma linha que o resumo grava — e não de
+// uma tabela de dívidas: não há nada para inserir, nada que fique
+// desactualizado, e o mesmo motorista nunca aparece duas vezes na semana.
+//
+// POR SEMANA, E NÃO ACUMULADO
+//
+// Antes vinha da vista `dividas_motorista_abertas`, que soma TODOS os
+// movimentos pendentes do motorista. Numa lista onde se escolhe a semana isso
+// lia-se mal: com duas semanas gravadas, quem devia 200 € numa e 300 € noutra
+// aparecia a dever 500 € em ambas. A vista continua a existir para o saldo
+// global, que é o que a ficha do motorista mostra.
 //
 // A tabela `dividas_motorista` guarda LIQUIDAÇÕES: uma linha por cada vez que
 // alguém marcou a dívida como paga. Marcar paga liquida mesmo os movimentos
 // (passam a 'pago'), e por isso o motorista sai da lista de abertas — não é a
-// linha a desaparecer, é a dívida a deixar de existir.
+// linha a desaparecer, é a dívida a deixar de existir. Essa liquidação também
+// é por semana: ver divida_marcar_paga(p_motorista_id, p_data_inicio, p_data_fim).
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -33,14 +43,13 @@ export interface Divida {
   pago_em: string | null;
 }
 
+/** Uma linha de `motorista_liquido_semanal` com o líquido negativo. */
 interface LinhaAberta {
   motorista_id: string;
   motorista_nome: string;
-  saldo: number;
-  valor_danos: number;
-  valor_caucao: number;
-  periodo_inicio: string;
-  periodo_fim: string;
+  liquido: number;
+  semana_inicio: string;
+  semana_fim: string;
 }
 
 interface LinhaPaga {
@@ -62,12 +71,18 @@ const CHAVE_LISTA = 'dividas-motorista';
 export function useDividasMotorista(filtros: {
   pesquisa?: string;
   estado?: 'por_cobrar' | 'paga' | 'todas';
+  /** Semana a mostrar (yyyy-MM-dd). Sem ela não se carrega nada: uma lista
+   *  semanal sem semana escolhida não tem o que mostrar. */
+  semanaInicio?: string;
+  semanaFim?: string;
 }) {
   const estado = filtros.estado ?? 'todas';
   const pesquisa = filtros.pesquisa ?? '';
+  const { semanaInicio, semanaFim } = filtros;
 
   return useQuery({
-    queryKey: [CHAVE_LISTA, pesquisa, estado],
+    enabled: !!semanaInicio && !!semanaFim,
+    queryKey: [CHAVE_LISTA, pesquisa, estado, semanaInicio, semanaFim],
     queryFn: async (): Promise<Divida[]> => {
       const querAbertas = estado === 'por_cobrar' || estado === 'todas';
       const querPagas = estado === 'paga' || estado === 'todas';
@@ -76,20 +91,29 @@ export function useDividasMotorista(filtros: {
         querAbertas
           ? (() => {
               let q = supabase
-                .from('dividas_motorista_abertas')
-                .select('*')
-                // Mais a dever primeiro: o saldo é negativo, logo ascendente.
-                .order('saldo', { ascending: true });
+                .from('motorista_liquido_semanal')
+                .select('motorista_id, motorista_nome, liquido, semana_inicio, semana_fim')
+                .eq('semana_inicio', semanaInicio as string)
+                // Só o líquido negativo é dívida. Um positivo é dinheiro a
+                // receber e vive no saldo, não aqui.
+                .lt('liquido', 0)
+                // Mais a dever primeiro: o líquido é negativo, logo ascendente.
+                .order('liquido', { ascending: true });
               if (pesquisa) q = q.ilike('motorista_nome', `%${pesquisa}%`);
               return q;
             })()
           : Promise.resolve({ data: [], error: null }),
         querPagas
           ? (() => {
+              // A liquidação guarda o período dos movimentos que liquidou, que
+              // pode ser mais estreito do que a semana (só os dias com
+              // movimento). Por isso é sobreposição, não igualdade.
               let q = supabase
                 .from('dividas_motorista')
                 .select('*')
                 .eq('estado', 'paga')
+                .lte('periodo_inicio', semanaFim as string)
+                .gte('periodo_fim', semanaInicio as string)
                 .order('pago_em', { ascending: false });
               if (pesquisa) q = q.ilike('motorista_nome', `%${pesquisa}%`);
               return q;
@@ -104,12 +128,16 @@ export function useDividasMotorista(filtros: {
         id: l.motorista_id,
         motorista_id: l.motorista_id,
         motorista_nome: l.motorista_nome,
-        periodo_inicio: l.periodo_inicio,
-        periodo_fim: l.periodo_fim,
-        valor_periodo: Number(l.saldo),
-        valor_danos: Number(l.valor_danos),
-        valor_caucao: Number(l.valor_caucao),
-        valor_total: Math.abs(Number(l.saldo)),
+        periodo_inicio: l.semana_inicio,
+        periodo_fim: l.semana_fim,
+        valor_periodo: Number(l.liquido),
+        // O líquido semanal é um número só: já traz os danos e a caução
+        // descontados no cálculo do resumo, e não os devolve separados. Ficam
+        // a zero em vez de se inventar uma decomposição — a tabela do ecrã não
+        // os mostra, e a liquidação recalcula-os a partir dos movimentos.
+        valor_danos: 0,
+        valor_caucao: 0,
+        valor_total: Math.abs(Number(l.liquido)),
         estado: 'por_cobrar',
         pago_em: null,
       }));
@@ -147,16 +175,26 @@ function mensagemDeErro(error: unknown): string {
 }
 
 /**
- * Liquida a dívida do motorista: os movimentos pendentes passam a 'pago' e o
- * saldo vai a zero. A conta é feita e travada dentro da BD (RPC), não aqui —
- * entre somar e liquidar não pode entrar um movimento que fique de fora.
+ * Liquida a dívida do motorista NAQUELA SEMANA: os movimentos pendentes desses
+ * dias passam a 'pago'. A conta é feita e travada dentro da BD (RPC), não aqui
+ * — entre somar e liquidar não pode entrar um movimento que fique de fora.
+ *
+ * O período é obrigatório do lado do ecrã. Sem ele a RPC liquidava tudo o que
+ * o motorista tem pendente, incluindo semanas que nem estão à vista — numa
+ * lista semanal isso seria dar baixa do que não se está a ver.
  */
 export function useMarcarDividaPaga() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (motoristaId: string) => {
+    mutationFn: async (args: {
+      motoristaId: string;
+      periodoInicio: string;
+      periodoFim: string;
+    }) => {
       const { data, error } = await supabase.rpc('divida_marcar_paga', {
-        p_motorista_id: motoristaId,
+        p_motorista_id: args.motoristaId,
+        p_data_inicio: args.periodoInicio,
+        p_data_fim: args.periodoFim,
       });
       if (error) throw error;
       return data as string;
@@ -194,6 +232,30 @@ export function useMarcarDividaNaoPaga() {
     },
     onError: (error) => {
       toast.error(`Não foi possível reabrir a dívida: ${mensagemDeErro(error)}`);
+    },
+  });
+}
+
+/**
+ * A semana mais recente com líquido gravado.
+ *
+ * A aba de Dívidas abre nesta, e não na semana em curso: o líquido só existe
+ * depois de alguém carregar a semana na lista de Contas, por isso a atual está
+ * quase sempre vazia e abrir nela dava a impressão de não haver dívidas
+ * nenhumas.
+ */
+export function useUltimaSemanaComLiquido() {
+  return useQuery({
+    queryKey: [CHAVE_LISTA, 'ultima-semana'],
+    queryFn: async (): Promise<{ inicio: string; fim: string } | null> => {
+      const { data, error } = await supabase
+        .from('motorista_liquido_semanal')
+        .select('semana_inicio, semana_fim')
+        .order('semana_inicio', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? { inicio: data.semana_inicio, fim: data.semana_fim } : null;
     },
   });
 }

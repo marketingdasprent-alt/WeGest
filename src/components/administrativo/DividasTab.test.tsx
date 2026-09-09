@@ -3,6 +3,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 
 const {
   useDividasMotorista,
+  useUltimaSemanaComLiquido,
   useMarcarDividaPaga,
   useMarcarDividaNaoPaga,
   marcarPaga,
@@ -10,6 +11,7 @@ const {
   hasAccessToResource,
 } = vi.hoisted(() => ({
   useDividasMotorista: vi.fn(),
+  useUltimaSemanaComLiquido: vi.fn(),
   useMarcarDividaPaga: vi.fn(),
   useMarcarDividaNaoPaga: vi.fn(),
   marcarPaga: vi.fn(),
@@ -19,6 +21,7 @@ const {
 
 vi.mock('@/hooks/useDividasMotorista', () => ({
   useDividasMotorista,
+  useUltimaSemanaComLiquido,
   useMarcarDividaPaga,
   useMarcarDividaNaoPaga,
 }));
@@ -53,6 +56,11 @@ const PAGA = {
 beforeEach(() => {
   vi.clearAllMocks();
   hasAccessToResource.mockReturnValue(true);
+  // O ecrã abre na última semana com líquido gravado; sem isto não escolhe
+  // semana nenhuma e não pede dados.
+  useUltimaSemanaComLiquido.mockReturnValue({
+    data: { inicio: '2026-08-24', fim: '2026-08-30' },
+  });
   useMarcarDividaPaga.mockReturnValue({ mutate: marcarPaga, isPending: false });
   useMarcarDividaNaoPaga.mockReturnValue({ mutate: marcarNaoPaga, isPending: false });
 });
@@ -87,7 +95,13 @@ describe('DividasTab', () => {
     expect(dialogo.getByText('Ana Costa')).toBeInTheDocument();
 
     fireEvent.click(dialogo.getByRole('button', { name: 'Marcar paga' }));
-    expect(marcarPaga).toHaveBeenCalledWith('m-1');
+    // O período da linha vai junto: liquidar só a semana à vista, não a conta
+    // corrente inteira do motorista.
+    expect(marcarPaga).toHaveBeenCalledWith({
+      motoristaId: 'm-1',
+      periodoInicio: '2026-08-01',
+      periodoFim: '2026-08-07',
+    });
     expect(marcarNaoPaga).not.toHaveBeenCalled();
   });
 

@@ -25,6 +25,10 @@ function encadeavel(tabela: string, resolver: () => Promise<unknown>) {
   const builder: any = {
     order: () => builder,
     eq: () => builder,
+    lt: () => builder,
+    lte: () => builder,
+    gte: () => builder,
+    limit: () => builder,
     ilike: (coluna: string, padrao: string) => {
       ilikeSpy(tabela, coluna, padrao);
       return builder;
@@ -38,7 +42,7 @@ vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     rpc,
     from: (tabela: string) => {
-      if (tabela === 'dividas_motorista_abertas')
+      if (tabela === 'motorista_liquido_semanal')
         return { select: () => encadeavel(tabela, abertasSelect) };
       if (tabela === 'dividas_motorista') return { select: () => encadeavel(tabela, pagasSelect) };
       throw new Error(`tabela inesperada: ${tabela}`);
@@ -60,16 +64,18 @@ function wrapper({ children }: { children: ReactNode }) {
   return createElement(QueryClientProvider, { client: qc }, children);
 }
 
+// Uma linha de motorista_liquido_semanal com o líquido negativo — é isso que
+// a aba de Dívidas passou a mostrar, semana a semana.
 const LINHA_ABERTA = {
   motorista_id: 'm-1',
   motorista_nome: 'Ana Costa',
-  org_id: 'o-1',
-  saldo: -120.5,
-  valor_danos: 40,
-  valor_caucao: -10,
-  periodo_inicio: '2026-07-01',
-  periodo_fim: '2026-08-30',
+  liquido: -120.5,
+  semana_inicio: '2026-08-24',
+  semana_fim: '2026-08-30',
 };
+
+/** A semana que os testes pedem. Sem ela o hook não carrega nada. */
+const SEMANA = { semanaInicio: '2026-08-24', semanaFim: '2026-08-30' };
 
 const LINHA_PAGA = {
   id: 'd-9',
@@ -93,8 +99,8 @@ beforeEach(() => {
 });
 
 describe('useDividasMotorista', () => {
-  it('junta as abertas (da vista) com as pagas', async () => {
-    const { result } = renderHook(() => useDividasMotorista({}), { wrapper });
+  it('junta as abertas (líquido da semana) com as pagas', async () => {
+    const { result } = renderHook(() => useDividasMotorista({ ...SEMANA }), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data).toHaveLength(2);
@@ -109,7 +115,7 @@ describe('useDividasMotorista', () => {
       data: [{ ...LINHA_PAGA, motorista_nome: 'Alberto Nunes' }],
       error: null,
     });
-    const { result } = renderHook(() => useDividasMotorista({}), { wrapper });
+    const { result } = renderHook(() => useDividasMotorista({ ...SEMANA }), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(result.current.data?.map((d) => d.motorista_nome)).toEqual([
@@ -119,8 +125,8 @@ describe('useDividasMotorista', () => {
     expect(result.current.data?.map((d) => d.estado)).toEqual(['paga', 'por_cobrar']);
   });
 
-  it('a dívida em aberto usa o saldo como valor e o motorista como chave', async () => {
-    const { result } = renderHook(() => useDividasMotorista({}), { wrapper });
+  it('a dívida em aberto usa o líquido da semana e o motorista como chave', async () => {
+    const { result } = renderHook(() => useDividasMotorista({ ...SEMANA }), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     const aberta = result.current.data![0];
@@ -128,11 +134,16 @@ describe('useDividasMotorista', () => {
     expect(aberta.valor_periodo).toBe(-120.5);
     // O total é a dívida como se lê: em positivo.
     expect(aberta.valor_total).toBe(120.5);
-    expect(aberta.valor_caucao).toBe(-10);
+    // O período da linha é a SEMANA, não o intervalo dos movimentos: é ele que
+    // vai para a RPC ao marcar paga, e é o que limita a liquidação.
+    expect(aberta.periodo_inicio).toBe('2026-08-24');
+    expect(aberta.periodo_fim).toBe('2026-08-30');
   });
 
   it('com o filtro "por cobrar" não vai buscar as pagas', async () => {
-    const { result } = renderHook(() => useDividasMotorista({ estado: 'por_cobrar' }), { wrapper });
+    const { result } = renderHook(() => useDividasMotorista({ ...SEMANA, estado: 'por_cobrar' }), {
+      wrapper,
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(abertasSelect).toHaveBeenCalled();
@@ -141,7 +152,9 @@ describe('useDividasMotorista', () => {
   });
 
   it('com o filtro "paga" não vai buscar as abertas', async () => {
-    const { result } = renderHook(() => useDividasMotorista({ estado: 'paga' }), { wrapper });
+    const { result } = renderHook(() => useDividasMotorista({ ...SEMANA, estado: 'paga' }), {
+      wrapper,
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(pagasSelect).toHaveBeenCalled();
@@ -149,33 +162,57 @@ describe('useDividasMotorista', () => {
   });
 
   it('a pesquisa filtra os dois lados pelo nome', async () => {
-    const { result } = renderHook(() => useDividasMotorista({ pesquisa: 'ana' }), { wrapper });
+    const { result } = renderHook(() => useDividasMotorista({ ...SEMANA, pesquisa: 'ana' }), {
+      wrapper,
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(ilikeSpy).toHaveBeenCalledWith('dividas_motorista_abertas', 'motorista_nome', '%ana%');
+    expect(ilikeSpy).toHaveBeenCalledWith('motorista_liquido_semanal', 'motorista_nome', '%ana%');
     expect(ilikeSpy).toHaveBeenCalledWith('dividas_motorista', 'motorista_nome', '%ana%');
   });
 
-  it('um erro na vista não passa em silêncio', async () => {
+  it('um erro a ler os líquidos não passa em silêncio', async () => {
     abertasSelect.mockResolvedValue({ data: null, error: { message: 'sem acesso' } });
-    const { result } = renderHook(() => useDividasMotorista({}), { wrapper });
+    const { result } = renderHook(() => useDividasMotorista({ ...SEMANA }), { wrapper });
     await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+
+  // Uma lista semanal sem semana não tem o que mostrar. Carregar à mesma
+  // traria a conta corrente inteira, que é exactamente o que se quis acabar.
+  it('sem semana escolhida não vai à base de dados', async () => {
+    renderHook(() => useDividasMotorista({}), { wrapper });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(abertasSelect).not.toHaveBeenCalled();
+    expect(pagasSelect).not.toHaveBeenCalled();
   });
 });
 
 describe('useMarcarDividaPaga', () => {
-  it('liquida pelo motorista, não por uma linha inventada', async () => {
+  it('liquida pelo motorista E pela semana, não a conta corrente toda', async () => {
     const { result } = renderHook(() => useMarcarDividaPaga(), { wrapper });
-    result.current.mutate('m-1');
+    result.current.mutate({
+      motoristaId: 'm-1',
+      periodoInicio: '2026-08-24',
+      periodoFim: '2026-08-30',
+    });
 
     await waitFor(() => expect(rpc).toHaveBeenCalled());
-    expect(rpc).toHaveBeenCalledWith('divida_marcar_paga', { p_motorista_id: 'm-1' });
+    // Sem as datas a RPC dava baixa de semanas que nem estão à vista.
+    expect(rpc).toHaveBeenCalledWith('divida_marcar_paga', {
+      p_motorista_id: 'm-1',
+      p_data_inicio: '2026-08-24',
+      p_data_fim: '2026-08-30',
+    });
   });
 
   it('a recusa da BD chega ao utilizador com a causa', async () => {
     rpc.mockResolvedValue({ data: null, error: { message: 'Sem permissão para gerir dívidas.' } });
     const { result } = renderHook(() => useMarcarDividaPaga(), { wrapper });
-    result.current.mutate('m-1');
+    result.current.mutate({
+      motoristaId: 'm-1',
+      periodoInicio: '2026-08-24',
+      periodoFim: '2026-08-30',
+    });
 
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(toastError.mock.calls[0][0]).toContain('Sem permissão para gerir dívidas.');
