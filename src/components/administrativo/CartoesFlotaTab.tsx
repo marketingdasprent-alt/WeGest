@@ -3,9 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   useCartoesFrotaLista,
   useMotoristasParaCartoes,
+  useClientesParaCartoes,
   useGuardarCartaoFrota,
   useEliminarCartaoFrota,
   useImportarCartoesFrota,
+  useAssociarCartaoAoMotorista,
+  useAssociarCartaoAoCliente,
+  useDevolverCartaoDoMotorista,
 } from '@/hooks/useCartoesFrota';
 import { errorMessage } from '@/utils/errorMessage';
 import { useToast } from '@/hooks/use-toast';
@@ -17,6 +21,7 @@ import {
   norm,
   type CartaoFrota,
   type MotoristaOption,
+  type ClienteOption,
   type HistoricoItem,
   type StatusCartao,
   type FormState,
@@ -41,7 +46,11 @@ export function CartoesFlotaTab() {
   const podeGerir = canEdit(RECURSOS.ADMINISTRATIVO_CARTOES);
   const { data: cartoes = [], isLoading: loading } = useCartoesFrotaLista<CartaoFrota>();
   const { data: motoristas = [] } = useMotoristasParaCartoes() as { data?: MotoristaOption[] };
+  const { data: clientes = [] } = useClientesParaCartoes() as { data?: ClienteOption[] };
   const guardarCartao = useGuardarCartaoFrota();
+  const associarMotorista = useAssociarCartaoAoMotorista();
+  const associarCliente = useAssociarCartaoAoCliente();
+  const devolverCartao = useDevolverCartaoDoMotorista();
   const eliminarCartao = useEliminarCartaoFrota();
   const importarCartoes = useImportarCartoesFrota();
   const [search, setSearch] = useState('');
@@ -110,6 +119,14 @@ export function CartoesFlotaTab() {
 
   const motoristaNome = (id: string | null) =>
     id ? (motoristas.find((m) => m.id === id)?.nome ?? '') : '';
+
+  /** Nome de um titular, venha ele da lista de motoristas ou da de clientes. */
+  const titularNome = (motoristaId: string | null, clienteId: string | null) =>
+    motoristaId
+      ? (motoristas.find((m) => m.id === motoristaId)?.nome ?? '')
+      : clienteId
+        ? (clientes.find((c) => c.id === clienteId)?.nome ?? '')
+        : '';
 
   const consumoOf = (c: CartaoFrota) => consumoMap[`${c.tipo}|${c.numero}`]?.total ?? 0;
 
@@ -213,7 +230,9 @@ export function CartoesFlotaTab() {
       devolucao: c.devolucao || '',
       status: c.status || 'disponivel',
       motorista_id: c.motorista_id || '',
+      cliente_id: c.cliente_id || '',
       ultimo_motorista_id: c.ultimo_motorista_id || '',
+      ultimo_cliente_id: c.ultimo_cliente_id || '',
       data_entrega: movimento === 'entrega' && !c.data_entrega ? todayISO() : c.data_entrega || '',
       data_devolucao:
         movimento === 'devolucao' && !c.data_devolucao ? todayISO() : c.data_devolucao || '',
@@ -223,43 +242,51 @@ export function CartoesFlotaTab() {
     setDialogOpen(true);
   };
 
+  /**
+   * Guardar são duas coisas distintas, e o que as separa é a atomicidade.
+   *
+   * Os campos DESCRITIVOS (número, PIN, limite, notas…) são um update directo:
+   * mexem numa tabela só e o RLS chega.
+   *
+   * O MOVIMENTO (quem tem o cartão, o estado e as datas) toca em três sítios —
+   * `cartoes_frota`, a ficha do motorista e o período em `cartao_atribuicoes` —
+   * e vai pelas RPC, que os escrevem numa transacção. Escrito daqui, como era
+   * até agora, o período nunca era aberto: o cartão mudava de mãos no ecrã e o
+   * consumo continuava a ser imputado a quem já o tinha devolvido.
+   *
+   * Trocar de titular é devolver + atribuir, por essa ordem, de propósito: é
+   * assim que o dia da entrega fica a contar para quem entregou e o novo
+   * período começa no dia seguinte, sem colidir com o EXCLUDE de
+   * `cartao_atribuicoes`.
+   */
   const handleSave = async () => {
     if (!form.numero.trim()) {
       toast({ title: 'Número obrigatório', variant: 'destructive' });
       return;
     }
 
-    // ── Lógica de movimento (Entrega / Devolução) ──
-    let motoristaId: string | null = form.motorista_id || null;
-    let ultimoId: string | null = form.ultimo_motorista_id || null;
-    let status: StatusCartao = form.status;
-    let dataEntrega: string | null = form.data_entrega || null;
-    let dataDevolucao: string | null = form.data_devolucao || null;
-    const devolucaoNota: string | null = form.devolucao || null;
-    const oldMot = editing?.motorista_id || null;
+    const titularAntes = editing?.motorista_id || editing?.cliente_id || null;
+    const titularDepois = form.motorista_id || form.cliente_id || null;
 
-    if (form.movimento === 'entrega') {
-      if (!motoristaId) {
-        toast({ title: 'Selecione o motorista para a entrega', variant: 'destructive' });
-        return;
-      }
-      if (oldMot && oldMot !== motoristaId) ultimoId = oldMot;
-      status = 'em_uso';
-      dataEntrega = form.data_entrega || todayISO();
-    } else if (form.movimento === 'devolucao') {
-      const holder = motoristaId || oldMot;
-      if (holder) ultimoId = holder;
-      motoristaId = null;
-      status = 'disponivel';
-      dataDevolucao = form.data_devolucao || todayISO();
-    } else if (oldMot && oldMot !== motoristaId) {
-      // Sem movimento explícito, mas o motorista foi trocado à mão → último automático.
-      ultimoId = oldMot;
+    if (form.movimento === 'entrega' && !titularDepois) {
+      toast({ title: 'Selecione o motorista ou o cliente da entrega', variant: 'destructive' });
+      return;
     }
+
+    // Sem movimento escolhido, mexer no titular à mão vale como movimento.
+    const movimento: Movimento =
+      form.movimento !== 'nenhum'
+        ? form.movimento
+        : titularDepois && titularDepois !== titularAntes
+          ? 'entrega'
+          : !titularDepois && titularAntes
+            ? 'devolucao'
+            : 'nenhum';
 
     setSaving(true);
     try {
-      const payload = {
+      const status: StatusCartao = form.status;
+      const payload: Record<string, unknown> = {
         numero: form.numero.trim(),
         tipo: form.tipo,
         data_validade: form.data_validade || null,
@@ -268,16 +295,43 @@ export function CartoesFlotaTab() {
         ambito: form.ambito || null,
         detentor: form.detentor || null,
         notas: form.notas || null,
-        devolucao: devolucaoNota,
-        status,
-        motorista_id: motoristaId,
-        ultimo_motorista_id: ultimoId,
-        data_entrega: dataEntrega,
-        data_devolucao: dataDevolucao,
-        // `ativo` mantido em sincronia com o ciclo de vida (usado no export/impressão).
-        ativo: status === 'disponivel' || status === 'em_uso',
+        devolucao: form.devolucao || null,
+        // Estado e datas só vêm daqui quando NÃO há movimento — havendo, é a
+        // RPC que os escreve, e os dois a escrever discordariam.
+        ...(movimento === 'nenhum'
+          ? {
+              status,
+              data_entrega: form.data_entrega || null,
+              data_devolucao: form.data_devolucao || null,
+              // `ativo` segue o ciclo de vida (usado no export/impressão).
+              ativo: status === 'disponivel' || status === 'em_uso',
+            }
+          : {}),
       };
-      await guardarCartao.mutateAsync({ cartaoId: editing?.id, payload });
+
+      const cartaoId = await guardarCartao.mutateAsync({ cartaoId: editing?.id, payload });
+
+      if (movimento === 'devolucao' || (movimento === 'entrega' && titularAntes)) {
+        await devolverCartao.mutateAsync({
+          cartaoId,
+          motoristaId: editing?.motorista_id ?? '',
+          data: (movimento === 'devolucao' ? form.data_devolucao : form.data_entrega) || undefined,
+        });
+      }
+
+      if (movimento === 'entrega') {
+        const data = form.data_entrega || undefined;
+        if (form.motorista_id) {
+          await associarMotorista.mutateAsync({
+            cartaoId,
+            motoristaId: form.motorista_id,
+            data,
+          });
+        } else {
+          await associarCliente.mutateAsync({ cartaoId, clienteId: form.cliente_id, data });
+        }
+      }
+
       toast({ title: editing ? 'Cartão atualizado' : 'Cartão criado' });
       setDialogOpen(false);
     } catch (err: unknown) {
@@ -460,7 +514,8 @@ export function CartoesFlotaTab() {
         showPin={showPin}
         setShowPin={setShowPin}
         motoristas={motoristas}
-        motoristaNome={motoristaNome}
+        clientes={clientes}
+        titularNome={titularNome}
         saving={saving}
         onSave={handleSave}
       />

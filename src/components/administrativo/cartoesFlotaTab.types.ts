@@ -22,15 +22,40 @@ export interface CartaoFrota {
   detentor: string | null;
   notas: string | null;
   devolucao: string | null;
+  ultimo_cliente_id: string | null;
   motorista: { nome: string } | null;
   ultimo_motorista: { nome: string } | null;
   cliente: { nome: string } | null;
+  ultimo_cliente: { nome: string } | null;
 }
 
 export interface MotoristaOption {
   id: string;
   nome: string;
 }
+
+export interface ClienteOption {
+  id: string;
+  nome: string;
+}
+
+/**
+ * O titular de um cartão é um motorista OU um cliente, nunca os dois — a base
+ * garante-o com `cartoes_frota_um_titular`. No formulário isso vive como um
+ * valor único prefixado, para que o `<Select>` (que só sabe de strings) não
+ * consiga exprimir o estado inválido "os dois preenchidos".
+ */
+export type TitularRef = `m:${string}` | `c:${string}` | '';
+
+export const titularRef = (motoristaId: string, clienteId: string): TitularRef =>
+  motoristaId ? `m:${motoristaId}` : clienteId ? `c:${clienteId}` : '';
+
+export const parseTitular = (ref: TitularRef): { motorista_id: string; cliente_id: string } =>
+  ref.startsWith('m:')
+    ? { motorista_id: ref.slice(2), cliente_id: '' }
+    : ref.startsWith('c:')
+      ? { motorista_id: '', cliente_id: ref.slice(2) }
+      : { motorista_id: '', cliente_id: '' };
 
 export const STATUS_INFO: Record<StatusCartao, { label: string; cls: string }> = {
   disponivel: {
@@ -126,7 +151,9 @@ export type FormState = {
   devolucao: string;
   status: StatusCartao;
   motorista_id: string;
+  cliente_id: string;
   ultimo_motorista_id: string;
+  ultimo_cliente_id: string;
   data_entrega: string;
   data_devolucao: string;
   movimento: Movimento;
@@ -144,7 +171,9 @@ export const emptyForm = (): FormState => ({
   devolucao: '',
   status: 'disponivel',
   motorista_id: '',
+  cliente_id: '',
   ultimo_motorista_id: '',
+  ultimo_cliente_id: '',
   data_entrega: '',
   data_devolucao: '',
   movimento: 'nenhum',

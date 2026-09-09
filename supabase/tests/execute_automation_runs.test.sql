@@ -4,7 +4,8 @@
 -- Corre com:  supabase start  &&  supabase test db
 --
 -- Cobre o Automation Executor: para acao_tipo='notificacao', resolve
--- destinatários por cargo direto (admin OU cargo escolhido na regra),
+-- destinatários EXACTAMENTE pelos cargos escolhidos na regra (desde
+-- 20260909120000 já não há cópia automática para os admins da org),
 -- cria uma notifications por destinatário, enfileira email quando
 -- enviar_email=true, e rejeita acao_config mal configurado. Outros
 -- acao_tipo só concluem, sem ação.
@@ -66,11 +67,19 @@ select is(
   'run de acao_tipo=notificacao é concluído com sucesso'
 );
 
--- 2. O admin recebe uma notificação (mesmo sem pertencer ao cargo escolhido).
+-- 2. O admin NÃO recebe: quem recebe é exactamente quem a regra configurou.
+--
+-- Até 20260909120000 havia um ramo `uo.is_admin = true` no laço de
+-- destinatários que punha uma cópia de todas as notificações internas na caixa
+-- de todos os admins da org, por cima dos cargos escolhidos — um "Suporte de
+-- TI (Admin)" recebia avisos de ficha de motorista sem nunca estar na lista.
+-- Este teste era a prova desse comportamento; passa a ser a prova de que ele
+-- não voltou. O admin aqui tem `cargo_id = null`, por isso não entra por
+-- nenhuma via.
 select is(
   (select count(*)::int from public.notifications where destinatario_user_id = '00000000-0000-0000-0000-0000000a0001'),
-  1,
-  'o admin da org recebe a notificação'
+  0,
+  'o admin da org não recebe cópia de borla — só quem a regra escolheu'
 );
 
 -- 3. O utilizador do cargo escolhido na regra recebe uma notificação.
@@ -88,9 +97,12 @@ select is(
 );
 
 -- 5. As notificações ficam ligadas ao run que as gerou.
+--
+-- Um destinatário e não dois desde 20260909120000: o segundo era o admin, que
+-- vinha por fora da configuração da regra. Ver a nota do teste 2.
 select is(
   (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0001'),
-  2,
+  1,
   'as notificações ficam com rastreabilidade até ao automation_run'
 );
 
@@ -233,7 +245,13 @@ select is(
   'para entidade viatura, o gestor responsável é resolvido via o motorista atualmente atribuído'
 );
 
--- Cenário F: sem gestor_responsavel definido — cai para o fallback (só admins).
+-- Cenário F: sem gestor_responsavel definido — a regra fica SEM destinatário.
+--
+-- Havia aqui um fallback para os admins da org. Saiu com 20260909120000, pela
+-- mesma razão do teste 2: uma regra que não resolve quem devia avisar não pode
+-- resolver-se sozinha avisando toda a gente. Nenhuma regra activa em produção
+-- usa a estratégia `gestor_responsavel`, por isso a mudança não tem alcance
+-- prático — mas o comportamento fica provado aqui.
 insert into public.motoristas_ativos (id, org_id, nome, gestor_responsavel) values
   ('00000000-0000-0000-0000-000000e00002', '00000000-0000-0000-0000-0000000a0000', 'Motorista Sem Gestor', null);
 
@@ -246,14 +264,17 @@ insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id
 
 select public.execute_automation_runs();
 
--- 13. Sem gestor_responsavel resolvido, cai para o fallback e avisa o admin.
+-- 13. Sem gestor_responsavel resolvido, não se avisa ninguém — nem o admin.
 select is(
-  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0006' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0001'),
-  1,
-  'sem gestor_responsavel resolvido, cai para o fallback e avisa o admin da org'
+  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0006'),
+  0,
+  'sem gestor_responsavel resolvido, a regra não avisa ninguém — já não cai nos admins'
 );
 
--- 14. ...e o fallback NÃO inclui quem só tem o recurso RBAC (só admins, não é a estratégia recurso).
+-- 14. ...e continua a não incluir quem só tem o recurso RBAC.
+--
+-- Passava antes e passa agora — fica porque é o que distingue "não avisou
+-- ninguém" de "avisou a pessoa errada".
 select is(
   (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0006' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0002'),
   0,

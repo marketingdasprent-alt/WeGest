@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { errorMessage } from '@/utils/errorMessage';
 
 export type CartaoTipo = 'bp' | 'repsol' | 'edp';
 export interface CartaoItem {
@@ -24,6 +25,13 @@ export function useMotoristaCartoesFrota(open: boolean, motoristaId: string | un
     edp: '',
   });
 
+  /**
+   * O que estava atribuído quando o diálogo abriu. Sem isto não se sabe o que
+   * mudou, e "devolver o anterior" viraria um palpite — a devolução é o que
+   * fecha o período de quem gastou.
+   */
+  const atribuidoInicial = useRef<Record<CartaoTipo, string>>({ bp: '', repsol: '', edp: '' });
+
   useEffect(() => {
     if (!open) return;
     const loadCartoes = async () => {
@@ -43,11 +51,13 @@ export function useMotoristaCartoesFrota(open: boolean, motoristaId: string | un
         });
         const atribuido = (t: string) =>
           all.find((c) => c.tipo === t && c.motorista_id === motoristaId)?.id || '';
-        setSelectedCartao({
+        const inicial = {
           bp: atribuido('bp'),
           repsol: atribuido('repsol'),
           edp: atribuido('edp'),
-        });
+        };
+        atribuidoInicial.current = { ...inicial };
+        setSelectedCartao(inicial);
       } catch {
         /* silencioso */
       }
@@ -55,26 +65,50 @@ export function useMotoristaCartoesFrota(open: boolean, motoristaId: string | un
     loadCartoes();
   }, [open, motoristaId]);
 
-  const syncCartoes = async (novoMotoristaId: string) => {
-    try {
-      for (const tipo of TIPOS) {
-        const cartaoId = selectedCartao[tipo];
-        await supabase
-          .from('cartoes_frota')
-          .update({ motorista_id: null })
-          .eq('tipo', tipo)
-          .eq('motorista_id', novoMotoristaId)
-          .neq('id', cartaoId || '00000000-0000-0000-0000-000000000000');
-        if (cartaoId) {
-          await supabase
-            .from('cartoes_frota')
-            .update({ motorista_id: novoMotoristaId })
-            .eq('id', cartaoId);
+  /**
+   * Aplica as escolhas do dropdown, um tipo de cada vez, pelas RPC.
+   *
+   * Antes eram dois `update` directos em `cartoes_frota`. Isso mudava o titular
+   * sem abrir nem fechar o período em `cartao_atribuicoes` — que é o que decide
+   * a quem se imputa o combustível — e sem tocar no estado nem nas datas. O
+   * cartão mudava de mãos no ecrã e o consumo continuava a ser imputado a quem
+   * já o tinha devolvido.
+   *
+   * Devolve os erros em vez de os atirar: gravar o motorista já correu bem
+   * nesta altura, e falhar o save inteiro por causa de um cartão seria pior.
+   * Mas deixam de ser engolidos — quem chama mostra-os.
+   */
+  const syncCartoes = async (novoMotoristaId: string): Promise<string[]> => {
+    const erros: string[] = [];
+
+    for (const tipo of TIPOS) {
+      const escolhido = selectedCartao[tipo];
+      const anterior = atribuidoInicial.current[tipo];
+      if (escolhido === anterior) continue;
+
+      try {
+        // Devolver primeiro: é o que fecha o período do titular anterior e o
+        // que liberta o cartão para poder ser atribuído a seguir.
+        if (anterior) {
+          const { error } = await supabase.rpc('devolver_cartao_frota', {
+            p_cartao_id: anterior,
+          });
+          if (error) throw error;
         }
+        if (escolhido) {
+          const { error } = await supabase.rpc('atribuir_cartao_frota', {
+            p_cartao_id: escolhido,
+            p_motorista_id: novoMotoristaId,
+          });
+          if (error) throw error;
+        }
+        atribuidoInicial.current[tipo] = escolhido;
+      } catch (err: unknown) {
+        erros.push(`${tipo.toUpperCase()}: ${errorMessage(err)}`);
       }
-    } catch {
-      /* silencioso — não bloqueia o save do motorista */
     }
+
+    return erros;
   };
 
   return { cartoesFrota, selectedCartao, setSelectedCartao, syncCartoes };
