@@ -14,10 +14,16 @@ insert into auth.users (id, email) values
 -- — quem recebe é exactamente quem a regra configurou — e sem cargo nenhuma
 -- destas regras resolveria ninguém.
 --
+-- O cargo tem nome PRÓPRIO do teste, e não "Administrador": inserir uma
+-- organização dispara `ensure_base_cargos`, que já semeia "Administrador",
+-- "Gestor TVDE" e "Supervisor Gestor TVDE", e `idx_cargos_nome_org_id` é único
+-- por (nome, org_id) — reutilizar o nome rebenta a fixture inteira antes da
+-- primeira asserção.
+--
 -- `is_admin` fica `true` de propósito: se a cópia automática voltar, este
 -- utilizador passa a ser resolvido por duas vias e as contagens denunciam-no.
 insert into public.cargos (id, nome, org_id) values
-  ('00000000-0000-0000-0000-0000000bc001', 'Administrador', '00000000-0000-0000-0000-0000000b0000');
+  ('00000000-0000-0000-0000-0000000bc001', 'Cargo Dual Write', '00000000-0000-0000-0000-0000000b0000');
 
 insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
   ('00000000-0000-0000-0000-0000000b0001', '00000000-0000-0000-0000-0000000b0000', true,

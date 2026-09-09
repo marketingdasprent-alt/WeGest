@@ -28,14 +28,19 @@ insert into auth.users (id, email) values
 -- saiu — quem recebe é exactamente quem a regra configurou — e sem cargo esta
 -- fixture deixava de resolver ninguém, com todas as contagens a dar 0.
 --
--- A migração fez o mesmo em produção no passo 1: às regras que tinham a lista
--- de cargos vazia atribuiu o cargo "Administrador" da própria org. Aqui
--- reproduz-se essa forma, para a fixture representar o que existe lá.
+-- A migração fez o equivalente em produção no passo 1: às regras que tinham a
+-- lista de cargos vazia atribuiu o cargo "Administrador" da própria org.
+--
+-- Aqui o cargo tem nome PRÓPRIO do teste, e não "Administrador": inserir uma
+-- organização dispara `ensure_base_cargos`, que já semeia "Administrador",
+-- "Gestor TVDE" e "Supervisor Gestor TVDE", e `idx_cargos_nome_org_id` é único
+-- por (nome, org_id) — reutilizar o nome rebenta a fixture inteira antes da
+-- primeira asserção. Mesma convenção de "Cargo Permitido"/"Cargo Idem".
 --
 -- `is_admin` fica `true` de propósito: se a cópia automática voltar, este
 -- utilizador passa a receber por duas vias e o teste 1 vê 6 onde espera 3.
 insert into public.cargos (id, nome, org_id) values
-  ('00000000-0000-0000-0000-000000030c01', 'Administrador', '00000000-0000-0000-0000-000000030000');
+  ('00000000-0000-0000-0000-000000030c01', 'Cargo Digest', '00000000-0000-0000-0000-000000030000');
 
 insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
   ('00000000-0000-0000-0000-000000030a01', '00000000-0000-0000-0000-000000030000', true,
