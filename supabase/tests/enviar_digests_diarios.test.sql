@@ -20,14 +20,36 @@ insert into public.organizacoes (id, nome, codigo) values
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000030a01', 'gestor@digest-h.pt');
 
-insert into public.user_organizacoes (user_id, org_id, is_admin) values
-  ('00000000-0000-0000-0000-000000030a01', '00000000-0000-0000-0000-000000030000', true);
+-- O destinatário tem de estar num CARGO, e a regra tem de o nomear.
+--
+-- Até 20260909120000 este utilizador era resolvido por `is_admin = true`: o
+-- laço de destinatários punha uma cópia de tudo na caixa de todos os admins da
+-- org, e a regra abaixo nem precisava de dizer quem devia avisar. Esse ramo
+-- saiu — quem recebe é exactamente quem a regra configurou — e sem cargo esta
+-- fixture deixava de resolver ninguém, com todas as contagens a dar 0.
+--
+-- A migração fez o mesmo em produção no passo 1: às regras que tinham a lista
+-- de cargos vazia atribuiu o cargo "Administrador" da própria org. Aqui
+-- reproduz-se essa forma, para a fixture representar o que existe lá.
+--
+-- `is_admin` fica `true` de propósito: se a cópia automática voltar, este
+-- utilizador passa a receber por duas vias e o teste 1 vê 6 onde espera 3.
+insert into public.cargos (id, nome, org_id) values
+  ('00000000-0000-0000-0000-000000030c01', 'Administrador', '00000000-0000-0000-0000-000000030000');
+
+insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
+  ('00000000-0000-0000-0000-000000030a01', '00000000-0000-0000-0000-000000030000', true,
+   '00000000-0000-0000-0000-000000030c01');
 
 -- Regra em modo digest — enviar_email=true MAS enviar_email_digest=true
 -- também: execute_automation_runs não deve enfileirar email nenhum.
+--
+-- `destinatarios_recurso` ficou aqui do desenho antigo e já não é consultado
+-- pela resolução — o que decide é a estratégia (por omissão `cargo`) e a lista
+-- de cargos. Fica explícito para o ficheiro não depender de omissões.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-000000463001', '00000000-0000-0000-0000-000000030000', 'teste.digest', 'Regra Digest Teste', 'teste.digest_evento', 'notificacao',
-   '{"template_codigo":"teste.digest_evento","destinatarios_recurso":"renting_contratos","enviar_email":true,"enviar_email_digest":true,"titulo":"Contrato a renovar"}'::jsonb);
+   '{"template_codigo":"teste.digest_evento","destinatarios_estrategia":"cargo","destinatarios_cargo_ids":["00000000-0000-0000-0000-000000030c01"],"enviar_email":true,"enviar_email_digest":true,"titulo":"Contrato a renovar"}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c3001', '00000000-0000-0000-0000-000000463001', '00000000-0000-0000-0000-000000030000', 'contratos_renting', '00000000-0000-0000-0000-000000ef3001'),
