@@ -80,6 +80,20 @@ export function MotoristaDialog({
     motorista?.id
   );
 
+  /**
+   * O motorista já ficou gravado; um cartão que não colou não desfaz isso. Mas
+   * também não pode passar despercebido — era o que acontecia antes, e é como
+   * cartões ficavam atribuídos no ecrã sem período nenhum aberto por trás.
+   */
+  const avisarErrosDeCartoes = (erros: string[]) => {
+    if (erros.length === 0) return;
+    toast({
+      title: 'Motorista gravado, mas os cartões não',
+      description: `${erros.join(' · ')}. Corrija em Administrativo → Cartões.`,
+      variant: 'destructive',
+    });
+  };
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchemaValidado),
     defaultValues: {
@@ -304,7 +318,7 @@ export function MotoristaDialog({
         if (error) throw error;
 
         // Sync cartões frota
-        await syncCartoes(motorista.id);
+        avisarErrosDeCartoes(await syncCartoes(motorista.id));
 
         toast({
           title: 'Motorista atualizado',
@@ -325,7 +339,7 @@ export function MotoristaDialog({
         if (error) throw error;
 
         // Sync cartões frota
-        if (newMotorista) await syncCartoes(newMotorista.id);
+        if (newMotorista) avisarErrosDeCartoes(await syncCartoes(newMotorista.id));
         limparRascunho();
 
         toast({

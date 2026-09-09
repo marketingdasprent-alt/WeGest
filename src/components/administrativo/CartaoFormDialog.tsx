@@ -13,7 +13,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -22,11 +24,14 @@ import {
   STATUS_INFO,
   STATUS_ORDER,
   todayISO,
+  titularRef,
+  parseTitular,
   type CartaoFrota,
   type FormState,
   type StatusCartao,
   type Movimento,
   type MotoristaOption,
+  type ClienteOption,
 } from './cartoesFlotaTab.types';
 
 interface CartaoFormDialogProps {
@@ -38,9 +43,74 @@ interface CartaoFormDialogProps {
   showPin: boolean;
   setShowPin: React.Dispatch<React.SetStateAction<boolean>>;
   motoristas: MotoristaOption[];
-  motoristaNome: (id: string | null) => string;
+  clientes: ClienteOption[];
+  titularNome: (motoristaId: string | null, clienteId: string | null) => string;
   saving: boolean;
   onSave: () => void;
+}
+
+/**
+ * Titular do cartão: motorista OU cliente, num dropdown só.
+ *
+ * Duas listas separadas deixariam escolher os dois ao mesmo tempo — estado que
+ * a base recusa (`cartoes_frota_um_titular`) e que o utilizador só descobriria
+ * ao gravar. Um valor único prefixado torna esse estado inexprimível.
+ */
+function TitularSelect({
+  motoristas,
+  clientes,
+  value,
+  onChange,
+  placeholder,
+  comOpcaoVazia,
+}: {
+  motoristas: MotoristaOption[];
+  clientes: ClienteOption[];
+  value: string;
+  onChange: (motoristaId: string, clienteId: string) => void;
+  placeholder: string;
+  comOpcaoVazia?: boolean;
+}) {
+  return (
+    <Select
+      value={value || '__none__'}
+      onValueChange={(v) => {
+        const { motorista_id, cliente_id } = parseTitular(v === '__none__' ? '' : (v as never));
+        onChange(motorista_id, cliente_id);
+      }}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {comOpcaoVazia && (
+          <SelectItem value="__none__">
+            <span className="text-muted-foreground italic">— Sem titular —</span>
+          </SelectItem>
+        )}
+        {clientes.length > 0 && (
+          <SelectGroup>
+            <SelectLabel>Clientes</SelectLabel>
+            {clientes.map((c) => (
+              <SelectItem key={c.id} value={`c:${c.id}`}>
+                {c.nome}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        )}
+        {motoristas.length > 0 && (
+          <SelectGroup>
+            <SelectLabel>Motoristas</SelectLabel>
+            {motoristas.map((m) => (
+              <SelectItem key={m.id} value={`m:${m.id}`}>
+                {m.nome}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        )}
+      </SelectContent>
+    </Select>
+  );
 }
 
 export function CartaoFormDialog({
@@ -52,7 +122,8 @@ export function CartaoFormDialog({
   showPin,
   setShowPin,
   motoristas,
-  motoristaNome,
+  clientes,
+  titularNome,
   saving,
   onSave,
 }: CartaoFormDialogProps) {
@@ -211,18 +282,19 @@ export function CartaoFormDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="nenhum">Sem alteração</SelectItem>
-                    <SelectItem value="entrega">Entrega (atribuir a motorista)</SelectItem>
+                    <SelectItem value="entrega">Entrega (atribuir titular)</SelectItem>
                     <SelectItem value="devolucao">Devolução (libertar cartão)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Último motorista</Label>
+                <Label>Último titular</Label>
                 <Input
                   readOnly
                   value={
-                    motoristaNome(form.ultimo_motorista_id) ||
+                    titularNome(form.ultimo_motorista_id, form.ultimo_cliente_id) ||
                     editing?.ultimo_motorista?.nome ||
+                    editing?.ultimo_cliente?.nome ||
                     '—'
                   }
                   className="bg-muted/50 text-muted-foreground"
@@ -234,24 +306,16 @@ export function CartaoFormDialog({
             {form.movimento === 'entrega' && (
               <div className="grid gap-4 sm:grid-cols-2 rounded-lg border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900/50 dark:bg-blue-900/10">
                 <div className="space-y-1.5">
-                  <Label>Motorista *</Label>
-                  <Select
-                    value={form.motorista_id || '__none__'}
-                    onValueChange={(v) =>
-                      setForm((f) => ({ ...f, motorista_id: v === '__none__' ? '' : v }))
+                  <Label>Titular *</Label>
+                  <TitularSelect
+                    motoristas={motoristas}
+                    clientes={clientes}
+                    value={titularRef(form.motorista_id, form.cliente_id)}
+                    onChange={(motorista_id, cliente_id) =>
+                      setForm((f) => ({ ...f, motorista_id, cliente_id }))
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar motorista" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {motoristas.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>
-                          {m.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Selecionar cliente ou motorista"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Data de entrega</Label>
@@ -263,7 +327,9 @@ export function CartaoFormDialog({
                 </div>
                 <p className="sm:col-span-2 text-xs text-muted-foreground">
                   Ao guardar: status → <strong>Em Uso</strong>
-                  {editing?.motorista_id ? '; o motorista atual passa a Último.' : '.'}
+                  {editing?.motorista_id || editing?.cliente_id
+                    ? '; o titular atual passa a Último e o período dele é fechado nesta data.'
+                    : '.'}
                 </p>
               </div>
             )}
@@ -271,10 +337,15 @@ export function CartaoFormDialog({
             {form.movimento === 'devolucao' && (
               <div className="grid gap-4 sm:grid-cols-2 rounded-lg border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/50 dark:bg-amber-900/10">
                 <div className="space-y-1.5">
-                  <Label>Motorista atual</Label>
+                  <Label>Titular atual</Label>
                   <Input
                     readOnly
-                    value={motoristaNome(form.motorista_id) || editing?.motorista?.nome || '—'}
+                    value={
+                      titularNome(form.motorista_id, form.cliente_id) ||
+                      editing?.motorista?.nome ||
+                      editing?.cliente?.nome ||
+                      '—'
+                    }
                     className="bg-muted/50 text-muted-foreground"
                   />
                 </div>
@@ -287,8 +358,9 @@ export function CartaoFormDialog({
                   />
                 </div>
                 <p className="sm:col-span-2 text-xs text-muted-foreground">
-                  Ao guardar: status → <strong>Disponível</strong>, o motorista passa a{' '}
-                  <strong>Último</strong> e o cartão fica livre.
+                  Ao guardar: status → <strong>Disponível</strong>, o titular passa a{' '}
+                  <strong>Último</strong> e o cartão fica livre. O consumo até esta data continua
+                  imputado a quem o tinha.
                 </p>
               </div>
             )}
@@ -296,25 +368,17 @@ export function CartaoFormDialog({
             {form.movimento === 'nenhum' && (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="space-y-1.5">
-                  <Label>Motorista atual</Label>
-                  <Select
-                    value={form.motorista_id || '__none__'}
-                    onValueChange={(v) =>
-                      setForm((f) => ({ ...f, motorista_id: v === '__none__' ? '' : v }))
+                  <Label>Titular atual</Label>
+                  <TitularSelect
+                    motoristas={motoristas}
+                    clientes={clientes}
+                    value={titularRef(form.motorista_id, form.cliente_id)}
+                    onChange={(motorista_id, cliente_id) =>
+                      setForm((f) => ({ ...f, motorista_id, cliente_id }))
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sem motorista" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">— Sem motorista —</SelectItem>
-                      {motoristas.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>
-                          {m.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Sem titular"
+                    comOpcaoVazia
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Data de entrega</Label>
