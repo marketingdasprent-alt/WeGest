@@ -990,21 +990,38 @@ export function useContasResumoSemana(
       // Falha em silêncio de propósito (só consola): quem não tem permissão de
       // escrita continua a poder ver a lista, e um erro aqui não pode derrubar
       // o ecrã todo — por isso o try/catch próprio, fora do da lista.
-      try {
-        const linhas = construirLinhasLiquidoSemanal(comUid, {
-          semanaInicio: weekStartStr,
-          semanaFim: weekEndStr,
-          gravadoEm: new Date().toISOString(),
-          gravadoPor: (await supabase.auth.getUser()).data.user?.id ?? null,
-        });
-        if (linhas.length > 0) {
-          const { error: erroGravar } = await supabase
-            .from('motorista_liquido_semanal')
-            .upsert(linhas, { onConflict: 'motorista_id,semana_inicio' });
-          if (erroGravar) console.error('[liquido semanal] falha ao gravar em lote:', erroGravar);
+      // Só se grava com o período FECHADO. O gate do carregamento não chega:
+      // quando a consulta que o verifica falha, o código assume fechado ("melhor
+      // mostrar o que há do que esconder o resumo por causa de uma falha de
+      // rede") — decisão certa para MOSTRAR, errada para ESCREVER. A 09/09 um
+      // soluço nessa verificação gravou três líquidos negativos da semana em
+      // curso, sem um único resumo de plataforma importado: receita a zero,
+      // custos a contar, e três dívidas inventadas na conta corrente.
+      //
+      // Mostrar um número provisório não faz mal a ninguém; gravá-lo cria
+      // movimentos financeiros que alguém vai cobrar.
+      //
+      // O `if` envolve a gravação em vez de sair da função: o saldo pendente
+      // vem a seguir e continua a carregar-se, período fechado ou não.
+      if (periodoFechado !== true) {
+        console.info('[liquido semanal] período por fechar — calculado, não gravado.');
+      } else {
+        try {
+          const linhas = construirLinhasLiquidoSemanal(comUid, {
+            semanaInicio: weekStartStr,
+            semanaFim: weekEndStr,
+            gravadoEm: new Date().toISOString(),
+            gravadoPor: (await supabase.auth.getUser()).data.user?.id ?? null,
+          });
+          if (linhas.length > 0) {
+            const { error: erroGravar } = await supabase
+              .from('motorista_liquido_semanal')
+              .upsert(linhas, { onConflict: 'motorista_id,semana_inicio' });
+            if (erroGravar) console.error('[liquido semanal] falha ao gravar em lote:', erroGravar);
+          }
+        } catch (erroGravar) {
+          console.error('[liquido semanal] falha ao gravar em lote:', erroGravar);
         }
-      } catch (erroGravar) {
-        console.error('[liquido semanal] falha ao gravar em lote:', erroGravar);
       }
 
       // Saldo pendente em lote (uma RPC para todos os motoristas da página,
