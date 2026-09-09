@@ -345,6 +345,12 @@ select is(
 -- ════════════════════════════════════════════════════════════
 -- Run B é outra viatura, mesma regra, mesmo destinatário, mesmo dia: agrupa na
 -- linha do run A, como sempre agrupou. A idempotência não pode matar isto.
+--
+-- O destinatário aqui é `permitido` (d0002), do cargo que a regra configura.
+-- Era o admin (d0001) até 20260909120000 — e como ele deixou de receber, estas
+-- asserções passaram a ler uma linha que não existe (`have: NULL`). O
+-- agrupamento é por (destinatário, tipo, dia) e não tem nada de especial nos
+-- admins, por isso trocar de destinatário mantém intacto o que se prova.
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-00000c4d0002', '00000000-0000-0000-0000-0000004d0001',
    '00000000-0000-0000-0000-0000000d0000', 'viaturas', '00000000-0000-0000-0000-0000008d0002');
@@ -354,7 +360,7 @@ select public.execute_automation_runs();
 select is(
   (select agrupadas::int from public.notificacoes
     where rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
-      and destinatario_id = '00000000-0000-0000-0000-0000000d0001'),
+      and destinatario_id = '00000000-0000-0000-0000-0000000d0002'),
   2,
   'um run DIFERENTE continua a poder contribuir para o mesmo agrupamento'
 );
@@ -362,14 +368,14 @@ select is(
 select is(
   (select jsonb_array_length(itens)::int from public.notificacoes
     where rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
-      and destinatario_id = '00000000-0000-0000-0000-0000000d0001'),
+      and destinatario_id = '00000000-0000-0000-0000-0000000d0002'),
   2,
   'os dois itens — um por run — estão presentes'
 );
 
 select is(
   (select count(*)::int from public.notificacoes
-    where destinatario_id = '00000000-0000-0000-0000-0000000d0001'
+    where destinatario_id = '00000000-0000-0000-0000-0000000d0002'
       and tipo = 'viatura_seguro_expirando'),
   1,
   'o run B fundiu-se na linha existente em vez de criar outra'
@@ -387,7 +393,7 @@ select public.execute_automation_runs();
 select is(
   (select agrupadas::int from public.notificacoes
     where rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
-      and destinatario_id = '00000000-0000-0000-0000-0000000d0001'),
+      and destinatario_id = '00000000-0000-0000-0000-0000000d0002'),
   2,
   'o retry de um run já fundido não volta a incrementar agrupadas'
 );
@@ -395,7 +401,7 @@ select is(
 select is(
   (select jsonb_array_length(itens)::int from public.notificacoes
     where rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
-      and destinatario_id = '00000000-0000-0000-0000-0000000d0001'),
+      and destinatario_id = '00000000-0000-0000-0000-0000000d0002'),
   2,
   'o retry de um run já fundido não volta a acrescentar o item'
 );
