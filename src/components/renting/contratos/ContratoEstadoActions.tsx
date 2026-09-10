@@ -66,7 +66,12 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
   const podeFechar = (ESTADOS_ORIGEM_FECHO as readonly string[]).includes(
     contrato.estado_operacional
   );
-  const podeReverterAbertura = contrato.estado_operacional === 'em_curso';
+  // Reverter a abertura desfaz a entrega da viatura e reabre o evento de
+  // entrega. Até aqui não tinha permissão nenhuma por trás — aparecia a quem
+  // conseguisse abrir o contrato. Passa a ter a sua, ao lado da de reverter
+  // para reserva, para as duas se ligarem no mesmo sítio das Permissões.
+  const podeReverterAbertura =
+    contrato.estado_operacional === 'em_curso' && canEdit('contratos_reverter_abertura');
   const podeReverterFecho = (ESTADOS_REVERTER_FECHO as readonly string[]).includes(
     contrato.estado_operacional
   );
