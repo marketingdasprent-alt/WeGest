@@ -74,12 +74,19 @@ select plan(29);
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000d0000', 'Org Idempotencia', 'idem-a');
 
--- `permitido2` existe num SEGUNDO cargo, usado só pela regra de email. Desde
--- 20260904093000 uma acção de email já não arrasta os admins da organização,
--- por isso os cenários de fila precisam de dois destinatários ESCOLHIDOS —
--- antes o segundo era o admin, que vinha de borla. O segundo cargo mantém as
--- contagens dos cenários de notificação (que continuam a incluir o admin)
--- exactamente como estavam.
+-- `permitido2` existe num SEGUNDO cargo. Desde 20260904093000 uma acção de
+-- email já não arrasta os admins da organização, e desde 20260909120000 as
+-- notificações internas também não: quem recebe é exactamente quem a regra
+-- configurou. O segundo destinatário deixou de vir de borla pelo `is_admin`.
+--
+-- Este ficheiro é sobre IDEMPOTÊNCIA POR DESTINATÁRIO — a chave é
+-- (run, destinatário), e prová-lo com um destinatário só não prova nada. Por
+-- isso as regras de notificação e de digest passaram a listar OS DOIS cargos,
+-- em vez de contarem com o admin. As contagens mantêm-se em 2 e continuam a
+-- significar o mesmo.
+--
+-- O admin fica na fixture de propósito: se a cópia automática voltar, estes
+-- testes passam a ver 3 onde esperam 2 e apanham-na.
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000d0001', 'admin@idem.pt'),
   ('00000000-0000-0000-0000-0000000d0002', 'permitido@idem.pt'),
@@ -120,7 +127,9 @@ insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_
      'titulo', 'Seguro a expirar',
      'template_codigo', 'teste.idem',
      'destinatarios_estrategia', 'cargo',
-     'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000cd0001'),
+     'destinatarios_cargo_ids', jsonb_build_array(
+       '00000000-0000-0000-0000-000000cd0001',
+       '00000000-0000-0000-0000-000000cd0002'),
      'enviar_email', true));
 
 -- ════════════════════════════════════════════════════════════
@@ -146,7 +155,7 @@ select is(
   (select count(*)::int from public.notifications
     where rule_run_id = '00000000-0000-0000-0000-00000c4d0001'),
   2,
-  'run A cria uma notifications por destinatário (admin + cargo)'
+  'run A cria uma notifications por destinatário (os dois cargos da regra)'
 );
 
 -- T5: mesmo run, destinatários diferentes → efeitos diferentes. A chave de
@@ -336,6 +345,12 @@ select is(
 -- ════════════════════════════════════════════════════════════
 -- Run B é outra viatura, mesma regra, mesmo destinatário, mesmo dia: agrupa na
 -- linha do run A, como sempre agrupou. A idempotência não pode matar isto.
+--
+-- O destinatário aqui é `permitido` (d0002), do cargo que a regra configura.
+-- Era o admin (d0001) até 20260909120000 — e como ele deixou de receber, estas
+-- asserções passaram a ler uma linha que não existe (`have: NULL`). O
+-- agrupamento é por (destinatário, tipo, dia) e não tem nada de especial nos
+-- admins, por isso trocar de destinatário mantém intacto o que se prova.
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-00000c4d0002', '00000000-0000-0000-0000-0000004d0001',
    '00000000-0000-0000-0000-0000000d0000', 'viaturas', '00000000-0000-0000-0000-0000008d0002');
@@ -345,7 +360,7 @@ select public.execute_automation_runs();
 select is(
   (select agrupadas::int from public.notificacoes
     where rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
-      and destinatario_id = '00000000-0000-0000-0000-0000000d0001'),
+      and destinatario_id = '00000000-0000-0000-0000-0000000d0002'),
   2,
   'um run DIFERENTE continua a poder contribuir para o mesmo agrupamento'
 );
@@ -353,14 +368,14 @@ select is(
 select is(
   (select jsonb_array_length(itens)::int from public.notificacoes
     where rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
-      and destinatario_id = '00000000-0000-0000-0000-0000000d0001'),
+      and destinatario_id = '00000000-0000-0000-0000-0000000d0002'),
   2,
   'os dois itens — um por run — estão presentes'
 );
 
 select is(
   (select count(*)::int from public.notificacoes
-    where destinatario_id = '00000000-0000-0000-0000-0000000d0001'
+    where destinatario_id = '00000000-0000-0000-0000-0000000d0002'
       and tipo = 'viatura_seguro_expirando'),
   1,
   'o run B fundiu-se na linha existente em vez de criar outra'
@@ -378,7 +393,7 @@ select public.execute_automation_runs();
 select is(
   (select agrupadas::int from public.notificacoes
     where rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
-      and destinatario_id = '00000000-0000-0000-0000-0000000d0001'),
+      and destinatario_id = '00000000-0000-0000-0000-0000000d0002'),
   2,
   'o retry de um run já fundido não volta a incrementar agrupadas'
 );
@@ -386,7 +401,7 @@ select is(
 select is(
   (select jsonb_array_length(itens)::int from public.notificacoes
     where rule_run_id = '00000000-0000-0000-0000-00000c4d0001'
-      and destinatario_id = '00000000-0000-0000-0000-0000000d0001'),
+      and destinatario_id = '00000000-0000-0000-0000-0000000d0002'),
   2,
   'o retry de um run já fundido não volta a acrescentar o item'
 );
@@ -485,7 +500,9 @@ insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_
      'titulo', 'Inspecao a expirar',
      'template_codigo', 'teste.idem_digest',
      'destinatarios_estrategia', 'cargo',
-     'destinatarios_cargo_ids', jsonb_build_array('00000000-0000-0000-0000-000000cd0001'),
+     'destinatarios_cargo_ids', jsonb_build_array(
+       '00000000-0000-0000-0000-000000cd0001',
+       '00000000-0000-0000-0000-000000cd0002'),
      'enviar_email', true,
      'enviar_email_digest', true));
 

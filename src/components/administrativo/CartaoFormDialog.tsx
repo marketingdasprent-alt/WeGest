@@ -1,4 +1,5 @@
-import { Loader2, Fuel, UserCheck, History, Eye, EyeOff } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2, Fuel, UserCheck, History, Eye, EyeOff, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,16 +18,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import {
   TIPO_INFO,
   STATUS_INFO,
   STATUS_ORDER,
   todayISO,
+  titularRef,
+  parseTitular,
   type CartaoFrota,
   type FormState,
   type StatusCartao,
   type Movimento,
   type MotoristaOption,
+  type ClienteOption,
 } from './cartoesFlotaTab.types';
 
 interface CartaoFormDialogProps {
@@ -38,9 +51,127 @@ interface CartaoFormDialogProps {
   showPin: boolean;
   setShowPin: React.Dispatch<React.SetStateAction<boolean>>;
   motoristas: MotoristaOption[];
-  motoristaNome: (id: string | null) => string;
+  clientes: ClienteOption[];
+  titularNome: (motoristaId: string | null, clienteId: string | null) => string;
   saving: boolean;
   onSave: () => void;
+}
+
+/**
+ * Titular do cartão: motorista OU cliente, num dropdown só.
+ *
+ * Duas listas separadas deixariam escolher os dois ao mesmo tempo — estado que
+ * a base recusa (`cartoes_frota_um_titular`) e que o utilizador só descobriria
+ * ao gravar. Um valor único prefixado torna esse estado inexprimível.
+ *
+ * Combobox (Popover + Command) e não `<Select>`: são centenas de nomes numa
+ * lista só, e sem pesquisa a única forma de lá chegar era rolar. Mesmo padrão
+ * de CartoesNaoReconhecidos.tsx.
+ */
+function TitularSelect({
+  motoristas,
+  clientes,
+  value,
+  onChange,
+  placeholder,
+  comOpcaoVazia,
+}: {
+  motoristas: MotoristaOption[];
+  clientes: ClienteOption[];
+  value: string;
+  onChange: (motoristaId: string, clienteId: string) => void;
+  placeholder: string;
+  comOpcaoVazia?: boolean;
+}) {
+  const [aberto, setAberto] = useState(false);
+
+  const { motorista_id, cliente_id } = parseTitular((value || '') as never);
+  const nomeEscolhido = motorista_id
+    ? motoristas.find((m) => m.id === motorista_id)?.nome
+    : cliente_id
+      ? clientes.find((c) => c.id === cliente_id)?.nome
+      : undefined;
+
+  const escolher = (ref: string) => {
+    const { motorista_id: mid, cliente_id: cid } = parseTitular(ref as never);
+    onChange(mid, cid);
+    setAberto(false);
+  };
+
+  // O cmdk filtra pelo `value` do item, e há nomes repetidos na lista (duas
+  // fichas distintas com o mesmo nome). Juntar o id mantém os valores únicos
+  // sem estragar a pesquisa — ninguém escreve um uuid na caixa.
+  const chaveDePesquisa = (nome: string, id: string) => `${nome} ${id}`;
+
+  return (
+    <Popover open={aberto} onOpenChange={setAberto}>
+      <PopoverTrigger asChild>
+        {/* Botão simples com `aria-expanded`, não `role="combobox"`: a role
+            exige `aria-controls` a apontar para a lista, e o id dela é gerado
+            pelo Radix. Prometer o contrato sem o cumprir é pior para um leitor
+            de ecrã do que não o prometer. */}
+        <Button
+          variant="outline"
+          aria-expanded={aberto}
+          aria-label={nomeEscolhido ? `Titular: ${nomeEscolhido}` : placeholder}
+          className="h-10 w-full justify-between px-3 py-2 text-sm font-normal"
+        >
+          <span className={`truncate ${nomeEscolhido ? '' : 'text-muted-foreground'}`}>
+            {nomeEscolhido ?? placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      {/* Por baixo do campo e com a largura dele. Sem `side`/`align` explícitos
+          o Radix escolhia sozinho e, num diálogo com pouco espaço em baixo,
+          abria por cima a tapar o próprio campo. */}
+      <PopoverContent
+        className="w-[--radix-popover-trigger-width] p-0 z-[100]"
+        side="bottom"
+        align="start"
+      >
+        <Command>
+          <CommandInput placeholder="Procurar titular…" />
+          <CommandList className="max-h-[280px]">
+            <CommandEmpty>Nenhum titular encontrado.</CommandEmpty>
+            {comOpcaoVazia && (
+              <CommandGroup>
+                <CommandItem value="sem titular" onSelect={() => escolher('')}>
+                  <span className="text-muted-foreground italic">— Sem titular —</span>
+                </CommandItem>
+              </CommandGroup>
+            )}
+            {clientes.length > 0 && (
+              <CommandGroup heading="Clientes">
+                {clientes.map((c) => (
+                  <CommandItem
+                    key={c.id}
+                    value={chaveDePesquisa(c.nome, c.id)}
+                    onSelect={() => escolher(`c:${c.id}`)}
+                  >
+                    <span className="truncate">{c.nome}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {motoristas.length > 0 && (
+              <CommandGroup heading="Motoristas">
+                {motoristas.map((m) => (
+                  <CommandItem
+                    key={m.id}
+                    value={chaveDePesquisa(m.nome, m.id)}
+                    onSelect={() => escolher(`m:${m.id}`)}
+                  >
+                    <span className="truncate">{m.nome}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function CartaoFormDialog({
@@ -52,7 +183,8 @@ export function CartaoFormDialog({
   showPin,
   setShowPin,
   motoristas,
-  motoristaNome,
+  clientes,
+  titularNome,
   saving,
   onSave,
 }: CartaoFormDialogProps) {
@@ -211,18 +343,19 @@ export function CartaoFormDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="nenhum">Sem alteração</SelectItem>
-                    <SelectItem value="entrega">Entrega (atribuir a motorista)</SelectItem>
+                    <SelectItem value="entrega">Entrega (atribuir titular)</SelectItem>
                     <SelectItem value="devolucao">Devolução (libertar cartão)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Último motorista</Label>
+                <Label>Último titular</Label>
                 <Input
                   readOnly
                   value={
-                    motoristaNome(form.ultimo_motorista_id) ||
+                    titularNome(form.ultimo_motorista_id, form.ultimo_cliente_id) ||
                     editing?.ultimo_motorista?.nome ||
+                    editing?.ultimo_cliente?.nome ||
                     '—'
                   }
                   className="bg-muted/50 text-muted-foreground"
@@ -234,24 +367,16 @@ export function CartaoFormDialog({
             {form.movimento === 'entrega' && (
               <div className="grid gap-4 sm:grid-cols-2 rounded-lg border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900/50 dark:bg-blue-900/10">
                 <div className="space-y-1.5">
-                  <Label>Motorista *</Label>
-                  <Select
-                    value={form.motorista_id || '__none__'}
-                    onValueChange={(v) =>
-                      setForm((f) => ({ ...f, motorista_id: v === '__none__' ? '' : v }))
+                  <Label>Titular *</Label>
+                  <TitularSelect
+                    motoristas={motoristas}
+                    clientes={clientes}
+                    value={titularRef(form.motorista_id, form.cliente_id)}
+                    onChange={(motorista_id, cliente_id) =>
+                      setForm((f) => ({ ...f, motorista_id, cliente_id }))
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar motorista" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {motoristas.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>
-                          {m.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Selecionar cliente ou motorista"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Data de entrega</Label>
@@ -263,7 +388,9 @@ export function CartaoFormDialog({
                 </div>
                 <p className="sm:col-span-2 text-xs text-muted-foreground">
                   Ao guardar: status → <strong>Em Uso</strong>
-                  {editing?.motorista_id ? '; o motorista atual passa a Último.' : '.'}
+                  {editing?.motorista_id || editing?.cliente_id
+                    ? '; o titular atual passa a Último e o período dele é fechado nesta data.'
+                    : '.'}
                 </p>
               </div>
             )}
@@ -271,10 +398,15 @@ export function CartaoFormDialog({
             {form.movimento === 'devolucao' && (
               <div className="grid gap-4 sm:grid-cols-2 rounded-lg border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/50 dark:bg-amber-900/10">
                 <div className="space-y-1.5">
-                  <Label>Motorista atual</Label>
+                  <Label>Titular atual</Label>
                   <Input
                     readOnly
-                    value={motoristaNome(form.motorista_id) || editing?.motorista?.nome || '—'}
+                    value={
+                      titularNome(form.motorista_id, form.cliente_id) ||
+                      editing?.motorista?.nome ||
+                      editing?.cliente?.nome ||
+                      '—'
+                    }
                     className="bg-muted/50 text-muted-foreground"
                   />
                 </div>
@@ -287,8 +419,9 @@ export function CartaoFormDialog({
                   />
                 </div>
                 <p className="sm:col-span-2 text-xs text-muted-foreground">
-                  Ao guardar: status → <strong>Disponível</strong>, o motorista passa a{' '}
-                  <strong>Último</strong> e o cartão fica livre.
+                  Ao guardar: status → <strong>Disponível</strong>, o titular passa a{' '}
+                  <strong>Último</strong> e o cartão fica livre. O consumo até esta data continua
+                  imputado a quem o tinha.
                 </p>
               </div>
             )}
@@ -296,25 +429,17 @@ export function CartaoFormDialog({
             {form.movimento === 'nenhum' && (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="space-y-1.5">
-                  <Label>Motorista atual</Label>
-                  <Select
-                    value={form.motorista_id || '__none__'}
-                    onValueChange={(v) =>
-                      setForm((f) => ({ ...f, motorista_id: v === '__none__' ? '' : v }))
+                  <Label>Titular atual</Label>
+                  <TitularSelect
+                    motoristas={motoristas}
+                    clientes={clientes}
+                    value={titularRef(form.motorista_id, form.cliente_id)}
+                    onChange={(motorista_id, cliente_id) =>
+                      setForm((f) => ({ ...f, motorista_id, cliente_id }))
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sem motorista" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">— Sem motorista —</SelectItem>
-                      {motoristas.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>
-                          {m.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Sem titular"
+                    comOpcaoVazia
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Data de entrega</Label>

@@ -90,3 +90,15 @@ CREATE TRIGGER motorista_liquido_semanal_gera_movimento
   ON public.motorista_liquido_semanal
   FOR EACH ROW
   EXECUTE FUNCTION public.sincronizar_movimento_resumo();
+
+COMMENT ON FUNCTION public.sincronizar_movimento_resumo() IS
+  'Espelha o líquido de motorista_liquido_semanal em motorista_financeiro (categoria ''resumos''), com data_movimento = semana_fim. Movimento já pago ou anulado não se reescreve; líquido zero não deixa movimento. Quem LÊ motorista_financeiro por intervalo de datas tem de excluir esta categoria — ela cai dentro da própria semana que resume, e contá-la duplica o líquido.';
+
+-- SECURITY DEFINER aberta ao PUBLIC é o buraco por onde o isolamento entre
+-- organizações se perde. Produção já está assim (a revogação foi aplicada
+-- pela migração 20260909094449, que não chegou a nenhum ramo); estas linhas
+-- garantem que uma reconstrução da base a partir do repo aterra no mesmo
+-- sítio, em vez de a reabrir.
+REVOKE ALL ON FUNCTION public.sincronizar_movimento_resumo() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.sincronizar_movimento_resumo() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.sincronizar_movimento_resumo() TO service_role;

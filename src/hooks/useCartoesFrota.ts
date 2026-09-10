@@ -75,6 +75,10 @@ export function useCartoesDisponiveis(tipo: TipoCartao | undefined) {
         .eq('tipo', tipo as TipoCartao)
         .eq('status', 'disponivel')
         .is('motorista_id', null)
+        // Um cartão de cliente também não está livre. O `status` já o excluiria,
+        // mas depender só dele deixaria passar qualquer linha que tenha ficado
+        // com o estado dessincronizado do titular — e havia 13 assim.
+        .is('cliente_id', null)
         .order('numero');
       if (error) throw error;
       return (data ?? []) as CartaoDisponivel[];
@@ -99,16 +103,24 @@ export interface MovimentoCartaoArgs {
    * Serve só para invalidar a lista certa depois de gravar.
    */
   motoristaId: string;
+  /**
+   * Data do movimento. Omitida, o servidor usa a dele — nunca o relógio do
+   * browser. Só é passada quando o utilizador a escreveu à mão no formulário
+   * de administração; aceitá-la no ecrã e descartá-la aqui poria a data
+   * mostrada em desacordo com o período que decide a imputação.
+   */
+  data?: string;
 }
 
 /** Marca o cartão em uso E grava o número na ficha, numa só transacção. */
 export function useAssociarCartaoAoMotorista() {
   const invalidar = useInvalidarCartoes();
   return useMutation({
-    mutationFn: async ({ cartaoId, motoristaId }: MovimentoCartaoArgs): Promise<void> => {
+    mutationFn: async ({ cartaoId, motoristaId, data }: MovimentoCartaoArgs): Promise<void> => {
       const { error } = await supabase.rpc('atribuir_cartao_frota', {
         p_cartao_id: cartaoId,
         p_motorista_id: motoristaId,
+        ...(data ? { p_de: data } : {}),
       });
       if (error) throw error;
     },
@@ -124,11 +136,71 @@ export function useAssociarCartaoAoMotorista() {
 export function useDevolverCartaoDoMotorista() {
   const invalidar = useInvalidarCartoes();
   return useMutation({
-    mutationFn: async ({ cartaoId }: MovimentoCartaoArgs): Promise<void> => {
-      const { error } = await supabase.rpc('devolver_cartao_frota', { p_cartao_id: cartaoId });
+    mutationFn: async ({ cartaoId, data }: MovimentoCartaoArgs): Promise<void> => {
+      const { error } = await supabase.rpc('devolver_cartao_frota', {
+        p_cartao_id: cartaoId,
+        ...(data ? { p_ate: data } : {}),
+      });
       if (error) throw error;
     },
     onSuccess: (_r, { motoristaId }) => invalidar(motoristaId),
+  });
+}
+
+/**
+ * Atribui o cartão a um CLIENTE.
+ *
+ * Gémea de `useAssociarCartaoAoMotorista`. A RPC não toca na ficha — as colunas
+ * `cartao_<tipo>` só existem em `motoristas_ativos` e são um resto do match
+ * legado; o cliente não as tem nem precisa delas, porque a imputação lê
+ * `cartao_atribuicoes`.
+ */
+export function useAssociarCartaoAoCliente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      cartaoId,
+      clienteId,
+      data,
+    }: {
+      cartaoId: string;
+      clienteId: string;
+      data?: string;
+    }): Promise<void> => {
+      const { error } = await supabase.rpc('atribuir_cartao_frota_cliente', {
+        p_cartao_id: cartaoId,
+        p_cliente_id: clienteId,
+        ...(data ? { p_de: data } : {}),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cartoes-frota'] });
+      qc.invalidateQueries({ queryKey: ['cliente-combustivel'] });
+    },
+  });
+}
+
+/**
+ * Devolve um cartão que está com um cliente.
+ *
+ * A RPC é a mesma de sempre — recebe só o cartão e ramifica pelo titular no
+ * servidor. O que muda aqui são as listas a invalidar.
+ */
+export function useDevolverCartaoDoCliente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ cartaoId, data }: { cartaoId: string; data?: string }): Promise<void> => {
+      const { error } = await supabase.rpc('devolver_cartao_frota', {
+        p_cartao_id: cartaoId,
+        ...(data ? { p_ate: data } : {}),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cartoes-frota'] });
+      qc.invalidateQueries({ queryKey: ['cliente-combustivel'] });
+    },
   });
 }
 
@@ -160,7 +232,7 @@ export function useCartoesFrotaLista<T>() {
       const { data, error } = await supabase
         .from('cartoes_frota')
         .select(
-          '*, motorista:motorista_id(nome), ultimo_motorista:ultimo_motorista_id(nome), cliente:cliente_id(nome)'
+          '*, motorista:motorista_id(nome), ultimo_motorista:ultimo_motorista_id(nome), cliente:cliente_id(nome), ultimo_cliente:ultimo_cliente_id(nome)'
         )
         .order('tipo')
         .order('numero');
@@ -185,12 +257,40 @@ export function useMotoristasParaCartoes() {
   });
 }
 
+/** Clientes para o dropdown de titular, a par dos motoristas. */
+export function useClientesParaCartoes() {
+  return useQuery({
+    queryKey: ['cartoes-frota', 'clientes-opcoes'],
+    queryFn: async (): Promise<Array<{ id: string; nome: string }>> => {
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('id, nome')
+        .is('deleted_at', null)
+        .order('nome');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 function useInvalidarLista() {
   const qc = useQueryClient();
   return () => qc.invalidateQueries({ queryKey: ['cartoes-frota'] });
 }
 
-/** Cria ou actualiza — `cartaoId` ausente significa criar. */
+/**
+ * Cria ou actualiza os campos DESCRITIVOS do cartão — `cartaoId` ausente
+ * significa criar.
+ *
+ * O titular, o estado e as datas de entrega/devolução saíram daqui: são um
+ * movimento, não um campo, e passaram para as RPC (`atribuir_*`/`devolver_*`),
+ * que os escrevem na mesma transacção em que abrem e fecham o período em
+ * `cartao_atribuicoes`. Escritos por aqui, o período nunca era tocado e o
+ * consumo do cartão deixava de ser imputado — em silêncio.
+ *
+ * Devolve o id porque criar um cartão já atribuído são duas coisas: a linha
+ * tem de existir antes de a RPC lhe poder pegar.
+ */
 export function useGuardarCartaoFrota() {
   const invalidar = useInvalidarLista();
   return useMutation({
@@ -200,14 +300,21 @@ export function useGuardarCartaoFrota() {
     }: {
       cartaoId?: string;
       payload: Record<string, unknown>;
-    }): Promise<void> => {
-      const { error } = cartaoId
+    }): Promise<string> => {
+      const { data, error } = cartaoId
         ? await supabase
             .from('cartoes_frota')
             .update(payload as never)
             .eq('id', cartaoId)
-        : await supabase.from('cartoes_frota').insert(payload as never);
+            .select('id')
+            .single()
+        : await supabase
+            .from('cartoes_frota')
+            .insert(payload as never)
+            .select('id')
+            .single();
       if (error) throw error;
+      return (data as { id: string }).id;
     },
     onSuccess: invalidar,
   });

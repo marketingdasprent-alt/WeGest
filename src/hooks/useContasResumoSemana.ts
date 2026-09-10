@@ -980,29 +980,38 @@ export function useContasResumoSemana(
       // Grava o líquido da semana de TODOS os motoristas de uma vez.
       //
       // O trigger em motorista_liquido_semanal transforma cada linha num
-      // movimento no perfil financeiro do motorista; o saldo dele passa a
-      // contar esse líquido junto com danos, cauções e o resto, e quem ficar
-      // negativo aparece sozinho na aba Dívidas. Antes disto o líquido só era
-      // gravado ao abrir o Resumo de um motorista à vez — quem nunca fosse
-      // aberto não tinha movimento nenhum e nunca chegava às Dívidas mesmo a
-      // dever.
+      // movimento no perfil financeiro do motorista (categoria 'resumos'), e
+      // é assim que a semana entra na conta corrente dele — o saldo pendente
+      // aqui ao lado, o separador Financeiro da ficha e o portal do motorista
+      // leem todos daí. Sem esta gravação, uma semana calculada e mostrada
+      // nunca chega à conta de ninguém.
       //
-      // Falha em silêncio de propósito (só consola): quem não tem permissão de
-      // escrita continua a poder ver a lista, e um erro aqui não pode derrubar
-      // o ecrã todo — por isso o try/catch próprio, fora do da lista.
-      // Só se grava com o período FECHADO. O gate do carregamento não chega:
-      // quando a consulta que o verifica falha, o código assume fechado ("melhor
-      // mostrar o que há do que esconder o resumo por causa de uma falha de
-      // rede") — decisão certa para MOSTRAR, errada para ESCREVER. A 09/09 um
-      // soluço nessa verificação gravou três líquidos negativos da semana em
-      // curso, sem um único resumo de plataforma importado: receita a zero,
-      // custos a contar, e três dívidas inventadas na conta corrente.
+      // Esta lista é o ÚNICO escritor: grava o valor já calculado acima, sem
+      // o recalcular. É o que garante que o histórico não contradiz o número
+      // que esteve no ecrã e que foi comunicado ao motorista.
+      //
+      // Só com o período FECHADO. O efeito lá em baixo já só chama
+      // `recarregar()` com periodoFechado === true — mas `recarregar` também
+      // é chamado DE FORA: ao fechar a semana e ao acabar uma importação. Aí
+      // o valor capturado no closure ainda pode ser `false`, e o cálculo
+      // corre na mesma. A 09/09 foi assim que a semana 07-13, ainda a
+      // decorrer e sem um único resumo de plataforma importado, gravou três
+      // líquidos negativos: receita a zero, custos a contar, três dívidas
+      // inventadas na conta corrente de quem nada devia. O ecrã dizia
+      // "Período por fechar" ao mesmo tempo que as dívidas apareciam.
       //
       // Mostrar um número provisório não faz mal a ninguém; gravá-lo cria
       // movimentos financeiros que alguém vai cobrar.
       //
-      // O `if` envolve a gravação em vez de sair da função: o saldo pendente
-      // vem a seguir e continua a carregar-se, período fechado ou não.
+      // Fica um buraco por tapar, e é de propósito que não o tapo aqui: se a
+      // consulta que verifica o fecho falhar, o componente assume fechado
+      // (`setPeriodoFechado(error ? true : …)`) — decisão certa para MOSTRAR,
+      // discutível para ESCREVER. Mexer nisso é mudar o comportamento do
+      // ecrã, não portar esta funcionalidade.
+      //
+      // Falha em silêncio de propósito (só consola): quem não tem permissão
+      // de escrita continua a poder ver a lista, e um erro aqui não pode
+      // derrubar o ecrã todo — daí o try/catch próprio.
       if (periodoFechado !== true) {
         console.info('[liquido semanal] período por fechar — calculado, não gravado.');
       } else {

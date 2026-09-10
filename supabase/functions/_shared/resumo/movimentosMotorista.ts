@@ -57,11 +57,19 @@ const JA_CALCULADAS_COMO_DEBITO = [...DEBITOS_QUE_O_CONTRATO_COBRE, 'reparacao']
 /** Categorias cujo CRÉDITO já vem na receita das plataformas. */
 const JA_CONTADAS_COMO_RECEITA = ['bolt', 'uber'];
 
-/** O movimento que o próprio resumo escreve (o líquido da semana). Não pode
- *  voltar a entrar no cálculo que o produziu: se entrasse, cada abertura do
- *  resumo lia o seu resultado anterior como despesa (ou receita) nova e o
- *  número fugia sozinho — −500, depois −1000, depois −1500. Regra: o resumo
- *  não se conta a si mesmo, em nenhum dos sentidos. */
+/** Categorias que o PRÓPRIO resumo escreve de volta em motorista_financeiro.
+ *
+ *  O trigger `sincronizar_movimento_resumo` (em motorista_liquido_semanal)
+ *  grava o líquido da semana como movimento — crédito se positivo, débito se
+ *  negativo — com `data_movimento` igual a `semana_fim`, ou seja DENTRO da
+ *  semana que resume. Voltar a lê-lo aqui somava a cada motorista o próprio
+ *  líquido uma segunda vez, e o erro cresce a cada recarregamento: o líquido
+ *  novo é regravado, o trigger actualiza o movimento, e a volta seguinte
+ *  parte de um valor já dobrado.
+ *
+ *  Ignora-se nos DOIS sentidos, ao contrário das restantes regras: não é uma
+ *  cobrança que outro bloco já calcula, é o resultado da conta a entrar na
+ *  sua própria conta. */
 const ESCRITAS_PELO_PROPRIO_RESUMO = ['resumos'];
 
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
@@ -70,11 +78,10 @@ export function classificarMovimento(m: MovimentoMotorista): Classificacao {
   const categoria = norm(m.categoria);
   const ehCredito = norm(m.tipo) === 'credito';
 
-  // Antes de tudo o resto: o resumo nunca se lê a si próprio.
   if (ESCRITAS_PELO_PROPRIO_RESUMO.includes(categoria)) {
     return {
       destino: 'ignorado',
-      motivo: 'é o líquido que este resumo produziu — não entra no próprio cálculo',
+      motivo: 'é o líquido que o próprio resumo escreveu, não uma linha da conta',
     };
   }
 

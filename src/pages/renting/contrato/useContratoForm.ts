@@ -970,10 +970,13 @@ export function useContratoForm(): UseContratoFormReturn {
       estacao_entrega_id: values.estacao_entrega_id || null,
       data_inicio: localInputToIso(values.data_inicio),
       estacao_recolha_id: values.estacao_recolha_id || null,
+      // TVDE nasce sempre sem data de fim (o servidor força-o desde
+      // 20260908115644), longa duração ou não — e o campo vazio TEM de passar
+      // por aqui como null: `localInputToIso('')` faz `new Date('')` e atira
+      // RangeError, matando o submit dentro do handler do clique, sem toast
+      // nem pedido. Ver useContratoForm.tvdeSemDataFim.test.ts.
       data_fim:
-        values.regime === 'tvde' && !values.is_longa_duracao
-          ? null
-          : localInputToIso(values.data_fim ?? ''),
+        values.regime === 'tvde' || !values.data_fim ? null : localInputToIso(values.data_fim),
       estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
       estado_operacional: values.estado_operacional,
       estado_financeiro: values.estado_financeiro,
@@ -1128,10 +1131,11 @@ export function useContratoForm(): UseContratoFormReturn {
               // Reenviá-los aqui era sobrepor os três com os valores hidratados
               // do contrato ANTIGO e desfazer a troca acabada de fazer.
               estacao_recolha_id: values.estacao_recolha_id || null,
+              // Mesma regra do payload de criação — ver o comentário lá.
               data_fim:
-                values.regime === 'tvde' && !values.is_longa_duracao
+                values.regime === 'tvde' || !values.data_fim
                   ? null
-                  : localInputToIso(values.data_fim ?? ''),
+                  : localInputToIso(values.data_fim),
               estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
               origem: values.origem,
               regime: values.regime,

@@ -1873,6 +1873,8 @@ export type Database = {
           fuel_type: string | null
           id: string
           integracao_id: string
+          cliente_id: string | null
+          devedor_cliente_id: string | null
           motorista_id: string | null
           org_id: string | null
           quantity: number | null
@@ -1891,6 +1893,8 @@ export type Database = {
           fuel_type?: string | null
           id?: string
           integracao_id: string
+          cliente_id?: string | null
+          devedor_cliente_id?: string | null
           motorista_id?: string | null
           org_id?: string | null
           quantity?: number | null
@@ -1909,6 +1913,8 @@ export type Database = {
           fuel_type?: string | null
           id?: string
           integracao_id?: string
+          cliente_id?: string | null
+          devedor_cliente_id?: string | null
           motorista_id?: string | null
           org_id?: string | null
           quantity?: number | null
@@ -2315,33 +2321,36 @@ export type Database = {
         Row: {
           ate: string | null
           cartao_id: string
+          cliente_id: string | null
           created_at: string
           criado_por: string | null
           de: string
           id: string
-          motorista_id: string
+          motorista_id: string | null
           org_id: string
           origem: string
         }
         Insert: {
           ate?: string | null
           cartao_id: string
+          cliente_id?: string | null
           created_at?: string
           criado_por?: string | null
           de: string
           id?: string
-          motorista_id: string
+          motorista_id?: string | null
           org_id: string
           origem?: string
         }
         Update: {
           ate?: string | null
           cartao_id?: string
+          cliente_id?: string | null
           created_at?: string
           criado_por?: string | null
           de?: string
           id?: string
-          motorista_id?: string
+          motorista_id?: string | null
           org_id?: string
           origem?: string
         }
@@ -2390,6 +2399,7 @@ export type Database = {
           status: string
           tipo: string
           ultimo_motorista_id: string | null
+          ultimo_cliente_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2412,6 +2422,7 @@ export type Database = {
           status?: string
           tipo: string
           ultimo_motorista_id?: string | null
+          ultimo_cliente_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2434,6 +2445,7 @@ export type Database = {
           status?: string
           tipo?: string
           ultimo_motorista_id?: string | null
+          ultimo_cliente_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -5071,6 +5083,8 @@ export type Database = {
           fuel_type: string | null
           id: string
           integracao_id: string | null
+          cliente_id: string | null
+          devedor_cliente_id: string | null
           motorista_id: string | null
           org_id: string | null
           quantity: number | null
@@ -5089,6 +5103,8 @@ export type Database = {
           fuel_type?: string | null
           id?: string
           integracao_id?: string | null
+          cliente_id?: string | null
+          devedor_cliente_id?: string | null
           motorista_id?: string | null
           org_id?: string | null
           quantity?: number | null
@@ -5107,6 +5123,8 @@ export type Database = {
           fuel_type?: string | null
           id?: string
           integracao_id?: string | null
+          cliente_id?: string | null
+          devedor_cliente_id?: string | null
           motorista_id?: string | null
           org_id?: string | null
           quantity?: number | null
@@ -10251,6 +10269,8 @@ export type Database = {
           fuel_type: string | null
           id: string
           integracao_id: string | null
+          cliente_id: string | null
+          devedor_cliente_id: string | null
           motorista_id: string | null
           org_id: string | null
           quantity: number | null
@@ -10269,6 +10289,8 @@ export type Database = {
           fuel_type?: string | null
           id?: string
           integracao_id?: string | null
+          cliente_id?: string | null
+          devedor_cliente_id?: string | null
           motorista_id?: string | null
           org_id?: string | null
           quantity?: number | null
@@ -10287,6 +10309,8 @@ export type Database = {
           fuel_type?: string | null
           id?: string
           integracao_id?: string | null
+          cliente_id?: string | null
+          devedor_cliente_id?: string | null
           motorista_id?: string | null
           org_id?: string | null
           quantity?: number | null
@@ -13988,7 +14012,11 @@ export type Database = {
         Returns: number
       }
       atribuir_cartao_frota: {
-        Args: { p_cartao_id: string; p_motorista_id: string }
+        Args: { p_cartao_id: string; p_motorista_id: string; p_de?: string }
+        Returns: undefined
+      }
+      atribuir_cartao_frota_cliente: {
+        Args: { p_cartao_id: string; p_cliente_id: string; p_de?: string }
         Returns: undefined
       }
       automation_catalogo: { Args: never; Returns: Json }
@@ -14284,7 +14312,7 @@ export type Database = {
         }[]
       }
       devolver_cartao_frota: {
-        Args: { p_cartao_id: string }
+        Args: { p_cartao_id: string; p_ate?: string }
         Returns: undefined
       }
       domain_events_claim: {
