@@ -92,10 +92,20 @@ export default function FrotaDonutChart({ disponiveis, ocupados, inativos }: Fro
                 <Cell key={d.name} fill={d.color} stroke={d.color} strokeWidth={1} />
               ))}
             </Pie>
-            <Tooltip content={<CustomTooltip />} />
+            {/* O tooltip TEM de pintar por cima do total ao centro. Sem
+                z-index explícito ficava por baixo: o rótulo do centro é um
+                irmão posicionado que vem depois no DOM, e entre irmãos
+                posicionados sem z-index ganha o último. O tooltip aparecia,
+                mas com o "422 viaturas" escrito por cima dele.
+                Aqui não pode ser evitado por posicionamento: o recharts
+                prende o tooltip à caixa do gráfico (allowEscapeViewBox é
+                false por omissão) e essa caixa está quase toda ocupada pela
+                rosca — quando bate na margem, é virado para dentro, ou seja
+                para o buraco do meio. */}
+            <Tooltip content={<CustomTooltip />} wrapperStyle={{ zIndex: 10 }} />
           </PieChart>
         </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <div className="pointer-events-none absolute inset-0 z-0 flex flex-col items-center justify-center">
           <span className="text-xl font-bold tabular-nums leading-none">{total}</span>
           <span className="text-[10px] text-muted-foreground mt-0.5">viaturas</span>
         </div>
