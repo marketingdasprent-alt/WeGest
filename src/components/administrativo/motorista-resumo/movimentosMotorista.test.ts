@@ -53,10 +53,26 @@ describe('classificarMovimento', () => {
     expect(classificarMovimento({ tipo: null, categoria: null, valor: 12 }).destino).toBe('outros');
   });
 
+  // O trigger sincronizar_movimento_resumo escreve o líquido da semana de
+  // volta em motorista_financeiro, com categoria 'resumos' e data igual ao
+  // último dia da semana — ou seja, DENTRO da semana que resume. Contá-lo
+  // aqui somava a cada motorista o próprio líquido uma segunda vez: crédito
+  // inchava a receita, débito inchava "Outros".
+  it('o movimento escrito pelo próprio resumo fica de fora, nos dois sentidos', () => {
+    const credito = classificarMovimento(mov('credito', 'resumos', 1712.45));
+    expect(credito.destino).toBe('ignorado');
+    expect(credito.motivo).toContain('resumo');
+
+    const debito = classificarMovimento(mov('debito', 'resumos', 1400));
+    expect(debito.destino).toBe('ignorado');
+    expect(debito.motivo).toContain('resumo');
+  });
+
   it('não se importa com maiúsculas nem espaços', () => {
     expect(classificarMovimento(mov(' Credito ', ' Renda_Viatura ', 10)).destino).toBe(
       'receita_outras'
     );
+    expect(classificarMovimento(mov('credito', ' Resumos ', 10)).destino).toBe('ignorado');
   });
 });
 
