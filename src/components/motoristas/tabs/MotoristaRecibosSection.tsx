@@ -419,7 +419,13 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         if (destino === 'receita_outras') extraCredits += val;
         else if (destino === 'caucao') finCaucao += val;
         else if (destino === 'seguros') finSeguros += val;
-        else if (destino === 'outros') finOutros += val;
+        // A mensalidade de slot ganhou balde próprio na classificação
+        // partilhada, mas este ecrã não tem linha para ela — vai para Outros,
+        // exactamente onde caía antes desta migração. Sem este ramo o valor
+        // não ia para lado nenhum: 6.030 € em 50 movimentos de 10 motoristas
+        // desapareciam da conta, e o líquido mostrado aqui subia na mesma
+        // medida.
+        else if (destino === 'outros' || destino === 'slot') finOutros += val;
       });
 
       // 6. FINAL AGGREGATION (MIRROR OF ContasResumoTab.tsx:resumosCalculados)
