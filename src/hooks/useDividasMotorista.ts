@@ -259,3 +259,93 @@ export function useUltimaSemanaComLiquido() {
     },
   });
 }
+
+export interface DividasAnteriores {
+  /** Quantos motoristas continuam por cobrar em semanas anteriores à escolhida. */
+  motoristas: number;
+  /** Em quantas semanas distintas isso acontece. */
+  semanas: number;
+  /** A soma do que falta cobrar, em positivo. */
+  total: number;
+  /** A semana mais antiga com dívida por cobrar, para se poder saltar lá. */
+  maisAntiga: { inicio: string; fim: string } | null;
+}
+
+/**
+ * O que ficou para trás: dívidas de semanas ANTERIORES à que está no ecrã e
+ * que ainda não foram liquidadas.
+ *
+ * Numa lista onde cada semana é a sua conta, uma dívida antiga sai de vista
+ * assim que se avança — e ninguém volta atrás semana a semana para ver o que
+ * ficou pendurado. Este contador é o que permite ir acompanhando: fica no topo
+ * da aba e só aparece quando há mesmo algo por cobrar.
+ *
+ * QUEM CONTA COMO PAGO. `divida_marcar_paga` liquida os movimentos e grava a
+ * liquidação em `dividas_motorista`, mas NÃO toca no líquido já gravado em
+ * `motorista_liquido_semanal` — esse é a fotografia da semana e continua
+ * negativo para sempre. Por isso "por cobrar" não pode ser só `liquido < 0`:
+ * tem de excluir quem já tem liquidação a cobrir aquela semana. Só contam as
+ * liquidações em estado 'paga' — uma 'cancelada' é uma cobrança desfeita, e
+ * a dívida volta a estar em aberto.
+ */
+export function useDividasAnterioresPorCobrar(semanaInicio: string | undefined) {
+  return useQuery({
+    queryKey: [CHAVE_LISTA, 'anteriores', semanaInicio],
+    enabled: !!semanaInicio,
+    queryFn: async (): Promise<DividasAnteriores> => {
+      const vazio: DividasAnteriores = {
+        motoristas: 0,
+        semanas: 0,
+        total: 0,
+        maisAntiga: null,
+      };
+
+      const [negativasRes, pagasRes] = await Promise.all([
+        supabase
+          .from('motorista_liquido_semanal')
+          .select('motorista_id, liquido, semana_inicio, semana_fim')
+          .lt('semana_inicio', semanaInicio as string)
+          .lt('liquido', 0)
+          .order('semana_inicio', { ascending: true }),
+        supabase
+          .from('dividas_motorista')
+          .select('motorista_id, periodo_inicio, periodo_fim')
+          .eq('estado', 'paga')
+          .lt('periodo_inicio', semanaInicio as string),
+      ]);
+
+      if (negativasRes.error) throw negativasRes.error;
+      if (pagasRes.error) throw pagasRes.error;
+
+      const pagas = pagasRes.data ?? [];
+      // Sobreposição, não igualdade: a liquidação guarda o período dos
+      // movimentos que apanhou, que pode ser mais estreito do que a semana.
+      const jaLiquidada = (linha: {
+        motorista_id: string;
+        semana_inicio: string;
+        semana_fim: string;
+      }) =>
+        pagas.some(
+          (p) =>
+            p.motorista_id === linha.motorista_id &&
+            p.periodo_inicio <= linha.semana_fim &&
+            p.periodo_fim >= linha.semana_inicio
+        );
+
+      const porCobrar = (negativasRes.data ?? []).filter((l) => !jaLiquidada(l));
+
+      if (porCobrar.length === 0) return vazio;
+
+      return {
+        motoristas: new Set(porCobrar.map((l) => l.motorista_id)).size,
+        semanas: new Set(porCobrar.map((l) => l.semana_inicio)).size,
+        total: porCobrar.reduce((soma, l) => soma + Math.abs(Number(l.liquido)), 0),
+        // A consulta vem ordenada por semana ascendente: a primeira é a mais antiga.
+        maisAntiga: {
+          inicio: porCobrar[0].semana_inicio,
+          fim: porCobrar[0].semana_fim,
+        },
+      };
+    },
+  });
+}

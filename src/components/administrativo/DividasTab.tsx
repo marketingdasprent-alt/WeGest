@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { HandCoins, ChevronLeft, ChevronRight } from 'lucide-react';
+import { HandCoins, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
@@ -36,6 +36,7 @@ import { cn } from '@/lib/utils';
 import {
   useDividasMotorista,
   useUltimaSemanaComLiquido,
+  useDividasAnterioresPorCobrar,
   useMarcarDividaPaga,
   useMarcarDividaNaoPaga,
   type Divida,
@@ -84,6 +85,13 @@ export function DividasTab() {
     semanaInicio: semanaInicio ? format(semanaInicio, 'yyyy-MM-dd') : undefined,
     semanaFim: semanaFim ? format(semanaFim, 'yyyy-MM-dd') : undefined,
   });
+  // O que ficou para trás. Cada semana é a sua conta, por isso uma dívida
+  // antiga sai de vista assim que se avança — e ninguém volta atrás semana a
+  // semana a ver o que ficou pendurado.
+  const { data: anteriores } = useDividasAnterioresPorCobrar(
+    semanaInicio ? format(semanaInicio, 'yyyy-MM-dd') : undefined
+  );
+
   const { mutate: marcarPaga, isPending: aPagar } = useMarcarDividaPaga();
   const { mutate: marcarNaoPaga, isPending: aReabrir } = useMarcarDividaNaoPaga();
   const ocupado = aPagar || aReabrir;
@@ -107,6 +115,36 @@ export function DividasTab() {
 
   return (
     <div className="space-y-4">
+      {/* Só aparece quando há mesmo algo por cobrar atrás. Um aviso que está
+          sempre no ecrã deixa de se ler ao fim de dois dias. */}
+      {anteriores && anteriores.motoristas > 0 && (
+        <div
+          data-testid="dividas-aviso-anteriores"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-amber-200 bg-amber-500/10 px-4 py-3 dark:border-amber-900/60"
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
+          <p className="text-sm text-amber-900 dark:text-amber-200">
+            <span className="font-semibold">
+              {anteriores.motoristas} {anteriores.motoristas === 1 ? 'motorista' : 'motoristas'}
+            </span>{' '}
+            por cobrar de {anteriores.semanas}{' '}
+            {anteriores.semanas === 1 ? 'semana anterior' : 'semanas anteriores'} —{' '}
+            <span className="font-semibold">{formatCurrency(anteriores.total)}</span>
+          </p>
+          {anteriores.maisAntiga && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto"
+              onClick={() => setSemanaEscolhida(parseISO(anteriores.maisAntiga!.inicio))}
+            >
+              Ir à mais antiga (
+              {format(parseISO(anteriores.maisAntiga.inicio), "d 'de' MMM", { locale: pt })})
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Navegação de semanas, igual à da lista de Contas — todas as colunas
           deste ecrã são da semana escolhida, os valores não acumulam de uma
           para a outra. */}

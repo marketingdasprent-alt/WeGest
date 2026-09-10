@@ -4,6 +4,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 const {
   useDividasMotorista,
   useUltimaSemanaComLiquido,
+  useDividasAnterioresPorCobrar,
   useMarcarDividaPaga,
   useMarcarDividaNaoPaga,
   marcarPaga,
@@ -12,6 +13,7 @@ const {
 } = vi.hoisted(() => ({
   useDividasMotorista: vi.fn(),
   useUltimaSemanaComLiquido: vi.fn(),
+  useDividasAnterioresPorCobrar: vi.fn(),
   useMarcarDividaPaga: vi.fn(),
   useMarcarDividaNaoPaga: vi.fn(),
   marcarPaga: vi.fn(),
@@ -22,6 +24,7 @@ const {
 vi.mock('@/hooks/useDividasMotorista', () => ({
   useDividasMotorista,
   useUltimaSemanaComLiquido,
+  useDividasAnterioresPorCobrar,
   useMarcarDividaPaga,
   useMarcarDividaNaoPaga,
 }));
@@ -63,6 +66,10 @@ beforeEach(() => {
   });
   useMarcarDividaPaga.mockReturnValue({ mutate: marcarPaga, isPending: false });
   useMarcarDividaNaoPaga.mockReturnValue({ mutate: marcarNaoPaga, isPending: false });
+  // Por omissão não há nada atrás — cada teste que queira o aviso põe-no.
+  useDividasAnterioresPorCobrar.mockReturnValue({
+    data: { motoristas: 0, semanas: 0, total: 0, maisAntiga: null },
+  });
 });
 
 describe('DividasTab', () => {
@@ -147,5 +154,68 @@ describe('DividasTab', () => {
     useDividasMotorista.mockReturnValue({ data: undefined, isLoading: false, isError: true });
     render(<DividasTab />);
     expect(screen.getByText('Não foi possível carregar as dívidas.')).toBeInTheDocument();
+  });
+});
+
+// Numa lista onde cada semana é a sua conta, o que ficou para trás sai de
+// vista assim que se avança. Este aviso é o que permite ir acompanhando.
+describe('DividasTab — o que ficou de semanas anteriores', () => {
+  beforeEach(() => {
+    useDividasMotorista.mockReturnValue({ data: [POR_COBRAR], isLoading: false });
+  });
+
+  it('não mostra aviso nenhum quando não há nada atrás', () => {
+    render(<DividasTab />);
+    expect(screen.queryByTestId('dividas-aviso-anteriores')).toBeNull();
+  });
+
+  it('conta os motoristas, as semanas e o total por cobrar', () => {
+    useDividasAnterioresPorCobrar.mockReturnValue({
+      data: {
+        motoristas: 19,
+        semanas: 3,
+        total: 8108.8,
+        maisAntiga: { inicio: '2026-08-10', fim: '2026-08-16' },
+      },
+    });
+    render(<DividasTab />);
+    const aviso = screen.getByTestId('dividas-aviso-anteriores');
+    expect(within(aviso).getByText('19 motoristas')).toBeInTheDocument();
+    expect(within(aviso).getByText(/3 semanas anteriores/)).toBeInTheDocument();
+    expect(within(aviso).getByText(/8[\s.]?108,80/)).toBeInTheDocument();
+  });
+
+  it('no singular não diz "1 motoristas" nem "1 semanas anteriores"', () => {
+    useDividasAnterioresPorCobrar.mockReturnValue({
+      data: {
+        motoristas: 1,
+        semanas: 1,
+        total: 110,
+        maisAntiga: { inicio: '2026-08-10', fim: '2026-08-16' },
+      },
+    });
+    render(<DividasTab />);
+    const aviso = screen.getByTestId('dividas-aviso-anteriores');
+    expect(within(aviso).getByText('1 motorista')).toBeInTheDocument();
+    expect(within(aviso).getByText(/1 semana anterior/)).toBeInTheDocument();
+  });
+
+  // Sem isto o aviso diz que há coisas atrás mas não há como lá chegar sem
+  // clicar "semana anterior" às cegas até encontrar.
+  it('o botão salta para a semana mais antiga por cobrar', () => {
+    useDividasAnterioresPorCobrar.mockReturnValue({
+      data: {
+        motoristas: 2,
+        semanas: 1,
+        total: 300,
+        maisAntiga: { inicio: '2026-08-10', fim: '2026-08-16' },
+      },
+    });
+    render(<DividasTab />);
+    fireEvent.click(screen.getByRole('button', { name: /Ir à mais antiga/ }));
+    // A lista passa a ser pedida para essa semana, não para a última.
+    expect(useDividasMotorista).toHaveBeenLastCalledWith(
+      expect.objectContaining({ semanaInicio: '2026-08-10', semanaFim: '2026-08-16' })
+    );
   });
 });

@@ -55,6 +55,7 @@ import { createElement, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   useDividasMotorista,
+  useDividasAnterioresPorCobrar,
   useMarcarDividaPaga,
   useMarcarDividaNaoPaga,
 } from './useDividasMotorista';
@@ -226,5 +227,125 @@ describe('useMarcarDividaNaoPaga', () => {
 
     await waitFor(() => expect(rpc).toHaveBeenCalled());
     expect(rpc).toHaveBeenCalledWith('divida_marcar_nao_paga', { p_divida_id: 'd-9' });
+  });
+});
+
+// O contador do topo da aba: o que ficou por cobrar em semanas ANTERIORES à
+// que está no ecrã. Sem ele, uma dívida antiga sai de vista assim que se
+// avança e ninguém volta atrás semana a semana a ver o que ficou pendurado.
+describe('useDividasAnterioresPorCobrar', () => {
+  const semanaEmCurso = '2026-08-31';
+
+  const negativa = (motorista: string, inicio: string, fim: string, liquido: number) => ({
+    motorista_id: motorista,
+    liquido,
+    semana_inicio: inicio,
+    semana_fim: fim,
+  });
+
+  it('conta motoristas, semanas distintas e o total, sempre em positivo', async () => {
+    abertasSelect.mockResolvedValue({
+      data: [
+        negativa('m-1', '2026-08-10', '2026-08-16', -100),
+        negativa('m-2', '2026-08-10', '2026-08-16', -50.5),
+        // O mesmo motorista noutra semana: duas linhas, um só motorista.
+        negativa('m-1', '2026-08-24', '2026-08-30', -20),
+      ],
+      error: null,
+    });
+    pagasSelect.mockResolvedValue({ data: [], error: null });
+
+    const { result } = renderHook(() => useDividasAnterioresPorCobrar(semanaEmCurso), { wrapper });
+    await waitFor(() => expect(result.current.data).toBeDefined());
+
+    expect(result.current.data).toEqual({
+      motoristas: 2,
+      semanas: 2,
+      total: 170.5,
+      maisAntiga: { inicio: '2026-08-10', fim: '2026-08-16' },
+    });
+  });
+
+  // `divida_marcar_paga` liquida os movimentos e grava a liquidação, mas NÃO
+  // toca no líquido gravado — esse é a fotografia da semana e fica negativo
+  // para sempre. Sem esta exclusão, o contador nunca descia e ninguém
+  // conseguia usá-lo para acompanhar nada.
+  it('não conta quem já tem liquidação a cobrir aquela semana', async () => {
+    abertasSelect.mockResolvedValue({
+      data: [
+        negativa('m-1', '2026-08-10', '2026-08-16', -100),
+        negativa('m-2', '2026-08-10', '2026-08-16', -50),
+      ],
+      error: null,
+    });
+    pagasSelect.mockResolvedValue({
+      data: [{ motorista_id: 'm-1', periodo_inicio: '2026-08-12', periodo_fim: '2026-08-14' }],
+      error: null,
+    });
+
+    const { result } = renderHook(() => useDividasAnterioresPorCobrar(semanaEmCurso), { wrapper });
+    await waitFor(() => expect(result.current.data).toBeDefined());
+
+    // A liquidação do m-1 apanha só três dias da semana — é sobreposição, não
+    // igualdade, e chega para o dar por cobrado.
+    expect(result.current.data).toMatchObject({ motoristas: 1, semanas: 1, total: 50 });
+  });
+
+  it('uma liquidação de outro motorista não desconta ninguém', async () => {
+    abertasSelect.mockResolvedValue({
+      data: [negativa('m-1', '2026-08-10', '2026-08-16', -100)],
+      error: null,
+    });
+    pagasSelect.mockResolvedValue({
+      data: [{ motorista_id: 'm-9', periodo_inicio: '2026-08-10', periodo_fim: '2026-08-16' }],
+      error: null,
+    });
+
+    const { result } = renderHook(() => useDividasAnterioresPorCobrar(semanaEmCurso), { wrapper });
+    await waitFor(() => expect(result.current.data).toBeDefined());
+    expect(result.current.data?.motoristas).toBe(1);
+  });
+
+  it('uma liquidação de um período que não toca a semana também não desconta', async () => {
+    abertasSelect.mockResolvedValue({
+      data: [negativa('m-1', '2026-08-10', '2026-08-16', -100)],
+      error: null,
+    });
+    pagasSelect.mockResolvedValue({
+      data: [{ motorista_id: 'm-1', periodo_inicio: '2026-07-01', periodo_fim: '2026-07-31' }],
+      error: null,
+    });
+
+    const { result } = renderHook(() => useDividasAnterioresPorCobrar(semanaEmCurso), { wrapper });
+    await waitFor(() => expect(result.current.data).toBeDefined());
+    expect(result.current.data?.motoristas).toBe(1);
+  });
+
+  it('sem nada por cobrar devolve zeros e nenhuma semana mais antiga', async () => {
+    abertasSelect.mockResolvedValue({ data: [], error: null });
+    pagasSelect.mockResolvedValue({ data: [], error: null });
+
+    const { result } = renderHook(() => useDividasAnterioresPorCobrar(semanaEmCurso), { wrapper });
+    await waitFor(() => expect(result.current.data).toBeDefined());
+    expect(result.current.data).toEqual({
+      motoristas: 0,
+      semanas: 0,
+      total: 0,
+      maisAntiga: null,
+    });
+  });
+
+  it('sem semana escolhida não vai à base de dados', async () => {
+    renderHook(() => useDividasAnterioresPorCobrar(undefined), { wrapper });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(abertasSelect).not.toHaveBeenCalled();
+  });
+
+  it('um erro a ler os líquidos não passa em silêncio', async () => {
+    abertasSelect.mockResolvedValue({ data: null, error: { message: 'boom' } });
+    pagasSelect.mockResolvedValue({ data: [], error: null });
+
+    const { result } = renderHook(() => useDividasAnterioresPorCobrar(semanaEmCurso), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });
