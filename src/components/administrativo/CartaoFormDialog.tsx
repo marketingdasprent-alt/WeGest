@@ -1,4 +1,5 @@
-import { Loader2, Fuel, UserCheck, History, Eye, EyeOff } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2, Fuel, UserCheck, History, Eye, EyeOff, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,12 +14,19 @@ import {
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import {
   TIPO_INFO,
   STATUS_INFO,
@@ -55,6 +63,10 @@ interface CartaoFormDialogProps {
  * Duas listas separadas deixariam escolher os dois ao mesmo tempo — estado que
  * a base recusa (`cartoes_frota_um_titular`) e que o utilizador só descobriria
  * ao gravar. Um valor único prefixado torna esse estado inexprimível.
+ *
+ * Combobox (Popover + Command) e não `<Select>`: são centenas de nomes numa
+ * lista só, e sem pesquisa a única forma de lá chegar era rolar. Mesmo padrão
+ * de CartoesNaoReconhecidos.tsx.
  */
 function TitularSelect({
   motoristas,
@@ -71,45 +83,94 @@ function TitularSelect({
   placeholder: string;
   comOpcaoVazia?: boolean;
 }) {
+  const [aberto, setAberto] = useState(false);
+
+  const { motorista_id, cliente_id } = parseTitular((value || '') as never);
+  const nomeEscolhido = motorista_id
+    ? motoristas.find((m) => m.id === motorista_id)?.nome
+    : cliente_id
+      ? clientes.find((c) => c.id === cliente_id)?.nome
+      : undefined;
+
+  const escolher = (ref: string) => {
+    const { motorista_id: mid, cliente_id: cid } = parseTitular(ref as never);
+    onChange(mid, cid);
+    setAberto(false);
+  };
+
+  // O cmdk filtra pelo `value` do item, e há nomes repetidos na lista (duas
+  // fichas distintas com o mesmo nome). Juntar o id mantém os valores únicos
+  // sem estragar a pesquisa — ninguém escreve um uuid na caixa.
+  const chaveDePesquisa = (nome: string, id: string) => `${nome} ${id}`;
+
   return (
-    <Select
-      value={value || '__none__'}
-      onValueChange={(v) => {
-        const { motorista_id, cliente_id } = parseTitular(v === '__none__' ? '' : (v as never));
-        onChange(motorista_id, cliente_id);
-      }}
-    >
-      <SelectTrigger>
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {comOpcaoVazia && (
-          <SelectItem value="__none__">
-            <span className="text-muted-foreground italic">— Sem titular —</span>
-          </SelectItem>
-        )}
-        {clientes.length > 0 && (
-          <SelectGroup>
-            <SelectLabel>Clientes</SelectLabel>
-            {clientes.map((c) => (
-              <SelectItem key={c.id} value={`c:${c.id}`}>
-                {c.nome}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        )}
-        {motoristas.length > 0 && (
-          <SelectGroup>
-            <SelectLabel>Motoristas</SelectLabel>
-            {motoristas.map((m) => (
-              <SelectItem key={m.id} value={`m:${m.id}`}>
-                {m.nome}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        )}
-      </SelectContent>
-    </Select>
+    <Popover open={aberto} onOpenChange={setAberto}>
+      <PopoverTrigger asChild>
+        {/* Botão simples com `aria-expanded`, não `role="combobox"`: a role
+            exige `aria-controls` a apontar para a lista, e o id dela é gerado
+            pelo Radix. Prometer o contrato sem o cumprir é pior para um leitor
+            de ecrã do que não o prometer. */}
+        <Button
+          variant="outline"
+          aria-expanded={aberto}
+          aria-label={nomeEscolhido ? `Titular: ${nomeEscolhido}` : placeholder}
+          className="h-10 w-full justify-between px-3 py-2 text-sm font-normal"
+        >
+          <span className={`truncate ${nomeEscolhido ? '' : 'text-muted-foreground'}`}>
+            {nomeEscolhido ?? placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      {/* Por baixo do campo e com a largura dele. Sem `side`/`align` explícitos
+          o Radix escolhia sozinho e, num diálogo com pouco espaço em baixo,
+          abria por cima a tapar o próprio campo. */}
+      <PopoverContent
+        className="w-[--radix-popover-trigger-width] p-0 z-[100]"
+        side="bottom"
+        align="start"
+      >
+        <Command>
+          <CommandInput placeholder="Procurar titular…" />
+          <CommandList className="max-h-[280px]">
+            <CommandEmpty>Nenhum titular encontrado.</CommandEmpty>
+            {comOpcaoVazia && (
+              <CommandGroup>
+                <CommandItem value="sem titular" onSelect={() => escolher('')}>
+                  <span className="text-muted-foreground italic">— Sem titular —</span>
+                </CommandItem>
+              </CommandGroup>
+            )}
+            {clientes.length > 0 && (
+              <CommandGroup heading="Clientes">
+                {clientes.map((c) => (
+                  <CommandItem
+                    key={c.id}
+                    value={chaveDePesquisa(c.nome, c.id)}
+                    onSelect={() => escolher(`c:${c.id}`)}
+                  >
+                    <span className="truncate">{c.nome}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {motoristas.length > 0 && (
+              <CommandGroup heading="Motoristas">
+                {motoristas.map((m) => (
+                  <CommandItem
+                    key={m.id}
+                    value={chaveDePesquisa(m.nome, m.id)}
+                    onSelect={() => escolher(`m:${m.id}`)}
+                  >
+                    <span className="truncate">{m.nome}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 

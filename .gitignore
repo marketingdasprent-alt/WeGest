@@ -32,6 +32,8 @@ dist-ssr
 
 # Supabase CLI — ficheiros temporários/estado local
 supabase/.temp/
+.agents
+skills-lock.json
 
 # Scripts locais de debug/diagnóstico (one-off) — não fazem parte do produto.
 scripts-local/
@@ -59,3 +61,5 @@ docs/**/*.md
 # A regra `docs/**/*.md` acima deixaria de fora documentação que é referenciada
 # por migrações e pelo próprio CI (mensagens de erro do job db-tests).
 !docs/motor-automacao/**
+
+

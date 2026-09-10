@@ -12,6 +12,7 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
+  AlertTriangle,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
@@ -19,6 +20,10 @@ import { colunaDoMovimento, type ColunaFinanceira } from './relatorioPagamentoCa
 
 interface ResumoBase {
   motorista_id?: string;
+  /** Chave estável da linha nos Resumos. Existe mesmo sem `motorista_id` — é
+   *  o que permite mostrar aqui um motorista ainda sem ficha no CRM. */
+  _uid?: string;
+  driver_uuid?: string;
   driver_name: string;
   liquido: number;
   aluguer: number;
@@ -37,7 +42,14 @@ interface RelatorioPagamentoDialogProps {
 }
 
 interface LinhaRelatorio {
-  motorista_id: string;
+  /** Identidade da linha na tabela (ordenação, arrasto, React key). Vem do
+   *  `_uid` dos Resumos, por isso existe mesmo sem ficha no CRM. */
+  key: string;
+  /** `null` = motorista de plataforma que ainda não está casado com uma ficha
+   *  do CRM. Sem ficha não há IBAN, não há movimentos financeiros e não dá
+   *  para marcar como pago (a tabela `relatorio_pagamento_pagos` guarda o id
+   *  da ficha). A linha aparece na mesma — ver o aviso no cabeçalho. */
+  motorista_id: string | null;
   nome: string;
   iban: string;
   liquido: number;
@@ -54,6 +66,7 @@ interface LinhaRelatorio {
   bonificacao: number;
   ajudaCusto: number;
   outrasDevolucoes: number;
+  outrosDebitos: number;
 }
 
 const fmtEur = (v: number) =>
@@ -75,7 +88,8 @@ type SortKey =
   | 'devCaucao'
   | 'bonificacao'
   | 'ajudaCusto'
-  | 'outrasDevolucoes';
+  | 'outrasDevolucoes'
+  | 'outrosDebitos';
 
 export function RelatorioPagamentoDialog({
   open,
@@ -186,19 +200,43 @@ export function RelatorioPagamentoDialog({
     }
   };
 
-  const comMotoristaId = useMemo(
-    () => resumos.filter((r): r is ResumoBase & { motorista_id: string } => !!r.motorista_id),
+  // Chave estável por linha. Sem ficha no CRM não há `motorista_id`, mas há
+  // sempre `_uid` (é o mesmo que a lista dos Resumos usa para seleccionar e
+  // para as keys do React).
+  const chaveDaLinha = (r: ResumoBase) =>
+    r.motorista_id || r._uid || r.driver_uuid || `sem-ficha:${r.driver_name}`;
+
+  // TODOS os motoristas dos Resumos, com ficha no CRM ou sem ela. Antes esta
+  // lista era `resumos.filter(r => !!r.motorista_id)` e os outros
+  // desapareciam do relatório e do Excel sem aviso nenhum — na semana
+  // 31/08–06/09 eram 21 pessoas e 5.352 € de faturado. O relatório de
+  // pagamento é onde se confere quem recebe o quê; faltar lá gente é pior do
+  // que mostrá-la incompleta.
+  const linhasBase = useMemo(
+    () =>
+      resumos.map((r) => ({
+        resumo: r,
+        key: chaveDaLinha(r),
+        motoristaId: r.motorista_id ?? null,
+      })),
     [resumos]
   );
 
+  const semFicha = useMemo(() => linhasBase.filter((l) => !l.motoristaId), [linhasBase]);
+
   useEffect(() => {
-    if (!open || comMotoristaId.length === 0) return;
+    if (!open || linhasBase.length === 0) return;
     let cancelled = false;
 
     (async () => {
       setLoading(true);
       try {
-        const ids = comMotoristaId.map((r) => r.motorista_id);
+        const ids = linhasBase.map((l) => l.motoristaId).filter((id): id is string => !!id);
+        if (ids.length === 0) {
+          setIbanMap({});
+          setFinanceiroMap({});
+          return;
+        }
         const weekStartStr = format(weekStart, 'yyyy-MM-dd');
         const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
 
@@ -209,7 +247,12 @@ export function RelatorioPagamentoDialog({
             .select('motorista_id, valor, categoria, tipo')
             .gte('data_movimento', weekStartStr)
             .lte('data_movimento', weekEndStr)
-            .eq('status', 'pendente')
+            // O MESMO critério do cálculo dos Resumos (useContasResumoSemana):
+            // conta tudo menos o cancelado. Com `.eq('status','pendente')` um
+            // débito já marcado como pago continuava a pesar no "Valor a
+            // Pagar" — que vem dos Resumos — e não tinha linha nenhuma no
+            // detalhe. Desde 01/08 eram 46 movimentos, 7.168,59 €.
+            .neq('status', 'cancelado')
             .in('motorista_id', ids),
         ]);
 
@@ -241,16 +284,17 @@ export function RelatorioPagamentoDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, comMotoristaId, weekStart, weekEnd]);
+  }, [open, linhasBase, weekStart, weekEnd]);
 
   const linhas: LinhaRelatorio[] = useMemo(
     () =>
-      comMotoristaId.map((r) => {
-        const fin = financeiroMap[r.motorista_id] || {};
+      linhasBase.map(({ resumo: r, key, motoristaId }) => {
+        const fin = (motoristaId && financeiroMap[motoristaId]) || {};
         return {
-          motorista_id: r.motorista_id,
+          key,
+          motorista_id: motoristaId,
           nome: r.driver_name,
-          iban: ibanMap[r.motorista_id] || '',
+          iban: (motoristaId && ibanMap[motoristaId]) || '',
           liquido: r.liquido,
           viatura: r.aluguer,
           combustivel: r.combustivel,
@@ -265,9 +309,10 @@ export function RelatorioPagamentoDialog({
           bonificacao: fin.bonificacao || 0,
           ajudaCusto: fin.ajudaCusto || 0,
           outrasDevolucoes: fin.outrasDevolucoes || 0,
+          outrosDebitos: fin.outrosDebitos || 0,
         };
       }),
-    [comMotoristaId, financeiroMap, ibanMap]
+    [linhasBase, financeiroMap, ibanMap]
   );
 
   // Ordenação, por prioridade:
@@ -295,8 +340,8 @@ export function RelatorioPagamentoDialog({
     if (ordemManual.length === 0) return alfabetica;
     const pos = new Map(ordemManual.map((id, i) => [id, i]));
     return alfabetica.sort((a, b) => {
-      const pa = pos.has(a.motorista_id) ? pos.get(a.motorista_id)! : Number.MAX_SAFE_INTEGER;
-      const pb = pos.has(b.motorista_id) ? pos.get(b.motorista_id)! : Number.MAX_SAFE_INTEGER;
+      const pa = pos.has(a.key) ? pos.get(a.key)! : Number.MAX_SAFE_INTEGER;
+      const pb = pos.has(b.key) ? pos.get(b.key)! : Number.MAX_SAFE_INTEGER;
       return pa - pb;
     });
   }, [linhas, ordemManual, sortCol, sortDir]);
@@ -304,7 +349,7 @@ export function RelatorioPagamentoDialog({
   // Drag-n-drop (HTML5 nativo — mesmo padrão do kanban-board do projeto).
   const handleDrop = (targetId: string) => {
     if (!dragId || dragId === targetId) return;
-    const base = linhasOrdenadas.map((l) => l.motorista_id);
+    const base = linhasOrdenadas.map((l) => l.key);
     const from = base.indexOf(dragId);
     const to = base.indexOf(targetId);
     if (from === -1 || to === -1) return;
@@ -330,6 +375,7 @@ export function RelatorioPagamentoDialog({
       bonificacao: 0,
       ajudaCusto: 0,
       outrasDevolucoes: 0,
+      outrosDebitos: 0,
     };
     linhasOrdenadas.forEach((l) => {
       t.liquido += l.liquido;
@@ -346,6 +392,7 @@ export function RelatorioPagamentoDialog({
       t.bonificacao += l.bonificacao;
       t.ajudaCusto += l.ajudaCusto;
       t.outrasDevolucoes += l.outrasDevolucoes;
+      t.outrosDebitos += l.outrosDebitos;
     });
     return t;
   }, [linhasOrdenadas]);
@@ -355,7 +402,7 @@ export function RelatorioPagamentoDialog({
       Nome: l.nome,
       IBAN: l.iban,
       Semana: weekLabel,
-      Pago: pagos.has(l.motorista_id) ? 'Sim' : '',
+      Pago: l.motorista_id && pagos.has(l.motorista_id) ? 'Sim' : '',
       'Valor a Pagar (€)': l.liquido,
       Negativos: l.liquido < 0 ? l.liquido : '',
       'Viatura (€)': l.viatura,
@@ -371,6 +418,13 @@ export function RelatorioPagamentoDialog({
       'Bonificação Motorista (€)': l.bonificacao,
       'Ajuda Custo (€)': l.ajudaCusto,
       'Outras Devoluções (€)': l.outrasDevolucoes,
+      'Outros Débitos (€)': l.outrosDebitos,
+      // O Excel sai destas salas para fora — quem o abre tem de perceber
+      // porque é que a linha não tem IBAN nem detalhe, sem ter de vir
+      // perguntar.
+      Observação: l.motorista_id
+        ? ''
+        : 'Motorista de plataforma sem ficha no CRM — sem IBAN e sem movimentos financeiros',
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -447,6 +501,33 @@ export function RelatorioPagamentoDialog({
               </Button>
             </div>
           </div>
+
+          {semFicha.length > 0 && (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+              <AlertTriangle className="mt-px h-4 w-4 shrink-0" />
+              <div className="space-y-1">
+                <p className="font-medium">
+                  {semFicha.length}{' '}
+                  {semFicha.length === 1
+                    ? 'motorista aparece sem ficha no CRM'
+                    : 'motoristas aparecem sem ficha no CRM'}{' '}
+                  — linha incompleta, não em falta.
+                </p>
+                <p>
+                  Vêm da Bolt/Uber e ainda não estão associados a um motorista. Contam no total, mas
+                  ficam sem IBAN, sem detalhe de movimentos e não dá para marcar como pagos.
+                  Associa-os na ficha do motorista para o relatório ficar completo.
+                </p>
+                <p className="text-amber-800/90 dark:text-amber-300/90">
+                  {semFicha
+                    .map((l) => l.resumo.driver_name)
+                    .slice(0, 8)
+                    .join(', ')}
+                  {semFicha.length > 8 ? ` e mais ${semFicha.length - 8}` : ''}
+                </p>
+              </div>
+            </div>
+          )}
         </DialogHeader>
 
         <div className="flex-1 overflow-auto">
@@ -496,6 +577,7 @@ export function RelatorioPagamentoDialog({
                   <Th col="danos" label="Danos" />
                   <Th col="caucao" label="Caução" />
                   <Th col="negativoAnterior" label="Neg. Anterior" />
+                  <Th col="outrosDebitos" label="Outros Débitos" />
                   <Th col="devCaucao" label="Dev. Caução" />
                   <Th col="bonificacao" label="Bonificação" />
                   <Th col="ajudaCusto" label="Ajuda Custo" />
@@ -505,20 +587,23 @@ export function RelatorioPagamentoDialog({
               <tbody>
                 {linhasOrdenadas.map((l, idx) => {
                   const negativo = l.liquido < 0;
-                  const pago = pagos.has(l.motorista_id);
+                  const semFichaCrm = !l.motorista_id;
+                  const pago = !!l.motorista_id && pagos.has(l.motorista_id);
                   const rowBg = pago
                     ? 'bg-emerald-100 dark:bg-emerald-950/50'
-                    : idx % 2 === 0
-                      ? 'bg-background'
-                      : 'bg-muted/20';
+                    : semFichaCrm
+                      ? 'bg-amber-50/70 dark:bg-amber-950/25'
+                      : idx % 2 === 0
+                        ? 'bg-background'
+                        : 'bg-muted/20';
                   return (
                     <tr
-                      key={l.motorista_id}
+                      key={l.key}
                       onDragOver={(e) => dragId && e.preventDefault()}
-                      onDrop={() => handleDrop(l.motorista_id)}
+                      onDrop={() => handleDrop(l.key)}
                       className={`border-b transition-colors ${rowBg} ${
                         negativo && !pago ? 'ring-1 ring-inset ring-red-300 dark:ring-red-900' : ''
-                      } ${dragId === l.motorista_id ? 'opacity-50' : ''}`}
+                      } ${dragId === l.key ? 'opacity-50' : ''}`}
                     >
                       <td className="px-3 py-2 text-xs font-medium whitespace-nowrap sticky left-0 bg-inherit">
                         <div className="flex items-center gap-2">
@@ -526,7 +611,7 @@ export function RelatorioPagamentoDialog({
                               na checkbox nem na seleção do nome. */}
                           <span
                             draggable
-                            onDragStart={() => setDragId(l.motorista_id)}
+                            onDragStart={() => setDragId(l.key)}
                             onDragEnd={() => setDragId(null)}
                             className="cursor-grab shrink-0 text-muted-foreground/40"
                             aria-label={`Arrastar ${l.nome} para reordenar`}
@@ -535,8 +620,18 @@ export function RelatorioPagamentoDialog({
                           </span>
                           <Checkbox
                             checked={pago}
-                            onCheckedChange={() => togglePago(l.motorista_id)}
-                            aria-label={`Marcar ${l.nome} como pago`}
+                            disabled={semFichaCrm}
+                            onCheckedChange={() => l.motorista_id && togglePago(l.motorista_id)}
+                            aria-label={
+                              semFichaCrm
+                                ? `${l.nome} não pode ser marcado como pago: sem ficha no CRM`
+                                : `Marcar ${l.nome} como pago`
+                            }
+                            title={
+                              semFichaCrm
+                                ? 'Sem ficha no CRM — associa o motorista para poder marcar como pago'
+                                : undefined
+                            }
                           />
                           <span
                             className={
@@ -545,6 +640,15 @@ export function RelatorioPagamentoDialog({
                           >
                             {l.nome}
                           </span>
+                          {semFichaCrm && (
+                            <span
+                              className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-900/50 dark:text-amber-200"
+                              title="Motorista de plataforma ainda não associado a uma ficha do CRM: sem IBAN e sem movimentos financeiros."
+                            >
+                              <AlertTriangle className="h-3 w-3" />
+                              sem ficha
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-3 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
@@ -584,6 +688,7 @@ export function RelatorioPagamentoDialog({
                       <Cell value={l.danos} cls={custoCls} pago={pago} />
                       <Cell value={l.caucao} cls={custoCls} pago={pago} />
                       <Cell value={l.negativoAnterior} cls={custoCls} pago={pago} />
+                      <Cell value={l.outrosDebitos} cls={custoCls} pago={pago} />
                       <Cell value={l.devCaucao} cls={creditoCls} pago={pago} />
                       <Cell value={l.bonificacao} cls={creditoCls} pago={pago} />
                       <Cell value={l.ajudaCusto} cls={creditoCls} pago={pago} />
@@ -616,6 +721,7 @@ export function RelatorioPagamentoDialog({
                   <Cell value={totais.danos} />
                   <Cell value={totais.caucao} />
                   <Cell value={totais.negativoAnterior} />
+                  <Cell value={totais.outrosDebitos} />
                   <Cell value={totais.devCaucao} />
                   <Cell value={totais.bonificacao} />
                   <Cell value={totais.ajudaCusto} />

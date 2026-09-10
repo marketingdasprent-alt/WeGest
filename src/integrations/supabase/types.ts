@@ -7204,6 +7204,57 @@ export type Database = {
           },
         ]
       }
+      motorista_liquido_semanal: {
+        Row: {
+          gravado_em: string
+          gravado_por: string | null
+          id: string
+          liquido: number
+          motorista_id: string
+          motorista_nome: string | null
+          org_id: string
+          semana_fim: string
+          semana_inicio: string
+        }
+        Insert: {
+          gravado_em?: string
+          gravado_por?: string | null
+          id?: string
+          liquido: number
+          motorista_id: string
+          motorista_nome?: string | null
+          org_id?: string
+          semana_fim: string
+          semana_inicio: string
+        }
+        Update: {
+          gravado_em?: string
+          gravado_por?: string | null
+          id?: string
+          liquido?: number
+          motorista_id?: string
+          motorista_nome?: string | null
+          org_id?: string
+          semana_fim?: string
+          semana_inicio?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motorista_liquido_semanal_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_liquido_semanal_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       motorista_plataforma_identidades: {
         Row: {
           created_at: string

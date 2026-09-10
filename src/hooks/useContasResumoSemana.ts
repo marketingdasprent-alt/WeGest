@@ -18,6 +18,7 @@ import {
   type TarifaModeloRow,
 } from '@/components/administrativo/motorista-resumo/tvdeModeloPreco';
 import { normalizeName, isNameMatch } from '@/components/administrativo/motoristaNomeMatching';
+import { construirLinhasLiquidoSemanal } from '@/components/administrativo/motorista-resumo/linhasLiquidoSemanal';
 import { type MotoristaResumo } from '@/components/administrativo/contasResumoExports';
 
 /**
@@ -490,18 +491,36 @@ export function useContasResumoSemana(
         if (!m.motorista_id) return;
         const val = Number(m.valor) || 0;
 
+        // O líquido que esta mesma lista escreveu de volta. O trigger
+        // `sincronizar_movimento_resumo` grava-o em motorista_financeiro com
+        // data igual ao último dia da semana — dentro da semana que resume —,
+        // por isso ele volta aqui na busca seguinte. Somá-lo dava a cada
+        // motorista o próprio líquido duas vezes (crédito inchava a receita,
+        // débito inchava "Outros"), e o erro dobrava a cada recarregamento.
+        // Mesma regra do resumo do motorista (classificarMovimento).
+        const categoria = (m.categoria ?? '').trim().toLowerCase();
+        if (categoria === 'resumos') return;
+
         if (m.tipo === 'credito') {
           // Não incluir caução como receita/crédito no recibo semanal
-          if (m.categoria === 'caucao') return;
+          if (categoria === 'caucao') return;
+          // Um crédito de bolt/uber já vem dentro da receita da plataforma —
+          // somá-lo aqui contava a mesma receita duas vezes. O resumo do
+          // motorista já o ignorava (JA_CONTADAS_COMO_RECEITA em
+          // movimentosMotorista.ts); esta lista, com a sua própria cópia da
+          // lógica, ainda não. Hoje não existe um único movimento destes em
+          // motorista_financeiro — é uma porta a fechar antes de alguém a
+          // abrir, não um erro a corrigir.
+          if (categoria === 'bolt' || categoria === 'uber') return;
           extrasByMotorista[m.motorista_id] = (extrasByMotorista[m.motorista_id] || 0) + val;
           return;
         }
 
         // De aqui em diante são só débitos
-        if (m.categoria === 'reparacao') {
+        if (categoria === 'reparacao') {
           reparacoesByMotorista[m.motorista_id] =
             (reparacoesByMotorista[m.motorista_id] || 0) + val;
-        } else if (m.categoria === 'renda_viatura') {
+        } else if (categoria === 'renda_viatura' || categoria === 'aluguer') {
           // Ignora-se de propósito: aluguerByMotorista já vem completo do
           // cálculo por viatura×dias, logo abaixo (buildSlotPeriodos). Somar
           // aqui um débito de renda_viatura DUPLICAVA o aluguer — caso real:
@@ -510,7 +529,13 @@ export function useContasResumoSemana(
           // semanal com esta categoria. A mesma regra já valia no resumo do
           // motorista e no fecho (ver movimentosMotorista.ts) — só esta
           // lista, com a sua própria cópia da lógica, ainda não a tinha.
-        } else if (m.categoria === 'slot_mensal') {
+          //
+          // `aluguer` entra pelo mesmo motivo e vem do mesmo sítio
+          // (DEBITOS_QUE_O_CONTRATO_COBRE): é a categoria antiga da renda, e
+          // o resumo do motorista já a ignorava. Não existe nenhum débito
+          // destes na base — alinha-se agora para as duas contas não poderem
+          // divergir em silêncio no dia em que aparecer o primeiro.
+        } else if (categoria === 'slot_mensal') {
           // Linha própria — antes caía em "Outros Custos" e ficava
           // indistinguível de qualquer despesa avulsa. Mesma regra do resumo
           // individual do motorista, ver movimentosMotorista.ts.
@@ -944,6 +969,62 @@ export function useContasResumoSemana(
         _uid: r.motorista_id || r.driver_uuid || `${r.driver_name || 'sem-nome'}__${idx}`,
       }));
       setResumos(comUid);
+
+      // Grava o líquido da semana de TODOS os motoristas de uma vez.
+      //
+      // O trigger em motorista_liquido_semanal transforma cada linha num
+      // movimento no perfil financeiro do motorista (categoria 'resumos'), e
+      // é assim que a semana entra na conta corrente dele — o saldo pendente
+      // aqui ao lado, o separador Financeiro da ficha e o portal do motorista
+      // leem todos daí. Sem esta gravação, uma semana calculada e mostrada
+      // nunca chega à conta de ninguém.
+      //
+      // Esta lista é o ÚNICO escritor: grava o valor já calculado acima, sem
+      // o recalcular. É o que garante que o histórico não contradiz o número
+      // que esteve no ecrã e que foi comunicado ao motorista.
+      //
+      // Só com o período FECHADO. O efeito lá em baixo já só chama
+      // `recarregar()` com periodoFechado === true — mas `recarregar` também
+      // é chamado DE FORA: ao fechar a semana e ao acabar uma importação. Aí
+      // o valor capturado no closure ainda pode ser `false`, e o cálculo
+      // corre na mesma. A 09/09 foi assim que a semana 07-13, ainda a
+      // decorrer e sem um único resumo de plataforma importado, gravou três
+      // líquidos negativos: receita a zero, custos a contar, três dívidas
+      // inventadas na conta corrente de quem nada devia. O ecrã dizia
+      // "Período por fechar" ao mesmo tempo que as dívidas apareciam.
+      //
+      // Mostrar um número provisório não faz mal a ninguém; gravá-lo cria
+      // movimentos financeiros que alguém vai cobrar.
+      //
+      // Fica um buraco por tapar, e é de propósito que não o tapo aqui: se a
+      // consulta que verifica o fecho falhar, o componente assume fechado
+      // (`setPeriodoFechado(error ? true : …)`) — decisão certa para MOSTRAR,
+      // discutível para ESCREVER. Mexer nisso é mudar o comportamento do
+      // ecrã, não portar esta funcionalidade.
+      //
+      // Falha em silêncio de propósito (só consola): quem não tem permissão
+      // de escrita continua a poder ver a lista, e um erro aqui não pode
+      // derrubar o ecrã todo — daí o try/catch próprio.
+      if (periodoFechado !== true) {
+        console.info('[liquido semanal] período por fechar — calculado, não gravado.');
+      } else {
+        try {
+          const linhas = construirLinhasLiquidoSemanal(comUid, {
+            semanaInicio: weekStartStr,
+            semanaFim: weekEndStr,
+            gravadoEm: new Date().toISOString(),
+            gravadoPor: (await supabase.auth.getUser()).data.user?.id ?? null,
+          });
+          if (linhas.length > 0) {
+            const { error: erroGravar } = await supabase
+              .from('motorista_liquido_semanal')
+              .upsert(linhas, { onConflict: 'motorista_id,semana_inicio' });
+            if (erroGravar) console.error('[liquido semanal] falha ao gravar em lote:', erroGravar);
+          }
+        } catch (erroGravar) {
+          console.error('[liquido semanal] falha ao gravar em lote:', erroGravar);
+        }
+      }
 
       // Saldo pendente em lote (uma RPC para todos os motoristas da página,
       // não N chamadas) — mesmo valor mostrado no separador Financeiro do

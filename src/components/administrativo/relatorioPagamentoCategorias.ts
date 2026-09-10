@@ -21,7 +21,8 @@ export type ColunaFinanceira =
   | 'devCaucao'
   | 'bonificacao'
   | 'ajudaCusto'
-  | 'outrasDevolucoes';
+  | 'outrasDevolucoes'
+  | 'outrosDebitos';
 
 const CAT_MAP: Record<string, ColunaFinanceira> = {
   rnvat: 'rnvat',
@@ -35,23 +36,48 @@ const CAT_MAP: Record<string, ColunaFinanceira> = {
   outras_devolucoes: 'outrasDevolucoes',
 };
 
+/** Categorias que NÃO entram no detalhe por coluna — não por serem
+ *  desconhecidas, mas porque já estão representadas noutro número da mesma
+ *  linha. Contá-las outra vez seria contar duas vezes:
+ *
+ *  - `resumos`: é o líquido da semana, escrito de volta em
+ *    motorista_financeiro pelo trigger `sincronizar_movimento_resumo`. É
+ *    exactamente a coluna "Valor a Pagar". Enquanto caía no catch-all dos
+ *    créditos, inchava "Outras Devoluções" com o pagamento inteiro — na
+ *    semana 31/08–06/09 eram 85.846,80 € numa coluna cujo resto somava
+ *    255,24 €.
+ *  - `renda_viatura`: o aluguer vem da coluna "Viatura", calculada a partir
+ *    de dias × tarifa do contrato. */
+const JA_NOUTRA_COLUNA = ['resumos', 'renda_viatura'];
+
+const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
+
 /**
  * `undefined` = este movimento fica fora do detalhe por coluna (mas continua
- * a contar para o total, que vem de outro lado).
+ * a contar para o total, que vem de outro lado). Só acontece para as
+ * categorias de `JA_NOUTRA_COLUNA`, que já estão representadas noutro número
+ * da linha.
  *
  * Uma categoria reconhecida vai sempre para a sua coluna. Uma categoria
- * desconhecida (tipicamente `outro`) só tem coluna quando é um CRÉDITO — cai
- * em "Outras Devoluções", o mesmo catch-all que a categoria homónima já usa.
- * Um DÉBITO desconhecido não tem coluna genérica correspondente entre as 9
- * existentes (cada uma tem um significado próprio — caução, seguros, etc.) e
- * fica de fora do detalhe, como sempre esteve; não se inventa uma coluna
- * errada só para não ficar vazio.
+ * desconhecida vai para o catch-all do seu lado: crédito para "Outras
+ * Devoluções", débito para "Outros Débitos".
+ *
+ * A coluna "Outros Débitos" existe precisamente porque não havia catch-all
+ * do lado do débito. As nove colunas têm significado próprio (caução,
+ * seguros, etc.) e nenhuma servia de genérica, por isso um débito de
+ * categoria nova ficava simplesmente de fora — na semana 31/08–06/09,
+ * 941,25 € de `slot_mensal`, 623,52 € de `desconto` e 295,43 € de `outro`
+ * contavam no líquido e na coluna "Outros" dos Resumos sem deixar rasto
+ * nenhum aqui. Uma coluna genérica honesta é melhor do que um buraco: o
+ * detalhe passa a fechar com o "Valor a Pagar".
  */
 export function colunaDoMovimento(
   categoria: string | null | undefined,
   tipo: string | null | undefined
 ): ColunaFinanceira | undefined {
-  const mapeada = categoria ? CAT_MAP[categoria] : undefined;
+  const cat = norm(categoria);
+  if (JA_NOUTRA_COLUNA.includes(cat)) return undefined;
+  const mapeada = CAT_MAP[cat];
   if (mapeada) return mapeada;
-  return tipo === 'credito' ? 'outrasDevolucoes' : undefined;
+  return norm(tipo) === 'credito' ? 'outrasDevolucoes' : 'outrosDebitos';
 }
