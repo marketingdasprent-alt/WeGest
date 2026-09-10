@@ -31,7 +31,7 @@
 -- bloqueado (42501). "Reverter abertura" nunca teve este problema — mexe no
 -- estado, não no deleted_at.
 
-DROP POLICY contratos_renting_select ON public.contratos_renting;
+DROP POLICY IF EXISTS contratos_renting_select ON public.contratos_renting;
 
 CREATE POLICY contratos_renting_select ON public.contratos_renting
   AS PERMISSIVE FOR SELECT TO authenticated
@@ -51,7 +51,7 @@ CREATE POLICY contratos_renting_select ON public.contratos_renting
     )
   );
 
-DROP POLICY contratos_renting_update ON public.contratos_renting;
+DROP POLICY IF EXISTS contratos_renting_update ON public.contratos_renting;
 
 CREATE POLICY contratos_renting_update ON public.contratos_renting
   AS PERMISSIVE FOR UPDATE TO authenticated
