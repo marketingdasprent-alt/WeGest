@@ -15,8 +15,10 @@ interface DocumentosSectionProps {
   setLicencaTvdeFicheiroUrl: (v: string) => void;
   // Documentos Adicionais
   registoCriminalUrl: string;
+  iban: string;
   comprovativoIbanUrl: string;
   setRegistoCriminalUrl: (v: string) => void;
+  setIban: (v: string) => void;
   setComprovativoIbanUrl: (v: string) => void;
   fieldErrors: Record<string, string>;
   clearFieldError: (field: string) => void;
@@ -31,8 +33,10 @@ export const DocumentosSection: React.FC<DocumentosSectionProps> = ({
   setLicencaTvdeValidade,
   setLicencaTvdeFicheiroUrl,
   registoCriminalUrl,
+  iban,
   comprovativoIbanUrl,
   setRegistoCriminalUrl,
+  setIban,
   setComprovativoIbanUrl,
   fieldErrors,
   clearFieldError,
@@ -140,6 +144,27 @@ export const DocumentosSection: React.FC<DocumentosSectionProps> = ({
               Certificado do registo criminal português (válido por 3 meses)
             </p>
             {renderError('registoCriminalUrl')}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="iban" className="flex items-center gap-2 text-foreground">
+              <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              IBAN <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="iban"
+              value={iban}
+              onChange={(e) => {
+                setIban(e.target.value);
+                clearFieldError('iban');
+              }}
+              placeholder="PT50 0000 0000 0000 0000 0000 0"
+              aria-invalid={!!fieldErrors.iban}
+              className={fieldErrors.iban ? 'border-destructive' : ''}
+            />
+            <p className="text-xs text-muted-foreground">
+              Conta bancária para onde recebe os pagamentos.
+            </p>
+            {renderError('iban')}
           </div>
           <div className="space-y-2">
             <Label className="flex items-center gap-2 text-foreground">

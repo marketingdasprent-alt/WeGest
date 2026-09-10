@@ -93,6 +93,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
   const [comprovativoMoradaUrl, setComprovativoMoradaUrl] = useState(
     candidatura?.comprovativo_morada_url || ''
   );
+  const [iban, setIban] = useState(candidatura?.iban || '');
   const [comprovativoIbanUrl, setComprovativoIbanUrl] = useState(
     candidatura?.comprovativo_iban_url || ''
   );
@@ -123,6 +124,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
     licenca_tvde_ficheiro_url: licencaTvdeFicheiroUrl,
     registo_criminal_url: registoCriminalUrl,
     comprovativo_morada_url: comprovativoMoradaUrl,
+    iban,
     comprovativo_iban_url: comprovativoIbanUrl,
   });
 
@@ -152,6 +154,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
     setLicencaTvdeFicheiroUrl(candidatura?.licenca_tvde_ficheiro_url || '');
     setRegistoCriminalUrl(candidatura?.registo_criminal_url || '');
     setComprovativoMoradaUrl(candidatura?.comprovativo_morada_url || '');
+    setIban(candidatura?.iban || '');
     setComprovativoIbanUrl(candidatura?.comprovativo_iban_url || '');
   }, [candidatura, metadataNome, metadataTelefone, user?.email]);
 
@@ -200,6 +203,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
         setRegistoCriminalUrl(draft.registo_criminal_url);
       if (typeof draft.comprovativo_morada_url === 'string')
         setComprovativoMoradaUrl(draft.comprovativo_morada_url);
+      if (typeof draft.iban === 'string') setIban(draft.iban);
       if (typeof draft.comprovativo_iban_url === 'string')
         setComprovativoIbanUrl(draft.comprovativo_iban_url);
       toast({
@@ -259,6 +263,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
     licencaTvdeFicheiroUrl,
     registoCriminalUrl,
     comprovativoMoradaUrl,
+    iban,
     comprovativoIbanUrl,
   ]);
 
@@ -308,6 +313,9 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
     licenca_tvde_ficheiro_url: licencaTvdeFicheiroUrl || null,
     registo_criminal_url: registoCriminalUrl || null,
     comprovativo_morada_url: comprovativoMoradaUrl || null,
+    // Mesma normalização que a ficha do gestor (motoristaDialog.schema.ts):
+    // sem espaços, maiúsculas — é assim que o validador e a BD esperam o IBAN.
+    iban: iban ? iban.replace(/\s+/g, '').toUpperCase() : null,
     comprovativo_iban_url: comprovativoIbanUrl || null,
     observacoes: observacoes || null,
   });
@@ -377,6 +385,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
       licencaTvdeFicheiroUrl,
       registoCriminalUrl,
       comprovativoMoradaUrl,
+      iban,
       comprovativoIbanUrl,
     };
     const errors = buildValidationErrors(campos);
@@ -467,6 +476,7 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
       licencaTvdeFicheiroUrl,
       registoCriminalUrl,
       comprovativoMoradaUrl,
+      iban,
       comprovativoIbanUrl,
     ];
     return Math.round((fields.filter(Boolean).length / fields.length) * 100);
@@ -574,8 +584,10 @@ export const CandidaturaFormulario: React.FC<CandidaturaFormularioProps> = ({
           setLicencaTvdeValidade={setLicencaTvdeValidade}
           setLicencaTvdeFicheiroUrl={setLicencaTvdeFicheiroUrl}
           registoCriminalUrl={registoCriminalUrl}
+          iban={iban}
           comprovativoIbanUrl={comprovativoIbanUrl}
           setRegistoCriminalUrl={setRegistoCriminalUrl}
+          setIban={setIban}
           setComprovativoIbanUrl={setComprovativoIbanUrl}
           fieldErrors={fieldErrors}
           clearFieldError={clearFieldError}

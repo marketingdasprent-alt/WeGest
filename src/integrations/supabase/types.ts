@@ -6729,6 +6729,7 @@ export type Database = {
           documento_tipo: string | null
           documento_validade: string | null
           email: string
+          iban: string | null
           id: string
           licenca_tvde_ficheiro_url: string | null
           licenca_tvde_numero: string | null
@@ -6766,6 +6767,7 @@ export type Database = {
           documento_tipo?: string | null
           documento_validade?: string | null
           email: string
+          iban?: string | null
           id?: string
           licenca_tvde_ficheiro_url?: string | null
           licenca_tvde_numero?: string | null
@@ -6803,6 +6805,7 @@ export type Database = {
           documento_tipo?: string | null
           documento_validade?: string | null
           email?: string
+          iban?: string | null
           id?: string
           licenca_tvde_ficheiro_url?: string | null
           licenca_tvde_numero?: string | null

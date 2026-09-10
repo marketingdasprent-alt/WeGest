@@ -22,6 +22,7 @@ const baseParams = {
     outros_custos: 20,
     caucao: 0,
     seguros: 50,
+    slot: 0,
     reparacoes: 10,
   },
   totalDespesas: 410,
@@ -76,6 +77,15 @@ describe('generateResumoPrintHTML', () => {
   it('includes the liquido value', () => {
     const html = generateResumoPrintHTML(baseParams);
     expect(html).toContain('VALOR LÍQUIDO A RECEBER');
+  });
+
+  it('shows a dedicated Slot row with its own value, not folded into Outros Custos', () => {
+    const html = generateResumoPrintHTML({
+      ...baseParams,
+      despesas: { ...baseParams.despesas, outros_custos: 20, slot: 75 },
+    });
+    expect(html).toContain('Slot');
+    expect(html).toContain('75,00');
   });
 
   it('includes the WeGest footer', () => {

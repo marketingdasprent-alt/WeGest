@@ -489,13 +489,13 @@ const FormularioPublico = () => {
               na marca WeGest — nunca na marca de outra organização, que era o
               que acontecia (o logótipo da Distância Arrojada estava fixo aqui
               para toda a gente). A cor segue a mesma regra, em corDaMarca.ts. */}
-          <motion.div className="mb-12" variants={fadeInUp}>
+          <motion.div className="mb-4" variants={fadeInUp}>
             <img
               src={organizacao?.logo_url || LOGO_WEGEST}
               alt={
                 organizacao?.logo_url ? `Logótipo de ${organizacao.nome ?? ''}`.trim() : 'WeGest'
               }
-              className="h-20 mx-auto object-contain"
+              className="h-60 mx-auto object-contain"
             />
           </motion.div>
 
@@ -599,12 +599,6 @@ const FormularioPublico = () => {
                       {isSubmitting ? 'Enviando...' : 'Enviar Formulário'}
                     </Button>
                   )}
-                </div>
-
-                <div className="text-center mt-6">
-                  <p className="text-sm font-medium" style={{ color: marca.cor }}>
-                    ⚡ Preencha todos os campos obrigatórios
-                  </p>
                 </div>
               </>
             )}
