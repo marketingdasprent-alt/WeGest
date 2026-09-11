@@ -1,9 +1,23 @@
 -- Garante que workers internos recebem a service role, nunca a anon key.
 -- A precondição aborta a migração antes de alterar a função se o segredo ainda
 -- não tiver sido criado no Vault, evitando interromper os jobs em produção.
+--
+-- A precondição só se aplica a bases COM Vault povoado. Numa reconstrução a
+-- partir do repo (supabase db start, job DB Rebuild + pgTAP) o Vault nasce
+-- vazio — nenhuma migração nem seed cria segredos — e abortar aí não protege
+-- coisa nenhuma: só impede o repo de se reconstruir. Foi exactamente o que
+-- partiu o db start.
+--
+-- Não se usa "existem cron jobs" como sinal de base viva: as migrações
+-- 20260907100000 e 20260907140000 correm antes desta e já agendam jobs, por
+-- isso numa reconstrução também haveria.
+--
+-- Nada fica a passar despercebido: a função criada abaixo recusa-se a correr
+-- sem o segredo, com erro próprio, em qualquer ambiente.
 DO $$
 BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (SELECT 1 FROM vault.decrypted_secrets)
+     AND NOT EXISTS (
     SELECT 1
     FROM vault.decrypted_secrets AS segredo
     WHERE segredo.name = 'cron_service_role_jwt'

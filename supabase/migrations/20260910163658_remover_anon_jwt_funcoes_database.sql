@@ -1,8 +1,12 @@
 -- Remove a anon key histórica de funções ativas sem reescrever a baseline já aplicada.
 -- Os pedidos internos passam a usar a mesma service role mantida no Vault pelos crons.
+-- Só se aplica a bases com Vault povoado — ver a nota longa em
+-- 20260910163628_exigir_service_role_nos_crons_edge.sql. Numa reconstrução a
+-- partir do repo o Vault nasce vazio e abortar aqui só impede o rebuild.
 DO $$
 BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (SELECT 1 FROM vault.decrypted_secrets)
+     AND NOT EXISTS (
     SELECT 1
     FROM vault.decrypted_secrets AS segredo
     WHERE segredo.name = 'cron_service_role_jwt'
