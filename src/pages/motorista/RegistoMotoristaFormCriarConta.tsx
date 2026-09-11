@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Eye, EyeOff, Car, CheckCircle2, Circle } from 'lucide-react';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 import { type ResolvedOrg } from '@/lib/org-codigo';
-import { passwordChecks, PASSWORD_REQUIREMENTS } from '@/lib/passwordPolicy';
+import { passwordChecks, isPasswordStrong, PASSWORD_REQUIREMENTS } from '@/lib/passwordPolicy';
 
 interface RegistoMotoristaFormCriarContaProps {
   org: ResolvedOrg | null;
@@ -42,6 +42,15 @@ export function RegistoMotoristaFormCriarConta({
   onSubmit,
   onBack,
 }: RegistoMotoristaFormCriarContaProps) {
+  // A regra é verificada AQUI, não só no submit: deixar carregar em "Criar
+  // conta" com uma password que não cumpre os requisitos só produz um toast de
+  // erro depois de uma ida ao servidor — o motorista lê "erro" e desiste, em
+  // vez de perceber que lhe falta um número. O botão fica bloqueado até os
+  // requisitos estarem cumpridos e as duas passwords coincidirem.
+  const checks = passwordChecks(password);
+  const passwordCoincide = confirmPassword.length > 0 && password === confirmPassword;
+  const podeCriarConta = isPasswordStrong(password) && passwordCoincide;
+
   return (
     <AuthMobileShell
       title="Criar conta de motorista"
@@ -99,26 +108,26 @@ export function RegistoMotoristaFormCriarConta({
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          {password.length > 0 && (
-            <div className="space-y-1 pt-0.5">
-              {PASSWORD_REQUIREMENTS.map(({ key, label }) => {
-                const ok = passwordChecks(password)[key];
-                return (
-                  <p
-                    key={key}
-                    className={`flex items-center gap-1.5 text-xs ${ok ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
-                  >
-                    {ok ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
-                    ) : (
-                      <Circle className="h-3.5 w-3.5 flex-shrink-0" />
-                    )}
-                    {label}
-                  </p>
-                );
-              })}
-            </div>
-          )}
+          {/* Sempre visível: os requisitos têm de ser conhecidos ANTES de
+              escrever, senão o botão bloqueado parece uma avaria. */}
+          <div className="space-y-1 pt-0.5">
+            {PASSWORD_REQUIREMENTS.map(({ key, label }) => {
+              const ok = checks[key];
+              return (
+                <p
+                  key={key}
+                  className={`flex items-center gap-1.5 text-xs ${ok ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
+                >
+                  {ok ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5 flex-shrink-0" />
+                  )}
+                  {label}
+                </p>
+              );
+            })}
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -139,7 +148,11 @@ export function RegistoMotoristaFormCriarConta({
           )}
         </div>
 
-        <Button type="submit" className="auth-primary-button w-full" disabled={loading}>
+        <Button
+          type="submit"
+          className="auth-primary-button w-full"
+          disabled={loading || !podeCriarConta}
+        >
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />A registar...

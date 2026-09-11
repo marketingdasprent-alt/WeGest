@@ -109,6 +109,41 @@ describe('RegistoMotorista (web) — email-first', () => {
     expect(arg.options.data.telefone).toBeUndefined();
   });
 
+  it('password que não cumpre os requisitos bloqueia o botão — não chega a chamar o signUp', async () => {
+    resolveOrgByCodigo.mockResolvedValue({ id: 'org-x', nome: 'Empresa X' });
+    invoke.mockResolvedValue({ data: { ok: true, status: 'criar' }, error: null });
+    renderAt('/motorista/registo?org=empresa-x');
+    await screen.findByText(/Empresa X/i);
+
+    await continuarComEmail('novo@x.pt');
+    await screen.findByLabelText(/^Palavra-passe$/i);
+
+    const botao = screen.getByRole('button', { name: /Criar conta/i });
+    expect(botao).toBeDisabled();
+
+    // Sem número: falha o requisito, mesmo com as duas iguais.
+    fireEvent.change(screen.getByLabelText(/^Palavra-passe$/i), {
+      target: { value: 'abcdefgh' },
+    });
+    fireEvent.change(screen.getByLabelText(/Confirmar palavra-passe/i), {
+      target: { value: 'abcdefgh' },
+    });
+    expect(botao).toBeDisabled();
+
+    // Cumpre os requisitos mas as duas não coincidem.
+    fireEvent.change(screen.getByLabelText(/^Palavra-passe$/i), { target: { value: 'abcd1234' } });
+    expect(botao).toBeDisabled();
+
+    fireEvent.click(botao);
+    expect(signUp).not.toHaveBeenCalled();
+
+    // Só com tudo cumprido é que desbloqueia.
+    fireEvent.change(screen.getByLabelText(/Confirmar palavra-passe/i), {
+      target: { value: 'abcd1234' },
+    });
+    expect(botao).toBeEnabled();
+  });
+
   it('signUp com sessão ativa (confirmação de email desligada) → vai direto para o painel', async () => {
     resolveOrgByCodigo.mockResolvedValue({ id: 'org-x', nome: 'Empresa X' });
     invoke.mockResolvedValue({ data: { ok: true, status: 'criar' }, error: null });
