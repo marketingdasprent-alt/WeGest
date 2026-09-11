@@ -76,6 +76,9 @@ export const CATEGORIAS = [
   { value: 'slot_mensal', label: 'Mensalidade Slot' },
   { value: 'reparacao', label: 'Reparação' },
   { value: 'negativo_anterior', label: 'Negativo Anterior' },
+  // Escrita pela BD quando um resumo semanal é gerado. Está aqui para a lista
+  // de movimentos lhe dar um nome legível — não é para se escolher à mão.
+  { value: 'resumos', label: 'Resumos' },
   { value: 'ajuda_custo', label: 'Ajuda de Custo' },
   { value: 'outras_devolucoes', label: 'Outras Devoluções' },
   { value: 'outro', label: 'Outro' },

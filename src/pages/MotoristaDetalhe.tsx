@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useGoBack } from '@/hooks/useGoBack';
 import { format } from 'date-fns';
 import {
@@ -55,6 +55,20 @@ interface ViaturaAtual {
   data_inicio: string;
 }
 
+const TABS = [
+  { id: 'dados', label: 'Dados', icon: User },
+  { id: 'documentos', label: 'Documentos', icon: FileText },
+  { id: 'financeiro', label: 'Financeiro', icon: Wallet },
+  { id: 'recibos', label: 'Resumos', icon: Receipt },
+  { id: 'viaturas', label: 'Viaturas', icon: Car },
+  { id: 'contratos', label: 'Contratos', icon: FileSignature },
+  { id: 'danos', label: 'Danos', icon: AlertTriangle },
+];
+
+/** Ids válidos para o `?tab=` da URL. Um valor que não esteja aqui cai em
+ *  'dados' — um link com um separador inventado abre a ficha, não rebenta. */
+const TAB_IDS = TABS.map((t) => t.id);
+
 export default function MotoristaDetalhe() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -68,22 +82,29 @@ export default function MotoristaDetalhe() {
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [viaturaAtual, setViaturaAtual] = useState<ViaturaAtual | null>(null);
-  const [activeTab, setActiveTab] = useState('dados');
+  // O separador vive na URL (`?tab=financeiro`), não só em estado: é assim que
+  // a aba de Dívidas consegue mandar alguém directamente ao Financeiro do
+  // motorista em vez de o largar nos Dados a ter de procurar. Sobrevive a um
+  // refresh e dá para partilhar o link, o que `location.state` não daria.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabPedido = searchParams.get('tab');
+  const activeTab = TAB_IDS.includes(tabPedido ?? '') ? (tabPedido as string) : 'dados';
+  // replace: trocar de separador não é um passo de navegação — com push, o
+  // voltar atrás percorria os separadores um a um em vez de sair da ficha.
+  const setActiveTab = (tab: string) =>
+    setSearchParams(
+      (anterior) => {
+        const proximo = new URLSearchParams(anterior);
+        proximo.set('tab', tab);
+        return proximo;
+      },
+      { replace: true }
+    );
   const [financeiroResumo, setFinanceiroResumo] = useState({
     totalCreditos: 0,
     totalDebitos: 0,
     saldo: 0,
   });
-
-  const TABS = [
-    { id: 'dados', label: 'Dados', icon: User },
-    { id: 'documentos', label: 'Documentos', icon: FileText },
-    { id: 'financeiro', label: 'Financeiro', icon: Wallet },
-    { id: 'recibos', label: 'Resumos', icon: Receipt },
-    { id: 'viaturas', label: 'Viaturas', icon: Car },
-    { id: 'contratos', label: 'Contratos', icon: FileSignature },
-    { id: 'danos', label: 'Danos', icon: AlertTriangle },
-  ];
 
   useEffect(() => {
     if (id) {

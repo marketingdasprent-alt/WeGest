@@ -16,6 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { classificarMovimento } from '@shared/movimentosMotorista';
 import {
   Select,
   SelectContent,
@@ -394,24 +395,37 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       let finSeguros = 0;
       let finOutros = 0;
 
+      // A classificação é a partilhada (movimentosMotorista.ts), a mesma do
+      // fecho, da lista de Contas e do resumo do motorista. Este ecrã era o
+      // último com cópia própria da regra, e faltava-lhe a proteção que mais
+      // importa: um crédito de categoria `resumos` é o líquido que ESTE ecrã
+      // gravou, e entrava outra vez como receita. Cada semana já gravada
+      // aparecia com o seu próprio líquido somado em "Outras" e o número
+      // subia a cada recarregamento — 1.599,63 € de receita fantasma na
+      // semana de 24/08, vindos do resumo dessa mesma semana.
+      //
+      // A reparação continua a sair antes: é calculada à parte, e a
+      // classificação partilhada ignora-a precisamente por isso.
       (finData || []).forEach((mov: any) => {
         const val = Number(mov.valor) || 0;
-        if (mov.tipo === 'credito') {
-          if (mov.categoria === 'caucao') return;
-          extraCredits += val;
-        } else {
-          if (mov.categoria === 'reparacao') finReparacoes += val;
-          else if (mov.categoria === 'caucao') finCaucao += val;
-          else if (mov.categoria === 'seguros') finSeguros += val;
-          // Um débito de renda_viatura já está representado no aluguer do
-          // contrato (fixedRent, acima) — somá-lo aqui duplicava sempre que
-          // havia contrato, e inventava dívida a partir do nada quando não
-          // havia (caso real: Paulo André Antunes Badalo, sem viatura
-          // atribuída, com 225 € "de aluguer" vindos só deste débito
-          // avulso). Mesma regra de movimentosMotorista.ts.
-          else if (mov.categoria === 'renda_viatura') return;
-          else finOutros += val;
+        const categoria = (mov.categoria ?? '').trim().toLowerCase();
+
+        if (mov.tipo !== 'credito' && categoria === 'reparacao') {
+          finReparacoes += val;
+          return;
         }
+
+        const { destino } = classificarMovimento(mov);
+        if (destino === 'receita_outras') extraCredits += val;
+        else if (destino === 'caucao') finCaucao += val;
+        else if (destino === 'seguros') finSeguros += val;
+        // A mensalidade de slot ganhou balde próprio na classificação
+        // partilhada, mas este ecrã não tem linha para ela — vai para Outros,
+        // exactamente onde caía antes desta migração. Sem este ramo o valor
+        // não ia para lado nenhum: 6.030 € em 50 movimentos de 10 motoristas
+        // desapareciam da conta, e o líquido mostrado aqui subia na mesma
+        // medida.
+        else if (destino === 'outros' || destino === 'slot') finOutros += val;
       });
 
       // 6. FINAL AGGREGATION (MIRROR OF ContasResumoTab.tsx:resumosCalculados)
