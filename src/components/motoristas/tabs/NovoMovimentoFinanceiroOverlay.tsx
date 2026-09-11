@@ -62,24 +62,39 @@ export interface RecorrenciaFinanceira {
   status: 'ativa' | 'pausada' | 'cancelada' | 'concluida';
 }
 
+// Categorias que se podem escolher ao lançar um movimento à mão.
 export const CATEGORIAS = [
+  { value: 'multa', label: 'Multa' },
+  { value: 'caucao', label: 'Caução' },
+  { value: 'seguros', label: 'Seguros' },
+  { value: 'acordo', label: 'Acordo' },
+  { value: 'reparacao', label: 'Reparação' },
+  { value: 'ajuda_custo', label: 'Ajuda de Custo' },
+  { value: 'outro', label: 'Outro' },
+];
+
+// Retiradas do picker a 11/09/2026 a pedido da direção — a lista tinha
+// categorias a mais. Continuam a existir na base (movimentos antigos e, no
+// caso de `resumos` e `renda_viatura`, movimentos que a própria app gera),
+// por isso mantêm-se aqui só para o histórico e a edição mostrarem o nome
+// certo em vez do valor cru.
+export const CATEGORIAS_RETIRADAS = [
   { value: 'salario', label: 'Salário' },
   { value: 'bonus', label: 'Bónus' },
   { value: 'desconto', label: 'Desconto' },
-  { value: 'multa', label: 'Multa' },
-  { value: 'caucao', label: 'Caução' },
-  { value: 'dev_caucao', label: 'Devolução de Caução' },
-  { value: 'seguros', label: 'Seguros' },
   { value: 'rnvat', label: 'RNVAT' },
-  { value: 'acordo', label: 'Acordo' },
+  { value: 'dev_caucao', label: 'Devolução de Caução' },
+  { value: 'negativo_anterior', label: 'Negativo Anterior' },
   { value: 'renda_viatura', label: 'Renda Viatura' },
   { value: 'slot_mensal', label: 'Mensalidade Slot' },
-  { value: 'reparacao', label: 'Reparação' },
-  { value: 'negativo_anterior', label: 'Negativo Anterior' },
-  { value: 'ajuda_custo', label: 'Ajuda de Custo' },
+  { value: 'resumos', label: 'Resumos' },
   { value: 'outras_devolucoes', label: 'Outras Devoluções' },
-  { value: 'outro', label: 'Outro' },
 ];
+
+export const labelDaCategoria = (value: string | null | undefined) =>
+  value
+    ? ([...CATEGORIAS, ...CATEGORIAS_RETIRADAS].find((c) => c.value === value)?.label ?? value)
+    : null;
 
 export interface NovoMovimentoFinanceiroOverlayProps {
   motoristaId: string;

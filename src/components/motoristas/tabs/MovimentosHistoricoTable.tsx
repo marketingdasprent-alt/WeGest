@@ -14,7 +14,7 @@ import { SortableTableHead, type SortDirection } from '@/components/ui/sortable-
 import { SectionCard } from '@/components/ui/section-card';
 import { cn } from '@/lib/utils';
 import {
-  CATEGORIAS,
+  labelDaCategoria,
   isMovimentoDaFaturacao,
   type MovimentoFinanceiro,
 } from './NovoMovimentoFinanceiroOverlay';
@@ -173,12 +173,7 @@ export function MovimentosHistoricoTable({
                     )}
                   </div>
                 </TableCell>
-                <TableCell>
-                  {movimento.categoria
-                    ? CATEGORIAS.find((c) => c.value === movimento.categoria)?.label ||
-                      movimento.categoria
-                    : '-'}
-                </TableCell>
+                <TableCell>{labelDaCategoria(movimento.categoria) ?? '-'}</TableCell>
                 <TableCell>
                   <Badge variant={movimento.tipo === 'credito' ? 'default' : 'secondary'}>
                     {movimento.tipo === 'credito' ? 'Crédito' : 'Débito'}
