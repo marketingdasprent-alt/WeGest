@@ -3,15 +3,20 @@ import { colunaDoMovimento } from './relatorioPagamentoCategorias';
 
 describe('colunaDoMovimento', () => {
   it('categorias reconhecidas vão sempre para a sua coluna', () => {
-    expect(colunaDoMovimento('rnvat', 'debito')).toBe('rnvat');
     expect(colunaDoMovimento('seguros', 'debito')).toBe('seguros');
     expect(colunaDoMovimento('acordo', 'debito')).toBe('acordos');
     expect(colunaDoMovimento('caucao', 'debito')).toBe('caucao');
-    expect(colunaDoMovimento('negativo_anterior', 'debito')).toBe('negativoAnterior');
-    expect(colunaDoMovimento('dev_caucao', 'credito')).toBe('devCaucao');
     expect(colunaDoMovimento('bonus', 'credito')).toBe('bonificacao');
     expect(colunaDoMovimento('ajuda_custo', 'credito')).toBe('ajudaCusto');
     expect(colunaDoMovimento('outras_devolucoes', 'credito')).toBe('outrasDevolucoes');
+  });
+
+  // Colunas retiradas a 11/09/2026 (nunca tiveram um movimento): se aparecer
+  // um, vai para o catch-all do seu lado em vez de se perder.
+  it('categorias das colunas retiradas caem no catch-all', () => {
+    expect(colunaDoMovimento('rnvat', 'debito')).toBe('outrosDebitos');
+    expect(colunaDoMovimento('negativo_anterior', 'debito')).toBe('outrosDebitos');
+    expect(colunaDoMovimento('dev_caucao', 'credito')).toBe('outrasDevolucoes');
   });
 
   // O caso real: Pedro Martins e Paulo Silva (PREMIUM RIDE) tinham créditos
@@ -47,10 +52,18 @@ describe('colunaDoMovimento', () => {
     expect(colunaDoMovimento('resumos', 'debito')).toBeUndefined();
   });
 
-  // O aluguer tem coluna própria (Viatura), vinda do cálculo dias × tarifa.
-  it('a renda da viatura não entra no detalhe — a coluna Viatura já a traz', () => {
+  // O aluguer cobrado tem coluna própria (Viatura), vinda do cálculo
+  // dias × tarifa: somar aqui o débito duplicava-o.
+  it('o débito da renda não entra no detalhe — a coluna Viatura já o traz', () => {
     expect(colunaDoMovimento('renda_viatura', 'debito')).toBeUndefined();
-    expect(colunaDoMovimento('renda_viatura', 'credito')).toBeUndefined();
+  });
+
+  // Mas o crédito é o desconto por dias sem viatura ("semana avaria", "DIA
+  // POR VINDA A LEIRIA"): a coluna Viatura mostra a renda cheia e não sabe
+  // dele. Ficava dentro do "Valor a Pagar" sem coluna nenhuma que o
+  // explicasse — 496,43 € só na semana 31/08–06/09.
+  it('o crédito da renda é um desconto e aparece em Outras Devoluções', () => {
+    expect(colunaDoMovimento('renda_viatura', 'credito')).toBe('outrasDevolucoes');
   });
 
   it('não se importa com maiúsculas nem espaços', () => {

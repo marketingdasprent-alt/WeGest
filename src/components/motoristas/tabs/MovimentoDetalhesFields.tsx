@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { CATEGORIAS } from './NovoMovimentoFinanceiroOverlay';
+import { CATEGORIAS, CATEGORIAS_RETIRADAS } from './NovoMovimentoFinanceiroOverlay';
 
 export interface MovimentoDetalhesFieldsProps {
   isAcordo: boolean;
@@ -57,6 +57,14 @@ export function MovimentoDetalhesFields({
             </SelectTrigger>
             <SelectContent>
               {CATEGORIAS.map((c) => (
+                <SelectItem key={c.value} value={c.value}>
+                  {c.label}
+                </SelectItem>
+              ))}
+              {/* Ao editar um movimento com categoria já retirada do picker,
+                  mantém-se essa opção visível — senão o select aparecia vazio
+                  e o utilizador não percebia que categoria estava a guardar. */}
+              {CATEGORIAS_RETIRADAS.filter((c) => c.value === categoria).map((c) => (
                 <SelectItem key={c.value} value={c.value}>
                   {c.label}
                 </SelectItem>
