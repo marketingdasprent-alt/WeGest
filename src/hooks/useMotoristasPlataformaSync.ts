@@ -68,7 +68,14 @@ export function useMotoristasPlataformaNaoAssociadosCount() {
       );
 
       const [uberDrv, boltRows] = await Promise.all([
-        supabase.from('uber_drivers').select('uber_driver_id, full_name').is('motorista_id', null),
+        // `is_conta_frota` fora: é a conta da própria empresa na Uber (a que
+        // recebe as transferências semanais), não um motorista. Ver migração
+        // 20260911140000.
+        supabase
+          .from('uber_drivers')
+          .select('uber_driver_id, full_name')
+          .is('motorista_id', null)
+          .eq('is_conta_frota', false),
         supabase
           .from('bolt_resumos_semanais')
           .select('identificador_motorista, motorista_nome')
@@ -282,7 +289,10 @@ export function useSincronizarMotoristasPlataformaIds() {
       const { data: uberDrivers, error: uberError } = await supabase
         .from('uber_drivers')
         .select('full_name, uber_driver_id, motorista_id, org_id')
-        .not('uber_driver_id', 'is', null);
+        .not('uber_driver_id', 'is', null)
+        // Nunca casar uma ficha com a conta da própria empresa: o cruzamento é
+        // por nome, e o nome da frota parece-se com o de quem a gere.
+        .eq('is_conta_frota', false);
       if (uberError) throw uberError;
 
       let totalMapped = 0;
