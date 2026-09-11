@@ -60,6 +60,7 @@ import { ImportRobotCsvDialog } from './ImportRobotCsvDialog';
 import { ViaVerdeContaDialog } from './via-verde/ViaVerdeContaDialog';
 import { ImportUberCsvDialog } from '../administrativo/ImportUberCsvDialog';
 import type { IntegracaoConfig } from './integracoes/types';
+import { temCredenciaisPortal } from './integracoes/boltIntegracao';
 import type { ViaVerdeConta } from './via-verde/types';
 
 interface IntegracaoWebhook {
@@ -811,13 +812,14 @@ export const IntegracoesTab: React.FC = () => {
           {cards.map((card) => {
             const raw = card.rawData as IntegracaoConfig | undefined;
             const rawPlataforma = raw?.plataforma;
-            // Bolt convertida para a API: o botão Play dispara robot-execute
-            // (Apify) e o login do portal desta conta já foi substituído pelas
-            // credenciais da API — deixaria de entrar. Sincroniza-se pelo botão
-            // "Sincronizar semana" dentro do detalhe da integração.
-            const isBoltApi = card.type === 'bolt' && raw?.auth_mode === 'oauth';
+            // O Play dispara o robot-execute (Apify), que entra no PORTAL. Uma
+            // Bolt convertida para a API continua a precisar dele: é do CSV do
+            // portal que vêm as campanhas, que a API não devolve. O que decide
+            // já não é o auth_mode — é haver login do portal guardado. Sem ele
+            // o robot-execute recusa, e o Play só daria erro.
+            const isBoltSemPortal = card.type === 'bolt' && !temCredenciaisPortal(raw);
             const isRobotBacked =
-              (rawPlataforma === 'robot' && !isBoltApi) || rawPlataforma === 'via_verde';
+              (rawPlataforma === 'robot' && !isBoltSemPortal) || rawPlataforma === 'via_verde';
             const isUberBacked = rawPlataforma === 'uber';
             const isCartrackBacked = rawPlataforma === 'cartrack';
             // Importação manual do CSV: em TODAS as integrações Bolt,
