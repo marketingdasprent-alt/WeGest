@@ -10,6 +10,7 @@ const {
   marcarPaga,
   marcarNaoPaga,
   hasAccessToResource,
+  navigate,
 } = vi.hoisted(() => ({
   useDividasMotorista: vi.fn(),
   useUltimaSemanaComLiquido: vi.fn(),
@@ -19,7 +20,10 @@ const {
   marcarPaga: vi.fn(),
   marcarNaoPaga: vi.fn(),
   hasAccessToResource: vi.fn(),
+  navigate: vi.fn(),
 }));
+
+vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
 
 vi.mock('@/hooks/useDividasMotorista', () => ({
   useDividasMotorista,
@@ -217,5 +221,42 @@ describe('DividasTab — o que ficou de semanas anteriores', () => {
     expect(useDividasMotorista).toHaveBeenLastCalledWith(
       expect.objectContaining({ semanaInicio: '2026-08-10', semanaFim: '2026-08-16' })
     );
+  });
+});
+
+// De uma dívida o passo seguinte é sempre ver a conta corrente do motorista.
+// Antes disto o nome era texto morto: obrigava a ir a Motoristas, procurar a
+// pessoa, abrir a ficha e ainda trocar para o separador Financeiro.
+describe('DividasTab — do nome para o perfil financeiro', () => {
+  beforeEach(() => {
+    useDividasMotorista.mockReturnValue({ data: [POR_COBRAR], isLoading: false });
+  });
+
+  it('clicar no nome abre o motorista JÁ no separador Financeiro', () => {
+    render(<DividasTab />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ana Costa' }));
+
+    expect(navigate).toHaveBeenCalledWith(
+      '/motoristas/m-1?tab=financeiro',
+      expect.objectContaining({ state: expect.objectContaining({ listaUrl: expect.any(String) }) })
+    );
+  });
+
+  // Sem o listaUrl, o voltar atrás da ficha caía em /motoristas em vez de
+  // devolver à aba de Dívidas onde se estava.
+  it('leva o sítio de onde se veio, para o voltar atrás funcionar', () => {
+    render(<DividasTab />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ana Costa' }));
+
+    const [, opcoes] = navigate.mock.calls[0];
+    expect(opcoes.state.listaUrl).toContain(window.location.pathname);
+  });
+
+  it('o nome de uma dívida já paga também leva lá', () => {
+    useDividasMotorista.mockReturnValue({ data: [PAGA], isLoading: false });
+    render(<DividasTab />);
+    fireEvent.click(screen.getByRole('button', { name: 'Bruno Reis' }));
+
+    expect(navigate).toHaveBeenCalledWith('/motoristas/m-2?tab=financeiro', expect.anything());
   });
 });

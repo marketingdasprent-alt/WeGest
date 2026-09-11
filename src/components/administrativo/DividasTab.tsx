@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { HandCoins, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -56,6 +57,7 @@ const ESTADO_CLASS: Record<EstadoDivida, string> = {
 };
 
 export function DividasTab() {
+  const navigate = useNavigate();
   const [pesquisa, setPesquisa] = useState('');
   // "Todas" por omissão de propósito: marcar uma dívida como paga move-a de
   // lista, e com o filtro em "Por cobrar" a linha sumia à frente de quem
@@ -237,7 +239,25 @@ export function DividasTab() {
             <TableBody>
               {dividas.map((d) => (
                 <TableRow key={`${d.estado}-${d.id}`}>
-                  <TableCell>{d.motorista_nome}</TableCell>
+                  {/* O nome leva ao Financeiro do motorista, não à ficha: de
+                      uma dívida o passo seguinte é sempre ver a conta corrente
+                      dele. `listaUrl` leva a semana escolhida, para o voltar
+                      atrás devolver a esta semana e não à última. */}
+                  <TableCell>
+                    <button
+                      type="button"
+                      className="text-left font-medium text-primary hover:underline"
+                      onClick={() =>
+                        navigate(`/motoristas/${d.motorista_id}?tab=financeiro`, {
+                          state: {
+                            listaUrl: `${window.location.pathname}${window.location.search}`,
+                          },
+                        })
+                      }
+                    >
+                      {d.motorista_nome}
+                    </button>
+                  </TableCell>
                   <TableCell>
                     {formatDate(d.periodo_inicio)} – {formatDate(d.periodo_fim)}
                   </TableCell>
