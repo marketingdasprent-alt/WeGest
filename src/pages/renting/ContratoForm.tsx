@@ -147,6 +147,19 @@ const ContratoForm = () => {
     ? 'min-w-0 border-0 p-0 m-0 pointer-events-none select-none'
     : 'min-w-0 border-0 p-0 m-0';
 
+  // A excepção ao bloqueio: a viatura. Sem isto o botão Guardar continuava
+  // desactivado e a troca não chegava a lado nenhum — dava para escolher o
+  // carro novo e não dava para o gravar.
+  //
+  // O `!!viaturaEscolhida` fecha a janela entre o contrato chegar e o
+  // formulário hidratar: nesse instante o campo ainda tem o '' por omissão e
+  // o contrato já tem uuid, o que dava a diferença por boa e activava o botão
+  // sozinho. A validação apanhava-o a seguir (o schema exige uuid), mas um
+  // botão que pisca activo sem nada ter mudado convida ao clique.
+  const viaturaEscolhida = form.watch('viatura_id');
+  const viaturaTrocada =
+    camposTravados && !!viaturaEscolhida && viaturaEscolhida !== contrato?.viatura_id;
+
   const abriuEntregaAoCriarRef = useRef(false);
 
   useEffect(() => {
@@ -293,7 +306,7 @@ const ContratoForm = () => {
             isPending ||
             contrato?.substituido_em != null ||
             condutoresRascunho.length > 0 ||
-            camposTravados
+            (camposTravados && !viaturaTrocada)
           }
           className="gap-2"
         >
@@ -394,24 +407,27 @@ const ContratoForm = () => {
                     <TabsTrigger value="anexos">Anexos</TabsTrigger>
                   </TabsList>
 
+                  {/* Sem fieldset à volta: aqui o bloqueio é por dentro
+                      (prop `travado`), para a secção da Viatura poder ficar de
+                      fora dele. Um fieldset desactivado desactiva todos os
+                      descendentes e um aninhado não os reactiva. */}
                   <TabsContent value="geral" className="mt-4">
-                    <fieldset disabled={camposTravados} className={camposFieldsetClass}>
-                      <ContratoTabGeral
-                        form={form}
-                        clientes={clientes}
-                        motoristas={motoristas}
-                        viaturas={viaturasParaSelecao}
-                        grupos={grupos}
-                        grupoIdAtual={grupoIdAtual}
-                        estacoes={estacoes}
-                        viaturaLocked={viaturaLocked}
-                        reservaCodigo={reservaAssociada?.codigo ?? null}
-                        onViaturaChange={aplicarDadosViatura}
-                        contratoId={contrato?.id ?? null}
-                        onCriarNovoCliente={() => setClienteDialogOpen(true)}
-                        onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
-                      />
-                    </fieldset>
+                    <ContratoTabGeral
+                      form={form}
+                      clientes={clientes}
+                      motoristas={motoristas}
+                      viaturas={viaturasParaSelecao}
+                      grupos={grupos}
+                      grupoIdAtual={grupoIdAtual}
+                      estacoes={estacoes}
+                      viaturaLocked={viaturaLocked}
+                      reservaCodigo={reservaAssociada?.codigo ?? null}
+                      onViaturaChange={aplicarDadosViatura}
+                      contratoId={contrato?.id ?? null}
+                      onCriarNovoCliente={() => setClienteDialogOpen(true)}
+                      onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
+                      travado={camposTravados}
+                    />
                   </TabsContent>
 
                   {isEdit && contrato && (

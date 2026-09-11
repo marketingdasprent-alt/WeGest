@@ -79,6 +79,17 @@ interface ContratoFormSecoesProps {
   onCriarNovoMotorista?: () => void;
   /** Contrato já existente (edição) — activa o botão "Pedir alteração de kms". */
   contratoId?: string | null;
+  /**
+   * Contrato já aberto: tudo fica em cinzento e sem clique — MENOS a secção
+   * da Viatura, que é a única alteração permitida depois de o contrato
+   * existir (trocar o cliente de carro sem refazer o contrato).
+   *
+   * O bloqueio vive aqui, e não num `<fieldset disabled>` à volta do
+   * separador inteiro, porque um fieldset desactivado desactiva TODOS os
+   * descendentes e um fieldset aninhado não os reactiva — a única forma de
+   * deixar um campo de fora é ele não estar lá dentro.
+   */
+  travado?: boolean;
 }
 
 /**
@@ -101,7 +112,18 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   onCriarNovoCliente,
   onCriarNovoMotorista,
   contratoId,
+  travado,
 }) => {
+  // pointer-events-none é o reforço do `disabled`: o Select da Radix decide
+  // se abre pelo seu próprio estado em JS, não pelo atributo nativo. min-w-0
+  // desfaz o min-width:min-content que o fieldset traz de fábrica e que
+  // partia os grids lá dentro. O cinzento vem dos próprios campos
+  // (disabled:opacity-*) — não se escurece o bloco todo, que apagava labels
+  // e cartões no tema escuro.
+  const blocoTravadoClass = travado
+    ? 'min-w-0 border-0 p-0 m-0 space-y-6 pointer-events-none select-none'
+    : 'min-w-0 border-0 p-0 m-0 space-y-6';
+
   const viaturaId = form.watch('viatura_id');
   const { data: tarifas = [] } = useRentingTarifasMin();
 
@@ -237,14 +259,19 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
 
   return (
     <div className="space-y-6">
-      <SectionRegime form={form} />
-      <SectionEmpresaEmissora form={form} />
-      <SectionCliente form={form} clientes={clientes} />
-      <SectionEntregaRecolha form={form} estacoes={estacoes} />
-      {/* Numa troca a Data Início é herdada do elo anterior — mostra-se aqui
-          quando esta viatura entrou, que é a data que faltava. */}
-      <TrocaViaturaInfo contratoId={contratoId} />
-      <ALDFields idPrefix="contrato" />
+      <fieldset disabled={travado} className={blocoTravadoClass}>
+        <SectionRegime form={form} />
+        <SectionEmpresaEmissora form={form} />
+        <SectionCliente form={form} clientes={clientes} />
+        <SectionEntregaRecolha form={form} estacoes={estacoes} />
+        {/* Numa troca a Data Início é herdada do elo anterior — mostra-se aqui
+            quando esta viatura entrou, que é a data que faltava. */}
+        <TrocaViaturaInfo contratoId={contratoId} />
+        <ALDFields idPrefix="contrato" />
+      </fieldset>
+
+      {/* FORA do bloqueio, de propósito: num contrato aberto trocar de
+          viatura é a única alteração permitida. */}
       <SectionViatura
         form={form}
         viaturas={viaturas}
@@ -255,189 +282,191 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         onViaturaChange={onViaturaChange}
       />
 
-      {/* Tarifa & Faturação — mesmo layout da reserva: escolha da tarifa,
+      <fieldset disabled={travado} className={blocoTravadoClass}>
+        {/* Tarifa & Faturação — mesmo layout da reserva: escolha da tarifa,
           cartão de preços do modelo e caixa "Faturar ao Cliente". O preço em si
           não se edita aqui: escreve-se no cartão lateral (ResumoContrato), que
           escreve `valor_total_manual`. */}
-      <div>
-        <SectionHeader icon={Coins} title="Tarifa & Faturação" accent="emerald" />
+        <div>
+          <SectionHeader icon={Coins} title="Tarifa & Faturação" accent="emerald" />
 
-        <div className="mb-3">
-          <FormField
-            control={form.control}
-            name="tarifa_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{isTvde ? 'Tarifa TVDE' : 'Tarifa Rent-a-Car'}</FormLabel>
-                <Select
-                  value={field.value ?? ''}
-                  onValueChange={(v) => handleTarifaChange(v || null)}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={
-                          isTvde ? 'Selecionar tarifa TVDE...' : 'Selecionar tarifa Rent-a-Car...'
-                        }
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {tarifasDoRegime.length === 0 && (
-                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                        {modeloIdSel
-                          ? 'Nenhuma tarifa cobre o modelo desta viatura.'
-                          : isTvde
-                            ? 'Nenhuma tarifa TVDE. Cria uma em Renting → Tarifas.'
-                            : 'Nenhuma tarifa Rent-a-Car. Cria uma em Renting → Tarifas.'}
-                      </div>
-                    )}
-                    {tarifasDoRegime.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
+          <div className="mb-3">
+            <FormField
+              control={form.control}
+              name="tarifa_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{isTvde ? 'Tarifa TVDE' : 'Tarifa Rent-a-Car'}</FormLabel>
+                  <Select
+                    value={field.value ?? ''}
+                    onValueChange={(v) => handleTarifaChange(v || null)}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            isTvde ? 'Selecionar tarifa TVDE...' : 'Selecionar tarifa Rent-a-Car...'
+                          }
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {tarifasDoRegime.length === 0 && (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          {modeloIdSel
+                            ? 'Nenhuma tarifa cobre o modelo desta viatura.'
+                            : isTvde
+                              ? 'Nenhuma tarifa TVDE. Cria uma em Renting → Tarifas.'
+                              : 'Nenhuma tarifa Rent-a-Car. Cria uma em Renting → Tarifas.'}
+                        </div>
+                      )}
+                      {tarifasDoRegime.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {modeloSemPreco && (
+              <Alert variant="destructive" className="mt-3">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Modelo sem preço nesta tarifa</AlertTitle>
+                <AlertDescription>
+                  A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) não tem
+                  preço definido na tarifa selecionada. Define o preço deste modelo na tarifa ou
+                  escolhe outra viatura/tarifa.
+                </AlertDescription>
+              </Alert>
             )}
-          />
+          </div>
 
-          {modeloSemPreco && (
-            <Alert variant="destructive" className="mt-3">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Modelo sem preço nesta tarifa</AlertTitle>
-              <AlertDescription>
-                A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) não tem
-                preço definido na tarifa selecionada. Define o preço deste modelo na tarifa ou
-                escolhe outra viatura/tarifa.
-              </AlertDescription>
-            </Alert>
+          {tarifaAtual ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {(isTvde
+                ? [
+                    { label: 'Tarifa', value: tarifaAtual.nome },
+                    {
+                      label: 'Modelo',
+                      value: viaturaSelected
+                        ? `${viaturaSelected.marca} ${viaturaSelected.modelo}`
+                        : '—',
+                    },
+                    {
+                      label: 'Preço / semana',
+                      value:
+                        precoModeloSemanaTvde != null ? `${precoModeloSemanaTvde} €` : 'Sem preço',
+                    },
+                    { label: 'Faturação', value: 'Semanal' },
+                  ]
+                : [
+                    { label: 'Tarifa', value: tarifaAtual.nome },
+                    {
+                      label: 'Modelo',
+                      value: viaturaSelected
+                        ? `${viaturaSelected.marca} ${viaturaSelected.modelo}`
+                        : '—',
+                    },
+                    {
+                      label: 'Preço / dia',
+                      value: precoModeloDiaRac != null ? `${precoModeloDiaRac} €` : 'Sem preço',
+                    },
+                    {
+                      label: 'Preço / mês',
+                      value: precoModeloMesRac != null ? `${precoModeloMesRac} €` : '—',
+                    },
+                  ]
+              ).map((cell) => (
+                <div key={cell.label} className="rounded-lg border bg-muted/20 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
+                    {cell.label}
+                  </p>
+                  <p className="mt-0.5 font-semibold truncate">{cell.value}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed bg-muted/10 p-4 text-sm text-muted-foreground">
+              {isTvde
+                ? 'Seleciona a tarifa TVDE e uma viatura para ver o preço semanal do modelo.'
+                : 'Seleciona uma viatura e a tarifa Rent-a-Car para ver o preço do modelo.'}
+            </div>
+          )}
+
+          {faturacao && (
+            <div className="mt-3 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-brand-navy/10 p-4">
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                    <Euro className="h-3.5 w-3.5" />
+                    Faturar ao cliente
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {faturacao.modo} · {faturacao.descricao}
+                    {form.watch('valor_total_manual') != null && ' · substituído por valor manual'}
+                  </p>
+                </div>
+                <p className="shrink-0 text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+                  {(form.watch('valor_total_manual') ?? faturacao.valor).toFixed(2)} €
+                </p>
+              </div>
+              {isTvde && (
+                <div className="mt-3 flex items-center justify-between gap-3 border-t border-emerald-500/20 pt-3">
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <CarTaxiFront className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    Condutor · conta-corrente semanal
+                  </p>
+                  <p className="shrink-0 text-sm font-semibold tabular-nums">
+                    {faturacao.semanalCondutor != null
+                      ? `${faturacao.semanalCondutor.toFixed(2)} €/sem`
+                      : '— sem preço/semana'}
+                  </p>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
-        {tarifaAtual ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {(isTvde
-              ? [
-                  { label: 'Tarifa', value: tarifaAtual.nome },
-                  {
-                    label: 'Modelo',
-                    value: viaturaSelected
-                      ? `${viaturaSelected.marca} ${viaturaSelected.modelo}`
-                      : '—',
-                  },
-                  {
-                    label: 'Preço / semana',
-                    value:
-                      precoModeloSemanaTvde != null ? `${precoModeloSemanaTvde} €` : 'Sem preço',
-                  },
-                  { label: 'Faturação', value: 'Semanal' },
-                ]
-              : [
-                  { label: 'Tarifa', value: tarifaAtual.nome },
-                  {
-                    label: 'Modelo',
-                    value: viaturaSelected
-                      ? `${viaturaSelected.marca} ${viaturaSelected.modelo}`
-                      : '—',
-                  },
-                  {
-                    label: 'Preço / dia',
-                    value: precoModeloDiaRac != null ? `${precoModeloDiaRac} €` : 'Sem preço',
-                  },
-                  {
-                    label: 'Preço / mês',
-                    value: precoModeloMesRac != null ? `${precoModeloMesRac} €` : '—',
-                  },
-                ]
-            ).map((cell) => (
-              <div key={cell.label} className="rounded-lg border bg-muted/20 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
-                  {cell.label}
-                </p>
-                <p className="mt-0.5 font-semibold truncate">{cell.value}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-dashed bg-muted/10 p-4 text-sm text-muted-foreground">
-            {isTvde
-              ? 'Seleciona a tarifa TVDE e uma viatura para ver o preço semanal do modelo.'
-              : 'Seleciona uma viatura e a tarifa Rent-a-Car para ver o preço do modelo.'}
-          </div>
-        )}
-
-        {faturacao && (
-          <div className="mt-3 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-brand-navy/10 p-4">
-            <div className="flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                  <Euro className="h-3.5 w-3.5" />
-                  Faturar ao cliente
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {faturacao.modo} · {faturacao.descricao}
-                  {form.watch('valor_total_manual') != null && ' · substituído por valor manual'}
-                </p>
-              </div>
-              <p className="shrink-0 text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-                {(form.watch('valor_total_manual') ?? faturacao.valor).toFixed(2)} €
-              </p>
-            </div>
-            {isTvde && (
-              <div className="mt-3 flex items-center justify-between gap-3 border-t border-emerald-500/20 pt-3">
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <CarTaxiFront className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  Condutor · conta-corrente semanal
-                </p>
-                <p className="shrink-0 text-sm font-semibold tabular-nums">
-                  {faturacao.semanalCondutor != null
-                    ? `${faturacao.semanalCondutor.toFixed(2)} €/sem`
-                    : '— sem preço/semana'}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <FranquiaKmsFields
-        franquiaReadOnly
-        kmsReadOnly
-        franquiaAction={
-          contratoId ? (
-            <BotaoPedirAlteracao
-              contratoId={contratoId}
-              tipo="franquia"
-              label="Pedir alteração de franquia"
-              icon={Coins}
-              onClick={() => setDialogAberto('franquia')}
-            />
-          ) : null
-        }
-        kmsAction={
-          contratoId ? (
-            <BotaoPedirAlteracao
-              contratoId={contratoId}
-              tipo="kms"
-              label="Pedir alteração de kms"
-              icon={Gauge}
-              onClick={() => setDialogAberto('kms')}
-            />
-          ) : null
-        }
-      />
-      <CondutoresFields
-        regime={regime}
-        clientes={clientes}
-        motoristas={motoristas}
-        clientePrincipalLabel="Cliente do contrato também conduz"
-        onCriarNovoCliente={onCriarNovoCliente}
-        onCriarNovoMotorista={onCriarNovoMotorista}
-      />
-      <SectionInfoAdicional form={form} />
+        <FranquiaKmsFields
+          franquiaReadOnly
+          kmsReadOnly
+          franquiaAction={
+            contratoId ? (
+              <BotaoPedirAlteracao
+                contratoId={contratoId}
+                tipo="franquia"
+                label="Pedir alteração de franquia"
+                icon={Coins}
+                onClick={() => setDialogAberto('franquia')}
+              />
+            ) : null
+          }
+          kmsAction={
+            contratoId ? (
+              <BotaoPedirAlteracao
+                contratoId={contratoId}
+                tipo="kms"
+                label="Pedir alteração de kms"
+                icon={Gauge}
+                onClick={() => setDialogAberto('kms')}
+              />
+            ) : null
+          }
+        />
+        <CondutoresFields
+          regime={regime}
+          clientes={clientes}
+          motoristas={motoristas}
+          clientePrincipalLabel="Cliente do contrato também conduz"
+          onCriarNovoCliente={onCriarNovoCliente}
+          onCriarNovoMotorista={onCriarNovoMotorista}
+        />
+        <SectionInfoAdicional form={form} />
+      </fieldset>
 
       {contratoId && dialogAberto && (
         <PedirAlteracaoContratoDialog
