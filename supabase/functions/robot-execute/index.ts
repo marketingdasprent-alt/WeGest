@@ -197,13 +197,48 @@ Deno.serve(async (req) => {
       }
       actorInput.cookies = parsedCookies;
     } else {
-      actorInput.username = config.client_id || null;
-      actorInput.email = config.client_id || null;
-      actorInput.login = config.client_id || null;
-      actorInput.password = config.client_secret || null;
-      actorInput.pass = config.client_secret || null;
-      actorInput.emailAppPassword = config.client_secret || null;
-      actorInput.appPassword = config.client_secret || null;
+      // O robô faz login no PORTAL da plataforma — não fala com a API oficial.
+      // Desde que uma integração pode usar as duas fontes ao mesmo tempo (ver
+      // migração 20260911100000), o login do portal tem colunas próprias.
+      //
+      // client_id/client_secret só servem de recurso enquanto a conta não foi
+      // convertida: aí ainda guardam o login do portal. Numa conta já em oauth
+      // guardam a chave da API, e mandá-la para o formulário de login do portal
+      // é precisamente o que deixou as 4 contas Bolt da Década Ousada sem CSV
+      // desde 2026-08-10 — e falha em SILÊNCIO, porque o actor não consegue
+      // entrar e devolve zero linhas como se a semana não tivesse dados.
+      const portalEmail =
+        config.robot_portal_email || (authMode !== 'oauth' ? config.client_id : null);
+      const portalPassword =
+        config.robot_portal_password || (authMode !== 'oauth' ? config.client_secret : null);
+
+      // A Via Verde é a excepção: as credenciais dela vivem em via_verde_contas
+      // e são preenchidas no bloco mais abaixo, não aqui.
+      if (targetPlatform !== 'viaverde' && (!portalEmail || !portalPassword)) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error:
+              authMode === 'oauth'
+                ? `A integração "${config.nome}" está ligada à API oficial, mas o robô precisa do ` +
+                  'login do PORTAL para descarregar o CSV semanal (é ele que traz as campanhas, ' +
+                  'que a API não devolve). Preencha o email e a password do portal no ecrã da ' +
+                  'integração — são credenciais diferentes do Client ID/Secret da API.'
+                : `A integração "${config.nome}" não tem o login do portal preenchido.`,
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // O actor aceita o login com vários nomes consoante o portal — manda-se
+      // em todos, como sempre.
+      actorInput.username = portalEmail;
+      actorInput.email = portalEmail;
+      actorInput.login = portalEmail;
+      actorInput.password = portalPassword;
+      actorInput.pass = portalPassword;
+      actorInput.emailAppPassword = portalPassword;
+      actorInput.appPassword = portalPassword;
     }
 
     if (config.anti_captcha_key) {
@@ -262,6 +297,20 @@ Deno.serve(async (req) => {
       }
       actorInput.periodo_inicio = ini;
       actorInput.periodo_fim = fim;
+    }
+
+    // Período pedido à mão ("Executar robô" com período personalizado). Até
+    // aqui só a Via Verde o usava: nas outras plataformas o utilizador escolhia
+    // as datas e elas eram deitadas fora sem aviso, o que torna impossível
+    // recuperar uma semana antiga — que é exactamente o que é preciso para as
+    // semanas de campanhas que ficaram por importar desde Agosto.
+    //
+    // Só se envia quando vem no pedido: a passagem semanal automática continua
+    // a mandar o mesmo input de sempre, para não arriscar uma rejeição do
+    // schema do actor naquilo que já está a funcionar.
+    if (targetPlatform !== 'viaverde' && periodo_inicio && periodo_fim) {
+      actorInput.periodo_inicio = periodo_inicio;
+      actorInput.periodo_fim = periodo_fim;
     }
 
     const apifyResponse = await fetch(

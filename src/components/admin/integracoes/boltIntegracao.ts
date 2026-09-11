@@ -18,9 +18,18 @@
  *   histórico tem de continuar ligado. Nunca criar uma linha nova para "a
  *   versão API" da mesma conta.
  *
- *   client_id/client_secret são as MESMAS colunas nos dois modos. Converter
- *   substitui o login do portal pelas credenciais da API — é por isso que o
- *   robô deixa de conseguir entrar, e é isso que o aviso de conversão diz.
+ *   As duas formas COEXISTEM na mesma integração, e é isso que se quer: a API
+ *   traz as viagens e o líquido todas as semanas sem ninguém mexer, e o robô
+ *   traz o CSV do portal, que é o único sítio onde existem as campanhas e os
+ *   reembolsos de despesas (a API devolve 9 campos de preço por viagem e
+ *   nenhum deles é campanha — as campanhas são pagas por semana, não por
+ *   viagem). Ver o comentário da RPC bolt_resumo_merge_api.
+ *
+ *   O login do portal tem colunas próprias — robot_portal_email/password — e
+ *   NÃO se mistura com client_id/client_secret, que em oauth guardam a chave
+ *   da API. Partilharem as mesmas colunas foi o que deixou 4 contas sem CSV
+ *   (e sem campanhas) entre Agosto e Setembro de 2026, em silêncio.
+ *   Ver migração 20260911100000_robot_portal_credenciais_proprias.sql.
  *
  * A importação manual do CSV mantém-se em qualquer dos modos (requisito
  * explícito): a API e o CSV são donos de campos diferentes do resumo semanal.
@@ -37,9 +46,36 @@ export interface LinhaIntegracaoBolt {
   plataforma?: string | null;
   robot_target_platform?: string | null;
   auth_mode?: string | null;
+  client_id?: string | null;
   client_secret?: string | null;
   company_id?: number | null;
   company_name?: string | null;
+  robot_portal_email?: string | null;
+  robot_portal_password?: string | null;
+}
+
+const preenchido = (v: string | null | undefined) => Boolean(v && v.trim());
+
+/**
+ * O robô consegue entrar no portal desta conta?
+ *
+ * É o que decide se se mostra o botão de executar e o agendamento semanal — já
+ * não é o auth_mode, porque a API e o robô deixaram de competir pelas mesmas
+ * colunas e passaram a poder correr os dois.
+ *
+ * Espelha EXACTAMENTE a regra do robot-execute, e tem de continuar a espelhá-la:
+ * usa-se robot_portal_email/password, e só numa conta ainda não convertida é que
+ * client_id/client_secret servem de recurso (aí ainda são o login do portal;
+ * em oauth são a chave da API, que no formulário de login não entra).
+ */
+export function temCredenciaisPortal(linha: LinhaIntegracaoBolt | null | undefined): boolean {
+  if (!linha) return false;
+  if (preenchido(linha.robot_portal_email) && preenchido(linha.robot_portal_password)) return true;
+  return (
+    boltAuthMode(linha) !== 'oauth' &&
+    preenchido(linha.client_id) &&
+    preenchido(linha.client_secret)
+  );
 }
 
 /**
@@ -117,12 +153,15 @@ export interface EntradaDecisaoBolt {
   companyId: string;
   estadoTeste: EstadoTesteBolt;
   empresas: BoltCompanyOption[];
+  /** Há login do portal gravado (ou acabado de escrever) nesta integração. */
+  temPortal?: boolean;
 }
 
 export interface DecisaoFormularioBolt {
   /** Está a converter uma conta do robô: avisar do que muda. */
   mostrarAvisoConversao: boolean;
-  /** Credenciais do portal — só enquanto a conta ainda é do robô. */
+  /** Login do portal: em edição mostra-se SEMPRE, nos dois modos. É ele que
+   *  traz o CSV com as campanhas, e a conta pode (e deve) ter as duas fontes. */
   mostrarCredenciaisPortal: boolean;
   mostrarEmpresas: boolean;
   podeTestar: boolean;
@@ -134,7 +173,7 @@ export interface DecisaoFormularioBolt {
   motivo: string | null;
   /** Importação manual do CSV: sempre, em qualquer modo (requisito). */
   mostrarImportarCsv: boolean;
-  /** Executar o robô Apify: só enquanto a conta não foi convertida. */
+  /** Executar o robô Apify: em qualquer modo, desde que haja login do portal. */
   mostrarExecutarRobot: boolean;
   /** Sincronizar uma semana pela API: só depois de convertida. */
   mostrarSincronizarSemana: boolean;
@@ -161,17 +200,24 @@ export function decidirFormularioBolt(entrada: EntradaDecisaoBolt): DecisaoFormu
     }
   }
 
+  const emEdicao = entrada.contexto === 'editar';
+
   return {
     mostrarAvisoConversao: aindaNoRobo,
-    mostrarCredenciaisPortal: aindaNoRobo,
+    // Nos DOIS modos: a conta convertida continua a precisar do robô para o
+    // CSV das campanhas. Esconder o campo em oauth era o que impedia sequer
+    // voltar a pôr o login do portal depois de a conversão o ter apagado.
+    mostrarCredenciaisPortal: emEdicao,
     mostrarEmpresas: entrada.empresas.length > 0,
     podeTestar: clientId !== '' && clientSecret !== '' && entrada.estadoTeste !== 'testing',
     preenchido,
     completo,
     motivo,
     mostrarImportarCsv: true,
-    mostrarExecutarRobot: aindaNoRobo,
-    mostrarSincronizarSemana: entrada.contexto === 'editar' && entrada.modoGravado === 'oauth',
+    // Já não depende do modo, só de haver com que entrar no portal. Sem
+    // credenciais o botão não aparece: premi-lo daria sempre erro.
+    mostrarExecutarRobot: emEdicao && entrada.temPortal === true,
+    mostrarSincronizarSemana: emEdicao && entrada.modoGravado === 'oauth',
   };
 }
 
@@ -287,20 +333,58 @@ export function payloadCriacaoBolt(entrada: EntradaCriacaoBolt): Record<string, 
  * e a linha mantém-se onde está, com o histórico agarrado a ela. Devolver
  * `plataforma` aqui seria a forma mais fácil de partir isso sem dar por ela.
  */
-export function payloadConversaoBolt(entrada: CredenciaisApiBolt): Record<string, unknown> {
+export interface EntradaConversaoBolt extends CredenciaisApiBolt {
+  /**
+   * Login do portal que esta linha tinha ANTES da conversão (o client_id/
+   * client_secret actuais de uma conta ainda em modo robô).
+   *
+   * A conversão está prestes a escrever a chave da API por cima dessas duas
+   * colunas. Passá-lo aqui salva-o para as colunas próprias do portal — é o
+   * que impede o robô de ficar sem forma de entrar, que foi exactamente o que
+   * aconteceu às contas convertidas em Agosto de 2026 e custou 5 semanas de
+   * campanhas por importar. Omitir só quando não há nada a salvar.
+   */
+  portalAnterior?: { email?: string | null; password?: string | null } | null;
+}
+
+export function payloadConversaoBolt(entrada: EntradaConversaoBolt): Record<string, unknown> {
   const cred = credenciaisLimpas(entrada);
 
-  return {
+  const payload: Record<string, unknown> = {
     auth_mode: 'oauth',
     client_id: cred.clientId,
     client_secret: cred.clientSecret,
     company_id: cred.companyId,
     company_name: cred.companyName,
     cookies_json: null,
-    // O robô Apify deixa de correr nesta conta: as credenciais do portal
-    // acabaram de ser substituídas pelas da API e ele já não consegue entrar.
+    // Interruptor do sync_orchestrator, que está desligado à escala do sistema
+    // (src/config/sync.ts). O robô desta conta não depende dele: corre pelo
+    // agendamento próprio (robot-schedule) ou pelo botão, e continua a correr
+    // depois da conversão — é ele que traz as campanhas.
     sync_automatico: false,
   };
+
+  const email = entrada.portalAnterior?.email?.trim();
+  const password = entrada.portalAnterior?.password?.trim();
+  if (email && password) {
+    payload.robot_portal_email = email;
+    payload.robot_portal_password = password;
+  }
+
+  return payload;
+}
+
+/** UPDATE só do login do portal — não toca nas credenciais da API. */
+export function payloadCredenciaisPortalBolt(
+  email: string,
+  password: string
+): Record<string, unknown> {
+  const emailLimpo = email.trim();
+  const passwordLimpa = password.trim();
+  if (!emailLimpo || !passwordLimpa) {
+    throw new Error('Preencha o email e a password do portal Bolt.');
+  }
+  return { robot_portal_email: emailLimpo, robot_portal_password: passwordLimpa };
 }
 
 // ---------------------------------------------------------------------------

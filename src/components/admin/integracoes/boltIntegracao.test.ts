@@ -9,7 +9,9 @@ import {
   normalizarCompanyId,
   normalizarEmpresasBolt,
   payloadConversaoBolt,
+  payloadCredenciaisPortalBolt,
   payloadCriacaoBolt,
+  temCredenciaisPortal,
   semanaDe,
   periodoTexto,
   semanaAnterior,
@@ -110,19 +112,34 @@ describe('decidirFormularioBolt', () => {
   });
 
   it('edição de uma conta ainda no robô: avisa da conversão e mantém o portal', () => {
-    const d = decidir({ contexto: 'editar', modoGravado: 'password' });
+    const d = decidir({ contexto: 'editar', modoGravado: 'password', temPortal: true });
     expect(d.mostrarAvisoConversao).toBe(true);
     expect(d.mostrarCredenciaisPortal).toBe(true);
     expect(d.mostrarExecutarRobot).toBe(true);
     expect(d.mostrarSincronizarSemana).toBe(false);
   });
 
-  it('edição de uma conta já convertida: sem robô, com sincronização semanal', () => {
-    const d = decidir({ contexto: 'editar', modoGravado: 'oauth' });
+  // O CSV do portal é o ÚNICO sítio onde existem as campanhas (a API devolve
+  // nove campos de preço por viagem e nenhum é campanha). Esconder o login do
+  // portal depois da conversão foi o que deixou 4 contas sem forma de o voltar
+  // a pôr — e sem campanhas — durante cinco semanas.
+  it('edição de uma conta já convertida: mantém o portal E ganha a sincronização semanal', () => {
+    const d = decidir({ contexto: 'editar', modoGravado: 'oauth', temPortal: true });
     expect(d.mostrarAvisoConversao).toBe(false);
-    expect(d.mostrarCredenciaisPortal).toBe(false);
-    expect(d.mostrarExecutarRobot).toBe(false);
+    expect(d.mostrarCredenciaisPortal).toBe(true);
+    expect(d.mostrarExecutarRobot).toBe(true);
     expect(d.mostrarSincronizarSemana).toBe(true);
+  });
+
+  it('sem login do portal não se oferece o robô — premi-lo daria sempre erro', () => {
+    expect(decidir({ contexto: 'editar', modoGravado: 'oauth' }).mostrarExecutarRobot).toBe(false);
+    expect(decidir({ contexto: 'editar', modoGravado: 'password' }).mostrarExecutarRobot).toBe(
+      false
+    );
+    // Mas o campo para o preencher aparece à mesma, senão não havia por onde.
+    expect(decidir({ contexto: 'editar', modoGravado: 'oauth' }).mostrarCredenciaisPortal).toBe(
+      true
+    );
   });
 
   it('a importação manual do CSV está sempre disponível, em qualquer modo', () => {
@@ -262,6 +279,78 @@ describe('payloadConversaoBolt', () => {
 
   it('desliga o sync automático do robô ao converter', () => {
     expect(payloadConversaoBolt(credenciaisValidas).sync_automatico).toBe(false);
+  });
+
+  // Esta é a regressão que custou 5 semanas de campanhas: a conversão escreve a
+  // chave da API por cima de client_id/client_secret, que numa conta ainda em
+  // modo robô são o login do portal. Sem salvar esse login, o robô fica sem
+  // forma de entrar e o CSV nunca mais chega — em silêncio.
+  it('salva o login do portal que a conversão está prestes a substituir', () => {
+    const payload = payloadConversaoBolt({
+      ...credenciaisValidas,
+      portalAnterior: { email: ' lara@exemplo.pt ', password: ' segredo ' },
+    });
+    expect(payload.robot_portal_email).toBe('lara@exemplo.pt');
+    expect(payload.robot_portal_password).toBe('segredo');
+    // E a chave da API vai para o sítio dela, não para o do portal.
+    expect(payload.client_id).toBe('cli_123');
+  });
+
+  it('sem login anterior para salvar, não inventa colunas do portal', () => {
+    for (const portalAnterior of [
+      null,
+      undefined,
+      { email: 'so@email.pt', password: '' },
+      { email: '', password: 'so_password' },
+    ]) {
+      const payload = payloadConversaoBolt({ ...credenciaisValidas, portalAnterior });
+      expect(payload).not.toHaveProperty('robot_portal_email');
+      expect(payload).not.toHaveProperty('robot_portal_password');
+    }
+  });
+});
+
+describe('temCredenciaisPortal', () => {
+  it('as colunas próprias chegam, em qualquer modo', () => {
+    const portal = { robot_portal_email: 'a@b.pt', robot_portal_password: 'x' };
+    expect(temCredenciaisPortal({ ...portal, auth_mode: 'oauth' })).toBe(true);
+    expect(temCredenciaisPortal({ ...portal, auth_mode: 'password' })).toBe(true);
+  });
+
+  it('numa conta por converter, client_id/secret ainda são o login do portal', () => {
+    expect(
+      temCredenciaisPortal({ auth_mode: 'password', client_id: 'a@b.pt', client_secret: 'x' })
+    ).toBe(true);
+  });
+
+  // O cerne do bug: em oauth estas colunas guardam a chave da API. Tratá-las
+  // como login do portal é mandar uma chave de API para um formulário de login.
+  it('numa conta em oauth, client_id/secret NÃO contam — são a chave da API', () => {
+    expect(
+      temCredenciaisPortal({ auth_mode: 'oauth', client_id: 'cli_x', client_secret: 'sec_y' })
+    ).toBe(false);
+  });
+
+  it('metade das credenciais não é credencial nenhuma', () => {
+    expect(temCredenciaisPortal({ robot_portal_email: 'a@b.pt' })).toBe(false);
+    expect(temCredenciaisPortal({ robot_portal_email: '  ', robot_portal_password: 'x' })).toBe(
+      false
+    );
+    expect(temCredenciaisPortal(null)).toBe(false);
+  });
+});
+
+describe('payloadCredenciaisPortalBolt', () => {
+  it('grava só as colunas do portal, sem tocar nas da API', () => {
+    expect(payloadCredenciaisPortalBolt(' lara@exemplo.pt ', ' segredo ')).toEqual({
+      robot_portal_email: 'lara@exemplo.pt',
+      robot_portal_password: 'segredo',
+    });
+  });
+
+  it('recusa gravar metade de um par', () => {
+    expect(() => payloadCredenciaisPortalBolt('', 'x')).toThrow(/portal Bolt/);
+    expect(() => payloadCredenciaisPortalBolt('a@b.pt', '   ')).toThrow(/portal Bolt/);
   });
 
   it('recusa converter com credenciais incompletas', () => {

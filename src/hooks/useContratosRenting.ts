@@ -962,7 +962,17 @@ export function useReverterParaReserva() {
         .select('id, emissor_id, tarifa_id')
         .maybeSingle();
       if (error) throw error;
-      if (!updated) return;
+      // Zero linhas não é sucesso: o UPDATE não passou. Ou o contrato deixou
+      // de estar agendado entretanto, ou a RLS recusou-o — e a RLS recusa
+      // devolvendo zero linhas, não um erro. Antes saía-se daqui em silêncio,
+      // com o ecrã a dar a acção por feita e nada ter acontecido; era o que
+      // se via em quem tinha a permissão "Reverter contrato para reserva" mas
+      // não tinha acesso de escrita aos contratos de renting.
+      if (!updated) {
+        throw new Error(
+          'Não foi possível reverter: o contrato deixou de estar agendado ou não tens permissão para o alterar.'
+        );
+      }
 
       // Devolve a reserva ao estado que tinha antes de virar contrato — o
       // mesmo valor que contrato_renting_cascata_estado usa para "cancelado
