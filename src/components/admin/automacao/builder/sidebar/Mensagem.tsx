@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { AlertTriangle, ChevronDown, Database, Eye, MessageSquareText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { sanitizeRichHtml } from '@/lib/safeHtml';
 import { cn } from '@/lib/utils';
 import { CampoComTokens } from '../modal/CampoComTokens';
-import { paresDoPayload, substituirTokens, tokensUsados } from '../tokens';
+import { paresDoPayload, substituirTokens, substituirTokensHtml, tokensUsados } from '../tokens';
 import { Campo, Seccao } from './CamposDoPasso';
 
 /**
@@ -167,7 +168,9 @@ export function Mensagem({
                   execução: não há endpoint que corra uma regra isolada. */}
               <div
                 className="prose prose-sm max-w-none text-[11px] dark:prose-invert"
-                dangerouslySetInnerHTML={{ __html: substituirTokens(corpo, payload ?? {}) }}
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeRichHtml(substituirTokensHtml(corpo, payload ?? {})),
+                }}
               />
             </div>
           </div>

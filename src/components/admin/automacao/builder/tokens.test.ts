@@ -4,6 +4,7 @@ import {
   inserirToken,
   paresDoPayload,
   substituirTokens,
+  substituirTokensHtml,
   sugestoesDeToken,
   tokensUsados,
 } from './tokens';
@@ -37,6 +38,16 @@ describe('substituirTokens', () => {
 
   it('substitui todas as ocorrências, não só a primeira', () => {
     expect(substituirTokens('{{a}} e {{a}}', { a: 'x' })).toBe('x e x');
+  });
+});
+
+describe('substituirTokensHtml', () => {
+  it('escapa valores do payload sem destruir o HTML do template', () => {
+    expect(
+      substituirTokensHtml('<p>Olá <strong>{{nome}}</strong></p>', {
+        nome: '<img src=x onerror=alert(1)>',
+      })
+    ).toBe('<p>Olá <strong>&lt;img src=x onerror=alert(1)&gt;</strong></p>');
   });
 });
 

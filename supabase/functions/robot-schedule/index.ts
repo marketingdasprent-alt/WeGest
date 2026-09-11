@@ -1,4 +1,10 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import {
+  authenticateUser,
+  AuthorizationError,
+  isInternalRequest,
+  requireOrgAdmin,
+} from '../_shared/auth/edgeAuthorization.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +20,18 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const isInternal = isInternalRequest(req, serviceRoleKey);
+    let actorId: string | null = null;
+    if (!isInternal) {
+      const authClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!);
+      const user = await authenticateUser(req, {
+        getUser: async (token) => {
+          const { data, error } = await authClient.auth.getUser(token);
+          return { user: error || !data.user ? null : { id: data.user.id } };
+        },
+      });
+      actorId = user.id;
+    }
 
     const { integracao_id, cron_expression, action } = await req.json();
 
@@ -23,6 +40,31 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "integracao_id é obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const { data: integration, error: integrationError } = await supabase
+      .from('plataformas_configuracao')
+      .select('org_id')
+      .eq('id', integracao_id)
+      .maybeSingle();
+    if (integrationError || !integration?.org_id) {
+      return new Response(JSON.stringify({ error: 'Integração não encontrada' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (actorId) {
+      await requireOrgAdmin(actorId, integration.org_id, async (userId, orgId) => {
+        const { data, error } = await supabase
+          .from('user_organizacoes')
+          .select('is_admin')
+          .eq('user_id', userId)
+          .eq('org_id', orgId)
+          .maybeSingle();
+        return error ? null : data;
+      });
     }
 
     // Read action — return current sync_automatico state
@@ -112,9 +154,10 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error("robot-schedule error:", err);
+    const status = err instanceof AuthorizationError ? err.status : 500;
     return new Response(
       JSON.stringify({ error: (err as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

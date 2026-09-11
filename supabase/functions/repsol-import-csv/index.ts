@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { stripAcc, parseNumber, findField, findNumericField } from '../_shared/repsol/campos.ts';
 
 const corsHeaders = {
@@ -307,8 +307,8 @@ Deno.serve(async (req) => {
       if (m.cartao_repsol) {
         const parts = m.cartao_repsol
           .split('/')
-          .map((p) => sanitizeCard(p.trim()))
-          .filter((p) => p.length >= 3);
+          .map((part: string) => sanitizeCard(part.trim()))
+          .filter((part: string) => part.length >= 3);
         for (const p of parts) {
           cardMap.set(p, m.id);
           if (p.length >= 4) cardMap.set(p.slice(-4), m.id);
@@ -449,7 +449,8 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: err.message }), {
+    const message = err instanceof Error ? err.message : 'Erro interno';
+    return new Response(JSON.stringify({ success: false, error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -1,47 +1,99 @@
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import {
+  authenticateUser,
+  AuthorizationError,
+  isInternalRequest,
+  requireOrgAdmin,
+} from "../_shared/auth/edgeAuthorization.ts";
+import { createRobotWebhookSignature } from "../_shared/integracoes/robotWebhookSecurity.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 // Sincronização automática/Apify DESATIVADA — só import manual por CSV.
 // Exceções (PLATAFORMAS_PERMITIDAS): robôs já validados e autorizados a
 // correr apesar do interruptor geral estar desligado.
 const SYNC_AUTOMATICO_DESATIVADO = true;
-const PLATAFORMAS_PERMITIDAS = ['viaverde', 'bolt'];
+const PLATAFORMAS_PERMITIDAS = ["viaverde", "bolt"];
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const isInternal = isInternalRequest(req, SERVICE_ROLE_KEY);
+    let authenticatedUserId: string | null = null;
+    if (!isInternal) {
+      const authClient = createClient(
+        SUPABASE_URL,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+      );
+      const user = await authenticateUser(req, {
+        getUser: async (token) => {
+          const { data, error } = await authClient.auth.getUser(token);
+          return { user: error || !data.user ? null : { id: data.user.id } };
+        },
+      });
+      authenticatedUserId = user.id;
+    }
 
     const requestBody = await req.json();
     const { integracao_id, periodo_inicio, periodo_fim } = requestBody;
     if (!integracao_id) {
       return new Response(
-        JSON.stringify({ success: false, error: 'integracao_id é obrigatório' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          success: false,
+          error: "integracao_id é obrigatório",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     const { data: config, error: configError } = await supabase
-      .from('plataformas_configuracao')
-      .select('*')
-      .eq('id', integracao_id)
-      .in('plataforma', ['robot', 'repsol', 'edp', 'via_verde'])
+      .from("plataformas_configuracao")
+      .select("*")
+      .eq("id", integracao_id)
+      .in("plataforma", ["robot", "repsol", "edp", "via_verde"])
       .single();
 
     if (configError || !config) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Integração robot não encontrada' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          success: false,
+          error: "Integração robot não encontrada",
+        }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    if (authenticatedUserId) {
+      await requireOrgAdmin(
+        authenticatedUserId,
+        config.org_id,
+        async (userId, orgId) => {
+          const { data, error } = await supabase
+            .from("user_organizacoes")
+            .select("is_admin")
+            .eq("user_id", userId)
+            .eq("org_id", orgId)
+            .maybeSingle();
+          return error ? null : data;
+        },
       );
     }
 
@@ -56,39 +108,43 @@ Deno.serve(async (req) => {
         JSON.stringify({
           success: false,
           disabled: true,
-          error: 'Sincronização automática desativada. Use o import manual por CSV.',
+          error:
+            "Sincronização automática desativada. Use o import manual por CSV.",
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
-    let actorId = config.apify_actor_id;
-    let apifyToken = config.apify_api_token;
-
-    // Forçar uso do Actor ID e API Token da integração "mestre/original" da MESMA org
-    // Isso garante que todas as sub-contas operem sob o mesmo robô e credenciais mais recentes.
     const targetPlatform = config.robot_target_platform || config.plataforma;
-    const { data: masterConfig } = await supabase
-      .from('plataformas_configuracao')
-      .select('apify_actor_id, apify_api_token')
-      .eq('plataforma', 'robot')
-      .eq('robot_target_platform', targetPlatform)
-      .eq('org_id', config.org_id)
-      .not('apify_actor_id', 'is', null)
-      .not('apify_api_token', 'is', null)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .single();
+    const { data: sharedCredential, error: sharedCredentialError } =
+      await supabase
+        .from("apify_credenciais_partilhadas")
+        .select("apify_actor_id, apify_api_token")
+        .eq("robot_target_platform", targetPlatform)
+        .maybeSingle();
 
-    if (masterConfig) {
-      actorId = masterConfig.apify_actor_id;
-      apifyToken = masterConfig.apify_api_token;
+    if (sharedCredentialError) {
+      throw new Error(
+        `Erro ao obter credenciais Apify: ${sharedCredentialError.message}`,
+      );
     }
+
+    const actorId = sharedCredential?.apify_actor_id;
+    const apifyToken = sharedCredential?.apify_api_token;
 
     if (!actorId) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Actor ID não configurado nesta integração' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          success: false,
+          error: "Actor ID não configurado nesta integração",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -96,30 +152,47 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'API Token do Apify não configurado nesta integração',
+          error: "API Token do Apify não configurado nesta integração",
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
-    const callbackUrl = `${SUPABASE_URL}/functions/v1/robot-webhook?integracao_id=${integracao_id}`;
+    const webhookSignature = await createRobotWebhookSignature(
+      integracao_id,
+      SERVICE_ROLE_KEY,
+    );
+    const callbackUrl = new URL(`${SUPABASE_URL}/functions/v1/robot-webhook`);
+    callbackUrl.searchParams.set("integracao_id", integracao_id);
+    callbackUrl.searchParams.set("signature", webhookSignature);
 
-    const authMode = config.auth_mode || 'password';
+    const authMode = config.auth_mode || "password";
 
     const actorInput: Record<string, unknown> = {
       startUrl: config.webhook_url || null,
-      callbackUrl,
+      callbackUrl: callbackUrl.toString(),
       integracaoId: integracao_id,
     };
 
-    if (authMode === 'cookies') {
+    if (authMode === "cookies") {
       let parsedCookies = [];
       try {
-        parsedCookies = config.cookies_json ? JSON.parse(config.cookies_json) : [];
+        parsedCookies = config.cookies_json
+          ? JSON.parse(config.cookies_json)
+          : [];
       } catch {
         return new Response(
-          JSON.stringify({ success: false, error: 'Cookies JSON inválido. Verifique o formato.' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({
+            success: false,
+            error: "Cookies JSON inválido. Verifique o formato.",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
       actorInput.cookies = parsedCookies;
@@ -140,17 +213,17 @@ Deno.serve(async (req) => {
     // ── Via Verde: credenciais vivem em via_verde_contas (sync_email/sync_password),
     // não em plataformas_configuracao. URL do portal é fixa.
     // Período por defeito = semana anterior (Seg-Dom ISO).
-    if (targetPlatform === 'viaverde') {
+    if (targetPlatform === "viaverde") {
       const VIA_VERDE_EXTRATOS_URL =
-        'https://www.viaverde.pt/empresas/minha-via-verde/extratos-movimentos';
+        "https://www.viaverde.pt/empresas/minha-via-verde/extratos-movimentos";
       actorInput.startUrl = VIA_VERDE_EXTRATOS_URL;
 
       const { data: conta, error: contaError } = await supabase
-        .from('via_verde_contas')
-        .select('sync_email, sync_password, nome_conta')
-        .eq('integracao_id', integracao_id)
-        .eq('sync_ativo', true)
-        .order('created_at', { ascending: true })
+        .from("via_verde_contas")
+        .select("sync_email, sync_password, nome_conta")
+        .eq("integracao_id", integracao_id)
+        .eq("sync_ativo", true)
+        .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();
 
@@ -158,9 +231,13 @@ Deno.serve(async (req) => {
         return new Response(
           JSON.stringify({
             success: false,
-            error: 'Nenhuma conta Via Verde com sync_ativo=true encontrada para esta integração.',
+            error:
+              "Nenhuma conta Via Verde com sync_ativo=true encontrada para esta integração.",
           }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
 
@@ -176,10 +253,12 @@ Deno.serve(async (req) => {
         const today = new Date();
         const dow = today.getDay(); // 0=Dom, 1=Seg...6=Sáb
         const diffToThisMonday = dow === 0 ? 6 : dow - 1;
-        const lastMonday = new Date(today.getTime() - (diffToThisMonday + 7) * 86400000);
+        const lastMonday = new Date(
+          today.getTime() - (diffToThisMonday + 7) * 86400000,
+        );
         const lastSunday = new Date(lastMonday.getTime() + 6 * 86400000);
-        ini = lastMonday.toISOString().split('T')[0];
-        fim = lastSunday.toISOString().split('T')[0];
+        ini = lastMonday.toISOString().split("T")[0];
+        fim = lastSunday.toISOString().split("T")[0];
       }
       actorInput.periodo_inicio = ini;
       actorInput.periodo_fim = fim;
@@ -188,47 +267,59 @@ Deno.serve(async (req) => {
     const apifyResponse = await fetch(
       `https://api.apify.com/v2/acts/${actorId}/runs?token=${apifyToken}`,
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(actorInput),
-      }
+      },
     );
 
     const apifyData = await apifyResponse.json();
 
     if (!apifyResponse.ok) {
-      console.error('Apify error:', apifyData);
+      console.error("Apify error:", apifyData);
       return new Response(
         JSON.stringify({
           success: false,
-          error: `Apify API error [${apifyResponse.status}]: ${JSON.stringify(apifyData)}`,
+          error: `Apify API error [${apifyResponse.status}]: ${
+            JSON.stringify(apifyData)
+          }`,
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     // Update ultimo_sync
     await supabase
-      .from('plataformas_configuracao')
+      .from("plataformas_configuracao")
       .update({ ultimo_sync: new Date().toISOString() })
-      .eq('id', integracao_id);
+      .eq("id", integracao_id);
 
     return new Response(
       JSON.stringify({
         success: true,
         run_id: apifyData.data?.id || apifyData.id,
-        message: 'Robot iniciado com sucesso',
+        message: "Robot iniciado com sucesso",
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   } catch (error) {
-    console.error('robot-execute error:', error);
+    console.error("robot-execute error:", error);
+    const status = error instanceof AuthorizationError ? error.status : 200;
     return new Response(
       JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : String(error),
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      {
+        status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

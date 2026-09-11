@@ -12,7 +12,7 @@
 // AS INTEGRAÇÕES AINDA EM MODO ROBÔ SÃO IGNORADAS, de propósito: sem
 // credenciais de API o bolt-sync-semana só devolveria erro. Enquanto uma
 // conta não for convertida, continua a ser servida pelo robô/CSV.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import {
   analisarData,
   segundaDaSemana,

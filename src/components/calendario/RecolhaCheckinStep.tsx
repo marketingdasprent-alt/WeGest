@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { nivelEnergia } from '@/utils/combustivel';
 import { useRascunho } from '@/hooks/useRascunho';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,8 @@ import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTempla
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
 import type { CheckinDadosState } from './CheckinDadosSection';
 import { useOrgId } from '@/contexts/TenantContext';
+
+type CalendarioEventoInsert = Database['public']['Tables']['calendario_eventos']['Insert'];
 import {
   AssinaturasHandoverSection,
   type AssinaturasHandoverHandle,
@@ -220,7 +223,7 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
         ? new Date(`${data}T00:00:00`).toISOString()
         : new Date(`${data}T${hora}:00`).toISOString();
 
-      const eventoPayload: Record<string, any> = {
+      const eventoPayload: CalendarioEventoInsert = {
         titulo: viatura.matricula.replace(/[-\s]/g, '').toUpperCase(),
         tipo: eventoData.tipo,
         data_inicio: dataISO,

@@ -1,10 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+type UntypedSupabaseClient = ReturnType<typeof createClient<any>>;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -195,7 +197,7 @@ const DELIVERY_STATUS_PRIORITY: Record<string, number> = {
 };
 
 async function updateNotificationDelivery(
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   messageId: string,
   eventType: string,
   date: string,
@@ -235,7 +237,7 @@ async function updateNotificationDelivery(
   }
 }
 
-async function updateCampaignCounters(supabase: ReturnType<typeof createClient>, campanhaId: string) {
+async function updateCampaignCounters(supabase: UntypedSupabaseClient, campanhaId: string) {
   const { data: counts } = await supabase
     .from("email_sends")
     .select("status")

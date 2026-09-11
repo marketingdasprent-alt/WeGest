@@ -62,4 +62,4 @@ docs/**/*.md
 # por migrações e pelo próprio CI (mensagens de erro do job db-tests).
 !docs/motor-automacao/**
 
-
+security-audit/

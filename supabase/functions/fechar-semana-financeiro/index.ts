@@ -1,5 +1,5 @@
 // supabase/functions/fechar-semana-financeiro/index.ts
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { buildWeeklyContractSummary } from '../_shared/resumo-semanal-viatura/calc.ts';
 import { repartirDiasPorMotorista } from '../_shared/resumo-semanal-viatura/diasPorMotorista.ts';
 

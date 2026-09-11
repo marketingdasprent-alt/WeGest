@@ -1,7 +1,7 @@
 // Submissão pública de tickets de TI. verify_jwt = false: quem submete pode não
 // ter conta nenhuma. A autorização é o token do link, validado aqui dentro; as
 // tabelas continuam fechadas por RLS a quem tem sessão.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { validarAnexosSubmissao } from '../_shared/ti-tickets/anexos.ts';
 
 const cors = {

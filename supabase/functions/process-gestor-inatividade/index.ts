@@ -1,5 +1,5 @@
 // supabase/functions/process-gestor-inatividade/index.ts
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

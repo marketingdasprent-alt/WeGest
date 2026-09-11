@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/table';
 import { format, formatDistanceToNowStrict, parseISO } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import type { RegraEstatistica } from '@/hooks/automacao/useAutomacaoStats';
 import { cn } from '@/lib/utils';
 import type { GrupoDeRegras } from './agrupamento';
 import { identidadeDoEvento, type ModuloIdentidade } from './rotulos';

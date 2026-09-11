@@ -1,10 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
 import { EmailService } from "../_shared/email/services/EmailService.ts";
+import {
+  authenticateUser,
+  AuthorizationError,
+  requireOrgAdmin,
+} from "../_shared/auth/edgeAuthorization.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
@@ -14,11 +20,24 @@ serve(async (req) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get(
+      "SUPABASE_SERVICE_ROLE_KEY",
+    )!;
+    const authClient = createClient(
+      SUPABASE_URL,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+    );
+    const user = await authenticateUser(req, {
+      getUser: async (token) => {
+        const { data, error } = await authClient.auth.getUser(token);
+        return { user: error || !data.user ? null : { id: data.user.id } };
+      },
+    });
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const emailService = new EmailService(supabase);
 
-    const { campanha_id, lista_id, assinatura_id: overrideAssinaturaId } = await req.json();
+    const { campanha_id, lista_id, assinatura_id: overrideAssinaturaId } =
+      await req.json();
     if (!campanha_id) throw new Error("campanha_id é obrigatório");
     if (!lista_id) throw new Error("lista_id é obrigatório");
 
@@ -30,6 +49,15 @@ serve(async (req) => {
       .single();
     if (campErr || !campanha) throw new Error("Campanha não encontrada");
     const orgId = campanha.org_id;
+    await requireOrgAdmin(user.id, orgId, async (userId, requestedOrgId) => {
+      const { data, error } = await supabase
+        .from("user_organizacoes")
+        .select("is_admin")
+        .eq("user_id", userId)
+        .eq("org_id", requestedOrgId)
+        .maybeSingle();
+      return error ? null : data;
+    });
 
     // Determinar assinatura: prioridade ao override do envio, senão usa a da campanha
     const finalAssinaturaId = overrideAssinaturaId !== undefined
@@ -38,34 +66,45 @@ serve(async (req) => {
 
     let assinaturaHtml = "";
     if (finalAssinaturaId) {
-      const { data: assinatura } = await supabase
+      const { data: assinatura, error: assinaturaError } = await supabase
         .from("marketing_assinaturas")
         .select("conteudo_html")
         .eq("id", finalAssinaturaId)
+        .eq("org_id", orgId)
         .single();
+      if (assinaturaError || !assinatura) {
+        throw new Error("Assinatura não encontrada nesta organização");
+      }
       if (assinatura?.conteudo_html) {
         const processedHtml = assinatura.conteudo_html.replace(
           /<img /gi,
-          '<img style="max-width:100%;height:auto;" '
+          '<img style="max-width:100%;height:auto;" ',
         );
-        assinaturaHtml = `<div style="max-width:600px;margin-top:20px;padding-top:15px;border-top:1px solid #e0e0e0;">${processedHtml}</div>`;
+        assinaturaHtml =
+          `<div style="max-width:600px;margin-top:20px;padding-top:15px;border-top:1px solid #e0e0e0;">${processedHtml}</div>`;
       }
     }
 
-    // Marcar como enviando
-    await supabase.from("marketing_campanhas").update({ status: "enviando", lista_id }).eq("id", campanha_id);
+    // Validar toda a relação multi-tenant antes da primeira escrita.
+    const { data: lista, error: listaErr } = await supabase
+      .from("marketing_listas")
+      .select("origem, org_id")
+      .eq("id", lista_id)
+      .eq("org_id", orgId)
+      .single();
+    if (listaErr || !lista) {
+      throw new Error("Lista não encontrada nesta organização");
+    }
+
+    // Marcar como enviando só depois de todas as referências estarem validadas.
+    const { error: marcarError } = await supabase
+      .from("marketing_campanhas")
+      .update({ status: "enviando", lista_id })
+      .eq("id", campanha_id)
+      .eq("org_id", orgId);
+    if (marcarError) throw new Error("Não foi possível iniciar o envio");
 
     try {
-      // Determinar origem da lista (manual vs audiência automática)
-      const { data: lista, error: listaErr } = await supabase
-        .from("marketing_listas")
-        .select("origem, org_id")
-        .eq("id", lista_id)
-        .single();
-      if (listaErr || !lista) throw new Error("Lista não encontrada");
-      // Defesa multi-tenant: service role ignora RLS — validar org da lista == org da campanha
-      if (lista.org_id !== orgId) throw new Error("Lista de outra organização");
-
       let contactos: Array<{ nome: string | null; email: string }> = [];
 
       if (lista.origem === "motoristas_ativos") {
@@ -91,7 +130,8 @@ serve(async (req) => {
         const { data: manuais, error: contErr } = await supabase
           .from("marketing_contactos")
           .select("nome, email")
-          .eq("lista_id", lista_id);
+          .eq("lista_id", lista_id)
+          .eq("org_id", orgId);
         if (contErr) throw new Error("Erro ao buscar contactos");
         contactos = manuais ?? [];
       }
@@ -134,7 +174,10 @@ serve(async (req) => {
               erro_mensagem: null,
             });
           } else {
-            console.error(`Erro ao enviar para ${contacto.email}:`, result.error);
+            console.error(
+              `Erro ao enviar para ${contacto.email}:`,
+              result.error,
+            );
             totalErros++;
             detalhes.push({
               contacto_email: contacto.email,
@@ -157,26 +200,20 @@ serve(async (req) => {
         total_enviados: totalEnviados,
         total_erros: totalErros,
         enviado_em: enviadoEm,
-      }).eq("id", campanha_id);
+      }).eq("id", campanha_id).eq("org_id", orgId);
 
       // Registar no histórico de envios e obter o ID
-      const authHeader = req.headers.get("Authorization");
-      let userId: string | null = null;
-      if (authHeader) {
-        const { data: { user } } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
-        userId = user?.id || null;
-      }
-
-      const { data: envioData } = await supabase.from("marketing_envios").insert({
-        campanha_id,
-        lista_id,
-        assinatura_id: finalAssinaturaId || null,
-        total_enviados: totalEnviados,
-        total_erros: totalErros,
-        enviado_por: userId,
-        enviado_em: enviadoEm,
-        org_id: orgId,
-      }).select("id").single();
+      const { data: envioData } = await supabase.from("marketing_envios")
+        .insert({
+          campanha_id,
+          lista_id,
+          assinatura_id: finalAssinaturaId || null,
+          total_enviados: totalEnviados,
+          total_erros: totalErros,
+          enviado_por: user.id,
+          enviado_em: enviadoEm,
+          org_id: orgId,
+        }).select("id").single();
 
       // Inserir detalhes por contacto
       if (envioData?.id && detalhes.length > 0) {
@@ -199,20 +236,29 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, total_enviados: totalEnviados, total_erros: totalErros }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          success: true,
+          total_enviados: totalEnviados,
+          total_erros: totalErros,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     } catch (innerError: any) {
       await supabase.from("marketing_campanhas")
         .update({ status: "erro" })
-        .eq("id", campanha_id);
+        .eq("id", campanha_id)
+        .eq("org_id", orgId);
       throw innerError;
     }
   } catch (error: any) {
     console.error("Erro send-marketing-email:", error);
+    const status = error instanceof AuthorizationError ? error.status : 400;
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

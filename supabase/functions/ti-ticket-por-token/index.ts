@@ -2,7 +2,7 @@
 // conta. O acesso_token é por ticket -- não confundir com ti_tokens.token, que
 // só da direito a submeter. Se fossem o mesmo, quem tivesse o link de
 // submissão lia os tickets de todos os colegas.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',

@@ -1,4 +1,6 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+
+type UntypedSupabaseClient = ReturnType<typeof createClient<any>>;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -141,7 +143,7 @@ const chunkArray = <T>(items: T[], size: number): T[][] => {
 // ─── Driver Name Upsert ───
 
 const upsertDriverNames = async (
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   integracaoId: string,
   drivers: Map<string, { first_name: string; last_name: string }>,
 ) => {
@@ -174,7 +176,7 @@ const upsertDriverNames = async (
 // ─── Process Pagamentos CSV ───
 
 const processPagamentosCsv = async (
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   integracaoId: string,
   csvText: string,
   nomeOriginal: string,
@@ -339,7 +341,7 @@ const parseDhm = (value: string): number | null => {
 // ─── Process Atividade (Driver Activity) CSV ───
 
 const processAtividadeCsv = async (
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   integracaoId: string,
   csvText: string,
   nomeOriginal: string,
@@ -504,11 +506,16 @@ Deno.serve(async (req) => {
     }
   }
 
+  if (typeof integracaoId !== "string" || !integracaoId) {
+    return jsonResponse({ success: false, error: "integracao_id inválido" }, 400);
+  }
+  const resolvedIntegracaoId = integracaoId;
+
   // Verify integration exists (accept both 'uber' and 'robot' platforms)
   const { data: configRow, error: configError } = await supabase
     .from("plataformas_configuracao")
     .select("id, nome, plataforma, ativo")
-    .eq("id", integracaoId)
+    .eq("id", resolvedIntegracaoId)
     .single();
   if (configError || !configRow) {
     return jsonResponse({ success: false, error: "Integração não encontrada" }, 404);
@@ -532,7 +539,7 @@ Deno.serve(async (req) => {
   // Process pagamentos
   if (pagamentosCsv) {
     try {
-      const pagResult = await processPagamentosCsv(supabase, integracaoId, pagamentosCsv, nomeOriginalPagamentos, origem, dataExtracao);
+      const pagResult = await processPagamentosCsv(supabase, resolvedIntegracaoId, pagamentosCsv, nomeOriginalPagamentos, origem, dataExtracao);
       results.pagamentos = { inserted: pagResult.inserted, updated: pagResult.updated, errors: pagResult.errors, skipped: pagResult.skipped };
       for (const [uuid, name] of pagResult.drivers) allDrivers.set(uuid, name);
     } catch (error) {
@@ -544,7 +551,7 @@ Deno.serve(async (req) => {
   // Process atividade (driver activity)
   if (viagensCsv) {
     try {
-      const atividadeResult = await processAtividadeCsv(supabase, integracaoId, viagensCsv, nomeOriginalViagens, dataExtracao);
+      const atividadeResult = await processAtividadeCsv(supabase, resolvedIntegracaoId, viagensCsv, nomeOriginalViagens, dataExtracao);
       results.atividade = { inserted: atividadeResult.inserted, errors: atividadeResult.errors, skipped: atividadeResult.skipped, columns_detected: atividadeResult.columns };
       for (const [uuid, name] of atividadeResult.drivers) {
         if (!allDrivers.has(uuid)) allDrivers.set(uuid, name);
@@ -556,12 +563,12 @@ Deno.serve(async (req) => {
   }
 
   // Upsert driver names from both CSVs
-  const driversUpserted = await upsertDriverNames(supabase, integracaoId, allDrivers);
+  const driversUpserted = await upsertDriverNames(supabase, resolvedIntegracaoId, allDrivers);
   results.drivers_upserted = driversUpserted;
 
   // Log
   await supabase.from("uber_sync_logs").insert({
-    integracao_id: integracaoId,
+    integracao_id: resolvedIntegracaoId,
     executado_por: null,
     tipo: "csv_import",
     status: "success",
@@ -575,13 +582,13 @@ Deno.serve(async (req) => {
   await supabase
     .from("plataformas_configuracao")
     .update({ last_webhook_at: nowIso, ultimo_sync: nowIso, ativo: true })
-    .eq("id", integracaoId);
+    .eq("id", resolvedIntegracaoId);
 
   // Trigger auto-mapping for this integration
   try {
-    console.info(`[uber-import-reports] Triggering auto-map for integration: ${integracaoId}`);
+    console.info(`[uber-import-reports] Triggering auto-map for integration: ${resolvedIntegracaoId}`);
     const { data: autoMapData, error: autoMapError } = await supabase.functions.invoke("uber-auto-map-drivers", {
-      body: { integracao_id: integracaoId },
+      body: { integracao_id: resolvedIntegracaoId },
     });
     
     if (autoMapError) {

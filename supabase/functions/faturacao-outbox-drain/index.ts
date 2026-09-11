@@ -11,8 +11,9 @@
 // humano a arriscar um documento fiscal duplicado.
 // ============================================================
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { proximaTentativa } from '../_shared/acordos/backoff.ts';
+import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -73,7 +74,18 @@ async function comLimite<T>(limite: number, itens: T[], tarefa: (i: T) => Promis
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
-  const service = createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+  const serviceRoleKey = env('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  try {
+    requireInternalRequest(req, serviceRoleKey);
+  } catch (error) {
+    const status = error instanceof AuthorizationError ? error.status : 401;
+    return new Response(JSON.stringify({ success: false, error: 'Chamada interna não autorizada' }), {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const service = createClient(env('SUPABASE_URL') ?? '', serviceRoleKey);
   const contadores = { processadas: 0, sucesso: 0, suspensas: 0, falhadas: 0, reagendadas: 0 };
 
   const { data: linhas, error } = await service.rpc('faturacao_outbox_claim', {

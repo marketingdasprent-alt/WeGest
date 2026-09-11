@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { generateFinanceiroPDF } from '@/utils/generateFinanceiroPDF';
+import { escapeHtml } from '@/lib/safeHtml';
 
 export interface MotoristaResumo {
   _uid?: string;
@@ -228,7 +229,7 @@ export async function gerarRelatorioConsolidadoPrint(params: {
   const rows = selectedResumos
     .map(
       (r) => `<tr>
-      <td>${r.driver_name}</td>
+      <td>${escapeHtml(r.driver_name)}</td>
       <td style="text-align:right">${fmtEur(r.total_faturado)}</td>
       <td style="text-align:right">${fmtEur(r.combustivel)}</td>
       <td style="text-align:right">${fmtEur(r.portagens)}</td>
@@ -352,15 +353,15 @@ export async function gerarPrintCompleto(params: {
     .map((r) => {
       const extraTds = [
         printSettings.mostrarMatricula
-          ? `<td>${r.motorista_id ? matriculaMap[r.motorista_id] || '—' : '—'}</td>`
+          ? `<td>${escapeHtml(r.motorista_id ? matriculaMap[r.motorista_id] || '—' : '—')}</td>`
           : '',
         printSettings.mostrarGestor
-          ? `<td>${r.motorista_id ? gestorMap[r.motorista_id] || '—' : '—'}</td>`
+          ? `<td>${escapeHtml(r.motorista_id ? gestorMap[r.motorista_id] || '—' : '—')}</td>`
           : '',
       ].join('');
       const liquidoColor = r.liquido < 0 ? '#dc2626' : '#15803d';
       return `<tr>
-        <td style="font-weight:500">${r.driver_name}</td>
+        <td style="font-weight:500">${escapeHtml(r.driver_name)}</td>
         <td style="text-align:right">${fmtEur(r.total_faturado)}</td>
         <td style="text-align:right;color:#16a34a">${fmtEur(r.combustivel)}</td>
         <td style="text-align:right;color:#16a34a">${fmtEur(r.portagens)}</td>

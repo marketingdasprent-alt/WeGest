@@ -10,7 +10,8 @@
 // Por isso a linha fecha nesta mesma invocação, com o resultado real gravado
 // em `resultado` — é de lá que se lê a calibração das 4 variantes da fórmula
 // sem ter de ir aos logs.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -43,9 +44,19 @@ interface LinhaFila {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  try {
+    requireInternalRequest(req, SERVICE_ROLE_KEY);
+  } catch (error) {
+    const status = error instanceof AuthorizationError ? error.status : 401;
+    return new Response(JSON.stringify({ success: false, error: 'Chamada interna não autorizada' }), {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     const { data: reclamadas, error: erroClaim } = await supabase.rpc('bolt_sync_queue_claim', {

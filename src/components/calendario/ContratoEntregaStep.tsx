@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { nivelEnergia } from '@/utils/combustivel';
 import { useRascunho } from '@/hooks/useRascunho';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { gerarContratoAtomico } from '@/hooks/useContratos';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,8 @@ import {
   uploadDocumentToStorage,
   generateDocumentFromTemplate,
 } from '@/utils/generateDocumentFromTemplate';
+
+type CalendarioEventoInsert = Database['public']['Tables']['calendario_eventos']['Insert'];
 import {
   CheckinDadosSection,
   emptyCheckinDados,
@@ -277,7 +280,7 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
         ? new Date(`${data}T00:00:00`).toISOString()
         : new Date(`${data}T${hora}:00`).toISOString();
 
-      const eventoPayload: Record<string, any> = {
+      const eventoPayload: CalendarioEventoInsert = {
         titulo: viatura.matricula.replace(/[-\s]/g, '').toUpperCase(),
         tipo: 'entrega',
         data_inicio: dataISO,

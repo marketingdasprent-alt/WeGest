@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { gerarContratoAtomico } from '@/hooks/useContratos';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,8 @@ import type { CheckinDadosState } from './CheckinDadosSection';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
 import { useOrgId } from '@/contexts/TenantContext';
+
+type CalendarioEventoInsert = Database['public']['Tables']['calendario_eventos']['Insert'];
 
 interface SelectedFile {
   id: string;
@@ -196,7 +199,7 @@ export const TrocaCheckinStep: React.FC<{
         : new Date(`${data}T${hora}:00`).toISOString();
 
       // 1. Criar evento de troca
-      const eventoPayload: Record<string, any> = {
+      const eventoPayload: CalendarioEventoInsert = {
         titulo: novaViatura.matricula.replace(/[-\s]/g, '').toUpperCase(),
         tipo,
         data_inicio: dataISO,

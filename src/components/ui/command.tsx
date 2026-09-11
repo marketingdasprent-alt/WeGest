@@ -121,7 +121,19 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:opacity-50",
+      // `data-[selected=true]:[--muted-foreground:var(--accent-foreground)]`
+      // reescreve o token DENTRO da linha seleccionada. Sem isto, um filho com
+      // `text-muted-foreground` (telefone, data, uuid — o padrão em toda a app)
+      // mantinha o cinzento claro por cima do fundo `accent`, que no tema
+      // escuro é um turquesa saturado: o texto secundário ficava ilegível.
+      // O `text-accent-foreground` da própria linha não chegava — a cor
+      // aplicada directamente no filho ganha sempre à herdada.
+      //
+      // Rebind do token em vez de forçar a cor nos descendentes (`[&_*]`):
+      // assim só muda quem usa este token, e ícones com cor própria (o visto
+      // verde, as bandeiras do phone-input) ficam como estão. A hierarquia
+      // visual continua a ler-se pelo tamanho da letra.
+      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-accent data-[selected=true]:text-accent-foreground data-[selected=true]:[--muted-foreground:var(--accent-foreground)] data-[disabled=true]:opacity-50",
       className
     )}
     {...props}

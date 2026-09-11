@@ -1,10 +1,17 @@
-import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { EmailService } from '../_shared/email/services/EmailService.ts';
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import { EmailService } from "../_shared/email/services/EmailService.ts";
+import {
+  authenticateUser,
+  AuthorizationError,
+  requireOrgAdmin,
+} from "../_shared/auth/edgeAuthorization.ts";
+import { validateDocumentAttachments } from "../_shared/documents/requestSecurity.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface SendDocumentoFiscalEmailRequest {
@@ -33,11 +40,23 @@ interface SendDocumentoFiscalEmailRequest {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const authClient = createClient(
+      supabaseUrl,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+    );
+    const user = await authenticateUser(req, {
+      getUser: async (token) => {
+        const { data, error } = await authClient.auth.getUser(token);
+        return { user: error || !data.user ? null : { id: data.user.id } };
+      },
+    });
+
     const {
       to,
       toNome,
@@ -60,26 +79,59 @@ serve(async (req) => {
     const ficheiros = anexos?.length
       ? anexos
       : pdfBase64 && filename
-        ? [{ content: pdfBase64, name: filename }]
-        : [];
+      ? [{ content: pdfBase64, name: filename }]
+      : [];
 
     if (!to || !subject || ficheiros.length === 0 || !org_id) {
       return new Response(
-        JSON.stringify({ error: 'to, subject, org_id e pelo menos um anexo são obrigatórios' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          error: "to, subject, org_id e pelo menos um anexo são obrigatórios",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
+    if (
+      to.length > 254 || subject.length > 200 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)
+    ) {
+      return new Response(
+        JSON.stringify({ error: "Destinatário ou assunto inválido" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    try {
+      validateDocumentAttachments(ficheiros);
+    } catch (error) {
+      return new Response(JSON.stringify({ error: (error as Error).message }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+    await requireOrgAdmin(user.id, org_id, async (userId, requestedOrgId) => {
+      const { data, error } = await supabase
+        .from("user_organizacoes")
+        .select("is_admin")
+        .eq("user_id", userId)
+        .eq("org_id", requestedOrgId)
+        .maybeSingle();
+      return error ? null : data;
+    });
     const emailService = new EmailService(supabase);
 
     const result = await emailService.sendDocumentoFiscal(org_id, {
       to,
       toNome,
       subject,
-      mensagem: mensagem || '',
+      mensagem: mensagem || "",
       intro,
       detalhes,
       ficheiros,
@@ -89,16 +141,25 @@ serve(async (req) => {
       categoria,
     });
 
-    if (!result.success) throw new Error(result.error || 'Falha ao enviar email');
+    if (!result.success) {
+      throw new Error(result.error || "Falha ao enviar email");
+    }
 
     return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error('Erro send-documento-fiscal-email:', error);
+    console.error("Erro send-documento-fiscal-email:", error);
+    const status = error instanceof AuthorizationError ? error.status : 500;
     return new Response(
-      JSON.stringify({ success: false, error: (error as Error).message || 'Erro interno' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        success: false,
+        error: (error as Error).message || "Erro interno",
+      }),
+      {
+        status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

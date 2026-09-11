@@ -104,7 +104,11 @@ function TitularSelect({
   const chaveDePesquisa = (nome: string, id: string) => `${nome} ${id}`;
 
   return (
-    <Popover open={aberto} onOpenChange={setAberto}>
+    /* `modal`: este Popover vive dentro do Dialog do cartão — sem isto a roda
+       do rato não roda a lista de titulares, porque o Dialog tranca o scroll
+       e o conteúdo do Popover está fora da árvore dele. Ver
+       CartoesNaoReconhecidos.tsx. */
+    <Popover open={aberto} onOpenChange={setAberto} modal>
       <PopoverTrigger asChild>
         {/* Botão simples com `aria-expanded`, não `role="combobox"`: a role
             exige `aria-controls` a apontar para a lista, e o id dela é gerado

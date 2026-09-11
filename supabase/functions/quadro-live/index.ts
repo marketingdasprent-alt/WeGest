@@ -1,5 +1,5 @@
 // supabase/functions/quadro-live/index.ts
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -175,9 +175,11 @@ Deno.serve(async (req) => {
   for (const v of viaturas ?? []) {
     const estado = derivarEstado({ status: v.status, is_slot: v.is_slot }, ocup.get(v.id));
     if (estado === 'disponivel') {
+      const marca = Array.isArray(v.marca) ? v.marca[0] : v.marca;
+      const modelo = Array.isArray(v.modelo) ? v.modelo[0] : v.modelo;
       disponiveis.push({
         matricula: v.matricula ?? '',
-        modelo: [v.marca?.nome, v.modelo?.nome].filter(Boolean).join(' '),
+        modelo: [marca?.nome, modelo?.nome].filter(Boolean).join(' '),
       });
     }
   }
