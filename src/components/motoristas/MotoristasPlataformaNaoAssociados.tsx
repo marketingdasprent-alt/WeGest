@@ -157,10 +157,16 @@ export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
         .gte('occurred_at', desdeIso)
         .not('uber_driver_id', 'is', null);
 
+      // `is_conta_frota`: a linha da própria empresa na Uber, que recebe as
+      // transferências semanais. Não é uma pessoa — aparecia aqui como
+      // "Década Ousada, Lda. -22 948,00 €", com um botão "Associar" ao lado
+      // que teria posto esse negativo na conta-corrente de um motorista.
+      // Ver migração 20260911140000.
       const { data: uberDrivers } = await supabase
         .from('uber_drivers')
         .select('uber_driver_id, full_name')
-        .is('motorista_id', null);
+        .is('motorista_id', null)
+        .eq('is_conta_frota', false);
       const uberNomeById = new Map<string, string>();
       (uberDrivers || []).forEach((d: any) => {
         if (d.uber_driver_id) uberNomeById.set(d.uber_driver_id, d.full_name || d.uber_driver_id);

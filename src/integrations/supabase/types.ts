@@ -11594,6 +11594,7 @@ export type Database = {
           full_name: string | null
           id: string
           integracao_id: string
+          is_conta_frota: boolean
           last_name: string | null
           last_synced_at: string | null
           motorista_id: string | null
@@ -11619,6 +11620,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           integracao_id: string
+          is_conta_frota?: boolean
           last_name?: string | null
           last_synced_at?: string | null
           motorista_id?: string | null
@@ -11644,6 +11646,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           integracao_id?: string
+          is_conta_frota?: boolean
           last_name?: string | null
           last_synced_at?: string | null
           motorista_id?: string | null
