@@ -195,3 +195,32 @@ export function contratosExpiradosSemRenovacao<T extends ContratoRenovavelInput>
     )
     .sort((a, b) => new Date(a.data_fim!).getTime() - new Date(b.data_fim!).getTime());
 }
+
+/**
+ * Contratos que TERMINAM no dia de referência — o botão "Terminam hoje" da
+ * lista de contratos.
+ *
+ * Ao contrário de `contratosPorRenovar`, não filtra por renovável: entra tudo
+ * o que acaba nesse dia, longa ou curta duração, TVDE ou rent-a-car. A
+ * pergunta aqui não é "há renovação a propor?" mas "o que é que acaba hoje?"
+ * — e a resposta a isso pode ser renovar, fechar, ou acordar datas novas.
+ *
+ * Fica de fora o que já não tem nada a fazer: fechado, cancelado, devolvido,
+ * substituído por outra versão, apagado. Um contrato agendado ainda conta —
+ * é um contrato vivo.
+ *
+ * A comparação é ao DIA, em hora local, como `estadoRenovacaoContrato`: um
+ * contrato que acaba às 23:50 de hoje termina hoje.
+ */
+export function contratosTerminamHoje<T extends ContratoRenovavelInput>(
+  contratos: T[],
+  hoje: Date = new Date()
+): T[] {
+  const ref = inicioDoDia(hoje).getTime();
+  return contratos.filter((c) => {
+    if (!c.data_fim) return false;
+    if (c.deleted_at || c.substituido_em) return false;
+    if (c.estado_operacional !== 'em_curso' && c.estado_operacional !== 'agendado') return false;
+    return inicioDoDia(new Date(c.data_fim)).getTime() === ref;
+  });
+}
